@@ -291,6 +291,14 @@ void Renderer::beginFrame() {
     vertices_.clear();
 }
 
+void Renderer::setUiTransform(float safeAreaFraction, float textScale) {
+    const float inset = std::clamp(safeAreaFraction, 0.0f, 0.10f);
+    uiScale_ = 1.0f - inset * 2.0f;
+    uiOffsetX_ = logicalWidth() * inset;
+    uiOffsetY_ = logicalHeight() * inset;
+    textScale_ = std::clamp(textScale, 0.8f, 1.5f);
+}
+
 void Renderer::endFrame() {
     if (!ready()) return;
     flush();
@@ -310,6 +318,10 @@ void Renderer::flush() {
 }
 
 void Renderer::rect(float x, float y, float w, float h, Color c) {
+    x = uiOffsetX_ + x * uiScale_;
+    y = uiOffsetY_ + y * uiScale_;
+    w *= uiScale_;
+    h *= uiScale_;
     const Vertex v0{x, y, c.r, c.g, c.b, c.a};
     const Vertex v1{x + w, y, c.r, c.g, c.b, c.a};
     const Vertex v2{x + w, y + h, c.r, c.g, c.b, c.a};
@@ -349,6 +361,10 @@ void Renderer::deleteTexture(GLuint texture) {
 void Renderer::image(GLuint texture, float x, float y, float w, float h, float alpha) {
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f) return;
     flush();
+    x = uiOffsetX_ + x * uiScale_;
+    y = uiOffsetY_ + y * uiScale_;
+    w *= uiScale_;
+    h *= uiScale_;
     const TextureVertex vertices[] = {
         {x, y, 0.0f, 0.0f},
         {x + w, y, 1.0f, 0.0f},
@@ -452,6 +468,7 @@ bool Renderer::externalImage(
 }
 
 float Renderer::textWidth(float scale, const std::string& value) const {
+    scale *= textScale_;
     size_t longest = 0;
     size_t current = 0;
     for (const char c : value) {
@@ -467,6 +484,7 @@ float Renderer::textWidth(float scale, const std::string& value) const {
 }
 
 void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {
+    scale *= textScale_;
     const float originX = x;
     const float charWidth = 6.0f * scale;
     const float lineHeight = 9.0f * scale;

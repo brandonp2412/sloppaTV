@@ -2,6 +2,7 @@
 
 #include "device_capabilities.hpp"
 #include "jni_http.hpp"
+#include "media_player_policy.hpp"
 
 #include <jni.h>
 #include <nlohmann/json.hpp>
@@ -40,6 +41,12 @@ struct JellyfinSubtitleStream {
     std::string title;
     bool forced = false;
     bool isDefault = false;
+};
+
+struct PlaybackOverrides {
+    int maxAvcLevel = 0;
+    int maxHevcLevel = 0;
+    HdrOverrideMode hdrMode = HdrOverrideMode::Auto;
 };
 
 struct JellyfinAudioStream {
@@ -81,6 +88,7 @@ struct JellyfinItem {
     int videoWidth = 0;
     int videoHeight = 0;
     int videoBitDepth = 0;
+    int videoLevel = 0;
     float videoFrameRate = 0.0f;
     int indexNumber = -1;
     int parentIndexNumber = -1;
@@ -235,6 +243,7 @@ public:
         const JellyfinItem& item,
         int maxStreamingBitrate = 120000000,
         int maxAudioChannels = 8,
+        PlaybackOverrides overrides = {},
         int audioStreamIndex = -1,
         int subtitleStreamIndex = -1
     ) const;

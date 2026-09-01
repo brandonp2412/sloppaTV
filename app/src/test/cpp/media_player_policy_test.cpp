@@ -27,6 +27,14 @@ int main() {
     assert(seekStrategy(true) == SeekStrategy::InPlace);
     assert(subtitleStrategy("pgssub") == SubtitleStrategy::ServerTranscode);
     assert(subtitleStrategy("ass") == SubtitleStrategy::ServerTranscode);
+    assert(codecLevelAllowed(51, 0));
+    assert(codecLevelAllowed(0, 41));
+    assert(codecLevelAllowed(41, 41));
+    assert(!codecLevelAllowed(51, 41));
+    assert(hdrCapabilityAllowed(true, HdrOverrideMode::Auto));
+    assert(!hdrCapabilityAllowed(false, HdrOverrideMode::Auto));
+    assert(!hdrCapabilityAllowed(true, HdrOverrideMode::ForceSdr));
+    assert(hdrCapabilityAllowed(false, HdrOverrideMode::AllowAllHdr));
 
     assert(static_cast<int>(StartupStep::StartPlayback) < static_cast<int>(StartupStep::ReadTrackMetadata));
     return 0;

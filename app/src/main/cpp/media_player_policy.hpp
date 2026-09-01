@@ -28,6 +28,22 @@ enum class SubtitleStrategy {
     ServerTranscode,
 };
 
+enum class HdrOverrideMode {
+    Auto = 0,
+    ForceSdr = 1,
+    AllowAllHdr = 2,
+};
+
+constexpr bool codecLevelAllowed(int mediaLevel, int overrideLevel) {
+    return overrideLevel <= 0 || mediaLevel <= 0 || mediaLevel <= overrideLevel;
+}
+
+constexpr bool hdrCapabilityAllowed(bool detected, HdrOverrideMode mode) {
+    if (mode == HdrOverrideMode::ForceSdr) return false;
+    if (mode == HdrOverrideMode::AllowAllHdr) return true;
+    return detected;
+}
+
 constexpr int clampSeekPositionMs(int64_t positionMs) {
     return static_cast<int>(std::clamp<int64_t>(positionMs, 0, std::numeric_limits<int>::max()));
 }

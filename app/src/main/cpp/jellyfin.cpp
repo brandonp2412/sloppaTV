@@ -398,6 +398,9 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
                     item.videoWidth = stream.value("Width", 0);
                     item.videoHeight = stream.value("Height", 0);
                     item.videoBitDepth = stream.value("BitDepth", 0);
+                    if (stream.contains("Level") && stream["Level"].is_number_integer()) {
+                        item.videoLevel = stream["Level"].get<int>();
+                    }
                     if (stream.contains("RealFrameRate") && stream["RealFrameRate"].is_number()) {
                         item.videoFrameRate = stream["RealFrameRate"].get<float>();
                     } else if (stream.contains("AverageFrameRate") && stream["AverageFrameRate"].is_number()) {
@@ -1039,6 +1042,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     const JellyfinItem& item,
     int maxStreamingBitrate,
     int maxAudioChannels,
+    PlaybackOverrides overrides,
     int audioStreamIndex,
     int subtitleStreamIndex
 ) const {
@@ -1071,12 +1075,22 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     const bool isHdr10Plus = range.find("hdr10plus") != std::string::npos || range.find("hdr10+") != std::string::npos;
     const bool isHdr10 = !isHdr10Plus && range.find("hdr10") != std::string::npos;
     const bool isHlg = range.find("hlg") != std::string::npos;
-    const bool unsupportedHdr = (isDolbyVision && !codecSupport_.displayDolbyVision)
-        || (!isDolbyVision && isHdr10Plus && !codecSupport_.displayHdr10Plus)
-        || (!isDolbyVision && isHdr10 && !codecSupport_.displayHdr10)
-        || (!isDolbyVision && isHlg && !codecSupport_.displayHlg);
+    const bool unsupportedHdr = (isDolbyVision && !hdrCapabilityAllowed(codecSupport_.displayDolbyVision, overrides.hdrMode))
+        || (!isDolbyVision && isHdr10Plus && !hdrCapabilityAllowed(codecSupport_.displayHdr10Plus, overrides.hdrMode))
+        || (!isDolbyVision && isHdr10 && !hdrCapabilityAllowed(codecSupport_.displayHdr10, overrides.hdrMode))
+        || (!isDolbyVision && isHlg && !hdrCapabilityAllowed(codecSupport_.displayHlg, overrides.hdrMode));
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kTag,
+        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d)",
+        itemCodec.c_str(), item.videoProfile.c_str(), item.videoLevel, item.videoRangeType.c_str(),
+        overrides.maxAvcLevel, overrides.maxHevcLevel, static_cast<int>(overrides.hdrMode)
+    );
 
     if (itemCodec == "hevc") {
+        if (!codecLevelAllowed(item.videoLevel, overrides.maxHevcLevel)) {
+            removeVideoCodec("hevc", "level exceeds user override");
+        }
         if ((item.videoBitDepth > 8 || itemProfile.find("main 10") != std::string::npos) && !codecSupport_.hevcMain10) {
             removeVideoCodec("hevc", "HEVC Main10 unsupported");
         }
@@ -1085,6 +1099,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         }
         if (unsupportedHdr) removeVideoCodec("hevc", "HDR range unsupported by connected display");
     } else if (itemCodec == "h264") {
+        if (!codecLevelAllowed(item.videoLevel, overrides.maxAvcLevel)) {
+            removeVideoCodec("h264", "level exceeds user override");
+        }
         if (itemProfile.find("high 10") != std::string::npos && !codecSupport_.h264High10) {
             removeVideoCodec("h264", "H.264 High10 unsupported");
         }

@@ -27,6 +27,7 @@ public:
 
     void beginFrame();
     void endFrame();
+    void setUiTransform(float safeAreaFraction, float textScale);
 
     void rect(float x, float y, float w, float h, Color color);
     void outline(float x, float y, float w, float h, float thickness, Color color);
@@ -94,5 +95,9 @@ private:
     GLint externalTransformLocation_ = -1;
     bool externalProgramFailed_ = false;
     uint64_t generation_ = 0;
+    float uiOffsetX_ = 0.0f;
+    float uiOffsetY_ = 0.0f;
+    float uiScale_ = 1.0f;
+    float textScale_ = 1.0f;
     std::vector<Vertex> vertices_;
 };
