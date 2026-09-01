@@ -133,10 +133,24 @@ Verified on the current Waydroid worktree/build:
 - The previously reproduced Blue Planet `ENG → OFF` black/dead decoder state no longer reproduced after serialized stream handoff and clean player teardown; measured frame pairs continued changing after the switch.
 - Player teardown no longer calls blocking `MediaPlayer.stop()` on the NativeActivity/input thread. A reproduced >5 second ANR in `NuPlayerDriver::stop/reset` was removed by detaching the player and asynchronously performing terminal `release()`; healthy Waydroid teardown now logs start→finish in milliseconds.
 - A poisoned Waydroid media service from earlier wedged NuPlayer instances was distinguished from application regressions by restarting the Waydroid session; Jellyfin authentication/app data survived and the same build resumed moving video afterward.
-- Five-column browse/search/episode navigation now uses the same column count as rendering; native boundary policy tests cover the old 5-vs-6 mismatch.
+- Browse/search/episode navigation uses the same column count as rendering; native boundary policy tests cover the old mismatch, and the current readability redesign intentionally uses four larger columns.
 - Home/media cards and player text/control sizing were increased for TV readability.
 
 Still required before the viewing-acceptance effort is considered complete: a current-build multi-audio title cycle, final full Wonder Egg lifecycle/30–60 second pass, final Planet Earth exit/re-enter/resume pass, a dedicated direct-play matrix, 10+ cross-title decoder/surface transitions, beginning/middle/near-end seeks, back-during-loading/immediately-after-restart cases, autoplay/next-up on the current build, explicit Jellyfin server progress-state assertions, and a final crash/ANR/HTTP/decoder audit.
+
+### Real-streamer readability/playback checkpoint — 2026-09-02
+
+Verified on the physical Google TV Streamer at the app's 1920x1080 render target using the isolated `nz.presley.sloppatv.test` Debug build, leaving the existing production package/data untouched:
+
+- Home was redesigned from four cards/three visible rows to three substantially larger cards/two visible rows; Movies/Browse/Search/episode grids now use four larger columns, and Settings uses seven larger rows. The new Home, Movies, Details, Settings and player-overlay layouts were visually inspected from real-device screenshots.
+- Global header/navigation type, item titles/metadata, focus targets, subtitles, player status/times/progress/controls and settings values were enlarged for couch-distance readability.
+- The non-debuggable Benchmark build retained **16.67 ms median / 16.71 ms p95** rapid-DPAD SurfaceFlinger cadence with **0.8% >20 ms** over an 80-event real-streamer sample after the redesign.
+- Episode Details now renders a landscape artwork frame rather than stretching 16:9 episode imagery into a portrait poster slot; movie/series Details retain the poster layout.
+- Real Friends S2E13 playback started successfully through Jellyfin's transcode path. Two screen captures two seconds apart differed during normal playback, after a forward seek, after a backward seek, after resume, and after exiting/re-entering playback, providing simple frame-motion evidence that decoded video remained live.
+- After pausing and allowing the overlay to expire, two screen captures two seconds apart were byte-identical, then diverged again after resume.
+- Two playback exits/re-entries completed with asynchronous `MediaPlayer` teardown start/finish logs and no observed app ANR, fatal exception or fatal native signal. Home repopulated after teardown in roughly 0.2 s for primary rows and roughly 0.5 s including enrichment in the observed runs.
+
+This is a focused readability/playback regression pass, not the final codec/HDR/audio/long-soak matrix.
 
 ### Explicitly excluded from scope
 
@@ -188,10 +202,10 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 - [x] Directional Home image prefetch around the focused card
 - [x] Bounded thread pool instead of one thread per request/report
 - [~] Waydroid E2E harness (`tools/waydroid_e2e.py`) requires an explicit ADB serial, validates Waydroid identity/1920x1080, captures screenshots/frame-difference motion evidence and filtered player logs; the final full matrix is still in progress
-- [~] A real player-teardown ANR was reproduced and fixed in Waydroid; broader ANR/crash soak tests on the real streamer remain pending
+- [~] A real player-teardown ANR was reproduced and fixed in Waydroid; two current-build physical-streamer playback exit/re-entry cycles completed cleanly with asynchronous teardown start/finish logs, while a broader ANR/crash soak remains pending
 - [~] Memory profiling baseline complete; leak/long-session profiling still required
 - [~] Release-candidate performance comparison underway; cold-launch and memory release measurements captured, final multi-run release suite still required
-- [~] Production release signing is environment-configurable and never silently falls back to a debug key; a separate non-debuggable debug-signed `benchmark` variant is available for device testing, while a real production-key signing pass remains pending
+- [~] Production release signing is environment-configurable and never silently falls back to a debug key; Debug/Benchmark acceptance builds use an isolated `.test` application ID so they can be installed beside production without clearing user data, and the separate Benchmark variant is non-debuggable/debug-signed while a real production-key signing pass remains pending
 - [~] GitHub Actions workflow builds/tests Debug, Benchmark and Release with the pinned SDK/NDK/CMake toolchain and uploads APKs; both the push and pull-request hosted runs passed after fixing runner `sdkmanager` discovery, while artifact install/device validation remains pending
 - [x] Version code/name are centralized in Gradle properties, compiled into native diagnostics, and tracked in `CHANGELOG.md`
 - [~] Two clean Astra unsigned Release builds produced the identical SHA-256 `fbcb843ad6c88aafdd2f145f482525fcd246edbe47d9663429cdb1c9646a4367`; the check is scripted, while final production-signed reproducibility remains pending
@@ -202,7 +216,7 @@ The Astra hardening branch adds a real navigation stack, native diagnostics/serv
 
 ## Roadmap continuation checkpoint — 2026-09-02
 
-Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation; max audio channels now feeds PlaybackInfo/device-profile negotiation as 2-channel stereo or 8-channel surround; and authenticated users/servers are retained as switchable saved profiles with local forget/add-account management and 401 expiry cleanup. These paths are build-clean on Astra but remain partial until exercised against the real Jellyfin server in Waydroid/target-TV acceptance. The reference client's configurable buffer presets were also re-audited: they rely on ExoPlayer `DefaultLoadControl`, so the existing `MediaPlayer` backend cannot honestly expose equivalent buffer-duration controls without a backend/buffering-layer change.
+Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation; max audio channels now feeds PlaybackInfo/device-profile negotiation as 2-channel stereo or 8-channel surround; and authenticated users/servers are retained as switchable saved profiles with local forget/add-account management and 401 expiry cleanup. The TV UI was then reworked around real-streamer couch readability: three large Home cards, four-column browse grids, larger typography/focus targets/settings/player controls, and aspect-aware episode Details artwork. The focused real-streamer playback pass above verifies normal motion, forward/back seeking, pause/resume and exit/re-entry on a real transcoded episode, while broader feature-specific acceptance remains partial. The reference client's configurable buffer presets were also re-audited: they rely on ExoPlayer `DefaultLoadControl`, so the existing `MediaPlayer` backend cannot honestly expose equivalent buffer-duration controls without a backend/buffering-layer change.
 
 ## Current performance evidence
 

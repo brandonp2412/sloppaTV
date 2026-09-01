@@ -69,12 +69,13 @@ Raw machine-readable evidence is stored in `artifacts/perf-checkpoint-2026-09-01
 
 ### Navigation frame cadence
 
-The latest pre-release Home redesign retained the existing real-device rapid-DPAD result in debug testing:
+The latest couch-readability redesign was rechecked on the physical Google TV Streamer using the non-debuggable, debug-signed Benchmark build after moving Home to three large cards and media grids to four larger columns:
 
-- sloppaTV: **16.66 ms median / 16.75 ms p95**, **0.8% >20 ms**
-- official Jellyfin TV baseline: **16.67 ms median / 50.02 ms p95**, **17.5% >20 ms**
+- redesigned sloppaTV Benchmark: **16.67 ms median / 16.71 ms p95**, **0.8% >20 ms** over an 80-event rapid-DPAD SurfaceFlinger sample
+- prior sloppaTV checkpoint: **16.66 ms median / 16.75 ms p95**, **0.8% >20 ms**
+- official Jellyfin TV historical baseline: **16.67 ms median / 50.02 ms p95**, **17.5% >20 ms**
 
-A final release-mode SurfaceFlinger run is still required after the scoped feature set is frozen. This is intentionally not promoted to the final release claim yet.
+The larger cards/text therefore did not regress the sampled navigation tail latency. A final multi-run signed-release SurfaceFlinger suite is still required after the scoped feature set is frozen; this single Benchmark run is a regression checkpoint, not the final release claim.
 
 ### Idle behavior
 

@@ -7,12 +7,12 @@ int main() {
     assert(playerControlKind(0) == PlayerControlKind::PlayPause);
     assert(playerControlKind(1) == PlayerControlKind::Audio);
     assert(playerControlKind(2) == PlayerControlKind::Subtitles);
-    assert(mediaGridColumns() == 5);
+    assert(mediaGridColumns() == 4);
     assert(isTopMediaGridSelection(0));
-    assert(isTopMediaGridSelection(4));
-    assert(!isTopMediaGridSelection(5));
-    assert(mediaCardWidth() >= 300.0f);
-    assert(mediaTitleScale() >= 1.8f);
+    assert(isTopMediaGridSelection(3));
+    assert(!isTopMediaGridSelection(4));
+    assert(mediaCardWidth() >= 400.0f);
+    assert(mediaTitleScale() >= 2.1f);
 
     assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
     assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);
