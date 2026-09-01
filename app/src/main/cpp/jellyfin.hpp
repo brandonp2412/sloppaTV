@@ -47,6 +47,10 @@ struct PlaybackOverrides {
     int maxAvcLevel = 0;
     int maxHevcLevel = 0;
     HdrOverrideMode hdrMode = HdrOverrideMode::Auto;
+    // Runtime recovery flag only: never persisted as a user preference. When a
+    // platform DirectPlay prepare fails, re-negotiate PlaybackInfo with all
+    // direct/video-copy paths disabled so Jellyfin must offer a transcode.
+    bool forceTranscode = false;
 };
 
 struct JellyfinPerson {
@@ -231,6 +235,11 @@ public:
         const std::string& personId,
         int limit = 60
     ) const;
+    ApiValueResult<std::vector<JellyfinItem>> getSeriesEpisodes(
+        const JellyfinSession& session,
+        const std::string& seriesId,
+        int limit = 500
+    ) const;
     ApiValueResult<std::vector<JellyfinItem>> getSeasons(const JellyfinSession& session, const std::string& seriesId) const;
     ApiValueResult<std::vector<JellyfinItem>> getEpisodes(
         const JellyfinSession& session,
@@ -251,6 +260,7 @@ public:
     ApiResult setPlayed(const JellyfinSession& session, const JellyfinItem& item, bool played) const;
     ApiResult refreshMetadata(const JellyfinSession& session, const JellyfinItem& item) const;
     ApiResult deleteItem(const JellyfinSession& session, const JellyfinItem& item) const;
+    [[nodiscard]] bool isStaticStreamAvailable(const JellyfinSession& session, const JellyfinItem& item) const;
     ApiValueResult<PlaybackTarget> resolvePlayback(
         const JellyfinSession& session,
         const JellyfinItem& item,

@@ -851,6 +851,27 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getItemsForPerson(
     return result;
 }
 
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSeriesEpisodes(
+    const JellyfinSession& session,
+    const std::string& seriesId,
+    int limit
+) const {
+    if (!session.valid() || seriesId.empty()) {
+        ApiValueResult<std::vector<JellyfinItem>> result;
+        result.error = "Series queue request is incomplete";
+        return result;
+    }
+    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes"
+        + "?UserId=" + urlEncode(session.userId)
+        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,ProductionYear"
+          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+          "&EnableUserData=true&EnableTotalRecordCount=false"
+        + "&Limit=" + std::to_string(std::clamp(limit, 1, 1000));
+    auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
+    if (result.ok) retainScopedVideoItems(result.value);
+    return result;
+}
+
 ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSeasons(
     const JellyfinSession& session,
     const std::string& seriesId
@@ -1066,6 +1087,21 @@ ApiResult JellyfinClient::deleteItem(
     return result;
 }
 
+bool JellyfinClient::isStaticStreamAvailable(const JellyfinSession& session, const JellyfinItem& item) const {
+    if (!session.valid() || item.id.empty() || item.container.empty()) return false;
+    const std::string mediaSourceId = item.mediaSourceId.empty() ? item.id : item.mediaSourceId;
+    const std::string container = firstContainer(item.container);
+    if (container.empty()) return false;
+    const std::string url = session.server + "/Videos/" + urlEncode(item.id) + "/stream." + urlEncode(container)
+        + "?Static=true&MediaSourceId=" + urlEncode(mediaSourceId)
+        + "&api_key=" + urlEncode(session.token);
+    const auto response = http_.request("HEAD", url, headers(&session, session.deviceId));
+    if (!response.ok()) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Static source probe failed for %s: HTTP %d", item.id.c_str(), response.status);
+    }
+    return response.ok();
+}
+
 ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     const JellyfinSession& session,
     const JellyfinItem& item,
@@ -1111,9 +1147,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
-        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d)",
+        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d forceTranscode=%d)",
         itemCodec.c_str(), item.videoProfile.c_str(), item.videoLevel, item.videoRangeType.c_str(),
-        overrides.maxAvcLevel, overrides.maxHevcLevel, static_cast<int>(overrides.hdrMode)
+        overrides.maxAvcLevel, overrides.maxHevcLevel, static_cast<int>(overrides.hdrMode), overrides.forceTranscode
     );
 
     if (itemCodec == "hevc") {
@@ -1215,10 +1251,10 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         {"AudioStreamIndex", audioStreamIndex >= 0 ? json(audioStreamIndex) : json(nullptr)},
         {"SubtitleStreamIndex", subtitleStreamIndex},
         {"MaxAudioChannels", maxAudioChannels},
-        {"EnableDirectPlay", directVideoSupported && !preferServerStream},
-        {"EnableDirectStream", directVideoSupported && !preferServerStream},
+        {"EnableDirectPlay", !overrides.forceTranscode && directVideoSupported && !preferServerStream},
+        {"EnableDirectStream", !overrides.forceTranscode && directVideoSupported && !preferServerStream},
         {"EnableTranscoding", true},
-        {"AllowVideoStreamCopy", directVideoSupported && !serverSubtitle},
+        {"AllowVideoStreamCopy", !overrides.forceTranscode && directVideoSupported && !serverSubtitle},
         {"AllowAudioStreamCopy", true},
         {"AutoOpenLiveStream", true}
     };
@@ -1247,8 +1283,8 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         target.mediaSourceId = source.value("Id", std::string{});
         target.startTicks = item.positionTicks;
 
-        const bool direct = source.value("SupportsDirectPlay", false);
-        const bool directStream = source.value("SupportsDirectStream", false);
+        const bool direct = !overrides.forceTranscode && source.value("SupportsDirectPlay", false);
+        const bool directStream = !overrides.forceTranscode && source.value("SupportsDirectStream", false);
         const bool transcode = source.value("SupportsTranscoding", false);
         const std::string transcodingUrl = source.value("TranscodingUrl", std::string{});
         const std::string container = firstContainer(source.value("Container", item.container));
@@ -1268,7 +1304,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             target.url = target.fallbackTranscodeUrl;
             target.fallbackTranscodeUrl.clear();
             target.transcoding = true;
-            target.playMethod = directStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode;
+            target.playMethod = overrides.forceTranscode
+                ? PlaybackMethod::Transcode
+                : (directStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode);
         } else {
             result.error = "No direct-play, direct-stream or transcode path was offered by Jellyfin";
             return result;
