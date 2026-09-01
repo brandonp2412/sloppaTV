@@ -113,7 +113,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [~] Configurable Still Watching guard and prompt; autoplay threshold logic implemented, prompt still needs dedicated threshold E2E
 - [x] Server-native media-segment skip actions (Intro/Outro/Recap/Preview/Commercial); real Fallout S1E2 `SKIP RECAP` verified to jump to the server-provided 0:58 segment end
 - [~] Native queue management / play-next / Series play-all is implemented and physically exercised on the Google TV Streamer: Friends Play All de-duplicated 97 raw Jellyfin episode records into 73 season/episode slots; move-down, play-next reordering and remove were verified; `PLAY NOW` started real S2E13 playback; and `KEYCODE_MEDIA_NEXT` advanced S2E13 → S2E14 with clean async teardown/restart. The pass also found a stale duplicate S1E1 whose static stream is 404; Play All now HEAD-probes duplicate slots and prefers an available copy, with one final post-fix streamer navigation rerun still pending.
-- [ ] Repeat and shuffle
+- [~] Queue-native Shuffle and Repeat Off/One/All are implemented with host policy coverage: shuffle preserves the current item and randomizes only the unplayed tail; Repeat One restarts only on natural completion; Repeat All wraps at queue end; and manual media-next remains an explicit advance. Physical-streamer remote/UI acceptance is still pending.
 - [ ] External player support (VLC/mpv/Vimu/MX-style flows)
 - [~] Suspend/window-loss pauses playback; full Android audio-focus/HDMI lifecycle parity remains
 - [~] Simplified player controls are now limited to PLAY/PAUSE, AUDIO and SUBS; control count/sizing is covered by native policy tests and visually verified in Waydroid

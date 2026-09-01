@@ -30,5 +30,23 @@ int main() {
     assert(!queueCanRemove(0, 0, 4));
     assert(queueCanRemove(1, 0, 4));
     assert(!queueCanRemove(4, 0, 4));
+
+    assert(queueShuffleBegin(-1, 4) == 0);
+    assert(queueShuffleBegin(0, 4) == 1);
+    assert(queueShuffleBegin(3, 4) == 4);
+    assert(queueCanShuffle(0, 4));
+    assert(!queueCanShuffle(2, 4));
+
+    assert(nextQueueRepeatMode(QueueRepeatMode::Off) == QueueRepeatMode::One);
+    assert(nextQueueRepeatMode(QueueRepeatMode::One) == QueueRepeatMode::All);
+    assert(nextQueueRepeatMode(QueueRepeatMode::All) == QueueRepeatMode::Off);
+
+    assert(queueNextIndex(0, 3, QueueRepeatMode::Off, false) == 1);
+    assert(queueNextIndex(0, 3, QueueRepeatMode::One, false) == 0);
+    assert(queueNextIndex(2, 3, QueueRepeatMode::Off, false) == -1);
+    assert(queueNextIndex(2, 3, QueueRepeatMode::All, false) == 0);
+    assert(queueNextIndex(1, 3, QueueRepeatMode::One, true) == 2);
+    assert(queueNextIndex(2, 3, QueueRepeatMode::One, true) == -1);
+    assert(queueNextIndex(2, 3, QueueRepeatMode::All, true) == 0);
     return 0;
 }
