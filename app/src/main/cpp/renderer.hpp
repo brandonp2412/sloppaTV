@@ -1,0 +1,98 @@
+#pragma once
+
+#include <EGL/egl.h>
+#include <GLES3/gl3.h>
+#include <android/native_window.h>
+
+#include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
+
+struct Color {
+    float r;
+    float g;
+    float b;
+    float a;
+};
+
+class Renderer {
+public:
+    Renderer() = default;
+    ~Renderer();
+
+    bool init(ANativeWindow* window);
+    void shutdown();
+    [[nodiscard]] bool ready() const { return display_ != EGL_NO_DISPLAY && surface_ != EGL_NO_SURFACE && context_ != EGL_NO_CONTEXT; }
+
+    void beginFrame();
+    void endFrame();
+
+    void rect(float x, float y, float w, float h, Color color);
+    void outline(float x, float y, float w, float h, float thickness, Color color);
+    void text(float x, float y, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
+    float textWidth(float scale, const std::string& value) const;
+    GLuint createTexture(int width, int height, const uint8_t* rgbaPixels);
+    void deleteTexture(GLuint texture);
+    void image(GLuint texture, float x, float y, float w, float h, float alpha = 1.0f);
+    bool externalImage(
+        GLuint texture,
+        float x,
+        float y,
+        float w,
+        float h,
+        const std::array<float, 16>& transform,
+        float alpha = 1.0f
+    );
+    [[nodiscard]] uint64_t generation() const { return generation_; }
+
+    static constexpr float logicalWidth() { return 1920.0f; }
+    static constexpr float logicalHeight() { return 1080.0f; }
+
+private:
+    struct Vertex {
+        float x;
+        float y;
+        float r;
+        float g;
+        float b;
+        float a;
+    };
+
+    struct TextureVertex {
+        float x;
+        float y;
+        float u;
+        float v;
+    };
+
+    void flush();
+    bool ensureExternalProgram();
+    GLuint compileShader(GLenum type, const char* source);
+    std::array<uint8_t, 7> glyph(char c) const;
+
+    EGLDisplay display_ = EGL_NO_DISPLAY;
+    EGLSurface surface_ = EGL_NO_SURFACE;
+    EGLContext context_ = EGL_NO_CONTEXT;
+    int surfaceWidth_ = 0;
+    int surfaceHeight_ = 0;
+
+    GLuint program_ = 0;
+    GLuint vao_ = 0;
+    GLuint vbo_ = 0;
+    GLint resolutionLocation_ = -1;
+    GLuint textureProgram_ = 0;
+    GLuint textureVao_ = 0;
+    GLuint textureVbo_ = 0;
+    GLint textureResolutionLocation_ = -1;
+    GLint textureAlphaLocation_ = -1;
+    GLuint externalProgram_ = 0;
+    GLuint externalVao_ = 0;
+    GLuint externalVbo_ = 0;
+    GLint externalResolutionLocation_ = -1;
+    GLint externalAlphaLocation_ = -1;
+    GLint externalTransformLocation_ = -1;
+    bool externalProgramFailed_ = false;
+    uint64_t generation_ = 0;
+    std::vector<Vertex> vertices_;
+};

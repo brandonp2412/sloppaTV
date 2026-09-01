@@ -1,0 +1,44 @@
+#include "ui_policy.hpp"
+
+#include <cassert>
+
+int main() {
+    assert(playerControlCount() == 3);
+    assert(playerControlKind(0) == PlayerControlKind::PlayPause);
+    assert(playerControlKind(1) == PlayerControlKind::Audio);
+    assert(playerControlKind(2) == PlayerControlKind::Subtitles);
+    assert(mediaGridColumns() == 5);
+    assert(isTopMediaGridSelection(0));
+    assert(isTopMediaGridSelection(4));
+    assert(!isTopMediaGridSelection(5));
+    assert(mediaCardWidth() >= 300.0f);
+    assert(mediaTitleScale() >= 1.8f);
+
+    assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
+    assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);
+    assert(homeImageKind(false, false, true) == ArtworkKind::Backdrop);
+
+    const ArtworkReference episodeArtwork = homeArtworkReference(
+        "episode-id",
+        "episode-tag",
+        "series-id",
+        "series-tag",
+        true,
+        "thumb-tag",
+        "backdrop-tag"
+    );
+    assert(episodeArtwork.itemId == "series-id");
+    assert(episodeArtwork.tag == "series-tag");
+    assert(episodeArtwork.kind == ArtworkKind::Primary);
+
+    const ArtworkReference thumbArtwork = homeArtworkReference(
+        "movie-id", "", "", "", false, "thumb-tag", "backdrop-tag"
+    );
+    assert(thumbArtwork.itemId == "movie-id");
+    assert(thumbArtwork.tag == "thumb-tag");
+    assert(thumbArtwork.kind == ArtworkKind::Thumb);
+
+    assert(subtitleLoadCompleted(false, false));
+    assert(subtitleLoadCompleted(true, false));
+    return 0;
+}
