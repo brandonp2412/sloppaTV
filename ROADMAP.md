@@ -49,20 +49,20 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [x] Favorites row
 - [x] Recently Added rows per scoped video library
 - [x] Video-only Jellyfin library views with direct Movies/Shows top navigation
-- [~] Text search for Movie, Series and Episode
+- [x] Text search for Movie, Series and Episode, physically verified on the Google TV Streamer with native-keyboard and direct key-event entry returning real server results
 - [x] Rich item-details screen with real server data
 - [x] Series Play action resolves the next episode
 - [~] Library browsing for Movies, Shows, Mixed and folders
 - [~] Seasons and episode lists
 - [~] Nested folder/collection browsing
-- [~] Dedicated Collections / box-set browse mode implemented against the real Collections data; physical-TV UI pass pending
-- [~] Server-native Genres browser/filter implemented; physical-TV UI pass pending
-- [~] A-Z / by-letter browser implemented with server-side `NameStartsWith`; physical-TV UI pass pending
+- [x] Dedicated Collections / box-set browse mode verified on the physical streamer against real Collections data, including opening a collection into its member list
+- [x] Server-native Genres browser/filter verified on the physical streamer, including opening Action into real filtered movie results
+- [x] A-Z / by-letter browser verified on the physical streamer with server-side `NameStartsWith`, including opening A into populated real movie results
 - [~] Dedicated Favorites filter implemented in Movies/Shows browse; current account has no movie favorites for a populated E2E case
-- [~] Cast names are loaded/displayed on Details; dedicated person browser/images still missing
+- [x] Cast names remain visible on Details and a dedicated native Cast browser now uses Jellyfin person IDs, actor image tags/roles, and server-side PersonIds filtering to open titles featuring a selected actor; verified end-to-end on the physical streamer with Braveheart → Mel Gibson → Featuring Mel Gibson → Braveheart and full Back-stack restoration
 - [~] Details now exposes a native `MORE` item-options menu for maintenance actions; broader card-level/context-key access and physical-TV UI verification remain pending
-- [~] Mark watched/unwatched mutation
-- [~] Favorite/unfavorite mutation
+- [x] Mark watched/unwatched mutation verified end-to-end on the physical streamer and asserted against server `UserData`, with the test item restored to its original unwatched state
+- [x] Favorite/unfavorite mutation verified end-to-end on the physical streamer and asserted against server `UserData`, with the test item restored to its original non-favorite state
 - [~] Delete media is gated by Jellyfin `CanDelete` and requires a second destructive confirmation with Cancel selected by default; real permission/filesystem behavior still needs device/server E2E
 - [~] Metadata refresh can be requested from the item-options menu using Jellyfin's default metadata/image refresh modes; real permission/server completion behavior still needs E2E
 
@@ -76,7 +76,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [ ] Logos
 - [~] Watched / favorite / progress indicators
 - [x] Ratings, year, runtime, content rating, genres and richer metadata
-- [~] Cast metadata on Details; cast/person images still missing
+- [x] Cast metadata plus actor/person images are rendered from real Jellyfin person data on the physical streamer
 - [ ] Theme/backdrop behavior parity
 - [x] Home row/item and Movies/Shows top-nav focus restoration across refresh/navigation
 - [x] Accessibility-friendly global UI text sizing (`NORMAL` / `LARGE` / `EXTRA LARGE`) and overscan safe-area controls (`OFF` / `2%` / `4%` / `6%` per edge), persisted and verified at the worst-case Extra Large + 6% combination on the physical Google TV Streamer; UI/artwork/overlays stay inside the safe area while video remains edge-to-edge
@@ -150,7 +150,7 @@ Verified on the physical Google TV Streamer at the app's 1920x1080 render target
 - After pausing and allowing the overlay to expire, two screen captures two seconds apart were byte-identical, then diverged again after resume.
 - Two playback exits/re-entries completed with asynchronous `MediaPlayer` teardown start/finish logs and no observed app ANR, fatal exception or fatal native signal. Home repopulated after teardown in roughly 0.2 s for primary rows and roughly 0.5 s including enrichment in the observed runs.
 
-This is a focused readability/playback regression pass, not the final codec/HDR/audio/long-soak matrix. A follow-up accessibility pass also verified the global `EXTRA LARGE` UI text preset together with a 6% per-edge safe area on Home, Settings and the player overlay without clipping; video remained full-frame beneath the inset overlay.
+This is a focused readability/playback regression pass, not the final codec/HDR/audio/long-soak matrix. A follow-up accessibility pass also verified the global `EXTRA LARGE` UI text preset together with a 6% per-edge safe area on Home, Settings and the player overlay without clipping; video remained full-frame beneath the inset overlay. The same target-TV pass also exercised Search, Genres→Action, A-Z→A, Collections→collection members, Diagnostics, reversible Favorite/Watched mutations with server-side state assertions, and the new cast/person-image browser including opening a person's filtered title list and navigating back through the stack.
 
 ### Explicitly excluded from scope
 
@@ -186,7 +186,7 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - [~] Persisted AVC 4.0–6.2, HEVC 4.0–6.2 and HDR Auto/SDR-only/Allow-all controls feed real PlaybackInfo negotiation. On the physical streamer, the same HEVC Main10 Level 5.0 Hell's Paradise S1E1 item selected `DirectPlay` with HEVC Auto, then rejected direct HEVC and selected/started `Transcode` when capped to HEVC 4.0. AVC and a real HDR-range title still need equivalent device assertions
 - [ ] Screensaver preferences
 - [~] User-select behavior now has a saved Users & Servers chooser and Settings `SWITCH USER` flow; physical-TV navigation/expiry/multi-server acceptance remains pending
-- [~] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and the last DirectPlay/DirectStream/Transcode path; physical-TV UI/server pass pending
+- [x] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and last playback path; physically verified on the Google TV Streamer against the real server (Jellyfin 10.11.11) and the streamer's detected H264/HEVC/VP8/VP9/AV1/MPEG2 plus HDR10/HDR10+/Dolby Vision/HLG capabilities
 
 ### Reliability, performance and release engineering
 

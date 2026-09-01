@@ -153,6 +153,8 @@ enum class Screen {
     Settings,
     Diagnostics,
     Details,
+    Cast,
+    PersonItems,
     ItemMenu,
     Seasons,
     Episodes,
@@ -529,6 +531,8 @@ private:
             case Screen::Settings: handleSettingsKey(key); break;
             case Screen::Diagnostics: handleDiagnosticsKey(key); break;
             case Screen::Details: handleDetailsKey(key); break;
+            case Screen::Cast: handleCastKey(key); break;
+            case Screen::PersonItems: handlePersonItemsKey(key); break;
             case Screen::ItemMenu: handleItemMenuKey(key); break;
             case Screen::Seasons: handleSeasonsKey(key); break;
             case Screen::Episodes: handleEpisodesKey(key); break;
@@ -866,6 +870,7 @@ private:
         if (detail_.type == "Series") actions.emplace_back("EPISODES");
         actions.emplace_back(detail_.favorite ? "UNFAVORITE" : "FAVORITE");
         actions.emplace_back(detail_.played ? "MARK UNWATCHED" : "MARK WATCHED");
+        if (!detail_.people.empty()) actions.emplace_back("CAST");
         actions.emplace_back("MORE");
         actions.emplace_back("BACK");
         return actions;
@@ -984,23 +989,72 @@ private:
         } else if (key == AKEYCODE_DPAD_DOWN && !detailsSimilar_.empty()) {
             detailsSimilarFocused_ = true;
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            int action = detailsButton_;
-            if (action == 0) {
-                beginPlayback();
+            const std::string& action = actions[static_cast<size_t>(detailsButton_)];
+            if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT") beginPlayback();
+            else if (action == "EPISODES") openSeasons();
+            else if (action == "FAVORITE" || action == "UNFAVORITE") toggleFavoriteAsync();
+            else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") togglePlayedAsync();
+            else if (action == "CAST") openCast();
+            else if (action == "MORE") openItemMenu();
+            else if (action == "BACK") popScreen(Screen::Home);
+        }
+    }
+
+    void openCast() {
+        if (detail_.people.empty()) return;
+        pushScreen(Screen::Cast);
+        castSelection_ = 0;
+        error_.clear();
+    }
+
+    void handleCastKey(int32_t key) {
+        if (key == AKEYCODE_BACK) {
+            popScreen(Screen::Details);
+            return;
+        }
+        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            if (!detail_.people.empty()) openPersonItems(detail_.people[static_cast<size_t>(castSelection_)]);
+            return;
+        }
+        moveGridSelectionByCount(key, static_cast<int>(detail_.people.size()), castSelection_);
+    }
+
+    void openPersonItems(const JellyfinPerson& person) {
+        if (!session_.valid() || person.id.empty()) return;
+        pushScreen(Screen::PersonItems);
+        selectedPerson_ = person;
+        personItems_.clear();
+        personItemSelection_ = 0;
+        loading_ = true;
+        error_.clear();
+        const JellyfinSession session = session_;
+        const std::string personId = person.id;
+        const uint64_t generation = ++taskGeneration_;
+        tasks_.submit([this, session, personId, generation] {
+            auto result = api_.getItemsForPerson(session, personId, 60);
+            if (generation != taskGeneration_.load()) return;
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            if (screen_ != Screen::PersonItems || selectedPerson_.id != personId) return;
+            if (!result.ok) {
+                error_ = "PERSON: " + result.error;
                 return;
             }
-            if (detail_.type == "Series") {
-                if (action == 1) {
-                    openSeasons();
-                    return;
-                }
-                --action;
-            }
-            if (action == 1) toggleFavoriteAsync();
-            else if (action == 2) togglePlayedAsync();
-            else if (action == 3) openItemMenu();
-            else if (action == 4) popScreen(Screen::Home);
+            personItems_ = std::move(result.value);
+            personItemSelection_ = 0;
+        });
+    }
+
+    void handlePersonItemsKey(int32_t key) {
+        if (key == AKEYCODE_BACK) {
+            popScreen(Screen::Cast);
+            return;
         }
+        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            if (!personItems_.empty()) openDetails(personItems_[static_cast<size_t>(personItemSelection_)]);
+            return;
+        }
+        moveGridSelection(key, personItems_, personItemSelection_);
     }
 
     std::vector<std::string> itemMenuActions() const {
@@ -1053,10 +1107,10 @@ private:
         }
     }
 
-    void moveGridSelection(int32_t key, const std::vector<JellyfinItem>& items, int& selection) {
-        if (items.empty()) return;
+    void moveGridSelectionByCount(int32_t key, int itemCount, int& selection) {
+        if (itemCount <= 0) return;
         constexpr int columns = mediaGridColumns();
-        const int rows = static_cast<int>((items.size() + columns - 1) / columns);
+        const int rows = (itemCount + columns - 1) / columns;
         int row = selection / columns;
         int col = selection % columns;
         if (key == AKEYCODE_DPAD_LEFT) col = std::max(0, col - 1);
@@ -1064,7 +1118,11 @@ private:
         else if (key == AKEYCODE_DPAD_UP) row = std::max(0, row - 1);
         else if (key == AKEYCODE_DPAD_DOWN) row = std::min(rows - 1, row + 1);
         const int next = row * columns + col;
-        if (next >= 0 && next < static_cast<int>(items.size())) selection = next;
+        if (next >= 0 && next < itemCount) selection = next;
+    }
+
+    void moveGridSelection(int32_t key, const std::vector<JellyfinItem>& items, int& selection) {
+        moveGridSelectionByCount(key, static_cast<int>(items.size()), selection);
     }
 
     void handleSeasonsKey(int32_t key) {
@@ -2671,6 +2729,8 @@ private:
             case Screen::Settings: renderSettings(); break;
             case Screen::Diagnostics: renderDiagnostics(); break;
             case Screen::Details: renderDetails(); break;
+            case Screen::Cast: renderCast(); break;
+            case Screen::PersonItems: renderPersonItems(); break;
             case Screen::ItemMenu: renderItemMenu(); break;
             case Screen::Seasons: renderSeasons(); break;
             case Screen::Episodes: renderEpisodes(); break;
@@ -3597,6 +3657,54 @@ private:
         }
     }
 
+    JellyfinItem personArtworkItem(const JellyfinPerson& person) const {
+        JellyfinItem item;
+        item.id = person.id;
+        item.name = person.name;
+        item.type = "Person";
+        item.imageTag = person.imageTag;
+        return item;
+    }
+
+    void renderCast() {
+        const std::string heading = detail_.name.empty() ? "CAST" : detail_.name + " - CAST";
+        renderHeader(heading);
+        if (detail_.people.empty()) {
+            renderer_.text(100, 260, 2.5f, "NO CAST DATA", kMuted);
+            return;
+        }
+        constexpr int columns = mediaGridColumns();
+        constexpr float cardW = 390.0f;
+        constexpr float cardH = 215.0f;
+        constexpr float xGap = 35.0f;
+        constexpr float yGap = 25.0f;
+        const int selectedRow = castSelection_ / columns;
+        const int firstRow = std::max(0, selectedRow - 2);
+        for (int index = firstRow * columns; index < static_cast<int>(detail_.people.size()); ++index) {
+            const int row = index / columns - firstRow;
+            const int col = index % columns;
+            if (row >= 4) break;
+            const float x = 80.0f + static_cast<float>(col) * (cardW + xGap);
+            const float y = 190.0f + static_cast<float>(row) * (cardH + yGap);
+            const bool focused = index == castSelection_;
+            renderer_.rect(x, y, cardW, cardH, focused ? kPanelAlt : kPanel);
+            const auto& person = detail_.people[static_cast<size_t>(index)];
+            const JellyfinItem artworkItem = personArtworkItem(person);
+            const bool hasArtwork = drawArtwork(artworkItem, x, y, 145.0f, cardH);
+            if (focused) renderer_.outline(x - 4, y - 4, cardW + 8, cardH + 8, 5, kFocus);
+            const float textX = x + (hasArtwork ? 165.0f : 20.0f);
+            const float textWidth = cardW - (hasArtwork ? 185.0f : 40.0f);
+            renderer_.text(textX, y + 42.0f, 2.05f, person.name, kText, textWidth);
+            if (!person.role.empty()) renderer_.text(textX, y + 118.0f, 1.35f, person.role, kMuted, textWidth);
+        }
+        renderer_.text(85, 1010, 1.6f, "OK OPENS TITLES FEATURING THIS PERSON. BACK RETURNS TO DETAILS.", kMuted, 1700);
+    }
+
+    void renderPersonItems() {
+        const std::string heading = selectedPerson_.name.empty() ? "PERSON" : "FEATURING " + selectedPerson_.name;
+        renderMediaGrid(heading, personItems_, personItemSelection_);
+    }
+
     void renderSeasons() {
         renderMediaGrid(seriesDetail_.name.empty() ? "SEASONS" : seriesDetail_.name + " - SEASONS", seasonItems_, seasonSelection_);
     }
@@ -3911,6 +4019,10 @@ private:
     std::vector<JellyfinItem> detailsSimilar_;
     int detailsSimilarSelection_ = 0;
     bool detailsSimilarFocused_ = false;
+    int castSelection_ = 0;
+    JellyfinPerson selectedPerson_;
+    std::vector<JellyfinItem> personItems_;
+    int personItemSelection_ = 0;
     JellyfinItem seriesDetail_;
     std::vector<JellyfinItem> seasonItems_;
     int seasonSelection_ = 0;

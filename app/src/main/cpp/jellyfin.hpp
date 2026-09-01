@@ -49,6 +49,13 @@ struct PlaybackOverrides {
     HdrOverrideMode hdrMode = HdrOverrideMode::Auto;
 };
 
+struct JellyfinPerson {
+    std::string id;
+    std::string name;
+    std::string imageTag;
+    std::string role;
+};
+
 struct JellyfinAudioStream {
     int index = -1;
     std::string codec;
@@ -80,6 +87,7 @@ struct JellyfinItem {
     std::string officialRating;
     std::vector<std::string> genres;
     std::vector<std::string> cast;
+    std::vector<JellyfinPerson> people;
     std::vector<JellyfinChapter> chapters;
     std::vector<JellyfinAudioStream> audios;
     std::vector<JellyfinSubtitleStream> subtitles;
@@ -217,6 +225,11 @@ public:
         const JellyfinSession& session,
         const std::string& itemId,
         int limit = 18
+    ) const;
+    ApiValueResult<std::vector<JellyfinItem>> getItemsForPerson(
+        const JellyfinSession& session,
+        const std::string& personId,
+        int limit = 60
     ) const;
     ApiValueResult<std::vector<JellyfinItem>> getSeasons(const JellyfinSession& session, const std::string& seriesId) const;
     ApiValueResult<std::vector<JellyfinItem>> getEpisodes(
