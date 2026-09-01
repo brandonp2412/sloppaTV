@@ -15,6 +15,10 @@ All notable user-visible and release-engineering changes are recorded here.
 - GitHub Actions Android build/test workflow.
 - Environment-based production release signing configuration and a separately debug-signed non-debuggable `benchmark` build type.
 - Centralized version code/name properties compiled into native diagnostics.
+- Distinct Jellyfin `DirectPlay`, `DirectStream` and `Transcode` playback-method reporting.
+- Persisted subtitle size, background and vertical-position controls for the native SRT renderer.
+- Native Details item-options menu with default metadata refresh and permission-aware media deletion.
+- Two-step destructive delete confirmation with Cancel selected by default.
 
 ## 0.1.0 - 2026-09-01
 

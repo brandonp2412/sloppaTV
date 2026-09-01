@@ -152,6 +152,7 @@ enum class Screen {
     Settings,
     Diagnostics,
     Details,
+    ItemMenu,
     Seasons,
     Episodes,
     Player,
@@ -268,6 +269,21 @@ std::string videoZoomName(VideoZoomMode mode) {
     return "FIT";
 }
 
+std::string subtitleSizeName(int size) {
+    static constexpr std::array<const char*, 3> names{"SMALL", "MEDIUM", "LARGE"};
+    return names[static_cast<size_t>(std::clamp(size, 0, 2))];
+}
+
+std::string subtitlePositionName(int position) {
+    static constexpr std::array<const char*, 3> names{"LOW", "MIDDLE", "HIGH"};
+    return names[static_cast<size_t>(std::clamp(position, 0, 2))];
+}
+
+float subtitleTextScale(int size) {
+    static constexpr std::array<float, 3> scales{1.55f, 1.9f, 2.35f};
+    return scales[static_cast<size_t>(std::clamp(size, 0, 2))];
+}
+
 struct AppSettings {
     int maxBitrateMbps = 120;
     int seekBackSeconds = 10;
@@ -279,6 +295,9 @@ struct AppSettings {
     bool showWatchedIndicators = true;
     bool showClock = true;
     bool showBackdrops = true;
+    int subtitleSize = 1;
+    bool subtitleBackground = true;
+    int subtitlePosition = 0;
 };
 
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
@@ -461,6 +480,7 @@ private:
             case Screen::Settings: handleSettingsKey(key); break;
             case Screen::Diagnostics: handleDiagnosticsKey(key); break;
             case Screen::Details: handleDetailsKey(key); break;
+            case Screen::ItemMenu: handleItemMenuKey(key); break;
             case Screen::Seasons: handleSeasonsKey(key); break;
             case Screen::Episodes: handleEpisodesKey(key); break;
             case Screen::Player: break;
@@ -770,6 +790,7 @@ private:
         if (detail_.type == "Series") actions.emplace_back("EPISODES");
         actions.emplace_back(detail_.favorite ? "UNFAVORITE" : "FAVORITE");
         actions.emplace_back(detail_.played ? "MARK UNWATCHED" : "MARK WATCHED");
+        actions.emplace_back("MORE");
         actions.emplace_back("BACK");
         return actions;
     }
@@ -782,7 +803,7 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_UP) settingsSelection_ = std::max(0, settingsSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(11, settingsSelection_ + 1);
+        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(14, settingsSelection_ + 1);
         else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
@@ -818,11 +839,17 @@ private:
                 settings_.showClock = !settings_.showClock;
             } else if (settingsSelection_ == 9) {
                 settings_.showBackdrops = !settings_.showBackdrops;
+            } else if (settingsSelection_ == 10) {
+                settings_.subtitleSize = std::clamp(settings_.subtitleSize + direction, 0, 2);
+            } else if (settingsSelection_ == 11) {
+                settings_.subtitleBackground = !settings_.subtitleBackground;
+            } else if (settingsSelection_ == 12) {
+                settings_.subtitlePosition = std::clamp(settings_.subtitlePosition + direction, 0, 2);
             }
             saveSession(session_);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (settingsSelection_ == 10) openDiagnostics();
-            else if (settingsSelection_ == 11) logout();
+            if (settingsSelection_ == 13) openDiagnostics();
+            else if (settingsSelection_ == 14) logout();
         }
     }
 
@@ -871,7 +898,58 @@ private:
             }
             if (action == 1) toggleFavoriteAsync();
             else if (action == 2) togglePlayedAsync();
-            else if (action == 3) popScreen(Screen::Home);
+            else if (action == 3) openItemMenu();
+            else if (action == 4) popScreen(Screen::Home);
+        }
+    }
+
+    std::vector<std::string> itemMenuActions() const {
+        std::vector<std::string> actions{"REFRESH METADATA"};
+        if (detail_.canDelete) actions.emplace_back("DELETE MEDIA");
+        actions.emplace_back("BACK");
+        return actions;
+    }
+
+    void openItemMenu() {
+        if (detail_.id.empty()) return;
+        pushScreen(Screen::ItemMenu);
+        itemMenuSelection_ = 0;
+        deleteConfirmation_ = false;
+        deleteConfirmationSelection_ = 1;
+        error_.clear();
+    }
+
+    void handleItemMenuKey(int32_t key) {
+        if (key == AKEYCODE_BACK) {
+            deleteConfirmation_ = false;
+            popScreen(Screen::Details);
+            return;
+        }
+        if (deleteConfirmation_) {
+            if (key == AKEYCODE_DPAD_UP || key == AKEYCODE_DPAD_LEFT) deleteConfirmationSelection_ = 0;
+            else if (key == AKEYCODE_DPAD_DOWN || key == AKEYCODE_DPAD_RIGHT) deleteConfirmationSelection_ = 1;
+            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+                if (deleteConfirmationSelection_ == 0) deleteCurrentItemAsync();
+                else {
+                    deleteConfirmation_ = false;
+                    deleteConfirmationSelection_ = 1;
+                }
+            }
+            return;
+        }
+
+        const auto actions = itemMenuActions();
+        if (key == AKEYCODE_DPAD_UP) itemMenuSelection_ = std::max(0, itemMenuSelection_ - 1);
+        else if (key == AKEYCODE_DPAD_DOWN) itemMenuSelection_ = std::min(static_cast<int>(actions.size()) - 1, itemMenuSelection_ + 1);
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            const std::string& action = actions[static_cast<size_t>(itemMenuSelection_)];
+            if (action == "REFRESH METADATA") refreshCurrentItemMetadataAsync();
+            else if (action == "DELETE MEDIA") {
+                deleteConfirmation_ = true;
+                deleteConfirmationSelection_ = 1;
+            } else {
+                popScreen(Screen::Details);
+            }
         }
     }
 
@@ -1667,6 +1745,68 @@ private:
         });
     }
 
+    void removeCachedItem(const std::string& itemId) {
+        if (itemId.empty()) return;
+        auto remove = [&](auto& items) {
+            std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
+        };
+        for (auto& row : home_.rows) remove(row.items);
+        remove(browseItems_);
+        remove(searchResults_);
+        remove(detailsSimilar_);
+        remove(seasonItems_);
+        remove(episodeItems_);
+        for (auto& snapshot : browseStack_) remove(snapshot.items);
+    }
+
+    void refreshCurrentItemMetadataAsync() {
+        if (loading_ || detail_.id.empty()) return;
+        const JellyfinSession session = session_;
+        const JellyfinItem item = detail_;
+        loading_ = true;
+        error_.clear();
+        tasks_.submit([this, session, item] {
+            auto result = api_.refreshMetadata(session, item);
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            if (!result.ok) {
+                error_ = result.error;
+                return;
+            }
+            if (screen_ == Screen::ItemMenu && detail_.id == item.id) {
+                popScreen(Screen::Details);
+                error_ = "METADATA REFRESH REQUESTED";
+            }
+        });
+    }
+
+    void deleteCurrentItemAsync() {
+        if (loading_ || detail_.id.empty() || !detail_.canDelete) return;
+        const JellyfinSession session = session_;
+        const JellyfinItem item = detail_;
+        loading_ = true;
+        error_.clear();
+        tasks_.submit([this, session, item] {
+            auto result = api_.deleteItem(session, item);
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            if (!result.ok) {
+                error_ = result.error;
+                deleteConfirmation_ = false;
+                deleteConfirmationSelection_ = 1;
+                return;
+            }
+            removeCachedItem(item.id);
+            if (detail_.id == item.id) detail_ = {};
+            deleteConfirmation_ = false;
+            deleteConfirmationSelection_ = 1;
+            if (screen_ == Screen::ItemMenu) {
+                popScreen(Screen::Details);
+                popScreen(Screen::Home);
+            }
+        });
+    }
+
     void openSearch() {
         pushScreen(Screen::Search);
         searchKeyboard_ = true;
@@ -2169,6 +2309,7 @@ private:
         activeTarget_.url = std::move(activeTarget_.fallbackTranscodeUrl);
         activeTarget_.fallbackTranscodeUrl.clear();
         activeTarget_.transcoding = true;
+        activeTarget_.playMethod = PlaybackMethod::Transcode;
         if (resumeTicks > 0) activeTarget_.startTicks = resumeTicks;
 
         std::string surfaceError;
@@ -2199,7 +2340,7 @@ private:
                 activePlaybackItem_ = item;
                 activeTarget_ = *target;
                 std::ostringstream playbackSummary;
-                playbackSummary << (target->transcoding ? "TRANSCODE" : "DIRECT PLAY");
+                playbackSummary << playbackMethodName(target->playMethod);
                 if (!item.videoCodec.empty()) playbackSummary << " / " << item.videoCodec;
                 if (item.videoWidth > 0 && item.videoHeight > 0) playbackSummary << " / " << item.videoWidth << 'X' << item.videoHeight;
                 lastPlaybackSummary_ = playbackSummary.str();
@@ -2354,6 +2495,7 @@ private:
             case Screen::Settings: renderSettings(); break;
             case Screen::Diagnostics: renderDiagnostics(); break;
             case Screen::Details: renderDetails(); break;
+            case Screen::ItemMenu: renderItemMenu(); break;
             case Screen::Seasons: renderSeasons(); break;
             case Screen::Episodes: renderEpisodes(); break;
             case Screen::Player: renderPlayer(); break;
@@ -2990,9 +3132,12 @@ private:
             || now < playerOverlayUntil_;
         if (const SubtitleCue* cue = activeSubtitleCue()) {
             const std::string subtitle = wrapText(cue->text, 72, 3);
-            const float subtitleY = showOverlay ? 585.0f : 865.0f;
-            renderer_.rect(250, subtitleY - 18.0f, 1420, 105.0f, Color{0.0f, 0.0f, 0.0f, 0.72f});
-            renderer_.text(285, subtitleY + 10.0f, 1.9f, subtitle, kText, 1350.0f);
+            const float subtitleY = (showOverlay ? 585.0f : 865.0f) - static_cast<float>(settings_.subtitlePosition) * 105.0f;
+            const float textScale = subtitleTextScale(settings_.subtitleSize);
+            if (settings_.subtitleBackground) {
+                renderer_.rect(250, subtitleY - 18.0f, 1420, 112.0f, Color{0.0f, 0.0f, 0.0f, 0.72f});
+            }
+            renderer_.text(285, subtitleY + 10.0f, textScale, subtitle, kText, 1350.0f);
         }
         if (skipSegment) {
             renderer_.rect(1470, 670, 360, 78, Color{0.0f, 0.0f, 0.0f, 0.82f});
@@ -3060,7 +3205,7 @@ private:
 
     void renderSettings() {
         renderHeader("SETTINGS");
-        const std::array<std::string, 12> labels{
+        const std::array<std::string, 15> labels{
             "MAX STREAMING BITRATE",
             "SKIP BACK",
             "SKIP AHEAD",
@@ -3071,10 +3216,13 @@ private:
             "WATCHED INDICATORS",
             "CLOCK",
             "BACKDROPS",
+            "SUBTITLE SIZE",
+            "SUBTITLE BACKGROUND",
+            "SUBTITLE POSITION",
             "DIAGNOSTICS",
             "LOG OUT",
         };
-        const std::array<std::string, 12> values{
+        const std::array<std::string, 15> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             std::to_string(settings_.seekBackSeconds) + " SECONDS",
             std::to_string(settings_.seekForwardSeconds) + " SECONDS",
@@ -3085,6 +3233,9 @@ private:
             settings_.showWatchedIndicators ? "ON" : "OFF",
             settings_.showClock ? "ON" : "OFF",
             settings_.showBackdrops ? "ON" : "OFF",
+            subtitleSizeName(settings_.subtitleSize),
+            settings_.subtitleBackground ? "ON" : "OFF",
+            subtitlePositionName(settings_.subtitlePosition),
             "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
         };
@@ -3097,7 +3248,7 @@ private:
             renderer_.rect(120, y, 1380, 92, focused ? kPanelAlt : kPanel);
             if (focused) renderer_.outline(116, y - 4, 1388, 100, 4, kFocus);
             renderer_.text(155, y + 25, 2.0f, labels[static_cast<size_t>(i)], kText, 650);
-            renderer_.text(900, y + 25, 2.0f, values[static_cast<size_t>(i)], i == 11 ? kMuted : kFocus, 520);
+            renderer_.text(900, y + 25, 2.0f, values[static_cast<size_t>(i)], i == 14 ? kMuted : kFocus, 520);
         }
         renderer_.text(120, 955, 1.6f, "LEFT / RIGHT CHANGES VALUES. OK OPENS ACTIONS. SETTINGS SAVE IMMEDIATELY.", kMuted);
     }
@@ -3139,6 +3290,52 @@ private:
             renderer_.text(560, y, 1.55f, rows[i].second, kText, 1240);
         }
         renderer_.text(120, 955, 1.5f, "BACK OR OK RETURNS TO SETTINGS", kMuted);
+    }
+
+    void renderItemMenu() {
+        if (settings_.showBackdrops) drawBackdrop(detail_);
+        renderHeader("ITEM OPTIONS");
+        renderer_.text(120, 205, 4.0f, detail_.name.empty() ? "ITEM" : detail_.name, kText, 1580);
+        renderer_.text(120, 275, 1.7f, detail_.type.empty() ? "MEDIA" : detail_.type, kMuted, 700);
+
+        if (deleteConfirmation_) {
+            renderer_.rect(120, 355, 1540, 180, kPanel);
+            renderer_.text(155, 385, 2.25f, "DELETE THIS MEDIA PERMANENTLY?", kError, 1450);
+            renderer_.text(
+                155,
+                445,
+                1.55f,
+                "THIS ASKS JELLYFIN TO DELETE THE ITEM AND ITS MEDIA FILES. THIS CANNOT BE UNDONE.",
+                kMuted,
+                1420
+            );
+
+            const std::array<std::string, 2> actions{"DELETE PERMANENTLY", "CANCEL"};
+            for (int i = 0; i < 2; ++i) {
+                const float y = 585.0f + static_cast<float>(i) * 110.0f;
+                const bool focused = deleteConfirmationSelection_ == i;
+                const Color panel = i == 0 ? kError : kPanelAlt;
+                renderer_.rect(120, y, 700, 82, focused ? panel : kPanel);
+                if (focused) renderer_.outline(116, y - 4, 708, 90, 4, i == 0 ? kError : kFocus);
+                renderer_.text(155, y + 27, 1.8f, actions[static_cast<size_t>(i)], kText, 630);
+            }
+            renderer_.text(120, 955, 1.5f, "CANCEL IS SELECTED BY DEFAULT. BACK ALSO CANCELS.", kMuted);
+            return;
+        }
+
+        const auto actions = itemMenuActions();
+        for (size_t i = 0; i < actions.size(); ++i) {
+            const float y = 365.0f + static_cast<float>(i) * 112.0f;
+            const bool focused = itemMenuSelection_ == static_cast<int>(i);
+            const bool destructive = actions[i] == "DELETE MEDIA";
+            renderer_.rect(120, y, 1050, 86, focused ? (destructive ? kError : kPanelAlt) : kPanel);
+            if (focused) renderer_.outline(116, y - 4, 1058, 94, 4, destructive ? kError : kFocus);
+            renderer_.text(155, y + 29, 1.9f, actions[i], kText, 970);
+        }
+        if (!detail_.canDelete) {
+            renderer_.text(120, 850, 1.45f, "DELETE IS HIDDEN BECAUSE JELLYFIN REPORTS CANDELETE = FALSE.", kMuted, 1450);
+        }
+        renderer_.text(120, 955, 1.5f, "OK SELECTS. BACK RETURNS TO DETAILS.", kMuted);
     }
 
     void renderMediaGrid(const std::string& title, const std::vector<JellyfinItem>& items, int selection) {
@@ -3306,6 +3503,9 @@ private:
                 settings_.showWatchedIndicators = saved.value("showWatchedIndicators", settings_.showWatchedIndicators);
                 settings_.showClock = saved.value("showClock", settings_.showClock);
                 settings_.showBackdrops = saved.value("showBackdrops", settings_.showBackdrops);
+                settings_.subtitleSize = std::clamp(saved.value("subtitleSize", settings_.subtitleSize), 0, 2);
+                settings_.subtitleBackground = saved.value("subtitleBackground", settings_.subtitleBackground);
+                settings_.subtitlePosition = std::clamp(saved.value("subtitlePosition", settings_.subtitlePosition), 0, 2);
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
             }
             loginFields_[0] = session_.server;
@@ -3335,6 +3535,9 @@ private:
                     {"showWatchedIndicators", settings_.showWatchedIndicators},
                     {"showClock", settings_.showClock},
                     {"showBackdrops", settings_.showBackdrops},
+                    {"subtitleSize", settings_.subtitleSize},
+                    {"subtitleBackground", settings_.subtitleBackground},
+                    {"subtitlePosition", settings_.subtitlePosition},
                 }},
             };
             std::ofstream output(dataPath_ + "/session.json", std::ios::trunc);
@@ -3406,6 +3609,9 @@ private:
 
     JellyfinItem detail_;
     int detailsButton_ = 0;
+    int itemMenuSelection_ = 0;
+    bool deleteConfirmation_ = false;
+    int deleteConfirmationSelection_ = 1;
     std::vector<JellyfinItem> detailsSimilar_;
     int detailsSimilarSelection_ = 0;
     bool detailsSimilarFocused_ = false;

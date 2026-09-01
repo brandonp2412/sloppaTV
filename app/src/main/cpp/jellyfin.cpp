@@ -342,6 +342,7 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
     item.indexNumber = value.value("IndexNumber", -1);
     item.parentIndexNumber = value.value("ParentIndexNumber", -1);
     item.runtimeTicks = value.value("RunTimeTicks", static_cast<int64_t>(0));
+    item.canDelete = value.value("CanDelete", false);
 
     if (value.contains("ProviderIds") && value["ProviderIds"].is_object()) {
         item.tmdbId = value["ProviderIds"].value("Tmdb", std::string{});
@@ -780,7 +781,7 @@ ApiValueResult<JellyfinItem> JellyfinClient::getItem(const JellyfinSession& sess
     const auto response = http_.request(
         "GET",
         session.server + "/Users/" + session.userId + "/Items/" + itemId
-            + "?Fields=Chapters,MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,CommunityRating,OfficialRating",
+            + "?Fields=Chapters,MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,CommunityRating,OfficialRating,CanDelete",
         headers(&session, session.deviceId)
     );
     if (!response.ok()) {
@@ -996,6 +997,43 @@ ApiResult JellyfinClient::setPlayed(
     return result;
 }
 
+ApiResult JellyfinClient::refreshMetadata(
+    const JellyfinSession& session,
+    const JellyfinItem& item
+) const {
+    ApiResult result;
+    if (!session.valid() || item.id.empty()) {
+        result.error = "Metadata refresh request is incomplete";
+        return result;
+    }
+    const std::string url = session.server + "/Items/" + urlEncode(item.id) + "/Refresh"
+        + "?metadataRefreshMode=Default&imageRefreshMode=Default"
+          "&replaceAllMetadata=false&replaceAllImages=false&regenerateTrickplay=false";
+    const auto response = http_.request("POST", url, headers(&session, session.deviceId));
+    result.ok = response.ok();
+    if (!result.ok) result.error = apiError(response);
+    return result;
+}
+
+ApiResult JellyfinClient::deleteItem(
+    const JellyfinSession& session,
+    const JellyfinItem& item
+) const {
+    ApiResult result;
+    if (!session.valid() || item.id.empty()) {
+        result.error = "Delete request is incomplete";
+        return result;
+    }
+    const auto response = http_.request(
+        "DELETE",
+        session.server + "/Items/" + urlEncode(item.id),
+        headers(&session, session.deviceId)
+    );
+    result.ok = response.ok();
+    if (!result.ok) result.error = apiError(response);
+    return result;
+}
+
 ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     const JellyfinSession& session,
     const JellyfinItem& item,
@@ -1163,16 +1201,18 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             target.url = session.server + "/Videos/" + item.id + "/stream." + container
                 + "?Static=true&MediaSourceId=" + urlEncode(target.mediaSourceId)
                 + "&api_key=" + urlEncode(session.token);
+            target.playMethod = PlaybackMethod::DirectPlay;
         } else if ((directStream || transcode) && !target.fallbackTranscodeUrl.empty()) {
             target.url = target.fallbackTranscodeUrl;
             target.fallbackTranscodeUrl.clear();
             target.transcoding = true;
+            target.playMethod = directStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode;
         } else {
-            result.error = "No direct-play or transcode path was offered by Jellyfin";
+            result.error = "No direct-play, direct-stream or transcode path was offered by Jellyfin";
             return result;
         }
 
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Playback target: %s", target.transcoding ? "transcode" : "direct");
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Playback target: %s", playbackMethodName(target.playMethod));
         result.value = std::move(target);
         result.ok = true;
     } catch (const std::exception& e) {
@@ -1197,7 +1237,7 @@ ApiResult JellyfinClient::reportPlaybackStart(
         {"IsPaused", false},
         {"IsMuted", false},
         {"VolumeLevel", 100},
-        {"PlayMethod", target.transcoding ? "Transcode" : "DirectPlay"}
+        {"PlayMethod", playbackMethodName(target.playMethod)}
     };
     const auto response = http_.request("POST", session.server + "/Sessions/Playing", headers(&session, session.deviceId), body.dump());
     result.ok = response.ok();
@@ -1222,7 +1262,7 @@ ApiResult JellyfinClient::reportPlaybackProgress(
         {"IsPaused", paused},
         {"IsMuted", false},
         {"VolumeLevel", 100},
-        {"PlayMethod", target.transcoding ? "Transcode" : "DirectPlay"}
+        {"PlayMethod", playbackMethodName(target.playMethod)}
     };
     const auto response = http_.request("POST", session.server + "/Sessions/Playing/Progress", headers(&session, session.deviceId), body.dump());
     result.ok = response.ok();
