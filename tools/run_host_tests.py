@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import pathlib
+import subprocess
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+CPP_DIR = ROOT / "app" / "src" / "main" / "cpp"
+CPP_TEST_DIR = ROOT / "app" / "src" / "test" / "cpp"
+PY_TEST_DIR = ROOT / "app" / "src" / "test" / "python"
+BUILD_DIR = ROOT / "build" / "host-tests"
+
+CPP_TESTS = [
+    "media_player_policy_test.cpp",
+    "ui_policy_test.cpp",
+    "navigation_stack_test.cpp",
+    "version_policy_test.cpp",
+]
+
+
+def run(command: list[str]) -> None:
+    print("+", " ".join(command), flush=True)
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def main() -> int:
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    for test_name in CPP_TESTS:
+        source = CPP_TEST_DIR / test_name
+        binary = BUILD_DIR / source.stem
+        run([
+            "g++",
+            "-std=c++20",
+            "-Wall",
+            "-Wextra",
+            "-Wpedantic",
+            "-Werror",
+            "-I",
+            str(CPP_DIR),
+            str(source),
+            "-o",
+            str(binary),
+        ])
+        run([str(binary)])
+
+    run([sys.executable, "-m", "unittest", "discover", "-s", str(PY_TEST_DIR), "-p", "test_*.py"])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

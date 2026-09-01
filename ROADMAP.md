@@ -25,8 +25,8 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [x] Bounded four-worker async task runner; no detached app-level request/report/image threads
 - [x] Async task completion wakes the native looper instead of requiring continuous redraw
 - [x] Event-driven static screens with short 60 Hz render bursts after DPAD input
-- [ ] Structured navigation stack instead of screen-specific return variables
-- [~] Native policy/unit test harness now covers player seek/startup policy and UI/grid/control policy, with Python renderer tests; broader integration coverage is still required
+- [~] Structured navigation stack now replaces screen-specific return variables and is covered by host policy tests; full Waydroid remote-navigation regression pass is still pending
+- [~] Native host policy/unit test runner now covers player seek/startup policy, UI/grid/control policy, navigation-stack behavior and server-version policy, alongside Python renderer tests; broader integration coverage is still required
 
 ### Authentication and servers
 
@@ -38,7 +38,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [ ] Multiple saved servers
 - [ ] Multiple saved users / user switching
 - [~] Logout clears the persisted session; full remove-server/user UX still missing
-- [ ] Server compatibility/version checks and upgrade messaging
+- [~] Server public-info/version diagnostics and a tested Jellyfin 10.10+ baseline warning are implemented; older/newer real-server compatibility cases still need device E2E
 
 ### Home and browsing
 
@@ -165,15 +165,15 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 - [~] Next Up autoplay behavior
 - [~] Still Watching threshold
 - [~] Match-video-refresh-rate setting persists and controls native fixed-source requests; physical switching requires the TV's system match-content setting
-- [ ] Watched-indicator behavior
-- [ ] Clock behavior
-- [ ] Backdrop behavior
+- [~] Watched-indicator visibility setting is persisted and gates Home/grid/Details watched badges; physical-TV UI pass pending
+- [~] Clock visibility setting is persisted and renders local 24-hour time in native headers; physical-TV UI pass pending
+- [~] Backdrop visibility setting is persisted and gates Details backdrop fetching/rendering; physical-TV UI pass pending
 - [x] Default video zoom mode
 - [ ] AVC / HEVC / HDR override controls
 - [ ] Screensaver preferences
 - [ ] Live TV preferences
 - [ ] User-select behavior
-- [ ] Diagnostics: device profile, server/app version and playback information
+- [~] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and the last direct-play/transcode path; physical-TV UI/server pass pending
 
 ### Reliability, performance and release engineering
 
@@ -185,17 +185,21 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 - [~] Bounded HTTP retry/backoff added for transient JNI/connection failures after TV wake; cancellation during the short retry sleep is still not wired through
 - [x] Graceful partial Home failures: one failed row does not blank Home
 - [x] Pagination/incremental 60-item loading for large libraries
-- [ ] Request de-duplication and API response caching
+- [~] Identical in-flight GETs are coalesced and successful non-media API GETs receive a bounded 5-second transport cache with mutation invalidation; Waydroid workload/regression profiling pending
 - [x] Directional Home image prefetch around the focused card
 - [x] Bounded thread pool instead of one thread per request/report
 - [~] Waydroid E2E harness (`tools/waydroid_e2e.py`) requires an explicit ADB serial, validates Waydroid identity/1920x1080, captures screenshots/frame-difference motion evidence and filtered player logs; the final full matrix is still in progress
 - [~] A real player-teardown ANR was reproduced and fixed in Waydroid; broader ANR/crash soak tests on the real streamer remain pending
 - [~] Memory profiling baseline complete; leak/long-session profiling still required
 - [~] Release-candidate performance comparison underway; cold-launch and memory release measurements captured, final multi-run release suite still required
-- [ ] Release signing/configuration
-- [ ] CI build/test workflow
-- [ ] Versioning/changelog
-- [ ] Reproducible release APK
+- [~] Production release signing is environment-configurable and never silently falls back to a debug key; a separate non-debuggable debug-signed `benchmark` variant is available for device testing, while a real production-key signing pass remains pending
+- [~] GitHub Actions workflow builds/tests Debug, Benchmark and Release with the pinned SDK/NDK/CMake toolchain and uploads APKs; first hosted run is pending
+- [x] Version code/name are centralized in Gradle properties, compiled into native diagnostics, and tracked in `CHANGELOG.md`
+- [~] Two clean Astra unsigned Release builds produced the identical SHA-256 `fbcb843ad6c88aafdd2f145f482525fcd246edbe47d9663429cdb1c9646a4367`; the check is scripted, while final production-signed reproducibility remains pending
+
+## Roadmap hardening checkpoint — 2026-09-01
+
+The Astra hardening branch adds a real navigation stack, native diagnostics/server-version checks, in-flight GET coalescing plus a short-lived API cache, watched/clock/backdrop settings, centralized versioning/changelog, production-signing configuration, a separate installable benchmark variant, host test orchestration, CI, and a repeatable release-reproducibility check. All host tests and Debug/Benchmark/Release Android builds pass locally across the configured ABIs. Items that change visible Android TV behavior remain partial until the required Waydroid/target-TV acceptance pass is run.
 
 ## Current performance evidence
 

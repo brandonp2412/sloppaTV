@@ -1,0 +1,59 @@
+name: Android CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: Install pinned Android toolchain
+        shell: bash
+        run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "ndk;29.0.14206865" \
+            "cmake;3.22.1"
+
+      - name: Run host policy tests
+        run: ./tools/run_host_tests.py
+
+      - name: Build debug, benchmark and release APKs
+        run: ./gradlew --no-daemon test assembleDebug assembleBenchmark assembleRelease
+
+      - name: Upload APKs
+        uses: actions/upload-artifact@v7
+        with:
+          name: sloppaTV-apks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/benchmark/*.apk
+            app/build/outputs/apk/release/*.apk
+          if-no-files-found: error
