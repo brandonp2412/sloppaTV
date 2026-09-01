@@ -26,6 +26,8 @@ All notable user-visible and release-engineering changes are recorded here.
 - Side-by-side `.test` application IDs for Debug/Benchmark acceptance builds so real-device testing never requires replacing or clearing an installed production client.
 - Persisted global UI text-size presets and per-edge overscan safe-area controls, with the native renderer applying them to UI/artwork/overlays while leaving playback video edge-to-edge.
 - Persisted AVC, HEVC and HDR playback overrides that feed real Jellyfin PlaybackInfo capability negotiation rather than acting as display-only preferences.
+- Native cast/person browser with Jellyfin actor images and roles, plus server-filtered Movie/Series/Episode results for a selected person.
+- Physical-streamer acceptance for Search, Genres, A-Z, Collections, Diagnostics, and reversible Favorite/Watched mutations with server-side state assertions.
 
 ## 0.1.0 - 2026-09-01
 

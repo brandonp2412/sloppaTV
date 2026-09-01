@@ -356,9 +356,15 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
     if (value.contains("People") && value["People"].is_array()) {
         for (const auto& person : value["People"]) {
             if (!person.is_object() || person.value("Type", std::string{}) != "Actor") continue;
-            const std::string name = person.value("Name", std::string{});
-            if (!name.empty()) item.cast.push_back(name);
-            if (item.cast.size() >= 8) break;
+            JellyfinPerson parsed;
+            parsed.id = person.value("Id", std::string{});
+            parsed.name = person.value("Name", std::string{});
+            parsed.imageTag = person.value("PrimaryImageTag", std::string{});
+            parsed.role = person.value("Role", std::string{});
+            if (parsed.name.empty()) continue;
+            item.cast.push_back(parsed.name);
+            item.people.push_back(std::move(parsed));
+            if (item.people.size() >= 12) break;
         }
     }
     if (value.contains("Chapters") && value["Chapters"].is_array()) {
@@ -814,6 +820,29 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSimilar(
     const std::string url = session.server + "/Items/" + urlEncode(itemId) + "/Similar"
         + "?UserId=" + urlEncode(session.userId)
         + "&Limit=" + std::to_string(std::clamp(limit, 1, 60))
+        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,ProductionYear"
+          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+          "&EnableTotalRecordCount=false";
+    auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
+    if (result.ok) retainScopedVideoItems(result.value);
+    return result;
+}
+
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getItemsForPerson(
+    const JellyfinSession& session,
+    const std::string& personId,
+    int limit
+) const {
+    if (!session.valid() || personId.empty()) {
+        ApiValueResult<std::vector<JellyfinItem>> result;
+        result.error = "Person-items request is incomplete";
+        return result;
+    }
+    const std::string url = session.server + "/Users/" + session.userId + "/Items"
+        + "?Recursive=true&PersonIds=" + urlEncode(personId)
+        + "&IncludeItemTypes=Movie,Series,Episode"
+        + "&SortBy=ProductionYear,SortName&SortOrder=Descending"
+        + "&Limit=" + std::to_string(std::clamp(limit, 1, 100))
         + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,ProductionYear"
           "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
