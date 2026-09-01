@@ -1570,9 +1570,14 @@ private:
             stopPlayback();
         } else if (key == AKEYCODE_DPAD_DOWN) {
             openQueueOverlay();
-        } else if (key == AKEYCODE_MEDIA_NEXT && playbackQueueIndex_ >= 0
-            && playbackQueueIndex_ + 1 < static_cast<int>(playbackQueue_.size())) {
-            playQueuedIndexAsync(playbackQueueIndex_ + 1);
+        } else if (key == AKEYCODE_MEDIA_NEXT && playbackQueueIndex_ >= 0) {
+            const int next = queueNextIndex(
+                playbackQueueIndex_,
+                static_cast<int>(playbackQueue_.size()),
+                queueRepeatMode_,
+                true
+            );
+            if (next >= 0) playQueuedIndexAsync(next);
         } else if (key == AKEYCODE_DPAD_UP) {
             playerControlsActive_ = true;
             playerControlSelection_ = 0;
@@ -2359,11 +2364,19 @@ private:
 
     void syncNextPlaybackFromQueue() {
         const int size = static_cast<int>(playbackQueue_.size());
-        if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ + 1 < size) {
-            nextPlaybackItem_ = playbackQueue_[static_cast<size_t>(playbackQueueIndex_ + 1)];
-        } else {
-            nextPlaybackItem_.reset();
-        }
+        const int next = queueNextIndex(playbackQueueIndex_, size, queueRepeatMode_, false);
+        if (next >= 0) nextPlaybackItem_ = playbackQueue_[static_cast<size_t>(next)];
+        else nextPlaybackItem_.reset();
+    }
+
+    void shuffleRemainingQueue() {
+        const int size = static_cast<int>(playbackQueue_.size());
+        const int begin = queueShuffleBegin(playbackQueueIndex_, size);
+        if (!queueCanShuffle(playbackQueueIndex_, size)) return;
+        static thread_local std::mt19937 generator(std::random_device{}());
+        std::shuffle(playbackQueue_.begin() + begin, playbackQueue_.end(), generator);
+        queueSelection_ = queueDefaultSelection(playbackQueueIndex_, size);
+        syncNextPlaybackFromQueue();
     }
 
     void openQueueOverlay() {
@@ -2388,10 +2401,10 @@ private:
         syncNextPlaybackFromQueue();
     }
 
-    void playQueuedIndexAsync(int index) {
+    void playQueuedIndexAsync(int index, bool restartCurrent = false) {
         const int size = static_cast<int>(playbackQueue_.size());
         if (loading_ || index < 0 || index >= size || !session_.valid()) return;
-        if (index == playbackQueueIndex_ && screen_ == Screen::Player) {
+        if (index == playbackQueueIndex_ && screen_ == Screen::Player && !restartCurrent) {
             queueOverlayActive_ = false;
             return;
         }
@@ -2406,6 +2419,7 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         JellyfinItem queued = playbackQueue_[static_cast<size_t>(index)];
+        if (restartCurrent) queued.positionTicks = 0;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
@@ -2460,7 +2474,7 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_RIGHT) {
-            queueActionSelection_ = std::min(4, queueActionSelection_ + 1);
+            queueActionSelection_ = std::min(6, queueActionSelection_ + 1);
             return;
         }
         if (key != AKEYCODE_DPAD_CENTER && key != AKEYCODE_ENTER) return;
@@ -2478,6 +2492,11 @@ private:
         } else if (queueActionSelection_ == 4 && queueCanRemove(queueSelection_, playbackQueueIndex_, size)) {
             playbackQueue_.erase(playbackQueue_.begin() + queueSelection_);
             queueSelection_ = std::min(queueSelection_, static_cast<int>(playbackQueue_.size()) - 1);
+            syncNextPlaybackFromQueue();
+        } else if (queueActionSelection_ == 5) {
+            shuffleRemainingQueue();
+        } else if (queueActionSelection_ == 6) {
+            queueRepeatMode_ = nextQueueRepeatMode(queueRepeatMode_);
             syncNextPlaybackFromQueue();
         }
     }
@@ -2583,6 +2602,7 @@ private:
             playbackQueue_ = std::move(episodes.value);
             playbackQueue_[0] = first;
             playbackQueueIndex_ = 0;
+            queueRepeatMode_ = QueueRepeatMode::Off;
             queueSelection_ = queueDefaultSelection(0, static_cast<int>(playbackQueue_.size()));
             queueActionSelection_ = 0;
             queueOverlayActive_ = false;
@@ -2603,10 +2623,12 @@ private:
             } else {
                 playbackQueue_.clear();
                 playbackQueueIndex_ = -1;
+                queueRepeatMode_ = QueueRepeatMode::Off;
             }
         } else {
             playbackQueue_.clear();
             playbackQueueIndex_ = -1;
+            queueRepeatMode_ = QueueRepeatMode::Off;
         }
         autoplayChainCount_ = 0;
         stillWatchingPrompt_ = false;
@@ -3036,7 +3058,16 @@ private:
                 requestNextEpisodeAsync();
             }
             if (cachedPlaybackDurationMs_ > 1000 && cachedPlaybackPositionMs_ >= cachedPlaybackDurationMs_ - 1000) {
-                if (nextPlaybackItem_) {
+                if (playbackQueueIndex_ >= 0 && queueRepeatMode_ != QueueRepeatMode::Off) {
+                    const int next = queueNextIndex(
+                        playbackQueueIndex_,
+                        static_cast<int>(playbackQueue_.size()),
+                        queueRepeatMode_,
+                        false
+                    );
+                    if (next >= 0) playQueuedIndexAsync(next, next == playbackQueueIndex_);
+                    else stopPlayback();
+                } else if (nextPlaybackItem_) {
                     JellyfinItem next = *nextPlaybackItem_;
                     if (settings_.autoplayNext && autoplayChainCount_ < settings_.stillWatchingAfter) {
                         queueAutoplayNext(std::move(next));
@@ -3870,23 +3901,33 @@ private:
             if (!secondary.empty()) renderer_.text(1160, y + 29, 1.45f, secondary, kMuted, 520);
         }
 
-        const std::array<std::string, 5> actions{"PLAY NOW", "PLAY NEXT", "MOVE UP", "MOVE DOWN", "REMOVE"};
+        const std::array<std::string, 7> actions{
+            "PLAY NOW",
+            "PLAY NEXT",
+            "MOVE UP",
+            "MOVE DOWN",
+            "REMOVE",
+            "SHUFFLE",
+            std::string("REPEAT ") + queueRepeatModeName(queueRepeatMode_),
+        };
         auto enabled = [&](int action) {
             if (action == 0) return queueCanPlayNow(queueSelection_, playbackQueueIndex_, size);
             if (action == 1) return queueCanPlayNext(queueSelection_, playbackQueueIndex_, size);
             if (action == 2) return queueCanMoveUp(queueSelection_, playbackQueueIndex_, size);
             if (action == 3) return queueCanMoveDown(queueSelection_, playbackQueueIndex_, size);
-            return queueCanRemove(queueSelection_, playbackQueueIndex_, size);
+            if (action == 4) return queueCanRemove(queueSelection_, playbackQueueIndex_, size);
+            if (action == 5) return queueCanShuffle(playbackQueueIndex_, size);
+            return true;
         };
-        constexpr float actionWidth = 300.0f;
-        constexpr float actionGap = 24.0f;
+        constexpr float actionWidth = 225.0f;
+        constexpr float actionGap = 15.0f;
         for (size_t i = 0; i < actions.size(); ++i) {
-            const float x = 120.0f + static_cast<float>(i) * (actionWidth + actionGap);
+            const float x = 100.0f + static_cast<float>(i) * (actionWidth + actionGap);
             const bool focused = queueActionSelection_ == static_cast<int>(i);
             const bool available = enabled(static_cast<int>(i));
             renderer_.rect(x, 855, actionWidth, 82, focused ? (available ? kFocus : kPanelAlt) : kPanel);
             if (focused) renderer_.outline(x - 4, 851, actionWidth + 8, 90, 4, available ? kFocus : kMuted);
-            renderer_.text(x + 20, 884, 1.65f, actions[i], available ? kText : kMuted, actionWidth - 40.0f);
+            renderer_.text(x + 14, 884, 1.42f, actions[i], available ? kText : kMuted, actionWidth - 28.0f);
         }
         renderer_.text(100, 982, 1.45f, "UP/DOWN SELECTS. LEFT/RIGHT CHOOSES ACTION. OK APPLIES. BACK CLOSES QUEUE.", kMuted, 1700);
     }
@@ -4450,6 +4491,7 @@ private:
     int playbackQueueIndex_ = -1;
     int queueSelection_ = 0;
     int queueActionSelection_ = 0;
+    QueueRepeatMode queueRepeatMode_ = QueueRepeatMode::Off;
     bool queueOverlayActive_ = false;
 
     std::optional<PlaybackTarget> pendingPlayback_;
