@@ -16,7 +16,7 @@ Target device: the same Android TV test target used for both sloppaTV and the in
 
 ## Current release-candidate evidence — 2026-09-01
 
-sloppaTV was built with the Android `release` build type (`isDebuggable=false`, native C++ optimized) and signed locally with the standard Android debug key solely so the release candidate could be installed on the test TV. Production signing is still pending.
+The measurements below predate the build-type split and used the then-current Android `release` build type (`isDebuggable=false`, native C++ optimized) signed locally with the standard Android debug key solely for installation on the test TV. Equivalent installable performance/device testing now uses the non-debuggable `benchmark` build type; `release` remains unsigned unless production signing credentials are explicitly supplied.
 
 ### Cold Activity-manager launch
 

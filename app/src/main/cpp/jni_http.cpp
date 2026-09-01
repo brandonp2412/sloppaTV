@@ -4,6 +4,7 @@
 
 #include <array>
 #include <chrono>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -45,6 +46,15 @@ jstring toJString(JNIEnv* env, const std::string& value) {
     return env->NewStringUTF(value.c_str());
 }
 
+bool shouldCacheApiGet(const std::string& url) {
+    return url.find("/Images/") == std::string::npos
+        && url.find("/Subtitles/") == std::string::npos
+        && url.find("/Videos/") == std::string::npos
+        && url.find("/Items/Resume") == std::string::npos
+        && url.find("/Shows/NextUp") == std::string::npos
+        && url.find("SortBy=Random") == std::string::npos;
+}
+
 std::string readStream(JNIEnv* env, jobject stream, std::string& error) {
     if (!stream) return {};
 
@@ -81,7 +91,81 @@ std::string readStream(JNIEnv* env, jobject stream, std::string& error) {
 }
 }  // namespace
 
+std::string JniHttpClient::getCacheKey(
+    const std::string& url,
+    const std::map<std::string, std::string>& headers
+) const {
+    std::ostringstream key;
+    key << url;
+    for (const auto& [name, value] : headers) key << '\n' << name << ':' << value;
+    return key.str();
+}
+
+void JniHttpClient::invalidateGetCache() const {
+    std::scoped_lock lock(cacheMutex_);
+    getCache_.clear();
+    ++cacheGeneration_;
+}
+
 HttpResponse JniHttpClient::request(
+    const std::string& method,
+    const std::string& url,
+    const std::map<std::string, std::string>& headers,
+    const std::string& body
+) const {
+    const bool deduplicate = method == "GET" && body.empty();
+    if (!deduplicate) {
+        HttpResponse response = requestWithRetry(method, url, headers, body);
+        if (response.ok()) invalidateGetCache();
+        return response;
+    }
+
+    const bool cacheable = shouldCacheApiGet(url);
+    const std::string key = getCacheKey(url, headers);
+    std::shared_ptr<InFlightRequest> inFlight;
+    bool owner = false;
+    uint64_t requestGeneration = 0;
+    {
+        std::unique_lock lock(cacheMutex_);
+        requestGeneration = cacheGeneration_;
+        if (cacheable) {
+            const auto cached = getCache_.find(key);
+            if (cached != getCache_.end()) {
+                if (cached->second.expiresAt > std::chrono::steady_clock::now()) return cached->second.response;
+                getCache_.erase(cached);
+            }
+        }
+        const auto pending = inFlightGets_.find(key);
+        if (pending != inFlightGets_.end()) {
+            inFlight = pending->second;
+        } else {
+            inFlight = std::make_shared<InFlightRequest>();
+            inFlightGets_.emplace(key, inFlight);
+            owner = true;
+        }
+    }
+
+    if (!owner) {
+        std::unique_lock lock(cacheMutex_);
+        inFlight->completed.wait(lock, [&] { return inFlight->done; });
+        return inFlight->response;
+    }
+
+    HttpResponse response = requestWithRetry(method, url, headers, body);
+    {
+        std::scoped_lock lock(cacheMutex_);
+        if (cacheable && response.ok() && requestGeneration == cacheGeneration_) {
+            getCache_[key] = CacheEntry{response, std::chrono::steady_clock::now() + std::chrono::seconds(5)};
+        }
+        inFlight->response = response;
+        inFlight->done = true;
+        inFlightGets_.erase(key);
+    }
+    inFlight->completed.notify_all();
+    return response;
+}
+
+HttpResponse JniHttpClient::requestWithRetry(
     const std::string& method,
     const std::string& url,
     const std::map<std::string, std::string>& headers,

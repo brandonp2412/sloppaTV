@@ -9,10 +9,12 @@
 #include "jellyfin.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
+#include "navigation_stack.hpp"
 #include "ui_policy.hpp"
 #include "renderer.hpp"
 #include "task_runner.hpp"
 #include "video_surface.hpp"
+#include "version_policy.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -23,6 +25,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
@@ -39,6 +42,10 @@
 
 using nlohmann::json;
 using namespace std::chrono_literals;
+
+#ifndef SLOPPATV_VERSION_NAME
+#define SLOPPATV_VERSION_NAME "dev"
+#endif
 
 namespace {
 constexpr const char* kTag = "sloppaTV";
@@ -143,6 +150,7 @@ enum class Screen {
     Browse,
     Search,
     Settings,
+    Diagnostics,
     Details,
     Seasons,
     Episodes,
@@ -268,6 +276,9 @@ struct AppSettings {
     bool autoplayNext = true;
     int stillWatchingAfter = 3;
     bool refreshRateSwitching = false;
+    bool showWatchedIndicators = true;
+    bool showClock = true;
+    bool showBackdrops = true;
 };
 
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
@@ -321,17 +332,36 @@ public:
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         loadSession();
         if (session_.valid()) {
-            screen_ = Screen::Home;
+            resetNavigation(Screen::Home);
             loadHomeAsync();
         } else {
-            screen_ = Screen::Login;
+            resetNavigation(Screen::Login);
         }
+    }
+
+    void resetNavigation(Screen screen) {
+        navigation_.reset(screen);
+        screen_ = screen;
+    }
+
+    void pushScreen(Screen screen) {
+        navigation_.push(screen);
+        screen_ = navigation_.current();
+    }
+
+    void replaceScreen(Screen screen) {
+        navigation_.replace(screen);
+        screen_ = navigation_.current();
+    }
+
+    void popScreen(Screen fallback = Screen::Home) {
+        screen_ = navigation_.popOr(fallback);
     }
 
     ~SloppaApp() {
         ++taskGeneration_;
         tasks_.shutdown();
-        stopPlayback(false);
+        stopPlayback();
         renderer_.shutdown();
     }
 
@@ -391,7 +421,7 @@ private:
                 if (app_->window) renderer_.init(app_->window);
                 break;
             case APP_CMD_TERM_WINDOW:
-                if (screen_ == Screen::Player) stopPlayback(true);
+                if (screen_ == Screen::Player) stopPlayback();
                 renderer_.shutdown();
                 break;
             case APP_CMD_LOST_FOCUS:
@@ -429,6 +459,7 @@ private:
             case Screen::Browse: handleBrowseKey(key); break;
             case Screen::Search: handleSearchKey(key); break;
             case Screen::Settings: handleSettingsKey(key); break;
+            case Screen::Diagnostics: handleDiagnosticsKey(key); break;
             case Screen::Details: handleDetailsKey(key); break;
             case Screen::Seasons: handleSeasonsKey(key); break;
             case Screen::Episodes: handleEpisodesKey(key); break;
@@ -583,7 +614,7 @@ private:
         } else if (key == AKEYCODE_DPAD_DOWN) {
             if (homeRow_ + 1 < static_cast<int>(home_.rows.size())) ++homeRow_;
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
-            openDetails(items[static_cast<size_t>(selection)], Screen::Home);
+            openDetails(items[static_cast<size_t>(selection)]);
             return;
         }
         if (homeRow_ >= 0 && homeRow_ < static_cast<int>(homeSelection_.size())) {
@@ -593,7 +624,7 @@ private:
 
     void handleLibrariesKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            screen_ = Screen::Home;
+            popScreen(Screen::Home);
             homeRow_ = -1;
             navIndex_ = 1;
             return;
@@ -633,8 +664,8 @@ private:
                 browseLetter_.clear();
                 populateLetterChoices();
             } else {
-                screen_ = browseReturn_;
-                if (browseReturn_ == Screen::Home) homeRow_ = -1;
+                popScreen(Screen::Home);
+                if (screen_ == Screen::Home) homeRow_ = -1;
                 browseItems_.clear();
             }
             return;
@@ -678,7 +709,7 @@ private:
             } else if (isBrowsableContainer(selected)) {
                 openBrowseContainer(selected, true);
             } else {
-                openDetails(selected, Screen::Browse);
+                openDetails(selected);
             }
             return;
         }
@@ -693,8 +724,8 @@ private:
             if (searchKeyboard_) {
                 searchKeyboard_ = false;
             } else {
-                screen_ = Screen::Home;
-                homeRow_ = 0;
+                popScreen(Screen::Home);
+                if (screen_ == Screen::Home) homeRow_ = 0;
             }
             return;
         }
@@ -726,7 +757,7 @@ private:
         else if (key == AKEYCODE_DPAD_UP) row = std::max(0, row - 1);
         else if (key == AKEYCODE_DPAD_DOWN) row = std::min(rows - 1, row + 1);
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            openDetails(searchResults_[static_cast<size_t>(searchSelection_)], Screen::Search);
+            openDetails(searchResults_[static_cast<size_t>(searchSelection_)]);
             return;
         }
         const int next = row * columns + col;
@@ -745,13 +776,13 @@ private:
 
     void handleSettingsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            screen_ = Screen::Home;
-            homeRow_ = -1;
+            popScreen(Screen::Home);
+            if (screen_ == Screen::Home) homeRow_ = -1;
             navIndex_ = 4;
             return;
         }
         if (key == AKEYCODE_DPAD_UP) settingsSelection_ = std::max(0, settingsSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(7, settingsSelection_ + 1);
+        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(11, settingsSelection_ + 1);
         else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
@@ -781,16 +812,29 @@ private:
             } else if (settingsSelection_ == 6) {
                 settings_.refreshRateSwitching = !settings_.refreshRateSwitching;
                 if (!settings_.refreshRateSwitching) displayMode_.restore();
+            } else if (settingsSelection_ == 7) {
+                settings_.showWatchedIndicators = !settings_.showWatchedIndicators;
+            } else if (settingsSelection_ == 8) {
+                settings_.showClock = !settings_.showClock;
+            } else if (settingsSelection_ == 9) {
+                settings_.showBackdrops = !settings_.showBackdrops;
             }
             saveSession(session_);
-        } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && settingsSelection_ == 7) {
-            logout();
+        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            if (settingsSelection_ == 10) openDiagnostics();
+            else if (settingsSelection_ == 11) logout();
+        }
+    }
+
+    void handleDiagnosticsKey(int32_t key) {
+        if (key == AKEYCODE_BACK || key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            popScreen(Screen::Settings);
         }
     }
 
     void handleDetailsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            screen_ = detailsReturn_;
+            popScreen(Screen::Home);
             return;
         }
         const auto actions = detailActions();
@@ -802,7 +846,7 @@ private:
             } else if (key == AKEYCODE_DPAD_RIGHT && !detailsSimilar_.empty()) {
                 detailsSimilarSelection_ = std::min(static_cast<int>(detailsSimilar_.size()) - 1, detailsSimilarSelection_ + 1);
             } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !detailsSimilar_.empty()) {
-                openDetails(detailsSimilar_[static_cast<size_t>(detailsSimilarSelection_)], detailsReturn_);
+                openDetails(detailsSimilar_[static_cast<size_t>(detailsSimilarSelection_)]);
             }
             return;
         }
@@ -827,7 +871,7 @@ private:
             }
             if (action == 1) toggleFavoriteAsync();
             else if (action == 2) togglePlayedAsync();
-            else if (action == 3) screen_ = detailsReturn_;
+            else if (action == 3) popScreen(Screen::Home);
         }
     }
 
@@ -848,7 +892,7 @@ private:
     void handleSeasonsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
             detail_ = seriesDetail_;
-            screen_ = Screen::Details;
+            popScreen(Screen::Details);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
@@ -860,11 +904,11 @@ private:
 
     void handleEpisodesKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            screen_ = Screen::Seasons;
+            popScreen(Screen::Seasons);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (!episodeItems_.empty()) openDetails(episodeItems_[static_cast<size_t>(episodeSelection_)], Screen::Episodes);
+            if (!episodeItems_.empty()) openDetails(episodeItems_[static_cast<size_t>(episodeSelection_)]);
             return;
         }
         moveGridSelection(key, episodeItems_, episodeSelection_);
@@ -1266,7 +1310,7 @@ private:
             return;
         }
         if (key == AKEYCODE_BACK) {
-            stopPlayback(true);
+            stopPlayback();
         } else if (key == AKEYCODE_DPAD_UP) {
             playerControlsActive_ = true;
             playerControlSelection_ = 0;
@@ -1286,9 +1330,35 @@ private:
     }
 
     void openSettings() {
-        screen_ = Screen::Settings;
+        pushScreen(Screen::Settings);
         settingsSelection_ = 0;
         error_.clear();
+    }
+
+    void openDiagnostics() {
+        if (!session_.valid()) return;
+        pushScreen(Screen::Diagnostics);
+        loading_ = true;
+        error_.clear();
+        serverInfo_ = {};
+        const JellyfinSession session = session_;
+        tasks_.submit([this, session] {
+            auto result = api_.getServerInfo(session);
+            std::scoped_lock lock(stateMutex_);
+            if (screen_ != Screen::Diagnostics) return;
+            loading_ = false;
+            if (!result.ok) {
+                error_ = "SERVER INFO: " + result.error;
+                return;
+            }
+            serverInfo_ = std::move(result.value);
+            const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
+            if (compatibility == ServerCompatibility::TooOld) {
+                error_ = "JELLYFIN " + serverInfo_.version + " IS BELOW THE TESTED 10.10+ BASELINE";
+            } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
+                error_ = "UNRECOGNIZED JELLYFIN VERSION: " + serverInfo_.version;
+            }
+        });
     }
 
     void logout() {
@@ -1301,7 +1371,7 @@ private:
         loginFields_[1].clear();
         loginFields_[2].clear();
         homeSelection_.clear();
-        screen_ = Screen::Login;
+        resetNavigation(Screen::Login);
         loginField_ = 0;
         loading_ = false;
         error_.clear();
@@ -1309,16 +1379,15 @@ private:
     }
 
     void openLibraries() {
-        screen_ = Screen::Libraries;
+        pushScreen(Screen::Libraries);
         librarySelection_ = std::clamp(librarySelection_, 0, std::max(0, static_cast<int>(home_.views.size()) - 1));
         error_.clear();
     }
 
     static constexpr int kBrowsePageSize = 60;
 
-    void openLibrary(const JellyfinItem& library, Screen returnScreen = Screen::Libraries) {
+    void openLibrary(const JellyfinItem& library) {
         if (loading_ || library.id.empty()) return;
-        browseReturn_ = returnScreen;
         browseStack_.clear();
         browseFilterFocused_ = false;
         browseFilterSelection_ = 0;
@@ -1337,7 +1406,7 @@ private:
             openLibraries();
             return;
         }
-        openLibrary(*library, Screen::Home);
+        openLibrary(*library);
     }
 
     bool browseHasFilterBar() const {
@@ -1403,7 +1472,7 @@ private:
                 browseHasMore_,
             });
         }
-        screen_ = Screen::Browse;
+        pushScreen(Screen::Browse);
         activeLibrary_ = container;
         browseItems_.clear();
         browseSelection_ = 0;
@@ -1480,7 +1549,7 @@ private:
         seasonItems_.clear();
         episodeItems_.clear();
         seasonSelection_ = 0;
-        screen_ = Screen::Seasons;
+        pushScreen(Screen::Seasons);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -1505,7 +1574,7 @@ private:
         selectedSeason_ = season;
         episodeItems_.clear();
         episodeSelection_ = 0;
-        screen_ = Screen::Episodes;
+        pushScreen(Screen::Episodes);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -1599,7 +1668,7 @@ private:
     }
 
     void openSearch() {
-        screen_ = Screen::Search;
+        pushScreen(Screen::Search);
         searchKeyboard_ = true;
         keyboardRow_ = keyboardCol_ = 0;
         error_.clear();
@@ -1652,7 +1721,7 @@ private:
                 loginFields_[0] = session_.server;
                 loginFields_[1] = session_.username;
                 loginFields_[2].clear();
-                screen_ = Screen::Home;
+                resetNavigation(Screen::Home);
                 loading_ = false;
                 homeRow_ = 0;
                 error_.clear();
@@ -1733,7 +1802,7 @@ private:
                     quickConnectActive_ = false;
                     quickConnectCode_.clear();
                     loading_ = false;
-                    screen_ = Screen::Home;
+                    resetNavigation(Screen::Home);
                     homeRow_ = 0;
                     error_.clear();
                     saveSession(session_);
@@ -1785,7 +1854,7 @@ private:
                 if (core.error.find("HTTP 401") != std::string::npos) {
                     session_.token.clear();
                     session_.userId.clear();
-                    screen_ = Screen::Login;
+                    resetNavigation(Screen::Login);
                     error_ = "SESSION EXPIRED - LOG IN AGAIN";
                     saveSession(session_);
                 } else {
@@ -1882,9 +1951,8 @@ private:
         });
     }
 
-    void openDetails(const JellyfinItem& item, Screen returnScreen) {
-        screen_ = Screen::Details;
-        detailsReturn_ = returnScreen;
+    void openDetails(const JellyfinItem& item) {
+        pushScreen(Screen::Details);
         stillWatchingPrompt_ = false;
         detail_ = item;
         detailsButton_ = 0;
@@ -2041,7 +2109,6 @@ private:
         nextTransitionLoading_ = true;
         detail_ = nextItem;
         stillWatchingPrompt_ = false;
-        detailsReturn_ = Screen::Home;
         playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
         const JellyfinSession session = session_;
         tasks_.submit([this, session, nextItem = std::move(nextItem)]() mutable {
@@ -2050,7 +2117,7 @@ private:
             loading_ = false;
             nextTransitionLoading_ = false;
             if (!target.ok) {
-                screen_ = Screen::Details;
+                popScreen(Screen::Details);
                 error_ = "NEXT EPISODE: " + target.error;
                 return;
             }
@@ -2063,9 +2130,8 @@ private:
         releaseActivePlayback(true);
         autoplayChainCount_ = 0;
         detail_ = std::move(nextItem);
-        detailsReturn_ = Screen::Home;
         detailsButton_ = 0;
-        screen_ = Screen::Details;
+        popScreen(Screen::Details);
         stillWatchingPrompt_ = true;
         error_.clear();
     }
@@ -2132,6 +2198,11 @@ private:
                 item = pendingPlaybackItem_;
                 activePlaybackItem_ = item;
                 activeTarget_ = *target;
+                std::ostringstream playbackSummary;
+                playbackSummary << (target->transcoding ? "TRANSCODE" : "DIRECT PLAY");
+                if (!item.videoCodec.empty()) playbackSummary << " / " << item.videoCodec;
+                if (item.videoWidth > 0 && item.videoHeight > 0) playbackSummary << " / " << item.videoWidth << 'X' << item.videoHeight;
+                lastPlaybackSummary_ = playbackSummary.str();
                 playbackStartReported_ = false;
                 playbackFallbackAttempted_ = false;
                 lastProgressReport_ = std::chrono::steady_clock::now();
@@ -2166,7 +2237,8 @@ private:
                     activeMediaSegments_.clear();
                 }
                 nextTransitionLoading_ = false;
-                screen_ = Screen::Player;
+                if (!streamRestart) pushScreen(Screen::Player);
+                else replaceScreen(Screen::Player);
             }
         }
 
@@ -2179,7 +2251,7 @@ private:
             if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
                 std::scoped_lock lock(stateMutex_);
                 error_ = surfaceError.empty() ? "VIDEO SURFACE IS NOT AVAILABLE" : surfaceError;
-                screen_ = Screen::Details;
+                popScreen(Screen::Details);
                 activeTarget_ = {};
                 activePlaybackItem_ = {};
                 return;
@@ -2207,7 +2279,7 @@ private:
                 return;
             }
             error_ = playerError;
-            stopPlayback(false);
+            stopPlayback();
             return;
         }
         if (status == PlayerStatus::Playing || status == PlayerStatus::Paused) {
@@ -2241,7 +2313,7 @@ private:
                         showStillWatching(std::move(next));
                     }
                 } else {
-                    stopPlayback(true);
+                    stopPlayback();
                     autoplayChainCount_ = 0;
                 }
             }
@@ -2261,12 +2333,11 @@ private:
         });
     }
 
-    void stopPlayback(bool returnToDetails) {
+    void stopPlayback() {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
         releaseActivePlayback(true);
         nextTransitionLoading_ = false;
-        if (returnToDetails) screen_ = Screen::Details;
-        else if (screen_ == Screen::Player) screen_ = Screen::Details;
+        if (screen_ == Screen::Player) popScreen(Screen::Details);
         if (app_->window && !renderer_.ready()) renderer_.init(app_->window);
         loadHomeAsync();
     }
@@ -2281,6 +2352,7 @@ private:
             case Screen::Browse: renderBrowse(); break;
             case Screen::Search: renderSearch(); break;
             case Screen::Settings: renderSettings(); break;
+            case Screen::Diagnostics: renderDiagnostics(); break;
             case Screen::Details: renderDetails(); break;
             case Screen::Seasons: renderSeasons(); break;
             case Screen::Episodes: renderEpisodes(); break;
@@ -2583,7 +2655,7 @@ private:
     }
 
     bool drawBackdrop(const JellyfinItem& item, float alpha = 0.28f) {
-        if (item.id.empty() || item.backdropTag.empty()) return false;
+        if (!settings_.showBackdrops || item.id.empty() || item.backdropTag.empty()) return false;
         const std::string key = backdropKey(item);
         auto it = backdrops_.find(key);
         if (it == backdrops_.end()) {
@@ -2604,6 +2676,14 @@ private:
     void renderHeader(const std::string& title) {
         renderer_.text(80, 55, 5.0f, "SLOPPATV", kText);
         renderer_.text(80, 120, 2.3f, title, kMuted);
+        if (settings_.showClock) {
+            const std::time_t now = std::time(nullptr);
+            std::tm local{};
+            localtime_r(&now, &local);
+            std::ostringstream clock;
+            clock << std::put_time(&local, "%H:%M");
+            renderer_.text(1690, 65, 2.1f, clock.str(), kMuted, 150);
+        }
     }
 
     void renderLogin() {
@@ -2728,7 +2808,7 @@ private:
                 renderer_.rect(x, y + cardH - 5.0f, cardW, 5.0f, kPanelAlt);
                 renderer_.rect(x, y + cardH - 5.0f, static_cast<float>(cardW * progress), 5.0f, kFocus);
             }
-            if (item.played) {
+            if (settings_.showWatchedIndicators && item.played) {
                 renderer_.rect(x + cardW - 92.0f, y + 10.0f, 82.0f, 27.0f, Color{0.0f, 0.0f, 0.0f, 0.72f});
                 renderer_.text(x + cardW - 84.0f, y + 18.0f, 0.85f, "WATCHED", kText, 68.0f);
             }
@@ -2980,7 +3060,7 @@ private:
 
     void renderSettings() {
         renderHeader("SETTINGS");
-        const std::array<std::string, 8> labels{
+        const std::array<std::string, 12> labels{
             "MAX STREAMING BITRATE",
             "SKIP BACK",
             "SKIP AHEAD",
@@ -2988,9 +3068,13 @@ private:
             "AUTOPLAY NEXT EPISODE",
             "STILL WATCHING AFTER",
             "MATCH VIDEO REFRESH RATE",
+            "WATCHED INDICATORS",
+            "CLOCK",
+            "BACKDROPS",
+            "DIAGNOSTICS",
             "LOG OUT",
         };
-        const std::array<std::string, 8> values{
+        const std::array<std::string, 12> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             std::to_string(settings_.seekBackSeconds) + " SECONDS",
             std::to_string(settings_.seekForwardSeconds) + " SECONDS",
@@ -2998,17 +3082,63 @@ private:
             settings_.autoplayNext ? "ON" : "OFF",
             std::to_string(settings_.stillWatchingAfter) + " AUTOPLAYS",
             settings_.refreshRateSwitching ? "ON" : "OFF",
+            settings_.showWatchedIndicators ? "ON" : "OFF",
+            settings_.showClock ? "ON" : "OFF",
+            settings_.showBackdrops ? "ON" : "OFF",
+            "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
         };
-        for (int i = 0; i < 8; ++i) {
-            const float y = 125.0f + static_cast<float>(i) * 101.0f;
+        constexpr int visibleRows = 8;
+        const int first = std::clamp(settingsSelection_ - visibleRows + 1, 0, static_cast<int>(labels.size()) - visibleRows);
+        for (int slot = 0; slot < visibleRows; ++slot) {
+            const int i = first + slot;
+            const float y = 125.0f + static_cast<float>(slot) * 101.0f;
             const bool focused = i == settingsSelection_;
             renderer_.rect(120, y, 1380, 92, focused ? kPanelAlt : kPanel);
             if (focused) renderer_.outline(116, y - 4, 1388, 100, 4, kFocus);
             renderer_.text(155, y + 25, 2.0f, labels[static_cast<size_t>(i)], kText, 650);
-            renderer_.text(900, y + 25, 2.0f, values[static_cast<size_t>(i)], i == 7 ? kMuted : kFocus, 520);
+            renderer_.text(900, y + 25, 2.0f, values[static_cast<size_t>(i)], i == 11 ? kMuted : kFocus, 520);
         }
-        renderer_.text(120, 955, 1.6f, "LEFT / RIGHT CHANGES VALUES. SETTINGS ARE SAVED IMMEDIATELY.", kMuted);
+        renderer_.text(120, 955, 1.6f, "LEFT / RIGHT CHANGES VALUES. OK OPENS ACTIONS. SETTINGS SAVE IMMEDIATELY.", kMuted);
+    }
+
+    void renderDiagnostics() {
+        renderHeader("DIAGNOSTICS");
+        const auto& codecs = api_.deviceCodecSupport();
+        const auto videoCodecs = codecs.jellyfinVideoCodecs();
+        const auto audioCodecs = codecs.jellyfinAudioCodecs();
+        std::vector<std::string> hdr;
+        if (codecs.displayHdr10) hdr.emplace_back("HDR10");
+        if (codecs.displayHdr10Plus) hdr.emplace_back("HDR10+");
+        if (codecs.displayDolbyVision) hdr.emplace_back("DOLBY VISION");
+        if (codecs.displayHlg) hdr.emplace_back("HLG");
+
+        std::string architecture = "UNKNOWN";
+#if defined(__aarch64__)
+        architecture = "ARM64";
+#elif defined(__arm__)
+        architecture = "ARM32";
+#elif defined(__x86_64__)
+        architecture = "X86_64";
+#endif
+
+        std::vector<std::pair<std::string, std::string>> rows{
+            {"APP VERSION", SLOPPATV_VERSION_NAME},
+            {"ABI", architecture},
+            {"SERVER", serverInfo_.name.empty() ? session_.server : serverInfo_.name},
+            {"JELLYFIN VERSION", serverInfo_.version.empty() ? (loading_ ? "LOADING..." : "UNKNOWN") : serverInfo_.version},
+            {"VIDEO DECODERS", videoCodecs.empty() ? "NONE DETECTED" : joinGenres(videoCodecs, videoCodecs.size())},
+            {"AUDIO DECODERS", audioCodecs.empty() ? "NONE DETECTED" : joinGenres(audioCodecs, audioCodecs.size())},
+            {"HEVC MAX", codecs.maxHevcWidth > 0 ? std::to_string(codecs.maxHevcWidth) + "X" + std::to_string(codecs.maxHevcHeight) : "UNKNOWN"},
+            {"HDR DISPLAY", hdr.empty() ? "SDR / NONE DETECTED" : joinGenres(hdr, hdr.size())},
+            {"LAST PLAYBACK", lastPlaybackSummary_.empty() ? "NOT YET PLAYED THIS SESSION" : lastPlaybackSummary_},
+        };
+        for (size_t i = 0; i < rows.size(); ++i) {
+            const float y = 180.0f + static_cast<float>(i) * 82.0f;
+            renderer_.text(120, y, 1.55f, rows[i].first, kMuted, 430);
+            renderer_.text(560, y, 1.55f, rows[i].second, kText, 1240);
+        }
+        renderer_.text(120, 955, 1.5f, "BACK OR OK RETURNS TO SETTINGS", kMuted);
     }
 
     void renderMediaGrid(const std::string& title, const std::vector<JellyfinItem>& items, int selection) {
@@ -3042,7 +3172,7 @@ private:
             const auto secondary = episodeLabel(item);
             if (!secondary.empty()) renderer_.text(textX, y + 112, 1.1f, secondary, kMuted, textWidth);
             if (item.favorite) renderer_.text(textX, y + 145, 1.0f, "FAVORITE", kFocus, textWidth);
-            else if (item.played) renderer_.text(textX, y + 145, 1.0f, "WATCHED", kMuted, textWidth);
+            else if (settings_.showWatchedIndicators && item.played) renderer_.text(textX, y + 145, 1.0f, "WATCHED", kMuted, textWidth);
         }
     }
 
@@ -3093,7 +3223,7 @@ private:
         if (!cast.empty()) renderer_.text(contentX + 5.0f, hasSimilar ? 590.0f : 650.0f, 1.35f, "CAST  " + cast, kMuted, contentWidth);
         const float badgeY = hasSimilar ? 630.0f : 700.0f;
         if (detail_.favorite) renderer_.text(contentX + 5.0f, badgeY, 1.7f, "FAVORITE", kFocus);
-        if (detail_.played) renderer_.text(contentX + 180.0f, badgeY, 1.7f, "WATCHED", kMuted);
+        if (settings_.showWatchedIndicators && detail_.played) renderer_.text(contentX + 180.0f, badgeY, 1.7f, "WATCHED", kMuted);
 
         const auto actions = detailActions();
         const float available = std::min(1690.0f - contentX, 1320.0f);
@@ -3173,6 +3303,9 @@ private:
                 settings_.autoplayNext = saved.value("autoplayNext", settings_.autoplayNext);
                 settings_.stillWatchingAfter = std::clamp(saved.value("stillWatchingAfter", settings_.stillWatchingAfter), 2, 6);
                 settings_.refreshRateSwitching = saved.value("refreshRateSwitching", settings_.refreshRateSwitching);
+                settings_.showWatchedIndicators = saved.value("showWatchedIndicators", settings_.showWatchedIndicators);
+                settings_.showClock = saved.value("showClock", settings_.showClock);
+                settings_.showBackdrops = saved.value("showBackdrops", settings_.showBackdrops);
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
             }
             loginFields_[0] = session_.server;
@@ -3199,6 +3332,9 @@ private:
                     {"autoplayNext", settings_.autoplayNext},
                     {"stillWatchingAfter", settings_.stillWatchingAfter},
                     {"refreshRateSwitching", settings_.refreshRateSwitching},
+                    {"showWatchedIndicators", settings_.showWatchedIndicators},
+                    {"showClock", settings_.showClock},
+                    {"showBackdrops", settings_.showBackdrops},
                 }},
             };
             std::ofstream output(dataPath_ + "/session.json", std::ios::trunc);
@@ -3223,14 +3359,14 @@ private:
     std::string deviceId_;
 
     Screen screen_ = Screen::Login;
-    Screen detailsReturn_ = Screen::Home;
-    Screen browseReturn_ = Screen::Libraries;
+    NavigationStack<Screen> navigation_{Screen::Login};
     bool loading_ = false;
     AppSettings settings_;
     int settingsSelection_ = 0;
     std::string error_;
 
     JellyfinSession session_;
+    JellyfinServerInfo serverInfo_;
     JellyfinHomeData home_;
     std::unordered_map<std::string, ArtworkEntry> artwork_;
     std::unordered_map<std::string, ArtworkEntry> homeArtwork_;
@@ -3315,6 +3451,7 @@ private:
     std::chrono::steady_clock::time_point playerOverlayUntil_{};
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     bool stillWatchingPrompt_ = false;
+    std::string lastPlaybackSummary_;
 };
 }  // namespace
 

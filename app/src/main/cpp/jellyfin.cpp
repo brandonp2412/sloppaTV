@@ -451,6 +451,34 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::parseItemList(const Ht
     return result;
 }
 
+ApiValueResult<JellyfinServerInfo> JellyfinClient::getServerInfo(const JellyfinSession& session) const {
+    ApiValueResult<JellyfinServerInfo> result;
+    if (session.server.empty()) {
+        result.error = "Server info request is incomplete";
+        return result;
+    }
+    const auto response = http_.request(
+        "GET",
+        session.server + "/System/Info/Public",
+        headers(nullptr, session.deviceId)
+    );
+    if (!response.ok()) {
+        result.error = apiError(response);
+        return result;
+    }
+    try {
+        const auto data = json::parse(response.body);
+        result.value.name = data.value("ServerName", std::string{});
+        result.value.version = data.value("Version", std::string{});
+        result.value.productName = data.value("ProductName", std::string{});
+        result.value.operatingSystem = data.value("OperatingSystem", std::string{});
+        result.ok = true;
+    } catch (const std::exception& e) {
+        result.error = std::string("Unable to parse server info: ") + e.what();
+    }
+    return result;
+}
+
 ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSession& session) const {
     ApiValueResult<JellyfinHomeData> result;
     if (!session.valid()) {

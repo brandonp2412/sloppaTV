@@ -101,6 +101,13 @@ struct JellyfinHomeData {
     std::string warning;
 };
 
+struct JellyfinServerInfo {
+    std::string name;
+    std::string version;
+    std::string productName;
+    std::string operatingSystem;
+};
+
 struct QuickConnectRequest {
     std::string server;
     std::string secret;
@@ -140,6 +147,7 @@ public:
     ApiValueResult<bool> pollQuickConnect(const QuickConnectRequest& request, const std::string& deviceId) const;
     ApiValueResult<JellyfinSession> completeQuickConnect(const QuickConnectRequest& request, const std::string& deviceId) const;
 
+    ApiValueResult<JellyfinServerInfo> getServerInfo(const JellyfinSession& session) const;
     ApiValueResult<JellyfinHomeData> loadHome(const JellyfinSession& session) const;
     ApiValueResult<JellyfinHomeData> loadHomeCore(const JellyfinSession& session) const;
     ApiValueResult<JellyfinHomeData> loadHomeSecondary(
@@ -241,6 +249,8 @@ public:
         const JellyfinItem& item,
         int subtitleIndex
     ) const;
+
+    [[nodiscard]] const DeviceCodecSupport& deviceCodecSupport() const { return codecSupport_; }
 
 private:
     std::string normalizeServer(std::string value) const;

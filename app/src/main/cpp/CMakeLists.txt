@@ -4,6 +4,10 @@ project(sloppatv LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+if(NOT DEFINED SLOPPATV_VERSION_NAME)
+    set(SLOPPATV_VERSION_NAME "dev")
+endif()
+
 add_library(sloppatv SHARED
     ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
     main.cpp
@@ -26,6 +30,10 @@ target_include_directories(sloppatv PRIVATE
 
 target_compile_options(sloppatv PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Wpedantic>
+)
+
+target_compile_definitions(sloppatv PRIVATE
+    SLOPPATV_VERSION_NAME="${SLOPPATV_VERSION_NAME}"
 )
 
 target_link_libraries(sloppatv PRIVATE
