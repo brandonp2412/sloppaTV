@@ -32,6 +32,12 @@ constexpr bool isTopMediaGridSelection(int selection) {
 }
 constexpr float mediaCardWidth() { return 405.0f; }
 constexpr float mediaTitleScale() { return 2.15f; }
+constexpr float uiTextScale(int option) {
+    return option <= 0 ? 1.0f : (option == 1 ? 1.15f : 1.30f);
+}
+constexpr float uiSafeAreaFraction(int percent) {
+    return static_cast<float>(percent < 0 ? 0 : (percent > 6 ? 6 : percent)) / 100.0f;
+}
 
 constexpr PlayerControlKind playerControlKind(std::size_t index) {
     return index == 0 ? PlayerControlKind::PlayPause

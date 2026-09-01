@@ -280,6 +280,39 @@ std::string subtitlePositionName(int position) {
     return names[static_cast<size_t>(std::clamp(position, 0, 2))];
 }
 
+std::string uiTextSizeName(int size) {
+    static constexpr std::array<const char*, 3> names{"NORMAL", "LARGE", "EXTRA LARGE"};
+    return names[static_cast<size_t>(std::clamp(size, 0, 2))];
+}
+
+std::string avcLevelName(int level) {
+    if (level <= 0) return "AUTO";
+    return std::to_string(level / 10) + "." + std::to_string(level % 10);
+}
+
+std::string hevcLevelName(int level) {
+    switch (level) {
+        case 120: return "4.0";
+        case 123: return "4.1";
+        case 150: return "5.0";
+        case 153: return "5.1";
+        case 156: return "5.2";
+        case 180: return "6.0";
+        case 183: return "6.1";
+        case 186: return "6.2";
+        default: return "AUTO";
+    }
+}
+
+std::string hdrOverrideName(int mode) {
+    switch (static_cast<HdrOverrideMode>(std::clamp(mode, 0, 2))) {
+        case HdrOverrideMode::ForceSdr: return "SDR ONLY";
+        case HdrOverrideMode::AllowAllHdr: return "ALLOW ALL HDR";
+        case HdrOverrideMode::Auto: return "AUTO";
+    }
+    return "AUTO";
+}
+
 float subtitleTextScale(int size) {
     static constexpr std::array<float, 3> scales{1.85f, 2.3f, 2.8f};
     return scales[static_cast<size_t>(std::clamp(size, 0, 2))];
@@ -300,7 +333,20 @@ struct AppSettings {
     bool subtitleBackground = true;
     int subtitlePosition = 0;
     int maxAudioChannels = 8;
+    int avcLevelOverride = 0;
+    int hevcLevelOverride = 0;
+    int hdrOverride = static_cast<int>(HdrOverrideMode::Auto);
+    int uiTextSize = 0;
+    int safeAreaPercent = 0;
 };
+
+PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
+    return {
+        .maxAvcLevel = settings.avcLevelOverride,
+        .maxHevcLevel = settings.hevcLevelOverride,
+        .hdrMode = static_cast<HdrOverrideMode>(std::clamp(settings.hdrOverride, 0, 2)),
+    };
+}
 
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
     static const std::vector<std::vector<VirtualKey>> rows = {
@@ -833,7 +879,7 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_UP) settingsSelection_ = std::max(0, settingsSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(15, settingsSelection_ + 1);
+        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(20, settingsSelection_ + 1);
         else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
@@ -877,11 +923,33 @@ private:
                 settings_.subtitlePosition = std::clamp(settings_.subtitlePosition + direction, 0, 2);
             } else if (settingsSelection_ == 13) {
                 settings_.maxAudioChannels = settings_.maxAudioChannels <= 2 ? 8 : 2;
+            } else if (settingsSelection_ == 14) {
+                static constexpr std::array<int, 10> choices{0, 40, 41, 42, 50, 51, 52, 60, 61, 62};
+                auto it = std::find(choices.begin(), choices.end(), settings_.avcLevelOverride);
+                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
+                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
+                settings_.avcLevelOverride = choices[static_cast<size_t>(index)];
+            } else if (settingsSelection_ == 15) {
+                static constexpr std::array<int, 9> choices{0, 120, 123, 150, 153, 156, 180, 183, 186};
+                auto it = std::find(choices.begin(), choices.end(), settings_.hevcLevelOverride);
+                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
+                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
+                settings_.hevcLevelOverride = choices[static_cast<size_t>(index)];
+            } else if (settingsSelection_ == 16) {
+                settings_.hdrOverride = std::clamp(settings_.hdrOverride + direction, 0, 2);
+            } else if (settingsSelection_ == 17) {
+                settings_.uiTextSize = std::clamp(settings_.uiTextSize + direction, 0, 2);
+            } else if (settingsSelection_ == 18) {
+                static constexpr std::array<int, 4> choices{0, 2, 4, 6};
+                auto it = std::find(choices.begin(), choices.end(), settings_.safeAreaPercent);
+                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
+                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
+                settings_.safeAreaPercent = choices[static_cast<size_t>(index)];
             }
             saveSession(session_);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (settingsSelection_ == 14) openDiagnostics();
-            else if (settingsSelection_ == 15) openProfiles();
+            if (settingsSelection_ == 19) openDiagnostics();
+            else if (settingsSelection_ == 20) openProfiles();
         }
     }
 
@@ -1248,6 +1316,7 @@ private:
         const bool shouldReportPrevious = playbackStartReported_ && !previousTarget.url.empty();
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
+        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
 
         // A Jellyfin server-stream change is a real playback-session handoff. Resolve the
         // replacement only after closing/reporting the old session: asking Jellyfin for a
@@ -1269,6 +1338,7 @@ private:
             shouldReportPrevious,
             maxStreamingBitrate,
             maxAudioChannels,
+            playbackOverrides,
             audioStreamIndex,
             subtitleStreamIndex,
             wasPaused
@@ -1281,6 +1351,7 @@ private:
                 item,
                 maxStreamingBitrate,
                 maxAudioChannels,
+                playbackOverrides,
                 audioStreamIndex,
                 subtitleStreamIndex
             );
@@ -2216,9 +2287,12 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const JellyfinItem selected = detail_;
+        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
         const uint64_t generation = ++taskGeneration_;
 
-        tasks_.submit([this, session, selected, generation] {
+        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides, generation] {
             JellyfinItem playable = selected;
             if (selected.type == "Series") {
                 auto next = api_.getNextUpForSeries(session, selected.id);
@@ -2237,8 +2311,9 @@ private:
             auto target = api_.resolvePlayback(
                 session,
                 playable,
-                settings_.maxBitrateMbps * 1000000,
-                settings_.maxAudioChannels
+                maxStreamingBitrate,
+                maxAudioChannels,
+                playbackOverrides
             );
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
@@ -2338,12 +2413,16 @@ private:
         stillWatchingPrompt_ = false;
         playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
         const JellyfinSession session = session_;
-        tasks_.submit([this, session, nextItem = std::move(nextItem)]() mutable {
+        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, nextItem = std::move(nextItem)]() mutable {
             auto target = api_.resolvePlayback(
                 session,
                 nextItem,
-                settings_.maxBitrateMbps * 1000000,
-                settings_.maxAudioChannels
+                maxStreamingBitrate,
+                maxAudioChannels,
+                playbackOverrides
             );
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
@@ -2578,6 +2657,10 @@ private:
     void render() {
         std::scoped_lock lock(stateMutex_);
         renderer_.beginFrame();
+        renderer_.setUiTransform(
+            uiSafeAreaFraction(settings_.safeAreaPercent),
+            uiTextScale(settings_.uiTextSize)
+        );
         switch (screen_) {
             case Screen::Login: renderLogin(); break;
             case Screen::Profiles: renderProfiles(); break;
@@ -3334,7 +3417,7 @@ private:
 
     void renderSettings() {
         renderHeader("SETTINGS");
-        const std::array<std::string, 16> labels{
+        const std::array<std::string, 21> labels{
             "MAX STREAMING BITRATE",
             "SKIP BACK",
             "SKIP AHEAD",
@@ -3349,10 +3432,15 @@ private:
             "SUBTITLE BACKGROUND",
             "SUBTITLE POSITION",
             "MAX AUDIO CHANNELS",
+            "AVC / H.264 MAX LEVEL",
+            "HEVC / H.265 MAX LEVEL",
+            "HDR PLAYBACK",
+            "UI TEXT SIZE",
+            "OVERSCAN SAFE AREA",
             "DIAGNOSTICS",
             "SWITCH USER",
         };
-        const std::array<std::string, 16> values{
+        const std::array<std::string, 21> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             std::to_string(settings_.seekBackSeconds) + " SECONDS",
             std::to_string(settings_.seekForwardSeconds) + " SECONDS",
@@ -3367,6 +3455,11 @@ private:
             settings_.subtitleBackground ? "ON" : "OFF",
             subtitlePositionName(settings_.subtitlePosition),
             std::to_string(settings_.maxAudioChannels) + " CHANNELS",
+            avcLevelName(settings_.avcLevelOverride),
+            hevcLevelName(settings_.hevcLevelOverride),
+            hdrOverrideName(settings_.hdrOverride),
+            uiTextSizeName(settings_.uiTextSize),
+            settings_.safeAreaPercent == 0 ? "OFF" : std::to_string(settings_.safeAreaPercent) + "% PER EDGE",
             "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
         };
@@ -3379,7 +3472,7 @@ private:
             renderer_.rect(100, y, 1580, 104, focused ? kPanelAlt : kPanel);
             if (focused) renderer_.outline(96, y - 4, 1588, 112, 5, kFocus);
             renderer_.text(140, y + 31, 2.3f, labels[static_cast<size_t>(i)], kText, 760);
-            renderer_.text(965, y + 31, 2.2f, values[static_cast<size_t>(i)], i == 15 ? kMuted : kFocus, 650);
+            renderer_.text(965, y + 31, 2.2f, values[static_cast<size_t>(i)], i == 20 ? kMuted : kFocus, 650);
         }
         renderer_.text(105, 1000, 1.75f, "LEFT / RIGHT CHANGES VALUES. OK OPENS ACTIONS. SETTINGS SAVE IMMEDIATELY.", kMuted, 1700);
     }
@@ -3682,6 +3775,12 @@ private:
                 settings_.subtitlePosition = std::clamp(saved.value("subtitlePosition", settings_.subtitlePosition), 0, 2);
                 const int savedMaxAudioChannels = saved.value("maxAudioChannels", settings_.maxAudioChannels);
                 settings_.maxAudioChannels = savedMaxAudioChannels <= 2 ? 2 : 8;
+                settings_.avcLevelOverride = saved.value("avcLevelOverride", settings_.avcLevelOverride);
+                settings_.hevcLevelOverride = saved.value("hevcLevelOverride", settings_.hevcLevelOverride);
+                settings_.hdrOverride = std::clamp(saved.value("hdrOverride", settings_.hdrOverride), 0, 2);
+                settings_.uiTextSize = std::clamp(saved.value("uiTextSize", settings_.uiTextSize), 0, 2);
+                const int savedSafeArea = saved.value("safeAreaPercent", settings_.safeAreaPercent);
+                settings_.safeAreaPercent = savedSafeArea <= 0 ? 0 : (savedSafeArea <= 2 ? 2 : (savedSafeArea <= 4 ? 4 : 6));
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
             }
             loginFields_[0] = session_.server;
@@ -3727,6 +3826,11 @@ private:
                     {"subtitleBackground", settings_.subtitleBackground},
                     {"subtitlePosition", settings_.subtitlePosition},
                     {"maxAudioChannels", settings_.maxAudioChannels},
+                    {"avcLevelOverride", settings_.avcLevelOverride},
+                    {"hevcLevelOverride", settings_.hevcLevelOverride},
+                    {"hdrOverride", settings_.hdrOverride},
+                    {"uiTextSize", settings_.uiTextSize},
+                    {"safeAreaPercent", settings_.safeAreaPercent},
                 }},
             };
             std::ofstream output(dataPath_ + "/session.json", std::ios::trunc);

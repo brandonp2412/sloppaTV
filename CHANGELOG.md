@@ -24,6 +24,8 @@ All notable user-visible and release-engineering changes are recorded here.
 - TV readability redesign with three large Home cards per row, four-column media grids, larger navigation/settings/player typography, larger focus targets and roomier spacing.
 - Aspect-aware Details artwork so episodes use a large landscape frame while movies/series retain poster presentation.
 - Side-by-side `.test` application IDs for Debug/Benchmark acceptance builds so real-device testing never requires replacing or clearing an installed production client.
+- Persisted global UI text-size presets and per-edge overscan safe-area controls, with the native renderer applying them to UI/artwork/overlays while leaving playback video edge-to-edge.
+- Persisted AVC, HEVC and HDR playback overrides that feed real Jellyfin PlaybackInfo capability negotiation rather than acting as display-only preferences.
 
 ## 0.1.0 - 2026-09-01
 

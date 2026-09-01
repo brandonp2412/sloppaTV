@@ -13,6 +13,12 @@ int main() {
     assert(!isTopMediaGridSelection(4));
     assert(mediaCardWidth() >= 400.0f);
     assert(mediaTitleScale() >= 2.1f);
+    assert(uiTextScale(0) == 1.0f);
+    assert(uiTextScale(1) > uiTextScale(0));
+    assert(uiTextScale(2) > uiTextScale(1));
+    assert(uiSafeAreaFraction(-1) == 0.0f);
+    assert(uiSafeAreaFraction(4) == 0.04f);
+    assert(uiSafeAreaFraction(99) == 0.06f);
 
     assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
     assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);

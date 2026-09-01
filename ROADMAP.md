@@ -79,7 +79,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [~] Cast metadata on Details; cast/person images still missing
 - [ ] Theme/backdrop behavior parity
 - [x] Home row/item and Movies/Shows top-nav focus restoration across refresh/navigation
-- [ ] Accessibility-friendly scalable text and overscan controls
+- [x] Accessibility-friendly global UI text sizing (`NORMAL` / `LARGE` / `EXTRA LARGE`) and overscan safe-area controls (`OFF` / `2%` / `4%` / `6%` per edge), persisted and verified at the worst-case Extra Large + 6% combination on the physical Google TV Streamer; UI/artwork/overlays stay inside the safe area while video remains edge-to-edge
 
 ### Video playback
 
@@ -93,7 +93,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [~] Playback start/progress/stop reporting; current cached-position/ticks reporting and immediate Details resume-state update are exercised in Waydroid, but server-state assertions still need automated tests
 - [x] End-to-end playback verified against the real Jellyfin server and streamer
 - [x] Native Android MediaCodecList capability probing for video/audio decoder families
-- [~] Device-aware direct-play codec/container/profile/resolution/HDR matching; real HEVC Main10/MKV direct play verified and a real HDR10 library title identified, HDR title playback E2E pending
+- [~] Device-aware direct-play codec/container/profile/resolution/HDR matching; real HEVC Main10/MKV direct play is verified, and user AVC/HEVC/HDR overrides now feed the same PlaybackInfo capability decision; real HDR title playback E2E remains pending
 - [~] Playback targets now distinguish Jellyfin `DirectPlay`, `DirectStream` and `Transcode` in session reporting and diagnostics while retaining server-stream seek policy; a real DirectStream/remux session assertion is still pending
 - [x] Native playback overlay with title, time and progress bar
 - [x] Native seek/progress UI
@@ -107,7 +107,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [~] In-player zoom/fill option intentionally removed from the simplified player controls; the persisted default-video-zoom setting/render path still exists
 - [~] Quality/max-bitrate selection feeds PlaybackInfo negotiation
 - [~] Fixed-source refresh-rate requests/clear implemented through `ANativeWindow`; real 23.976 request succeeds, but the streamer has system `match_content_frame_rate=0`, so physical mode switching is intentionally blocked by Android policy
-- [~] Native HDR10/HDR10+/Dolby Vision/HLG display probing and per-item gating implemented; real HDR10 title playback/override UI still pending
+- [~] Native HDR10/HDR10+/Dolby Vision/HLG display probing and per-item gating implemented; persisted HDR override modes (`AUTO`, `SDR ONLY`, `ALLOW ALL HDR`) now alter capability gating, but the current enumerated library returned no HDR-range item for a physical-streamer override assertion
 - [ ] Audio output/downmix/passthrough behavior parity
 - [x] Next Up prefetch/overlay/autoplay; real Friends S2E10 → S2E11 end-of-episode transition verified on the streamer
 - [~] Configurable Still Watching guard and prompt; autoplay threshold logic implemented, prompt still needs dedicated threshold E2E
@@ -150,7 +150,7 @@ Verified on the physical Google TV Streamer at the app's 1920x1080 render target
 - After pausing and allowing the overlay to expire, two screen captures two seconds apart were byte-identical, then diverged again after resume.
 - Two playback exits/re-entries completed with asynchronous `MediaPlayer` teardown start/finish logs and no observed app ANR, fatal exception or fatal native signal. Home repopulated after teardown in roughly 0.2 s for primary rows and roughly 0.5 s including enrichment in the observed runs.
 
-This is a focused readability/playback regression pass, not the final codec/HDR/audio/long-soak matrix.
+This is a focused readability/playback regression pass, not the final codec/HDR/audio/long-soak matrix. A follow-up accessibility pass also verified the global `EXTRA LARGE` UI text preset together with a 6% per-edge safe area on Home, Settings and the player overlay without clipping; video remained full-frame beneath the inset overlay.
 
 ### Explicitly excluded from scope
 
@@ -183,7 +183,7 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - [~] Clock visibility setting is persisted and renders local 24-hour time in native headers; physical-TV UI pass pending
 - [~] Backdrop visibility setting is persisted and gates Details backdrop fetching/rendering; physical-TV UI pass pending
 - [x] Default video zoom mode
-- [ ] AVC / HEVC / HDR override controls
+- [~] Persisted AVC 4.0–6.2, HEVC 4.0–6.2 and HDR Auto/SDR-only/Allow-all controls feed real PlaybackInfo negotiation. On the physical streamer, the same HEVC Main10 Level 5.0 Hell's Paradise S1E1 item selected `DirectPlay` with HEVC Auto, then rejected direct HEVC and selected/started `Transcode` when capped to HEVC 4.0. AVC and a real HDR-range title still need equivalent device assertions
 - [ ] Screensaver preferences
 - [~] User-select behavior now has a saved Users & Servers chooser and Settings `SWITCH USER` flow; physical-TV navigation/expiry/multi-server acceptance remains pending
 - [~] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and the last DirectPlay/DirectStream/Transcode path; physical-TV UI/server pass pending
@@ -216,7 +216,7 @@ The Astra hardening branch adds a real navigation stack, native diagnostics/serv
 
 ## Roadmap continuation checkpoint — 2026-09-02
 
-Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation; max audio channels now feeds PlaybackInfo/device-profile negotiation as 2-channel stereo or 8-channel surround; and authenticated users/servers are retained as switchable saved profiles with local forget/add-account management and 401 expiry cleanup. The TV UI was then reworked around real-streamer couch readability: three large Home cards, four-column browse grids, larger typography/focus targets/settings/player controls, and aspect-aware episode Details artwork. The focused real-streamer playback pass above verifies normal motion, forward/back seeking, pause/resume and exit/re-entry on a real transcoded episode, while broader feature-specific acceptance remains partial. The reference client's configurable buffer presets were also re-audited: they rely on ExoPlayer `DefaultLoadControl`, so the existing `MediaPlayer` backend cannot honestly expose equivalent buffer-duration controls without a backend/buffering-layer change.
+Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation; max audio channels now feeds PlaybackInfo/device-profile negotiation as 2-channel stereo or 8-channel surround; and authenticated users/servers are retained as switchable saved profiles with local forget/add-account management and 401 expiry cleanup. The TV UI was then reworked around real-streamer couch readability: three large Home cards, four-column browse grids, larger typography/focus targets/settings/player controls, and aspect-aware episode Details artwork. Persisted global UI-size and overscan safe-area controls are now physically verified at their worst-case Extra Large + 6% combination, with video intentionally excluded from the safe-area transform. AVC/HEVC/HDR overrides now affect real Jellyfin capability negotiation; a same-title streamer test proved HEVC Main10 Level 5.0 changes from DirectPlay on Auto to a working Transcode when capped to HEVC 4.0. The focused real-streamer playback pass above verifies normal motion, forward/back seeking, pause/resume and exit/re-entry on a real transcoded episode, while broader feature-specific acceptance remains partial. The reference client's configurable buffer presets were also re-audited: they rely on ExoPlayer `DefaultLoadControl`, so the existing `MediaPlayer` backend cannot honestly expose equivalent buffer-duration controls without a backend/buffering-layer change.
 
 ## Current performance evidence
 
