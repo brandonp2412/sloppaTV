@@ -160,8 +160,8 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - Android TV launcher home-screen channels/recommendations
 
 ### Android TV platform integration
-- [ ] Global/deep-link content intents
-- [ ] Voice search
+- [~] Native `ACTION_VIEW` content intents accept validated bare Jellyfin item IDs and route authenticated launches to Details after Home initialization; the installed physical-streamer package resolves VIEW, while an actual external VIEW launch is still pending because the execution environment currently blocks that ADB start form
+- [~] Android searchable metadata and native `ACTION_SEARCH` handling route external/voice-recognizer queries into the existing Jellyfin Search screen; the installed physical-streamer package resolves SEARCH, while an actual voice/external-search launch remains pending
 - [ ] Media session integration
 - [ ] Screensaver / DreamService equivalent
 - [ ] In-app screensaver

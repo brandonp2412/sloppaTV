@@ -3,6 +3,7 @@
 #include <android/native_activity.h>
 #include <android_native_app_glue.h>
 
+#include "deep_link.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
 #include "image_decoder.hpp"
@@ -388,6 +389,79 @@ char keyCodeToChar(int32_t keyCode, int32_t metaState) {
     }
 }
 
+struct LaunchRequest {
+    std::string itemId;
+    std::string searchQuery;
+};
+
+LaunchRequest readLaunchRequest(android_app* app) {
+    LaunchRequest request;
+    if (!app || !app->activity || !app->activity->env || !app->activity->clazz) return request;
+    JNIEnv* env = app->activity->env;
+    jobject activity = app->activity->clazz;
+    jclass activityClass = env->GetObjectClass(activity);
+    if (!activityClass) return request;
+    jmethodID getIntent = env->GetMethodID(activityClass, "getIntent", "()Landroid/content/Intent;");
+    if (!getIntent || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(activityClass);
+        return request;
+    }
+    jobject intent = env->CallObjectMethod(activity, getIntent);
+    if (!intent || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(activityClass);
+        return request;
+    }
+    jclass intentClass = env->GetObjectClass(intent);
+    jmethodID getAction = intentClass ? env->GetMethodID(intentClass, "getAction", "()Ljava/lang/String;") : nullptr;
+    jmethodID getDataString = intentClass ? env->GetMethodID(intentClass, "getDataString", "()Ljava/lang/String;") : nullptr;
+    jmethodID getStringExtra = intentClass ? env->GetMethodID(intentClass, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;") : nullptr;
+    if (!getAction || !getDataString || !getStringExtra || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (intentClass) env->DeleteLocalRef(intentClass);
+        env->DeleteLocalRef(intent);
+        env->DeleteLocalRef(activityClass);
+        return request;
+    }
+
+    auto toString = [&](jstring value) {
+        std::string result;
+        if (!value) return result;
+        const char* chars = env->GetStringUTFChars(value, nullptr);
+        if (chars) {
+            result = chars;
+            env->ReleaseStringUTFChars(value, chars);
+        } else if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+        }
+        return result;
+    };
+
+    auto actionValue = static_cast<jstring>(env->CallObjectMethod(intent, getAction));
+    auto dataValue = static_cast<jstring>(env->CallObjectMethod(intent, getDataString));
+    const std::string action = toString(actionValue);
+    const std::string data = toString(dataValue);
+    if (action == "android.intent.action.VIEW") {
+        request.itemId = normalizeJellyfinItemId(data);
+    } else if (action == "android.intent.action.SEARCH") {
+        jstring queryKey = env->NewStringUTF("query");
+        auto queryValue = queryKey
+            ? static_cast<jstring>(env->CallObjectMethod(intent, getStringExtra, queryKey))
+            : nullptr;
+        request.searchQuery = normalizeExternalSearchQuery(toString(queryValue));
+        if (queryValue) env->DeleteLocalRef(queryValue);
+        if (queryKey) env->DeleteLocalRef(queryKey);
+    }
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (actionValue) env->DeleteLocalRef(actionValue);
+    if (dataValue) env->DeleteLocalRef(dataValue);
+    env->DeleteLocalRef(intentClass);
+    env->DeleteLocalRef(intent);
+    env->DeleteLocalRef(activityClass);
+    return request;
+}
+
 class SloppaApp {
 public:
     explicit SloppaApp(android_app* app)
@@ -400,6 +474,9 @@ public:
               if (app && app->looper) ALooper_wake(app->looper);
           }) {
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
+        const LaunchRequest launchRequest = readLaunchRequest(app_);
+        pendingDeepLinkItemId_ = launchRequest.itemId;
+        pendingSearchQuery_ = launchRequest.searchQuery;
         loadSession();
         if (session_.valid()) {
             resetNavigation(Screen::Home);
@@ -2263,6 +2340,23 @@ private:
                 if (homeRow_ >= 0) prefetchHomeWindow(homeRow_, homeSelection_[static_cast<size_t>(homeRow_)]);
                 const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - homeLoadStarted).count();
                 __android_log_print(ANDROID_LOG_INFO, kTag, "Home primary rows ready in %lld ms", static_cast<long long>(coreMs));
+                if (!pendingDeepLinkItemId_.empty()) {
+                    JellyfinItem linked;
+                    linked.id = std::move(pendingDeepLinkItemId_);
+                    pendingDeepLinkItemId_.clear();
+                    __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_VIEW Jellyfin item %s", linked.id.c_str());
+                    openDetails(linked);
+                    return;
+                }
+                if (!pendingSearchQuery_.empty()) {
+                    searchQuery_ = std::move(pendingSearchQuery_);
+                    pendingSearchQuery_.clear();
+                    searchKeyboard_ = false;
+                    pushScreen(Screen::Search);
+                    __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_SEARCH query");
+                    searchAsync();
+                    return;
+                }
             }
 
             tasks_.submit([this, session, generation, views = std::move(views), navFocused, focusedRowTitle, selectedItemByRow, coreRestoredRow, homeLoadStarted] {
@@ -4427,6 +4521,8 @@ private:
     std::string error_;
 
     JellyfinSession session_;
+    std::string pendingDeepLinkItemId_;
+    std::string pendingSearchQuery_;
     std::vector<JellyfinSession> savedSessions_;
     int profilesSelection_ = 0;
     int profileAction_ = 0;
