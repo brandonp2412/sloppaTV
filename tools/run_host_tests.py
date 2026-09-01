@@ -14,6 +14,7 @@ BUILD_DIR = ROOT / "build" / "host-tests"
 CPP_TESTS = [
     "media_player_policy_test.cpp",
     "ui_policy_test.cpp",
+    "playback_queue_test.cpp",
     "navigation_stack_test.cpp",
     "version_policy_test.cpp",
 ]

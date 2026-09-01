@@ -26,6 +26,9 @@ All notable user-visible and release-engineering changes are recorded here.
 - Side-by-side `.test` application IDs for Debug/Benchmark acceptance builds so real-device testing never requires replacing or clearing an installed production client.
 - Persisted global UI text-size presets and per-edge overscan safe-area controls, with the native renderer applying them to UI/artwork/overlays while leaving playback video edge-to-edge.
 - Persisted AVC, HEVC and HDR playback overrides that feed real Jellyfin PlaybackInfo capability negotiation rather than acting as display-only preferences.
+- Native playback queue management with Series `PLAY ALL`, `PLAY NOW`, `PLAY NEXT`, move up/down, remove and hardware/media-next integration, shared with episode autoplay.
+- Series Play All de-duplicates alternate Jellyfin episode entries by season/episode slot and probes duplicate static sources so an available copy is preferred over a stale library entry.
+- Direct-play failure recovery can renegotiate a forced Jellyfin transcode when the initial PlaybackInfo response did not provide a fallback URL.
 - Native cast/person browser with Jellyfin actor images and roles, plus server-filtered Movie/Series/Episode results for a selected person.
 - Physical-streamer acceptance for Search, Genres, A-Z, Collections, Diagnostics, and reversible Favorite/Watched mutations with server-side state assertions.
 

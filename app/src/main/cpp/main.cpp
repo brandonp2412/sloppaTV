@@ -10,6 +10,7 @@
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
 #include "navigation_stack.hpp"
+#include "playback_queue.hpp"
 #include "ui_policy.hpp"
 #include "renderer.hpp"
 #include "task_runner.hpp"
@@ -511,6 +512,11 @@ private:
         const int32_t meta = AKeyEvent_getMetaState(event);
         renderBurstUntil_ = std::chrono::steady_clock::now() + 150ms;
         std::scoped_lock lock(stateMutex_);
+
+        if (queueOverlayActive_) {
+            handleQueueOverlayKey(key);
+            return 1;
+        }
 
         if (screen_ == Screen::Player) {
             handlePlayerKey(key);
@@ -1058,7 +1064,10 @@ private:
     }
 
     std::vector<std::string> itemMenuActions() const {
-        std::vector<std::string> actions{"REFRESH METADATA"};
+        std::vector<std::string> actions;
+        if (detail_.type == "Series") actions.emplace_back("PLAY ALL");
+        if (!playbackQueue_.empty()) actions.emplace_back("VIEW QUEUE");
+        actions.emplace_back("REFRESH METADATA");
         if (detail_.canDelete) actions.emplace_back("DELETE MEDIA");
         actions.emplace_back("BACK");
         return actions;
@@ -1097,7 +1106,13 @@ private:
         else if (key == AKEYCODE_DPAD_DOWN) itemMenuSelection_ = std::min(static_cast<int>(actions.size()) - 1, itemMenuSelection_ + 1);
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const std::string& action = actions[static_cast<size_t>(itemMenuSelection_)];
-            if (action == "REFRESH METADATA") refreshCurrentItemMetadataAsync();
+            if (action == "PLAY ALL") {
+                popScreen(Screen::Details);
+                beginSeriesPlayAll();
+            } else if (action == "VIEW QUEUE") {
+                popScreen(Screen::Details);
+                openQueueOverlay();
+            } else if (action == "REFRESH METADATA") refreshCurrentItemMetadataAsync();
             else if (action == "DELETE MEDIA") {
                 deleteConfirmation_ = true;
                 deleteConfirmationSelection_ = 1;
@@ -1553,6 +1568,11 @@ private:
         }
         if (key == AKEYCODE_BACK) {
             stopPlayback();
+        } else if (key == AKEYCODE_DPAD_DOWN) {
+            openQueueOverlay();
+        } else if (key == AKEYCODE_MEDIA_NEXT && playbackQueueIndex_ >= 0
+            && playbackQueueIndex_ + 1 < static_cast<int>(playbackQueue_.size())) {
+            playQueuedIndexAsync(playbackQueueIndex_ + 1);
         } else if (key == AKEYCODE_DPAD_UP) {
             playerControlsActive_ = true;
             playerControlSelection_ = 0;
@@ -2337,8 +2357,257 @@ private:
         });
     }
 
+    void syncNextPlaybackFromQueue() {
+        const int size = static_cast<int>(playbackQueue_.size());
+        if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ + 1 < size) {
+            nextPlaybackItem_ = playbackQueue_[static_cast<size_t>(playbackQueueIndex_ + 1)];
+        } else {
+            nextPlaybackItem_.reset();
+        }
+    }
+
+    void openQueueOverlay() {
+        if (playbackQueue_.empty()) {
+            error_ = "QUEUE IS EMPTY";
+            return;
+        }
+        queueOverlayActive_ = true;
+        queueSelection_ = queueDefaultSelection(playbackQueueIndex_, static_cast<int>(playbackQueue_.size()));
+        queueActionSelection_ = 0;
+        error_.clear();
+        playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
+    }
+
+    void moveQueuedItem(int from, int to) {
+        const int size = static_cast<int>(playbackQueue_.size());
+        if (from < 0 || from >= size || to < 0 || to >= size || from == to) return;
+        JellyfinItem item = std::move(playbackQueue_[static_cast<size_t>(from)]);
+        playbackQueue_.erase(playbackQueue_.begin() + from);
+        playbackQueue_.insert(playbackQueue_.begin() + to, std::move(item));
+        queueSelection_ = to;
+        syncNextPlaybackFromQueue();
+    }
+
+    void playQueuedIndexAsync(int index) {
+        const int size = static_cast<int>(playbackQueue_.size());
+        if (loading_ || index < 0 || index >= size || !session_.valid()) return;
+        if (index == playbackQueueIndex_ && screen_ == Screen::Player) {
+            queueOverlayActive_ = false;
+            return;
+        }
+
+        const bool replacingPlayer = screen_ == Screen::Player && !activePlaybackItem_.id.empty();
+        if (replacingPlayer) releaseActivePlayback(true);
+        playbackQueueIndex_ = index;
+        queueOverlayActive_ = false;
+        loading_ = true;
+        nextTransitionLoading_ = replacingPlayer;
+        stillWatchingPrompt_ = false;
+        error_.clear();
+        const JellyfinSession session = session_;
+        JellyfinItem queued = playbackQueue_[static_cast<size_t>(index)];
+        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        const uint64_t generation = ++taskGeneration_;
+        tasks_.submit([this, session, queued = std::move(queued), index, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, generation]() mutable {
+            auto detailed = api_.getItem(session, queued.id);
+            if (detailed.ok) queued = std::move(detailed.value);
+            auto target = api_.resolvePlayback(
+                session,
+                queued,
+                maxStreamingBitrate,
+                maxAudioChannels,
+                playbackOverrides
+            );
+            if (generation != taskGeneration_.load()) return;
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            nextTransitionLoading_ = false;
+            if (index != playbackQueueIndex_) return;
+            if (!target.ok) {
+                if (replacingPlayer && screen_ == Screen::Player) popScreen(Screen::Details);
+                error_ = "QUEUE: " + target.error;
+                return;
+            }
+            playbackQueue_[static_cast<size_t>(index)] = queued;
+            pendingPlayback_ = std::move(target.value);
+            pendingPlaybackItem_ = std::move(queued);
+        });
+    }
+
+    void handleQueueOverlayKey(int32_t key) {
+        if (key == AKEYCODE_BACK) {
+            queueOverlayActive_ = false;
+            return;
+        }
+        const int size = static_cast<int>(playbackQueue_.size());
+        if (size <= 0) {
+            queueOverlayActive_ = false;
+            return;
+        }
+        const int minimumSelection = std::clamp(playbackQueueIndex_, 0, size - 1);
+        if (key == AKEYCODE_DPAD_UP) {
+            queueSelection_ = std::max(minimumSelection, queueSelection_ - 1);
+            return;
+        }
+        if (key == AKEYCODE_DPAD_DOWN) {
+            queueSelection_ = std::min(size - 1, queueSelection_ + 1);
+            return;
+        }
+        if (key == AKEYCODE_DPAD_LEFT) {
+            queueActionSelection_ = std::max(0, queueActionSelection_ - 1);
+            return;
+        }
+        if (key == AKEYCODE_DPAD_RIGHT) {
+            queueActionSelection_ = std::min(4, queueActionSelection_ + 1);
+            return;
+        }
+        if (key != AKEYCODE_DPAD_CENTER && key != AKEYCODE_ENTER) return;
+
+        if (queueActionSelection_ == 0) {
+            if (queueCanPlayNow(queueSelection_, playbackQueueIndex_, size)) playQueuedIndexAsync(queueSelection_);
+        } else if (queueActionSelection_ == 1) {
+            if (queueCanPlayNext(queueSelection_, playbackQueueIndex_, size)) {
+                moveQueuedItem(queueSelection_, playbackQueueIndex_ + 1);
+            }
+        } else if (queueActionSelection_ == 2) {
+            if (queueCanMoveUp(queueSelection_, playbackQueueIndex_, size)) moveQueuedItem(queueSelection_, queueSelection_ - 1);
+        } else if (queueActionSelection_ == 3) {
+            if (queueCanMoveDown(queueSelection_, playbackQueueIndex_, size)) moveQueuedItem(queueSelection_, queueSelection_ + 1);
+        } else if (queueActionSelection_ == 4 && queueCanRemove(queueSelection_, playbackQueueIndex_, size)) {
+            playbackQueue_.erase(playbackQueue_.begin() + queueSelection_);
+            queueSelection_ = std::min(queueSelection_, static_cast<int>(playbackQueue_.size()) - 1);
+            syncNextPlaybackFromQueue();
+        }
+    }
+
+    void beginSeriesPlayAll() {
+        if (loading_ || detail_.type != "Series" || detail_.id.empty() || !session_.valid()) return;
+        loading_ = true;
+        error_.clear();
+        autoplayChainCount_ = 0;
+        stillWatchingPrompt_ = false;
+        const JellyfinSession session = session_;
+        const JellyfinItem series = detail_;
+        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        const uint64_t generation = ++taskGeneration_;
+        tasks_.submit([this, session, series, maxStreamingBitrate, maxAudioChannels, playbackOverrides, generation] {
+            auto episodes = api_.getSeriesEpisodes(session, series.id, 1000);
+            if (!episodes.ok || episodes.value.empty()) {
+                if (generation != taskGeneration_.load()) return;
+                std::scoped_lock lock(stateMutex_);
+                loading_ = false;
+                error_ = episodes.ok ? "PLAY ALL: NO EPISODES" : "PLAY ALL: " + episodes.error;
+                return;
+            }
+
+            const bool hasRegularEpisodes = std::any_of(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& item) {
+                return item.parentIndexNumber > 0;
+            });
+            if (hasRegularEpisodes) {
+                episodes.value.erase(std::remove_if(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& item) {
+                    return item.parentIndexNumber <= 0;
+                }), episodes.value.end());
+            }
+            std::sort(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& left, const JellyfinItem& right) {
+                if (left.parentIndexNumber != right.parentIndexNumber) return left.parentIndexNumber < right.parentIndexNumber;
+                if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
+                return left.name < right.name;
+            });
+
+            std::vector<JellyfinItem> deduplicated;
+            deduplicated.reserve(episodes.value.size());
+            for (size_t begin = 0; begin < episodes.value.size();) {
+                size_t end = begin + 1;
+                while (end < episodes.value.size() && sameEpisodeSlot(
+                    episodes.value[begin].parentIndexNumber,
+                    episodes.value[begin].indexNumber,
+                    episodes.value[end].parentIndexNumber,
+                    episodes.value[end].indexNumber
+                )) {
+                    ++end;
+                }
+
+                size_t selected = begin;
+                if (end - begin > 1) {
+                    bool selectedAvailable = api_.isStaticStreamAvailable(session, episodes.value[selected]);
+                    for (size_t candidate = begin + 1; candidate < end && !selectedAvailable; ++candidate) {
+                        const bool candidateAvailable = api_.isStaticStreamAvailable(session, episodes.value[candidate]);
+                        if (preferAvailableDuplicate(selectedAvailable, candidateAvailable)) {
+                            selected = candidate;
+                            selectedAvailable = true;
+                        }
+                    }
+                    if (!selectedAvailable) {
+                        __android_log_print(
+                            ANDROID_LOG_WARN,
+                            kTag,
+                            "No available source found for duplicate S%02dE%02d slot; retaining first server result",
+                            episodes.value[begin].parentIndexNumber,
+                            episodes.value[begin].indexNumber
+                        );
+                    }
+                }
+                deduplicated.push_back(std::move(episodes.value[selected]));
+                begin = end;
+            }
+            episodes.value = std::move(deduplicated);
+            if (episodes.value.empty()) {
+                if (generation != taskGeneration_.load()) return;
+                std::scoped_lock lock(stateMutex_);
+                loading_ = false;
+                error_ = "PLAY ALL: NO REGULAR EPISODES";
+                return;
+            }
+
+            JellyfinItem first = episodes.value.front();
+            auto detailed = api_.getItem(session, first.id);
+            if (detailed.ok) first = std::move(detailed.value);
+            auto target = api_.resolvePlayback(
+                session,
+                first,
+                maxStreamingBitrate,
+                maxAudioChannels,
+                playbackOverrides
+            );
+            if (generation != taskGeneration_.load()) return;
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            if (!target.ok) {
+                error_ = "PLAY ALL: " + target.error;
+                return;
+            }
+            playbackQueue_ = std::move(episodes.value);
+            playbackQueue_[0] = first;
+            playbackQueueIndex_ = 0;
+            queueSelection_ = queueDefaultSelection(0, static_cast<int>(playbackQueue_.size()));
+            queueActionSelection_ = 0;
+            queueOverlayActive_ = false;
+            pendingPlayback_ = std::move(target.value);
+            pendingPlaybackItem_ = std::move(first);
+        });
+    }
+
     void beginPlayback() {
         if (loading_ || detail_.id.empty()) return;
+        const bool continuingQueuedPrompt = stillWatchingPrompt_ && !playbackQueue_.empty();
+        if (continuingQueuedPrompt) {
+            const auto queued = std::find_if(playbackQueue_.begin(), playbackQueue_.end(), [&](const JellyfinItem& item) {
+                return item.id == detail_.id;
+            });
+            if (queued != playbackQueue_.end()) {
+                playbackQueueIndex_ = static_cast<int>(std::distance(playbackQueue_.begin(), queued));
+            } else {
+                playbackQueue_.clear();
+                playbackQueueIndex_ = -1;
+            }
+        } else {
+            playbackQueue_.clear();
+            playbackQueueIndex_ = -1;
+        }
         autoplayChainCount_ = 0;
         stillWatchingPrompt_ = false;
         loading_ = true;
@@ -2404,6 +2673,11 @@ private:
     }
 
     void requestNextEpisodeAsync() {
+        if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ < static_cast<int>(playbackQueue_.size())) {
+            nextEpisodeRequested_ = true;
+            syncNextPlaybackFromQueue();
+            return;
+        }
         if (nextEpisodeRequested_ || !session_.valid() || activePlaybackItem_.type != "Episode"
             || activePlaybackItem_.seriesId.empty() || activePlaybackItem_.id.empty()) {
             return;
@@ -2440,6 +2714,7 @@ private:
         videoSurface_.release();
         displayMode_.restore();
         playbackStartReported_ = false;
+        playbackFallbackResolving_ = false;
         activeTarget_ = {};
         activePlaybackItem_ = {};
         cachedPlaybackPositionMs_ = 0;
@@ -2463,6 +2738,10 @@ private:
     }
 
     void queueAutoplayNext(JellyfinItem nextItem) {
+        if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ + 1 < static_cast<int>(playbackQueue_.size())
+            && playbackQueue_[static_cast<size_t>(playbackQueueIndex_ + 1)].id == nextItem.id) {
+            ++playbackQueueIndex_;
+        }
         releaseActivePlayback(true);
         ++autoplayChainCount_;
         loading_ = true;
@@ -2475,6 +2754,8 @@ private:
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
         tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, nextItem = std::move(nextItem)]() mutable {
+            auto detailed = api_.getItem(session, nextItem.id);
+            if (detailed.ok) nextItem = std::move(detailed.value);
             auto target = api_.resolvePlayback(
                 session,
                 nextItem,
@@ -2489,6 +2770,10 @@ private:
                 popScreen(Screen::Details);
                 error_ = "NEXT EPISODE: " + target.error;
                 return;
+            }
+            if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ < static_cast<int>(playbackQueue_.size())
+                && playbackQueue_[static_cast<size_t>(playbackQueueIndex_)].id == nextItem.id) {
+                playbackQueue_[static_cast<size_t>(playbackQueueIndex_)] = nextItem;
             }
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(nextItem);
@@ -2514,17 +2799,16 @@ private:
     }
 
     bool retryPlaybackWithTranscodeFallback() {
-        if (playbackFallbackAttempted_ || activeTarget_.transcoding || activeTarget_.fallbackTranscodeUrl.empty()) return false;
-
-        const auto failedTarget = activeTarget_;
-        const auto item = activePlaybackItem_;
-        const auto session = session_;
-        const int64_t resumeTicks = playbackTicksFromPositionMs(cachedPlaybackPositionMs_);
-        if (playbackStartReported_ && session.valid() && !item.id.empty()) {
-            tasks_.submit([this, session, item, failedTarget, resumeTicks] {
-                api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks);
-            });
+        if (playbackFallbackAttempted_ || activeTarget_.transcoding || !session_.valid() || activePlaybackItem_.id.empty()) {
+            return false;
         }
+
+        const PlaybackTarget failedTarget = activeTarget_;
+        JellyfinItem item = activePlaybackItem_;
+        const JellyfinSession session = session_;
+        const int64_t resumeTicks = playbackTicksFromPositionMs(cachedPlaybackPositionMs_);
+        const bool shouldReportPrevious = playbackStartReported_ && !failedTarget.url.empty();
+        item.positionTicks = resumeTicks;
 
         player_.stop();
         videoSurface_.release();
@@ -2535,20 +2819,92 @@ private:
         lastPlaybackTelemetryRead_ = {};
         lastPlaybackDurationProbe_ = {};
 
-        activeTarget_.url = std::move(activeTarget_.fallbackTranscodeUrl);
-        activeTarget_.fallbackTranscodeUrl.clear();
-        activeTarget_.transcoding = true;
-        activeTarget_.playMethod = PlaybackMethod::Transcode;
-        if (resumeTicks > 0) activeTarget_.startTicks = resumeTicks;
+        // Some PlaybackInfo responses include a TranscodingUrl beside DirectPlay. Use
+        // that immediately when available; it avoids a second round-trip to Jellyfin.
+        if (!activeTarget_.fallbackTranscodeUrl.empty()) {
+            if (shouldReportPrevious) {
+                tasks_.submit([this, session, item, failedTarget, resumeTicks] {
+                    api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks);
+                });
+            }
+            activeTarget_.url = std::move(activeTarget_.fallbackTranscodeUrl);
+            activeTarget_.fallbackTranscodeUrl.clear();
+            activeTarget_.transcoding = true;
+            activeTarget_.playMethod = PlaybackMethod::Transcode;
+            activeTarget_.startTicks = resumeTicks;
 
-        std::string surfaceError;
-        if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
-            error_ = surfaceError.empty() ? "VIDEO FALLBACK SURFACE IS NOT AVAILABLE" : surfaceError;
+            std::string surfaceError;
+            if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
+                error_ = surfaceError.empty() ? "VIDEO FALLBACK SURFACE IS NOT AVAILABLE" : surfaceError;
+                return false;
+            }
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; using offered Jellyfin transcode fallback");
+            playerOverlayUntil_ = std::chrono::steady_clock::now() + 5s;
+            startResolvedPlaybackTarget(activeTarget_);
+            return true;
+        }
+
+        // Jellyfin commonly omits TranscodingUrl when it selected DirectPlay, even when
+        // SupportsTranscoding=true. Re-negotiate asynchronously with direct paths disabled
+        // instead of abandoning playback after an Android MediaPlayer prepare failure.
+        PlaybackOverrides fallbackOverrides = playbackOverridesFor(settings_);
+        fallbackOverrides.forceTranscode = true;
+        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        const int audioStreamIndex = selectedAudioServerIndex_;
+        const int subtitleStreamIndex = selectedSubtitleServerIndex_;
+        loading_ = true;
+        playbackFallbackResolving_ = true;
+        playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed without fallback URL; forcing Jellyfin transcode negotiation");
+
+        const bool submitted = tasks_.submit([
+            this,
+            session,
+            item,
+            failedTarget,
+            shouldReportPrevious,
+            resumeTicks,
+            maxStreamingBitrate,
+            maxAudioChannels,
+            fallbackOverrides,
+            audioStreamIndex,
+            subtitleStreamIndex
+        ]() mutable {
+            if (shouldReportPrevious) {
+                api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks);
+            }
+            auto target = api_.resolvePlayback(
+                session,
+                item,
+                maxStreamingBitrate,
+                maxAudioChannels,
+                fallbackOverrides,
+                audioStreamIndex,
+                subtitleStreamIndex
+            );
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            playbackFallbackResolving_ = false;
+            if (screen_ != Screen::Player || activePlaybackItem_.id != item.id) return;
+            if (!target.ok) {
+                error_ = "TRANSCODE FALLBACK: " + target.error;
+                stopPlayback();
+                return;
+            }
+            pendingPlayback_ = std::move(target.value);
+            pendingPlaybackItem_ = std::move(item);
+            pendingStreamRestart_ = true;
+            pendingRestartPaused_ = false;
+            pendingAudioStreamIndex_ = audioStreamIndex;
+            pendingSubtitleStreamIndex_ = subtitleStreamIndex;
+        });
+        if (!submitted) {
+            loading_ = false;
+            playbackFallbackResolving_ = false;
+            error_ = "TRANSCODE FALLBACK COULD NOT BE STARTED";
             return false;
         }
-        __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; retrying Jellyfin transcode fallback");
-        playerOverlayUntil_ = std::chrono::steady_clock::now() + 5s;
-        startResolvedPlaybackTarget(activeTarget_);
         return true;
     }
 
@@ -2586,6 +2942,7 @@ private:
                 if (!streamRestart) {
                     nextEpisodeRequested_ = false;
                     nextPlaybackItem_.reset();
+                    syncNextPlaybackFromQueue();
                 }
                 subtitleLoadInProgress_ = false;
                 activeSubtitleCues_.clear();
@@ -2607,8 +2964,12 @@ private:
                     activeMediaSegments_.clear();
                 }
                 nextTransitionLoading_ = false;
-                if (!streamRestart) pushScreen(Screen::Player);
-                else replaceScreen(Screen::Player);
+                if (!streamRestart) {
+                    if (screen_ == Screen::Player) replaceScreen(Screen::Player);
+                    else pushScreen(Screen::Player);
+                } else {
+                    replaceScreen(Screen::Player);
+                }
             }
         }
 
@@ -2736,6 +3097,7 @@ private:
             case Screen::Episodes: renderEpisodes(); break;
             case Screen::Player: renderPlayer(); break;
         }
+        if (queueOverlayActive_) renderQueueOverlay();
         renderStatus();
         renderer_.endFrame();
     }
@@ -3400,6 +3762,7 @@ private:
         const bool showOverlay = status == PlayerStatus::Preparing
             || status == PlayerStatus::Paused
             || nextTransitionLoading_
+            || playbackFallbackResolving_
             || showNextUp
             || now < playerOverlayUntil_;
         if (const SubtitleCue* cue = activeSubtitleCue()) {
@@ -3438,8 +3801,9 @@ private:
         const int position = cachedPlaybackPositionMs_;
         const int duration = cachedPlaybackDurationMs_;
         renderer_.text(80, 825, 2.6f,
-            nextTransitionLoading_ ? "LOADING NEXT EPISODE" :
-            (status == PlayerStatus::Paused ? "PAUSED" : (status == PlayerStatus::Preparing ? "LOADING" : "PLAYING")),
+            playbackFallbackResolving_ ? "RETRYING TRANSCODE" :
+            (nextTransitionLoading_ ? "LOADING NEXT EPISODE" :
+            (status == PlayerStatus::Paused ? "PAUSED" : (status == PlayerStatus::Preparing ? "LOADING" : "PLAYING"))),
             kText);
         renderer_.text(80, 905, 2.35f, formatPlaybackTime(position), kText);
         renderer_.text(1640, 905, 2.35f, formatPlaybackTime(duration), kText);
@@ -3464,15 +3828,67 @@ private:
                 renderer_.text(x + 24, 999, 1.95f, controls[i], kText, width - 48.0f);
             }
         } else {
+            const std::string queueHint = playbackQueue_.empty() ? "" : "   DOWN QUEUE";
             renderer_.text(
                 80,
                 992,
                 1.7f,
-                "LEFT -" + std::to_string(settings_.seekBackSeconds) + "S   OK PLAY/PAUSE   RIGHT +" + std::to_string(settings_.seekForwardSeconds) + "S   UP OPTIONS   BACK EXIT",
+                "LEFT -" + std::to_string(settings_.seekBackSeconds) + "S   OK PLAY/PAUSE   RIGHT +" + std::to_string(settings_.seekForwardSeconds) + "S   UP OPTIONS" + queueHint + "   BACK EXIT",
                 kMuted,
                 1700
             );
         }
+    }
+
+    void renderQueueOverlay() {
+        if (playbackQueue_.empty()) return;
+        const int size = static_cast<int>(playbackQueue_.size());
+        const int current = std::clamp(playbackQueueIndex_, 0, size - 1);
+        queueSelection_ = std::clamp(queueSelection_, current, size - 1);
+
+        renderer_.rect(45, 45, 1830, 990, Color{0.01f, 0.012f, 0.018f, 0.96f});
+        renderer_.outline(45, 45, 1830, 990, 4, kFocus);
+        renderer_.text(85, 85, 3.6f, "PLAYBACK QUEUE", kText, 1200);
+        renderer_.text(1390, 95, 1.7f,
+            std::to_string(size - current) + " REMAINING", kMuted, 390);
+
+        constexpr int visibleRows = 6;
+        const int first = std::clamp(queueSelection_ - 2, current, std::max(current, size - visibleRows));
+        for (int slot = 0; slot < visibleRows; ++slot) {
+            const int index = first + slot;
+            if (index >= size) break;
+            const float y = 165.0f + static_cast<float>(slot) * 105.0f;
+            const bool selected = index == queueSelection_;
+            const bool isCurrent = index == current;
+            renderer_.rect(90, y, 1640, 88, selected ? kPanelAlt : kPanel);
+            if (selected) renderer_.outline(86, y - 4, 1648, 96, 4, kFocus);
+            const auto& item = playbackQueue_[static_cast<size_t>(index)];
+            const std::string marker = isCurrent ? "CURRENT" : (index == current + 1 ? "NEXT" : std::to_string(index - current + 1));
+            renderer_.text(120, y + 28, 1.55f, marker, isCurrent ? kFocus : kMuted, 150);
+            renderer_.text(285, y + 24, 2.15f, item.name, kText, 860);
+            const std::string secondary = episodeLabel(item);
+            if (!secondary.empty()) renderer_.text(1160, y + 29, 1.45f, secondary, kMuted, 520);
+        }
+
+        const std::array<std::string, 5> actions{"PLAY NOW", "PLAY NEXT", "MOVE UP", "MOVE DOWN", "REMOVE"};
+        auto enabled = [&](int action) {
+            if (action == 0) return queueCanPlayNow(queueSelection_, playbackQueueIndex_, size);
+            if (action == 1) return queueCanPlayNext(queueSelection_, playbackQueueIndex_, size);
+            if (action == 2) return queueCanMoveUp(queueSelection_, playbackQueueIndex_, size);
+            if (action == 3) return queueCanMoveDown(queueSelection_, playbackQueueIndex_, size);
+            return queueCanRemove(queueSelection_, playbackQueueIndex_, size);
+        };
+        constexpr float actionWidth = 300.0f;
+        constexpr float actionGap = 24.0f;
+        for (size_t i = 0; i < actions.size(); ++i) {
+            const float x = 120.0f + static_cast<float>(i) * (actionWidth + actionGap);
+            const bool focused = queueActionSelection_ == static_cast<int>(i);
+            const bool available = enabled(static_cast<int>(i));
+            renderer_.rect(x, 855, actionWidth, 82, focused ? (available ? kFocus : kPanelAlt) : kPanel);
+            if (focused) renderer_.outline(x - 4, 851, actionWidth + 8, 90, 4, available ? kFocus : kMuted);
+            renderer_.text(x + 20, 884, 1.65f, actions[i], available ? kText : kMuted, actionWidth - 40.0f);
+        }
+        renderer_.text(100, 982, 1.45f, "UP/DOWN SELECTS. LEFT/RIGHT CHOOSES ACTION. OK APPLIES. BACK CLOSES QUEUE.", kMuted, 1700);
     }
 
     void renderSettings() {
@@ -4030,6 +4446,12 @@ private:
     std::vector<JellyfinItem> episodeItems_;
     int episodeSelection_ = 0;
 
+    std::vector<JellyfinItem> playbackQueue_;
+    int playbackQueueIndex_ = -1;
+    int queueSelection_ = 0;
+    int queueActionSelection_ = 0;
+    bool queueOverlayActive_ = false;
+
     std::optional<PlaybackTarget> pendingPlayback_;
     JellyfinItem pendingPlaybackItem_;
     bool pendingStreamRestart_ = false;
@@ -4047,6 +4469,7 @@ private:
     int autoplayChainCount_ = 0;
     bool playbackStartReported_ = false;
     bool playbackFallbackAttempted_ = false;
+    bool playbackFallbackResolving_ = false;
     VideoZoomMode videoZoomMode_ = VideoZoomMode::Fit;
     bool playerControlsActive_ = false;
     int playerControlSelection_ = 0;
