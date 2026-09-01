@@ -145,6 +145,7 @@ std::string generateDeviceId() {
 
 enum class Screen {
     Login,
+    Profiles,
     Home,
     Libraries,
     Browse,
@@ -474,6 +475,7 @@ private:
 
         switch (screen_) {
             case Screen::Login: handleLoginKey(key); break;
+            case Screen::Profiles: handleProfilesKey(key); break;
             case Screen::Home: handleHomeKey(key); break;
             case Screen::Libraries: handleLibrariesKey(key); break;
             case Screen::Browse: handleBrowseKey(key); break;
@@ -583,8 +585,9 @@ private:
             if (loginField_ < 2) ++loginField_;
             else if (loginField_ == 2) loginField_ = 3;
         } else if ((key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) && loginField_ >= 3) {
-            if (key == AKEYCODE_DPAD_LEFT) loginField_ = loginField_ <= 3 ? 5 : loginField_ - 1;
-            else loginField_ = loginField_ >= 5 ? 3 : loginField_ + 1;
+            const int maxAction = savedSessions_.empty() ? 5 : 6;
+            if (key == AKEYCODE_DPAD_LEFT) loginField_ = loginField_ <= 3 ? maxAction : loginField_ - 1;
+            else loginField_ = loginField_ >= maxAction ? 3 : loginField_ + 1;
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             if (loginField_ < 3) {
                 loginKeyboard_ = true;
@@ -593,8 +596,34 @@ private:
                 loginAsync();
             } else if (loginField_ == 4) {
                 quickConnectAsync();
-            } else {
+            } else if (loginField_ == 5) {
                 discoverServersAsync();
+            } else {
+                openProfiles();
+            }
+        }
+    }
+
+    void handleProfilesKey(int32_t key) {
+        if (key == AKEYCODE_BACK) {
+            popScreen(Screen::Login);
+            return;
+        }
+        const int addIndex = static_cast<int>(savedSessions_.size());
+        if (key == AKEYCODE_DPAD_UP) {
+            profilesSelection_ = std::max(0, profilesSelection_ - 1);
+            profileAction_ = 0;
+        } else if (key == AKEYCODE_DPAD_DOWN) {
+            profilesSelection_ = std::min(addIndex, profilesSelection_ + 1);
+            profileAction_ = 0;
+        } else if ((key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) && profilesSelection_ < addIndex) {
+            profileAction_ = profileAction_ == 0 ? 1 : 0;
+        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            if (profilesSelection_ == addIndex) {
+                startAddAccount();
+            } else if (profilesSelection_ >= 0 && profilesSelection_ < addIndex) {
+                if (profileAction_ == 0) switchSavedSession(static_cast<size_t>(profilesSelection_));
+                else forgetSavedSession(static_cast<size_t>(profilesSelection_));
             }
         }
     }
@@ -852,7 +881,7 @@ private:
             saveSession(session_);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             if (settingsSelection_ == 14) openDiagnostics();
-            else if (settingsSelection_ == 15) logout();
+            else if (settingsSelection_ == 15) openProfiles();
         }
     }
 
@@ -1445,7 +1474,7 @@ private:
         });
     }
 
-    void logout() {
+    void clearCurrentSessionUi() {
         ++taskGeneration_;
         session_ = {};
         home_ = {};
@@ -1455,11 +1484,56 @@ private:
         loginFields_[1].clear();
         loginFields_[2].clear();
         homeSelection_.clear();
-        resetNavigation(Screen::Login);
-        loginField_ = 0;
         loading_ = false;
         error_.clear();
+    }
+
+    void openProfiles() {
+        if (savedSessions_.empty()) {
+            startAddAccount();
+            return;
+        }
+        pushScreen(Screen::Profiles);
+        profilesSelection_ = std::clamp(profilesSelection_, 0, static_cast<int>(savedSessions_.size()));
+        profileAction_ = 0;
+        error_.clear();
+    }
+
+    void startAddAccount() {
+        const std::string existingServer = session_.server;
+        clearCurrentSessionUi();
+        if (!existingServer.empty()) loginFields_[0] = existingServer;
+        resetNavigation(Screen::Login);
+        loginField_ = 0;
         saveSession(session_);
+    }
+
+    void switchSavedSession(size_t index) {
+        if (index >= savedSessions_.size()) return;
+        clearCurrentSessionUi();
+        session_ = savedSessions_[index];
+        session_.deviceId = deviceId_;
+        loginFields_[0] = session_.server;
+        loginFields_[1] = session_.username;
+        resetNavigation(Screen::Home);
+        homeRow_ = 0;
+        saveSession(session_);
+        loadHomeAsync();
+    }
+
+    void forgetSavedSession(size_t index) {
+        if (index >= savedSessions_.size()) return;
+        const JellyfinSession removed = savedSessions_[index];
+        const bool removedCurrent = sameSessionIdentity(session_, removed);
+        savedSessions_.erase(savedSessions_.begin() + static_cast<std::ptrdiff_t>(index));
+        if (removedCurrent) {
+            session_ = {};
+            resetNavigation(Screen::Profiles);
+        }
+        profilesSelection_ = std::clamp(profilesSelection_, 0, static_cast<int>(savedSessions_.size()));
+        profileAction_ = 0;
+        saveSession(session_);
+        if (savedSessions_.empty()) startAddAccount();
     }
 
     void openLibraries() {
@@ -1998,6 +2072,8 @@ private:
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
                 if (core.error.find("HTTP 401") != std::string::npos) {
+                    const JellyfinSession expired = session_;
+                    removeSavedSessionIdentity(expired);
                     session_.token.clear();
                     session_.userId.clear();
                     resetNavigation(Screen::Login);
@@ -2504,6 +2580,7 @@ private:
         renderer_.beginFrame();
         switch (screen_) {
             case Screen::Login: renderLogin(); break;
+            case Screen::Profiles: renderProfiles(); break;
             case Screen::Home: renderHome(); break;
             case Screen::Libraries: renderLibraries(); break;
             case Screen::Browse: renderBrowse(); break;
@@ -2870,17 +2947,53 @@ private:
             if (!loginKeyboard_ && loginField_ == i) renderer_.outline(116, y - 4, 1058, 76, 4, kFocus);
         }
 
-        renderer_.rect(120, 520, 280, 68, loginField_ == 3 && !loginKeyboard_ ? kFocus : kPanelAlt);
-        renderer_.text(165, 542, 2.5f, "LOG IN", kText);
-        renderer_.rect(420, 520, 390, 68, loginField_ == 4 && !loginKeyboard_ ? kFocus : kPanelAlt);
-        renderer_.text(460, 542, 2.2f, "QUICK CONNECT", kText);
-        renderer_.rect(830, 520, 330, 68, loginField_ == 5 && !loginKeyboard_ ? kFocus : kPanelAlt);
-        renderer_.text(880, 542, 2.2f, "DISCOVER", kText);
+        renderer_.rect(120, 520, 245, 68, loginField_ == 3 && !loginKeyboard_ ? kFocus : kPanelAlt);
+        renderer_.text(160, 542, 2.35f, "LOG IN", kText);
+        renderer_.rect(385, 520, 340, 68, loginField_ == 4 && !loginKeyboard_ ? kFocus : kPanelAlt);
+        renderer_.text(425, 542, 2.0f, "QUICK CONNECT", kText);
+        renderer_.rect(745, 520, 285, 68, loginField_ == 5 && !loginKeyboard_ ? kFocus : kPanelAlt);
+        renderer_.text(790, 542, 2.05f, "DISCOVER", kText);
+        if (!savedSessions_.empty()) {
+            renderer_.rect(1050, 520, 390, 68, loginField_ == 6 && !loginKeyboard_ ? kFocus : kPanelAlt);
+            renderer_.text(1090, 542, 1.9f, "SAVED USERS (" + std::to_string(savedSessions_.size()) + ")", kText, 320);
+        }
         if (!loginKeyboard_) {
             const std::string hint = !discoveryStatus_.empty() ? discoveryStatus_ : "DISCOVER FINDS JELLYFIN ON YOUR LAN";
             renderer_.text(120, 620, 1.65f, hint, discoveryStatus_.empty() ? kMuted : kFocus, 1300);
         }
         if (loginKeyboard_) renderKeyboard(610);
+    }
+
+    void renderProfiles() {
+        renderHeader("USERS & SERVERS");
+        renderer_.text(120, 175, 1.7f, "SAVED AUTHENTICATED SESSIONS", kMuted);
+        const int totalRows = static_cast<int>(savedSessions_.size()) + 1;
+        constexpr int visibleRows = 7;
+        const int maxFirst = std::max(0, totalRows - visibleRows);
+        const int first = std::clamp(profilesSelection_ - visibleRows + 1, 0, maxFirst);
+        for (int slot = 0; slot < visibleRows; ++slot) {
+            const int index = first + slot;
+            if (index >= totalRows) break;
+            const float y = 225.0f + static_cast<float>(slot) * 102.0f;
+            const bool focused = index == profilesSelection_;
+            renderer_.rect(120, y, 1540, 88, focused ? kPanelAlt : kPanel);
+            if (index == static_cast<int>(savedSessions_.size())) {
+                renderer_.text(155, y + 28, 2.0f, "ADD ANOTHER ACCOUNT", kText, 700);
+                if (focused) renderer_.outline(116, y - 4, 1548, 96, 4, kFocus);
+                continue;
+            }
+            const auto& saved = savedSessions_[static_cast<size_t>(index)];
+            renderer_.text(155, y + 18, 1.9f, saved.username.empty() ? "USER" : saved.username, kText, 500);
+            renderer_.text(155, y + 52, 1.2f, saved.server, kMuted, 790);
+            const bool useFocused = focused && profileAction_ == 0;
+            const bool forgetFocused = focused && profileAction_ == 1;
+            renderer_.rect(1110, y + 12, 210, 62, useFocused ? kFocus : kPanelAlt);
+            renderer_.text(1165, y + 33, 1.55f, "USE", kText, 110);
+            renderer_.rect(1340, y + 12, 280, 62, forgetFocused ? kError : kPanelAlt);
+            renderer_.text(1382, y + 33, 1.55f, "FORGET", kText, 190);
+            if (focused) renderer_.outline(116, y - 4, 1548, 96, 4, profileAction_ == 1 ? kError : kFocus);
+        }
+        renderer_.text(120, 955, 1.5f, "UP / DOWN CHOOSES ACCOUNT. LEFT / RIGHT CHOOSES USE OR FORGET.", kMuted, 1600);
     }
 
     void renderKeyboard(float top) {
@@ -3237,7 +3350,7 @@ private:
             "SUBTITLE POSITION",
             "MAX AUDIO CHANNELS",
             "DIAGNOSTICS",
-            "LOG OUT",
+            "SWITCH USER",
         };
         const std::array<std::string, 16> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
@@ -3495,6 +3608,32 @@ private:
         }
     }
 
+    static bool sameSessionIdentity(const JellyfinSession& left, const JellyfinSession& right) {
+        return !left.server.empty() && left.server == right.server && !left.userId.empty() && left.userId == right.userId;
+    }
+
+    void rememberSession(const JellyfinSession& session) {
+        if (!session.valid()) return;
+        const auto existing = std::find_if(savedSessions_.begin(), savedSessions_.end(), [&](const JellyfinSession& saved) {
+            return sameSessionIdentity(saved, session);
+        });
+        JellyfinSession saved = session;
+        saved.deviceId = deviceId_;
+        if (existing == savedSessions_.end()) savedSessions_.insert(savedSessions_.begin(), std::move(saved));
+        else {
+            *existing = std::move(saved);
+            std::rotate(savedSessions_.begin(), existing, std::next(existing));
+        }
+        constexpr size_t kMaxSavedSessions = 16;
+        if (savedSessions_.size() > kMaxSavedSessions) savedSessions_.resize(kMaxSavedSessions);
+    }
+
+    void removeSavedSessionIdentity(const JellyfinSession& session) {
+        std::erase_if(savedSessions_, [&](const JellyfinSession& saved) {
+            return sameSessionIdentity(saved, session);
+        });
+    }
+
     void loadSession() {
         deviceId_ = generateDeviceId();
         if (dataPath_.empty()) return;
@@ -3504,11 +3643,25 @@ private:
             json data;
             input >> data;
             deviceId_ = data.value("deviceId", deviceId_);
+            savedSessions_.clear();
+            if (data.contains("savedSessions") && data["savedSessions"].is_array()) {
+                for (const auto& saved : data["savedSessions"]) {
+                    if (!saved.is_object()) continue;
+                    JellyfinSession candidate;
+                    candidate.deviceId = deviceId_;
+                    candidate.server = saved.value("server", std::string{});
+                    candidate.username = saved.value("username", std::string{});
+                    candidate.userId = saved.value("userId", std::string{});
+                    candidate.token = saved.value("token", std::string{});
+                    if (candidate.valid()) savedSessions_.push_back(std::move(candidate));
+                }
+            }
             session_.deviceId = deviceId_;
             session_.server = data.value("server", std::string{});
             session_.username = data.value("username", std::string{});
             session_.userId = data.value("userId", std::string{});
             session_.token = data.value("token", std::string{});
+            if (session_.valid()) rememberSession(session_);
             if (data.contains("settings") && data["settings"].is_object()) {
                 const auto& saved = data["settings"];
                 settings_.maxBitrateMbps = std::clamp(saved.value("maxBitrateMbps", settings_.maxBitrateMbps), 20, 200);
@@ -3538,12 +3691,24 @@ private:
     void saveSession(const JellyfinSession& session) {
         if (dataPath_.empty()) return;
         try {
+            if (session.valid()) rememberSession(session);
+            json saved = json::array();
+            for (const auto& candidate : savedSessions_) {
+                if (!candidate.valid()) continue;
+                saved.push_back({
+                    {"server", candidate.server},
+                    {"username", candidate.username},
+                    {"userId", candidate.userId},
+                    {"token", candidate.token},
+                });
+            }
             json data = {
                 {"deviceId", deviceId_},
                 {"server", session.server},
                 {"username", session.username},
                 {"userId", session.userId},
                 {"token", session.token},
+                {"savedSessions", std::move(saved)},
                 {"settings", {
                     {"maxBitrateMbps", settings_.maxBitrateMbps},
                     {"seekBackSeconds", settings_.seekBackSeconds},
@@ -3590,6 +3755,9 @@ private:
     std::string error_;
 
     JellyfinSession session_;
+    std::vector<JellyfinSession> savedSessions_;
+    int profilesSelection_ = 0;
+    int profileAction_ = 0;
     JellyfinServerInfo serverInfo_;
     JellyfinHomeData home_;
     std::unordered_map<std::string, ArtworkEntry> artwork_;

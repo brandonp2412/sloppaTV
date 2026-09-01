@@ -20,6 +20,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Native Details item-options menu with default metadata refresh and permission-aware media deletion.
 - Two-step destructive delete confirmation with Cancel selected by default.
 - Persisted 2-channel/8-channel maximum-audio capability negotiation in PlaybackInfo and the Jellyfin device profile.
+- Saved authenticated user/server profiles with native switching, forgetting, add-account flow, single-session migration and expired-token cleanup.
 
 ## 0.1.0 - 2026-09-01
 

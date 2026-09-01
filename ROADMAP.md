@@ -35,9 +35,9 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [x] Persisted authenticated session and relaunch into Home
 - [~] Quick Connect initiate/code/poll/complete implementation; real server code generation verified, authorization round-trip not yet exercised
 - [~] Native UDP Jellyfin LAN discovery on port 7359, including interface broadcast addresses; the current test network returns no discovery response even to an independent probe
-- [ ] Multiple saved servers
-- [ ] Multiple saved users / user switching
-- [~] Logout clears the persisted session; full remove-server/user UX still missing
+- [~] Multiple authenticated servers are retained as saved session profiles and can be switched without re-entering credentials; multi-server device E2E is still pending
+- [~] Multiple saved users are retained per server, exposed through a native Users & Servers chooser, and can be switched without password re-entry while their token remains valid; device E2E is pending
+- [~] Saved-profile management supports `USE`, `FORGET` and `ADD ANOTHER ACCOUNT`; expired 401 profiles are automatically removed, while avatar/PIN/reordering parity remains out of scope or incomplete
 - [~] Server public-info/version diagnostics and a tested Jellyfin 10.10+ baseline warning are implemented; older/newer real-server compatibility cases still need device E2E
 
 ### Home and browsing
@@ -171,8 +171,7 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 - [x] Default video zoom mode
 - [ ] AVC / HEVC / HDR override controls
 - [ ] Screensaver preferences
-- [ ] Live TV preferences
-- [ ] User-select behavior
+- [~] User-select behavior now has a saved Users & Servers chooser and Settings `SWITCH USER` flow; physical-TV navigation/expiry/multi-server acceptance remains pending
 - [~] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and the last DirectPlay/DirectStream/Transcode path; physical-TV UI/server pass pending
 
 ### Reliability, performance and release engineering
@@ -203,7 +202,7 @@ The Astra hardening branch adds a real navigation stack, native diagnostics/serv
 
 ## Roadmap continuation checkpoint — 2026-09-02
 
-Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation; and max audio channels now feeds PlaybackInfo/device-profile negotiation as 2-channel stereo or 8-channel surround. These paths are build-clean on Astra but remain partial until exercised against the real Jellyfin server in Waydroid/target-TV acceptance. The reference client's configurable buffer presets were also re-audited: they rely on ExoPlayer `DefaultLoadControl`, so the existing `MediaPlayer` backend cannot honestly expose equivalent buffer-duration controls without a backend/buffering-layer change.
+Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation; max audio channels now feeds PlaybackInfo/device-profile negotiation as 2-channel stereo or 8-channel surround; and authenticated users/servers are retained as switchable saved profiles with local forget/add-account management and 401 expiry cleanup. These paths are build-clean on Astra but remain partial until exercised against the real Jellyfin server in Waydroid/target-TV acceptance. The reference client's configurable buffer presets were also re-audited: they rely on ExoPlayer `DefaultLoadControl`, so the existing `MediaPlayer` backend cannot honestly expose equivalent buffer-duration controls without a backend/buffering-layer change.
 
 ## Current performance evidence
 
