@@ -6,6 +6,7 @@ local.properties
 *.iml
 .idea/
 artifacts/*.png
+artifacts/*.tmp
 artifacts/e2e-waydroid/
 **/__pycache__/
 *.pyc

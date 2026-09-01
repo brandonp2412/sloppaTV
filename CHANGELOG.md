@@ -21,6 +21,9 @@ All notable user-visible and release-engineering changes are recorded here.
 - Two-step destructive delete confirmation with Cancel selected by default.
 - Persisted 2-channel/8-channel maximum-audio capability negotiation in PlaybackInfo and the Jellyfin device profile.
 - Saved authenticated user/server profiles with native switching, forgetting, add-account flow, single-session migration and expired-token cleanup.
+- TV readability redesign with three large Home cards per row, four-column media grids, larger navigation/settings/player typography, larger focus targets and roomier spacing.
+- Aspect-aware Details artwork so episodes use a large landscape frame while movies/series retain poster presentation.
+- Side-by-side `.test` application IDs for Debug/Benchmark acceptance builds so real-device testing never requires replacing or clearing an installed production client.
 
 ## 0.1.0 - 2026-09-01
 

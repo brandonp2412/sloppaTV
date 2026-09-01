@@ -27,6 +27,7 @@ android {
         targetSdk = 36
         versionCode = sloppaVersionCode
         versionName = sloppaVersionName
+        manifestPlaceholders["appLabel"] = "sloppaTV"
 
         externalNativeBuild {
             cmake {
@@ -54,6 +55,13 @@ android {
     }
 
     buildTypes {
+        getByName("debug") {
+            // Install developer builds beside a user's production TV install. This also
+            // lets real-device acceptance use a separate signing key without wiping data.
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-test"
+            manifestPlaceholders["appLabel"] = "sloppaTV Test"
+        }
         getByName("release") {
             isMinifyEnabled = false
             isDebuggable = false
@@ -63,6 +71,9 @@ android {
         }
         create("benchmark") {
             initWith(getByName("release"))
+            applicationIdSuffix = ".test"
+            versionNameSuffix = "-benchmark"
+            manifestPlaceholders["appLabel"] = "sloppaTV Test"
             isDebuggable = false
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += listOf("release")

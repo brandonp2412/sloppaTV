@@ -8,7 +8,7 @@
         android:allowBackup="false"
         android:banner="@drawable/banner"
         android:hasCode="false"
-        android:label="sloppaTV"
+        android:label="${appLabel}"
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
         <activity

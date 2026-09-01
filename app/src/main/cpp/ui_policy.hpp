@@ -26,12 +26,12 @@ constexpr std::size_t playerControlCount() {
     return 3;
 }
 
-constexpr int mediaGridColumns() { return 5; }
+constexpr int mediaGridColumns() { return 4; }
 constexpr bool isTopMediaGridSelection(int selection) {
     return selection >= 0 && selection < mediaGridColumns();
 }
-constexpr float mediaCardWidth() { return 310.0f; }
-constexpr float mediaTitleScale() { return 1.8f; }
+constexpr float mediaCardWidth() { return 405.0f; }
+constexpr float mediaTitleScale() { return 2.15f; }
 
 constexpr PlayerControlKind playerControlKind(std::size_t index) {
     return index == 0 ? PlayerControlKind::PlayPause
