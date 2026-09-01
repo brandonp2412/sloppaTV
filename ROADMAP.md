@@ -158,8 +158,8 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 
 - [x] Native settings navigation and persistence
 - [x] Max streaming bitrate
-- [ ] Buffer length
-- [ ] Audio behavior / max channels
+- [ ] Playback buffer presets are present in the pinned Android TV reference (`AUTO`, `LARGE`, `EXTRA LARGE` via ExoPlayer `DefaultLoadControl`), but Android `MediaPlayer` exposes no equivalent buffer-duration control; parity requires either a different player backend or a deliberate buffering layer rather than a fake setting
+- [~] Persisted max-audio-channel setting advertises either stereo (2-channel) or 8-channel capability through PlaybackInfo and the Jellyfin device/transcode profile, matching the reference client's downmix-vs-surround capability policy; device/server transcode/direct-play matrix pending
 - [~] Subtitle size, background and vertical-position preferences persist; preferred language/default/forced playback-mode behavior remains incomplete
 - [x] Skip-ahead / skip-back lengths
 - [~] Next Up autoplay behavior
@@ -203,7 +203,7 @@ The Astra hardening branch adds a real navigation stack, native diagnostics/serv
 
 ## Roadmap continuation checkpoint — 2026-09-02
 
-Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; and Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation. These paths are build-clean on Astra but remain partial until exercised against the real Jellyfin server in Waydroid/target-TV acceptance.
+Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation; and max audio channels now feeds PlaybackInfo/device-profile negotiation as 2-channel stereo or 8-channel surround. These paths are build-clean on Astra but remain partial until exercised against the real Jellyfin server in Waydroid/target-TV acceptance. The reference client's configurable buffer presets were also re-audited: they rely on ExoPlayer `DefaultLoadControl`, so the existing `MediaPlayer` backend cannot honestly expose equivalent buffer-duration controls without a backend/buffering-layer change.
 
 ## Current performance evidence
 

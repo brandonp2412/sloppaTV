@@ -19,6 +19,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Persisted subtitle size, background and vertical-position controls for the native SRT renderer.
 - Native Details item-options menu with default metadata refresh and permission-aware media deletion.
 - Two-step destructive delete confirmation with Cancel selected by default.
+- Persisted 2-channel/8-channel maximum-audio capability negotiation in PlaybackInfo and the Jellyfin device profile.
 
 ## 0.1.0 - 2026-09-01
 

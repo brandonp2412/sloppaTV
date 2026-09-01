@@ -1038,10 +1038,12 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     const JellyfinSession& session,
     const JellyfinItem& item,
     int maxStreamingBitrate,
+    int maxAudioChannels,
     int audioStreamIndex,
     int subtitleStreamIndex
 ) const {
     ApiValueResult<PlaybackTarget> result;
+    maxAudioChannels = std::clamp(maxAudioChannels, 2, 8);
 
     auto videoCodecs = codecSupport_.jellyfinVideoCodecs();
     auto audioCodecs = codecSupport_.jellyfinAudioCodecs();
@@ -1127,10 +1129,23 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
                 {"Protocol", "hls"},
                 {"Context", "Streaming"},
                 {"CopyTimestamps", false},
-                {"EnableSubtitlesInManifest", true}
+                {"EnableSubtitlesInManifest", true},
+                {"MaxAudioChannels", std::to_string(maxAudioChannels)}
             }
         })},
-        {"CodecProfiles", json::array()},
+        {"CodecProfiles", json::array({
+            {
+                {"Type", "VideoAudio"},
+                {"Conditions", json::array({
+                    {
+                        {"Condition", "LessThanEqual"},
+                        {"Property", "AudioChannels"},
+                        {"Value", std::to_string(maxAudioChannels)},
+                        {"IsRequired", false}
+                    }
+                })}
+            }
+        })},
         {"SubtitleProfiles", json::array({
             {{"Format", "vtt"}, {"Method", "Hls"}},
             {{"Format", "webvtt"}, {"Method", "Hls"}},
@@ -1153,6 +1168,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         // embedded subtitle force an otherwise direct-playable video into a full transcode.
         {"AudioStreamIndex", audioStreamIndex >= 0 ? json(audioStreamIndex) : json(nullptr)},
         {"SubtitleStreamIndex", subtitleStreamIndex},
+        {"MaxAudioChannels", maxAudioChannels},
         {"EnableDirectPlay", directVideoSupported && !preferServerStream},
         {"EnableDirectStream", directVideoSupported && !preferServerStream},
         {"EnableTranscoding", true},

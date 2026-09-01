@@ -298,6 +298,7 @@ struct AppSettings {
     int subtitleSize = 1;
     bool subtitleBackground = true;
     int subtitlePosition = 0;
+    int maxAudioChannels = 8;
 };
 
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
@@ -803,7 +804,7 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_UP) settingsSelection_ = std::max(0, settingsSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(14, settingsSelection_ + 1);
+        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(15, settingsSelection_ + 1);
         else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
@@ -845,11 +846,13 @@ private:
                 settings_.subtitleBackground = !settings_.subtitleBackground;
             } else if (settingsSelection_ == 12) {
                 settings_.subtitlePosition = std::clamp(settings_.subtitlePosition + direction, 0, 2);
+            } else if (settingsSelection_ == 13) {
+                settings_.maxAudioChannels = settings_.maxAudioChannels <= 2 ? 8 : 2;
             }
             saveSession(session_);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (settingsSelection_ == 13) openDiagnostics();
-            else if (settingsSelection_ == 14) logout();
+            if (settingsSelection_ == 14) openDiagnostics();
+            else if (settingsSelection_ == 15) logout();
         }
     }
 
@@ -1215,6 +1218,7 @@ private:
         const PlaybackTarget previousTarget = activeTarget_;
         const bool shouldReportPrevious = playbackStartReported_ && !previousTarget.url.empty();
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
+        const int maxAudioChannels = settings_.maxAudioChannels;
 
         // A Jellyfin server-stream change is a real playback-session handoff. Resolve the
         // replacement only after closing/reporting the old session: asking Jellyfin for a
@@ -1235,6 +1239,7 @@ private:
             previousTarget,
             shouldReportPrevious,
             maxStreamingBitrate,
+            maxAudioChannels,
             audioStreamIndex,
             subtitleStreamIndex,
             wasPaused
@@ -1246,6 +1251,7 @@ private:
                 session,
                 item,
                 maxStreamingBitrate,
+                maxAudioChannels,
                 audioStreamIndex,
                 subtitleStreamIndex
             );
@@ -2152,7 +2158,12 @@ private:
                 if (detailed.ok) playable = std::move(detailed.value);
             }
 
-            auto target = api_.resolvePlayback(session, playable, settings_.maxBitrateMbps * 1000000);
+            auto target = api_.resolvePlayback(
+                session,
+                playable,
+                settings_.maxBitrateMbps * 1000000,
+                settings_.maxAudioChannels
+            );
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
@@ -2252,7 +2263,12 @@ private:
         playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
         const JellyfinSession session = session_;
         tasks_.submit([this, session, nextItem = std::move(nextItem)]() mutable {
-            auto target = api_.resolvePlayback(session, nextItem, settings_.maxBitrateMbps * 1000000);
+            auto target = api_.resolvePlayback(
+                session,
+                nextItem,
+                settings_.maxBitrateMbps * 1000000,
+                settings_.maxAudioChannels
+            );
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             nextTransitionLoading_ = false;
@@ -3205,7 +3221,7 @@ private:
 
     void renderSettings() {
         renderHeader("SETTINGS");
-        const std::array<std::string, 15> labels{
+        const std::array<std::string, 16> labels{
             "MAX STREAMING BITRATE",
             "SKIP BACK",
             "SKIP AHEAD",
@@ -3219,10 +3235,11 @@ private:
             "SUBTITLE SIZE",
             "SUBTITLE BACKGROUND",
             "SUBTITLE POSITION",
+            "MAX AUDIO CHANNELS",
             "DIAGNOSTICS",
             "LOG OUT",
         };
-        const std::array<std::string, 15> values{
+        const std::array<std::string, 16> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             std::to_string(settings_.seekBackSeconds) + " SECONDS",
             std::to_string(settings_.seekForwardSeconds) + " SECONDS",
@@ -3236,6 +3253,7 @@ private:
             subtitleSizeName(settings_.subtitleSize),
             settings_.subtitleBackground ? "ON" : "OFF",
             subtitlePositionName(settings_.subtitlePosition),
+            std::to_string(settings_.maxAudioChannels) + " CHANNELS",
             "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
         };
@@ -3248,7 +3266,7 @@ private:
             renderer_.rect(120, y, 1380, 92, focused ? kPanelAlt : kPanel);
             if (focused) renderer_.outline(116, y - 4, 1388, 100, 4, kFocus);
             renderer_.text(155, y + 25, 2.0f, labels[static_cast<size_t>(i)], kText, 650);
-            renderer_.text(900, y + 25, 2.0f, values[static_cast<size_t>(i)], i == 14 ? kMuted : kFocus, 520);
+            renderer_.text(900, y + 25, 2.0f, values[static_cast<size_t>(i)], i == 15 ? kMuted : kFocus, 520);
         }
         renderer_.text(120, 955, 1.6f, "LEFT / RIGHT CHANGES VALUES. OK OPENS ACTIONS. SETTINGS SAVE IMMEDIATELY.", kMuted);
     }
@@ -3506,6 +3524,8 @@ private:
                 settings_.subtitleSize = std::clamp(saved.value("subtitleSize", settings_.subtitleSize), 0, 2);
                 settings_.subtitleBackground = saved.value("subtitleBackground", settings_.subtitleBackground);
                 settings_.subtitlePosition = std::clamp(saved.value("subtitlePosition", settings_.subtitlePosition), 0, 2);
+                const int savedMaxAudioChannels = saved.value("maxAudioChannels", settings_.maxAudioChannels);
+                settings_.maxAudioChannels = savedMaxAudioChannels <= 2 ? 2 : 8;
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
             }
             loginFields_[0] = session_.server;
@@ -3538,6 +3558,7 @@ private:
                     {"subtitleSize", settings_.subtitleSize},
                     {"subtitleBackground", settings_.subtitleBackground},
                     {"subtitlePosition", settings_.subtitlePosition},
+                    {"maxAudioChannels", settings_.maxAudioChannels},
                 }},
             };
             std::ofstream output(dataPath_ + "/session.json", std::ios::trunc);
