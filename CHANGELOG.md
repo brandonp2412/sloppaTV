@@ -32,6 +32,8 @@ All notable user-visible and release-engineering changes are recorded here.
 - Direct-play failure recovery can renegotiate a forced Jellyfin transcode when the initial PlaybackInfo response did not provide a fallback URL.
 - Native cast/person browser with Jellyfin actor images and roles, plus server-filtered Movie/Series/Episode results for a selected person.
 - Physical-streamer acceptance for Search, Genres, A-Z, Collections, Diagnostics, and reversible Favorite/Watched mutations with server-side state assertions.
+- Android TV `ACTION_VIEW` item intents routed directly into native Details using validated Jellyfin item IDs.
+- Android `ACTION_SEARCH` integration plus searchable/voice-recognizer metadata, routing external search text into the existing native Jellyfin Search screen.
 
 ## 0.1.0 - 2026-09-01
 
