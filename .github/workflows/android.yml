@@ -35,8 +35,18 @@ jobs:
       - name: Install pinned Android toolchain
         shell: bash
         run: |
-          yes | sdkmanager --licenses >/dev/null
-          sdkmanager \
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+
+          # Under pipefail, `yes` exits with SIGPIPE once sdkmanager has consumed
+          # all license answers. Check sdkmanager's status specifically instead.
+          set +e
+          yes | "$SDKMANAGER" --licenses >/dev/null
+          sdkmanager_status=${PIPESTATUS[1]}
+          set -e
+          test "$sdkmanager_status" -eq 0
+
+          "$SDKMANAGER" \
             "platforms;android-36" \
             "build-tools;36.0.0" \
             "ndk;29.0.14206865" \
