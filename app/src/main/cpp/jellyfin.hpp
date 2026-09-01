@@ -234,6 +234,7 @@ public:
         const JellyfinSession& session,
         const JellyfinItem& item,
         int maxStreamingBitrate = 120000000,
+        int maxAudioChannels = 8,
         int audioStreamIndex = -1,
         int subtitleStreamIndex = -1
     ) const;
