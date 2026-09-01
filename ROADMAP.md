@@ -12,7 +12,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [~] Implemented, but not yet fully end-to-end verified or has a known limitation
 - [ ] Not implemented
 
-## Current status — 2026-09-01
+## Current status — 2026-09-02
 
 ### Native foundation
 
@@ -60,11 +60,11 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [~] A-Z / by-letter browser implemented with server-side `NameStartsWith`; physical-TV UI pass pending
 - [~] Dedicated Favorites filter implemented in Movies/Shows browse; current account has no movie favorites for a populated E2E case
 - [~] Cast names are loaded/displayed on Details; dedicated person browser/images still missing
-- [ ] Item context menus
+- [~] Details now exposes a native `MORE` item-options menu for maintenance actions; broader card-level/context-key access and physical-TV UI verification remain pending
 - [~] Mark watched/unwatched mutation
 - [~] Favorite/unfavorite mutation
-- [ ] Delete media where server permissions allow it
-- [ ] Refresh metadata where server permissions allow it
+- [~] Delete media is gated by Jellyfin `CanDelete` and requires a second destructive confirmation with Cancel selected by default; real permission/filesystem behavior still needs device/server E2E
+- [~] Metadata refresh can be requested from the item-options menu using Jellyfin's default metadata/image refresh modes; real permission/server completion behavior still needs E2E
 
 ### Artwork and presentation
 
@@ -94,14 +94,14 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [x] End-to-end playback verified against the real Jellyfin server and streamer
 - [x] Native Android MediaCodecList capability probing for video/audio decoder families
 - [~] Device-aware direct-play codec/container/profile/resolution/HDR matching; real HEVC Main10/MKV direct play verified and a real HDR10 library title identified, HDR title playback E2E pending
-- [ ] Direct-stream/remux distinction in session reporting
+- [~] Playback targets now distinguish Jellyfin `DirectPlay`, `DirectStream` and `Transcode` in session reporting and diagnostics while retaining server-stream seek policy; a real DirectStream/remux session assertion is still pending
 - [x] Native playback overlay with title, time and progress bar
 - [x] Native seek/progress UI
 - [~] Jellyfin chapter parsing remains available internally, but the chapter button/interactive chapter control was intentionally removed from the simplified player overlay
 - [ ] Trickplay thumbnails
 - [~] Jellyfin audio streams and server stream indices are parsed and the player restarts/resolves playback to change server audio streams; prior real-streamer dual-audio direct-play switching was verified, while the current Waydroid multi-audio restart matrix is still pending
 - [x] Subtitle track selection and off/on UI; in Waydroid Blue Planet II repeatedly survived OFF → ENG → OFF cycles, rendered actual English subtitle text, and remained moving through subtitle-active seek/pause/resume testing
-- [ ] Subtitle styling, position and background settings
+- [~] Persisted native subtitle size, background on/off and low/middle/high vertical-position controls feed the GLES SRT renderer; physical-TV visual verification and richer ASS/font styling remain pending
 - [~] Native SRT renderer strips ASS overrides after Jellyfin conversion; full libass-equivalent ASS/SSA styling/positioning is still missing
 - [x] Playback speed option intentionally removed from the scoped player UI
 - [~] In-player zoom/fill option intentionally removed from the simplified player controls; the persisted default-video-zoom setting/render path still exists
@@ -160,7 +160,7 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 - [x] Max streaming bitrate
 - [ ] Buffer length
 - [ ] Audio behavior / max channels
-- [ ] Subtitle preferences
+- [~] Subtitle size, background and vertical-position preferences persist; preferred language/default/forced playback-mode behavior remains incomplete
 - [x] Skip-ahead / skip-back lengths
 - [~] Next Up autoplay behavior
 - [~] Still Watching threshold
@@ -173,7 +173,7 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 - [ ] Screensaver preferences
 - [ ] Live TV preferences
 - [ ] User-select behavior
-- [~] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and the last direct-play/transcode path; physical-TV UI/server pass pending
+- [~] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and the last DirectPlay/DirectStream/Transcode path; physical-TV UI/server pass pending
 
 ### Reliability, performance and release engineering
 
@@ -193,13 +193,17 @@ Still required before the viewing-acceptance effort is considered complete: a cu
 - [~] Memory profiling baseline complete; leak/long-session profiling still required
 - [~] Release-candidate performance comparison underway; cold-launch and memory release measurements captured, final multi-run release suite still required
 - [~] Production release signing is environment-configurable and never silently falls back to a debug key; a separate non-debuggable debug-signed `benchmark` variant is available for device testing, while a real production-key signing pass remains pending
-- [~] GitHub Actions workflow builds/tests Debug, Benchmark and Release with the pinned SDK/NDK/CMake toolchain and uploads APKs; first hosted run is pending
+- [~] GitHub Actions workflow builds/tests Debug, Benchmark and Release with the pinned SDK/NDK/CMake toolchain and uploads APKs; both the push and pull-request hosted runs passed after fixing runner `sdkmanager` discovery, while artifact install/device validation remains pending
 - [x] Version code/name are centralized in Gradle properties, compiled into native diagnostics, and tracked in `CHANGELOG.md`
 - [~] Two clean Astra unsigned Release builds produced the identical SHA-256 `fbcb843ad6c88aafdd2f145f482525fcd246edbe47d9663429cdb1c9646a4367`; the check is scripted, while final production-signed reproducibility remains pending
 
 ## Roadmap hardening checkpoint — 2026-09-01
 
-The Astra hardening branch adds a real navigation stack, native diagnostics/server-version checks, in-flight GET coalescing plus a short-lived API cache, watched/clock/backdrop settings, centralized versioning/changelog, production-signing configuration, a separate installable benchmark variant, host test orchestration, CI, and a repeatable release-reproducibility check. All host tests and Debug/Benchmark/Release Android builds pass locally across the configured ABIs. Items that change visible Android TV behavior remain partial until the required Waydroid/target-TV acceptance pass is run.
+The Astra hardening branch adds a real navigation stack, native diagnostics/server-version checks, in-flight GET coalescing plus a short-lived API cache, watched/clock/backdrop settings, centralized versioning/changelog, production-signing configuration, a separate installable benchmark variant, host test orchestration, CI, and a repeatable release-reproducibility check. All host tests and Debug/Benchmark/Release Android builds pass locally across the configured ABIs. The first hosted push and pull-request CI runs are also green. Items that change visible Android TV behavior remain partial until the required Waydroid/target-TV acceptance pass is run.
+
+## Roadmap continuation checkpoint — 2026-09-02
+
+Direct-stream session reporting now preserves Jellyfin's distinct DirectPlay/DirectStream/Transcode methods; the native subtitle renderer has persisted size/background/position controls; and Details has a permission-aware item-options menu for default metadata refresh and `CanDelete`-gated deletion with a destructive confirmation. These paths are build-clean on Astra but remain partial until exercised against the real Jellyfin server in Waydroid/target-TV acceptance.
 
 ## Current performance evidence
 

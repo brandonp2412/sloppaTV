@@ -88,6 +88,7 @@ struct JellyfinItem {
     int64_t runtimeTicks = 0;
     bool favorite = false;
     bool played = false;
+    bool canDelete = false;
 };
 
 struct JellyfinHomeRow {
@@ -114,12 +115,30 @@ struct QuickConnectRequest {
     std::string code;
 };
 
+enum class PlaybackMethod {
+    DirectPlay,
+    DirectStream,
+    Transcode,
+};
+
+inline const char* playbackMethodName(PlaybackMethod method) {
+    switch (method) {
+        case PlaybackMethod::DirectPlay: return "DirectPlay";
+        case PlaybackMethod::DirectStream: return "DirectStream";
+        case PlaybackMethod::Transcode: return "Transcode";
+    }
+    return "DirectPlay";
+}
+
 struct PlaybackTarget {
     std::string url;
     std::string fallbackTranscodeUrl;
     std::string playSessionId;
     std::string mediaSourceId;
+    // Server-streamed DirectStream and Transcode targets both retain in-place
+    // seek behavior; playMethod keeps Jellyfin session reporting accurate.
     bool transcoding = false;
+    PlaybackMethod playMethod = PlaybackMethod::DirectPlay;
     int64_t startTicks = 0;
 };
 
@@ -209,6 +228,8 @@ public:
     ) const;
     ApiResult setFavorite(const JellyfinSession& session, const JellyfinItem& item, bool favorite) const;
     ApiResult setPlayed(const JellyfinSession& session, const JellyfinItem& item, bool played) const;
+    ApiResult refreshMetadata(const JellyfinSession& session, const JellyfinItem& item) const;
+    ApiResult deleteItem(const JellyfinSession& session, const JellyfinItem& item) const;
     ApiValueResult<PlaybackTarget> resolvePlayback(
         const JellyfinSession& session,
         const JellyfinItem& item,
