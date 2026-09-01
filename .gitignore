@@ -1,0 +1,12 @@
+.gradle/
+**/.cxx/
+**/build/
+build/
+local.properties
+*.iml
+.idea/
+artifacts/*.png
+artifacts/e2e-waydroid/
+**/__pycache__/
+*.pyc
+.env.local
