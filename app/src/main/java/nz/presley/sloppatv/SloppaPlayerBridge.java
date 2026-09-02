@@ -168,6 +168,10 @@ public final class SloppaPlayerBridge {
                 playerBuilder.setRenderersFactory(defaultRenderersFactory);
             }
             ExoPlayer created = playerBuilder.build();
+            if (context.getPackageName().endsWith(".test")) {
+                created.setVolume(0.0f);
+                Log.i(TAG, "Test/benchmark build audio forced to volume=0.0");
+            }
             created.setAudioAttributes(
                 new AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
