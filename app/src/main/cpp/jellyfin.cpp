@@ -1437,6 +1437,29 @@ ApiResult JellyfinClient::reportPlaybackStopped(
     return result;
 }
 
+ApiResult JellyfinClient::reportExternalPlaybackStopped(
+    const JellyfinSession& session,
+    const JellyfinItem& item,
+    std::optional<int64_t> positionTicks
+) const {
+    ApiResult result;
+    json body = {
+        {"ItemId", item.id},
+        {"MediaSourceId", item.mediaSourceId},
+        {"Failed", false}
+    };
+    if (positionTicks) body["PositionTicks"] = *positionTicks;
+    const auto response = http_.request(
+        "POST",
+        session.server + "/Sessions/Playing/Stopped",
+        headers(&session, session.deviceId),
+        body.dump()
+    );
+    result.ok = response.ok();
+    if (!result.ok) result.error = apiError(response);
+    return result;
+}
+
 std::string JellyfinClient::imageUrl(
     const JellyfinSession& session,
     const JellyfinItem& item,

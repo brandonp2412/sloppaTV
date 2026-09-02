@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -292,6 +293,11 @@ public:
     ApiResult reportPlaybackStart(const JellyfinSession& session, const JellyfinItem& item, const PlaybackTarget& target, int64_t positionTicks) const;
     ApiResult reportPlaybackProgress(const JellyfinSession& session, const JellyfinItem& item, const PlaybackTarget& target, int64_t positionTicks, bool paused) const;
     ApiResult reportPlaybackStopped(const JellyfinSession& session, const JellyfinItem& item, const PlaybackTarget& target, int64_t positionTicks) const;
+    ApiResult reportExternalPlaybackStopped(
+        const JellyfinSession& session,
+        const JellyfinItem& item,
+        std::optional<int64_t> positionTicks
+    ) const;
 
     [[nodiscard]] std::string imageUrl(
         const JellyfinSession& session,

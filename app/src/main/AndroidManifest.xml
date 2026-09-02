@@ -7,14 +7,13 @@
     <application
         android:allowBackup="false"
         android:banner="@drawable/banner"
-        android:hasCode="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="${appLabel}"
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
         <activity
-            android:name="android.app.NativeActivity"
+            android:name="nz.presley.sloppatv.SloppaNativeActivity"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
             android:screenOrientation="landscape">

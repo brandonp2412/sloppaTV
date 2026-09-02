@@ -3417,10 +3417,16 @@ private:
     void tick() {
         std::optional<PlaybackTarget> target;
         std::optional<PendingExternalLaunch> externalLaunch;
+        std::optional<PendingExternalLaunch> completedExternalPlayback;
+        const auto externalResult = externalPlayer_.takeResult();
         JellyfinItem item;
         bool streamRestart = false;
         {
             std::scoped_lock lock(stateMutex_);
+            if (externalResult && activeExternalPlayback_) {
+                completedExternalPlayback = std::move(activeExternalPlayback_);
+                activeExternalPlayback_.reset();
+            }
             if (pendingExternalLaunch_) {
                 externalLaunch = std::move(pendingExternalLaunch_);
                 pendingExternalLaunch_.reset();
@@ -3483,6 +3489,39 @@ private:
             }
         }
 
+        if (externalResult && completedExternalPlayback) {
+            if (!externalResult->success) {
+                std::scoped_lock lock(stateMutex_);
+                error_ = "EXTERNAL PLAYER REPORTED PLAYBACK FAILURE";
+            } else {
+                std::optional<int64_t> positionTicks;
+                if (externalResult->positionMs >= 0) {
+                    positionTicks = static_cast<int64_t>(externalResult->positionMs) * 10000;
+                } else if (externalResult->completionKnown && externalResult->completed
+                    && completedExternalPlayback->item.runtimeTicks > 0) {
+                    positionTicks = completedExternalPlayback->item.runtimeTicks;
+                }
+                if (positionTicks) {
+                    const int64_t boundedTicks = completedExternalPlayback->item.runtimeTicks > 0
+                        ? std::clamp<int64_t>(*positionTicks, 0, completedExternalPlayback->item.runtimeTicks)
+                        : std::max<int64_t>(0, *positionTicks);
+                    positionTicks = boundedTicks;
+                    std::scoped_lock lock(stateMutex_);
+                    if (detail_.id == completedExternalPlayback->item.id) detail_.positionTicks = boundedTicks;
+                }
+                const JellyfinSession reportSession = session_;
+                const JellyfinItem reportItem = completedExternalPlayback->item;
+                tasks_.submit([this, reportSession, reportItem, positionTicks] {
+                    const auto reported = api_.reportExternalPlaybackStopped(reportSession, reportItem, positionTicks);
+                    if (!reported.ok) {
+                        __android_log_print(ANDROID_LOG_WARN, kTag, "External playback stop report failed: %s", reported.error.c_str());
+                    }
+                });
+                std::scoped_lock lock(stateMutex_);
+                error_.clear();
+            }
+        }
+
         if (externalLaunch) {
             std::string launchError;
             const std::string title = externalLaunch->item.seriesName.empty()
@@ -3503,6 +3542,7 @@ private:
                 std::scoped_lock lock(stateMutex_);
                 error_.clear();
                 lastPlaybackSummary_ = "EXTERNAL / " + externalLaunch->player.label;
+                activeExternalPlayback_ = std::move(externalLaunch);
             }
             return;
         }
@@ -5078,6 +5118,7 @@ private:
     bool queueOverlayActive_ = false;
 
     std::optional<PendingExternalLaunch> pendingExternalLaunch_;
+    std::optional<PendingExternalLaunch> activeExternalPlayback_;
     std::optional<PlaybackTarget> pendingPlayback_;
     JellyfinItem pendingPlaybackItem_;
     bool pendingStreamRestart_ = false;
