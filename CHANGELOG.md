@@ -34,6 +34,13 @@ All notable user-visible and release-engineering changes are recorded here.
 - Physical-streamer acceptance for Search, Genres, A-Z, Collections, Diagnostics, and reversible Favorite/Watched mutations with server-side state assertions.
 - Android TV `ACTION_VIEW` item intents routed directly into native Details using validated Jellyfin item IDs.
 - Android `ACTION_SEARCH` integration plus searchable/voice-recognizer metadata, routing external search text into the existing native Jellyfin Search screen.
+- Lazy native Android `MediaSession` publication for playback title/episode metadata, duration, position and buffering/playing/paused state without claiming unimplemented system transport callbacks.
+- Branded Android TV vector banner plus adaptive launcher/round icons replacing the previous flat placeholder banner.
+
+### Fixed
+
+- Launch-intent JNI now attaches the `android_main` thread to the VM instead of reusing `ANativeActivity::env`; a physical-streamer CheckJNI abort exposed the invalid cross-thread `JNIEnv*` use.
+- MediaSession lifetime is restricted to active playback so idle Home does not register or retain a sloppaTV media session.
 
 ## 0.1.0 - 2026-09-01
 
