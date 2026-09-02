@@ -13,6 +13,7 @@
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
 #include "playback_queue.hpp"
+#include "screensaver_policy.hpp"
 #include "ui_policy.hpp"
 #include "renderer.hpp"
 #include "task_runner.hpp"
@@ -290,6 +291,11 @@ std::string uiTextSizeName(int size) {
     return names[static_cast<size_t>(std::clamp(size, 0, 2))];
 }
 
+std::string screensaverName(int minutes) {
+    minutes = normalizedScreensaverMinutes(minutes);
+    return minutes <= 0 ? "OFF" : std::to_string(minutes) + " MINUTES";
+}
+
 std::string avcLevelName(int level) {
     if (level <= 0) return "AUTO";
     return std::to_string(level / 10) + "." + std::to_string(level % 10);
@@ -343,6 +349,7 @@ struct AppSettings {
     int hdrOverride = static_cast<int>(HdrOverrideMode::Auto);
     int uiTextSize = 0;
     int safeAreaPercent = 0;
+    int screensaverMinutes = 0;
 };
 
 PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
@@ -544,11 +551,20 @@ public:
     void run() {
         while (!app_->destroyRequested) {
             int timeoutMs = -1;
-            bool burstActive = std::chrono::steady_clock::now() < renderBurstUntil_;
+            const auto pollNow = std::chrono::steady_clock::now();
+            bool burstActive = pollNow < renderBurstUntil_;
             {
                 std::scoped_lock lock(stateMutex_);
                 if (screen_ == Screen::Player || burstActive) timeoutMs = 0;
+                else if (screensaverActive_) timeoutMs = 30000;
                 else if (loading_ || quickConnectActive_) timeoutMs = 100;
+                else {
+                    const int64_t delayMs = screensaverDelayMs(settings_.screensaverMinutes);
+                    if (delayMs > 0) {
+                        const int64_t idleMs = std::chrono::duration_cast<std::chrono::milliseconds>(pollNow - lastInteraction_).count();
+                        timeoutMs = static_cast<int>(std::clamp<int64_t>(delayMs - idleMs, 0, delayMs));
+                    }
+                }
             }
 
             int events = 0;
@@ -570,12 +586,26 @@ public:
 
             tick();
             bool playerScreen = false;
+            bool screensaver = false;
             {
                 std::scoped_lock lock(stateMutex_);
                 playerScreen = screen_ == Screen::Player;
+                if (playerScreen) {
+                    screensaverActive_ = false;
+                } else if (!screensaverActive_) {
+                    const auto now = std::chrono::steady_clock::now();
+                    const int64_t idleMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInteraction_).count();
+                    screensaverActive_ = shouldActivateScreensaver(
+                        settings_.screensaverMinutes,
+                        idleMs,
+                        false,
+                        loading_ || quickConnectActive_
+                    );
+                }
+                screensaver = screensaverActive_;
             }
             burstActive = std::chrono::steady_clock::now() < renderBurstUntil_;
-            if (renderer_.ready() && (playerScreen || shouldRender || burstActive)) render();
+            if (renderer_.ready() && (playerScreen || screensaver || shouldRender || burstActive)) render();
         }
     }
 
@@ -585,12 +615,19 @@ private:
         switch (command) {
             case APP_CMD_INIT_WINDOW:
                 if (app_->window) renderer_.init(app_->window);
+                lastInteraction_ = std::chrono::steady_clock::now();
+                screensaverActive_ = false;
                 break;
             case APP_CMD_TERM_WINDOW:
                 if (screen_ == Screen::Player) stopPlayback();
                 renderer_.shutdown();
                 break;
+            case APP_CMD_GAINED_FOCUS:
+                lastInteraction_ = std::chrono::steady_clock::now();
+                screensaverActive_ = false;
+                break;
             case APP_CMD_LOST_FOCUS:
+                screensaverActive_ = false;
                 if (screen_ == Screen::Player && player_.status() == PlayerStatus::Playing) {
                     player_.togglePause();
                 }
@@ -606,8 +643,14 @@ private:
 
         const int32_t key = AKeyEvent_getKeyCode(event);
         const int32_t meta = AKeyEvent_getMetaState(event);
-        renderBurstUntil_ = std::chrono::steady_clock::now() + 150ms;
+        const auto inputNow = std::chrono::steady_clock::now();
+        renderBurstUntil_ = inputNow + 150ms;
         std::scoped_lock lock(stateMutex_);
+        lastInteraction_ = inputNow;
+        if (screensaverActive_) {
+            screensaverActive_ = false;
+            return 1;
+        }
 
         if (queueOverlayActive_) {
             handleQueueOverlayKey(key);
@@ -986,7 +1029,7 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_UP) settingsSelection_ = std::max(0, settingsSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(20, settingsSelection_ + 1);
+        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(21, settingsSelection_ + 1);
         else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
@@ -1052,11 +1095,19 @@ private:
                 int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
                 index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
                 settings_.safeAreaPercent = choices[static_cast<size_t>(index)];
+            } else if (settingsSelection_ == 19) {
+                static constexpr std::array<int, 5> choices{0, 5, 10, 20, 30};
+                auto it = std::find(choices.begin(), choices.end(), settings_.screensaverMinutes);
+                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
+                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
+                settings_.screensaverMinutes = choices[static_cast<size_t>(index)];
+                lastInteraction_ = std::chrono::steady_clock::now();
+                screensaverActive_ = false;
             }
             saveSession(session_);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (settingsSelection_ == 19) openDiagnostics();
-            else if (settingsSelection_ == 20) openProfiles();
+            if (settingsSelection_ == 20) openDiagnostics();
+            else if (settingsSelection_ == 21) openProfiles();
         }
     }
 
@@ -3237,6 +3288,12 @@ private:
     void render() {
         std::scoped_lock lock(stateMutex_);
         renderer_.beginFrame();
+        if (screensaverActive_) {
+            renderer_.setUiTransform(0.0f, 1.0f);
+            renderScreensaver();
+            renderer_.endFrame();
+            return;
+        }
         renderer_.setUiTransform(
             uiSafeAreaFraction(settings_.safeAreaPercent),
             uiTextScale(settings_.uiTextSize)
@@ -4062,9 +4119,39 @@ private:
         renderer_.text(100, 982, 1.45f, "UP/DOWN SELECTS. LEFT/RIGHT CHOOSES ACTION. OK APPLIES. BACK CLOSES QUEUE.", kMuted, 1700);
     }
 
+    void renderScreensaver() {
+        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.008f, 0.009f, 0.012f, 1.0f});
+        const int64_t elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+            std::chrono::steady_clock::now().time_since_epoch()
+        ).count();
+        static constexpr std::array<std::array<float, 2>, 8> positions{{
+            {{180.0f, 180.0f}},
+            {{1120.0f, 180.0f}},
+            {{180.0f, 690.0f}},
+            {{1120.0f, 690.0f}},
+            {{650.0f, 265.0f}},
+            {{650.0f, 640.0f}},
+            {{350.0f, 430.0f}},
+            {{950.0f, 430.0f}},
+        }};
+        const auto& position = positions[static_cast<size_t>(screensaverPositionSlot(elapsedSeconds))];
+
+        std::time_t now = std::time(nullptr);
+        std::tm local{};
+        localtime_r(&now, &local);
+        char clock[16]{};
+        std::strftime(clock, sizeof(clock), "%H:%M", &local);
+
+        renderer_.rect(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f, Color{0.035f, 0.038f, 0.050f, 0.92f});
+        renderer_.outline(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f, 3.0f, Color{0.56f, 0.38f, 0.98f, 0.72f});
+        renderer_.text(position[0], position[1], 3.2f, "SLOPPATV", kText, 520.0f);
+        renderer_.text(position[0], position[1] + 78.0f, 5.8f, clock, kText, 520.0f);
+        renderer_.text(670, 1015, 1.35f, "PRESS ANY BUTTON TO RETURN", kMuted, 620.0f);
+    }
+
     void renderSettings() {
         renderHeader("SETTINGS");
-        const std::array<std::string, 21> labels{
+        const std::array<std::string, 22> labels{
             "MAX STREAMING BITRATE",
             "SKIP BACK",
             "SKIP AHEAD",
@@ -4084,10 +4171,11 @@ private:
             "HDR PLAYBACK",
             "UI TEXT SIZE",
             "OVERSCAN SAFE AREA",
+            "IN-APP SCREENSAVER",
             "DIAGNOSTICS",
             "SWITCH USER",
         };
-        const std::array<std::string, 21> values{
+        const std::array<std::string, 22> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             std::to_string(settings_.seekBackSeconds) + " SECONDS",
             std::to_string(settings_.seekForwardSeconds) + " SECONDS",
@@ -4107,6 +4195,7 @@ private:
             hdrOverrideName(settings_.hdrOverride),
             uiTextSizeName(settings_.uiTextSize),
             settings_.safeAreaPercent == 0 ? "OFF" : std::to_string(settings_.safeAreaPercent) + "% PER EDGE",
+            screensaverName(settings_.screensaverMinutes),
             "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
         };
@@ -4119,7 +4208,7 @@ private:
             renderer_.rect(100, y, 1580, 104, focused ? kPanelAlt : kPanel);
             if (focused) renderer_.outline(96, y - 4, 1588, 112, 5, kFocus);
             renderer_.text(140, y + 31, 2.3f, labels[static_cast<size_t>(i)], kText, 760);
-            renderer_.text(965, y + 31, 2.2f, values[static_cast<size_t>(i)], i == 20 ? kMuted : kFocus, 650);
+            renderer_.text(965, y + 31, 2.2f, values[static_cast<size_t>(i)], i == 21 ? kMuted : kFocus, 650);
         }
         renderer_.text(105, 1000, 1.75f, "LEFT / RIGHT CHANGES VALUES. OK OPENS ACTIONS. SETTINGS SAVE IMMEDIATELY.", kMuted, 1700);
     }
@@ -4476,6 +4565,7 @@ private:
                 settings_.uiTextSize = std::clamp(saved.value("uiTextSize", settings_.uiTextSize), 0, 2);
                 const int savedSafeArea = saved.value("safeAreaPercent", settings_.safeAreaPercent);
                 settings_.safeAreaPercent = savedSafeArea <= 0 ? 0 : (savedSafeArea <= 2 ? 2 : (savedSafeArea <= 4 ? 4 : 6));
+                settings_.screensaverMinutes = normalizedScreensaverMinutes(saved.value("screensaverMinutes", settings_.screensaverMinutes));
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
             }
             loginFields_[0] = session_.server;
@@ -4526,6 +4616,7 @@ private:
                     {"hdrOverride", settings_.hdrOverride},
                     {"uiTextSize", settings_.uiTextSize},
                     {"safeAreaPercent", settings_.safeAreaPercent},
+                    {"screensaverMinutes", settings_.screensaverMinutes},
                 }},
             };
             std::ofstream output(dataPath_ + "/session.json", std::ios::trunc);
@@ -4662,6 +4753,8 @@ private:
     int cachedPlaybackDurationMs_ = 0;
     std::chrono::steady_clock::time_point playerOverlayUntil_{};
     std::chrono::steady_clock::time_point renderBurstUntil_{};
+    std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
+    bool screensaverActive_ = false;
     bool stillWatchingPrompt_ = false;
     std::string lastPlaybackSummary_;
 };
