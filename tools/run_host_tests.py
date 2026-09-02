@@ -54,6 +54,25 @@ def main() -> int:
         ])
         run([str(binary)])
 
+    task_runner_test = CPP_TEST_DIR / "task_runner_test.cpp"
+    task_runner_binary = BUILD_DIR / task_runner_test.stem
+    run([
+        "g++",
+        "-std=c++20",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Werror",
+        "-pthread",
+        "-I",
+        str(CPP_DIR),
+        str(task_runner_test),
+        str(CPP_DIR / "task_runner.cpp"),
+        "-o",
+        str(task_runner_binary),
+    ])
+    run([str(task_runner_binary)])
+
     java_build = BUILD_DIR / "java"
     java_build.mkdir(parents=True, exist_ok=True)
     run([
