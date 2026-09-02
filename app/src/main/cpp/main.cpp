@@ -794,16 +794,17 @@ private:
                         displayMode_.matchVideo(app_->window, activePlaybackItem_.videoFrameRate);
                     }
                     const PlayerStatus restoreStatus = player_.status();
+                    const bool shouldResumePlayback = windowRestoreResumePlaying_;
                     const bool preservedPlayer = reusedRendererContext
                         && videoSurface_.ready()
                         && restoreStatus != PlayerStatus::Idle
                         && restoreStatus != PlayerStatus::Error;
                     if (preservedPlayer) {
-                        if (windowRestoreResumePlaying_ && restoreStatus == PlayerStatus::Paused) {
+                        if (shouldResumePlayback && restoreStatus == PlayerStatus::Paused) {
                             player_.togglePause();
                         }
                         mediaSession_.updateState(
-                            windowRestoreResumePlaying_ ? MediaSessionState::Playing : MediaSessionState::Paused,
+                            shouldResumePlayback ? MediaSessionState::Playing : MediaSessionState::Paused,
                             cachedPlaybackPositionMs_
                         );
                         __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved Media3 and GLES context");
@@ -822,12 +823,13 @@ private:
                             playerAudioOrdinal(activeTarget_, activePlaybackItem_),
                             playerSubtitleTracks(activeTarget_, activePlaybackItem_)
                         );
-                        pauseAfterRestart_ = !windowRestoreResumePlaying_;
+                        pauseAfterRestart_ = !shouldResumePlayback;
                         mediaSession_.updateState(MediaSessionState::Buffering, cachedPlaybackPositionMs_);
                         __android_log_print(ANDROID_LOG_WARN, kTag, "GLES context was not reusable during window restore; recreated playback surface");
                     }
                     playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
                     windowRestorePending_ = false;
+                    windowRestoreResumePlaying_ = false;
                 }
                 break;
             }
@@ -849,6 +851,13 @@ private:
             case APP_CMD_GAINED_FOCUS:
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
+                if (screen_ == Screen::Player && !windowRestorePending_ && windowRestoreResumePlaying_
+                    && player_.status() == PlayerStatus::Paused) {
+                    player_.togglePause();
+                    mediaSession_.updateState(MediaSessionState::Playing, cachedPlaybackPositionMs_);
+                    windowRestoreResumePlaying_ = false;
+                    __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
+                }
                 break;
             case APP_CMD_LOST_FOCUS:
                 screensaverActive_ = false;
