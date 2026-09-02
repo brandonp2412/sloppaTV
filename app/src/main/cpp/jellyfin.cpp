@@ -385,6 +385,7 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
     if (value.contains("ImageTags") && value["ImageTags"].is_object()) {
         item.imageTag = value["ImageTags"].value("Primary", std::string{});
         item.thumbTag = value["ImageTags"].value("Thumb", std::string{});
+        item.logoTag = value["ImageTags"].value("Logo", std::string{});
     }
     if (value.contains("BackdropImageTags") && value["BackdropImageTags"].is_array() && !value["BackdropImageTags"].empty()) {
         item.backdropTag = value["BackdropImageTags"][0].get<std::string>();
@@ -1522,6 +1523,35 @@ ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(
     }
     if (response.body.empty()) {
         result.error = "Jellyfin returned an empty backdrop";
+        return result;
+    }
+    result.value = response.body;
+    result.ok = true;
+    return result;
+}
+
+ApiValueResult<std::string> JellyfinClient::downloadLogoImage(
+    const JellyfinSession& session,
+    const JellyfinItem& item,
+    int width,
+    int height
+) const {
+    ApiValueResult<std::string> result;
+    if (!session.valid() || item.id.empty() || item.logoTag.empty()) {
+        result.error = "Logo request is incomplete";
+        return result;
+    }
+    const std::string url = session.server + "/Items/" + item.id + "/Images/Logo?maxWidth=" + std::to_string(width)
+        + "&maxHeight=" + std::to_string(height) + "&quality=90"
+        + "&tag=" + urlEncode(item.logoTag)
+        + "&api_key=" + urlEncode(session.token);
+    const auto response = http_.request("GET", url, headers(&session, session.deviceId));
+    if (!response.ok()) {
+        result.error = apiError(response);
+        return result;
+    }
+    if (response.body.empty()) {
+        result.error = "Jellyfin returned an empty logo";
         return result;
     }
     result.value = response.body;

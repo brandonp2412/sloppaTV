@@ -2121,6 +2121,7 @@ private:
         artwork_.clear();
         homeArtwork_.clear();
         backdrops_.clear();
+        logos_.clear();
         loginFields_[1].clear();
         loginFields_[2].clear();
         homeSelection_.clear();
@@ -3775,6 +3776,10 @@ private:
         return item.id + ":backdrop:" + item.backdropTag;
     }
 
+    std::string logoKey(const JellyfinItem& item) const {
+        return item.id + ":logo:" + item.logoTag;
+    }
+
     std::string homeArtworkKey(const JellyfinItem& item) const {
         const ArtworkReference artwork = homeArtworkReference(
             item.id,
@@ -4075,6 +4080,61 @@ private:
         }
         if (entry.texture == 0) return false;
         renderer_.image(entry.texture, 0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), alpha);
+        return true;
+    }
+
+    void requestLogo(const JellyfinItem& item) {
+        if (!session_.valid() || item.id.empty() || item.logoTag.empty()) return;
+        const std::string key = logoKey(item);
+        if (logos_.contains(key)) return;
+        logos_.emplace(key, ArtworkEntry{});
+        const JellyfinSession session = session_;
+        const JellyfinItem itemCopy = item;
+        tasks_.submit([this, session, itemCopy, key] {
+            auto bytes = api_.downloadLogoImage(session, itemCopy, 800, 240);
+            if (!bytes.ok) {
+                std::scoped_lock lock(stateMutex_);
+                auto it = logos_.find(key);
+                if (it != logos_.end()) it->second.state = ArtworkState::Failed;
+                return;
+            }
+            std::string decodeError;
+            DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
+            std::scoped_lock lock(stateMutex_);
+            auto it = logos_.find(key);
+            if (it == logos_.end()) return;
+            if (!decoded.valid()) {
+                it->second.state = ArtworkState::Failed;
+                return;
+            }
+            it->second.decoded = std::move(decoded);
+            it->second.state = ArtworkState::Ready;
+        });
+    }
+
+    bool drawLogo(const JellyfinItem& item, float x, float y, float maxWidth, float maxHeight) {
+        if (item.id.empty() || item.logoTag.empty()) return false;
+        const std::string key = logoKey(item);
+        auto it = logos_.find(key);
+        if (it == logos_.end()) {
+            requestLogo(item);
+            return false;
+        }
+        auto& entry = it->second;
+        if (entry.state != ArtworkState::Ready || !entry.decoded.valid()) return false;
+        if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
+            entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
+            entry.textureGeneration = renderer_.generation();
+        }
+        if (entry.texture == 0) return false;
+        const float aspect = static_cast<float>(entry.decoded.width) / static_cast<float>(entry.decoded.height);
+        float width = maxWidth;
+        float height = width / aspect;
+        if (height > maxHeight) {
+            height = maxHeight;
+            width = height * aspect;
+        }
+        renderer_.image(entry.texture, x, y + (maxHeight - height) * 0.5f, width, height);
         return true;
     }
 
@@ -4853,7 +4913,10 @@ private:
         if (stillWatchingPrompt_) {
             renderer_.text(contentX, 150, 2.5f, "STILL WATCHING?", kFocus, contentWidth);
         }
-        renderer_.text(contentX, 185, 5.5f, detail_.name.empty() ? "LOADING..." : detail_.name, kText, contentWidth);
+        const bool hasLogo = drawLogo(detail_, contentX + 5.0f, 165.0f, std::min(contentWidth, 680.0f), 100.0f);
+        if (!hasLogo) {
+            renderer_.text(contentX, 185, 5.5f, detail_.name.empty() ? "LOADING..." : detail_.name, kText, contentWidth);
+        }
         const std::string secondary = episodeLabel(detail_);
         if (!secondary.empty()) renderer_.text(contentX + 5.0f, 272, 2.55f, secondary, kMuted, contentWidth);
 
@@ -5115,6 +5178,7 @@ private:
     uint64_t homeArtworkUseCounter_ = 0;
     std::mutex homeDiskCacheMutex_;
     std::unordered_map<std::string, ArtworkEntry> backdrops_;
+    std::unordered_map<std::string, ArtworkEntry> logos_;
     std::vector<int> homeSelection_;
     int homeRow_ = 0;
     int navIndex_ = 0;
