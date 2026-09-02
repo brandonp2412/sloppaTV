@@ -35,11 +35,40 @@ private:
 
 bool clearException(JNIEnv* env, const char* where, std::string& error) {
     if (!env || !env->ExceptionCheck()) return false;
-    __android_log_print(ANDROID_LOG_ERROR, kTag, "Java exception at %s", where);
-    env->ExceptionDescribe();
+
+    jthrowable exception = env->ExceptionOccurred();
     env->ExceptionClear();
+    std::string detail;
+    if (exception) {
+        jclass throwableClass = env->FindClass("java/lang/Throwable");
+        if (throwableClass && !env->ExceptionCheck()) {
+            jmethodID toString = env->GetMethodID(throwableClass, "toString", "()Ljava/lang/String;");
+            if (toString && !env->ExceptionCheck()) {
+                auto description = static_cast<jstring>(env->CallObjectMethod(exception, toString));
+                if (description && !env->ExceptionCheck()) {
+                    const char* chars = env->GetStringUTFChars(description, nullptr);
+                    if (chars) {
+                        detail = chars;
+                        env->ReleaseStringUTFChars(description, chars);
+                    }
+                    env->DeleteLocalRef(description);
+                }
+            }
+            env->DeleteLocalRef(throwableClass);
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(exception);
+    }
+
     error = std::string("Java exception at ") + where;
+    if (!detail.empty()) error += ": " + detail;
+    __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error.c_str());
     return true;
+}
+
+std::string requestUrlForLog(const std::string& url) {
+    const size_t query = url.find('?');
+    return query == std::string::npos ? url : url.substr(0, query);
 }
 
 jstring toJString(JNIEnv* env, const std::string& value) {
@@ -303,7 +332,18 @@ HttpResponse JniHttpClient::requestOnce(
     }
 
     response.status = env->CallIntMethod(connection, getResponseCode);
-    if (clearException(env, "getResponseCode", response.error)) goto cleanup;
+    if (clearException(env, "getResponseCode", response.error)) {
+        const std::string safeUrl = requestUrlForLog(url);
+        __android_log_print(
+            ANDROID_LOG_ERROR,
+            kTag,
+            "%s %s failed before HTTP status: %s",
+            method.c_str(),
+            safeUrl.c_str(),
+            response.error.c_str()
+        );
+        goto cleanup;
+    }
 
     {
         jobject stream = nullptr;
