@@ -37,11 +37,13 @@ All notable user-visible and release-engineering changes are recorded here.
 - Lazy native Android `MediaSession` publication for playback title/episode metadata, duration, position and buffering/playing/paused state without claiming unimplemented system transport callbacks.
 - Branded Android TV vector banner plus adaptive launcher/round icons replacing the previous flat placeholder banner.
 - Persisted native in-app screensaver with Off/5/10/20/30-minute idle choices, a low-redraw moving clock/brand surface, playback/loading inhibition, and first-key dismissal back to the exact underlying screen.
+- Jellyfin server-default subtitle selection on playback startup, plus queue/autoplay carry-forward of an explicitly selected subtitle language or explicit Off state.
 
 ### Fixed
 
 - Launch-intent JNI now attaches the `android_main` thread to the VM instead of reusing `ANativeActivity::env`; a physical-streamer CheckJNI abort exposed the invalid cross-thread `JNIEnv*` use.
 - MediaSession lifetime is restricted to active playback so idle Home does not register or retain a sloppaTV media session.
+- Subtitle-selected transcodes that fail to prepare now retry the same item without subtitles instead of dropping immediately back to Details; the original queue language preference is retained for later items.
 
 ## 0.1.0 - 2026-09-01
 
