@@ -9,8 +9,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 CPP_DIR = ROOT / "app" / "src" / "main" / "cpp"
 CPP_TEST_DIR = ROOT / "app" / "src" / "test" / "cpp"
 PY_TEST_DIR = ROOT / "app" / "src" / "test" / "python"
-JAVA_MAIN_DIR = ROOT / "app" / "src" / "main" / "java"
-JAVA_TEST_DIR = ROOT / "app" / "src" / "hostTest" / "java"
 BUILD_DIR = ROOT / "build" / "host-tests"
 
 CPP_TESTS = [
@@ -75,18 +73,6 @@ def main() -> int:
     ])
     run([str(task_runner_binary)])
 
-    java_build = BUILD_DIR / "java"
-    java_build.mkdir(parents=True, exist_ok=True)
-    run([
-        "javac",
-        "-Xlint:all",
-        "-Werror",
-        "-d",
-        str(java_build),
-        str(JAVA_MAIN_DIR / "nz" / "presley" / "sloppatv" / "PlaybackBufferPolicy.java"),
-        str(JAVA_TEST_DIR / "nz" / "presley" / "sloppatv" / "PlaybackBufferPolicyTest.java"),
-    ])
-    run(["java", "-cp", str(java_build), "nz.presley.sloppatv.PlaybackBufferPolicyTest"])
 
     run([sys.executable, "-m", "unittest", "discover", "-s", str(PY_TEST_DIR), "-p", "test_*.py"])
     return 0

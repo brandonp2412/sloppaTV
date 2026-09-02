@@ -27,6 +27,24 @@ enum class HdrOverrideMode {
     AllowAllHdr = 2,
 };
 
+struct PlaybackBufferDurations {
+    int minBufferMs = -1;
+    int maxBufferMs = -1;
+    int bufferForPlaybackMs = -1;
+    int bufferForPlaybackAfterRebufferMs = -1;
+
+    [[nodiscard]] constexpr bool custom() const {
+        return minBufferMs >= 0 && maxBufferMs >= 0
+            && bufferForPlaybackMs >= 0 && bufferForPlaybackAfterRebufferMs >= 0;
+    }
+};
+
+constexpr PlaybackBufferDurations playbackBufferDurations(int preset) {
+    if (preset == 1) return {50'000, 120'000, 2'500, 5'000};
+    if (preset == 2) return {80'000, 240'000, 5'000, 10'000};
+    return {};
+}
+
 constexpr bool codecLevelAllowed(int mediaLevel, int overrideLevel) {
     return overrideLevel <= 0 || mediaLevel <= 0 || mediaLevel <= overrideLevel;
 }

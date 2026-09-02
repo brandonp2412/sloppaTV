@@ -112,12 +112,13 @@ void NativeMediaPlayer::startAsync(
         return;
     }
 
+    const PlaybackBufferDurations bufferDurations = playbackBufferDurations(bufferPreset);
     jclass playerClass = objectClass(env, localPlayer);
     jmethodID start = playerClass
         ? env->GetMethodID(
             playerClass,
             "start",
-            "(Ljava/lang/String;Landroid/view/Surface;JIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"
+            "(Ljava/lang/String;Landroid/view/Surface;JIIIIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"
         )
         : nullptr;
     if (!start || clearException(env, "player bridge lookup", &error)) {
@@ -141,7 +142,10 @@ void NativeMediaPlayer::startAsync(
         jUrl,
         surface,
         static_cast<jlong>(std::max<int64_t>(0, startPositionMs)),
-        static_cast<jint>(std::clamp(bufferPreset, 0, 2)),
+        static_cast<jint>(bufferDurations.minBufferMs),
+        static_cast<jint>(bufferDurations.maxBufferMs),
+        static_cast<jint>(bufferDurations.bufferForPlaybackMs),
+        static_cast<jint>(bufferDurations.bufferForPlaybackAfterRebufferMs),
         static_cast<jint>(embeddedAudioOrdinal),
         embeddedSubtitleOrdinal,
         jSubtitleUrl,
