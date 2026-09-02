@@ -1,4 +1,5 @@
 #include "jni_http.hpp"
+#include "http_error_policy.hpp"
 
 #include <android/log.h>
 
@@ -60,9 +61,12 @@ bool clearException(JNIEnv* env, const char* where, std::string& error) {
         env->DeleteLocalRef(exception);
     }
 
-    error = std::string("Java exception at ") + where;
-    if (!detail.empty()) error += ": " + detail;
-    __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error.c_str());
+    error = userFacingJavaHttpError(where, detail);
+    if (!detail.empty() && error != std::string("Java exception at ") + where + ": " + detail) {
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "%s (%s)", error.c_str(), detail.c_str());
+    } else {
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error.c_str());
+    }
     return true;
 }
 
