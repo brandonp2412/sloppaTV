@@ -17,6 +17,7 @@ CPP_TESTS = [
     "ui_policy_test.cpp",
     "playback_queue_test.cpp",
     "screensaver_policy_test.cpp",
+    "subtitle_policy_test.cpp",
     "navigation_stack_test.cpp",
     "version_policy_test.cpp",
 ]

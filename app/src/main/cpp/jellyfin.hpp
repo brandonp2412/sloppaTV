@@ -3,6 +3,7 @@
 #include "device_capabilities.hpp"
 #include "jni_http.hpp"
 #include "media_player_policy.hpp"
+#include "subtitle_policy.hpp"
 
 #include <jni.h>
 #include <nlohmann/json.hpp>
@@ -159,6 +160,7 @@ struct PlaybackTarget {
     // seek behavior; playMethod keeps Jellyfin session reporting accurate.
     bool transcoding = false;
     PlaybackMethod playMethod = PlaybackMethod::DirectPlay;
+    int subtitleStreamIndex = kSubtitleOffIndex;
     int64_t startTicks = 0;
 };
 
@@ -268,7 +270,7 @@ public:
         int maxAudioChannels = 8,
         PlaybackOverrides overrides = {},
         int audioStreamIndex = -1,
-        int subtitleStreamIndex = -1
+        int subtitleStreamIndex = kSubtitleServerDefaultIndex
     ) const;
     ApiResult reportPlaybackStart(const JellyfinSession& session, const JellyfinItem& item, const PlaybackTarget& target, int64_t positionTicks) const;
     ApiResult reportPlaybackProgress(const JellyfinSession& session, const JellyfinItem& item, const PlaybackTarget& target, int64_t positionTicks, bool paused) const;

@@ -1246,10 +1246,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         {"StartTimeTicks", item.positionTicks},
         {"MediaSourceId", item.mediaSourceId.empty() ? json(nullptr) : json(item.mediaSourceId)},
         {"DeviceProfile", profile},
-        // Until sloppaTV has client-side ASS/SSA rendering, do not let a server-default
-        // embedded subtitle force an otherwise direct-playable video into a full transcode.
         {"AudioStreamIndex", audioStreamIndex >= 0 ? json(audioStreamIndex) : json(nullptr)},
-        {"SubtitleStreamIndex", subtitleStreamIndex},
         {"MaxAudioChannels", maxAudioChannels},
         {"EnableDirectPlay", !overrides.forceTranscode && directVideoSupported && !preferServerStream},
         {"EnableDirectStream", !overrides.forceTranscode && directVideoSupported && !preferServerStream},
@@ -1258,12 +1255,17 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         {"AllowAudioStreamCopy", true},
         {"AutoOpenLiveStream", true}
     };
+    if (subtitleStreamIndex != kSubtitleServerDefaultIndex) {
+        body["SubtitleStreamIndex"] = subtitleStreamIndex;
+    }
 
     std::string url = session.server + "/Items/" + item.id + "/PlaybackInfo?UserId=" + session.userId
         + "&StartTimeTicks=" + std::to_string(item.positionTicks)
-        + "&AudioStreamIndex=" + std::to_string(audioStreamIndex)
-        + "&SubtitleStreamIndex=" + std::to_string(subtitleStreamIndex)
-        + "&IsPlayback=true&AutoOpenLiveStream=true&MaxStreamingBitrate=" + std::to_string(std::max(1000000, maxStreamingBitrate));
+        + "&AudioStreamIndex=" + std::to_string(audioStreamIndex);
+    if (subtitleStreamIndex != kSubtitleServerDefaultIndex) {
+        url += "&SubtitleStreamIndex=" + std::to_string(subtitleStreamIndex);
+    }
+    url += "&IsPlayback=true&AutoOpenLiveStream=true&MaxStreamingBitrate=" + std::to_string(std::max(1000000, maxStreamingBitrate));
 
     const auto response = http_.request("POST", url, headers(&session, session.deviceId), body.dump());
     if (!response.ok()) {
@@ -1281,6 +1283,10 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         PlaybackTarget target;
         target.playSessionId = data.value("PlaySessionId", std::string{});
         target.mediaSourceId = source.value("Id", std::string{});
+        target.subtitleStreamIndex = resolvedSubtitleIndex(
+            subtitleStreamIndex,
+            source.value("DefaultSubtitleStreamIndex", kSubtitleOffIndex)
+        );
         target.startTicks = item.positionTicks;
 
         const bool direct = !overrides.forceTranscode && source.value("SupportsDirectPlay", false);
@@ -1312,7 +1318,14 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             return result;
         }
 
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Playback target: %s", playbackMethodName(target.playMethod));
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kTag,
+            "Playback target: %s subtitle=%d%s",
+            playbackMethodName(target.playMethod),
+            target.subtitleStreamIndex,
+            subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : ""
+        );
         result.value = std::move(target);
         result.ok = true;
     } catch (const std::exception& e) {
