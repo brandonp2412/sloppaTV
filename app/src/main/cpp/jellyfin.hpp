@@ -105,6 +105,7 @@ struct JellyfinItem {
     std::string videoRangeType;
     std::string imageTag;
     std::string thumbTag;
+    std::string logoTag;
     std::string backdropTag;
     std::string officialRating;
     std::vector<std::string> genres;
@@ -316,6 +317,12 @@ public:
         const JellyfinItem& item,
         int width = 1280,
         int height = 720
+    ) const;
+    ApiValueResult<std::string> downloadLogoImage(
+        const JellyfinSession& session,
+        const JellyfinItem& item,
+        int width = 800,
+        int height = 240
     ) const;
     ApiValueResult<std::string> downloadHomeImage(
         const JellyfinSession& session,
