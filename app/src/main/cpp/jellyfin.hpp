@@ -69,6 +69,21 @@ struct JellyfinAudioStream {
     bool isDefault = false;
 };
 
+struct JellyfinTrickplayInfo {
+    std::string mediaSourceId;
+    int width = 0;
+    int height = 0;
+    int tileWidth = 0;
+    int tileHeight = 0;
+    int thumbnailCount = 0;
+    int intervalMs = 0;
+
+    [[nodiscard]] bool valid() const {
+        return !mediaSourceId.empty() && width > 0 && height > 0 && tileWidth > 0 && tileHeight > 0
+            && thumbnailCount > 0 && intervalMs > 0;
+    }
+};
+
 struct JellyfinItem {
     std::string id;
     std::string name;
@@ -96,6 +111,7 @@ struct JellyfinItem {
     std::vector<JellyfinChapter> chapters;
     std::vector<JellyfinAudioStream> audios;
     std::vector<JellyfinSubtitleStream> subtitles;
+    JellyfinTrickplayInfo trickplay;
     int productionYear = 0;
     float communityRating = -1.0f;
     int videoWidth = 0;
@@ -304,6 +320,11 @@ public:
         const JellyfinSession& session,
         const JellyfinItem& item,
         int subtitleIndex
+    ) const;
+    ApiValueResult<std::string> downloadTrickplayTile(
+        const JellyfinSession& session,
+        const JellyfinItem& item,
+        int tileIndex
     ) const;
 
     [[nodiscard]] const DeviceCodecSupport& deviceCodecSupport() const { return codecSupport_; }

@@ -36,6 +36,18 @@ public:
     GLuint createTexture(int width, int height, const uint8_t* rgbaPixels);
     void deleteTexture(GLuint texture);
     void image(GLuint texture, float x, float y, float w, float h, float alpha = 1.0f);
+    void imageRegion(
+        GLuint texture,
+        float x,
+        float y,
+        float w,
+        float h,
+        float u0,
+        float v0,
+        float u1,
+        float v1,
+        float alpha = 1.0f
+    );
     bool externalImage(
         GLuint texture,
         float x,

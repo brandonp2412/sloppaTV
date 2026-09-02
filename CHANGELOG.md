@@ -38,6 +38,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Branded Android TV vector banner plus adaptive launcher/round icons replacing the previous flat placeholder banner.
 - Persisted native in-app screensaver with Off/5/10/20/30-minute idle choices, a low-redraw moving clock/brand surface, playback/loading inhibition, and first-key dismissal back to the exact underlying screen.
 - Jellyfin server-default subtitle selection on playback startup, plus queue/autoplay carry-forward of an explicitly selected subtitle language or explicit Off state.
+- Native Jellyfin trickplay seek previews with tile-sheet metadata parsing, asynchronous JPEG fetch/decode, one-sheet bounded caching, and cropped GLES rendering positioned along the playback timeline.
 
 ### Fixed
 

@@ -359,6 +359,21 @@ void Renderer::deleteTexture(GLuint texture) {
 }
 
 void Renderer::image(GLuint texture, float x, float y, float w, float h, float alpha) {
+    imageRegion(texture, x, y, w, h, 0.0f, 0.0f, 1.0f, 1.0f, alpha);
+}
+
+void Renderer::imageRegion(
+    GLuint texture,
+    float x,
+    float y,
+    float w,
+    float h,
+    float u0,
+    float v0,
+    float u1,
+    float v1,
+    float alpha
+) {
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f) return;
     flush();
     x = uiOffsetX_ + x * uiScale_;
@@ -366,12 +381,12 @@ void Renderer::image(GLuint texture, float x, float y, float w, float h, float a
     w *= uiScale_;
     h *= uiScale_;
     const TextureVertex vertices[] = {
-        {x, y, 0.0f, 0.0f},
-        {x + w, y, 1.0f, 0.0f},
-        {x + w, y + h, 1.0f, 1.0f},
-        {x, y, 0.0f, 0.0f},
-        {x + w, y + h, 1.0f, 1.0f},
-        {x, y + h, 0.0f, 1.0f},
+        {x, y, u0, v0},
+        {x + w, y, u1, v0},
+        {x + w, y + h, u1, v1},
+        {x, y, u0, v0},
+        {x + w, y + h, u1, v1},
+        {x, y + h, u0, v1},
     };
     glUseProgram(textureProgram_);
     glUniform2f(textureResolutionLocation_, logicalWidth(), logicalHeight());

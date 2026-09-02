@@ -433,6 +433,39 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
             }
         }
     }
+    if (value.contains("Trickplay") && value["Trickplay"].is_object()) {
+        const auto& trickplay = value["Trickplay"];
+        const nlohmann::json* resolutions = nullptr;
+        std::string trickplaySourceId = item.mediaSourceId;
+        if (!trickplaySourceId.empty() && trickplay.contains(trickplaySourceId) && trickplay[trickplaySourceId].is_object()) {
+            resolutions = &trickplay[trickplaySourceId];
+        } else {
+            for (const auto& [sourceId, candidate] : trickplay.items()) {
+                if (!candidate.is_object()) continue;
+                trickplaySourceId = sourceId;
+                resolutions = &candidate;
+                break;
+            }
+        }
+        if (resolutions) {
+            for (const auto& [widthKey, valueInfo] : resolutions->items()) {
+                (void)widthKey;
+                if (!valueInfo.is_object()) continue;
+                JellyfinTrickplayInfo candidate;
+                candidate.mediaSourceId = trickplaySourceId;
+                candidate.width = valueInfo.value("Width", 0);
+                candidate.height = valueInfo.value("Height", 0);
+                candidate.tileWidth = valueInfo.value("TileWidth", 0);
+                candidate.tileHeight = valueInfo.value("TileHeight", 0);
+                candidate.thumbnailCount = valueInfo.value("ThumbnailCount", 0);
+                candidate.intervalMs = valueInfo.value("Interval", 0);
+                if (!candidate.valid()) continue;
+                if (!item.trickplay.valid() || candidate.width < item.trickplay.width) {
+                    item.trickplay = std::move(candidate);
+                }
+            }
+        }
+    }
     return item;
 }
 
@@ -790,7 +823,7 @@ ApiValueResult<JellyfinItem> JellyfinClient::getItem(const JellyfinSession& sess
     const auto response = http_.request(
         "GET",
         session.server + "/Users/" + session.userId + "/Items/" + itemId
-            + "?Fields=Chapters,MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,CommunityRating,OfficialRating,CanDelete",
+            + "?Fields=Chapters,MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,CommunityRating,OfficialRating,CanDelete,Trickplay",
         headers(&session, session.deviceId)
     );
     if (!response.ok()) {
@@ -1517,6 +1550,34 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
     }
     if (response.body.empty()) {
         result.error = "Jellyfin returned an empty home image";
+        return result;
+    }
+    result.value = response.body;
+    result.ok = true;
+    return result;
+}
+
+ApiValueResult<std::string> JellyfinClient::downloadTrickplayTile(
+    const JellyfinSession& session,
+    const JellyfinItem& item,
+    int tileIndex
+) const {
+    ApiValueResult<std::string> result;
+    if (!session.valid() || item.id.empty() || !item.trickplay.valid() || tileIndex < 0) {
+        result.error = "Trickplay request is incomplete";
+        return result;
+    }
+    const std::string url = session.server + "/Videos/" + urlEncode(item.id)
+        + "/Trickplay/" + std::to_string(item.trickplay.width)
+        + "/" + std::to_string(tileIndex) + ".jpg?MediaSourceId=" + urlEncode(item.trickplay.mediaSourceId)
+        + "&api_key=" + urlEncode(session.token);
+    const auto response = http_.request("GET", url, headers(&session, session.deviceId));
+    if (!response.ok()) {
+        result.error = apiError(response);
+        return result;
+    }
+    if (response.body.empty()) {
+        result.error = "Jellyfin returned an empty trickplay tile";
         return result;
     }
     result.value = response.body;
