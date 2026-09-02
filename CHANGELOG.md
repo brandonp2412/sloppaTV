@@ -83,6 +83,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Still Watching dismissal no longer leaves stale continuation state behind; the prompt now exposes a clear `KEEP WATCHING` action and Back terminates the autoplay chain.
 - Playback completion and Still Watching now restart the in-app screensaver idle window, preventing long viewing sessions from immediately covering the post-playback/prompt UI with the saver.
 - Failed Jellyfin playback start/progress/stop reports are logged with stage and item context instead of being silently discarded.
+- Jellyfin 10.11 remux/server-stream URLs are classified as DirectStream when their `TranscodeReasons` contain only Jellyfin's direct-stream-safe container/audio reasons, avoiding full-transcode misreporting when the server intentionally returns `SupportsDirectStream=false`.
 
 ## 0.1.0 - 2026-09-01
 

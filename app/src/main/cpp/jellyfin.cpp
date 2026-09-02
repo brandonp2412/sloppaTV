@@ -1497,6 +1497,12 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         const bool directStream = !overrides.forceTranscode && source.value("SupportsDirectStream", false);
         const bool transcode = source.value("SupportsTranscoding", false);
         const std::string transcodingUrl = source.value("TranscodingUrl", std::string{});
+        // Jellyfin 10.11 can intentionally expose video remux/direct-stream work through
+        // TranscodingUrl while SupportsDirectStream is false. Infer DirectStream only
+        // when every reported reason belongs to Jellyfin's own direct-stream reason set;
+        // subtitle/video conversion reasons remain full Transcode.
+        const bool semanticDirectStream = !overrides.forceTranscode
+            && (directStream || transcodingUrlRepresentsDirectStream(transcodingUrl));
         const std::string container = firstContainer(source.value("Container", item.container));
         if (!transcodingUrl.empty()) {
             target.fallbackTranscodeUrl = transcodingUrl.rfind("http://", 0) == 0 || transcodingUrl.rfind("https://", 0) == 0
@@ -1516,7 +1522,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             target.transcoding = true;
             target.playMethod = overrides.forceTranscode
                 ? PlaybackMethod::Transcode
-                : (directStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode);
+                : (semanticDirectStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode);
         } else {
             result.error = "No direct-play, direct-stream or transcode path was offered by Jellyfin";
             return result;

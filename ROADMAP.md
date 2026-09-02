@@ -26,7 +26,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [x] Async task completion wakes the native looper instead of requiring continuous redraw
 - [x] Event-driven static screens with short 60 Hz render bursts after DPAD input
 - [~] Structured navigation stack now replaces screen-specific return variables and is covered by host policy tests; full Waydroid remote-navigation regression pass is still pending
-- [~] Native host policy/unit tests cover player seek/startup/audio/subtitle policy, UI/grid/control policy, queueing, navigation-stack behavior and server-version policy alongside Python renderer tests; a credential-local non-destructive real-server harness now covers authentication, Home endpoints, browse/search hierarchy, artwork inventory and ASS PlaybackInfo negotiation. Full Android device integration remains required
+- [~] Native host policy/unit tests cover player seek/startup/audio/subtitle/direct-stream classification policy, UI/grid/control policy, queueing, navigation-stack behavior and server-version policy alongside Python renderer/tooling tests; a credential-local non-destructive real-server harness now covers authentication, Home endpoints, browse/search hierarchy, artwork inventory, ASS PlaybackInfo negotiation and Jellyfin 10.11 remux/DirectStream semantics. Full Android device integration remains required
 
 ### Authentication and servers
 
@@ -95,7 +95,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [x] End-to-end playback verified against the real Jellyfin server and streamer
 - [x] Native Android MediaCodecList capability probing for video/audio decoder families
 - [~] Device-aware direct-play codec/container/profile/resolution/HDR matching; real HEVC Main10/MKV direct play is verified, and user AVC/HEVC/HDR overrides now feed the same PlaybackInfo capability decision; real HDR title playback E2E remains pending
-- [~] Playback targets now distinguish Jellyfin `DirectPlay`, `DirectStream` and `Transcode` in session reporting and diagnostics while retaining server-stream seek policy; a real DirectStream/remux session assertion is still pending
+- [x] Playback targets distinguish Jellyfin `DirectPlay`, semantic `DirectStream`/remux and full `Transcode` in session reporting and diagnostics while retaining server-stream seek policy. Jellyfin 10.11.11 was verified to return a real HEVC/AAC MKV remux case (`Road to Hero`, `TranscodeReasons=ContainerNotSupported`) with `SupportsDirectStream=false`; sloppaTV now conservatively recognizes only Jellyfin's own direct-stream reason set from the server-stream URL, while subtitle/video-conversion reasons remain Transcode. The real-server harness repeats this non-destructive assertion and host tests cover mixed/encoded reason parsing
 - [x] Native playback overlay with title, time and progress bar
 - [x] Native seek/progress UI
 - [~] Jellyfin chapter parsing remains available internally, but the chapter button/interactive chapter control was intentionally removed from the simplified player overlay
