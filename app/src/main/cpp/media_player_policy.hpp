@@ -90,6 +90,19 @@ inline bool transcodingUrlRepresentsDirectStream(std::string_view url) {
     return true;
 }
 
+constexpr bool shouldAcceptPostSeekTelemetry(
+    int observedPositionMs,
+    int targetPositionMs,
+    int64_t elapsedSinceSeekMs,
+    int toleranceMs = 1500,
+    int holdMs = 750
+) {
+    if (targetPositionMs < 0) return true;
+    const int64_t difference = static_cast<int64_t>(observedPositionMs) - targetPositionMs;
+    const int64_t absoluteDifference = difference < 0 ? -difference : difference;
+    return absoluteDifference <= std::max(0, toleranceMs) || elapsedSinceSeekMs >= std::max(0, holdMs);
+}
+
 constexpr int clampSeekPositionMs(int64_t positionMs) {
     return static_cast<int>(std::clamp<int64_t>(positionMs, 0, std::numeric_limits<int>::max()));
 }

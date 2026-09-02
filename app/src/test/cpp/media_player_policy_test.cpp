@@ -49,6 +49,13 @@ int main() {
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported,SubtitleCodecNotSupported"));
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?foo=bar"));
 
+    assert(shouldAcceptPostSeekTelemetry(10'000, -1, 0));
+    assert(shouldAcceptPostSeekTelemetry(20'800, 20'000, 50));
+    assert(!shouldAcceptPostSeekTelemetry(10'000, 20'000, 100));
+    assert(!shouldAcceptPostSeekTelemetry(10'000, 20'000, 749));
+    assert(shouldAcceptPostSeekTelemetry(10'000, 20'000, 750));
+    assert(shouldAcceptPostSeekTelemetry(30'000, 20'000, 900));
+
     assert(static_cast<int>(StartupStep::StartPlayback) < static_cast<int>(StartupStep::ReadTrackMetadata));
     return 0;
 }
