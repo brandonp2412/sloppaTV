@@ -79,6 +79,19 @@ The latest couch-readability redesign was rechecked on the physical Google TV St
 
 The larger cards/text therefore did not regress the sampled navigation tail latency. A final multi-run signed-release SurfaceFlinger suite is still required after the scoped feature set is frozen; this single Benchmark run is a regression checkpoint, not the final release claim.
 
+### Final-sample-count Benchmark checkpoint — 2026-09-03
+
+The canonical `--final-suite` sample counts were run on the physical Google TV Streamer using the currently installed non-debuggable sloppaTV Benchmark package and the installed official Jellyfin Android TV client. This satisfies the sample-count portion of the final gate, but it is still a checkpoint rather than the release claim because the installed benchmark predates the newest tiny UI/manifest/network-error commits and is not production-signed.
+
+- 20 alternating process-cold sloppaTV launches: **218, 229, 209, 260, 228, 270, 207, 237, 219, 201, 210, 218, 293, 228, 211, 225, 216, 240, 337, 220 ms**; median **222.5 ms**, mean **233.8 ms**.
+- 20 alternating Jellyfin launches: **551, 445, 403, 470, 397, 394, 405, 266, 410, 422, 404, 420, 415, 278, 417, 418, 413, 468, 415, 391 ms**; median **414.0 ms**, mean **410.1 ms**.
+- Five-run settled-memory medians: sloppaTV **37,562 KB PSS / 114,766 KB RSS / 3,888 KB Java heap / 8,268 KB native heap**; Jellyfin **150,356 / 237,204 / 41,612 / 18,220 KB** respectively.
+- Five-run rapid-DPAD aggregate: sloppaTV **16.67 ms median / 16.72 ms p95 / 0.8% >20 ms / 0.8% >33.4 ms**; Jellyfin **16.67 / 33.35 ms / 10.3% / 2.4%**.
+- Sampled idle CPU remained **0.0%** for both applications.
+- Relative result: sloppaTV was **46.3% lower startup median**, **75.0% lower PSS**, **51.6% lower RSS**, **90.7% lower Java heap**, and **49.9% lower navigation p95** in this run.
+
+Machine-readable raw evidence is kept locally as `artifacts/e2e-physical-tv/final-benchmark-2026-09-03.json`; physical evidence directories are intentionally gitignored. The remaining final-gate work is equal-source H.264/HEVC playback startup comparison, long Home/playback soaks, and repetition on the final production-signed APK.
+
 ### Idle behavior
 
 sloppaTV static screens are event-driven. The last sampled populated Home measured **0.0% process CPU** while idle; playback remains vsync-driven. This prevents the 60 Hz navigation optimization from turning into continuous background rendering.
@@ -87,9 +100,9 @@ sloppaTV static screens are event-driven. The last sampled populated Home measur
 
 Before declaring the project complete, run at least:
 
-- 20 alternating cold launches per app.
-- 5 settled Home-memory samples per app.
-- 5 rapid-DPAD SurfaceFlinger runs per app.
+- 20 alternating cold launches per app. **Completed on the 2026-09-03 Benchmark checkpoint; repeat on the final signed APK.**
+- 5 settled Home-memory samples per app. **Completed on the 2026-09-03 Benchmark checkpoint; repeat on the final signed APK.**
+- 5 rapid-DPAD SurfaceFlinger runs per app. **Completed on the 2026-09-03 Benchmark checkpoint; repeat on the final signed APK.**
 - equal-source playback startup comparisons for at least H.264 and HEVC Main10 direct play.
 - a 30-minute Home/navigation soak and a 60-minute playback soak while tracking PSS and crashes.
 - the same suite against the final signed release APK.
