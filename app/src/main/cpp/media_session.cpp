@@ -7,6 +7,9 @@
 
 namespace {
 constexpr const char* kTag = "sloppaTV/media-session";
+constexpr int64_t kTransportActions = 1LL | 2LL | 4LL | 16LL | 32LL | 256LL; // STOP, PAUSE, PLAY, PREVIOUS, NEXT, SEEK_TO
+std::mutex gInstanceMutex;
+NativeMediaSession* gInstance = nullptr;
 
 class ScopedEnv {
 public:
@@ -47,9 +50,15 @@ NativeMediaSession::NativeMediaSession(JavaVM* vm, jobject activity) : vm_(vm) {
     JNIEnv* env = scoped.get();
     if (!env) return;
     activity_ = env->NewGlobalRef(activity);
+    std::scoped_lock lock(gInstanceMutex);
+    gInstance = this;
 }
 
 NativeMediaSession::~NativeMediaSession() {
+    {
+        std::scoped_lock lock(gInstanceMutex);
+        if (gInstance == this) gInstance = nullptr;
+    }
     clear();
     if (!activity_) return;
     ScopedEnv scoped(vm_);
@@ -70,7 +79,12 @@ bool NativeMediaSession::ensureSession() {
     if (!sessionClass || clearException(env, "MediaSession class lookup")) return false;
     jmethodID ctor = env->GetMethodID(sessionClass, "<init>", "(Landroid/content/Context;Ljava/lang/String;)V");
     jmethodID setFlags = env->GetMethodID(sessionClass, "setFlags", "(I)V");
-    if (!ctor || !setFlags || clearException(env, "MediaSession method lookup")) {
+    jmethodID setCallback = env->GetMethodID(
+        sessionClass,
+        "setCallback",
+        "(Landroid/media/session/MediaSession$Callback;)V"
+    );
+    if (!ctor || !setFlags || !setCallback || clearException(env, "MediaSession method lookup")) {
         env->DeleteLocalRef(sessionClass);
         return false;
     }
@@ -83,12 +97,30 @@ bool NativeMediaSession::ensureSession() {
         return false;
     }
 
-    // Hardware media keys already arrive through NativeActivity input. Do not advertise
-    // transport callbacks until a real callback bridge exists.
-    env->CallVoidMethod(localSession, setFlags, 0);
+    jclass bridgeClass = env->FindClass("nz/presley/sloppatv/SloppaNativeActivity");
+    jmethodID createCallback = bridgeClass
+        ? env->GetStaticMethodID(
+            bridgeClass,
+            "createMediaSessionCallback",
+            "()Landroid/media/session/MediaSession$Callback;"
+        )
+        : nullptr;
+    jobject callback = createCallback ? env->CallStaticObjectMethod(bridgeClass, createCallback) : nullptr;
+    if (!callback || clearException(env, "MediaSession callback construction")) {
+        if (callback) env->DeleteLocalRef(callback);
+        if (bridgeClass) env->DeleteLocalRef(bridgeClass);
+        env->DeleteLocalRef(localSession);
+        env->DeleteLocalRef(sessionClass);
+        return false;
+    }
+
+    env->CallVoidMethod(localSession, setFlags, 3); // media buttons + transport controls
+    env->CallVoidMethod(localSession, setCallback, callback);
     if (!clearException(env, "MediaSession initialization")) {
         session_ = env->NewGlobalRef(localSession);
     }
+    env->DeleteLocalRef(callback);
+    env->DeleteLocalRef(bridgeClass);
     env->DeleteLocalRef(localSession);
     env->DeleteLocalRef(sessionClass);
     if (session_) __android_log_print(ANDROID_LOG_INFO, kTag, "Android media session created for playback");
@@ -207,8 +239,7 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
             speed,
             now
         );
-        // Do not advertise system transport actions until callbacks are actually wired.
-        env->CallObjectMethod(builder, setActions, static_cast<jlong>(0));
+        env->CallObjectMethod(builder, setActions, static_cast<jlong>(kTransportActions));
     }
     jobject playbackState = builder ? env->CallObjectMethod(builder, build) : nullptr;
     if (playbackState) env->CallVoidMethod(session_, setPlaybackState, playbackState);
@@ -223,6 +254,35 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
     env->DeleteLocalRef(builderClass);
     env->DeleteLocalRef(sessionClass);
     env->DeleteLocalRef(clockClass);
+}
+
+std::optional<MediaSessionCommand> NativeMediaSession::takeCommand() {
+    std::scoped_lock lock(commandMutex_);
+    auto command = std::move(pendingCommand_);
+    pendingCommand_.reset();
+    return command;
+}
+
+void NativeMediaSession::handlePlatformCommand(int command, int64_t positionMs) {
+    std::optional<MediaSessionCommandType> type;
+    switch (command) {
+        case 1: type = MediaSessionCommandType::Play; break;
+        case 2: type = MediaSessionCommandType::Pause; break;
+        case 3: type = MediaSessionCommandType::Stop; break;
+        case 4: type = MediaSessionCommandType::SeekTo; break;
+        case 5: type = MediaSessionCommandType::Next; break;
+        case 6: type = MediaSessionCommandType::Previous; break;
+        default: break;
+    }
+    if (!type) return;
+    {
+        std::scoped_lock lock(commandMutex_);
+        pendingCommand_ = MediaSessionCommand{
+            .type = *type,
+            .positionMs = std::max<int64_t>(0, positionMs),
+        };
+    }
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Received platform transport command %d at %lld ms", command, static_cast<long long>(positionMs));
 }
 
 void NativeMediaSession::clear() {
@@ -250,4 +310,15 @@ void NativeMediaSession::clear() {
     env->DeleteGlobalRef(session_);
     session_ = nullptr;
     __android_log_print(ANDROID_LOG_INFO, kTag, "Android media session released");
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnMediaSessionCommand(
+    JNIEnv*,
+    jclass,
+    jint command,
+    jlong positionMs
+) {
+    std::scoped_lock lock(gInstanceMutex);
+    if (gInstance) gInstance->handlePlatformCommand(command, positionMs);
 }

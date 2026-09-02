@@ -42,6 +42,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Native external-video-player discovery and persisted selection, with Jellyfin static-stream handoff plus VLC, MX Player, mpv and Vimu title/resume conventions and supported external-subtitle URL extras.
 - Minimal `NativeActivity` result bridge for external-player return state, with player-specific completion/resume parsing and Jellyfin playback-stop reporting while keeping application/UI/playback logic in C++.
 - Android system `DreamService` integration whose Java layer owns only the service/Surface lifecycle while the existing native GLES renderer draws the moving sloppaTV clock/brand screensaver.
+- Android MediaSession transport callbacks for Play, Pause, Stop, Seek, Next and Previous, forwarded through the minimal platform bridge into the native player/queue.
 
 ### Fixed
 

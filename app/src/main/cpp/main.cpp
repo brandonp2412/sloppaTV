@@ -34,6 +34,7 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <iomanip>
 #include <iterator>
 #include <mutex>
@@ -2029,6 +2030,57 @@ private:
         }
     }
 
+    void handleMediaSessionCommand(const MediaSessionCommand& command) {
+        if (screen_ != Screen::Player) return;
+        switch (command.type) {
+            case MediaSessionCommandType::Play:
+                if (player_.status() == PlayerStatus::Paused) {
+                    player_.togglePause();
+                    reportProgressAsync(true);
+                }
+                break;
+            case MediaSessionCommandType::Pause:
+                if (player_.status() == PlayerStatus::Playing) {
+                    player_.togglePause();
+                    reportProgressAsync(true);
+                }
+                break;
+            case MediaSessionCommandType::Stop:
+                stopPlayback();
+                break;
+            case MediaSessionCommandType::SeekTo: {
+                const int64_t maxPosition = cachedPlaybackDurationMs_ > 0
+                    ? cachedPlaybackDurationMs_
+                    : static_cast<int64_t>(std::numeric_limits<int>::max());
+                const int positionMs = static_cast<int>(std::clamp<int64_t>(command.positionMs, 0, maxPosition));
+                requestTrickplayPreview(positionMs);
+                seekPlaybackTo(positionMs);
+                reportProgressAsync(false);
+                break;
+            }
+            case MediaSessionCommandType::Next:
+                if (playbackQueueIndex_ >= 0) {
+                    const int next = queueNextIndex(
+                        playbackQueueIndex_,
+                        static_cast<int>(playbackQueue_.size()),
+                        queueRepeatMode_,
+                        true
+                    );
+                    if (next >= 0) playQueuedIndexAsync(next);
+                }
+                break;
+            case MediaSessionCommandType::Previous:
+                if (playbackQueueIndex_ > 0) {
+                    playQueuedIndexAsync(playbackQueueIndex_ - 1);
+                } else {
+                    requestTrickplayPreview(0);
+                    seekPlaybackTo(0);
+                    reportProgressAsync(false);
+                }
+                break;
+        }
+    }
+
     void openSettings() {
         refreshExternalPlayers();
         pushScreen(Screen::Settings);
@@ -3415,6 +3467,9 @@ private:
     }
 
     void tick() {
+        const auto mediaSessionCommand = mediaSession_.takeCommand();
+        if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
+
         std::optional<PlaybackTarget> target;
         std::optional<PendingExternalLaunch> externalLaunch;
         std::optional<PendingExternalLaunch> completedExternalPlayback;
