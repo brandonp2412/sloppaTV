@@ -26,5 +26,14 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
         </activity>
+        <service
+            android:name="nz.presley.sloppatv.SloppaDreamService"
+            android:exported="true"
+            android:label="${appLabel}"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

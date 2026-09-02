@@ -17,7 +17,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 ### Native foundation
 
 - [x] Standalone Android TV project using `NativeActivity`, C++20 and GLES3
-- [~] Application/UI/playback logic remains C++/NDK; one deliberately tiny Java `NativeActivity` subclass now exists solely to forward Android activity-result callbacks that `NativeActivity` does not expose natively
+- [~] Application/navigation/playback logic remains C++/NDK; two deliberately tiny Java platform classes now cover Android-only lifecycle gaps: external-player activity results and the system `DreamService` Surface lifecycle, while both result handling and Dream rendering remain native
 - [x] Native DPAD navigation and native on-screen TV keyboard
 - [x] 1920x1080 rendering verified on target Android TV hardware
 - [x] Builds for both `armeabi-v7a` and `arm64-v8a`; 32-bit Android userspace is supported on compatible targets
@@ -163,7 +163,7 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - [x] Native `ACTION_VIEW` content intents accept validated bare Jellyfin item IDs and route authenticated launches to Details after Home initialization; physically verified on the Google TV Streamer by externally launching real Blue Planet II and Wonder Egg item IDs into their Details screens
 - [~] Android searchable metadata and native `ACTION_SEARCH` handling route external/voice-recognizer queries into the existing Jellyfin Search screen; an external `ACTION_SEARCH` for `Friends` is physically verified on the Google TV Streamer, while an actual microphone/voice-recognizer invocation remains pending
 - [~] Native Android `MediaSession` integration publishes playback title/episode metadata, duration, position and buffering/playing/paused state. The physical streamer verifies idle Home has no registered sloppaTV session, while active Wonder Egg playback reports sloppaTV as the addressed media-button session with `PLAYING`, a live position and `My Priority / Wonder Egg Priority - S0E1` metadata. System transport callbacks remain pending and no unsupported transport actions are advertised (`actions=0`).
-- [ ] System Screensaver / `DreamService` equivalent remains unimplemented; Android exposes this as a Java service component, so matching it requires another deliberately isolated platform bridge rather than pretending the in-app idle screen is a system Dream
+- [~] System Screensaver / `DreamService` is implemented as an isolated Java service/Surface lifecycle bridge backed by the existing native GLES renderer; the service is registered with `BIND_DREAM_SERVICE` and physically visible to Android's Dream service resolver on the Google TV Streamer. A forced Dream launch cannot be run from the unprivileged ADB shell (`cmd dreams start-dreaming` requires root on this device), so normal-idle physical rendering/dismissal remains pending.
 - [~] Native in-app screensaver is implemented with persisted Off/5/10/20/30-minute idle thresholds, a low-redraw clock/brand surface that changes safe position every 30 seconds, suppression during playback/loading/Quick Connect, and first-key dismissal back to the unchanged underlying screen; host policy and Android builds pass, while timed physical activation/dismissal remains pending
 - [ ] Notification/message presentation where relevant
 - [~] Branded Android TV vector banner and adaptive launcher/round icons replace the previous flat placeholder banner; Android resource compilation is verified, while a physical launcher visual pass is still pending

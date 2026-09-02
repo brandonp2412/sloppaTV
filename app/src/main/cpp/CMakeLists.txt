@@ -14,6 +14,7 @@ add_library(sloppatv SHARED
     discovery.cpp
     device_capabilities.cpp
     display_mode.cpp
+    dream_renderer.cpp
     external_player.cpp
     renderer.cpp
     jni_http.cpp
