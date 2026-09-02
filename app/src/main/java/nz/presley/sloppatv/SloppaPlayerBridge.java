@@ -48,10 +48,6 @@ public final class SloppaPlayerBridge {
     public static final int STATE_PAUSED = 3;
     public static final int STATE_ERROR = 4;
 
-    public static final int BUFFER_AUTO = PlaybackBufferPolicy.BUFFER_AUTO;
-    public static final int BUFFER_LARGE = PlaybackBufferPolicy.BUFFER_LARGE;
-    public static final int BUFFER_EXTRA_LARGE = PlaybackBufferPolicy.BUFFER_EXTRA_LARGE;
-
     private final SloppaNativeActivity activity;
     private final Context context;
     private final HandlerThread playerThread;
@@ -85,7 +81,10 @@ public final class SloppaPlayerBridge {
         String url,
         Surface surface,
         long startPositionMs,
-        int bufferPreset,
+        int minBufferMs,
+        int maxBufferMs,
+        int bufferForPlaybackMs,
+        int bufferForPlaybackAfterRebufferMs,
         int embeddedAudioOrdinal,
         int embeddedSubtitleOrdinal,
         String subtitleUrl,
@@ -103,7 +102,10 @@ public final class SloppaPlayerBridge {
             url,
             surface,
             Math.max(0L, startPositionMs),
-            bufferPreset,
+            minBufferMs,
+            maxBufferMs,
+            bufferForPlaybackMs,
+            bufferForPlaybackAfterRebufferMs,
             embeddedAudioOrdinal,
             embeddedSubtitleOrdinal,
             subtitleUrl,
@@ -116,7 +118,10 @@ public final class SloppaPlayerBridge {
         String url,
         Surface surface,
         long startPositionMs,
-        int bufferPreset,
+        int minBufferMs,
+        int maxBufferMs,
+        int bufferForPlaybackMs,
+        int bufferForPlaybackAfterRebufferMs,
         int embeddedAudioOrdinal,
         int embeddedSubtitleOrdinal,
         String subtitleUrl,
@@ -126,17 +131,20 @@ public final class SloppaPlayerBridge {
         if (released) return;
         releasePlayerOnly();
         try {
-            int[] bufferDurations = PlaybackBufferPolicy.durationsMs(bufferPreset);
-            DefaultLoadControl loadControl = bufferDurations == null
-                ? new DefaultLoadControl()
-                : new DefaultLoadControl.Builder()
+            boolean customBufferDurations = minBufferMs >= 0
+                && maxBufferMs >= 0
+                && bufferForPlaybackMs >= 0
+                && bufferForPlaybackAfterRebufferMs >= 0;
+            DefaultLoadControl loadControl = customBufferDurations
+                ? new DefaultLoadControl.Builder()
                     .setBufferDurationsMs(
-                        bufferDurations[0],
-                        bufferDurations[1],
-                        bufferDurations[2],
-                        bufferDurations[3]
+                        minBufferMs,
+                        maxBufferMs,
+                        bufferForPlaybackMs,
+                        bufferForPlaybackAfterRebufferMs
                     )
-                    .build();
+                    .build()
+                : new DefaultLoadControl();
 
             DefaultRenderersFactory defaultRenderersFactory = new DefaultRenderersFactory(context)
                 .setEnableDecoderFallback(true)
