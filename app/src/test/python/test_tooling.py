@@ -33,6 +33,12 @@ class BenchmarkToolingTest(unittest.TestCase):
 
 
 class WaydroidToolingTest(unittest.TestCase):
+    def test_target_model_guard_requires_explicit_physical_target(self) -> None:
+        self.assertTrue(waydroid_e2e.model_matches_target("WayDroid x86_64", "waydroid"))
+        self.assertFalse(waydroid_e2e.model_matches_target("Google TV Streamer", "waydroid"))
+        self.assertTrue(waydroid_e2e.model_matches_target("Google TV Streamer", "google-tv-streamer"))
+        self.assertFalse(waydroid_e2e.model_matches_target("SM-S931B", "google-tv-streamer"))
+
     def test_fatal_log_detection_is_scoped_to_app(self) -> None:
         waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
         app_fatal = (
