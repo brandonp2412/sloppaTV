@@ -598,9 +598,15 @@ public:
           externalPlayer_(app->activity->vm, app->activity->clazz),
           imageDecoder_(app->activity->vm),
           videoSurface_(app->activity->vm),
-          tasks_(4, [app] {
-              if (app && app->looper) ALooper_wake(app->looper);
-          }) {
+          tasks_(
+              4,
+              [app] {
+                  if (app && app->looper) ALooper_wake(app->looper);
+              },
+              [](const std::string& error) {
+                  __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
+              }
+          ) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         const LaunchRequest launchRequest = readLaunchRequest(app_);
