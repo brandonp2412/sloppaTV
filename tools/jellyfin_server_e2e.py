@@ -36,10 +36,10 @@ def load_local_env() -> None:
         os.environ.setdefault(key.strip(), value.strip())
 
 
-def authorization(token: str = "") -> str:
+def authorization(token: str = "", device_id: str = DEVICE_ID) -> str:
     value = (
         f'MediaBrowser Client="{CLIENT}",Version="{VERSION}",'
-        f'DeviceId="{DEVICE_ID}",Device="Glass"'
+        f'DeviceId="{device_id}",Device="Glass"'
     )
     if token:
         value += f',Token="{token}"'
@@ -47,8 +47,9 @@ def authorization(token: str = "") -> str:
 
 
 class Jellyfin:
-    def __init__(self, server: str, insecure: bool = False) -> None:
+    def __init__(self, server: str, insecure: bool = False, device_id: str = DEVICE_ID) -> None:
         self.server = server.rstrip("/")
+        self.device_id = device_id
         self.token = ""
         self.user_id = ""
         self.username = ""
@@ -58,7 +59,7 @@ class Jellyfin:
         headers = {
             "Accept": "application/json",
             "Content-Type": "application/json",
-            "Authorization": authorization(self.token),
+            "Authorization": authorization(self.token, self.device_id),
             "User-Agent": f"sloppaTV-server-e2e/{VERSION}",
         }
         if self.token:
@@ -84,6 +85,16 @@ class Jellyfin:
         self.user_id = result["User"]["Id"]
         self.username = result["User"]["Name"]
 
+    def logout(self) -> None:
+        if not self.token:
+            return
+        try:
+            self.request("POST", "/Sessions/Logout")
+        finally:
+            self.token = ""
+            self.user_id = ""
+            self.username = ""
+
 
 def query(values: dict[str, Any]) -> str:
     return urllib.parse.urlencode(values, doseq=True)
@@ -94,6 +105,45 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def verify_quick_connect(server: str, insecure: bool, username: str, password: str) -> dict[str, Any]:
+    authorizer = Jellyfin(server, insecure, f"{DEVICE_ID}-qc-authorizer")
+    target = Jellyfin(server, insecure, f"{DEVICE_ID}-qc-target")
+    try:
+        authorizer.login(username, password)
+        require(target.get("/QuickConnect/Enabled") is True, "Quick Connect is disabled on the server")
+        initiated = target.request("POST", "/QuickConnect/Initiate")
+        secret = str(initiated.get("Secret") or "")
+        code = str(initiated.get("Code") or "")
+        require(bool(secret and code), "Quick Connect initiate response was incomplete")
+
+        initial = target.get("/QuickConnect/Connect?" + query({"secret": secret}))
+        require(initial.get("Authenticated") is False, "Quick Connect request was unexpectedly pre-authorized")
+        authorized = authorizer.request("POST", "/QuickConnect/Authorize?" + query({"code": code}))
+        require(authorized is True, "Quick Connect authorization was rejected")
+        connected = target.get("/QuickConnect/Connect?" + query({"secret": secret}))
+        require(connected.get("Authenticated") is True, "Quick Connect poll did not observe authorization")
+
+        authentication = target.request(
+            "POST",
+            "/Users/AuthenticateWithQuickConnect",
+            {"Secret": secret},
+        )
+        target.token = str(authentication.get("AccessToken") or "")
+        target.user_id = str((authentication.get("User") or {}).get("Id") or "")
+        target.username = str((authentication.get("User") or {}).get("Name") or "")
+        require(bool(target.token and target.user_id), "Quick Connect did not issue an authenticated session")
+        require(target.username == authorizer.username, "Quick Connect authenticated the wrong user")
+        return {
+            "initiallyAuthorized": False,
+            "authorized": True,
+            "authenticatedUser": target.username,
+            "tokenIssued": True,
+        }
+    finally:
+        target.logout()
+        authorizer.logout()
+
+
 def main() -> int:
     load_local_env()
     parser = argparse.ArgumentParser()
@@ -102,6 +152,11 @@ def main() -> int:
     parser.add_argument("--password", default=os.getenv("JELLYFIN_LOCAL_PASSWORD", ""))
     parser.add_argument("--insecure", action="store_true", help="Disable TLS verification for a local test endpoint")
     parser.add_argument("--scan-limit", type=int, default=1000)
+    parser.add_argument(
+        "--quick-connect",
+        action="store_true",
+        help="Exercise the transient Quick Connect authorize/authenticate round-trip and log out both test sessions",
+    )
     args = parser.parse_args()
 
     require(bool(args.server), "Set JELLYFIN_LOCAL_SERVER or pass --server")
@@ -403,6 +458,12 @@ def main() -> int:
             "hasDeliveryUrl": True,
         }
 
+    quick_connect = (
+        verify_quick_connect(args.server, args.insecure, args.username, args.password)
+        if args.quick_connect
+        else None
+    )
+
     result = {
         "server": {
             "name": public.get("ServerName"),
@@ -430,7 +491,9 @@ def main() -> int:
         "hdrItems": len(hdr),
         "hdrExamples": hdr[:5],
         "assSubtitleProbe": ass_probe,
+        "quickConnectProbe": quick_connect,
     }
+    client.logout()
     print(json.dumps(result, indent=2))
     return 0
 

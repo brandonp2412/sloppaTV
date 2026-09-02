@@ -33,7 +33,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [x] Manual server + username + password login via `/Users/AuthenticateByName`, verified against the real server/account
 - [x] Automatic Jellyfin base-path discovery, including the real server mounted at `/jellyfin`
 - [x] Persisted authenticated session and relaunch into Home
-- [~] Quick Connect initiate/code/poll/complete implementation; real server code generation verified, authorization round-trip not yet exercised
+- [~] Quick Connect initiate/code/poll/complete implementation; the full Jellyfin 10.11.11 API round-trip is now exercised by the opt-in server harness (initiate unauthenticated → poll false → authenticated user authorizes code → poll true → `AuthenticateWithQuickConnect` issues the expected user token, followed by test-session logout). Native TV code-entry/progress UI acceptance remains pending
 - [~] Native UDP Jellyfin LAN discovery on port 7359, including interface broadcast addresses; the current test network returns no discovery response even to an independent probe
 - [~] Multiple authenticated servers are retained as saved session profiles and can be switched without re-entering credentials; multi-server device E2E is still pending
 - [~] Multiple saved users are retained per server, exposed through a native Users & Servers chooser, and can be switched without password re-entry while their token remains valid; device E2E is pending
