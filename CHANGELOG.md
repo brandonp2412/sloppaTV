@@ -91,6 +91,8 @@ All notable user-visible and release-engineering changes are recorded here.
 - Long Details action labels use a slightly smaller local scale so `KEEP WATCHING` and `MARK WATCHED` remain single-line under the Extra Large global TV text preset.
 - Saved user/server switching and forgetting now perform a full account-scoped media teardown: old-session playback is stopped/reported before credentials are cleared, and queues, autoplay/track carry, pending playback, navigation/detail data, artwork and diagnostics do not leak into the next profile.
 - Seeks and media-segment skips now hold the requested logical position briefly until Media3 telemetry catches up, preventing a stale pre-seek position sample from snapping the progress UI/reporting backward immediately after the jump.
+- JNI HTTP failures now map common Java network exceptions to concise TV-facing DNS, timeout, connection and TLS/certificate errors while retaining the full Throwable detail in logcat.
+- The 5-minute native in-app screensaver path is now physically verified on the Google TV Streamer, including first-key dismissal back to the unchanged underlying screen.
 
 ## 0.1.0 - 2026-09-01
 
