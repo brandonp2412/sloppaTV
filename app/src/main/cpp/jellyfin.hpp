@@ -9,6 +9,7 @@
 #include <nlohmann/json.hpp>
 
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -182,7 +183,9 @@ struct PlaybackTarget {
     // seek behavior; playMethod keeps Jellyfin session reporting accurate.
     bool transcoding = false;
     PlaybackMethod playMethod = PlaybackMethod::DirectPlay;
+    int audioStreamIndex = -1;
     int subtitleStreamIndex = kSubtitleOffIndex;
+    bool subtitleEmbedded = false;
     std::string subtitleUrl;
     std::string subtitleCodec;
     std::string subtitleLanguage;
@@ -201,9 +204,14 @@ struct ApiValueResult : ApiResult {
 
 class JellyfinClient {
 public:
-    JellyfinClient(JavaVM* vm, jobject activity) : http_(vm), codecSupport_(queryDeviceCodecSupport(vm, activity)) {}
+    JellyfinClient(JavaVM* vm, jobject activity);
+    ~JellyfinClient();
+
+    JellyfinClient(const JellyfinClient&) = delete;
+    JellyfinClient& operator=(const JellyfinClient&) = delete;
 
     void cancelPendingRequests() const { http_.cancelPending(); }
+    void warmDeviceCodecSupport() const;
 
     ApiValueResult<JellyfinSession> login(
         std::string server,
@@ -367,7 +375,7 @@ public:
         int tileIndex
     ) const;
 
-    [[nodiscard]] const DeviceCodecSupport& deviceCodecSupport() const { return codecSupport_; }
+    [[nodiscard]] DeviceCodecSupport deviceCodecSupport() const;
 
 private:
     std::string normalizeServer(std::string value) const;
@@ -384,6 +392,12 @@ private:
     ) const;
     ApiValueResult<std::vector<JellyfinItem>> parseItemList(const HttpResponse& response) const;
 
+    DeviceCodecSupport ensureDeviceCodecSupport() const;
+
     JniHttpClient http_;
-    DeviceCodecSupport codecSupport_;
+    JavaVM* vm_ = nullptr;
+    jobject activity_ = nullptr;
+    mutable std::once_flag codecSupportOnce_;
+    mutable std::mutex codecSupportMutex_;
+    mutable DeviceCodecSupport codecSupport_;
 };

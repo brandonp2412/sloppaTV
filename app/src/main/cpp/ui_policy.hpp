@@ -36,8 +36,8 @@ constexpr bool isTopMediaGridSelection(int selection) {
 constexpr float mediaCardWidth() { return 405.0f; }
 constexpr float mediaTitleScale() { return 2.15f; }
 constexpr float uiTextScale(int option) {
-    // TV viewing distance needs a larger baseline than desktop/mobile UI.
-    return option <= 0 ? 1.12f : (option == 1 ? 1.28f : 1.44f);
+    // Couch-distance TV UI needs materially larger type than desktop/mobile UI.
+    return option <= 0 ? 1.45f : (option == 1 ? 1.65f : 1.85f);
 }
 constexpr float uiSafeAreaFraction(int percent) {
     return static_cast<float>(percent < 0 ? 0 : (percent > 6 ? 6 : percent)) / 100.0f;

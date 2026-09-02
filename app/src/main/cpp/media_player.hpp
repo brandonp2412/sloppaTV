@@ -26,6 +26,9 @@ struct ExternalSubtitleTrack {
     std::string path;
     std::string codec;
     std::string language;
+    // >= 0 selects an embedded container subtitle by its ordinal among embedded
+    // subtitle streams. path remains empty for this mode.
+    int embeddedOrdinal = -1;
 };
 
 class NativeMediaPlayer {
@@ -38,12 +41,14 @@ public:
         jobject surface,
         int64_t startPositionMs,
         int bufferPreset = 0,
+        int embeddedAudioOrdinal = -1,
         std::vector<ExternalSubtitleTrack> externalSubtitles = {}
     );
     void stop();
     void togglePause();
     void seekBy(int deltaMs);
     void seekTo(int positionMs);
+    bool selectEmbeddedAudioOrdinal(int ordinal);
     bool setPlaybackSpeed(float speed);
     bool selectTrack(int trackIndex);
     bool deselectTrack(int trackIndex);

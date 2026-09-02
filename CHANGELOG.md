@@ -46,7 +46,10 @@ All notable user-visible and release-engineering changes are recorded here.
 - Android MediaSession transport callbacks for Play, Pause, Stop, Seek, Next and Previous, forwarded through the minimal platform bridge into the native player/queue.
 - Media3/ExoPlayer 1.11 playback backend with persisted Auto/Large/Extra Large buffering presets matching the Android TV reference client's `DefaultLoadControl` ranges.
 - Route-aware Android audio-output capability probing for AC3, E-AC3, DTS, DTS-HD and TrueHD, with PlaybackInfo direct-play/downmix negotiation capped to the currently attached output route.
-- Direct-play ASS/SSA subtitles through the Media3 libass extension using Jellyfin's exact external subtitle `DeliveryUrl`, with a Canvas overlay for broader Android TV GLES compatibility.
+- Direct-play ASS/SSA subtitles through the Media3 libass extension with exact embedded-track ordinal selection, using a Canvas overlay for broader Android TV GLES compatibility.
+- DirectPlay embedded SRT/VTT rendering through Media3's text pipeline, including exact duplicate-language track selection without relying on Jellyfin's embedded-subtitle extraction endpoint.
+- In-place DirectPlay embedded-audio switching through exact Media3 audio-track ordinals, avoiding a PlaybackInfo/player restart for ordinary track changes.
+- `singleTask` runtime VIEW/SEARCH intent delivery into the existing native app loop so launcher/deep-link/search re-entry does not create a second playback Activity.
 - Read-only real-server integration harness covering authentication, scoped libraries, Home endpoints, search, browse and artwork/HDR/trickplay inventory.
 - Direct `MENU`/`INFO` item context actions from Home, browse, search, person results and episode grids.
 - Off/Blurred/Clear backdrop modes and native compatibility/action notice banners.
@@ -61,7 +64,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Subtitle-selected transcodes that fail to prepare now retry the same item without subtitles instead of dropping immediately back to Details; the original queue language preference is retained for later items.
 - SRT/VTT client subtitle rendering remains on the native GLES text path after the Media3 migration rather than relying on ExoPlayer to draw text into a raw video `Surface`.
 - Parent-inherited Jellyfin logo and backdrop tags/owner IDs are resolved, fixing artwork on the large majority of sampled episodes that inherit series artwork.
-- Native window loss now preserves logical playback position/state and recreates the Media3/video surface when the Android window returns instead of ending playback.
+- Android HOME/window loss now preserves the live Media3 decoder, GLES context and video `SurfaceTexture`; only the EGL window surface is detached/recreated, avoiding MediaCodec teardown and restoring the same player instance on return.
 - HTTP retry backoff is cancellable on task/session generation changes so teardown, Quick Connect cancellation and user switching do not leave stale retry sleeps running.
 - Media3 JNI telemetry polling is bounded instead of querying Java on every render tick.
 - DirectPlay resume/seeking no longer retains the old NuPlayer workaround that forced resumed MKV toward server streaming and restarted the Jellyfin stream for every direct seek; Media3 now receives the logical resume/seek position directly.
@@ -70,7 +73,9 @@ All notable user-visible and release-engineering changes are recorded here.
 - NativeActivity explicitly loads the app library through the application classloader so Java-to-native system-keyboard callbacks resolve reliably; real IME typing now updates native Search/Settings/login state without `UnsatisfiedLinkError`.
 - The fallback native virtual keyboard wraps horizontally at both row edges and remains available only when the configured Android TV IME cannot be opened.
 - Home episode artwork now preserves the owner ID for inherited Jellyfin backdrops, preventing `ParentBackdropImageTag` from being requested against the episode ID; card rendering uses higher-resolution requests and aspect-preserving center crop rather than stretching.
-- Embedded text-subtitle delivery failures are nonfatal. If Jellyfin returns an unusable external SubRip/SRT `DeliveryUrl`, playback falls back to subtitles Off with a transient notice instead of a persistent red playback error.
+- Embedded text-subtitle delivery no longer depends on Jellyfin's unusable external SubRip/SRT extraction URL during DirectPlay; Media3 demuxes the embedded track directly while external subtitle failures remain nonfatal.
+- Detached/replaced ExoPlayer instances can no longer overwrite the active bridge state through late release/error callbacks.
+- DirectPlay audio switching now updates the active Media3 track in place and playback reporting carries the selected Jellyfin audio/subtitle stream indices.
 
 ## 0.1.0 - 2026-09-01
 

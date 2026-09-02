@@ -31,6 +31,15 @@ bool clearException(JNIEnv* env, const char* where, std::string& error) {
     error = std::string("Image decode failed at ") + where;
     return true;
 }
+
+void recycleBitmap(JNIEnv* env, jobject bitmap) {
+    if (!env || !bitmap) return;
+    jclass bitmapClass = env->GetObjectClass(bitmap);
+    jmethodID recycle = bitmapClass ? env->GetMethodID(bitmapClass, "recycle", "()V") : nullptr;
+    if (recycle) env->CallVoidMethod(bitmap, recycle);
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (bitmapClass) env->DeleteLocalRef(bitmapClass);
+}
 }  // namespace
 
 DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::string& error) const {
@@ -94,6 +103,7 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
 
     AndroidBitmapInfo info{};
     if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS || info.width == 0 || info.height == 0) {
+        recycleBitmap(env, bitmap);
         env->DeleteLocalRef(bitmap);
         error = "Unable to inspect decoded bitmap";
         return result;
@@ -101,6 +111,7 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
 
     void* pixels = nullptr;
     if (AndroidBitmap_lockPixels(env, bitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS || !pixels) {
+        recycleBitmap(env, bitmap);
         env->DeleteLocalRef(bitmap);
         error = "Unable to lock decoded bitmap pixels";
         return result;
@@ -136,6 +147,7 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
     }
 
     AndroidBitmap_unlockPixels(env, bitmap);
+    recycleBitmap(env, bitmap);
     env->DeleteLocalRef(bitmap);
     return result;
 }
