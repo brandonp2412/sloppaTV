@@ -13,6 +13,10 @@ int main() {
     assert(!isTopMediaGridSelection(4));
     assert(mediaCardWidth() >= 400.0f);
     assert(mediaTitleScale() >= 2.1f);
+    assert(detailActionTextScale(5) == 1.8f);
+    assert(detailActionTextScale(10) == 1.8f);
+    assert(detailActionTextScale(11) == 1.6f);
+    assert(detailActionTextScale(13) == 1.6f);
     assert(uiTextScale(0) > 1.0f);
     assert(uiTextScale(1) > uiTextScale(0));
     assert(uiTextScale(2) > uiTextScale(1));

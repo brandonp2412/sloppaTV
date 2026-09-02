@@ -35,6 +35,11 @@ constexpr bool isTopMediaGridSelection(int selection) {
 }
 constexpr float mediaCardWidth() { return 405.0f; }
 constexpr float mediaTitleScale() { return 2.15f; }
+constexpr float detailActionTextScale(std::size_t labelLength) {
+    // Details can expose six actions at once. Long labels must remain single-line
+    // even under the Extra Large global TV text preset.
+    return labelLength > 10 ? 1.6f : 1.8f;
+}
 constexpr float uiTextScale(int option) {
     // Couch-distance TV UI needs materially larger type than desktop/mobile UI.
     return option <= 0 ? 1.45f : (option == 1 ? 1.65f : 1.85f);

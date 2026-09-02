@@ -9,6 +9,8 @@ artifacts/*.png
 artifacts/*.tmp
 artifacts/*.tar
 artifacts/e2e-waydroid/
+artifacts/e2e-physical-tv/
+artifacts/ci-*/
 **/__pycache__/
 *.pyc
 .env.local
