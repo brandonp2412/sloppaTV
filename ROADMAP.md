@@ -68,26 +68,26 @@ Performance is part of parity: where the official client and sloppaTV implement 
 
 ### Artwork and presentation
 
-- [x] Primary poster/thumb artwork download and GLES rendering on the real Home/Details UI
-- [~] Backdrop download/decode/render pipeline supports own and parent-inherited Jellyfin backdrop tags; real-server inventory found 983/1000 sampled items inheriting parent backdrops, while current-build TV visual acceptance remains pending
+- [x] Primary poster/thumb artwork download and GLES rendering on Home/Details; the 2026-09-02 Waydroid pass verifies higher-resolution 960×540 Home episode imagery with aspect-preserving crop and populated Continue Watching/Next Up cards.
+- [x] Backdrop download/decode/render ownership handles both item-owned and parent-inherited Jellyfin tags. A reproduced Home bug was fixed by carrying `ParentBackdropItemId` with `ParentBackdropImageTag`, and current Waydroid Home/Details rendering verifies inherited ownership instead of issuing episode-ID HTTP 404s.
 - [x] In-memory decoded-image/texture cache
 - [x] 48 MiB / 256-file bounded Home artwork disk cache keyed by Jellyfin image tags
 - [x] Image fetch and decode off the render thread; GLES upload occurs on the render context
-- [~] Jellyfin logo artwork download/decode/GLES rendering supports both item-owned and parent-inherited logo tags/owner IDs; real-server inventory found only 2/1000 sampled items with own logos versus 983 with parent logos, while current-build TV visual acceptance remains pending
+- [x] Jellyfin logo artwork download/decode/GLES rendering supports both item-owned and parent-inherited logo tags/owner IDs; current Waydroid `Planet Earth III - S1E2` Details renders the inherited series logo, matching the real-server inventory where only 2/1000 sampled items had own logos versus 983 inherited logos.
 - [~] Watched / favorite / progress indicators
 - [x] Ratings, year, runtime, content rating, genres and richer metadata
 - [x] Cast metadata plus actor/person images are rendered from real Jellyfin person data on the physical streamer
 - [~] Persisted backdrop presentation now offers `OFF`, `BLURRED` and `CLEAR` modes on Home/Details with inherited-artwork resolution; final target-TV visual parity pass remains pending
 - [x] Home row/item and Movies/Shows top-nav focus restoration across refresh/navigation
-- [x] Accessibility-friendly global UI text sizing (`NORMAL` / `LARGE` / `EXTRA LARGE`) and overscan safe-area controls (`OFF` / `2%` / `4%` / `6%` per edge), persisted and verified at the worst-case Extra Large + 6% combination on the physical Google TV Streamer; UI/artwork/overlays stay inside the safe area while video remains edge-to-edge
+- [x] Accessibility-friendly global UI text sizing (`NORMAL` / `LARGE` / `EXTRA LARGE`) and overscan safe-area controls (`OFF` / `2%` / `4%` / `6%` per edge), persisted and verified at the worst-case Extra Large + 6% combination on the physical Google TV Streamer; UI/artwork/overlays stay inside the safe area while video remains edge-to-edge. The current Waydroid build additionally replaces the legacy pixel-only UI font with a bold anti-aliased Android system-font atlas and keeps the pixel glyphs only as a fallback.
 
 ### Video playback
 
 - [x] PlaybackInfo negotiation against the real Jellyfin server
 - [x] Direct-play preference with Jellyfin HLS transcode fallback
-- [~] Hardware-backed Android Media3/ExoPlayer 1.11 backend driven by C++ policy through a minimal JNI bridge; host/Debug/Benchmark/Release builds pass, but fresh Waydroid/target-TV playback acceptance after the backend migration is pending
+- [~] Hardware-backed Android Media3/ExoPlayer 1.11 backend driven by C++ policy through a minimal JNI bridge. Fresh Waydroid acceptance now verifies Media3 construction, first-frame decode, main-thread Android `MediaSession` creation and `Planet Earth III S1E2` resume at the saved ~9:31 position without the two migration crashes. Smooth long-motion acceptance remains blocked in the current headless Waydroid session because its `AudioTrack` repeatedly reports stale timestamps and stalls ExoPlayer's playback clock despite ~50 s buffered; no product-code audio workaround is retained.
 - [x] Real Jellyfin video rendered through `SurfaceTexture` / `GL_TEXTURE_EXTERNAL_OES` into the GLES scene
-- [x] Resume position verified with real content
+- [x] Resume position verified with real content; current Media3 Waydroid acceptance opens `Planet Earth III - S1E2` and resumes at ~9:31/58:28 without process death.
 - [x] Play/pause
 - [x] Configurable skip-back/skip-forward seeking
 - [~] Playback start/progress/stop reporting; current cached-position/ticks reporting and immediate Details resume-state update are exercised in Waydroid, but server-state assertions still need automated tests
@@ -100,7 +100,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 - [~] Jellyfin chapter parsing remains available internally, but the chapter button/interactive chapter control was intentionally removed from the simplified player overlay
 - [~] Jellyfin trickplay seek thumbnails are implemented: item `Trickplay` metadata is parsed, seek timestamps map to the correct tile sheet/cell, JPEG tile sheets are downloaded/decoded asynchronously, only one decoded sheet is retained, and the native player renders a large timestamped cell preview above the progress bar on left/right seek. Host policy tests and Android builds pass. The real server currently exposes no Trickplay metadata in the sampled Movie/Episode library; an earlier controlled `regenerateTrickplay=true` refresh for one known-good episode was rejected HTTP 403 by the then-used non-admin acceptance account, so physical thumbnail rendering remains pending rather than manufacturing admin credentials for the test.
 - [~] Jellyfin audio streams and server stream indices are parsed and the player restarts/resolves playback to change server audio streams; prior real-streamer dual-audio direct-play switching was verified, while the current Waydroid multi-audio restart matrix is still pending
-- [x] Subtitle track selection and off/on UI; in Waydroid Blue Planet II repeatedly survived OFF → ENG → OFF cycles, rendered actual English subtitle text, and remained moving through subtitle-active seek/pause/resume testing. Playback startup now also respects Jellyfin's server-selected default subtitle rather than always forcing Off.
+- [x] Subtitle track selection and off/on UI; earlier Waydroid Blue Planet II repeatedly survived OFF → ENG → OFF cycles and rendered English text. Playback startup respects Jellyfin's server-selected default subtitle, but the current Jellyfin 10.11.11 server returns HTTP 404 for the exact generated external SubRip `DeliveryUrl` on `Planet Earth III S1E2`; sloppaTV now treats that server failure as optional/nonfatal, falls subtitles Off and shows a transient notice rather than a red playback error.
 - [~] Persisted subtitle size/background/vertical-position controls feed the native GLES SRT/VTT path; full styled ASS/SSA is handled separately by libass, while fresh physical-TV subtitle visual acceptance remains pending
 - [~] ASS/SSA direct play is implemented with Jellyfin `External` subtitle delivery plus the Media3 libass extension, preserving styles/positioning without video burn-in; the Canvas overlay is intentionally used because upstream has documented OpenGL-overlay failures on some Android TVs. Real Jellyfin 10.11.11 PlaybackInfo was verified to keep a sampled embedded ASS title DirectPlay and return the exact selected subtitle DeliveryUrl; on-device rendering remains pending
 - [x] Playback speed option intentionally removed from the scoped player UI
@@ -171,6 +171,8 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 ### Settings parity
 
 - [x] Native settings navigation and persistence
+- [x] Searchable Settings filter is integrated at the top of Settings and verified in Waydroid; filtering is case-insensitive and covered by native policy tests.
+- [x] Search, Settings search and login use the configured Android TV system IME when available. Waydroid verifies the real Android LatinIME overlay and live EditText→JNI→native filter updates; the native fallback keyboard remains available and its left/right row-edge wraparound has policy-test coverage.
 - [x] Max streaming bitrate
 - [~] Persisted playback buffer presets now use Media3/ExoPlayer `DefaultLoadControl`: `AUTO`, `LARGE` (50–120 s), and `EXTRA LARGE` (80–240 s), matching the Android TV reference ranges; fresh playback/device acceptance remains pending
 - [~] Persisted stereo/direct-surround audio mode now combines the user preference with the attached Android output route: PlaybackInfo caps channels to the detected route, advertises decoder/direct-route compatible codecs, rejects incompatible selected-stream copying, and constrains transcode output to stereo-safe or route-safe formats; device/server/receiver transcode/direct-play matrix pending
@@ -202,14 +204,14 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - [~] Identical in-flight GETs are coalesced and successful non-media API GETs receive a bounded 5-second transport cache with mutation invalidation; Waydroid workload/regression profiling pending
 - [x] Directional Home image prefetch around the focused card
 - [x] Bounded thread pool instead of one thread per request/report
-- [~] Waydroid E2E harness (`tools/waydroid_e2e.py`) requires an explicit ADB serial, validates Waydroid identity/1920x1080, captures screenshots/frame-difference motion evidence and filtered player logs; the final full matrix is still in progress
+- [~] Waydroid E2E harness (`tools/waydroid_e2e.py`) requires an explicit ADB serial, validates Waydroid identity/1920x1080, captures screenshots/frame-difference motion evidence and filtered player logs. The 2026-09-02 pass additionally validates system-IME state through Android `dumpsys`, Home artwork screenshots and current Media3 resume/crash behavior; the final codec/audio/long-soak matrix is still in progress.
 - [~] A real player-teardown ANR was reproduced and fixed in Waydroid; two current-build physical-streamer playback exit/re-entry cycles completed cleanly with asynchronous teardown start/finish logs, while a broader ANR/crash soak remains pending
 - [~] Memory profiling baseline complete; leak/long-session profiling still required
 - [~] Release-candidate performance comparison underway; cold-launch and memory release measurements captured, final multi-run release suite still required
 - [~] Production release signing is environment-configurable and never silently falls back to a debug key; Debug/Benchmark acceptance builds use an isolated `.test` application ID so they can be installed beside production without clearing user data, and the separate Benchmark variant is non-debuggable/debug-signed while a real production-key signing pass remains pending
 - [~] GitHub Actions workflow builds/tests Debug, Benchmark and Release with the pinned SDK/NDK/CMake toolchain and uploads APKs; both the push and pull-request hosted runs passed after fixing runner `sdkmanager` discovery, while artifact install/device validation remains pending
 - [x] Version code/name are centralized in Gradle properties, compiled into native diagnostics, and tracked in `CHANGELOG.md`
-- [~] After the final Media3/libass/audio-policy/seek/profile-avatar tree, two clean Glass unsigned Release builds produced an identical byte-for-byte APK, SHA-256 `bac8a3cbc6cbd18384ab4f17b07746496217081480646cbe0f95360830a04dfd`; final production-signed reproducibility remains pending
+- [~] After the 2026-09-02 Media3/UI/input/artwork/resume fixes, two clean Glass unsigned Release builds produced an identical byte-for-byte APK, SHA-256 `60c1d37ef31b11c4ed8f1e3236aa304146c3b8d4494c5a3202b18d0d04647833`; final production-signed reproducibility remains pending
 
 ## Roadmap hardening checkpoint — 2026-09-01
 
@@ -225,7 +227,7 @@ The old Android `MediaPlayer` backend has been replaced with Media3/ExoPlayer 1.
 
 ASS/SSA no longer requires burn-in: the device profile advertises direct client support, Jellyfin 10.11.11 was verified to keep a sampled embedded ASS title DirectPlay and provide an exact external `DeliveryUrl`, and Media3 renders that stream through libass using the Canvas overlay for broader TV compatibility. SRT/VTT remain on the existing native GLES text renderer. The real-server integration harness confirms Movies/Shows browse, Resume, Next Up and search endpoints and also exposed inherited-artwork behavior: in a 1000-item sample only 2 items had own logos/backdrops while 983 inherited both from parents, so logo/backdrop ownership parsing was fixed accordingly. The same sample still exposes zero Trickplay and zero HDR-range items, leaving those acceptance rows externally blocked by available server data rather than unimplemented code.
 
-Host policy tests, real-server non-destructive integration checks, Debug, Benchmark and Release builds all pass after the migration. Two clean unsigned Release builds of the final candidate are byte-identical at SHA-256 `bac8a3cbc6cbd18384ab4f17b07746496217081480646cbe0f95360830a04dfd`. Fresh visual/playback acceptance of the Media3/libass build is still required; Waydroid is currently stopped on Glass and the SSH environment has no usable Wayland/seat session, so no physical-device status has been falsely promoted.
+Host policy tests and real-server non-destructive integration checks pass after the migration. Waydroid is running again and the current Media3 build has fresh visual acceptance for the anti-aliased font, searchable Settings/system IME, high-resolution aspect-correct Home artwork, inherited logo/backdrop ownership and crash-free `Planet Earth III S1E2` resume startup. Headless Waydroid's stale `AudioTrack` timestamp behavior still prevents using it as valid long-motion/audio evidence, so that portion remains partial rather than being hidden behind emulator-specific product code. The release APK hash below is refreshed whenever the frozen candidate changes.
 
 ## Current performance evidence
 

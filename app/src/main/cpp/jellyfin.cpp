@@ -1565,7 +1565,7 @@ std::string JellyfinClient::imageUrl(
 ) const {
     if (item.id.empty()) return {};
     std::string url = session.server + "/Items/" + item.id + "/Images/Primary?maxWidth=" + std::to_string(width)
-        + "&maxHeight=" + std::to_string(height) + "&quality=85";
+        + "&maxHeight=" + std::to_string(height) + "&quality=92";
     if (!item.imageTag.empty()) url += "&tag=" + urlEncode(item.imageTag);
     url += "&api_key=" + urlEncode(session.token);
     return url;
@@ -1705,18 +1705,19 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
         item.seriesPrimaryImageTag,
         item.type == "Episode",
         item.thumbTag,
-        item.backdropTag
+        item.backdropTag,
+        item.backdropItemId
     );
     const ArtworkKind kind = artwork.kind;
     if (kind == ArtworkKind::Primary) {
         url = session.server + "/Items/" + artwork.itemId + "/Images/Primary?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=84&tag=" + urlEncode(artwork.tag);
+            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
     } else if (kind == ArtworkKind::Thumb) {
         url = session.server + "/Items/" + artwork.itemId + "/Images/Thumb?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=84&tag=" + urlEncode(artwork.tag);
+            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
     } else if (kind == ArtworkKind::Backdrop) {
         url = session.server + "/Items/" + artwork.itemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=84&tag=" + urlEncode(artwork.tag);
+            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
     } else {
         result.error = "Item has no artwork";
         return result;
@@ -1725,6 +1726,16 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
 
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kTag,
+            "Home image HTTP %d artworkItem=%s kind=%d tag=%s sourceItem=%s",
+            response.status,
+            artwork.itemId.c_str(),
+            static_cast<int>(kind),
+            artwork.tag.c_str(),
+            item.id.c_str()
+        );
         result.error = apiError(response);
         return result;
     }
@@ -1794,9 +1805,15 @@ ApiValueResult<std::string> JellyfinClient::downloadSubtitleSrt(
     const JellyfinItem& item,
     int subtitleIndex
 ) const {
+    return downloadSubtitleUrl(session, subtitleSrtUrl(session, item, subtitleIndex));
+}
+
+ApiValueResult<std::string> JellyfinClient::downloadSubtitleUrl(
+    const JellyfinSession& session,
+    const std::string& url
+) const {
     ApiValueResult<std::string> result;
-    const std::string url = subtitleSrtUrl(session, item, subtitleIndex);
-    if (url.empty()) {
+    if (!session.valid() || url.empty()) {
         result.error = "Subtitle request is incomplete";
         return result;
     }

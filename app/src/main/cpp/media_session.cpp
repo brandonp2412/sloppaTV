@@ -75,54 +75,22 @@ bool NativeMediaSession::ensureSession() {
     JNIEnv* env = scoped.get();
     if (!env) return false;
 
-    jclass sessionClass = env->FindClass("android/media/session/MediaSession");
-    if (!sessionClass || clearException(env, "MediaSession class lookup")) return false;
-    jmethodID ctor = env->GetMethodID(sessionClass, "<init>", "(Landroid/content/Context;Ljava/lang/String;)V");
-    jmethodID setFlags = env->GetMethodID(sessionClass, "setFlags", "(I)V");
-    jmethodID setCallback = env->GetMethodID(
-        sessionClass,
-        "setCallback",
-        "(Landroid/media/session/MediaSession$Callback;)V"
-    );
-    if (!ctor || !setFlags || !setCallback || clearException(env, "MediaSession method lookup")) {
-        env->DeleteLocalRef(sessionClass);
-        return false;
-    }
-
-    jstring tag = env->NewStringUTF("sloppaTV");
-    jobject localSession = tag ? env->NewObject(sessionClass, ctor, activity_, tag) : nullptr;
-    if (tag) env->DeleteLocalRef(tag);
-    if (!localSession || clearException(env, "MediaSession construction")) {
-        env->DeleteLocalRef(sessionClass);
-        return false;
-    }
-
-    jclass bridgeClass = env->FindClass("nz/presley/sloppatv/SloppaNativeActivity");
-    jmethodID createCallback = bridgeClass
-        ? env->GetStaticMethodID(
-            bridgeClass,
-            "createMediaSessionCallback",
-            "()Landroid/media/session/MediaSession$Callback;"
-        )
+    // Android's MediaSession constructor needs the Activity/main looper on some TV
+    // firmware (including the Google TV Streamer). Let the Java bridge create and
+    // configure it on the UI thread, then keep only a global JNI reference here.
+    jclass activityClass = env->GetObjectClass(activity_);
+    jmethodID createSession = activityClass
+        ? env->GetMethodID(activityClass, "createMediaSessionBridge", "()Landroid/media/session/MediaSession;")
         : nullptr;
-    jobject callback = createCallback ? env->CallStaticObjectMethod(bridgeClass, createCallback) : nullptr;
-    if (!callback || clearException(env, "MediaSession callback construction")) {
-        if (callback) env->DeleteLocalRef(callback);
-        if (bridgeClass) env->DeleteLocalRef(bridgeClass);
-        env->DeleteLocalRef(localSession);
-        env->DeleteLocalRef(sessionClass);
+    jobject localSession = createSession ? env->CallObjectMethod(activity_, createSession) : nullptr;
+    if (!localSession || clearException(env, "MediaSession bridge construction")) {
+        if (localSession) env->DeleteLocalRef(localSession);
+        if (activityClass) env->DeleteLocalRef(activityClass);
         return false;
     }
-
-    env->CallVoidMethod(localSession, setFlags, 3); // media buttons + transport controls
-    env->CallVoidMethod(localSession, setCallback, callback);
-    if (!clearException(env, "MediaSession initialization")) {
-        session_ = env->NewGlobalRef(localSession);
-    }
-    env->DeleteLocalRef(callback);
-    env->DeleteLocalRef(bridgeClass);
+    session_ = env->NewGlobalRef(localSession);
     env->DeleteLocalRef(localSession);
-    env->DeleteLocalRef(sessionClass);
+    env->DeleteLocalRef(activityClass);
     if (session_) __android_log_print(ANDROID_LOG_INFO, kTag, "Android media session created for playback");
     return session_ != nullptr;
 }

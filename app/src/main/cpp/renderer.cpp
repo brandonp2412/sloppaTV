@@ -1,14 +1,31 @@
 #include "renderer.hpp"
 
+#include <android/bitmap.h>
 #include <android/log.h>
 #include <GLES2/gl2ext.h>
 
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <vector>
 
 namespace {
 constexpr const char* kTag = "sloppaTV/render";
+
+class ScopedEnv {
+public:
+    explicit ScopedEnv(JavaVM* vm) : vm_(vm) {
+        if (!vm_) return;
+        const jint result = vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6);
+        if (result == JNI_EDETACHED && vm_->AttachCurrentThread(&env_, nullptr) == JNI_OK) attached_ = true;
+    }
+    ~ScopedEnv() { if (attached_ && vm_) vm_->DetachCurrentThread(); }
+    JNIEnv* get() const { return env_; }
+private:
+    JavaVM* vm_ = nullptr;
+    JNIEnv* env_ = nullptr;
+    bool attached_ = false;
+};
 
 constexpr const char* kVertexShader = R"(#version 300 es
 layout(location = 0) in vec2 aPosition;
@@ -54,10 +71,11 @@ precision mediump float;
 in vec2 vTexCoord;
 uniform sampler2D uTexture;
 uniform float uAlpha;
+uniform vec4 uTint;
 out vec4 outColor;
 void main() {
     vec4 sampled = texture(uTexture, vTexCoord);
-    outColor = vec4(sampled.rgb, sampled.a * uAlpha);
+    outColor = vec4(sampled.rgb * uTint.rgb, sampled.a * uTint.a * uAlpha);
 }
 )";
 
@@ -93,8 +111,20 @@ void main() {
 )";
 }  // namespace
 
+Renderer::Renderer(JavaVM* vm, jobject activity) : vm_(vm) {
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (env && activity) activity_ = env->NewGlobalRef(activity);
+}
+
 Renderer::~Renderer() {
     shutdown();
+    if (activity_) {
+        ScopedEnv scoped(vm_);
+        JNIEnv* env = scoped.get();
+        if (env) env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+    }
 }
 
 GLuint Renderer::compileShader(GLenum type, const char* source) {
@@ -222,6 +252,7 @@ bool Renderer::init(ANativeWindow* window) {
 
     textureResolutionLocation_ = glGetUniformLocation(textureProgram_, "uResolution");
     textureAlphaLocation_ = glGetUniformLocation(textureProgram_, "uAlpha");
+    textureTintLocation_ = glGetUniformLocation(textureProgram_, "uTint");
     glGenVertexArrays(1, &textureVao_);
     glGenBuffers(1, &textureVbo_);
     glBindVertexArray(textureVao_);
@@ -237,6 +268,8 @@ bool Renderer::init(ANativeWindow* window) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     vertices_.reserve(32768);
     ++generation_;
+    fontAtlasAttempted_ = false;
+    loadFontAtlas();
     __android_log_print(ANDROID_LOG_INFO, kTag, "Renderer initialized at %dx%d (generation %llu)", surfaceWidth_, surfaceHeight_, static_cast<unsigned long long>(generation_));
     return true;
 }
@@ -247,6 +280,7 @@ void Renderer::shutdown() {
             if (vbo_) glDeleteBuffers(1, &vbo_);
             if (vao_) glDeleteVertexArrays(1, &vao_);
             if (program_) glDeleteProgram(program_);
+            if (fontTexture_) glDeleteTextures(1, &fontTexture_);
             if (textureVbo_) glDeleteBuffers(1, &textureVbo_);
             if (textureVao_) glDeleteVertexArrays(1, &textureVao_);
             if (textureProgram_) glDeleteProgram(textureProgram_);
@@ -271,6 +305,7 @@ void Renderer::shutdown() {
     textureVbo_ = 0;
     textureResolutionLocation_ = -1;
     textureAlphaLocation_ = -1;
+    textureTintLocation_ = -1;
     externalProgram_ = 0;
     externalVao_ = 0;
     externalVbo_ = 0;
@@ -278,6 +313,8 @@ void Renderer::shutdown() {
     externalAlphaLocation_ = -1;
     externalTransformLocation_ = -1;
     externalProgramFailed_ = false;
+    fontTexture_ = 0;
+    fontAtlasAttempted_ = false;
     surfaceWidth_ = 0;
     surfaceHeight_ = 0;
     vertices_.clear();
@@ -374,6 +411,22 @@ void Renderer::imageRegion(
     float v1,
     float alpha
 ) {
+    imageRegionTint(texture, x, y, w, h, u0, v0, u1, v1, Color{1.0f, 1.0f, 1.0f, 1.0f}, alpha);
+}
+
+void Renderer::imageRegionTint(
+    GLuint texture,
+    float x,
+    float y,
+    float w,
+    float h,
+    float u0,
+    float v0,
+    float u1,
+    float v1,
+    Color tint,
+    float alpha
+) {
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f) return;
     flush();
     x = uiOffsetX_ + x * uiScale_;
@@ -391,6 +444,7 @@ void Renderer::imageRegion(
     glUseProgram(textureProgram_);
     glUniform2f(textureResolutionLocation_, logicalWidth(), logicalHeight());
     glUniform1f(textureAlphaLocation_, std::clamp(alpha, 0.0f, 1.0f));
+    glUniform4f(textureTintLocation_, tint.r, tint.g, tint.b, tint.a);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glBindVertexArray(textureVao_);
@@ -482,6 +536,61 @@ bool Renderer::externalImage(
     return true;
 }
 
+bool Renderer::loadFontAtlas() {
+    if (fontTexture_ != 0) return true;
+    if (fontAtlasAttempted_ || !ready() || !activity_) return false;
+    fontAtlasAttempted_ = true;
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (!env) return false;
+    jclass activityClass = env->GetObjectClass(activity_);
+    jmethodID createAtlas = activityClass
+        ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;")
+        : nullptr;
+    jobject bitmap = createAtlas ? env->CallObjectMethod(activity_, createAtlas) : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        bitmap = nullptr;
+    }
+    if (!bitmap) {
+        if (activityClass) env->DeleteLocalRef(activityClass);
+        __android_log_print(ANDROID_LOG_WARN, kTag, "System font atlas unavailable; using pixel fallback");
+        return false;
+    }
+    AndroidBitmapInfo info{};
+    void* pixels = nullptr;
+    bool ok = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS
+        && info.width > 0 && info.height > 0
+        && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
+        && AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
+        && pixels;
+    if (ok) {
+        std::vector<uint8_t> packed(static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * 4);
+        for (uint32_t row = 0; row < info.height; ++row) {
+            std::memcpy(
+                packed.data() + static_cast<size_t>(row) * static_cast<size_t>(info.width) * 4,
+                static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride,
+                static_cast<size_t>(info.width) * 4
+            );
+        }
+        // Android Canvas bitmaps are premultiplied. The GLES texture path uses
+        // straight-alpha blending, so restore white RGB while preserving coverage.
+        for (size_t pixel = 0; pixel + 3 < packed.size(); pixel += 4) {
+            if (packed[pixel + 3] != 0) {
+                packed[pixel] = 255;
+                packed[pixel + 1] = 255;
+                packed[pixel + 2] = 255;
+            }
+        }
+        fontTexture_ = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), packed.data());
+        AndroidBitmap_unlockPixels(env, bitmap);
+    }
+    env->DeleteLocalRef(bitmap);
+    if (activityClass) env->DeleteLocalRef(activityClass);
+    if (fontTexture_) __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded antialiased Android system font atlas");
+    return fontTexture_ != 0;
+}
+
 float Renderer::textWidth(float scale, const std::string& value) const {
     scale *= textScale_;
     size_t longest = 0;
@@ -495,13 +604,13 @@ float Renderer::textWidth(float scale, const std::string& value) const {
         }
     }
     longest = std::max(longest, current);
-    return static_cast<float>(longest) * 6.0f * scale;
+    return static_cast<float>(longest) * (fontTexture_ ? 5.6f : 6.0f) * scale;
 }
 
 void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {
     scale *= textScale_;
     const float originX = x;
-    const float charWidth = 6.0f * scale;
+    const float charWidth = (fontTexture_ ? 5.6f : 6.0f) * scale;
     const float lineHeight = 9.0f * scale;
 
     for (char raw : value) {
@@ -516,12 +625,34 @@ void Renderer::text(float x, float y, float scale, const std::string& value, Col
             y += lineHeight;
         }
 
-        const char c = static_cast<char>(std::toupper(static_cast<unsigned char>(raw)));
-        const auto rows = glyph(c);
-        for (int row = 0; row < 7; ++row) {
-            for (int col = 0; col < 5; ++col) {
-                if ((rows[static_cast<size_t>(row)] & (1u << (4 - col))) != 0) {
-                    rect(x + static_cast<float>(col) * scale, y + static_cast<float>(row) * scale, scale, scale, color);
+        const unsigned char rawByte = static_cast<unsigned char>(raw);
+        if (fontTexture_ && rawByte >= 32 && rawByte <= 126) {
+            const int index = static_cast<int>(rawByte) - 32;
+            const int column = index % 16;
+            const int row = index / 16;
+            constexpr float atlasColumns = 16.0f;
+            constexpr float atlasRows = 6.0f;
+            imageRegionTint(
+                fontTexture_,
+                x,
+                y - 0.7f * scale,
+                charWidth,
+                9.0f * scale,
+                static_cast<float>(column) / atlasColumns,
+                static_cast<float>(row) / atlasRows,
+                static_cast<float>(column + 1) / atlasColumns,
+                static_cast<float>(row + 1) / atlasRows,
+                color,
+                1.0f
+            );
+        } else {
+            const char c = static_cast<char>(std::toupper(rawByte));
+            const auto rows = glyph(c);
+            for (int row = 0; row < 7; ++row) {
+                for (int col = 0; col < 5; ++col) {
+                    if ((rows[static_cast<size_t>(row)] & (1u << (4 - col))) != 0) {
+                        rect(x + static_cast<float>(col) * scale, y + static_cast<float>(row) * scale, scale, scale, color);
+                    }
                 }
             }
         }

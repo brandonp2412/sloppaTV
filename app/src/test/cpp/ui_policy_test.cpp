@@ -13,12 +13,20 @@ int main() {
     assert(!isTopMediaGridSelection(4));
     assert(mediaCardWidth() >= 400.0f);
     assert(mediaTitleScale() >= 2.1f);
-    assert(uiTextScale(0) == 1.0f);
+    assert(uiTextScale(0) > 1.0f);
     assert(uiTextScale(1) > uiTextScale(0));
     assert(uiTextScale(2) > uiTextScale(1));
     assert(uiSafeAreaFraction(-1) == 0.0f);
     assert(uiSafeAreaFraction(4) == 0.04f);
     assert(uiSafeAreaFraction(99) == 0.06f);
+    assert(wrappedIndex(0, -1, 10) == 9);
+    assert(wrappedIndex(9, 1, 10) == 0);
+    assert(wrappedIndex(2, 1, 5) == 3);
+    assert(wrappedIndex(4, 1, 5) == 0);
+    assert(containsCaseInsensitive("AUDIO OUTPUT", "audio"));
+    assert(containsCaseInsensitive("PLAYBACK BUFFER", "Buffer"));
+    assert(!containsCaseInsensitive("SUBTITLE SIZE", "audio"));
+    assert(containsCaseInsensitive("CLOCK", ""));
 
     assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
     assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);
@@ -31,14 +39,29 @@ int main() {
         "series-tag",
         true,
         "thumb-tag",
-        "backdrop-tag"
+        "backdrop-tag",
+        "episode-id"
     );
-    assert(episodeArtwork.itemId == "series-id");
-    assert(episodeArtwork.tag == "series-tag");
-    assert(episodeArtwork.kind == ArtworkKind::Primary);
+    assert(episodeArtwork.itemId == "episode-id");
+    assert(episodeArtwork.tag == "thumb-tag");
+    assert(episodeArtwork.kind == ArtworkKind::Thumb);
+
+    const ArtworkReference episodePrimaryArtwork = homeArtworkReference(
+        "episode-id", "episode-primary", "series-id", "series-tag", true, "", "", "series-id"
+    );
+    assert(episodePrimaryArtwork.itemId == "episode-id");
+    assert(episodePrimaryArtwork.tag == "episode-primary");
+    assert(episodePrimaryArtwork.kind == ArtworkKind::Primary);
+
+    const ArtworkReference parentBackdropArtwork = homeArtworkReference(
+        "episode-id", "", "series-id", "series-tag", true, "", "backdrop-tag", "series-id"
+    );
+    assert(parentBackdropArtwork.itemId == "series-id");
+    assert(parentBackdropArtwork.tag == "backdrop-tag");
+    assert(parentBackdropArtwork.kind == ArtworkKind::Backdrop);
 
     const ArtworkReference thumbArtwork = homeArtworkReference(
-        "movie-id", "", "", "", false, "thumb-tag", "backdrop-tag"
+        "movie-id", "", "", "", false, "thumb-tag", "backdrop-tag", "movie-id"
     );
     assert(thumbArtwork.itemId == "movie-id");
     assert(thumbArtwork.tag == "thumb-tag");

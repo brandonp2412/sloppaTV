@@ -357,6 +357,10 @@ public:
         const JellyfinItem& item,
         int subtitleIndex
     ) const;
+    ApiValueResult<std::string> downloadSubtitleUrl(
+        const JellyfinSession& session,
+        const std::string& url
+    ) const;
     ApiValueResult<std::string> downloadTrickplayTile(
         const JellyfinSession& session,
         const JellyfinItem& item,
