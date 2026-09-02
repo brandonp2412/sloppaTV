@@ -199,7 +199,7 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - [x] Repeatable process-cold startup benchmark against installed official Jellyfin
 - [x] Settled process memory measurement against installed official Jellyfin
 - [x] Idle static screens consume effectively 0% process CPU in the sampled `top` snapshot
-- [~] Bounded HTTP retry/backoff handles transient JNI/connection failures after TV wake, and cancellation now wakes backoff waits immediately on teardown, Quick Connect cancellation or session/task-generation changes; wake/device regression profiling remains pending
+- [~] Bounded HTTP retry/backoff handles transient JNI/connection failures after TV wake, and cancellation wakes backoff waits immediately on teardown, Quick Connect cancellation or session/task-generation changes. Transparent retry is now restricted to safe GET/HEAD reads so login, Quick Connect initiation/completion, metadata refresh, playback reports and DELETE cannot be duplicated after an ambiguous connection failure; the method policy is host-tested while wake/device regression profiling remains pending
 - [x] Graceful partial Home failures: one failed row does not blank Home
 - [x] Pagination/incremental 60-item loading for large libraries
 - [~] Identical in-flight GETs are coalesced and successful non-media API GETs receive a 5-second transport cache with mutation invalidation; expired entries are now pruned during normal cacheable traffic and the cache is hard-capped at 32 responses so long browse/search sessions cannot accumulate stale JSON indefinitely. Cacheability exclusions are host-tested; broader device workload profiling remains pending

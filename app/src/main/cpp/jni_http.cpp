@@ -1,6 +1,7 @@
 #include "jni_http.hpp"
 #include "http_cache_policy.hpp"
 #include "http_error_policy.hpp"
+#include "http_retry_policy.hpp"
 
 #include <android/log.h>
 
@@ -222,7 +223,8 @@ HttpResponse JniHttpClient::requestWithRetry(
         std::chrono::milliseconds{250},
         std::chrono::milliseconds{750},
     };
-    for (size_t attempt = 0; attempt <= retryDelays.size(); ++attempt) {
+    const size_t retryCount = transientHttpRetryCount(method);
+    for (size_t attempt = 0; attempt <= retryCount; ++attempt) {
         if (cancelGeneration_.load(std::memory_order_relaxed) != generation) {
             response = {};
             response.error = "Request cancelled";
@@ -230,7 +232,7 @@ HttpResponse JniHttpClient::requestWithRetry(
         }
         response = requestOnce(method, url, headers, body);
         if (response.status != 0 || response.error.empty()) return response;
-        if (attempt == retryDelays.size()) break;
+        if (attempt == retryCount) break;
         __android_log_print(
             ANDROID_LOG_WARN,
             kTag,
