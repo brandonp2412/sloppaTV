@@ -42,6 +42,7 @@ struct JellyfinSubtitleStream {
     std::string title;
     bool forced = false;
     bool isDefault = false;
+    bool isExternal = false;
 };
 
 struct PlaybackOverrides {
@@ -315,6 +316,15 @@ public:
         const JellyfinItem& item,
         int width = 480,
         int height = 270
+    ) const;
+    [[nodiscard]] std::string staticVideoUrl(
+        const JellyfinSession& session,
+        const JellyfinItem& item
+    ) const;
+    [[nodiscard]] std::string subtitleSrtUrl(
+        const JellyfinSession& session,
+        const JellyfinItem& item,
+        int subtitleIndex
     ) const;
     ApiValueResult<std::string> downloadSubtitleSrt(
         const JellyfinSession& session,
