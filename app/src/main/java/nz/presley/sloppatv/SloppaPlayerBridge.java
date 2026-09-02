@@ -4,6 +4,7 @@ import android.content.Context;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.util.Log;
 import android.view.Surface;
 
 import androidx.media3.common.AudioAttributes;
@@ -34,6 +35,8 @@ import io.github.peerless2012.ass.media.widget.AssSubtitleView;
  */
 @SuppressWarnings("UnsafeOptInUsageError")
 public final class SloppaPlayerBridge {
+    private static final String TAG = "sloppaTV/player";
+
     public static final int STATE_IDLE = 0;
     public static final int STATE_PREPARING = 1;
     public static final int STATE_PLAYING = 2;
@@ -158,6 +161,10 @@ public final class SloppaPlayerBridge {
                 @Override
                 public void onPlaybackStateChanged(int playbackState) {
                     updateTelemetry(created);
+                    Log.i(TAG, "Media3 state=" + playbackStateName(playbackState)
+                        + " playWhenReady=" + created.getPlayWhenReady()
+                        + " positionMs=" + created.getCurrentPosition()
+                        + " bufferedMs=" + created.getBufferedPosition());
                     if (playbackState == Player.STATE_READY) {
                         state = created.getPlayWhenReady() ? STATE_PLAYING : STATE_PAUSED;
                     } else if (playbackState == Player.STATE_BUFFERING) {
@@ -180,6 +187,12 @@ public final class SloppaPlayerBridge {
                 public void onVideoSizeChanged(VideoSize videoSize) {
                     videoWidth = videoSize.width;
                     videoHeight = videoSize.height;
+                    Log.i(TAG, "Media3 video size=" + videoSize.width + "x" + videoSize.height);
+                }
+
+                @Override
+                public void onRenderedFirstFrame() {
+                    Log.i(TAG, "Media3 rendered first frame at positionMs=" + created.getCurrentPosition());
                 }
 
                 @Override
@@ -187,6 +200,7 @@ public final class SloppaPlayerBridge {
                     error = playbackException.getMessage() == null
                         ? "ExoPlayer playback failed"
                         : playbackException.getMessage();
+                    Log.e(TAG, "Media3 playback error", playbackException);
                     state = STATE_ERROR;
                 }
             });
@@ -228,6 +242,15 @@ public final class SloppaPlayerBridge {
                 handler.postDelayed(this, 100L);
             }
         }, 100L);
+    }
+
+
+    private static String playbackStateName(int state) {
+        if (state == Player.STATE_IDLE) return "IDLE";
+        if (state == Player.STATE_BUFFERING) return "BUFFERING";
+        if (state == Player.STATE_READY) return "READY";
+        if (state == Player.STATE_ENDED) return "ENDED";
+        return Integer.toString(state);
     }
 
     private void updateTelemetry(ExoPlayer expectedPlayer) {

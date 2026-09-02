@@ -60,7 +60,7 @@ constexpr const char* kTag = "sloppaTV";
 constexpr Color kPanel{0.090f, 0.098f, 0.122f, 1.0f};
 constexpr Color kPanelAlt{0.125f, 0.137f, 0.165f, 1.0f};
 constexpr Color kText{0.95f, 0.96f, 0.98f, 1.0f};
-constexpr Color kMuted{0.60f, 0.63f, 0.69f, 1.0f};
+constexpr Color kMuted{0.72f, 0.75f, 0.81f, 1.0f};
 constexpr Color kFocus{0.56f, 0.38f, 0.98f, 1.0f};
 constexpr Color kError{0.95f, 0.28f, 0.30f, 1.0f};
 
@@ -397,6 +397,50 @@ PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
     };
 }
 
+constexpr int kTextInputSearch = 1;
+constexpr int kTextInputSettingsSearch = 2;
+constexpr int kTextInputLoginServer = 10;
+constexpr int kTextInputLoginPassword = 12;
+
+const std::array<std::string, 24>& settingsLabels() {
+    static const std::array<std::string, 24> labels{
+        "MAX STREAMING BITRATE",
+        "PLAYBACK BUFFER",
+        "SKIP BACK",
+        "SKIP AHEAD",
+        "DEFAULT VIDEO ZOOM",
+        "AUTOPLAY NEXT EPISODE",
+        "STILL WATCHING AFTER",
+        "MATCH VIDEO REFRESH RATE",
+        "WATCHED INDICATORS",
+        "CLOCK",
+        "BACKDROPS",
+        "SUBTITLE SIZE",
+        "SUBTITLE BACKGROUND",
+        "SUBTITLE POSITION",
+        "AUDIO OUTPUT",
+        "AVC / H.264 MAX LEVEL",
+        "HEVC / H.265 MAX LEVEL",
+        "HDR PLAYBACK",
+        "UI TEXT SIZE",
+        "OVERSCAN SAFE AREA",
+        "IN-APP SCREENSAVER",
+        "EXTERNAL PLAYER",
+        "DIAGNOSTICS",
+        "SWITCH USER",
+    };
+    return labels;
+}
+
+std::vector<int> matchingSettings(const std::string& query) {
+    std::vector<int> matches;
+    const auto& labels = settingsLabels();
+    for (size_t i = 0; i < labels.size(); ++i) {
+        if (containsCaseInsensitive(labels[i], query)) matches.push_back(static_cast<int>(i));
+    }
+    return matches;
+}
+
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
     static const std::vector<std::vector<VirtualKey>> rows = {
         {{"A","A"},{"B","B"},{"C","C"},{"D","D"},{"E","E"},{"F","F"},{"G","G"},{"H","H"},{"I","I"},{"J","J"}},
@@ -524,10 +568,15 @@ LaunchRequest readLaunchRequest(android_app* app) {
     return request;
 }
 
+class SloppaApp;
+SloppaApp* gActiveApp = nullptr;
+std::mutex gActiveAppMutex;
+
 class SloppaApp {
 public:
     explicit SloppaApp(android_app* app)
         : app_(app),
+          renderer_(app->activity->vm, app->activity->clazz),
           api_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz),
           mediaSession_(app->activity->vm, app->activity->clazz),
@@ -647,6 +696,46 @@ public:
             burstActive = std::chrono::steady_clock::now() < renderBurstUntil_;
             if (renderer_.ready() && (playerScreen || screensaver || shouldRender || burstActive)) render();
         }
+    }
+
+    void onSystemTextInputChanged(int mode, const std::string& value) {
+        std::scoped_lock lock(stateMutex_);
+        const std::string text = value.substr(0, 160);
+        if (mode == kTextInputSearch) {
+            searchQuery_ = text;
+            searchKeyboard_ = false;
+        } else if (mode == kTextInputSettingsSearch) {
+            settingsSearchQuery_ = text;
+            settingsSearchFocused_ = true;
+            const auto matches = matchingSettings(settingsSearchQuery_);
+            if (!matches.empty()) settingsSelection_ = matches.front();
+        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
+            loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
+        }
+        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
+    void onSystemTextInputDone(int mode, const std::string& value) {
+        std::scoped_lock lock(stateMutex_);
+        const std::string text = value.substr(0, 160);
+        if (mode == kTextInputSearch) {
+            searchQuery_ = text;
+            searchKeyboard_ = false;
+            searchSelection_ = 0;
+            searchAsync();
+        } else if (mode == kTextInputSettingsSearch) {
+            settingsSearchQuery_ = text;
+            settingsSearchFocused_ = true;
+            const auto matches = matchingSettings(settingsSearchQuery_);
+            if (!matches.empty()) settingsSelection_ = matches.front();
+        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
+            const int field = mode - kTextInputLoginServer;
+            loginFields_[static_cast<size_t>(field)] = text;
+            loginField_ = std::min(3, field + 1);
+        }
+        renderBurstUntil_ = std::chrono::steady_clock::now() + 500ms;
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
 private:
@@ -773,7 +862,6 @@ private:
         }
         if (screen_ == Screen::Search) {
             searchQuery_.push_back(c);
-            searchKeyboard_ = true;
             return true;
         }
         return false;
@@ -792,10 +880,63 @@ private:
         return false;
     }
 
+    bool showSystemTextInput(const std::string& initial, const std::string& hint, int mode, bool password = false) {
+        if (!app_ || !app_->activity || !app_->activity->vm || !app_->activity->clazz) return false;
+        ScopedLaunchEnv scoped(app_->activity->vm);
+        JNIEnv* env = scoped.get();
+        if (!env) return false;
+        jobject activity = app_->activity->clazz;
+        jclass activityClass = env->GetObjectClass(activity);
+        jmethodID method = activityClass
+            ? env->GetMethodID(
+                activityClass,
+                "showTextInput",
+                "(Ljava/lang/String;Ljava/lang/String;IZ)Z"
+            )
+            : nullptr;
+        jstring jInitial = env->NewStringUTF(initial.c_str());
+        jstring jHint = env->NewStringUTF(hint.c_str());
+        jboolean shown = JNI_FALSE;
+        if (method && jInitial && jHint) {
+            shown = env->CallBooleanMethod(activity, method, jInitial, jHint, static_cast<jint>(mode), password ? JNI_TRUE : JNI_FALSE);
+        }
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            shown = JNI_FALSE;
+        }
+        if (jHint) env->DeleteLocalRef(jHint);
+        if (jInitial) env->DeleteLocalRef(jInitial);
+        if (activityClass) env->DeleteLocalRef(activityClass);
+        return shown == JNI_TRUE;
+    }
+
+    void hideSystemTextInput() {
+        if (!app_ || !app_->activity || !app_->activity->vm || !app_->activity->clazz) return;
+        ScopedLaunchEnv scoped(app_->activity->vm);
+        JNIEnv* env = scoped.get();
+        if (!env) return;
+        jobject activity = app_->activity->clazz;
+        jclass activityClass = env->GetObjectClass(activity);
+        jmethodID method = activityClass ? env->GetMethodID(activityClass, "hideTextInput", "()V") : nullptr;
+        if (method) env->CallVoidMethod(activity, method);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (activityClass) env->DeleteLocalRef(activityClass);
+    }
+
     void moveKeyboard(int dx, int dy) {
         const auto& rows = keyboardRows();
-        keyboardRow_ = std::clamp(keyboardRow_ + dy, 0, static_cast<int>(rows.size()) - 1);
-        keyboardCol_ = std::clamp(keyboardCol_ + dx, 0, static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size()) - 1);
+        if (dy != 0) {
+            keyboardRow_ = std::clamp(keyboardRow_ + dy, 0, static_cast<int>(rows.size()) - 1);
+            keyboardCol_ = std::clamp(
+                keyboardCol_,
+                0,
+                static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size()) - 1
+            );
+        }
+        if (dx != 0) {
+            const int columns = static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size());
+            keyboardCol_ = wrappedIndex(keyboardCol_, dx, columns);
+        }
     }
 
     void activateKeyboardKey(bool forSearch) {
@@ -866,8 +1007,17 @@ private:
             else loginField_ = loginField_ >= maxAction ? 3 : loginField_ + 1;
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             if (loginField_ < 3) {
-                loginKeyboard_ = true;
-                keyboardRow_ = keyboardCol_ = 0;
+                const int mode = kTextInputLoginServer + loginField_;
+                static constexpr std::array<const char*, 3> hints{
+                    "Jellyfin server URL", "Jellyfin username", "Jellyfin password"
+                };
+                loginKeyboard_ = !showSystemTextInput(
+                    loginFields_[static_cast<size_t>(loginField_)],
+                    hints[static_cast<size_t>(loginField_)],
+                    mode,
+                    loginField_ == 2
+                );
+                if (loginKeyboard_) keyboardRow_ = keyboardCol_ = 0;
             } else if (loginField_ == 3) {
                 loginAsync();
             } else if (loginField_ == 4) {
@@ -1085,6 +1235,7 @@ private:
             if (searchKeyboard_) {
                 searchKeyboard_ = false;
             } else {
+                hideSystemTextInput();
                 popScreen(Screen::Home);
                 if (screen_ == Screen::Home) homeRow_ = 0;
             }
@@ -1103,9 +1254,11 @@ private:
             return;
         }
 
-        if (key == AKEYCODE_SEARCH || (key == AKEYCODE_DPAD_UP && isTopMediaGridSelection(searchSelection_))) {
-            searchKeyboard_ = true;
-            keyboardRow_ = keyboardCol_ = 0;
+        if (key == AKEYCODE_SEARCH
+            || (key == AKEYCODE_DPAD_UP && (searchResults_.empty() || isTopMediaGridSelection(searchSelection_)))
+            || ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && searchResults_.empty())) {
+            searchKeyboard_ = !showSystemTextInput(searchQuery_, "Search Jellyfin", kTextInputSearch);
+            if (searchKeyboard_) keyboardRow_ = keyboardCol_ = 0;
             return;
         }
         if (searchResults_.empty()) return;
@@ -1187,14 +1340,43 @@ private:
 
     void handleSettingsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
+            hideSystemTextInput();
             popScreen(Screen::Home);
             if (screen_ == Screen::Home) homeRow_ = -1;
             navIndex_ = 4;
             return;
         }
-        if (key == AKEYCODE_DPAD_UP) settingsSelection_ = std::max(0, settingsSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(23, settingsSelection_ + 1);
-        else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
+        if (key == AKEYCODE_SEARCH) {
+            settingsSearchFocused_ = true;
+            showSystemTextInput(settingsSearchQuery_, "Search settings", kTextInputSettingsSearch);
+            return;
+        }
+
+        const auto matches = matchingSettings(settingsSearchQuery_);
+        if (settingsSearchFocused_) {
+            if (key == AKEYCODE_DPAD_DOWN && !matches.empty()) {
+                settingsSearchFocused_ = false;
+                settingsSelection_ = matches.front();
+            } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+                showSystemTextInput(settingsSearchQuery_, "Search settings", kTextInputSettingsSearch);
+            }
+            return;
+        }
+
+        auto selected = std::find(matches.begin(), matches.end(), settingsSelection_);
+        int selectedPosition = selected == matches.end() ? 0 : static_cast<int>(std::distance(matches.begin(), selected));
+        if (key == AKEYCODE_DPAD_UP) {
+            if (selectedPosition <= 0) settingsSearchFocused_ = true;
+            else settingsSelection_ = matches[static_cast<size_t>(selectedPosition - 1)];
+            return;
+        }
+        if (key == AKEYCODE_DPAD_DOWN) {
+            if (!matches.empty() && selectedPosition + 1 < static_cast<int>(matches.size())) {
+                settingsSelection_ = matches[static_cast<size_t>(selectedPosition + 1)];
+            }
+            return;
+        }
+        if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
                 static constexpr std::array<int, 6> choices{20, 40, 80, 120, 160, 200};
@@ -1714,13 +1896,13 @@ private:
         return static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), preferred));
     }
 
-    void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle) {
+    void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
         if (subtitleLoadInProgress_ || !session_.valid() || subtitle.index < 0) return;
         subtitleLoadInProgress_ = true;
         const JellyfinSession session = session_;
         const JellyfinItem item = activePlaybackItem_;
         const std::string dataPath = dataPath_;
-        if (!tasks_.submit([this, session, item, subtitle, dataPath] {
+        if (!tasks_.submit([this, session, item, subtitle, deliveryUrl, dataPath] {
             std::string clean;
             std::filesystem::path cacheFile;
             bool fromCache = false;
@@ -1733,8 +1915,14 @@ private:
                     fromCache = !clean.empty();
                 }
             }
+            const auto fetchSubtitle = [&] {
+                return deliveryUrl.empty()
+                    ? api_.downloadSubtitleSrt(session, item, subtitle.index)
+                    : api_.downloadSubtitleUrl(session, deliveryUrl);
+            };
+            std::string subtitleFailure;
             if (clean.empty()) {
-                auto response = api_.downloadSubtitleSrt(session, item, subtitle.index);
+                auto response = fetchSubtitle();
                 if (response.ok && !response.value.empty()) {
                     clean = sanitizeSubRip(std::move(response.value));
                     if (!cacheFile.empty() && !clean.empty()) {
@@ -1745,19 +1933,35 @@ private:
                             if (output) output.write(clean.data(), static_cast<std::streamsize>(clean.size()));
                         }
                     }
+                } else {
+                    subtitleFailure = response.error.empty() ? "empty subtitle response" : response.error;
                 }
             }
             std::vector<SubtitleCue> cues = parseSubRipCues(clean);
             if (cues.empty() && fromCache) {
                 std::error_code ec;
                 std::filesystem::remove(cacheFile, ec);
-                auto response = api_.downloadSubtitleSrt(session, item, subtitle.index);
+                auto response = fetchSubtitle();
                 if (response.ok) {
                     clean = sanitizeSubRip(std::move(response.value));
                     cues = parseSubRipCues(clean);
+                } else {
+                    subtitleFailure = response.error.empty() ? "subtitle cache refresh failed" : response.error;
                 }
             }
             const bool loaded = !cues.empty();
+            if (!loaded) {
+                if (subtitleFailure.empty()) subtitleFailure = clean.empty() ? "subtitle body was empty" : "subtitle contained no parseable SRT cues";
+                __android_log_print(
+                    ANDROID_LOG_WARN,
+                    kTag,
+                    "Subtitle load failed item=%s stream=%d codec=%s reason=%s",
+                    item.id.c_str(),
+                    subtitle.index,
+                    subtitle.codec.c_str(),
+                    subtitleFailure.c_str()
+                );
+            }
             std::scoped_lock lock(stateMutex_);
             if (screen_ == Screen::Player && activePlaybackItem_.id == item.id && loaded) {
                 activeSubtitleCues_ = std::move(cues);
@@ -1768,11 +1972,18 @@ private:
             }
             if (activePlaybackItem_.id == item.id) {
                 subtitleLoadInProgress_ = false;
-                if (!loaded) error_ = "SUBTITLES COULD NOT BE LOADED";
+                if (!loaded) {
+                    selectedSubtitleServerIndex_ = -1;
+                    activeSubtitleServerIndex_ = -1;
+                    activeSubtitleEnabled_ = false;
+                    activeSubtitleCues_.clear();
+                    showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
+                }
             }
         })) {
             subtitleLoadInProgress_ = false;
-            error_ = "SUBTITLES COULD NOT BE STARTED";
+            selectedSubtitleServerIndex_ = -1;
+            showNotice("SUBTITLES COULD NOT BE STARTED");
         }
     }
 
@@ -2225,6 +2436,8 @@ private:
         refreshExternalPlayers();
         pushScreen(Screen::Settings);
         settingsSelection_ = 0;
+        settingsSearchQuery_.clear();
+        settingsSearchFocused_ = true;
         error_.clear();
     }
 
@@ -2673,7 +2886,7 @@ private:
 
     void openSearch() {
         pushScreen(Screen::Search);
-        searchKeyboard_ = true;
+        searchKeyboard_ = !showSystemTextInput(searchQuery_, "Search Jellyfin", kTextInputSearch);
         keyboardRow_ = keyboardCol_ = 0;
         error_.clear();
     }
@@ -3695,7 +3908,7 @@ private:
                     );
                     if (selectedSubtitle != item.subtitles.end()
                         && subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ClientText) {
-                        loadSubtitleAsync(*selectedSubtitle);
+                        loadSubtitleAsync(*selectedSubtitle, target->subtitleUrl);
                     }
                 }
                 pendingAudioStreamIndex_ = -1;
@@ -3962,9 +4175,10 @@ private:
             item.seriesPrimaryImageTag,
             item.type == "Episode",
             item.thumbTag,
-            item.backdropTag
+            item.backdropTag,
+            item.backdropItemId
         );
-        return artwork.itemId + ":home:v3:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
+        return artwork.itemId + ":home:v4-hq:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
     }
 
     std::string homeDiskCachePath(const std::string& key) const {
@@ -4094,8 +4308,16 @@ private:
                 encoded = std::move(*cached);
                 fromDisk = true;
             } else {
-                auto bytes = api_.downloadHomeImage(session, itemCopy, 480, 270);
+                auto bytes = api_.downloadHomeImage(session, itemCopy, 960, 540);
                 if (!bytes.ok) {
+                    __android_log_print(
+                        ANDROID_LOG_WARN,
+                        kTag,
+                        "Home artwork download failed item=%s type=%s reason=%s",
+                        itemCopy.id.c_str(),
+                        itemCopy.type.c_str(),
+                        bytes.error.c_str()
+                    );
                     std::scoped_lock lock(stateMutex_);
                     auto it = homeArtwork_.find(key);
                     if (it != homeArtwork_.end()) it->second.state = ArtworkState::Failed;
@@ -4108,7 +4330,7 @@ private:
             DecodedImage decoded = imageDecoder_.decode(encoded, decodeError);
             if (!decoded.valid() && fromDisk) {
                 eraseHomeDiskCache(key);
-                auto bytes = api_.downloadHomeImage(session, itemCopy, 480, 270);
+                auto bytes = api_.downloadHomeImage(session, itemCopy, 960, 540);
                 if (bytes.ok) {
                     encoded = std::move(bytes.value);
                     decodeError.clear();
@@ -4122,12 +4344,39 @@ private:
             auto it = homeArtwork_.find(key);
             if (it == homeArtwork_.end()) return;
             if (!decoded.valid()) {
+                __android_log_print(
+                    ANDROID_LOG_WARN,
+                    kTag,
+                    "Home artwork decode failed item=%s reason=%s",
+                    itemCopy.id.c_str(),
+                    decodeError.c_str()
+                );
                 it->second.state = ArtworkState::Failed;
                 return;
             }
             it->second.decoded = std::move(decoded);
             it->second.state = ArtworkState::Ready;
         });
+    }
+
+    void drawCoverTexture(const ArtworkEntry& entry, float x, float y, float width, float height, float alpha = 1.0f) {
+        if (entry.texture == 0 || !entry.decoded.valid() || width <= 0.0f || height <= 0.0f) return;
+        const float sourceAspect = static_cast<float>(entry.decoded.width) / static_cast<float>(entry.decoded.height);
+        const float targetAspect = width / height;
+        float u0 = 0.0f;
+        float v0 = 0.0f;
+        float u1 = 1.0f;
+        float v1 = 1.0f;
+        if (sourceAspect > targetAspect) {
+            const float visible = targetAspect / sourceAspect;
+            u0 = (1.0f - visible) * 0.5f;
+            u1 = u0 + visible;
+        } else if (sourceAspect < targetAspect) {
+            const float visible = sourceAspect / targetAspect;
+            v0 = (1.0f - visible) * 0.5f;
+            v1 = v0 + visible;
+        }
+        renderer_.imageRegion(entry.texture, x, y, width, height, u0, v0, u1, v1, alpha);
     }
 
     bool drawHomeArtwork(const JellyfinItem& item, float x, float y, float width, float height) {
@@ -4146,7 +4395,7 @@ private:
             entry.textureGeneration = renderer_.generation();
         }
         if (entry.texture == 0) return false;
-        renderer_.image(entry.texture, x, y, width, height);
+        drawCoverTexture(entry, x, y, width, height);
         return true;
     }
 
@@ -4214,7 +4463,7 @@ private:
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
-            auto bytes = api_.downloadPrimaryImage(session, itemCopy, 360, 540);
+            auto bytes = api_.downloadPrimaryImage(session, itemCopy, 720, 1080);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
                 auto it = artwork_.find(key);
@@ -4251,7 +4500,7 @@ private:
             entry.textureGeneration = renderer_.generation();
         }
         if (entry.texture == 0) return false;
-        renderer_.image(entry.texture, x, y, width, height, alpha);
+        drawCoverTexture(entry, x, y, width, height, alpha);
         return true;
     }
 
@@ -4457,20 +4706,20 @@ private:
 
     void renderKeyboard(float top) {
         const auto& rows = keyboardRows();
-        constexpr float startX = 210.0f;
-        constexpr float keyH = 70.0f;
-        constexpr float gap = 12.0f;
+        constexpr float startX = 150.0f;
+        constexpr float keyH = 82.0f;
+        constexpr float gap = 14.0f;
         for (size_t row = 0; row < rows.size(); ++row) {
             const float y = top + static_cast<float>(row) * (keyH + gap);
             const auto& keys = rows[row];
-            const float keyW = row == rows.size() - 1 ? 285.0f : 135.0f;
+            const float keyW = row == rows.size() - 1 ? 310.0f : 145.0f;
             for (size_t col = 0; col < keys.size(); ++col) {
                 const float x = startX + static_cast<float>(col) * (keyW + gap);
                 const bool selected = static_cast<int>(row) == keyboardRow_ && static_cast<int>(col) == keyboardCol_;
                 renderer_.rect(x, y, keyW, keyH, selected ? kFocus : kPanelAlt);
                 const auto& label = keys[col].label;
-                const float width = renderer_.textWidth(2.2f, label);
-                renderer_.text(x + (keyW - width) / 2.0f, y + 23, 2.2f, label, kText);
+                const float width = renderer_.textWidth(2.65f, label);
+                renderer_.text(x + (keyW - width) / 2.0f, y + 27, 2.65f, label, kText);
             }
         }
     }
@@ -4648,16 +4897,17 @@ private:
         renderer_.rect(100, 160, 1320, 82, kPanel);
         renderer_.text(130, 188, 2.8f, searchQuery_.empty() ? "TYPE A TITLE" : searchQuery_, searchQuery_.empty() ? kMuted : kText, 1250);
         renderer_.rect(1450, 160, 320, 82, searchKeyboard_ ? kFocus : kPanelAlt);
-        renderer_.text(1505, 188, 2.4f, searchKeyboard_ ? "KEYBOARD" : "EDIT", kText);
+        renderer_.text(1480, 188, 2.05f, searchKeyboard_ ? "FALLBACK KEYS" : "TV KEYBOARD", kText, 260);
 
         if (searchKeyboard_) {
             renderKeyboard(285);
-            renderer_.text(105, 755, 2.0f, "DONE RUNS THE SEARCH", kMuted);
+            renderer_.text(105, 815, 2.0f, "LEFT / RIGHT WRAPS. DONE RUNS THE SEARCH.", kMuted);
             return;
         }
 
         if (searchResults_.empty()) {
             renderer_.text(120, 330, 2.5f, loading_ ? "SEARCHING..." : "NO RESULTS", kMuted);
+            renderer_.text(120, 385, 1.8f, "PRESS SEARCH / OK TO OPEN THE TV KEYBOARD", kMuted);
             return;
         }
         constexpr int columns = mediaGridColumns();
@@ -4900,32 +5150,7 @@ private:
 
     void renderSettings() {
         renderHeader("SETTINGS");
-        const std::array<std::string, 24> labels{
-            "MAX STREAMING BITRATE",
-            "PLAYBACK BUFFER",
-            "SKIP BACK",
-            "SKIP AHEAD",
-            "DEFAULT VIDEO ZOOM",
-            "AUTOPLAY NEXT EPISODE",
-            "STILL WATCHING AFTER",
-            "MATCH VIDEO REFRESH RATE",
-            "WATCHED INDICATORS",
-            "CLOCK",
-            "BACKDROPS",
-            "SUBTITLE SIZE",
-            "SUBTITLE BACKGROUND",
-            "SUBTITLE POSITION",
-            "AUDIO OUTPUT",
-            "AVC / H.264 MAX LEVEL",
-            "HEVC / H.265 MAX LEVEL",
-            "HDR PLAYBACK",
-            "UI TEXT SIZE",
-            "OVERSCAN SAFE AREA",
-            "IN-APP SCREENSAVER",
-            "EXTERNAL PLAYER",
-            "DIAGNOSTICS",
-            "SWITCH USER",
-        };
+        const auto& labels = settingsLabels();
         const std::array<std::string, 24> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             playbackBufferName(settings_.playbackBufferPreset),
@@ -4954,18 +5179,42 @@ private:
             "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
         };
-        constexpr int visibleRows = 7;
-        const int first = std::clamp(settingsSelection_ - visibleRows + 1, 0, static_cast<int>(labels.size()) - visibleRows);
-        for (int slot = 0; slot < visibleRows; ++slot) {
-            const int i = first + slot;
-            const float y = 155.0f + static_cast<float>(slot) * 118.0f;
-            const bool focused = i == settingsSelection_;
-            renderer_.rect(100, y, 1580, 104, focused ? kPanelAlt : kPanel);
-            if (focused) renderer_.outline(96, y - 4, 1588, 112, 5, kFocus);
-            renderer_.text(140, y + 31, 2.3f, labels[static_cast<size_t>(i)], kText, 760);
-            renderer_.text(965, y + 31, 2.2f, values[static_cast<size_t>(i)], i == 23 ? kMuted : kFocus, 650);
+        renderer_.rect(100, 150, 1580, 82, kPanel);
+        if (settingsSearchFocused_) renderer_.outline(96, 146, 1588, 90, 5, kFocus);
+        renderer_.text(
+            135,
+            178,
+            2.35f,
+            settingsSearchQuery_.empty() ? "SEARCH SETTINGS" : settingsSearchQuery_,
+            settingsSearchQuery_.empty() ? kMuted : kText,
+            1160
+        );
+        renderer_.text(1410, 180, 1.75f, "TV KEYBOARD", kFocus, 230);
+
+        const auto matches = matchingSettings(settingsSearchQuery_);
+        if (matches.empty()) {
+            renderer_.text(120, 300, 2.4f, "NO SETTINGS MATCH", kMuted);
+            renderer_.text(120, 355, 1.8f, "PRESS OK OR SEARCH TO EDIT THE FILTER", kMuted);
+            return;
         }
-        renderer_.text(105, 1000, 1.75f, "LEFT / RIGHT CHANGES VALUES. OK OPENS ACTIONS. SETTINGS SAVE IMMEDIATELY.", kMuted, 1700);
+
+        auto selected = std::find(matches.begin(), matches.end(), settingsSelection_);
+        const int selectedPosition = selected == matches.end() ? 0 : static_cast<int>(std::distance(matches.begin(), selected));
+        constexpr int visibleRows = 6;
+        const int maxFirst = std::max(0, static_cast<int>(matches.size()) - visibleRows);
+        const int first = std::clamp(selectedPosition - visibleRows + 1, 0, maxFirst);
+        for (int slot = 0; slot < visibleRows; ++slot) {
+            const int matchPosition = first + slot;
+            if (matchPosition >= static_cast<int>(matches.size())) break;
+            const int i = matches[static_cast<size_t>(matchPosition)];
+            const float y = 260.0f + static_cast<float>(slot) * 115.0f;
+            const bool focused = !settingsSearchFocused_ && i == settingsSelection_;
+            renderer_.rect(100, y, 1580, 101, focused ? kPanelAlt : kPanel);
+            if (focused) renderer_.outline(96, y - 4, 1588, 109, 5, kFocus);
+            renderer_.text(140, y + 30, 2.15f, labels[static_cast<size_t>(i)], kText, 760);
+            renderer_.text(965, y + 30, 2.05f, values[static_cast<size_t>(i)], i == 23 ? kMuted : kFocus, 650);
+        }
+        renderer_.text(105, 985, 1.55f, "SEARCH FILTERS SETTINGS. LEFT / RIGHT CHANGES VALUES. SETTINGS SAVE IMMEDIATELY.", kMuted, 1700);
     }
 
     void renderDiagnostics() {
@@ -5424,6 +5673,8 @@ private:
     AppSettings settings_;
     std::vector<ExternalPlayerApp> externalPlayers_;
     int settingsSelection_ = 0;
+    std::string settingsSearchQuery_;
+    bool settingsSearchFocused_ = false;
     std::string error_;
     std::string notice_;
     std::chrono::steady_clock::time_point noticeUntil_{};
@@ -5551,11 +5802,55 @@ private:
 };
 }  // namespace
 
+std::string javaString(JNIEnv* env, jstring value) {
+    if (!env || !value) return {};
+    const char* chars = env->GetStringUTFChars(value, nullptr);
+    if (!chars) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return {};
+    }
+    std::string result(chars);
+    env->ReleaseStringUTFChars(value, chars);
+    return result;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(
+    JNIEnv* env,
+    jclass,
+    jint mode,
+    jstring text
+) {
+    const std::string value = javaString(env, text);
+    std::scoped_lock lock(gActiveAppMutex);
+    if (gActiveApp) gActiveApp->onSystemTextInputChanged(static_cast<int>(mode), value);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(
+    JNIEnv* env,
+    jclass,
+    jint mode,
+    jstring text
+) {
+    const std::string value = javaString(env, text);
+    std::scoped_lock lock(gActiveAppMutex);
+    if (gActiveApp) gActiveApp->onSystemTextInputDone(static_cast<int>(mode), value);
+}
+
 void android_main(android_app* app) {
     __android_log_print(ANDROID_LOG_INFO, kTag, "Starting sloppaTV native activity");
     SloppaApp sloppa(app);
+    {
+        std::scoped_lock lock(gActiveAppMutex);
+        gActiveApp = &sloppa;
+    }
     app->userData = &sloppa;
     app->onAppCmd = SloppaApp::handleAppCommand;
     app->onInputEvent = SloppaApp::handleInput;
     sloppa.run();
+    {
+        std::scoped_lock lock(gActiveAppMutex);
+        if (gActiveApp == &sloppa) gActiveApp = nullptr;
+    }
 }

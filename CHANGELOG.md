@@ -51,6 +51,8 @@ All notable user-visible and release-engineering changes are recorded here.
 - Direct `MENU`/`INFO` item context actions from Home, browse, search, person results and episode grids.
 - Off/Blurred/Clear backdrop modes and native compatibility/action notice banners.
 - Saved-user chooser avatars loaded lazily from each authenticated Jellyfin profile, with a deterministic text-initial fallback and retry after re-authentication.
+- Searchable Settings filter using the Android TV system IME, with the same system-keyboard bridge used for Jellyfin Search and login text entry.
+- Anti-aliased Android system-font atlas for the native GLES UI, retaining the original pixel glyphs only as a fallback.
 
 ### Fixed
 
@@ -64,6 +66,11 @@ All notable user-visible and release-engineering changes are recorded here.
 - Media3 JNI telemetry polling is bounded instead of querying Java on every render tick.
 - DirectPlay resume/seeking no longer retains the old NuPlayer workaround that forced resumed MKV toward server streaming and restarted the Jellyfin stream for every direct seek; Media3 now receives the logical resume/seek position directly.
 - Audio stream-copy and transcode-output negotiation now respects the selected stream codec/channel count and attached-route stereo/surround constraints instead of leaving `AllowAudioStreamCopy` unconditional.
+- Media3 playback startup no longer resolves application classes from attached native worker threads, and Android `MediaSession` creation is marshalled onto the Activity main thread; both crashes were reproduced during real resume playback and fixed.
+- NativeActivity explicitly loads the app library through the application classloader so Java-to-native system-keyboard callbacks resolve reliably; real IME typing now updates native Search/Settings/login state without `UnsatisfiedLinkError`.
+- The fallback native virtual keyboard wraps horizontally at both row edges and remains available only when the configured Android TV IME cannot be opened.
+- Home episode artwork now preserves the owner ID for inherited Jellyfin backdrops, preventing `ParentBackdropImageTag` from being requested against the episode ID; card rendering uses higher-resolution requests and aspect-preserving center crop rather than stretching.
+- Embedded text-subtitle delivery failures are nonfatal. If Jellyfin returns an unusable external SubRip/SRT `DeliveryUrl`, playback falls back to subtitles Off with a transient notice instead of a persistent red playback error.
 
 ## 0.1.0 - 2026-09-01
 

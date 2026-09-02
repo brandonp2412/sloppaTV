@@ -3,6 +3,7 @@
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <android/native_window.h>
+#include <jni.h>
 
 #include <array>
 #include <cstdint>
@@ -19,6 +20,7 @@ struct Color {
 class Renderer {
 public:
     Renderer() = default;
+    Renderer(JavaVM* vm, jobject activity);
     ~Renderer();
 
     bool init(ANativeWindow* window);
@@ -81,6 +83,20 @@ private:
 
     void flush();
     bool ensureExternalProgram();
+    bool loadFontAtlas();
+    void imageRegionTint(
+        GLuint texture,
+        float x,
+        float y,
+        float w,
+        float h,
+        float u0,
+        float v0,
+        float u1,
+        float v1,
+        Color tint,
+        float alpha
+    );
     GLuint compileShader(GLenum type, const char* source);
     std::array<uint8_t, 7> glyph(char c) const;
 
@@ -99,6 +115,7 @@ private:
     GLuint textureVbo_ = 0;
     GLint textureResolutionLocation_ = -1;
     GLint textureAlphaLocation_ = -1;
+    GLint textureTintLocation_ = -1;
     GLuint externalProgram_ = 0;
     GLuint externalVao_ = 0;
     GLuint externalVbo_ = 0;
@@ -106,6 +123,10 @@ private:
     GLint externalAlphaLocation_ = -1;
     GLint externalTransformLocation_ = -1;
     bool externalProgramFailed_ = false;
+    GLuint fontTexture_ = 0;
+    bool fontAtlasAttempted_ = false;
+    JavaVM* vm_ = nullptr;
+    jobject activity_ = nullptr;
     uint64_t generation_ = 0;
     float uiOffsetX_ = 0.0f;
     float uiOffsetY_ = 0.0f;

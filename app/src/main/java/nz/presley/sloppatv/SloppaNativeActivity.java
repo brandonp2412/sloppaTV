@@ -3,26 +3,51 @@ package nz.presley.sloppatv;
 import android.app.NativeActivity;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.media.AudioDeviceInfo;
 import android.media.AudioFormat;
 import android.media.AudioManager;
 import android.media.AudioTrack;
 import android.media.session.MediaSession;
 import android.os.Build;
+import android.os.Looper;
+import android.text.Editable;
+import android.text.InputType;
+import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Minimal Android platform bridge for APIs NativeActivity does not expose to native callbacks.
  * All application, navigation, rendering and playback behavior remains in C++.
  */
 public final class SloppaNativeActivity extends NativeActivity {
+    static {
+        // NativeActivity dlopens the library for android_main, but Java native
+        // callbacks also need the library associated with this app class loader.
+        System.loadLibrary("sloppatv");
+    }
+
     private static final int MEDIA_COMMAND_PLAY = 1;
     private static final int MEDIA_COMMAND_PAUSE = 2;
     private static final int MEDIA_COMMAND_STOP = 3;
     private static final int MEDIA_COMMAND_SEEK = 4;
     private static final int MEDIA_COMMAND_NEXT = 5;
     private static final int MEDIA_COMMAND_PREVIOUS = 6;
+
+    private EditText nativeTextInput;
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
@@ -32,6 +57,137 @@ public final class SloppaNativeActivity extends NativeActivity {
 
     public SloppaPlayerBridge createPlayerBridge() {
         return new SloppaPlayerBridge(this);
+    }
+
+    public MediaSession createMediaSessionBridge() {
+        if (Looper.myLooper() == Looper.getMainLooper()) return createMediaSessionOnMainThread();
+        AtomicReference<MediaSession> result = new AtomicReference<>();
+        CountDownLatch ready = new CountDownLatch(1);
+        runOnUiThread(() -> {
+            try {
+                result.set(createMediaSessionOnMainThread());
+            } finally {
+                ready.countDown();
+            }
+        });
+        try {
+            if (!ready.await(3, TimeUnit.SECONDS)) return null;
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            return null;
+        }
+        return result.get();
+    }
+
+    private MediaSession createMediaSessionOnMainThread() {
+        try {
+            MediaSession session = new MediaSession(this, "sloppaTV");
+            session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
+            session.setCallback(createMediaSessionCallback());
+            return session;
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * Uses the TV's configured IME (normally Gboard on Android TV) instead of
+     * forcing users through the native fallback keyboard.
+     */
+    public boolean showTextInput(String initialText, String hint, int mode, boolean password) {
+        InputMethodManager inputManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (inputManager == null) return false;
+        final String startingText = initialText == null ? "" : initialText;
+        final String inputHint = hint == null ? "" : hint;
+        runOnUiThread(() -> {
+            removeNativeTextInput(false);
+            EditText input = new EditText(this);
+            nativeTextInput = input;
+            input.setSingleLine(true);
+            input.setHint(inputHint);
+            input.setText(startingText);
+            input.setSelection(startingText.length());
+            int imeAction = mode == 1
+                ? EditorInfo.IME_ACTION_SEARCH
+                : ((mode == 10 || mode == 11) ? EditorInfo.IME_ACTION_NEXT : EditorInfo.IME_ACTION_DONE);
+            input.setImeOptions(imeAction);
+            int inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES;
+            if (password) inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD;
+            else if (mode == 10) inputType = InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI;
+            input.setInputType(inputType);
+            input.setBackgroundColor(Color.TRANSPARENT);
+            input.setTextColor(Color.TRANSPARENT);
+            input.setHintTextColor(Color.TRANSPARENT);
+            input.setCursorVisible(false);
+            input.setAlpha(0.01f);
+            input.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    nativeOnSystemTextInputChanged(mode, s.toString());
+                }
+                @Override public void afterTextChanged(Editable s) {}
+            });
+            input.setOnEditorActionListener((view, actionId, event) -> {
+                if (actionId == EditorInfo.IME_ACTION_SEARCH
+                    || actionId == EditorInfo.IME_ACTION_DONE
+                    || actionId == EditorInfo.IME_ACTION_GO
+                    || actionId == EditorInfo.IME_ACTION_NEXT) {
+                    String value = input.getText().toString();
+                    nativeOnSystemTextInputDone(mode, value);
+                    removeNativeTextInput(true);
+                    return true;
+                }
+                return false;
+            });
+            FrameLayout.LayoutParams layout = new FrameLayout.LayoutParams(2, 2);
+            addContentView(input, layout);
+            input.requestFocus();
+            input.post(() -> inputManager.showSoftInput(input, 0));
+        });
+        return true;
+    }
+
+    public void hideTextInput() {
+        runOnUiThread(() -> removeNativeTextInput(true));
+    }
+
+    private void removeNativeTextInput(boolean hideKeyboard) {
+        EditText input = nativeTextInput;
+        nativeTextInput = null;
+        if (input == null) return;
+        if (hideKeyboard) {
+            InputMethodManager manager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (manager != null) manager.hideSoftInputFromWindow(input.getWindowToken(), 0);
+        }
+        if (input.getParent() instanceof ViewGroup) {
+            ((ViewGroup) input.getParent()).removeView(input);
+        }
+    }
+
+    /** Returns a high-resolution antialiased ASCII atlas using Android's system sans font. */
+    public Bitmap createFontAtlas() {
+        final int columns = 16;
+        final int rows = 6;
+        final int cellWidth = 32;
+        final int cellHeight = 56;
+        Bitmap bitmap = Bitmap.createBitmap(columns * cellWidth, rows * cellHeight, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        canvas.drawColor(Color.TRANSPARENT);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        paint.setColor(Color.WHITE);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
+        paint.setTextSize(42.0f);
+        Paint.FontMetrics metrics = paint.getFontMetrics();
+        for (int index = 0; index < 95; ++index) {
+            int column = index % columns;
+            int row = index / columns;
+            float centerX = column * cellWidth + cellWidth * 0.5f;
+            float top = row * cellHeight;
+            float baseline = top + (cellHeight - metrics.bottom - metrics.top) * 0.5f;
+            canvas.drawText(String.valueOf((char) (32 + index)), centerX, baseline, paint);
+        }
+        return bitmap;
     }
 
     public void attachSubtitleOverlay(View view) {
@@ -157,4 +313,6 @@ public final class SloppaNativeActivity extends NativeActivity {
 
     private static native void nativeOnActivityResult(int requestCode, int resultCode, Intent data);
     private static native void nativeOnMediaSessionCommand(int command, long positionMs);
+    private static native void nativeOnSystemTextInputChanged(int mode, String text);
+    private static native void nativeOnSystemTextInputDone(int mode, String text);
 }
