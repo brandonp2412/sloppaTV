@@ -9,8 +9,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageStat
-
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-waydroid"
 DEFAULT_PACKAGE = "nz.presley.sloppatv.test"
@@ -91,6 +89,11 @@ def capture(name: str) -> Path:
 
 
 def roi_diff(a: Path, b: Path) -> float:
+    # Pillow is only required when image evidence is actually captured. Keeping
+    # this import local lets host-policy CI test the non-image harness helpers
+    # without adding an unrelated Python dependency to the Android build job.
+    from PIL import Image, ImageChops, ImageStat
+
     ia = Image.open(a).convert("RGB").crop((0, 120, 1920, 780))
     ib = Image.open(b).convert("RGB").crop((0, 120, 1920, 780))
     diff = ImageChops.difference(ia, ib)
