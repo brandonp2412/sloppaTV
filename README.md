@@ -61,7 +61,7 @@ Version code and version name are defined centrally in `gradle.properties` as `S
 
 ## Device acceptance
 
-Automated viewing acceptance is designed around Waydroid rather than a personal physical TV. `tools/waydroid_e2e.py` requires an explicit ADB serial and validates that the target is Waydroid before running. Real-device performance comparison uses `tools/benchmark_tv.py`.
+Automated viewing acceptance is designed around Waydroid rather than a personal physical TV. `tools/waydroid_e2e.py` requires an explicit ADB serial and validates that the target is Waydroid before running. In addition to the title-specific playback scenarios, it provides repeatable lifecycle/HOME restoration, runtime VIEW/SEARCH intent, MediaSession dump, fatal-log audit, and memory/CPU soak commands. Evidence is written under `artifacts/e2e-waydroid/`. Real-device performance comparison uses `tools/benchmark_tv.py`; `--final-suite` selects the sample counts required by `PERFORMANCE.md`.
 
 A roadmap item is not considered fully verified merely because it builds. Device-visible behavior remains marked partial until the relevant Android TV/Waydroid acceptance pass has been completed. A headless Waydroid session can expose an invalid/stale Android `AudioTrack` clock; when that occurs, video/audio motion results are recorded as an emulator limitation rather than adding Waydroid-specific playback behavior to the production client.
 

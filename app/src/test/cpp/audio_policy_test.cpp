@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <optional>
 #include <string>
 
 namespace {
@@ -74,5 +75,17 @@ int main() {
     assert(hasCodec(passthrough, "eac3"));
     assert(hasCodec(passthrough, "dts"));
     assert(hasCodec(passthrough, "truehd"));
+
+    const std::vector<AudioPreferenceCandidate> audioTracks{
+        {1, "jpn"},
+        {3, "eng"},
+        {5, "ENG"},
+    };
+    assert(audioIndexForQueuePreference(audioTracks, std::nullopt) == -1);
+    assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"eng"}) == 3);
+    assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"ENG"}) == 3);
+    assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"jpn"}) == 1);
+    assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"fra"}) == -1);
+    assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{""}) == -1);
     return 0;
 }
