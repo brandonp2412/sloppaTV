@@ -17,6 +17,7 @@ CPP_TESTS = [
     "audio_policy_test.cpp",
     "deep_link_test.cpp",
     "external_player_policy_test.cpp",
+    "http_error_policy_test.cpp",
     "media_player_policy_test.cpp",
     "ui_policy_test.cpp",
     "playback_queue_test.cpp",
