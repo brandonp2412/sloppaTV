@@ -12,6 +12,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - In-flight GET request coalescing and a short-lived API response cache, with mutation invalidation.
 - User settings for watched indicators, clock visibility and backdrop behavior.
 - Host-side native policy test runner and navigation/server-version policy tests.
+- Real-server acceptance harness for scoped browse/search/artwork/subtitle negotiation, with an opt-in Quick Connect authorize/authenticate round-trip that logs out its transient test sessions.
 - GitHub Actions Android build/test workflow.
 - Environment-based production release signing configuration and a separately debug-signed non-debuggable `benchmark` build type.
 - Centralized version code/name properties compiled into native diagnostics.
