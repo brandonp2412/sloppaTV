@@ -14,6 +14,7 @@
         android:theme="@style/AppTheme">
         <activity
             android:name="nz.presley.sloppatv.SloppaNativeActivity"
+            android:banner="@drawable/banner"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
             android:launchMode="singleTask"
