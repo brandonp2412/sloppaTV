@@ -10,6 +10,7 @@
 #include "jellyfin.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
+#include "media_session.hpp"
 #include "navigation_stack.hpp"
 #include "playback_queue.hpp"
 #include "ui_policy.hpp"
@@ -394,10 +395,27 @@ struct LaunchRequest {
     std::string searchQuery;
 };
 
+class ScopedLaunchEnv {
+public:
+    explicit ScopedLaunchEnv(JavaVM* vm) : vm_(vm) {
+        if (!vm_) return;
+        const jint result = vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6);
+        if (result == JNI_EDETACHED && vm_->AttachCurrentThread(&env_, nullptr) == JNI_OK) attached_ = true;
+    }
+    ~ScopedLaunchEnv() { if (attached_ && vm_) vm_->DetachCurrentThread(); }
+    JNIEnv* get() const { return env_; }
+private:
+    JavaVM* vm_ = nullptr;
+    JNIEnv* env_ = nullptr;
+    bool attached_ = false;
+};
+
 LaunchRequest readLaunchRequest(android_app* app) {
     LaunchRequest request;
-    if (!app || !app->activity || !app->activity->env || !app->activity->clazz) return request;
-    JNIEnv* env = app->activity->env;
+    if (!app || !app->activity || !app->activity->vm || !app->activity->clazz) return request;
+    ScopedLaunchEnv scoped(app->activity->vm);
+    JNIEnv* env = scoped.get();
+    if (!env) return request;
     jobject activity = app->activity->clazz;
     jclass activityClass = env->GetObjectClass(activity);
     if (!activityClass) return request;
@@ -468,6 +486,7 @@ public:
         : app_(app),
           api_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm),
+          mediaSession_(app->activity->vm, app->activity->clazz),
           imageDecoder_(app->activity->vm),
           videoSurface_(app->activity->vm),
           tasks_(4, [app] {
@@ -2829,6 +2848,7 @@ private:
         player_.stop();
         videoSurface_.release();
         displayMode_.restore();
+        mediaSession_.clear();
         playbackStartReported_ = false;
         playbackFallbackResolving_ = false;
         activeTarget_ = {};
@@ -3106,6 +3126,15 @@ private:
             if (settings_.refreshRateSwitching && item.videoFrameRate > 0.0f) {
                 displayMode_.matchVideo(app_->window, item.videoFrameRate);
             }
+            mediaSession_.updateMetadata(
+                item.name,
+                episodeLabel(item),
+                playbackPositionMsFromTicks(item.runtimeTicks)
+            );
+            mediaSession_.updateState(
+                MediaSessionState::Buffering,
+                playbackPositionMsFromTicks(target->startTicks)
+            );
             playerOverlayUntil_ = std::chrono::steady_clock::now() + 5s;
             startResolvedPlaybackTarget(*target);
             return;
@@ -3113,6 +3142,9 @@ private:
 
         if (screen_ != Screen::Player) return;
         PlayerStatus status = player_.status();
+        if (status == PlayerStatus::Preparing) {
+            mediaSession_.updateState(MediaSessionState::Buffering, cachedPlaybackPositionMs_);
+        }
         if (status == PlayerStatus::Playing && pauseAfterRestart_) {
             player_.togglePause();
             pauseAfterRestart_ = false;
@@ -3131,6 +3163,10 @@ private:
         }
         if (status == PlayerStatus::Playing || status == PlayerStatus::Paused) {
             refreshPlaybackTelemetry();
+            mediaSession_.updateState(
+                status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
+                cachedPlaybackPositionMs_
+            );
             if (!mediaSegmentsRequested_) requestMediaSegmentsAsync();
             if (!playbackStartReported_) {
                 playbackStartReported_ = true;
@@ -4504,6 +4540,7 @@ private:
     JellyfinClient api_;
     DisplayModeController displayMode_;
     NativeMediaPlayer player_;
+    NativeMediaSession mediaSession_;
     JniImageDecoder imageDecoder_;
     VideoSurface videoSurface_;
     TaskRunner tasks_;

@@ -19,6 +19,7 @@ add_library(sloppatv SHARED
     jellyfin.cpp
     image_decoder.cpp
     media_player.cpp
+    media_session.cpp
     task_runner.cpp
     video_surface.cpp
 )
