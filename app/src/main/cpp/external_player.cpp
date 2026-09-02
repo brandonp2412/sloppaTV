@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <mutex>
 #include <unordered_set>
 
 namespace {
@@ -13,6 +14,8 @@ constexpr const char* kTag = "sloppaTV/external";
 constexpr const char* kActionView = "android.intent.action.VIEW";
 constexpr const char* kVideoMime = "video/*";
 constexpr const char* kSampleVideoUrl = "http://jellyfin.local/query.mp4";
+std::mutex gInstanceMutex;
+NativeExternalPlayer* gInstance = nullptr;
 
 class ScopedEnv {
 public:
@@ -115,6 +118,48 @@ void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
     clearException(env, "integer intent extra");
 }
 
+bool hasExtra(JNIEnv* env, jobject intent, const char* key) {
+    if (!env || !intent || !key) return false;
+    jclass intentClass = env->GetObjectClass(intent);
+    jmethodID method = intentClass
+        ? env->GetMethodID(intentClass, "hasExtra", "(Ljava/lang/String;)Z")
+        : nullptr;
+    jstring jKey = env->NewStringUTF(key);
+    const bool result = method && jKey && env->CallBooleanMethod(intent, method, jKey) == JNI_TRUE;
+    if (jKey) env->DeleteLocalRef(jKey);
+    if (intentClass) env->DeleteLocalRef(intentClass);
+    clearException(env, "has intent extra");
+    return result;
+}
+
+int getIntExtra(JNIEnv* env, jobject intent, const char* key, int fallback = -1) {
+    if (!env || !intent || !key) return fallback;
+    jclass intentClass = env->GetObjectClass(intent);
+    jmethodID method = intentClass
+        ? env->GetMethodID(intentClass, "getIntExtra", "(Ljava/lang/String;I)I")
+        : nullptr;
+    jstring jKey = env->NewStringUTF(key);
+    const int result = method && jKey ? env->CallIntMethod(intent, method, jKey, static_cast<jint>(fallback)) : fallback;
+    if (jKey) env->DeleteLocalRef(jKey);
+    if (intentClass) env->DeleteLocalRef(intentClass);
+    clearException(env, "integer result extra");
+    return result;
+}
+
+int64_t getLongExtra(JNIEnv* env, jobject intent, const char* key, int64_t fallback = -1) {
+    if (!env || !intent || !key) return fallback;
+    jclass intentClass = env->GetObjectClass(intent);
+    jmethodID method = intentClass
+        ? env->GetMethodID(intentClass, "getLongExtra", "(Ljava/lang/String;J)J")
+        : nullptr;
+    jstring jKey = env->NewStringUTF(key);
+    const int64_t result = method && jKey ? env->CallLongMethod(intent, method, jKey, static_cast<jlong>(fallback)) : fallback;
+    if (jKey) env->DeleteLocalRef(jKey);
+    if (intentClass) env->DeleteLocalRef(intentClass);
+    clearException(env, "long result extra");
+    return result;
+}
+
 void putBoolExtra(JNIEnv* env, jobject intent, const char* key, bool value) {
     if (!env || !intent || !key) return;
     jclass intentClass = env->GetObjectClass(intent);
@@ -137,9 +182,15 @@ NativeExternalPlayer::NativeExternalPlayer(JavaVM* vm, jobject activity) : vm_(v
     JNIEnv* env = scoped.get();
     if (!env) return;
     activity_ = env->NewGlobalRef(activity);
+    std::scoped_lock lock(gInstanceMutex);
+    gInstance = this;
 }
 
 NativeExternalPlayer::~NativeExternalPlayer() {
+    {
+        std::scoped_lock lock(gInstanceMutex);
+        if (gInstance == this) gInstance = nullptr;
+    }
     if (!activity_) return;
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
@@ -263,7 +314,7 @@ bool NativeExternalPlayer::launch(
     int positionMs,
     const std::string& subtitleUrl,
     std::string& error
-) const {
+) {
     if (!activity_ || app.componentName.empty() || app.packageName.empty() || url.empty()) {
         error = "External player launch is incomplete";
         return false;
@@ -334,11 +385,18 @@ bool NativeExternalPlayer::launch(
     }
 
     jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID startActivity = activityClass
-        ? env->GetMethodID(activityClass, "startActivity", "(Landroid/content/Intent;)V")
+    jmethodID startActivityForResult = activityClass
+        ? env->GetMethodID(activityClass, "startActivityForResult", "(Landroid/content/Intent;I)V")
         : nullptr;
-    if (startActivity) env->CallVoidMethod(activity_, startActivity, intent);
-    const bool failed = !startActivity || clearException(env, "startActivity", &error);
+    {
+        std::scoped_lock lock(resultMutex_);
+        activeKind_ = externalPlayerKindForPackage(app.packageName);
+        pendingResult_.reset();
+    }
+    if (startActivityForResult) {
+        env->CallVoidMethod(activity_, startActivityForResult, intent, static_cast<jint>(kRequestCode));
+    }
+    const bool failed = !startActivityForResult || clearException(env, "startActivityForResult", &error);
     if (activityClass) env->DeleteLocalRef(activityClass);
     if (intentClass) env->DeleteLocalRef(intentClass);
     env->DeleteLocalRef(intent);
@@ -349,4 +407,62 @@ bool NativeExternalPlayer::launch(
 
     __android_log_print(ANDROID_LOG_INFO, kTag, "Launching external player %s at %d ms", app.packageName.c_str(), safePosition);
     return true;
+}
+
+std::optional<ExternalPlayerResult> NativeExternalPlayer::takeResult() {
+    std::scoped_lock lock(resultMutex_);
+    auto result = std::move(pendingResult_);
+    pendingResult_.reset();
+    return result;
+}
+
+void NativeExternalPlayer::handleActivityResult(JNIEnv* env, int requestCode, int resultCode, jobject dataIntent) {
+    if (requestCode != kRequestCode) return;
+
+    ExternalPlayerKind kind = ExternalPlayerKind::Generic;
+    {
+        std::scoped_lock lock(resultMutex_);
+        kind = activeKind_;
+    }
+
+    const char* positionKey = kind == ExternalPlayerKind::Vlc ? "extra_position" : "position";
+    const bool hasPosition = dataIntent && hasExtra(env, dataIntent, positionKey);
+    const auto outcome = externalPlayerOutcomeForResult(kind, resultCode, hasPosition);
+    ExternalPlayerResult result{
+        .success = outcome.success,
+        .completionKnown = outcome.completionKnown,
+        .completed = outcome.completed,
+    };
+    if (result.success && hasPosition) {
+        result.positionMs = kind == ExternalPlayerKind::Vlc
+            ? getLongExtra(env, dataIntent, positionKey)
+            : getIntExtra(env, dataIntent, positionKey);
+    }
+
+    {
+        std::scoped_lock lock(resultMutex_);
+        pendingResult_ = result;
+    }
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kTag,
+        "External playback result code=%d success=%d completedKnown=%d completed=%d positionMs=%lld",
+        resultCode,
+        result.success ? 1 : 0,
+        result.completionKnown ? 1 : 0,
+        result.completed ? 1 : 0,
+        static_cast<long long>(result.positionMs)
+    );
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnActivityResult(
+    JNIEnv* env,
+    jclass,
+    jint requestCode,
+    jint resultCode,
+    jobject dataIntent
+) {
+    std::scoped_lock lock(gInstanceMutex);
+    if (gInstance) gInstance->handleActivityResult(env, requestCode, resultCode, dataIntent);
 }
