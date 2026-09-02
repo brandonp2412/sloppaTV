@@ -5926,7 +5926,14 @@ private:
             const float x = contentX + 5.0f + static_cast<float>(i) * (buttonWidth + gap);
             const bool focused = !detailsSimilarFocused_ && detailsButton_ == static_cast<int>(i);
             renderer_.rect(x, actionY, buttonWidth, 86, focused ? kFocus : kPanelAlt);
-            renderer_.text(x + 18, actionY + 31, 1.8f, actions[i], kText, buttonWidth - 36.0f);
+            renderer_.text(
+                x + 18,
+                actionY + 31,
+                detailActionTextScale(actions[i].size()),
+                actions[i],
+                kText,
+                buttonWidth - 36.0f
+            );
         }
 
         if (detail_.positionTicks > 0 && detail_.runtimeTicks > 0) {
