@@ -30,6 +30,22 @@ int main() {
     assert(!hdrCapabilityAllowed(true, HdrOverrideMode::ForceSdr));
     assert(hdrCapabilityAllowed(false, HdrOverrideMode::AllowAllHdr));
 
+    const auto autoBuffer = playbackBufferDurations(0);
+    assert(!autoBuffer.custom());
+    const auto largeBuffer = playbackBufferDurations(1);
+    assert(largeBuffer.custom());
+    assert(largeBuffer.minBufferMs == 50'000);
+    assert(largeBuffer.maxBufferMs == 120'000);
+    assert(largeBuffer.bufferForPlaybackMs == 2'500);
+    assert(largeBuffer.bufferForPlaybackAfterRebufferMs == 5'000);
+    const auto extraLargeBuffer = playbackBufferDurations(2);
+    assert(extraLargeBuffer.custom());
+    assert(extraLargeBuffer.minBufferMs == 80'000);
+    assert(extraLargeBuffer.maxBufferMs == 240'000);
+    assert(extraLargeBuffer.bufferForPlaybackMs == 5'000);
+    assert(extraLargeBuffer.bufferForPlaybackAfterRebufferMs == 10'000);
+    assert(!playbackBufferDurations(99).custom());
+
     assert(!shouldAutoplayNextEpisode(false, 0, 3));
     assert(shouldAutoplayNextEpisode(true, 0, 3));
     assert(shouldAutoplayNextEpisode(true, 2, 3));
