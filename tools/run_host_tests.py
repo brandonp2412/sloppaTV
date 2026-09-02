@@ -10,7 +10,7 @@ CPP_DIR = ROOT / "app" / "src" / "main" / "cpp"
 CPP_TEST_DIR = ROOT / "app" / "src" / "test" / "cpp"
 PY_TEST_DIR = ROOT / "app" / "src" / "test" / "python"
 JAVA_MAIN_DIR = ROOT / "app" / "src" / "main" / "java"
-JAVA_TEST_DIR = ROOT / "app" / "src" / "test" / "java"
+JAVA_TEST_DIR = ROOT / "app" / "src" / "hostTest" / "java"
 BUILD_DIR = ROOT / "build" / "host-tests"
 
 CPP_TESTS = [
