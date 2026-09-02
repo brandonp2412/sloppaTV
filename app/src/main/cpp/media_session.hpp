@@ -3,6 +3,8 @@
 #include <jni.h>
 
 #include <cstdint>
+#include <mutex>
+#include <optional>
 #include <string>
 
 enum class MediaSessionState {
@@ -10,6 +12,20 @@ enum class MediaSessionState {
     Buffering,
     Playing,
     Paused,
+};
+
+enum class MediaSessionCommandType {
+    Play,
+    Pause,
+    Stop,
+    SeekTo,
+    Next,
+    Previous,
+};
+
+struct MediaSessionCommand {
+    MediaSessionCommandType type = MediaSessionCommandType::Play;
+    int64_t positionMs = 0;
 };
 
 class NativeMediaSession {
@@ -27,6 +43,8 @@ public:
     );
     void updateState(MediaSessionState state, int64_t positionMs);
     void clear();
+    [[nodiscard]] std::optional<MediaSessionCommand> takeCommand();
+    void handlePlatformCommand(int command, int64_t positionMs);
 
     [[nodiscard]] bool ready() const { return session_ != nullptr; }
 
@@ -41,4 +59,6 @@ private:
     int64_t durationMs_ = -1;
     MediaSessionState state_ = MediaSessionState::Stopped;
     int64_t lastPositionMs_ = -1;
+    std::mutex commandMutex_;
+    std::optional<MediaSessionCommand> pendingCommand_;
 };
