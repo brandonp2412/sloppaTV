@@ -93,6 +93,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Seeks and media-segment skips now hold the requested logical position briefly until Media3 telemetry catches up, preventing a stale pre-seek position sample from snapping the progress UI/reporting backward immediately after the jump.
 - JNI HTTP failures now map common Java network exceptions to concise TV-facing DNS, timeout, connection and TLS/certificate errors while retaining the full Throwable detail in logcat.
 - The 5-minute native in-app screensaver path is now physically verified on the Google TV Streamer, including first-key dismissal back to the unchanged underlying screen.
+- Background worker tasks now contain unexpected exceptions at the worker boundary, report the failure to logcat, and continue processing later queued work instead of allowing an exception to escape `std::thread` and terminate the app.
 
 ## 0.1.0 - 2026-09-01
 

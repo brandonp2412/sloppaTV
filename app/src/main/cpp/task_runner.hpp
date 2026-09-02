@@ -5,12 +5,17 @@
 #include <deque>
 #include <functional>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
 class TaskRunner {
 public:
-    explicit TaskRunner(size_t workerCount = 4, std::function<void()> onTaskComplete = {});
+    explicit TaskRunner(
+        size_t workerCount = 4,
+        std::function<void()> onTaskComplete = {},
+        std::function<void(const std::string&)> onTaskError = {}
+    );
     ~TaskRunner();
 
     TaskRunner(const TaskRunner&) = delete;
@@ -27,5 +32,6 @@ private:
     std::deque<std::function<void()>> queue_;
     std::vector<std::thread> workers_;
     std::function<void()> onTaskComplete_;
+    std::function<void(const std::string&)> onTaskError_;
     bool stopping_ = false;
 };

@@ -1,10 +1,15 @@
 #include "task_runner.hpp"
 
 #include <algorithm>
+#include <exception>
 #include <utility>
 
-TaskRunner::TaskRunner(size_t workerCount, std::function<void()> onTaskComplete)
-    : onTaskComplete_(std::move(onTaskComplete)) {
+TaskRunner::TaskRunner(
+    size_t workerCount,
+    std::function<void()> onTaskComplete,
+    std::function<void(const std::string&)> onTaskError
+) : onTaskComplete_(std::move(onTaskComplete)),
+    onTaskError_(std::move(onTaskError)) {
     workerCount = std::clamp<size_t>(workerCount, 1, 8);
     workers_.reserve(workerCount);
     for (size_t i = 0; i < workerCount; ++i) {
@@ -51,7 +56,13 @@ void TaskRunner::workerLoop() {
             task = std::move(queue_.front());
             queue_.pop_front();
         }
-        task();
+        try {
+            task();
+        } catch (const std::exception& error) {
+            if (onTaskError_) onTaskError_(error.what());
+        } catch (...) {
+            if (onTaskError_) onTaskError_("Unknown background task exception");
+        }
         if (onTaskComplete_) onTaskComplete_();
     }
 }
