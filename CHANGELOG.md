@@ -95,6 +95,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - The 5-minute native in-app screensaver path is now physically verified on the Google TV Streamer, including first-key dismissal back to the unchanged underlying screen.
 - Background worker tasks now contain unexpected exceptions at the worker boundary, report the failure to logcat, and continue processing later queued work instead of allowing an exception to escape `std::thread` and terminate the app.
 - The short-lived API GET cache now prunes expired responses during normal traffic and is capped at 32 entries, preventing unique browse/search URLs from leaving expired JSON resident for the lifetime of the process.
+- Automatic transient transport retry is now limited to safe GET/HEAD requests; authentication, Quick Connect, metadata refresh, playback-report POSTs and DELETE actions are never invisibly replayed after an ambiguous connection failure.
 
 ## 0.1.0 - 2026-09-01
 
