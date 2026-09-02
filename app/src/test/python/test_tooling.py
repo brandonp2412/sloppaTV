@@ -51,6 +51,24 @@ class WaydroidToolingTest(unittest.TestCase):
         line = "09-02 22:00:00 E ActivityManager: ANR in nz.presley.sloppatv.custom"
         self.assertEqual(waydroid_e2e.fatal_lines([line]), [line])
 
+    def test_soak_summary_uses_median_windows_and_reports_growth(self) -> None:
+        samples = [
+            {"total_pss_kb": 100, "total_rss_kb": 200},
+            {"total_pss_kb": 110, "total_rss_kb": 210},
+            {"total_pss_kb": 105, "total_rss_kb": 205},
+            {"total_pss_kb": 140, "total_rss_kb": 260},
+            {"total_pss_kb": 150, "total_rss_kb": 270},
+            {"total_pss_kb": 145, "total_rss_kb": 265},
+        ]
+        summary = waydroid_e2e.soak_summary(samples)
+        self.assertEqual(summary["baseline_pss_kb"], 105)
+        self.assertEqual(summary["final_pss_kb"], 145)
+        self.assertEqual(summary["pss_growth_kb"], 40)
+        self.assertEqual(summary["peak_pss_kb"], 150)
+        self.assertEqual(summary["baseline_rss_kb"], 205)
+        self.assertEqual(summary["final_rss_kb"], 265)
+        self.assertEqual(summary["rss_growth_kb"], 60)
+
 
 if __name__ == "__main__":
     unittest.main()

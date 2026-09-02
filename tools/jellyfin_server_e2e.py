@@ -105,6 +105,109 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def verify_bitrate_negotiation(client: Jellyfin, items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    candidate: tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]] | None = None
+    for item in items:
+        for source in item.get("MediaSources") or []:
+            streams = source.get("MediaStreams") or []
+            video = next((stream for stream in streams if stream.get("Type") == "Video"), None)
+            audio = next((stream for stream in streams if stream.get("Type") == "Audio"), None)
+            source_bitrate = int(source.get("Bitrate") or 0)
+            if video is None or audio is None or source_bitrate <= 3_000_000:
+                continue
+            if (
+                str(source.get("Container") or "").split(",", 1)[0].lower() in {"mkv", "mp4"}
+                and str(video.get("Codec") or "").lower() in {"h264", "hevc"}
+                and str(audio.get("Codec") or "").lower() in {"aac", "ac3", "eac3"}
+            ):
+                candidate = (item, source, video, audio)
+                break
+        if candidate is not None:
+            break
+    if candidate is None:
+        return None
+
+    item, source, video, audio = candidate
+    video_codec = str(video.get("Codec") or "").lower()
+    audio_codec = str(audio.get("Codec") or "").lower()
+    high_cap = 120_000_000
+    low_cap = min(2_000_000, max(1_000_000, int(source.get("Bitrate") or 0) // 4))
+
+    def negotiate(max_bitrate: int) -> dict[str, Any]:
+        profile = {
+            "Name": "sloppaTV Bitrate E2E",
+            "MaxStaticBitrate": high_cap,
+            "MaxStreamingBitrate": max_bitrate,
+            "DirectPlayProfiles": [
+                {
+                    "Container": "mkv,matroska,mp4,m4v,mov,ts,mpegts,webm",
+                    "Type": "Video",
+                    "VideoCodec": video_codec,
+                    "AudioCodec": audio_codec,
+                }
+            ],
+            "TranscodingProfiles": [
+                {
+                    "Container": "ts",
+                    "Type": "Video",
+                    "VideoCodec": "h264",
+                    "AudioCodec": "aac,ac3,eac3,mp3",
+                    "Protocol": "hls",
+                    "Context": "Streaming",
+                    "MaxAudioChannels": "8",
+                }
+            ],
+            "CodecProfiles": [],
+            "SubtitleProfiles": [],
+        }
+        params = {
+            "UserId": client.user_id,
+            "MediaSourceId": source["Id"],
+            "SubtitleStreamIndex": -1,
+            "IsPlayback": "true",
+            "AutoOpenLiveStream": "true",
+            "MaxStreamingBitrate": max_bitrate,
+        }
+        playback = client.request(
+            "POST",
+            f"/Items/{item['Id']}/PlaybackInfo?" + query(params),
+            {
+                "UserId": client.user_id,
+                "MediaSourceId": source["Id"],
+                "DeviceProfile": profile,
+                "SubtitleStreamIndex": -1,
+                "MaxAudioChannels": 8,
+                "EnableDirectPlay": True,
+                "EnableDirectStream": True,
+                "EnableTranscoding": True,
+                "AllowVideoStreamCopy": True,
+                "AllowAudioStreamCopy": True,
+                "AutoOpenLiveStream": True,
+            },
+        )
+        return playback.get("MediaSources", [])[0]
+
+    high = negotiate(high_cap)
+    low = negotiate(low_cap)
+    low_url = str(low.get("TranscodingUrl") or "")
+    low_query = urllib.parse.parse_qs(urllib.parse.urlparse(low_url).query)
+    low_reasons = [reason for value in low_query.get("TranscodeReasons", []) for reason in value.split(",") if reason]
+    require(high.get("SupportsDirectPlay") is True, "High-bitrate probe did not preserve DirectPlay")
+    require(not high.get("TranscodingUrl"), "High-bitrate probe unexpectedly returned a server stream")
+    require(low.get("SupportsDirectPlay") is False, "Low-bitrate probe did not reject DirectPlay")
+    require(bool(low_url), "Low-bitrate probe did not return a constrained server stream")
+    require("ContainerBitrateExceedsLimit" in low_reasons, f"Low-bitrate probe reasons were unexpected: {low_reasons}")
+    return {
+        "item": item.get("Name"),
+        "sourceBitrate": int(source.get("Bitrate") or 0),
+        "highCap": high_cap,
+        "highCapDirectPlay": True,
+        "lowCap": low_cap,
+        "lowCapDirectPlay": False,
+        "lowCapTranscodeReasons": low_reasons,
+    }
+
+
 def verify_direct_stream_negotiation(client: Jellyfin, items: list[dict[str, Any]]) -> dict[str, Any] | None:
     hls_video_codecs = {"h264", "hevc", "vp9", "av1"}
     hls_audio_codecs = {"aac", "ac3", "eac3", "mp3"}
@@ -567,6 +670,7 @@ def main() -> int:
             "hasDeliveryUrl": True,
         }
 
+    bitrate_probe = verify_bitrate_negotiation(client, scan)
     direct_stream_probe = verify_direct_stream_negotiation(client, scan)
     quick_connect = (
         verify_quick_connect(args.server, args.insecure, args.username, args.password)
@@ -601,6 +705,7 @@ def main() -> int:
         "hdrItems": len(hdr),
         "hdrExamples": hdr[:5],
         "assSubtitleProbe": ass_probe,
+        "bitrateProbe": bitrate_probe,
         "directStreamProbe": direct_stream_probe,
         "quickConnectProbe": quick_connect,
     }
