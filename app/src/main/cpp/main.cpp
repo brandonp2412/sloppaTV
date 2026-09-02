@@ -189,6 +189,8 @@ enum class ArtworkState {
 struct ArtworkEntry {
     ArtworkState state = ArtworkState::Loading;
     DecodedImage decoded;
+    int sourceWidth = 0;
+    int sourceHeight = 0;
     GLuint texture = 0;
     uint64_t textureGeneration = 0;
     uint64_t lastUse = 0;
@@ -586,18 +588,20 @@ public:
           tasks_(4, [app] {
               if (app && app->looper) ALooper_wake(app->looper);
           }) {
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
         loadSession();
-        refreshExternalPlayers();
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: session loaded valid=%d", session_.valid() ? 1 : 0);
         if (session_.valid()) {
             resetNavigation(Screen::Home);
             loadHomeAsync();
         } else {
             resetNavigation(Screen::Login);
         }
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: constructor complete");
     }
 
     void resetNavigation(Screen screen) {
@@ -625,6 +629,10 @@ public:
         tasks_.shutdown();
         stopPlayback();
         renderer_.shutdown();
+    }
+
+    void warmDeviceCapabilitiesAsync() {
+        tasks_.submit([this] { api_.warmDeviceCodecSupport(); });
     }
 
     static void handleAppCommand(android_app* app, int32_t command) {
@@ -738,58 +746,92 @@ public:
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
+    void onNewLaunchIntent(const std::string& action, const std::string& data, const std::string& query) {
+        LaunchRequest request;
+        if (action == "android.intent.action.VIEW") {
+            request.itemId = normalizeJellyfinItemId(data);
+        } else if (action == "android.intent.action.SEARCH") {
+            request.searchQuery = normalizeExternalSearchQuery(query);
+        }
+        if (request.itemId.empty() && request.searchQuery.empty()) return;
+        {
+            std::scoped_lock lock(stateMutex_);
+            pendingRuntimeLaunchRequest_ = std::move(request);
+        }
+        renderBurstUntil_ = std::chrono::steady_clock::now() + 500ms;
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
 private:
     void onAppCommand(int32_t command) {
         std::scoped_lock lock(stateMutex_);
         switch (command) {
-            case APP_CMD_INIT_WINDOW:
-                if (app_->window) renderer_.init(app_->window);
+            case APP_CMD_INIT_WINDOW: {
+                bool reusedRendererContext = false;
+                if (app_->window) {
+                    if (renderer_.contextReady() && !renderer_.ready()) {
+                        reusedRendererContext = renderer_.attachWindow(app_->window);
+                    }
+                    if (!renderer_.ready()) renderer_.init(app_->window);
+                }
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
                 if (screen_ == Screen::Player && windowRestorePending_ && renderer_.ready() && !activeTarget_.url.empty()) {
-                    std::string surfaceError;
-                    if (videoSurface_.create(surfaceError)) {
-                        if (settings_.refreshRateSwitching && activePlaybackItem_.videoFrameRate > 0.0f) {
-                            displayMode_.matchVideo(app_->window, activePlaybackItem_.videoFrameRate);
+                    if (settings_.refreshRateSwitching && activePlaybackItem_.videoFrameRate > 0.0f) {
+                        displayMode_.matchVideo(app_->window, activePlaybackItem_.videoFrameRate);
+                    }
+                    const PlayerStatus restoreStatus = player_.status();
+                    const bool preservedPlayer = reusedRendererContext
+                        && videoSurface_.ready()
+                        && restoreStatus != PlayerStatus::Idle
+                        && restoreStatus != PlayerStatus::Error;
+                    if (preservedPlayer) {
+                        if (windowRestoreResumePlaying_ && restoreStatus == PlayerStatus::Paused) {
+                            player_.togglePause();
                         }
-                        std::vector<ExternalSubtitleTrack> externalSubtitles;
-                        if (!activeTarget_.subtitleUrl.empty()
-                            && subtitleStrategy(activeTarget_.subtitleCodec) == SubtitleStrategy::ClientStyled) {
-                            externalSubtitles.push_back({
-                                .path = activeTarget_.subtitleUrl,
-                                .codec = activeTarget_.subtitleCodec,
-                                .language = activeTarget_.subtitleLanguage,
-                            });
+                        mediaSession_.updateState(
+                            windowRestoreResumePlaying_ ? MediaSessionState::Playing : MediaSessionState::Paused,
+                            cachedPlaybackPositionMs_
+                        );
+                        __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved Media3 and GLES context");
+                    } else {
+                        videoSurface_.release();
+                        std::string surfaceError;
+                        if (!videoSurface_.create(surfaceError)) {
+                            error_ = surfaceError.empty() ? "VIDEO SURFACE COULD NOT BE RESTORED" : surfaceError;
+                            break;
                         }
                         player_.startAsync(
                             activeTarget_.url,
                             videoSurface_.surface(),
                             cachedPlaybackPositionMs_,
                             settings_.playbackBufferPreset,
-                            std::move(externalSubtitles)
+                            playerAudioOrdinal(activeTarget_, activePlaybackItem_),
+                            playerSubtitleTracks(activeTarget_, activePlaybackItem_)
                         );
                         pauseAfterRestart_ = !windowRestoreResumePlaying_;
-                        playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
                         mediaSession_.updateState(MediaSessionState::Buffering, cachedPlaybackPositionMs_);
-                        windowRestorePending_ = false;
-                    } else {
-                        error_ = surfaceError.empty() ? "VIDEO SURFACE COULD NOT BE RESTORED" : surfaceError;
+                        __android_log_print(ANDROID_LOG_WARN, kTag, "GLES context was not reusable during window restore; recreated playback surface");
                     }
+                    playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
+                    windowRestorePending_ = false;
                 }
                 break;
+            }
             case APP_CMD_TERM_WINDOW:
                 if (screen_ == Screen::Player && !activeTarget_.url.empty()) {
                     const PlayerStatus status = player_.status();
                     refreshPlaybackTelemetry(true);
                     windowRestorePending_ = true;
-                    windowRestoreResumePlaying_ = status == PlayerStatus::Playing || status == PlayerStatus::Preparing;
+                    if (status == PlayerStatus::Playing || status == PlayerStatus::Preparing) {
+                        windowRestoreResumePlaying_ = true;
+                    }
+                    if (status == PlayerStatus::Playing) player_.togglePause();
                     reportProgressAsync(true);
-                    player_.stop();
-                    videoSurface_.release();
                     displayMode_.restore();
                     mediaSession_.updateState(MediaSessionState::Paused, cachedPlaybackPositionMs_);
                 }
-                renderer_.shutdown();
+                if (!renderer_.detachWindow()) renderer_.shutdown();
                 break;
             case APP_CMD_GAINED_FOCUS:
                 lastInteraction_ = std::chrono::steady_clock::now();
@@ -797,8 +839,14 @@ private:
                 break;
             case APP_CMD_LOST_FOCUS:
                 screensaverActive_ = false;
-                if (screen_ == Screen::Player && player_.status() == PlayerStatus::Playing) {
-                    player_.togglePause();
+                if (screen_ == Screen::Player) {
+                    const PlayerStatus status = player_.status();
+                    if (status == PlayerStatus::Playing) {
+                        windowRestoreResumePlaying_ = true;
+                        player_.togglePause();
+                    } else if (status == PlayerStatus::Preparing) {
+                        windowRestoreResumePlaying_ = true;
+                    }
                 }
                 break;
             default:
@@ -1092,13 +1140,12 @@ private:
         }
         if (homeRow_ < 0) {
             if (key == AKEYCODE_DPAD_LEFT) navIndex_ = std::max(0, navIndex_ - 1);
-            else if (key == AKEYCODE_DPAD_RIGHT) navIndex_ = std::min(4, navIndex_ + 1);
+            else if (key == AKEYCODE_DPAD_RIGHT) navIndex_ = std::min(3, navIndex_ + 1);
             else if (key == AKEYCODE_DPAD_DOWN && !home_.rows.empty()) homeRow_ = 0;
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (navIndex_ == 1) openLibraryByCollectionType("movies");
-                else if (navIndex_ == 2) openLibraryByCollectionType("tvshows");
-                else if (navIndex_ == 3) openSearch();
-                else if (navIndex_ == 4) openSettings();
+                if (navIndex_ == 0) openProfiles();
+                else if (navIndex_ == 2) openSearch();
+                else if (navIndex_ == 3) openSettings();
             }
             return;
         }
@@ -1107,7 +1154,8 @@ private:
             return;
         }
 
-        auto& items = home_.rows[static_cast<size_t>(homeRow_)].items;
+        auto& section = home_.rows[static_cast<size_t>(homeRow_)];
+        auto& items = section.items;
         int& selection = homeSelection_[static_cast<size_t>(homeRow_)];
         if (key == AKEYCODE_DPAD_LEFT && !items.empty()) selection = std::max(0, selection - 1);
         else if (key == AKEYCODE_DPAD_RIGHT && !items.empty()) selection = std::min(static_cast<int>(items.size()) - 1, selection + 1);
@@ -1116,11 +1164,12 @@ private:
             else --homeRow_;
         } else if (key == AKEYCODE_DPAD_DOWN) {
             if (homeRow_ + 1 < static_cast<int>(home_.rows.size())) ++homeRow_;
-        } else if (isItemContextKey(key) && !items.empty()) {
+        } else if (isItemContextKey(key) && !items.empty() && section.title != "My Media") {
             openItemMenuForItem(items[static_cast<size_t>(selection)]);
             return;
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
-            openDetails(items[static_cast<size_t>(selection)]);
+            if (section.title == "My Media") openLibrary(items[static_cast<size_t>(selection)]);
+            else openDetails(items[static_cast<size_t>(selection)]);
             return;
         }
         if (homeRow_ >= 0 && homeRow_ < static_cast<int>(homeSelection_.size())) {
@@ -1343,7 +1392,7 @@ private:
             hideSystemTextInput();
             popScreen(Screen::Home);
             if (screen_ == Screen::Home) homeRow_ = -1;
-            navIndex_ = 4;
+            navIndex_ = 3;
             return;
         }
         if (key == AKEYCODE_SEARCH) {
@@ -1844,6 +1893,14 @@ private:
         const size_t next = selected == tracks.end()
             ? 0
             : (static_cast<size_t>(std::distance(tracks.begin(), selected)) + 1) % tracks.size();
+        if (activeTarget_.playMethod == PlaybackMethod::DirectPlay
+            && player_.selectEmbeddedAudioOrdinal(static_cast<int>(next))) {
+            selectedAudioServerIndex_ = tracks[next].index;
+            activeTarget_.audioStreamIndex = tracks[next].index;
+            playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
+            reportProgressAsync(false);
+            return;
+        }
         restartPlaybackAt(cachedPlaybackPositionMs_, tracks[next].index, selectedSubtitleServerIndex_);
     }
 
@@ -2397,9 +2454,12 @@ private:
     }
 
     void showNotice(std::string message, std::chrono::seconds duration = 6s, bool persistent = false) {
+        const auto now = std::chrono::steady_clock::now();
         notice_ = std::move(message);
         noticePersistent_ = persistent;
-        noticeUntil_ = persistent ? std::chrono::steady_clock::time_point::max() : std::chrono::steady_clock::now() + duration;
+        noticeUntil_ = persistent ? std::chrono::steady_clock::time_point::max() : now + duration;
+        renderBurstUntil_ = std::max(renderBurstUntil_, now + 350ms);
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     void clearNotice() {
@@ -3690,22 +3750,58 @@ private:
         error_.clear();
     }
 
-    void startResolvedPlaybackTarget(const PlaybackTarget& target) {
-        std::vector<ExternalSubtitleTrack> externalSubtitles;
-        if (!target.subtitleUrl.empty()
-            && subtitleStrategy(target.subtitleCodec) == SubtitleStrategy::ClientStyled) {
-            externalSubtitles.push_back({
+    int playerAudioOrdinal(const PlaybackTarget& target, const JellyfinItem& item) const {
+        if (target.playMethod != PlaybackMethod::DirectPlay || target.audioStreamIndex < 0) return -1;
+        for (size_t index = 0; index < item.audios.size(); ++index) {
+            if (item.audios[index].index == target.audioStreamIndex) return static_cast<int>(index);
+        }
+        return -1;
+    }
+
+    std::vector<ExternalSubtitleTrack> playerSubtitleTracks(
+        const PlaybackTarget& target,
+        const JellyfinItem& item
+    ) const {
+        std::vector<ExternalSubtitleTrack> tracks;
+        const SubtitleStrategy strategy = subtitleStrategy(target.subtitleCodec);
+        const bool embeddedClientSubtitle = target.playMethod == PlaybackMethod::DirectPlay
+            && target.subtitleEmbedded
+            && (strategy == SubtitleStrategy::ClientText || strategy == SubtitleStrategy::ClientStyled)
+            && target.subtitleStreamIndex >= 0;
+        if (embeddedClientSubtitle) {
+            int embeddedOrdinal = 0;
+            for (const auto& subtitle : item.subtitles) {
+                if (subtitle.isExternal) continue;
+                if (subtitle.index == target.subtitleStreamIndex) {
+                    tracks.push_back({
+                        .path = {},
+                        .codec = target.subtitleCodec.empty() ? subtitle.codec : target.subtitleCodec,
+                        .language = target.subtitleLanguage.empty() ? subtitle.language : target.subtitleLanguage,
+                        .embeddedOrdinal = embeddedOrdinal,
+                    });
+                    return tracks;
+                }
+                ++embeddedOrdinal;
+            }
+        }
+        if (!target.subtitleUrl.empty() && strategy == SubtitleStrategy::ClientStyled) {
+            tracks.push_back({
                 .path = target.subtitleUrl,
                 .codec = target.subtitleCodec,
                 .language = target.subtitleLanguage,
             });
         }
+        return tracks;
+    }
+
+    void startResolvedPlaybackTarget(const PlaybackTarget& target) {
         player_.startAsync(
             target.url,
             videoSurface_.surface(),
             initialPlayerSeekMs(target.startTicks),
             settings_.playbackBufferPreset,
-            std::move(externalSubtitles)
+            playerAudioOrdinal(target, activePlaybackItem_),
+            playerSubtitleTracks(target, activePlaybackItem_)
         );
     }
 
@@ -3724,6 +3820,45 @@ private:
         );
         restartPlaybackAt(cachedPlaybackPositionMs_, selectedAudioServerIndex_, kSubtitleOffIndex);
         return true;
+    }
+
+    void applyRuntimeLaunchRequest(const LaunchRequest& request) {
+        std::scoped_lock lock(stateMutex_);
+        if (!session_.valid()) {
+            if (!request.itemId.empty()) pendingDeepLinkItemId_ = request.itemId;
+            if (!request.searchQuery.empty()) pendingSearchQuery_ = request.searchQuery;
+            return;
+        }
+
+        api_.cancelPendingRequests();
+        ++taskGeneration_;
+        loading_ = false;
+        quickConnectActive_ = false;
+        hideSystemTextInput();
+        if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle) {
+            releaseActivePlayback(true);
+            playbackSubtitleLanguagePreference_.reset();
+            nextTransitionLoading_ = false;
+        }
+        resetNavigation(Screen::Home);
+        queueOverlayActive_ = false;
+        lastInteraction_ = std::chrono::steady_clock::now();
+        screensaverActive_ = false;
+        error_.clear();
+
+        if (!request.itemId.empty()) {
+            JellyfinItem linked;
+            linked.id = request.itemId;
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_VIEW Jellyfin item %s", linked.id.c_str());
+            openDetails(linked);
+        } else if (!request.searchQuery.empty()) {
+            searchQuery_ = request.searchQuery;
+            searchKeyboard_ = false;
+            searchSelection_ = 0;
+            pushScreen(Screen::Search);
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_SEARCH query");
+            searchAsync();
+        }
     }
 
     bool retryPlaybackWithTranscodeFallback() {
@@ -3839,6 +3974,16 @@ private:
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
 
+        std::optional<LaunchRequest> runtimeLaunchRequest;
+        {
+            std::scoped_lock lock(stateMutex_);
+            if (pendingRuntimeLaunchRequest_) {
+                runtimeLaunchRequest = std::move(pendingRuntimeLaunchRequest_);
+                pendingRuntimeLaunchRequest_.reset();
+            }
+        }
+        if (runtimeLaunchRequest) applyRuntimeLaunchRequest(*runtimeLaunchRequest);
+
         std::optional<PlaybackTarget> target;
         std::optional<PendingExternalLaunch> externalLaunch;
         std::optional<PendingExternalLaunch> completedExternalPlayback;
@@ -3907,7 +4052,8 @@ private:
                         }
                     );
                     if (selectedSubtitle != item.subtitles.end()
-                        && subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ClientText) {
+                        && subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ClientText
+                        && !(target->playMethod == PlaybackMethod::DirectPlay && target->subtitleEmbedded)) {
                         loadSubtitleAsync(*selectedSubtitle, target->subtitleUrl);
                     }
                 }
@@ -3925,6 +4071,7 @@ private:
                 }
             }
         }
+
 
         if (externalResult && completedExternalPlayback) {
             if (!externalResult->success) {
@@ -4178,7 +4325,7 @@ private:
             item.backdropTag,
             item.backdropItemId
         );
-        return artwork.itemId + ":home:v4-hq:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
+        return artwork.itemId + ":home:v5-480x270:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
     }
 
     std::string homeDiskCachePath(const std::string& key) const {
@@ -4308,7 +4455,7 @@ private:
                 encoded = std::move(*cached);
                 fromDisk = true;
             } else {
-                auto bytes = api_.downloadHomeImage(session, itemCopy, 960, 540);
+                auto bytes = api_.downloadHomeImage(session, itemCopy, 480, 270);
                 if (!bytes.ok) {
                     __android_log_print(
                         ANDROID_LOG_WARN,
@@ -4330,7 +4477,7 @@ private:
             DecodedImage decoded = imageDecoder_.decode(encoded, decodeError);
             if (!decoded.valid() && fromDisk) {
                 eraseHomeDiskCache(key);
-                auto bytes = api_.downloadHomeImage(session, itemCopy, 960, 540);
+                auto bytes = api_.downloadHomeImage(session, itemCopy, 480, 270);
                 if (bytes.ok) {
                     encoded = std::move(bytes.value);
                     decodeError.clear();
@@ -4354,14 +4501,18 @@ private:
                 it->second.state = ArtworkState::Failed;
                 return;
             }
+            it->second.sourceWidth = decoded.width;
+            it->second.sourceHeight = decoded.height;
             it->second.decoded = std::move(decoded);
             it->second.state = ArtworkState::Ready;
         });
     }
 
     void drawCoverTexture(const ArtworkEntry& entry, float x, float y, float width, float height, float alpha = 1.0f) {
-        if (entry.texture == 0 || !entry.decoded.valid() || width <= 0.0f || height <= 0.0f) return;
-        const float sourceAspect = static_cast<float>(entry.decoded.width) / static_cast<float>(entry.decoded.height);
+        const int sourceWidth = entry.sourceWidth > 0 ? entry.sourceWidth : entry.decoded.width;
+        const int sourceHeight = entry.sourceHeight > 0 ? entry.sourceHeight : entry.decoded.height;
+        if (entry.texture == 0 || sourceWidth <= 0 || sourceHeight <= 0 || width <= 0.0f || height <= 0.0f) return;
+        const float sourceAspect = static_cast<float>(sourceWidth) / static_cast<float>(sourceHeight);
         const float targetAspect = width / height;
         float u0 = 0.0f;
         float v0 = 0.0f;
@@ -4389,10 +4540,20 @@ private:
         }
         auto& entry = it->second;
         entry.lastUse = ++homeArtworkUseCounter_;
-        if (entry.state != ArtworkState::Ready || !entry.decoded.valid()) return false;
+        if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
+            if (!entry.decoded.valid()) {
+                homeArtwork_.erase(it);
+                requestHomeArtwork(item);
+                return false;
+            }
+            entry.sourceWidth = entry.decoded.width;
+            entry.sourceHeight = entry.decoded.height;
             entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
             entry.textureGeneration = renderer_.generation();
+            if (entry.texture != 0) {
+                std::vector<uint8_t>().swap(entry.decoded.rgba);
+            }
         }
         if (entry.texture == 0) return false;
         drawCoverTexture(entry, x, y, width, height);
@@ -4734,76 +4895,162 @@ private:
                     0,
                     static_cast<int>(backdropItems.size()) - 1
                 );
-                drawBackdrop(backdropItems[static_cast<size_t>(selected)], 0.22f);
+                drawBackdrop(backdropItems[static_cast<size_t>(selected)], 0.18f);
             }
         }
-        renderHeader("HOME");
-        const std::array<std::string, 5> nav{"HOME", "MOVIES", "SHOWS", "SEARCH", "SETTINGS"};
-        const std::array<float, 5> widths{145.0f, 190.0f, 180.0f, 180.0f, 220.0f};
-        float x = 835.0f;
-        for (int i = 0; i < 5; ++i) {
-            const float width = widths[static_cast<size_t>(i)];
-            renderer_.rect(x, 54, width, 66, homeRow_ < 0 && navIndex_ == i ? kFocus : kPanel);
-            renderer_.text(x + 24, 77, 2.15f, nav[static_cast<size_t>(i)], kText);
-            x += width + 16.0f;
+
+        // Match Jellyfin Android TV's MainToolbar: user at the left, Home/Search in the
+        // center, and Settings/clock at the right. The Home button stays visually active
+        // even when focus has moved into the Leanback-style rows below it.
+        const bool toolbarFocused = homeRow_ < 0;
+        const float profileX = 54.0f;
+        const float profileY = 35.0f;
+        const float profileSize = 68.0f;
+        renderer_.rect(profileX - 4.0f, profileY - 4.0f, profileSize + 8.0f, profileSize + 8.0f,
+            toolbarFocused && navIndex_ == 0 ? kFocus : kPanel);
+        if (!drawProfileArtwork(session_, profileX, profileY, profileSize)) {
+            renderer_.rect(profileX, profileY, profileSize, profileSize, kPanelAlt);
+            std::string initial = session_.username.empty() ? "U" : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(session_.username.front()))));
+            renderer_.text(profileX + 20.0f, profileY + 18.0f, 2.8f, initial, kText, 32.0f);
         }
+
+        const std::array<std::string, 2> centerNav{"HOME", "SEARCH"};
+        const std::array<int, 2> centerIndices{1, 2};
+        float navX = 775.0f;
+        for (size_t i = 0; i < centerNav.size(); ++i) {
+            const int index = centerIndices[i];
+            const float width = i == 0 ? 170.0f : 195.0f;
+            const bool focused = toolbarFocused && navIndex_ == index;
+            const bool active = index == 1;
+            if (focused || active) {
+                renderer_.rect(navX, 40.0f, width, 62.0f, focused ? kFocus : Color{0.28f, 0.20f, 0.46f, 0.92f});
+            }
+            renderer_.text(navX + 28.0f, 58.0f, 2.05f, centerNav[i], active ? kText : kMuted, width - 56.0f);
+            navX += width + 18.0f;
+        }
+
+        const bool settingsFocused = toolbarFocused && navIndex_ == 3;
+        if (settingsFocused) renderer_.rect(1450.0f, 40.0f, 220.0f, 62.0f, kFocus);
+        renderer_.text(1482.0f, 58.0f, 1.85f, "SETTINGS", settingsFocused ? kText : kMuted, 160.0f);
+        if (settings_.showClock) {
+            const std::time_t now = std::time(nullptr);
+            std::tm local{};
+            localtime_r(&now, &local);
+            std::ostringstream clock;
+            clock << std::put_time(&local, "%H:%M");
+            renderer_.text(1730.0f, 58.0f, 1.9f, clock.str(), kMuted, 120.0f);
+        }
+
         if (home_.rows.empty()) {
-            renderer_.text(90, 260, 2.5f, loading_ ? "LOADING HOME..." : "NO VIDEO HOME SECTIONS", kMuted);
+            renderer_.text(70.0f, 210.0f, 2.3f, loading_ ? "LOADING HOME..." : "NO VIDEO HOME SECTIONS", kMuted);
             return;
         }
 
+        // Jellyfin's HomeRowsFragment uses compact horizontal Leanback rows. Keep the
+        // selected row near the top and allow the next rows to remain visible below it.
         const int firstRow = homeRow_ < 0 ? 0 : std::max(0, homeRow_ - 1);
-        for (int slot = 0; slot < 2; ++slot) {
+        for (int slot = 0; slot < 3; ++slot) {
             const int row = firstRow + slot;
             if (row >= static_cast<int>(home_.rows.size())) break;
             const auto& section = home_.rows[static_cast<size_t>(row)];
-            renderHomeRow(section.title, section.items, row, 170.0f + static_cast<float>(slot) * 410.0f);
+            renderHomeRow(section.title, section.items, row, 145.0f + static_cast<float>(slot) * 315.0f);
         }
     }
 
     void renderHomeRow(const std::string& title, const std::vector<JellyfinItem>& items, int row, float top) {
-        renderer_.text(70, top, 2.85f, title, homeRow_ == row ? kText : kMuted);
+        renderer_.text(62.0f, top, 2.2f, title, homeRow_ == row ? kText : kMuted, 900.0f);
         if (items.empty()) {
-            renderer_.text(88, top + 95, 2.0f, loading_ ? "LOADING..." : "NOTHING HERE", kMuted);
+            renderer_.text(72.0f, top + 70.0f, 1.7f, loading_ ? "LOADING..." : "NOTHING HERE", kMuted);
             return;
         }
 
         const int selected = std::clamp(homeSelection_[static_cast<size_t>(row)], 0, static_cast<int>(items.size()) - 1);
-        constexpr int visible = 3;
-        constexpr float cardW = 560.0f;
-        constexpr float cardH = 280.0f;
-        constexpr float gap = 40.0f;
-        const int maxStart = std::max(0, static_cast<int>(items.size()) - visible);
-        const int start = std::clamp(selected - 1, 0, maxStart);
+        const int start = std::max(0, selected - 1);
+        constexpr float cardH = 205.0f;
+        constexpr float gap = 26.0f;
+        constexpr float startX = 62.0f;
+        const float imageY = top + 42.0f;
+        float x = startX;
 
-        for (int slot = 0; slot < visible; ++slot) {
-            const int index = start + slot;
-            if (index >= static_cast<int>(items.size())) break;
-            const float x = 70.0f + static_cast<float>(slot) * (cardW + gap);
-            const float y = top + 52.0f;
+        auto isLandscape = [](const JellyfinItem& item) {
+            return item.type == "Episode" || item.type == "CollectionFolder" || item.type == "UserView" || item.type == "Folder";
+        };
+        auto singleLine = [&](std::string value, float scale, float width) {
+            if (renderer_.textWidth(scale, value) <= width) return value;
+            while (value.size() > 4 && renderer_.textWidth(scale, value + "...") > width) value.pop_back();
+            return value + "...";
+        };
+
+        for (int index = start; index < static_cast<int>(items.size()); ++index) {
             const auto& item = items[static_cast<size_t>(index)];
+            const float aspect = isLandscape(item) ? (16.0f / 9.0f) : (2.0f / 3.0f);
+            const float cardW = cardH * aspect;
+            if (x + cardW > 1895.0f && index > start) break;
             const bool focused = homeRow_ == row && index == selected;
 
-            renderer_.rect(x, y, cardW, cardH, kPanel);
-            const bool hasArtwork = drawHomeArtwork(item, x, y, cardW, cardH);
-            if (!hasArtwork) renderer_.rect(x + 1, y + 1, cardW - 2, cardH - 2, kPanelAlt);
-
-            renderer_.rect(x, y + cardH - 92.0f, cardW, 92.0f, Color{0.0f, 0.0f, 0.0f, 0.80f});
-            renderer_.text(x + 20, y + cardH - 75.0f, 2.15f, item.name, kText, cardW - 40.0f);
-            std::string secondary = episodeLabel(item);
-            if (secondary.empty() && item.productionYear > 0) secondary = std::to_string(item.productionYear);
-            if (!secondary.empty()) renderer_.text(x + 20, y + cardH - 34.0f, 1.4f, secondary, kMuted, cardW - 40.0f);
+            renderer_.rect(x, imageY, cardW, cardH, kPanel);
+            const bool hasArtwork = drawHomeArtwork(item, x, imageY, cardW, cardH);
+            if (!hasArtwork) renderer_.rect(x + 1.0f, imageY + 1.0f, cardW - 2.0f, cardH - 2.0f, kPanelAlt);
 
             if (item.positionTicks > 0 && item.runtimeTicks > 0) {
                 const double progress = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-                renderer_.rect(x, y + cardH - 5.0f, cardW, 5.0f, kPanelAlt);
-                renderer_.rect(x, y + cardH - 5.0f, static_cast<float>(cardW * progress), 5.0f, kFocus);
+                renderer_.rect(x, imageY + cardH - 6.0f, cardW, 6.0f, kPanelAlt);
+                renderer_.rect(x, imageY + cardH - 6.0f, static_cast<float>(cardW * progress), 6.0f, kFocus);
             }
             if (settings_.showWatchedIndicators && item.played) {
-                renderer_.rect(x + cardW - 116.0f, y + 12.0f, 104.0f, 34.0f, Color{0.0f, 0.0f, 0.0f, 0.75f});
-                renderer_.text(x + cardW - 106.0f, y + 21.0f, 1.0f, "WATCHED", kText, 86.0f);
+                renderer_.rect(x + cardW - 88.0f, imageY + 10.0f, 78.0f, 30.0f, Color{0.0f, 0.0f, 0.0f, 0.70f});
+                renderer_.text(x + cardW - 80.0f, imageY + 17.0f, 0.82f, "WATCHED", kText, 64.0f);
             }
-            if (focused) renderer_.outline(x - 5, y - 5, cardW + 10, cardH + 10, 5, kFocus);
+            if (focused) renderer_.outline(x - 4.0f, imageY - 4.0f, cardW + 8.0f, cardH + 8.0f, 4.0f, kFocus);
+
+            if (title != "My Media") {
+                constexpr float primaryScale = 1.85f;
+                constexpr float secondaryScale = 1.35f;
+                std::string primary = item.name;
+                std::string secondary = item.officialRating;
+                if (item.type == "Episode") {
+                    primary = item.seriesName;
+                    if (item.parentIndexNumber == 0) {
+                        if (!primary.empty()) primary += " ";
+                        primary += "Special";
+                    } else {
+                        if (item.parentIndexNumber >= 0) {
+                            if (!primary.empty()) primary += " ";
+                            primary += "S" + std::to_string(item.parentIndexNumber);
+                        }
+                        if (item.indexNumber >= 0) {
+                            if (!primary.empty()) primary += " ";
+                            primary += "E" + std::to_string(item.indexNumber);
+                        }
+                    }
+                    secondary = item.name;
+                }
+                primary = singleLine(primary, primaryScale, cardW);
+                const float primaryWidth = renderer_.textWidth(primaryScale, primary);
+                renderer_.text(
+                    x + std::max(0.0f, (cardW - primaryWidth) * 0.5f),
+                    imageY + cardH + 13.0f,
+                    primaryScale,
+                    primary,
+                    kText,
+                    cardW
+                );
+
+                if (!secondary.empty()) {
+                    secondary = singleLine(secondary, secondaryScale, cardW);
+                    const float secondaryWidth = renderer_.textWidth(secondaryScale, secondary);
+                    renderer_.text(
+                        x + std::max(0.0f, (cardW - secondaryWidth) * 0.5f),
+                        imageY + cardH + 55.0f,
+                        secondaryScale,
+                        secondary,
+                        kMuted,
+                        cardW
+                    );
+                }
+            }
+
+            x += cardW + gap;
         }
     }
 
@@ -5493,9 +5740,10 @@ private:
         const bool noticeVisible = !notice_.empty()
             && (noticePersistent_ || std::chrono::steady_clock::now() < noticeUntil_);
         if (noticeVisible) {
-            renderer_.rect(70, 925, 1760, 58, kPanelAlt);
-            renderer_.outline(70, 925, 1760, 58, 3, kFocus);
-            renderer_.text(94, 945, 1.6f, notice_, kText, 1710);
+            const float noticeY = screen_ == Screen::Player ? 670.0f : 925.0f;
+            renderer_.rect(70, noticeY, 1760, 58, kPanelAlt);
+            renderer_.outline(70, noticeY, 1760, 58, 3, kFocus);
+            renderer_.text(94, noticeY + 20.0f, 1.6f, notice_, kText, 1710);
         }
         if (!error_.empty()) {
             renderer_.rect(70, 995, 1360, 55, kError);
@@ -5683,6 +5931,7 @@ private:
     JellyfinSession session_;
     std::string pendingDeepLinkItemId_;
     std::string pendingSearchQuery_;
+    std::optional<LaunchRequest> pendingRuntimeLaunchRequest_;
     std::vector<JellyfinSession> savedSessions_;
     int profilesSelection_ = 0;
     int profileAction_ = 0;
@@ -5698,7 +5947,7 @@ private:
     std::unordered_map<std::string, ArtworkEntry> logos_;
     std::vector<int> homeSelection_;
     int homeRow_ = 0;
-    int navIndex_ = 0;
+    int navIndex_ = 1;
     int librarySelection_ = 0;
     JellyfinItem activeLibrary_;
     std::vector<JellyfinItem> browseItems_;
@@ -5815,6 +6064,21 @@ std::string javaString(JNIEnv* env, jstring value) {
 }
 
 extern "C" JNIEXPORT void JNICALL
+Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
+    JNIEnv* env,
+    jclass,
+    jstring action,
+    jstring data,
+    jstring query
+) {
+    const std::string actionValue = javaString(env, action);
+    const std::string dataValue = javaString(env, data);
+    const std::string queryValue = javaString(env, query);
+    std::scoped_lock lock(gActiveAppMutex);
+    if (gActiveApp) gActiveApp->onNewLaunchIntent(actionValue, dataValue, queryValue);
+}
+
+extern "C" JNIEXPORT void JNICALL
 Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(
     JNIEnv* env,
     jclass,
@@ -5848,6 +6112,7 @@ void android_main(android_app* app) {
     app->userData = &sloppa;
     app->onAppCmd = SloppaApp::handleAppCommand;
     app->onInputEvent = SloppaApp::handleInput;
+    sloppa.warmDeviceCapabilitiesAsync();
     sloppa.run();
     {
         std::scoped_lock lock(gActiveAppMutex);

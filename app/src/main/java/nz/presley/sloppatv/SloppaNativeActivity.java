@@ -55,6 +55,17 @@ public final class SloppaNativeActivity extends NativeActivity {
         nativeOnActivityResult(requestCode, resultCode, data);
     }
 
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (intent == null) return;
+        String action = intent.getAction();
+        String data = intent.getDataString();
+        String query = intent.getStringExtra("query");
+        nativeOnNewIntent(action, data, query);
+    }
+
     public SloppaPlayerBridge createPlayerBridge() {
         return new SloppaPlayerBridge(this);
     }
@@ -164,30 +175,46 @@ public final class SloppaNativeActivity extends NativeActivity {
         }
     }
 
-    /** Returns a high-resolution antialiased ASCII atlas using Android's system sans font. */
+    private Paint createUiFontPaint() {
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
+        paint.setColor(Color.WHITE);
+        paint.setTextAlign(Paint.Align.LEFT);
+        paint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.NORMAL));
+        paint.setTextSize(48.0f);
+        return paint;
+    }
+
+    /** Returns a high-resolution antialiased ASCII atlas using Android's proportional system sans font. */
     public Bitmap createFontAtlas() {
         final int columns = 16;
         final int rows = 6;
-        final int cellWidth = 32;
-        final int cellHeight = 56;
+        final int cellWidth = 64;
+        final int cellHeight = 64;
+        final float leftPadding = 5.0f;
         Bitmap bitmap = Bitmap.createBitmap(columns * cellWidth, rows * cellHeight, Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         canvas.drawColor(Color.TRANSPARENT);
-        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.SUBPIXEL_TEXT_FLAG);
-        paint.setColor(Color.WHITE);
-        paint.setTextAlign(Paint.Align.CENTER);
-        paint.setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
-        paint.setTextSize(42.0f);
+        Paint paint = createUiFontPaint();
         Paint.FontMetrics metrics = paint.getFontMetrics();
         for (int index = 0; index < 95; ++index) {
             int column = index % columns;
             int row = index / columns;
-            float centerX = column * cellWidth + cellWidth * 0.5f;
+            float left = column * cellWidth + leftPadding;
             float top = row * cellHeight;
             float baseline = top + (cellHeight - metrics.bottom - metrics.top) * 0.5f;
-            canvas.drawText(String.valueOf((char) (32 + index)), centerX, baseline, paint);
+            canvas.drawText(String.valueOf((char) (32 + index)), left, baseline, paint);
         }
         return bitmap;
+    }
+
+    /** Per-glyph advances for the atlas above, in source bitmap pixels. */
+    public float[] createFontAdvances() {
+        Paint paint = createUiFontPaint();
+        float[] advances = new float[95];
+        for (int index = 0; index < advances.length; ++index) {
+            advances[index] = paint.measureText(String.valueOf((char) (32 + index)));
+        }
+        return advances;
     }
 
     public void attachSubtitleOverlay(View view) {
@@ -312,6 +339,7 @@ public final class SloppaNativeActivity extends NativeActivity {
     }
 
     private static native void nativeOnActivityResult(int requestCode, int resultCode, Intent data);
+    private static native void nativeOnNewIntent(String action, String data, String query);
     private static native void nativeOnMediaSessionCommand(int command, long positionMs);
     private static native void nativeOnSystemTextInputChanged(int mode, String text);
     private static native void nativeOnSystemTextInputDone(int mode, String text);

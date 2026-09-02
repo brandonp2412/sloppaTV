@@ -30,9 +30,10 @@ class App:
 APPS = (
     App(
         "sloppaTV",
-        "nz.presley.sloppatv",
-        "nz.presley.sloppatv/android.app.NativeActivity",
-        "NativeActivity",
+        "nz.presley.sloppatv.test",
+        "nz.presley.sloppatv.test/nz.presley.sloppatv.SloppaNativeActivity",
+        "SloppaNativeActivity",
+        ("20",),  # Move from the top toolbar into the first Home media row.
     ),
     App(
         "Jellyfin",
@@ -143,11 +144,52 @@ def active_layer(serial: str, app: App) -> str:
     candidates = [
         line
         for line in layers
-        if line.startswith(app.package + "/") and app.layer_contains in line
+        if app.package + "/" in line
+        and app.layer_contains in line
+        and "ActivityRecord" not in line
+        and "InputSink" not in line
     ]
     if not candidates:
         raise RuntimeError(f"No SurfaceFlinger layer found for {app.name}")
-    return candidates[-1]
+    buffer_layers = [line for line in candidates if line.startswith("TID:")]
+    return (buffer_layers or candidates)[-1]
+
+
+def histogram_values(line: str) -> list[float]:
+    values: list[float] = []
+    for bucket, count in re.findall(r"(\d+)ms=(\d+)", line):
+        values.extend([float(bucket)] * int(count))
+    return values
+
+
+def navigation_timestats(serial: str, app: App) -> dict[str, float | int]:
+    output = adb(serial, "shell", "dumpsys", "SurfaceFlinger", "--timestats", "-dump")
+    blocks = output.split("displayRefreshRate = ")
+    matches: list[tuple[int, str]] = []
+    for block in blocks:
+        if app.package not in block:
+            continue
+        total_match = re.search(r"totalFrames = (\d+)", block)
+        if total_match:
+            matches.append((int(total_match.group(1)), block))
+    if not matches:
+        raise RuntimeError(f"No SurfaceFlinger TimeStats layer found for {app.name}")
+    total_frames, block = max(matches, key=lambda entry: entry[0])
+    dropped_match = re.search(r"droppedFrames = (\d+)", block)
+    fps_match = re.search(r"averageFPS = ([0-9.]+)", block)
+    histogram_match = re.search(r"present2present histogram is as below:\n([^\n]+)", block)
+    values = histogram_values(histogram_match.group(1)) if histogram_match else []
+    if not values:
+        raise RuntimeError(f"No SurfaceFlinger TimeStats present histogram for {app.name}")
+    return {
+        "frames": total_frames,
+        "median_interval_ms": round(statistics.median(values), 2),
+        "p95_interval_ms": round(percentile(values, 0.95), 2),
+        "over_20ms_pct": round(sum(value > 20 for value in values) * 100 / len(values), 1),
+        "over_33_4ms_pct": round(sum(value > 33.4 for value in values) * 100 / len(values), 1),
+        "dropped_frames": int(dropped_match.group(1)) if dropped_match else 0,
+        "average_fps": round(float(fps_match.group(1)), 2) if fps_match else 0.0,
+    }
 
 
 def navigation_benchmark(serial: str, app: App, nav_events: int, settle_seconds: float) -> dict[str, float | int]:
@@ -159,6 +201,8 @@ def navigation_benchmark(serial: str, app: App, nav_events: int, settle_seconds:
     time.sleep(0.25)
 
     layer = active_layer(serial, app)
+    adb(serial, "shell", "dumpsys", "SurfaceFlinger", "--timestats", "-enable", capture=False)
+    adb(serial, "shell", "dumpsys", "SurfaceFlinger", "--timestats", "-clear", capture=False)
     adb(serial, "shell", "dumpsys", "SurfaceFlinger", "--latency-clear", layer, capture=False)
     for index in range(nav_events):
         adb(serial, "shell", "input", "keyevent", "22" if index % 2 == 0 else "21", capture=False)
@@ -171,13 +215,15 @@ def navigation_benchmark(serial: str, app: App, nav_events: int, settle_seconds:
             actual.append(int(columns[1]))
     intervals = [(right - left) / 1_000_000 for left, right in zip(actual, actual[1:]) if right > left]
     if not intervals:
-        raise RuntimeError(f"No SurfaceFlinger frame intervals captured for {app.name}")
+        return navigation_timestats(serial, app)
     return {
         "frames": len(actual),
         "median_interval_ms": round(statistics.median(intervals), 2),
         "p95_interval_ms": round(percentile(intervals, 0.95), 2),
         "over_20ms_pct": round(sum(value > 20 for value in intervals) * 100 / len(intervals), 1),
         "over_33_4ms_pct": round(sum(value > 33.4 for value in intervals) * 100 / len(intervals), 1),
+        "dropped_frames": 0,
+        "average_fps": round(1000.0 / statistics.mean(intervals), 2) if intervals else 0.0,
     }
 
 

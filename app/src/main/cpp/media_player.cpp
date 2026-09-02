@@ -80,6 +80,7 @@ void NativeMediaPlayer::startAsync(
     jobject surface,
     int64_t startPositionMs,
     int bufferPreset,
+    int embeddedAudioOrdinal,
     std::vector<ExternalSubtitleTrack> externalSubtitles
 ) {
     stop();
@@ -116,7 +117,7 @@ void NativeMediaPlayer::startAsync(
         ? env->GetMethodID(
             playerClass,
             "start",
-            "(Ljava/lang/String;Landroid/view/Surface;JILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"
+            "(Ljava/lang/String;Landroid/view/Surface;JIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"
         )
         : nullptr;
     if (!start || clearException(env, "player bridge lookup", &error)) {
@@ -130,6 +131,7 @@ void NativeMediaPlayer::startAsync(
 
     const ExternalSubtitleTrack* subtitle = externalSubtitles.empty() ? nullptr : &externalSubtitles.front();
     jstring jUrl = env->NewStringUTF(url.c_str());
+    const jint embeddedSubtitleOrdinal = subtitle ? static_cast<jint>(subtitle->embeddedOrdinal) : static_cast<jint>(-1);
     jstring jSubtitleUrl = subtitle && !subtitle->path.empty() ? env->NewStringUTF(subtitle->path.c_str()) : nullptr;
     jstring jSubtitleCodec = subtitle && !subtitle->codec.empty() ? env->NewStringUTF(subtitle->codec.c_str()) : nullptr;
     jstring jSubtitleLanguage = subtitle && !subtitle->language.empty() ? env->NewStringUTF(subtitle->language.c_str()) : nullptr;
@@ -140,6 +142,8 @@ void NativeMediaPlayer::startAsync(
         surface,
         static_cast<jlong>(std::max<int64_t>(0, startPositionMs)),
         static_cast<jint>(std::clamp(bufferPreset, 0, 2)),
+        static_cast<jint>(embeddedAudioOrdinal),
+        embeddedSubtitleOrdinal,
         jSubtitleUrl,
         jSubtitleCodec,
         jSubtitleLanguage
@@ -244,6 +248,21 @@ void NativeMediaPlayer::seekTo(int positionMs) {
     if (method) env->CallVoidMethod(player_, method, static_cast<jlong>(clampSeekPositionMs(positionMs)));
     clearException(env, "absolute seek");
     if (playerClass) env->DeleteLocalRef(playerClass);
+}
+
+bool NativeMediaPlayer::selectEmbeddedAudioOrdinal(int ordinal) {
+    if (ordinal < 0) return false;
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (!env) return false;
+    std::scoped_lock lock(mutex_);
+    if (!player_) return false;
+    jclass playerClass = objectClass(env, player_);
+    jmethodID method = playerClass ? env->GetMethodID(playerClass, "selectEmbeddedAudioOrdinal", "(I)V") : nullptr;
+    if (method) env->CallVoidMethod(player_, method, static_cast<jint>(ordinal));
+    const bool ok = method && !clearException(env, "embedded audio selection");
+    if (playerClass) env->DeleteLocalRef(playerClass);
+    return ok;
 }
 
 bool NativeMediaPlayer::setPlaybackSpeed(float speed) {

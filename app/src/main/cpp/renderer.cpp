@@ -163,21 +163,20 @@ bool Renderer::init(ANativeWindow* window) {
         EGL_ALPHA_SIZE, 8,
         EGL_NONE
     };
-    EGLConfig config = nullptr;
     EGLint configCount = 0;
-    if (!eglChooseConfig(display_, configAttribs, &config, 1, &configCount) || configCount < 1) {
+    if (!eglChooseConfig(display_, configAttribs, &config_, 1, &configCount) || configCount < 1) {
         __android_log_print(ANDROID_LOG_ERROR, kTag, "eglChooseConfig failed");
         shutdown();
         return false;
     }
 
     EGLint format = 0;
-    eglGetConfigAttrib(display_, config, EGL_NATIVE_VISUAL_ID, &format);
+    eglGetConfigAttrib(display_, config_, EGL_NATIVE_VISUAL_ID, &format);
     ANativeWindow_setBuffersGeometry(window, 0, 0, format);
 
-    surface_ = eglCreateWindowSurface(display_, config, window, nullptr);
+    surface_ = eglCreateWindowSurface(display_, config_, window, nullptr);
     constexpr EGLint contextAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
-    context_ = eglCreateContext(display_, config, EGL_NO_CONTEXT, contextAttribs);
+    context_ = eglCreateContext(display_, config_, EGL_NO_CONTEXT, contextAttribs);
     if (surface_ == EGL_NO_SURFACE || context_ == EGL_NO_CONTEXT || !eglMakeCurrent(display_, surface_, surface_, context_)) {
         __android_log_print(ANDROID_LOG_ERROR, kTag, "Unable to create EGL surface/context");
         shutdown();
@@ -274,6 +273,47 @@ bool Renderer::init(ANativeWindow* window) {
     return true;
 }
 
+bool Renderer::detachWindow() {
+    if (!contextReady()) return false;
+    if (surface_ == EGL_NO_SURFACE) return true;
+    eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+    if (!eglDestroySurface(display_, surface_)) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to destroy EGL window surface during detach");
+        return false;
+    }
+    surface_ = EGL_NO_SURFACE;
+    surfaceWidth_ = 0;
+    surfaceHeight_ = 0;
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Detached EGL window surface while preserving context");
+    return true;
+}
+
+bool Renderer::attachWindow(ANativeWindow* window) {
+    if (!contextReady() || !window) return false;
+    if (surface_ != EGL_NO_SURFACE) {
+        eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        eglDestroySurface(display_, surface_);
+        surface_ = EGL_NO_SURFACE;
+    }
+
+    EGLint format = 0;
+    eglGetConfigAttrib(display_, config_, EGL_NATIVE_VISUAL_ID, &format);
+    ANativeWindow_setBuffersGeometry(window, 0, 0, format);
+    surface_ = eglCreateWindowSurface(display_, config_, window, nullptr);
+    if (surface_ == EGL_NO_SURFACE || !eglMakeCurrent(display_, surface_, surface_, context_)) {
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "Unable to reattach EGL window surface");
+        if (surface_ != EGL_NO_SURFACE) eglDestroySurface(display_, surface_);
+        surface_ = EGL_NO_SURFACE;
+        return false;
+    }
+    eglSwapInterval(display_, 1);
+    eglQuerySurface(display_, surface_, EGL_WIDTH, &surfaceWidth_);
+    eglQuerySurface(display_, surface_, EGL_HEIGHT, &surfaceHeight_);
+    glViewport(0, 0, surfaceWidth_, surfaceHeight_);
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Reattached EGL window surface at %dx%d", surfaceWidth_, surfaceHeight_);
+    return true;
+}
+
 void Renderer::shutdown() {
     if (display_ != EGL_NO_DISPLAY) {
         if (context_ != EGL_NO_CONTEXT && eglGetCurrentContext() == context_) {
@@ -294,6 +334,7 @@ void Renderer::shutdown() {
         eglTerminate(display_);
     }
     display_ = EGL_NO_DISPLAY;
+    config_ = nullptr;
     surface_ = EGL_NO_SURFACE;
     context_ = EGL_NO_CONTEXT;
     program_ = 0;
@@ -315,6 +356,8 @@ void Renderer::shutdown() {
     externalProgramFailed_ = false;
     fontTexture_ = 0;
     fontAtlasAttempted_ = false;
+    fontAdvances_.fill(0.0f);
+    fontAdvancesReady_ = false;
     surfaceWidth_ = 0;
     surfaceHeight_ = 0;
     vertices_.clear();
@@ -333,7 +376,7 @@ void Renderer::setUiTransform(float safeAreaFraction, float textScale) {
     uiScale_ = 1.0f - inset * 2.0f;
     uiOffsetX_ = logicalWidth() * inset;
     uiOffsetY_ = logicalHeight() * inset;
-    textScale_ = std::clamp(textScale, 0.8f, 1.5f);
+    textScale_ = std::clamp(textScale, 0.8f, 2.0f);
 }
 
 void Renderer::endFrame() {
@@ -547,11 +590,27 @@ bool Renderer::loadFontAtlas() {
     jmethodID createAtlas = activityClass
         ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;")
         : nullptr;
+    jmethodID createAdvances = activityClass
+        ? env->GetMethodID(activityClass, "createFontAdvances", "()[F")
+        : nullptr;
     jobject bitmap = createAtlas ? env->CallObjectMethod(activity_, createAtlas) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
         bitmap = nullptr;
     }
+    jfloatArray advances = createAdvances
+        ? static_cast<jfloatArray>(env->CallObjectMethod(activity_, createAdvances))
+        : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        advances = nullptr;
+    }
+    if (advances && env->GetArrayLength(advances) >= static_cast<jsize>(fontAdvances_.size())) {
+        env->GetFloatArrayRegion(advances, 0, static_cast<jsize>(fontAdvances_.size()), fontAdvances_.data());
+        if (!env->ExceptionCheck()) fontAdvancesReady_ = true;
+        else env->ExceptionClear();
+    }
+    if (advances) env->DeleteLocalRef(advances);
     if (!bitmap) {
         if (activityClass) env->DeleteLocalRef(activityClass);
         __android_log_print(ANDROID_LOG_WARN, kTag, "System font atlas unavailable; using pixel fallback");
@@ -587,31 +646,51 @@ bool Renderer::loadFontAtlas() {
     }
     env->DeleteLocalRef(bitmap);
     if (activityClass) env->DeleteLocalRef(activityClass);
-    if (fontTexture_) __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded antialiased Android system font atlas");
+    if (fontTexture_) {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kTag,
+            "Loaded proportional antialiased Android system font atlas (metrics=%d)",
+            fontAdvancesReady_
+        );
+    }
     return fontTexture_ != 0;
 }
 
 float Renderer::textWidth(float scale, const std::string& value) const {
     scale *= textScale_;
-    size_t longest = 0;
-    size_t current = 0;
+    auto advanceFor = [&](unsigned char byte) {
+        if (fontTexture_ && fontAdvancesReady_ && byte >= 32 && byte <= 126) {
+            constexpr float atlasCellToUi = 10.0f / 64.0f;
+            return std::max(1.0f, fontAdvances_[static_cast<size_t>(byte - 32)] * atlasCellToUi) * scale;
+        }
+        return (fontTexture_ ? 5.6f : 6.0f) * scale;
+    };
+
+    float longest = 0.0f;
+    float current = 0.0f;
     for (const char c : value) {
         if (c == '\n') {
             longest = std::max(longest, current);
-            current = 0;
-        } else {
-            ++current;
+            current = 0.0f;
+        } else if (c != '\r') {
+            current += advanceFor(static_cast<unsigned char>(c));
         }
     }
-    longest = std::max(longest, current);
-    return static_cast<float>(longest) * (fontTexture_ ? 5.6f : 6.0f) * scale;
+    return std::max(longest, current);
 }
 
 void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {
     scale *= textScale_;
     const float originX = x;
-    const float charWidth = (fontTexture_ ? 5.6f : 6.0f) * scale;
-    const float lineHeight = 9.0f * scale;
+    const float lineHeight = (fontTexture_ ? 11.0f : 9.0f) * scale;
+    auto advanceFor = [&](unsigned char byte) {
+        if (fontTexture_ && fontAdvancesReady_ && byte >= 32 && byte <= 126) {
+            constexpr float atlasCellToUi = 10.0f / 64.0f;
+            return std::max(1.0f, fontAdvances_[static_cast<size_t>(byte - 32)] * atlasCellToUi) * scale;
+        }
+        return (fontTexture_ ? 5.6f : 6.0f) * scale;
+    };
 
     for (char raw : value) {
         if (raw == '\r') continue;
@@ -620,31 +699,37 @@ void Renderer::text(float x, float y, float scale, const std::string& value, Col
             y += lineHeight;
             continue;
         }
-        if (maxWidth > 0.0f && x + charWidth > originX + maxWidth) {
+
+        const unsigned char rawByte = static_cast<unsigned char>(raw);
+        const float advance = advanceFor(rawByte);
+        if (maxWidth > 0.0f && x + advance > originX + maxWidth) {
             x = originX;
             y += lineHeight;
         }
 
-        const unsigned char rawByte = static_cast<unsigned char>(raw);
         if (fontTexture_ && rawByte >= 32 && rawByte <= 126) {
             const int index = static_cast<int>(rawByte) - 32;
             const int column = index % 16;
             const int row = index / 16;
             constexpr float atlasColumns = 16.0f;
             constexpr float atlasRows = 6.0f;
-            imageRegionTint(
-                fontTexture_,
-                x,
-                y - 0.7f * scale,
-                charWidth,
-                9.0f * scale,
-                static_cast<float>(column) / atlasColumns,
-                static_cast<float>(row) / atlasRows,
-                static_cast<float>(column + 1) / atlasColumns,
-                static_cast<float>(row + 1) / atlasRows,
-                color,
-                1.0f
-            );
+            constexpr float atlasCellWidthUi = 10.0f;
+            constexpr float atlasCellHeightUi = 10.0f;
+            if (rawByte != ' ') {
+                imageRegionTint(
+                    fontTexture_,
+                    x,
+                    y - 0.45f * scale,
+                    atlasCellWidthUi * scale,
+                    atlasCellHeightUi * scale,
+                    static_cast<float>(column) / atlasColumns,
+                    static_cast<float>(row) / atlasRows,
+                    static_cast<float>(column + 1) / atlasColumns,
+                    static_cast<float>(row + 1) / atlasRows,
+                    color,
+                    1.0f
+                );
+            }
         } else {
             const char c = static_cast<char>(std::toupper(rawByte));
             const auto rows = glyph(c);
@@ -656,7 +741,7 @@ void Renderer::text(float x, float y, float scale, const std::string& value, Col
                 }
             }
         }
-        x += charWidth;
+        x += advance;
     }
 }
 

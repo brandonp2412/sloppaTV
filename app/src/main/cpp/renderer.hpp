@@ -24,8 +24,11 @@ public:
     ~Renderer();
 
     bool init(ANativeWindow* window);
+    bool detachWindow();
+    bool attachWindow(ANativeWindow* window);
     void shutdown();
-    [[nodiscard]] bool ready() const { return display_ != EGL_NO_DISPLAY && surface_ != EGL_NO_SURFACE && context_ != EGL_NO_CONTEXT; }
+    [[nodiscard]] bool contextReady() const { return display_ != EGL_NO_DISPLAY && context_ != EGL_NO_CONTEXT && config_ != nullptr; }
+    [[nodiscard]] bool ready() const { return contextReady() && surface_ != EGL_NO_SURFACE; }
 
     void beginFrame();
     void endFrame();
@@ -101,6 +104,7 @@ private:
     std::array<uint8_t, 7> glyph(char c) const;
 
     EGLDisplay display_ = EGL_NO_DISPLAY;
+    EGLConfig config_ = nullptr;
     EGLSurface surface_ = EGL_NO_SURFACE;
     EGLContext context_ = EGL_NO_CONTEXT;
     int surfaceWidth_ = 0;
@@ -125,6 +129,8 @@ private:
     bool externalProgramFailed_ = false;
     GLuint fontTexture_ = 0;
     bool fontAtlasAttempted_ = false;
+    std::array<float, 95> fontAdvances_{};
+    bool fontAdvancesReady_ = false;
     JavaVM* vm_ = nullptr;
     jobject activity_ = nullptr;
     uint64_t generation_ = 0;
