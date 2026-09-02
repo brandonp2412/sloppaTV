@@ -1,4 +1,5 @@
 #include "jni_http.hpp"
+#include "http_cache_policy.hpp"
 #include "http_error_policy.hpp"
 
 #include <android/log.h>
@@ -77,15 +78,6 @@ std::string requestUrlForLog(const std::string& url) {
 
 jstring toJString(JNIEnv* env, const std::string& value) {
     return env->NewStringUTF(value.c_str());
-}
-
-bool shouldCacheApiGet(const std::string& url) {
-    return url.find("/Images/") == std::string::npos
-        && url.find("/Subtitles/") == std::string::npos
-        && url.find("/Videos/") == std::string::npos
-        && url.find("/Items/Resume") == std::string::npos
-        && url.find("/Shows/NextUp") == std::string::npos
-        && url.find("SortBy=Random") == std::string::npos;
 }
 
 std::string readStream(JNIEnv* env, jobject stream, std::string& error) {
@@ -167,11 +159,12 @@ HttpResponse JniHttpClient::request(
         std::unique_lock lock(cacheMutex_);
         requestGeneration = cacheGeneration_;
         if (cacheable) {
+            const auto now = std::chrono::steady_clock::now();
+            std::erase_if(getCache_, [&](const auto& entry) {
+                return entry.second.expiresAt <= now;
+            });
             const auto cached = getCache_.find(key);
-            if (cached != getCache_.end()) {
-                if (cached->second.expiresAt > std::chrono::steady_clock::now()) return cached->second.response;
-                getCache_.erase(cached);
-            }
+            if (cached != getCache_.end()) return cached->second.response;
         }
         const auto pending = inFlightGets_.find(key);
         if (pending != inFlightGets_.end()) {
@@ -193,7 +186,21 @@ HttpResponse JniHttpClient::request(
     {
         std::scoped_lock lock(cacheMutex_);
         if (cacheable && response.ok() && requestGeneration == cacheGeneration_) {
-            getCache_[key] = CacheEntry{response, std::chrono::steady_clock::now() + std::chrono::seconds(5)};
+            const auto now = std::chrono::steady_clock::now();
+            std::erase_if(getCache_, [&](const auto& entry) {
+                return entry.second.expiresAt <= now;
+            });
+            if (getCache_.size() >= kMaxApiGetCacheEntries) {
+                const auto oldest = std::min_element(
+                    getCache_.begin(),
+                    getCache_.end(),
+                    [](const auto& left, const auto& right) {
+                        return left.second.expiresAt < right.second.expiresAt;
+                    }
+                );
+                if (oldest != getCache_.end()) getCache_.erase(oldest);
+            }
+            getCache_[key] = CacheEntry{response, now + std::chrono::seconds(5)};
         }
         inFlight->response = response;
         inFlight->done = true;
