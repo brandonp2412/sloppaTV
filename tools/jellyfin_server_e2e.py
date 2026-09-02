@@ -105,6 +105,115 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def verify_direct_stream_negotiation(client: Jellyfin, items: list[dict[str, Any]]) -> dict[str, Any] | None:
+    hls_video_codecs = {"h264", "hevc", "vp9", "av1"}
+    hls_audio_codecs = {"aac", "ac3", "eac3", "mp3"}
+    candidate: tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any]] | None = None
+    for item in items:
+        for source in item.get("MediaSources") or []:
+            streams = source.get("MediaStreams") or []
+            video = next((stream for stream in streams if stream.get("Type") == "Video"), None)
+            audio = next((stream for stream in streams if stream.get("Type") == "Audio"), None)
+            if video is None or audio is None:
+                continue
+            video_codec = str(video.get("Codec") or "").lower()
+            audio_codec = str(audio.get("Codec") or "").lower()
+            container = str(source.get("Container") or "").split(",", 1)[0].lower()
+            if container == "mkv" and video_codec in hls_video_codecs and audio_codec in hls_audio_codecs:
+                candidate = (item, source, video, audio)
+                break
+        if candidate is not None:
+            break
+    if candidate is None:
+        return None
+
+    item, source, video, audio = candidate
+    video_codec = str(video.get("Codec") or "").lower()
+    audio_codec = str(audio.get("Codec") or "").lower()
+    profile = {
+        "Name": "sloppaTV DirectStream E2E",
+        "MaxStaticBitrate": 120_000_000,
+        "MaxStreamingBitrate": 120_000_000,
+        # Intentionally exclude MKV so Jellyfin must expose the remux/server-stream path.
+        "DirectPlayProfiles": [
+            {
+                "Container": "mp4,m4v,mov",
+                "Type": "Video",
+                "VideoCodec": video_codec,
+                "AudioCodec": audio_codec,
+            }
+        ],
+        "TranscodingProfiles": [
+            {
+                "Container": "ts",
+                "Type": "Video",
+                "VideoCodec": video_codec,
+                "AudioCodec": audio_codec,
+                "Protocol": "hls",
+                "Context": "Streaming",
+                "MaxAudioChannels": "8",
+            }
+        ],
+        "CodecProfiles": [],
+        "SubtitleProfiles": [],
+    }
+    params = {
+        "UserId": client.user_id,
+        "MediaSourceId": source["Id"],
+        "SubtitleStreamIndex": -1,
+        "IsPlayback": "true",
+        "AutoOpenLiveStream": "true",
+        "MaxStreamingBitrate": 120_000_000,
+    }
+    playback = client.request(
+        "POST",
+        f"/Items/{item['Id']}/PlaybackInfo?" + query(params),
+        {
+            "UserId": client.user_id,
+            "MediaSourceId": source["Id"],
+            "DeviceProfile": profile,
+            "SubtitleStreamIndex": -1,
+            "MaxAudioChannels": 8,
+            "EnableDirectPlay": True,
+            "EnableDirectStream": True,
+            "EnableTranscoding": True,
+            "AllowVideoStreamCopy": True,
+            "AllowAudioStreamCopy": True,
+            "AutoOpenLiveStream": True,
+        },
+    )
+    playback_source = playback.get("MediaSources", [])[0]
+    transcoding_url = str(playback_source.get("TranscodingUrl") or "")
+    require(not playback_source.get("SupportsDirectPlay"), "DirectStream probe unexpectedly remained DirectPlay")
+    require(playback_source.get("SupportsTranscoding") is True, "DirectStream probe did not offer a server-stream path")
+    require(bool(transcoding_url), "DirectStream probe returned no server-stream URL")
+    transcode_query = urllib.parse.parse_qs(urllib.parse.urlparse(transcoding_url).query)
+    reasons = [reason for value in transcode_query.get("TranscodeReasons", []) for reason in value.split(",") if reason]
+    direct_stream_reasons = {
+        "AudioCodecNotSupported",
+        "AudioBitrateNotSupported",
+        "AudioChannelsNotSupported",
+        "AudioProfileNotSupported",
+        "AudioSampleRateNotSupported",
+        "SecondaryAudioNotSupported",
+        "AudioBitDepthNotSupported",
+        "AudioIsExternal",
+        "ContainerNotSupported",
+        "VideoCodecTagNotSupported",
+    }
+    require(bool(reasons), "DirectStream probe did not return TranscodeReasons")
+    require(all(reason in direct_stream_reasons for reason in reasons), f"Probe required full transcoding: {reasons}")
+    return {
+        "item": item.get("Name"),
+        "container": source.get("Container"),
+        "videoCodec": video_codec,
+        "audioCodec": audio_codec,
+        "serverSupportsDirectStreamFlag": bool(playback_source.get("SupportsDirectStream")),
+        "transcodeReasons": reasons,
+        "semanticDirectStream": True,
+    }
+
+
 def verify_quick_connect(server: str, insecure: bool, username: str, password: str) -> dict[str, Any]:
     authorizer = Jellyfin(server, insecure, f"{DEVICE_ID}-qc-authorizer")
     target = Jellyfin(server, insecure, f"{DEVICE_ID}-qc-target")
@@ -458,6 +567,7 @@ def main() -> int:
             "hasDeliveryUrl": True,
         }
 
+    direct_stream_probe = verify_direct_stream_negotiation(client, scan)
     quick_connect = (
         verify_quick_connect(args.server, args.insecure, args.username, args.password)
         if args.quick_connect
@@ -491,6 +601,7 @@ def main() -> int:
         "hdrItems": len(hdr),
         "hdrExamples": hdr[:5],
         "assSubtitleProbe": ass_probe,
+        "directStreamProbe": direct_stream_probe,
         "quickConnectProbe": quick_connect,
     }
     client.logout()

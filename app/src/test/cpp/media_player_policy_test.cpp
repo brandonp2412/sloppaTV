@@ -38,6 +38,17 @@ int main() {
     assert(!shouldAutoplayNextEpisode(true, 0, 0));
     assert(!shouldAutoplayNextEpisode(true, 0, -2));
 
+    assert(transcodingReasonsFromUrl("/master.m3u8?TranscodeReasons=ContainerNotSupported") == "ContainerNotSupported");
+    assert(transcodingReasonsFromUrl("/master.m3u8?x=1&TranscodeReasons=ContainerNotSupported%2CAudioCodecNotSupported&y=2")
+        == "ContainerNotSupported,AudioCodecNotSupported");
+    assert(transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported"));
+    assert(transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported,AudioChannelsNotSupported"));
+    assert(transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=AudioCodecNotSupported%2CVideoCodecTagNotSupported"));
+    assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=SubtitleCodecNotSupported"));
+    assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=VideoBitDepthNotSupported"));
+    assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported,SubtitleCodecNotSupported"));
+    assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?foo=bar"));
+
     assert(static_cast<int>(StartupStep::StartPlayback) < static_cast<int>(StartupStep::ReadTrackMetadata));
     return 0;
 }
