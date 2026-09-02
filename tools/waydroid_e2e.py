@@ -61,7 +61,7 @@ def filtered_logs(name: str) -> None:
     filtered = [
         line for line in logs.splitlines()
         if any(token.lower() in line.lower() for token in (
-            "sloppaTV", "MediaPlayer", "NuPlayer", "CCodec", "PlaybackInfo",
+            "sloppaTV", "ExoPlayer", "MediaCodec", "CCodec", "libass", "PlaybackInfo",
             "HTTP 4", "HTTP 5", "FATAL", "ANR", "surface"
         ))
     ]

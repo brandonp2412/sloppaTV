@@ -2,6 +2,7 @@
 
 #include <jni.h>
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
@@ -30,6 +31,7 @@ public:
         const std::string& body = {}
     ) const;
     void invalidateGetCache() const;
+    void cancelPending() const;
 
 private:
     struct CacheEntry {
@@ -65,4 +67,7 @@ private:
     mutable std::unordered_map<std::string, CacheEntry> getCache_;
     mutable std::unordered_map<std::string, std::shared_ptr<InFlightRequest>> inFlightGets_;
     mutable uint64_t cacheGeneration_ = 0;
+    mutable std::atomic<uint64_t> cancelGeneration_{0};
+    mutable std::mutex retryMutex_;
+    mutable std::condition_variable retryWake_;
 };

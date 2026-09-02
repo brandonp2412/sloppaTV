@@ -107,6 +107,11 @@ void JniHttpClient::invalidateGetCache() const {
     ++cacheGeneration_;
 }
 
+void JniHttpClient::cancelPending() const {
+    cancelGeneration_.fetch_add(1, std::memory_order_relaxed);
+    retryWake_.notify_all();
+}
+
 HttpResponse JniHttpClient::request(
     const std::string& method,
     const std::string& url,
@@ -172,11 +177,17 @@ HttpResponse JniHttpClient::requestWithRetry(
     const std::string& body
 ) const {
     HttpResponse response;
+    const uint64_t generation = cancelGeneration_.load(std::memory_order_relaxed);
     constexpr std::array<std::chrono::milliseconds, 2> retryDelays{
         std::chrono::milliseconds{250},
         std::chrono::milliseconds{750},
     };
     for (size_t attempt = 0; attempt <= retryDelays.size(); ++attempt) {
+        if (cancelGeneration_.load(std::memory_order_relaxed) != generation) {
+            response = {};
+            response.error = "Request cancelled";
+            return response;
+        }
         response = requestOnce(method, url, headers, body);
         if (response.status != 0 || response.error.empty()) return response;
         if (attempt == retryDelays.size()) break;
@@ -187,7 +198,14 @@ HttpResponse JniHttpClient::requestWithRetry(
             response.error.c_str(),
             static_cast<long long>(retryDelays[attempt].count())
         );
-        std::this_thread::sleep_for(retryDelays[attempt]);
+        std::unique_lock retryLock(retryMutex_);
+        if (retryWake_.wait_for(retryLock, retryDelays[attempt], [&] {
+                return cancelGeneration_.load(std::memory_order_relaxed) != generation;
+            })) {
+            response = {};
+            response.error = "Request cancelled";
+            return response;
+        }
     }
     return response;
 }

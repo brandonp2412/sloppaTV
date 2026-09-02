@@ -14,19 +14,13 @@ int main() {
     assert(playbackPositionMsFromTicks(-1) == 0);
     assert(playbackPositionMsFromTicks(12'340'000) == 1234);
 
-    // Exact-frame seeks have frozen the video decoder on some Android TV devices.
-    // Playback seeks should use the platform's decoder-safe legacy/keyframe path.
-    assert(seekApiForPlayback() == SeekApi::Legacy);
-    assert(!forceAudioClockSync());
-    assert(preferServerStreamForStartup("mkv", 1));
-    assert(preferServerStreamForStartup("matroska", 50'000'000));
-    assert(!preferServerStreamForStartup("mp4", 0));
-    assert(initialPlayerSeekMs(true, 12'340'000) == 1234);
-    assert(initialPlayerSeekMs(false, 12'340'000) == 1234);
-    assert(seekStrategy(false) == SeekStrategy::RestartServerStream);
-    assert(seekStrategy(true) == SeekStrategy::InPlace);
+    // Media3 accepts the logical resume position directly for both direct and
+    // server-streamed playback; the old MediaPlayer/NuPlayer restart policy is gone.
+    assert(initialPlayerSeekMs(12'340'000) == 1234);
+    assert(subtitleStrategy("srt") == SubtitleStrategy::ClientText);
+    assert(subtitleStrategy("ass") == SubtitleStrategy::ClientStyled);
+    assert(subtitleStrategy("ssa") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("pgssub") == SubtitleStrategy::ServerTranscode);
-    assert(subtitleStrategy("ass") == SubtitleStrategy::ServerTranscode);
     assert(codecLevelAllowed(51, 0));
     assert(codecLevelAllowed(0, 41));
     assert(codecLevelAllowed(41, 41));

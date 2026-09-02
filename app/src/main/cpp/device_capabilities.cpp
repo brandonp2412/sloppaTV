@@ -1,4 +1,5 @@
 #include "device_capabilities.hpp"
+#include "audio_policy.hpp"
 
 #include <android/log.h>
 
@@ -150,16 +151,48 @@ std::vector<std::string> DeviceCodecSupport::jellyfinVideoCodecs() const {
     return codecs;
 }
 
-std::vector<std::string> DeviceCodecSupport::jellyfinAudioCodecs() const {
-    std::vector<std::string> codecs;
-    if (aac) codecs.emplace_back("aac");
-    if (mp3) codecs.emplace_back("mp3");
-    if (ac3) codecs.emplace_back("ac3");
-    if (eac3) codecs.emplace_back("eac3");
-    if (flac) codecs.emplace_back("flac");
-    if (opus) codecs.emplace_back("opus");
-    if (vorbis) codecs.emplace_back("vorbis");
-    return codecs;
+std::vector<std::string> DeviceCodecSupport::jellyfinAudioCodecs(int maxAudioChannels) const {
+    return advertisedAudioCodecs(
+        AudioCodecCapabilities{
+            .aac = aac,
+            .mp3 = mp3,
+            .ac3 = ac3,
+            .eac3 = eac3,
+            .dts = dts,
+            .truehd = truehd,
+            .flac = flac,
+            .opus = opus,
+            .vorbis = vorbis,
+            .directAc3 = directAc3,
+            .directEac3 = directEac3,
+            .directDts = directDts,
+            .directDtsHd = directDtsHd,
+            .directTrueHd = directTrueHd,
+        },
+        maxAudioChannels
+    );
+}
+
+std::vector<std::string> DeviceCodecSupport::jellyfinTranscodingAudioCodecs(int maxAudioChannels) const {
+    return transcodingAudioCodecs(
+        AudioCodecCapabilities{
+            .aac = aac,
+            .mp3 = mp3,
+            .ac3 = ac3,
+            .eac3 = eac3,
+            .dts = dts,
+            .truehd = truehd,
+            .flac = flac,
+            .opus = opus,
+            .vorbis = vorbis,
+            .directAc3 = directAc3,
+            .directEac3 = directEac3,
+            .directDts = directDts,
+            .directDtsHd = directDtsHd,
+            .directTrueHd = directTrueHd,
+        },
+        maxAudioChannels
+    );
 }
 
 DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
@@ -273,24 +306,63 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     result.mp3 = has(decoderTypes, "audio/mpeg");
     result.ac3 = has(decoderTypes, "audio/ac3");
     result.eac3 = has(decoderTypes, "audio/eac3") || has(decoderTypes, "audio/eac3-joc");
+    result.dts = has(decoderTypes, "audio/vnd.dts") || has(decoderTypes, "audio/vnd.dts.hd");
+    result.truehd = has(decoderTypes, "audio/true-hd") || has(decoderTypes, "audio/vnd.dolby.mlp");
     result.flac = has(decoderTypes, "audio/flac");
     result.opus = has(decoderTypes, "audio/opus");
     result.vorbis = has(decoderTypes, "audio/vorbis");
 
     queryDisplayHdr(env, activity, result);
 
+    if (activity) {
+        jclass activityClass = env->GetObjectClass(activity);
+        jmethodID queryAudio = activityClass
+            ? env->GetMethodID(activityClass, "queryAudioOutputCapabilities", "()[I")
+            : nullptr;
+        auto audioCaps = queryAudio
+            ? static_cast<jintArray>(env->CallObjectMethod(activity, queryAudio))
+            : nullptr;
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            audioCaps = nullptr;
+        }
+        if (audioCaps && env->GetArrayLength(audioCaps) >= 2) {
+            jint values[2]{};
+            env->GetIntArrayRegion(audioCaps, 0, 2, values);
+            if (!env->ExceptionCheck()) {
+                constexpr int kDirectAc3 = 1;
+                constexpr int kDirectEac3 = 1 << 1;
+                constexpr int kDirectDts = 1 << 2;
+                constexpr int kDirectDtsHd = 1 << 3;
+                constexpr int kDirectTrueHd = 1 << 4;
+                result.maxAudioOutputChannels = std::clamp(static_cast<int>(values[0]), 2, 8);
+                result.directAc3 = (values[1] & kDirectAc3) != 0;
+                result.directEac3 = (values[1] & kDirectEac3) != 0;
+                result.directDts = (values[1] & kDirectDts) != 0;
+                result.directDtsHd = (values[1] & kDirectDtsHd) != 0;
+                result.directTrueHd = (values[1] & kDirectTrueHd) != 0;
+            } else {
+                env->ExceptionClear();
+            }
+            env->DeleteLocalRef(audioCaps);
+        }
+        if (activityClass) env->DeleteLocalRef(activityClass);
+    }
+
     const auto videos = result.jellyfinVideoCodecs();
-    const auto audios = result.jellyfinAudioCodecs();
+    const auto audios = result.jellyfinAudioCodecs(result.maxAudioOutputChannels);
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
-        "Detected %zu video/%zu audio; H264 High10=%d HEVC Main10=%d AV1 Main10=%d; max H264=%dx%d HEVC=%dx%d AV1=%dx%d; HDR10=%d HDR10+=%d DV=%d HLG=%d",
+        "Detected %zu video/%zu audio; H264 High10=%d HEVC Main10=%d AV1 Main10=%d; max H264=%dx%d HEVC=%dx%d AV1=%dx%d; HDR10=%d HDR10+=%d DV=%d HLG=%d; audioOut=%dch direct(ac3=%d eac3=%d dts=%d dtshd=%d truehd=%d)",
         videos.size(), audios.size(),
         result.h264High10, result.hevcMain10, result.av1Main10,
         result.maxH264Width, result.maxH264Height,
         result.maxHevcWidth, result.maxHevcHeight,
         result.maxAv1Width, result.maxAv1Height,
-        result.displayHdr10, result.displayHdr10Plus, result.displayDolbyVision, result.displayHlg
+        result.displayHdr10, result.displayHdr10Plus, result.displayDolbyVision, result.displayHlg,
+        result.maxAudioOutputChannels,
+        result.directAc3, result.directEac3, result.directDts, result.directDtsHd, result.directTrueHd
     );
     return result;
 }

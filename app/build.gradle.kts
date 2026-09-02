@@ -89,5 +89,14 @@ android {
 
     packaging {
         jniLibs.useLegacyPackaging = false
+        jniLibs.pickFirsts += "**/libc++_shared.so"
     }
+}
+
+
+dependencies {
+    val media3Version = "1.11.0"
+    implementation("androidx.media3:media3-exoplayer:$media3Version")
+    implementation("androidx.media3:media3-exoplayer-hls:$media3Version")
+    implementation("io.github.peerless2012:ass-media:0.5.1")
 }

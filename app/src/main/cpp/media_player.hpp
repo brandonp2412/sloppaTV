@@ -2,11 +2,10 @@
 
 #include <jni.h>
 
-#include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 enum class PlayerStatus {
@@ -25,18 +24,20 @@ struct PlayerTrack {
 
 struct ExternalSubtitleTrack {
     std::string path;
+    std::string codec;
     std::string language;
 };
 
 class NativeMediaPlayer {
 public:
-    explicit NativeMediaPlayer(JavaVM* vm) : vm_(vm) {}
+    NativeMediaPlayer(JavaVM* vm, jobject activity);
     ~NativeMediaPlayer();
 
     void startAsync(
         const std::string& url,
         jobject surface,
         int64_t startPositionMs,
+        int bufferPreset = 0,
         std::vector<ExternalSubtitleTrack> externalSubtitles = {}
     );
     void stop();
@@ -60,25 +61,14 @@ public:
     [[nodiscard]] int selectedSubtitleTrack() const;
 
 private:
-    void worker(
-        std::string url,
-        jobject surface,
-        int64_t startPositionMs,
-        std::vector<ExternalSubtitleTrack> externalSubtitles
-    );
-    void joinWorkerIfDone();
-
     JavaVM* vm_ = nullptr;
+    jobject activity_ = nullptr;
     mutable std::mutex mutex_;
     jobject player_ = nullptr;
-    PlayerStatus status_ = PlayerStatus::Idle;
     std::string error_;
-    int videoWidth_ = 0;
-    int videoHeight_ = 0;
-    float playbackSpeed_ = 1.0f;
-    std::vector<PlayerTrack> tracks_;
-    int selectedAudioTrack_ = -1;
-    int selectedSubtitleTrack_ = -1;
-    std::thread worker_;
-    std::atomic<bool> cancel_{false};
+    mutable PlayerStatus cachedStatus_ = PlayerStatus::Idle;
+    mutable int cachedVideoWidth_ = 0;
+    mutable int cachedVideoHeight_ = 0;
+    mutable float cachedPlaybackSpeed_ = 1.0f;
+    mutable std::chrono::steady_clock::time_point lastSnapshotPoll_{};
 };

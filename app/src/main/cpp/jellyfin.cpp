@@ -1,4 +1,5 @@
 #include "jellyfin.hpp"
+#include "audio_policy.hpp"
 #include "media_player_policy.hpp"
 #include "ui_policy.hpp"
 
@@ -386,9 +387,20 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
         item.imageTag = value["ImageTags"].value("Primary", std::string{});
         item.thumbTag = value["ImageTags"].value("Thumb", std::string{});
         item.logoTag = value["ImageTags"].value("Logo", std::string{});
+        if (!item.logoTag.empty()) item.logoItemId = item.id;
+    }
+    if (item.logoTag.empty()) {
+        item.logoTag = value.value("ParentLogoImageTag", std::string{});
+        item.logoItemId = value.value("ParentLogoItemId", std::string{});
     }
     if (value.contains("BackdropImageTags") && value["BackdropImageTags"].is_array() && !value["BackdropImageTags"].empty()) {
         item.backdropTag = value["BackdropImageTags"][0].get<std::string>();
+        item.backdropItemId = item.id;
+    }
+    if (item.backdropTag.empty() && value.contains("ParentBackdropImageTags")
+        && value["ParentBackdropImageTags"].is_array() && !value["ParentBackdropImageTags"].empty()) {
+        item.backdropTag = value["ParentBackdropImageTags"][0].get<std::string>();
+        item.backdropItemId = value.value("ParentBackdropItemId", std::string{});
     }
     if (value.contains("MediaSources") && value["MediaSources"].is_array() && !value["MediaSources"].empty()) {
         const auto& source = value["MediaSources"][0];
@@ -416,6 +428,7 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
                 } else if (streamType == "Audio") {
                     JellyfinAudioStream audio;
                     audio.index = stream.value("Index", -1);
+                    audio.channels = stream.value("Channels", 0);
                     audio.codec = stream.value("Codec", std::string{});
                     audio.language = stream.value("Language", std::string{});
                     audio.title = stream.value("DisplayTitle", stream.value("Title", std::string{}));
@@ -1147,10 +1160,21 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     int subtitleStreamIndex
 ) const {
     ApiValueResult<PlaybackTarget> result;
-    maxAudioChannels = std::clamp(maxAudioChannels, 2, 8);
+    const int requestedAudioChannels = std::clamp(maxAudioChannels, 2, 8);
+    maxAudioChannels = effectiveAudioChannels(requestedAudioChannels, codecSupport_.maxAudioOutputChannels);
+    if (maxAudioChannels != requestedAudioChannels) {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kTag,
+            "Audio output route limits requested %d channels to %d",
+            requestedAudioChannels,
+            maxAudioChannels
+        );
+    }
 
     auto videoCodecs = codecSupport_.jellyfinVideoCodecs();
-    auto audioCodecs = codecSupport_.jellyfinAudioCodecs();
+    auto audioCodecs = codecSupport_.jellyfinAudioCodecs(maxAudioChannels);
+    auto transcodeAudioCodecs = codecSupport_.jellyfinTranscodingAudioCodecs(maxAudioChannels);
 
     auto lower = [](std::string value) {
         std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
@@ -1221,8 +1245,40 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
 
     if (videoCodecs.empty()) videoCodecs.emplace_back("h264");
     if (audioCodecs.empty()) audioCodecs.emplace_back("aac");
+    if (transcodeAudioCodecs.empty()) transcodeAudioCodecs.emplace_back("aac");
     const std::string videoCodecList = joinCodecs(videoCodecs);
     const std::string audioCodecList = joinCodecs(audioCodecs);
+    const std::string transcodeAudioCodecList = joinCodecs(transcodeAudioCodecs);
+
+    const JellyfinAudioStream* selectedAudio = nullptr;
+    if (!item.audios.empty()) {
+        if (audioStreamIndex >= 0) {
+            const auto selected = std::find_if(item.audios.begin(), item.audios.end(), [&](const JellyfinAudioStream& audio) {
+                return audio.index == audioStreamIndex;
+            });
+            if (selected != item.audios.end()) selectedAudio = &*selected;
+        }
+        if (!selectedAudio) {
+            const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
+                return audio.isDefault;
+            });
+            selectedAudio = preferred == item.audios.end() ? &item.audios.front() : &*preferred;
+        }
+    }
+    const bool allowAudioStreamCopy = selectedAudio
+        && audioStreamCopyAllowed(audioCodecs, selectedAudio->codec, selectedAudio->channels, maxAudioChannels);
+    if (selectedAudio) {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kTag,
+            "Audio capability check: codec=%s channels=%d max=%d streamCopy=%d transcode=%s",
+            selectedAudio->codec.c_str(),
+            selectedAudio->channels,
+            maxAudioChannels,
+            allowAudioStreamCopy,
+            transcodeAudioCodecList.c_str()
+        );
+    }
 
     json profile = {
         {"Name", "sloppaTV-Native"},
@@ -1242,7 +1298,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
                 {"Container", "ts"},
                 {"Type", "Video"},
                 {"VideoCodec", "h264"},
-                {"AudioCodec", "aac,ac3,eac3,mp3"},
+                {"AudioCodec", transcodeAudioCodecList},
                 {"Protocol", "hls"},
                 {"Context", "Streaming"},
                 {"CopyTimestamps", false},
@@ -1264,18 +1320,31 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             }
         })},
         {"SubtitleProfiles", json::array({
-            {{"Format", "vtt"}, {"Method", "Hls"}},
-            {{"Format", "webvtt"}, {"Method", "Hls"}},
-            {{"Format", "srt"}, {"Method", "Encode"}},
-            {{"Format", "subrip"}, {"Method", "Encode"}},
+            // Text subtitles are downloaded separately and rendered in the client so
+            // selecting one does not force the video through a subtitle transcode.
+            {{"Format", "vtt"}, {"Method", "External"}},
+            {{"Format", "webvtt"}, {"Method", "External"}},
+            {{"Format", "srt"}, {"Method", "External"}},
+            {{"Format", "subrip"}, {"Method", "External"}},
+            // Media3 + libass consumes exact ASS/SSA streams externally while
+            // preserving direct video playback; Encode remains the server fallback.
+            {{"Format", "ass"}, {"Method", "External"}},
             {{"Format", "ass"}, {"Method", "Encode"}},
+            {{"Format", "ssa"}, {"Method", "External"}},
             {{"Format", "ssa"}, {"Method", "Encode"}},
             {{"Format", "pgs"}, {"Method", "Encode"}}
         })}
     };
 
-    const bool serverSubtitle = subtitleStreamIndex >= 0;
-    const bool preferServerStream = preferServerStreamForStartup(item.container, item.positionTicks) || serverSubtitle;
+    const auto selectedSubtitle = std::find_if(
+        item.subtitles.begin(),
+        item.subtitles.end(),
+        [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == subtitleStreamIndex; }
+    );
+    const bool clientSubtitle = selectedSubtitle != item.subtitles.end()
+        && subtitleStrategy(selectedSubtitle->codec) != SubtitleStrategy::ServerTranscode;
+    const bool serverSubtitle = subtitleStreamIndex >= 0 && !clientSubtitle;
+    const bool preferServerStream = serverSubtitle;
     json body = {
         {"UserId", session.userId},
         {"StartTimeTicks", item.positionTicks},
@@ -1287,7 +1356,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         {"EnableDirectStream", !overrides.forceTranscode && directVideoSupported && !preferServerStream},
         {"EnableTranscoding", true},
         {"AllowVideoStreamCopy", !overrides.forceTranscode && directVideoSupported && !serverSubtitle},
-        {"AllowAudioStreamCopy", true},
+        {"AllowAudioStreamCopy", allowAudioStreamCopy},
         {"AutoOpenLiveStream", true}
     };
     if (subtitleStreamIndex != kSubtitleServerDefaultIndex) {
@@ -1324,6 +1393,32 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         );
         target.startTicks = item.positionTicks;
 
+        if (target.subtitleStreamIndex >= 0 && source.contains("MediaStreams") && source["MediaStreams"].is_array()) {
+            const auto stream = std::find_if(
+                source["MediaStreams"].begin(),
+                source["MediaStreams"].end(),
+                [&](const json& candidate) {
+                    return candidate.is_object()
+                        && candidate.value("Type", std::string{}) == "Subtitle"
+                        && candidate.value("Index", -1) == target.subtitleStreamIndex;
+                }
+            );
+            if (stream != source["MediaStreams"].end()) {
+                target.subtitleCodec = stream->value("Codec", std::string{});
+                target.subtitleLanguage = stream->value("Language", std::string{});
+                const std::string delivery = stream->value("DeliveryMethod", std::string{});
+                std::string deliveryUrl = stream->value("DeliveryUrl", std::string{});
+                if (delivery == "External" && !deliveryUrl.empty()
+                    && subtitleStrategy(target.subtitleCodec) != SubtitleStrategy::ServerTranscode) {
+                    if (deliveryUrl.rfind("http://", 0) != 0 && deliveryUrl.rfind("https://", 0) != 0) {
+                        if (deliveryUrl.front() != '/') deliveryUrl.insert(deliveryUrl.begin(), '/');
+                        deliveryUrl = session.server + deliveryUrl;
+                    }
+                    target.subtitleUrl = std::move(deliveryUrl);
+                }
+            }
+        }
+
         const bool direct = !overrides.forceTranscode && source.value("SupportsDirectPlay", false);
         const bool directStream = !overrides.forceTranscode && source.value("SupportsDirectStream", false);
         const bool transcode = source.value("SupportsTranscoding", false);
@@ -1356,10 +1451,11 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
-            "Playback target: %s subtitle=%d%s",
+            "Playback target: %s subtitle=%d%s externalAss=%d",
             playbackMethodName(target.playMethod),
             target.subtitleStreamIndex,
-            subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : ""
+            subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
+            !target.subtitleUrl.empty()
         );
         result.value = std::move(target);
         result.ok = true;
@@ -1501,6 +1597,34 @@ ApiValueResult<std::string> JellyfinClient::downloadPrimaryImage(
     return result;
 }
 
+ApiValueResult<std::string> JellyfinClient::downloadUserImage(
+    const JellyfinSession& session,
+    int width,
+    int height
+) const {
+    ApiValueResult<std::string> result;
+    if (!session.valid()) {
+        result.error = "User image request is incomplete";
+        return result;
+    }
+    const std::string url = session.server + "/Users/" + urlEncode(session.userId)
+        + "/Images/Primary?maxWidth=" + std::to_string(width)
+        + "&maxHeight=" + std::to_string(height)
+        + "&quality=88&api_key=" + urlEncode(session.token);
+    const auto response = http_.request("GET", url, headers(&session, session.deviceId));
+    if (!response.ok()) {
+        result.error = apiError(response);
+        return result;
+    }
+    if (response.body.empty()) {
+        result.error = "Jellyfin returned an empty user image";
+        return result;
+    }
+    result.value = response.body;
+    result.ok = true;
+    return result;
+}
+
 ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(
     const JellyfinSession& session,
     const JellyfinItem& item,
@@ -1508,11 +1632,12 @@ ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(
     int height
 ) const {
     ApiValueResult<std::string> result;
-    if (!session.valid() || item.id.empty() || item.backdropTag.empty()) {
+    const std::string backdropItemId = item.backdropItemId.empty() ? item.id : item.backdropItemId;
+    if (!session.valid() || backdropItemId.empty() || item.backdropTag.empty()) {
         result.error = "Backdrop request is incomplete";
         return result;
     }
-    std::string url = session.server + "/Items/" + item.id + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
+    std::string url = session.server + "/Items/" + backdropItemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
         + "&maxHeight=" + std::to_string(height) + "&quality=82"
         + "&tag=" + urlEncode(item.backdropTag)
         + "&api_key=" + urlEncode(session.token);
@@ -1537,11 +1662,12 @@ ApiValueResult<std::string> JellyfinClient::downloadLogoImage(
     int height
 ) const {
     ApiValueResult<std::string> result;
-    if (!session.valid() || item.id.empty() || item.logoTag.empty()) {
+    const std::string logoItemId = item.logoItemId.empty() ? item.id : item.logoItemId;
+    if (!session.valid() || logoItemId.empty() || item.logoTag.empty()) {
         result.error = "Logo request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Items/" + item.id + "/Images/Logo?maxWidth=" + std::to_string(width)
+    const std::string url = session.server + "/Items/" + logoItemId + "/Images/Logo?maxWidth=" + std::to_string(width)
         + "&maxHeight=" + std::to_string(height) + "&quality=90"
         + "&tag=" + urlEncode(item.logoTag)
         + "&api_key=" + urlEncode(session.token);
