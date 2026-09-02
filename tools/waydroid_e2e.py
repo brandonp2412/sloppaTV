@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import statistics
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -303,6 +304,39 @@ def media_session() -> None:
     print("\n".join(relevant[:80]) if relevant else "no sloppaTV media-session lines")
 
 
+def soak_summary(samples: list[dict[str, int | float | str]]) -> dict[str, int | float]:
+    if not samples:
+        return {}
+    window = min(3, len(samples))
+
+    def median_value(key: str, subset: list[dict[str, int | float | str]]) -> int:
+        return int(round(statistics.median(float(sample.get(key, 0)) for sample in subset)))
+
+    first = samples[:window]
+    last = samples[-window:]
+    baseline_pss = median_value("total_pss_kb", first)
+    final_pss = median_value("total_pss_kb", last)
+    baseline_rss = median_value("total_rss_kb", first)
+    final_rss = median_value("total_rss_kb", last)
+
+    def growth_percent(final: int, baseline: int) -> float:
+        return round((final - baseline) * 100.0 / baseline, 1) if baseline > 0 else 0.0
+
+    return {
+        "sample_count": len(samples),
+        "baseline_pss_kb": baseline_pss,
+        "final_pss_kb": final_pss,
+        "pss_growth_kb": final_pss - baseline_pss,
+        "pss_growth_pct": growth_percent(final_pss, baseline_pss),
+        "peak_pss_kb": max(int(sample.get("total_pss_kb", 0)) for sample in samples),
+        "baseline_rss_kb": baseline_rss,
+        "final_rss_kb": final_rss,
+        "rss_growth_kb": final_rss - baseline_rss,
+        "rss_growth_pct": growth_percent(final_rss, baseline_rss),
+        "peak_rss_kb": max(int(sample.get("total_rss_kb", 0)) for sample in samples),
+    }
+
+
 def soak(seconds: int, sample_seconds: int) -> None:
     if seconds < sample_seconds or sample_seconds < 1:
         raise SystemExit("soak duration must be >= sample interval >= 1 second")
@@ -323,13 +357,20 @@ def soak(seconds: int, sample_seconds: int) -> None:
             break
         time.sleep(min(sample_seconds, max(0.0, seconds - elapsed)))
 
+    summary = soak_summary(samples)
     evidence = {
         "serial": SERIAL,
         "package": PACKAGE,
         "duration_seconds": seconds,
         "sample_seconds": sample_seconds,
+        "summary": summary,
         "samples": samples,
     }
+    print(
+        f"soak summary PSS growth={summary.get('pss_growth_kb', 0)}KB "
+        f"({summary.get('pss_growth_pct', 0.0)}%) RSS growth={summary.get('rss_growth_kb', 0)}KB "
+        f"({summary.get('rss_growth_pct', 0.0)}%)"
+    )
     path = ARTIFACTS / "soak.json"
     path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {path}")

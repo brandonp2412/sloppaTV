@@ -48,9 +48,9 @@ public final class SloppaPlayerBridge {
     public static final int STATE_PAUSED = 3;
     public static final int STATE_ERROR = 4;
 
-    public static final int BUFFER_AUTO = 0;
-    public static final int BUFFER_LARGE = 1;
-    public static final int BUFFER_EXTRA_LARGE = 2;
+    public static final int BUFFER_AUTO = PlaybackBufferPolicy.BUFFER_AUTO;
+    public static final int BUFFER_LARGE = PlaybackBufferPolicy.BUFFER_LARGE;
+    public static final int BUFFER_EXTRA_LARGE = PlaybackBufferPolicy.BUFFER_EXTRA_LARGE;
 
     private final SloppaNativeActivity activity;
     private final Context context;
@@ -126,18 +126,17 @@ public final class SloppaPlayerBridge {
         if (released) return;
         releasePlayerOnly();
         try {
-            DefaultLoadControl loadControl;
-            if (bufferPreset == BUFFER_LARGE) {
-                loadControl = new DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(50_000, 120_000, 2_500, 5_000)
+            int[] bufferDurations = PlaybackBufferPolicy.durationsMs(bufferPreset);
+            DefaultLoadControl loadControl = bufferDurations == null
+                ? new DefaultLoadControl()
+                : new DefaultLoadControl.Builder()
+                    .setBufferDurationsMs(
+                        bufferDurations[0],
+                        bufferDurations[1],
+                        bufferDurations[2],
+                        bufferDurations[3]
+                    )
                     .build();
-            } else if (bufferPreset == BUFFER_EXTRA_LARGE) {
-                loadControl = new DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(80_000, 240_000, 5_000, 10_000)
-                    .build();
-            } else {
-                loadControl = new DefaultLoadControl();
-            }
 
             DefaultRenderersFactory defaultRenderersFactory = new DefaultRenderersFactory(context)
                 .setEnableDecoderFallback(true)
