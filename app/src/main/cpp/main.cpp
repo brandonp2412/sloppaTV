@@ -2581,19 +2581,128 @@ private:
     }
 
     void clearCurrentSessionUi() {
+        const bool hadAuthenticatedSession = session_.valid();
+        // A saved-user/server change is a hard ownership boundary. Cancel old async
+        // work first, then stop/report any active player while the old session token is
+        // still available. No queue, track preference, pending playback or browsed item
+        // from one Jellyfin user should survive into another account.
         api_.cancelPendingRequests();
         ++taskGeneration_;
+        if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle || !activePlaybackItem_.id.empty()) {
+            releaseActivePlayback(true);
+        }
+
+        playbackQueue_.clear();
+        playbackQueueIndex_ = -1;
+        queueSelection_ = 0;
+        queueActionSelection_ = 0;
+        queueRepeatMode_ = QueueRepeatMode::Off;
+        queueOverlayActive_ = false;
+        autoplayChainCount_ = 0;
+        stillWatchingPrompt_ = false;
+        playbackAudioLanguagePreference_.reset();
+        playbackSubtitleLanguagePreference_.reset();
+        pendingPlayback_.reset();
+        pendingPlaybackItem_ = {};
+        pendingStreamRestart_ = false;
+        pendingRestartPaused_ = false;
+        pauseAfterRestart_ = false;
+        windowRestorePending_ = false;
+        windowRestoreResumePlaying_ = false;
+        pendingAudioStreamIndex_ = -1;
+        nextPlaybackItem_.reset();
+        nextTransitionLoading_ = false;
+        pendingExternalLaunch_.reset();
+        activeExternalPlayback_.reset();
+        activeTarget_ = {};
+        activePlaybackItem_ = {};
+        activeMediaSegments_.clear();
+        mediaSegmentsRequested_ = false;
+        nextEpisodeRequested_ = false;
+        playbackStartReported_ = false;
+        playbackFallbackAttempted_ = false;
+        playbackFallbackResolving_ = false;
+        playerControlsActive_ = false;
+        playerControlSelection_ = 0;
+        subtitleLoadInProgress_ = false;
+        activeSubtitleCues_.clear();
+        activeSubtitleLanguage_.clear();
+        activeSubtitleServerIndex_ = -1;
+        selectedAudioServerIndex_ = -1;
+        selectedSubtitleServerIndex_ = -1;
+        activeSubtitleEnabled_ = false;
+        clearTrickplayPreview();
+        cachedPlaybackPositionMs_ = 0;
+        cachedPlaybackDurationMs_ = 0;
+        lastPlaybackTelemetryRead_ = {};
+        lastPlaybackDurationProbe_ = {};
+        playerOverlayUntil_ = {};
+        lastPlaybackSummary_.clear();
+
+        if (hadAuthenticatedSession) {
+            pendingDeepLinkItemId_.clear();
+            pendingSearchQuery_.clear();
+            pendingRuntimeLaunchRequest_.reset();
+        }
         session_ = {};
+        serverInfo_ = {};
+        serverInfoLoading_ = false;
         home_ = {};
+        homeSelection_.clear();
+        homeRow_ = 0;
+        navIndex_ = 1;
+        librarySelection_ = 0;
+        activeLibrary_ = {};
+        browseItems_.clear();
+        browseSelection_ = 0;
+        browseNextIndex_ = 0;
+        browseHasMore_ = false;
+        browseStack_.clear();
+        browseContentMode_ = BrowseContentMode::All;
+        browseFilterFocused_ = false;
+        browseFilterSelection_ = 0;
+        browseGenre_.clear();
+        browseLetter_.clear();
+        searchQuery_.clear();
+        searchResults_.clear();
+        searchSelection_ = 0;
+        searchKeyboard_ = true;
+        detail_ = {};
+        detailsButton_ = 0;
+        itemMenuSelection_ = 0;
+        deleteConfirmation_ = false;
+        deleteConfirmationSelection_ = 1;
+        detailsSimilar_.clear();
+        detailsSimilarSelection_ = 0;
+        detailsSimilarFocused_ = false;
+        castSelection_ = 0;
+        selectedPerson_ = {};
+        personItems_.clear();
+        personItemSelection_ = 0;
+        seriesDetail_ = {};
+        seasonItems_.clear();
+        seasonSelection_ = 0;
+        selectedSeason_ = {};
+        episodeItems_.clear();
+        episodeSelection_ = 0;
+
         artwork_.clear();
         homeArtwork_.clear();
+        homeArtworkUseCounter_ = 0;
         backdrops_.clear();
         logos_.clear();
         loginFields_[1].clear();
         loginFields_[2].clear();
-        homeSelection_.clear();
+        quickConnectActive_ = false;
+        quickConnectCode_.clear();
+        discoveryStatus_.clear();
         loading_ = false;
         error_.clear();
+        notice_.clear();
+        noticeUntil_ = {};
+        noticePersistent_ = false;
+        screensaverActive_ = false;
+        lastInteraction_ = std::chrono::steady_clock::now();
     }
 
     void openProfiles() {
@@ -2636,7 +2745,7 @@ private:
         profileArtwork_.erase(profileArtworkKey(removed));
         savedSessions_.erase(savedSessions_.begin() + static_cast<std::ptrdiff_t>(index));
         if (removedCurrent) {
-            session_ = {};
+            clearCurrentSessionUi();
             resetNavigation(Screen::Profiles);
         }
         profilesSelection_ = std::clamp(profilesSelection_, 0, static_cast<int>(savedSessions_.size()));
