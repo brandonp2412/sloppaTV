@@ -618,8 +618,10 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         result.value.rows.push_back({"My Media", result.value.views});
     }
 
+    // Home cards only need Jellyfin's base item/user/image metadata. Overview and
+    // MediaSources are fetched on demand by Details/playback; requesting them here
+    // multiplies Home payload size for no visible benefit.
     const std::string common =
-        "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
         "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
         "&EnableTotalRecordCount=false";
     auto addWarning = [&](const std::string& warning) {
@@ -665,7 +667,6 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
     result.value.views = views;
 
     const std::string common =
-        "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
         "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
         "&EnableTotalRecordCount=false";
     auto addWarning = [&](const std::string& warning) {
@@ -776,8 +777,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseLibrary(
         + "&IncludeItemTypes=Movie,Series,Episode,Season,Folder,BoxSet"
         + "&StartIndex=" + std::to_string(std::max(0, startIndex))
         + "&Limit=" + std::to_string(std::max(1, limit))
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,DateCreated,PremiereDate,ProductionYear"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
@@ -807,8 +807,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseVideoFilter(
         + "&IncludeItemTypes=" + includeTypes
         + "&StartIndex=" + std::to_string(std::max(0, startIndex))
         + "&Limit=" + std::to_string(std::max(1, limit))
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,DateCreated,PremiereDate,ProductionYear"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     if (favorites) url += "&Filters=IsFavorite";
     if (!genre.empty()) url += "&Genres=" + urlEncode(genre);
@@ -853,7 +852,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseCollections(
         + "?Recursive=true&IncludeItemTypes=BoxSet&SortBy=SortName&SortOrder=Ascending"
         + "&StartIndex=" + std::to_string(std::max(0, startIndex))
         + "&Limit=" + std::to_string(std::max(1, limit))
-        + "&Fields=Overview,PrimaryImageAspectRatio,ProductionYear,ProviderIds"
+        + "&Fields=ProviderIds"
           "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
@@ -871,7 +870,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseCollectionMember
 
     const std::string url = session.server + "/Users/" + session.userId + "/Items"
         + "?Recursive=true&IncludeItemTypes=Movie&SortBy=SortName&SortOrder=Ascending"
-          "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,ProductionYear,ProviderIds"
+          "&Fields=ProviderIds"
           "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false&Limit=5000";
     auto allMovies = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
@@ -894,7 +893,6 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::search(const JellyfinS
     const std::string url = session.server + "/Items?UserId=" + session.userId
         + "&Recursive=true&SearchTerm=" + urlEncode(query)
         + "&IncludeItemTypes=Movie,Series,Episode&Limit=60"
-          "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
           "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
@@ -935,8 +933,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSimilar(
     const std::string url = session.server + "/Items/" + urlEncode(itemId) + "/Similar"
         + "?UserId=" + urlEncode(session.userId)
         + "&Limit=" + std::to_string(std::clamp(limit, 1, 60))
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,ProductionYear"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (result.ok) retainScopedVideoItems(result.value);
@@ -958,8 +955,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getItemsForPerson(
         + "&IncludeItemTypes=Movie,Series,Episode"
         + "&SortBy=ProductionYear,SortName&SortOrder=Descending"
         + "&Limit=" + std::to_string(std::clamp(limit, 1, 100))
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,ProductionYear"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (result.ok) retainScopedVideoItems(result.value);
@@ -978,8 +974,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSeriesEpisodes(
     }
     const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes"
         + "?UserId=" + urlEncode(session.userId)
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources,ProductionYear"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableUserData=true&EnableTotalRecordCount=false"
         + "&Limit=" + std::to_string(std::clamp(limit, 1, 1000));
     auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
@@ -998,8 +993,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSeasons(
     }
     const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Seasons"
         + "?UserId=" + urlEncode(session.userId)
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
@@ -1017,8 +1011,7 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getEpisodes(
     const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes"
         + "?UserId=" + urlEncode(session.userId)
         + "&SeasonId=" + urlEncode(seasonId)
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
@@ -1072,7 +1065,6 @@ ApiValueResult<JellyfinItem> JellyfinClient::getNextUpForSeries(const JellyfinSe
     const std::string url = session.server + "/Shows/NextUp?UserId=" + session.userId
         + "&SeriesId=" + urlEncode(seriesId)
         + "&Limit=1&EnableResumable=true"
-          "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
           "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb";
     auto items = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (!items.ok) {
@@ -1101,8 +1093,7 @@ ApiValueResult<JellyfinItem> JellyfinClient::getFollowingEpisodeForSeries(
     const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes"
         + "?UserId=" + urlEncode(session.userId)
         + "&AdjacentTo=" + urlEncode(currentItemId)
-        + "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
           "&EnableUserData=true&EnableTotalRecordCount=false";
     auto items = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (!items.ok) {

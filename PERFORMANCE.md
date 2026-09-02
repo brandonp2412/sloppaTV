@@ -12,7 +12,7 @@ Target device: the same Android TV test target used for both sloppaTV and the in
 6. Compare playback only when both clients use the same source/direct-play/transcode condition.
 7. Preserve raw samples and the exact benchmark command/tool version used for the final report.
 
-`tools/benchmark_tv.py` is the canonical benchmark harness. It records startup, settled memory, idle CPU, SurfaceFlinger navigation cadence and percentage deltas, and can emit JSON evidence.
+`tools/benchmark_tv.py` is the canonical benchmark harness. It records startup, settled memory, idle CPU, SurfaceFlinger navigation cadence and percentage deltas, and can emit JSON evidence. Pass `--final-suite` to enforce the final-gate 20 startup / 5 memory / 5 navigation sample counts; missing cold-launch samples fail explicitly instead of silently weakening the result.
 
 ## Current release-candidate evidence — 2026-09-01
 
@@ -38,6 +38,8 @@ On the real Jellyfin server after the staged Home-loader change:
 - secondary Home enrichment (Recently Added, Recommended, Favorites): roughly **0.94–1.1 s**
 
 The primary rows are published immediately and remain interactive while secondary rows append.
+
+A 2026-09-02 real-server payload audit then removed list/grid over-fetching of `Overview`, `PrimaryImageAspectRatio` and full `MediaSources`; full Details/playback data remains fetched on demand. With the same current account/server, representative JSON payloads changed as follows: Continue Watching 50.7 KB → 9.3 KB (**81.7% smaller**), 24-item Latest Movies 210.0 KB → 26.5 KB (**87.4% smaller**), 60-movie browse 394.0 KB → 65.9 KB (**83.3% smaller**), Friends search 229.8 KB → 70.1 KB (**69.5% smaller**), and the 97-record Friends Play All episode list 884.4 KB → 144.9 KB (**83.6% smaller**). The lighter responses retained the card/user/artwork/episode-index metadata consumed by those screens. Final device timing must still be refreshed because transport-payload measurements are not a substitute for the final cold-launch/navigation suite.
 
 ### Settled Home memory — release candidate
 

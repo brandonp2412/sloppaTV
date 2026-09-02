@@ -35,6 +35,12 @@ constexpr bool hdrCapabilityAllowed(bool detected, HdrOverrideMode mode) {
     return detected;
 }
 
+constexpr bool shouldAutoplayNextEpisode(bool autoplayEnabled, int completedAutoplays, int stillWatchingAfter) {
+    if (!autoplayEnabled) return false;
+    const int threshold = std::max(0, stillWatchingAfter);
+    return completedAutoplays < threshold;
+}
+
 constexpr int clampSeekPositionMs(int64_t positionMs) {
     return static_cast<int>(std::clamp<int64_t>(positionMs, 0, std::numeric_limits<int>::max()));
 }

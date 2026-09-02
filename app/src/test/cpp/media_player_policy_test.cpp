@@ -30,6 +30,14 @@ int main() {
     assert(!hdrCapabilityAllowed(true, HdrOverrideMode::ForceSdr));
     assert(hdrCapabilityAllowed(false, HdrOverrideMode::AllowAllHdr));
 
+    assert(!shouldAutoplayNextEpisode(false, 0, 3));
+    assert(shouldAutoplayNextEpisode(true, 0, 3));
+    assert(shouldAutoplayNextEpisode(true, 2, 3));
+    assert(!shouldAutoplayNextEpisode(true, 3, 3));
+    assert(!shouldAutoplayNextEpisode(true, 4, 3));
+    assert(!shouldAutoplayNextEpisode(true, 0, 0));
+    assert(!shouldAutoplayNextEpisode(true, 0, -2));
+
     assert(static_cast<int>(StartupStep::StartPlayback) < static_cast<int>(StartupStep::ReadTrackMetadata));
     return 0;
 }

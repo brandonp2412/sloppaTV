@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -35,6 +36,34 @@ inline std::string normalizedAudioCodec(std::string_view codec) {
         return static_cast<char>(std::tolower(c));
     });
     return value;
+}
+
+struct AudioPreferenceCandidate {
+    int index = -1;
+    std::string language;
+};
+
+inline std::string normalizeAudioLanguage(std::string language) {
+    std::transform(language.begin(), language.end(), language.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return language;
+}
+
+// Audio language overrides are intentionally scoped to one queue/autoplay chain.
+// nullopt means let Jellyfin apply the user's server-side audio preference. If a
+// manually selected language is unavailable on the next episode, fall back to the
+// server default rather than leaking a different fallback choice into later media.
+inline int audioIndexForQueuePreference(
+    const std::vector<AudioPreferenceCandidate>& audios,
+    const std::optional<std::string>& languagePreference
+) {
+    if (!languagePreference.has_value() || languagePreference->empty()) return -1;
+    const std::string preferred = normalizeAudioLanguage(*languagePreference);
+    const auto match = std::find_if(audios.begin(), audios.end(), [&](const AudioPreferenceCandidate& audio) {
+        return audio.index >= 0 && normalizeAudioLanguage(audio.language) == preferred;
+    });
+    return match == audios.end() ? -1 : match->index;
 }
 
 inline bool audioStreamCopyAllowed(

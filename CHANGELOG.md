@@ -56,6 +56,8 @@ All notable user-visible and release-engineering changes are recorded here.
 - Saved-user chooser avatars loaded lazily from each authenticated Jellyfin profile, with a deterministic text-initial fallback and retry after re-authentication.
 - Searchable Settings filter using the Android TV system IME, with the same system-keyboard bridge used for Jellyfin Search and login text entry.
 - Anti-aliased Android system-font atlas for the native GLES UI, retaining the original pixel glyphs only as a fallback.
+- Expanded Waydroid acceptance tooling for HOME/lifecycle restoration, runtime VIEW/SEARCH intents, MediaSession inspection, app-scoped fatal-log auditing, and timestamped PSS/RSS/CPU soak evidence.
+- A `--final-suite` benchmark mode that enforces the performance-gate 20 startup / 5 memory / 5 navigation sample counts and rejects incomplete startup samples.
 
 ### Fixed
 
@@ -73,9 +75,14 @@ All notable user-visible and release-engineering changes are recorded here.
 - NativeActivity explicitly loads the app library through the application classloader so Java-to-native system-keyboard callbacks resolve reliably; real IME typing now updates native Search/Settings/login state without `UnsatisfiedLinkError`.
 - The fallback native virtual keyboard wraps horizontally at both row edges and remains available only when the configured Android TV IME cannot be opened.
 - Home episode artwork now preserves the owner ID for inherited Jellyfin backdrops, preventing `ParentBackdropImageTag` from being requested against the episode ID; card rendering uses higher-resolution requests and aspect-preserving center crop rather than stretching.
+- Home, browse, search, similar/person and season/episode list requests no longer fetch Details/playback-only Overview/full MediaSources payloads. Current real-server samples shrank representative Continue Watching, Latest Movies, 60-movie browse, Friends search and 97-record Friends Play All JSON by 69–87% while retaining the list/card metadata sloppaTV consumes; full details/media sources are still fetched on demand before Details/playback.
 - Embedded text-subtitle delivery no longer depends on Jellyfin's unusable external SubRip/SRT extraction URL during DirectPlay; Media3 demuxes the embedded track directly while external subtitle failures remain nonfatal.
 - Detached/replaced ExoPlayer instances can no longer overwrite the active bridge state through late release/error callbacks.
 - DirectPlay audio switching now updates the active Media3 track in place and playback reporting carries the selected Jellyfin audio/subtitle stream indices.
+- Manually selected audio language now follows the current queue/autoplay chain when the next episode exposes the same language, falls back to Jellyfin's server preference when unavailable, and resets on unrelated manual playback.
+- Still Watching dismissal no longer leaves stale continuation state behind; the prompt now exposes a clear `KEEP WATCHING` action and Back terminates the autoplay chain.
+- Playback completion and Still Watching now restart the in-app screensaver idle window, preventing long viewing sessions from immediately covering the post-playback/prompt UI with the saver.
+- Failed Jellyfin playback start/progress/stop reports are logged with stage and item context instead of being silently discarded.
 
 ## 0.1.0 - 2026-09-01
 

@@ -3,6 +3,7 @@
 #include <android/native_activity.h>
 #include <android_native_app_glue.h>
 
+#include "audio_policy.hpp"
 #include "deep_link.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
@@ -63,6 +64,18 @@ constexpr Color kText{0.95f, 0.96f, 0.98f, 1.0f};
 constexpr Color kMuted{0.72f, 0.75f, 0.81f, 1.0f};
 constexpr Color kFocus{0.56f, 0.38f, 0.98f, 1.0f};
 constexpr Color kError{0.95f, 0.28f, 0.30f, 1.0f};
+
+void logPlaybackReportFailure(const char* stage, const std::string& itemId, const ApiResult& result) {
+    if (result.ok) return;
+    __android_log_print(
+        ANDROID_LOG_WARN,
+        kTag,
+        "Playback %s report failed for %s: %s",
+        stage,
+        itemId.c_str(),
+        result.error.c_str()
+    );
+}
 
 std::string wrapText(const std::string& input, size_t maxColumns, size_t maxLines) {
     if (input.empty()) return "NO DESCRIPTION";
@@ -1333,7 +1346,11 @@ private:
 
     std::vector<std::string> detailActions() const {
         std::vector<std::string> actions;
-        actions.emplace_back(detail_.type == "Series" ? "PLAY NEXT" : (detail_.positionTicks > 0 ? "RESUME" : "PLAY"));
+        actions.emplace_back(
+            stillWatchingPrompt_
+                ? "KEEP WATCHING"
+                : (detail_.type == "Series" ? "PLAY NEXT" : (detail_.positionTicks > 0 ? "RESUME" : "PLAY"))
+        );
         if (detail_.type == "Series") actions.emplace_back("EPISODES");
         actions.emplace_back(detail_.favorite ? "UNFAVORITE" : "FAVORITE");
         actions.emplace_back(detail_.played ? "MARK UNWATCHED" : "MARK WATCHED");
@@ -1518,6 +1535,8 @@ private:
 
     void handleDetailsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
+            stillWatchingPrompt_ = false;
+            autoplayChainCount_ = 0;
             popScreen(Screen::Home);
             return;
         }
@@ -1542,13 +1561,17 @@ private:
             detailsSimilarFocused_ = true;
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const std::string& action = actions[static_cast<size_t>(detailsButton_)];
-            if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT") beginPlayback();
+            if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING") beginPlayback();
             else if (action == "EPISODES") openSeasons();
             else if (action == "FAVORITE" || action == "UNFAVORITE") toggleFavoriteAsync();
             else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") togglePlayedAsync();
             else if (action == "CAST") openCast();
             else if (action == "MORE") openItemMenu();
-            else if (action == "BACK") popScreen(Screen::Home);
+            else if (action == "BACK") {
+                stillWatchingPrompt_ = false;
+                autoplayChainCount_ = 0;
+                popScreen(Screen::Home);
+            }
         }
     }
 
@@ -1881,6 +1904,31 @@ private:
         return type == 2 ? "DEFAULT" : "OFF";
     }
 
+    int audioIndexForPlaybackItem(
+        const JellyfinItem& item,
+        const std::optional<std::string>& languagePreference
+    ) const {
+        std::vector<AudioPreferenceCandidate> candidates;
+        candidates.reserve(item.audios.size());
+        for (const auto& audio : item.audios) {
+            candidates.push_back({audio.index, audio.language});
+        }
+        return audioIndexForQueuePreference(candidates, languagePreference);
+    }
+
+    void rememberPlaybackAudioPreference(int streamIndex) {
+        const auto selected = std::find_if(
+            activePlaybackItem_.audios.begin(),
+            activePlaybackItem_.audios.end(),
+            [&](const JellyfinAudioStream& audio) { return audio.index == streamIndex; }
+        );
+        if (selected != activePlaybackItem_.audios.end() && !selected->language.empty()) {
+            playbackAudioLanguagePreference_ = normalizeAudioLanguage(selected->language);
+        } else {
+            playbackAudioLanguagePreference_.reset();
+        }
+    }
+
     void cycleAudioTrack() {
         const auto& tracks = activePlaybackItem_.audios;
         if (tracks.size() < 2) {
@@ -1893,6 +1941,7 @@ private:
         const size_t next = selected == tracks.end()
             ? 0
             : (static_cast<size_t>(std::distance(tracks.begin(), selected)) + 1) % tracks.size();
+        rememberPlaybackAudioPreference(tracks[next].index);
         if (activeTarget_.playMethod == PlaybackMethod::DirectPlay
             && player_.selectEmbeddedAudioOrdinal(static_cast<int>(next))) {
             selectedAudioServerIndex_ = tracks[next].index;
@@ -2106,7 +2155,11 @@ private:
             wasPaused
         ] {
             if (shouldReportPrevious) {
-                api_.reportPlaybackStopped(session, item, previousTarget, item.positionTicks);
+                logPlaybackReportFailure(
+                    "stop",
+                    item.id,
+                    api_.reportPlaybackStopped(session, item, previousTarget, item.positionTicks)
+                );
             }
             auto target = api_.resolvePlayback(
                 session,
@@ -3344,11 +3397,13 @@ private:
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
         const uint64_t generation = ++taskGeneration_;
-        tasks_.submit([this, session, queued = std::move(queued), index, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, subtitlePreference, generation]() mutable {
+        tasks_.submit([this, session, queued = std::move(queued), index, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, generation]() mutable {
             auto detailed = api_.getItem(session, queued.id);
             if (detailed.ok) queued = std::move(detailed.value);
+            const int audioStreamIndex = audioIndexForPlaybackItem(queued, audioPreference);
             const int subtitleStreamIndex = subtitleIndexForPlaybackItem(queued, subtitlePreference);
             auto target = api_.resolvePlayback(
                 session,
@@ -3356,7 +3411,7 @@ private:
                 maxStreamingBitrate,
                 maxAudioChannels,
                 playbackOverrides,
-                -1,
+                audioStreamIndex,
                 subtitleStreamIndex
             );
             if (generation != taskGeneration_.load()) return;
@@ -3432,6 +3487,7 @@ private:
         error_.clear();
         autoplayChainCount_ = 0;
         stillWatchingPrompt_ = false;
+        playbackAudioLanguagePreference_.reset();
         playbackSubtitleLanguagePreference_.reset();
         const JellyfinSession session = session_;
         const JellyfinItem series = detail_;
@@ -3541,7 +3597,10 @@ private:
         if (loading_ || detail_.id.empty()) return;
         const bool continuingPlaybackChain = stillWatchingPrompt_;
         const bool continuingQueuedPrompt = continuingPlaybackChain && !playbackQueue_.empty();
-        if (!continuingPlaybackChain) playbackSubtitleLanguagePreference_.reset();
+        if (!continuingPlaybackChain) {
+            playbackAudioLanguagePreference_.reset();
+            playbackSubtitleLanguagePreference_.reset();
+        }
         if (continuingQueuedPrompt) {
             const auto queued = std::find_if(playbackQueue_.begin(), playbackQueue_.end(), [&](const JellyfinItem& item) {
                 return item.id == detail_.id;
@@ -3567,10 +3626,11 @@ private:
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
         const uint64_t generation = ++taskGeneration_;
 
-        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides, subtitlePreference, generation] {
+        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, generation] {
             JellyfinItem playable = selected;
             if (selected.type == "Series") {
                 auto next = api_.getNextUpForSeries(session, selected.id);
@@ -3586,6 +3646,7 @@ private:
                 if (detailed.ok) playable = std::move(detailed.value);
             }
 
+            const int audioStreamIndex = audioIndexForPlaybackItem(playable, audioPreference);
             const int subtitleStreamIndex = subtitleIndexForPlaybackItem(playable, subtitlePreference);
             auto target = api_.resolvePlayback(
                 session,
@@ -3593,7 +3654,7 @@ private:
                 maxStreamingBitrate,
                 maxAudioChannels,
                 playbackOverrides,
-                -1,
+                audioStreamIndex,
                 subtitleStreamIndex
             );
             if (generation != taskGeneration_.load()) return;
@@ -3688,7 +3749,7 @@ private:
         activeMediaSegments_.clear();
         if (shouldReport) {
             tasks_.submit([this, session, item, target, ticks] {
-                api_.reportPlaybackStopped(session, item, target, ticks);
+                logPlaybackReportFailure("stop", item.id, api_.reportPlaybackStopped(session, item, target, ticks));
             });
         }
     }
@@ -3709,10 +3770,12 @@ private:
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
-        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, subtitlePreference, nextItem = std::move(nextItem)]() mutable {
+        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, nextItem = std::move(nextItem)]() mutable {
             auto detailed = api_.getItem(session, nextItem.id);
             if (detailed.ok) nextItem = std::move(detailed.value);
+            const int audioStreamIndex = audioIndexForPlaybackItem(nextItem, audioPreference);
             const int subtitleStreamIndex = subtitleIndexForPlaybackItem(nextItem, subtitlePreference);
             auto target = api_.resolvePlayback(
                 session,
@@ -3720,7 +3783,7 @@ private:
                 maxStreamingBitrate,
                 maxAudioChannels,
                 playbackOverrides,
-                -1,
+                audioStreamIndex,
                 subtitleStreamIndex
             );
             std::scoped_lock lock(stateMutex_);
@@ -3743,6 +3806,8 @@ private:
     void showStillWatching(JellyfinItem nextItem) {
         releaseActivePlayback(true);
         autoplayChainCount_ = 0;
+        lastInteraction_ = std::chrono::steady_clock::now();
+        screensaverActive_ = false;
         detail_ = std::move(nextItem);
         detailsButton_ = 0;
         popScreen(Screen::Details);
@@ -3837,6 +3902,7 @@ private:
         hideSystemTextInput();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle) {
             releaseActivePlayback(true);
+            playbackAudioLanguagePreference_.reset();
             playbackSubtitleLanguagePreference_.reset();
             nextTransitionLoading_ = false;
         }
@@ -3887,7 +3953,11 @@ private:
         if (!activeTarget_.fallbackTranscodeUrl.empty()) {
             if (shouldReportPrevious) {
                 tasks_.submit([this, session, item, failedTarget, resumeTicks] {
-                    api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks);
+                    logPlaybackReportFailure(
+                        "stop-after-failure",
+                        item.id,
+                        api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks)
+                    );
                 });
             }
             activeTarget_.url = std::move(activeTarget_.fallbackTranscodeUrl);
@@ -3935,7 +4005,11 @@ private:
             subtitleStreamIndex
         ]() mutable {
             if (shouldReportPrevious) {
-                api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks);
+                logPlaybackReportFailure(
+                    "stop-after-failure",
+                    item.id,
+                    api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks)
+                );
             }
             auto target = api_.resolvePlayback(
                 session,
@@ -4035,7 +4109,9 @@ private:
                 activeSubtitleLanguage_.clear();
                 activeSubtitleServerIndex_ = -1;
                 activeSubtitleEnabled_ = false;
-                selectedAudioServerIndex_ = pendingAudioStreamIndex_;
+                selectedAudioServerIndex_ = pendingAudioStreamIndex_ >= 0
+                    ? pendingAudioStreamIndex_
+                    : target->audioStreamIndex;
                 if (selectedAudioServerIndex_ < 0 && !item.audios.empty()) {
                     const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
                         return audio.isDefault;
@@ -4201,7 +4277,11 @@ private:
                 const auto itemCopy = activePlaybackItem_;
                 const auto targetCopy = activeTarget_;
                 tasks_.submit([this, session, itemCopy, targetCopy, ticks] {
-                    api_.reportPlaybackStart(session, itemCopy, targetCopy, ticks);
+                    logPlaybackReportFailure(
+                        "start",
+                        itemCopy.id,
+                        api_.reportPlaybackStart(session, itemCopy, targetCopy, ticks)
+                    );
                 });
             }
             const auto now = std::chrono::steady_clock::now();
@@ -4225,7 +4305,7 @@ private:
                     else stopPlayback();
                 } else if (nextPlaybackItem_) {
                     JellyfinItem next = *nextPlaybackItem_;
-                    if (settings_.autoplayNext && autoplayChainCount_ < settings_.stillWatchingAfter) {
+                    if (shouldAutoplayNextEpisode(settings_.autoplayNext, autoplayChainCount_, settings_.stillWatchingAfter)) {
                         queueAutoplayNext(std::move(next));
                     } else {
                         showStillWatching(std::move(next));
@@ -4247,13 +4327,20 @@ private:
         const auto item = activePlaybackItem_;
         const auto target = activeTarget_;
         tasks_.submit([this, session, item, target, ticks, paused] {
-            api_.reportPlaybackProgress(session, item, target, ticks, paused);
+            logPlaybackReportFailure(
+                paused ? "paused-progress" : "progress",
+                item.id,
+                api_.reportPlaybackProgress(session, item, target, ticks, paused)
+            );
         });
     }
 
     void stopPlayback() {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
         releaseActivePlayback(true);
+        lastInteraction_ = std::chrono::steady_clock::now();
+        screensaverActive_ = false;
+        playbackAudioLanguagePreference_.reset();
         playbackSubtitleLanguagePreference_.reset();
         nextTransitionLoading_ = false;
         if (screen_ == Screen::Player) popScreen(Screen::Details);
@@ -5653,7 +5740,9 @@ private:
         const float contentX = hasArtwork ? 90.0f + artworkWidth + 55.0f : 90.0f;
         const float contentWidth = hasArtwork ? 1805.0f - contentX : 1710.0f;
         if (stillWatchingPrompt_) {
-            renderer_.text(contentX, 150, 2.5f, "STILL WATCHING?", kFocus, contentWidth);
+            renderer_.rect(980.0f, 78.0f, 650.0f, 64.0f, kPanelAlt);
+            renderer_.outline(976.0f, 74.0f, 658.0f, 72.0f, 4.0f, kFocus);
+            renderer_.text(1010.0f, 99.0f, 2.05f, "STILL WATCHING?  KEEP WATCHING OR BACK", kText, 590.0f);
         }
         const bool hasLogo = drawLogo(detail_, contentX + 5.0f, 165.0f, std::min(contentWidth, 680.0f), 100.0f);
         if (!hasLogo) {
@@ -6032,6 +6121,7 @@ private:
     int activeSubtitleServerIndex_ = -1;
     int selectedAudioServerIndex_ = -1;
     int selectedSubtitleServerIndex_ = -1;
+    std::optional<std::string> playbackAudioLanguagePreference_;
     std::optional<std::string> playbackSubtitleLanguagePreference_;
     bool activeSubtitleEnabled_ = false;
     TrickplayPreviewEntry trickplayPreview_;

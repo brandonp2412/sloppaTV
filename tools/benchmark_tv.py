@@ -93,6 +93,10 @@ def startup_benchmark(serial: str, runs: int) -> dict[str, dict[str, float | lis
     result = {}
     for app in APPS:
         values = samples[app.name]
+        if len(values) != runs:
+            raise RuntimeError(
+                f"Expected {runs} cold-launch samples for {app.name}, captured {len(values)}: {values}"
+            )
         result[app.name] = {
             "samples_ms": values,
             "median_ms": statistics.median(values),
@@ -251,7 +255,20 @@ def main() -> None:
     parser.add_argument("--nav-events", type=int, default=80)
     parser.add_argument("--settle-seconds", type=float, default=6.0)
     parser.add_argument("--json-out", type=Path, help="Write machine-readable benchmark evidence")
+    parser.add_argument(
+        "--final-suite",
+        action="store_true",
+        help="Use the PERFORMANCE.md final-gate sample counts: 20 startup, 5 memory and 5 navigation runs",
+    )
     args = parser.parse_args()
+    if args.final_suite:
+        args.runs = 20
+        args.memory_runs = 5
+        args.nav_runs = 5
+    if args.runs < 1 or args.memory_runs < 1 or args.nav_runs < 1 or args.nav_events < 1:
+        parser.error("all run/event counts must be at least 1")
+    if args.settle_seconds < 0:
+        parser.error("--settle-seconds cannot be negative")
 
     adb(args.serial, "shell", "input", "keyevent", "224", capture=False)
     print("STARTUP")
@@ -319,6 +336,7 @@ def main() -> None:
                 "nav_runs": args.nav_runs,
                 "nav_events": args.nav_events,
                 "settle_seconds": args.settle_seconds,
+                "final_suite": args.final_suite,
             },
             "apps": [asdict(app) for app in APPS],
             "startup": startup,
