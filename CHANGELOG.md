@@ -43,12 +43,26 @@ All notable user-visible and release-engineering changes are recorded here.
 - Minimal `NativeActivity` result bridge for external-player return state, with player-specific completion/resume parsing and Jellyfin playback-stop reporting while keeping application/UI/playback logic in C++.
 - Android system `DreamService` integration whose Java layer owns only the service/Surface lifecycle while the existing native GLES renderer draws the moving sloppaTV clock/brand screensaver.
 - Android MediaSession transport callbacks for Play, Pause, Stop, Seek, Next and Previous, forwarded through the minimal platform bridge into the native player/queue.
+- Media3/ExoPlayer 1.11 playback backend with persisted Auto/Large/Extra Large buffering presets matching the Android TV reference client's `DefaultLoadControl` ranges.
+- Route-aware Android audio-output capability probing for AC3, E-AC3, DTS, DTS-HD and TrueHD, with PlaybackInfo direct-play/downmix negotiation capped to the currently attached output route.
+- Direct-play ASS/SSA subtitles through the Media3 libass extension using Jellyfin's exact external subtitle `DeliveryUrl`, with a Canvas overlay for broader Android TV GLES compatibility.
+- Read-only real-server integration harness covering authentication, scoped libraries, Home endpoints, search, browse and artwork/HDR/trickplay inventory.
+- Direct `MENU`/`INFO` item context actions from Home, browse, search, person results and episode grids.
+- Off/Blurred/Clear backdrop modes and native compatibility/action notice banners.
+- Saved-user chooser avatars loaded lazily from each authenticated Jellyfin profile, with a deterministic text-initial fallback and retry after re-authentication.
 
 ### Fixed
 
 - Launch-intent JNI now attaches the `android_main` thread to the VM instead of reusing `ANativeActivity::env`; a physical-streamer CheckJNI abort exposed the invalid cross-thread `JNIEnv*` use.
 - MediaSession lifetime is restricted to active playback so idle Home does not register or retain a sloppaTV media session.
 - Subtitle-selected transcodes that fail to prepare now retry the same item without subtitles instead of dropping immediately back to Details; the original queue language preference is retained for later items.
+- SRT/VTT client subtitle rendering remains on the native GLES text path after the Media3 migration rather than relying on ExoPlayer to draw text into a raw video `Surface`.
+- Parent-inherited Jellyfin logo and backdrop tags/owner IDs are resolved, fixing artwork on the large majority of sampled episodes that inherit series artwork.
+- Native window loss now preserves logical playback position/state and recreates the Media3/video surface when the Android window returns instead of ending playback.
+- HTTP retry backoff is cancellable on task/session generation changes so teardown, Quick Connect cancellation and user switching do not leave stale retry sleeps running.
+- Media3 JNI telemetry polling is bounded instead of querying Java on every render tick.
+- DirectPlay resume/seeking no longer retains the old NuPlayer workaround that forced resumed MKV toward server streaming and restarted the Jellyfin stream for every direct seek; Media3 now receives the logical resume/seek position directly.
+- Audio stream-copy and transcode-output negotiation now respects the selected stream codec/channel count and attached-route stereo/surround constraints instead of leaving `AllowAudioStreamCopy` unconditional.
 
 ## 0.1.0 - 2026-09-01
 

@@ -13,18 +13,9 @@ enum class StartupStep {
     ReadTrackMetadata,
 };
 
-enum class SeekApi {
-    Legacy,
-    ExactFrame,
-};
-
-enum class SeekStrategy {
-    InPlace,
-    RestartServerStream,
-};
-
 enum class SubtitleStrategy {
     ClientText,
+    ClientStyled,
     ServerTranscode,
 };
 
@@ -56,36 +47,16 @@ constexpr int playbackPositionMsFromTicks(int64_t ticks) {
     return clampSeekPositionMs(std::max<int64_t>(0, ticks) / 10000);
 }
 
-constexpr SeekApi seekApiForPlayback() {
-    return SeekApi::Legacy;
-}
-
-constexpr bool forceAudioClockSync() {
-    return false;
-}
-
-constexpr bool preferServerStreamForStartup(std::string_view container, int64_t positionTicks) {
-    return positionTicks > 0 && (container == "mkv" || container == "matroska");
-}
-
-constexpr int initialPlayerSeekMs(bool /* transcoding */, int64_t desiredStartTicks) {
-    // Android's NuPlayer does not reliably instantiate the HLS decoders for Jellyfin
-    // resume/transcode playlists until the prepared MediaPlayer receives the logical
-    // initial seek. Keep this for both direct and transcoded targets; device E2E is the
-    // authority here because omitting it produces a parsed HLS stream with no decoder.
+constexpr int initialPlayerSeekMs(int64_t desiredStartTicks) {
+    // Media3 accepts a logical initial position before prepare, for both direct and
+    // server-streamed targets. No stream re-resolution is needed for ordinary resume.
     return playbackPositionMsFromTicks(desiredStartTicks);
 }
 
-constexpr SeekStrategy seekStrategy(bool currentlyTranscoding) {
-    // HLS/transcoded playback is already decoder-safe and can seek in place. Re-resolving
-    // PlaybackInfo for every HLS seek is both slower and can make Jellyfin return HTTP 500
-    // while the previous transcode session is still active. Direct-play files use a fresh
-    // server stream instead because in-place seeks have frozen video on Android TV.
-    return currentlyTranscoding ? SeekStrategy::InPlace : SeekStrategy::RestartServerStream;
-}
-
 constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
-    return codec == "srt" || codec == "subrip" || codec == "vtt" || codec == "webvtt"
-        ? SubtitleStrategy::ClientText
-        : SubtitleStrategy::ServerTranscode;
+    if (codec == "srt" || codec == "subrip" || codec == "vtt" || codec == "webvtt") {
+        return SubtitleStrategy::ClientText;
+    }
+    if (codec == "ass" || codec == "ssa") return SubtitleStrategy::ClientStyled;
+    return SubtitleStrategy::ServerTranscode;
 }

@@ -33,12 +33,22 @@ struct DeviceCodecSupport {
     bool mp3 = false;
     bool ac3 = false;
     bool eac3 = false;
+    bool dts = false;
+    bool truehd = false;
     bool flac = false;
     bool opus = false;
     bool vorbis = false;
 
+    int maxAudioOutputChannels = 2;
+    bool directAc3 = false;
+    bool directEac3 = false;
+    bool directDts = false;
+    bool directDtsHd = false;
+    bool directTrueHd = false;
+
     [[nodiscard]] std::vector<std::string> jellyfinVideoCodecs() const;
-    [[nodiscard]] std::vector<std::string> jellyfinAudioCodecs() const;
+    [[nodiscard]] std::vector<std::string> jellyfinAudioCodecs(int maxAudioChannels = 8) const;
+    [[nodiscard]] std::vector<std::string> jellyfinTranscodingAudioCodecs(int maxAudioChannels = 8) const;
 };
 
 DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity);

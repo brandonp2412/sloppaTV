@@ -65,6 +65,7 @@ struct JellyfinPerson {
 
 struct JellyfinAudioStream {
     int index = -1;
+    int channels = 0;
     std::string codec;
     std::string language;
     std::string title;
@@ -106,7 +107,9 @@ struct JellyfinItem {
     std::string imageTag;
     std::string thumbTag;
     std::string logoTag;
+    std::string logoItemId;
     std::string backdropTag;
+    std::string backdropItemId;
     std::string officialRating;
     std::vector<std::string> genres;
     std::vector<std::string> cast;
@@ -180,6 +183,9 @@ struct PlaybackTarget {
     bool transcoding = false;
     PlaybackMethod playMethod = PlaybackMethod::DirectPlay;
     int subtitleStreamIndex = kSubtitleOffIndex;
+    std::string subtitleUrl;
+    std::string subtitleCodec;
+    std::string subtitleLanguage;
     int64_t startTicks = 0;
 };
 
@@ -196,6 +202,8 @@ struct ApiValueResult : ApiResult {
 class JellyfinClient {
 public:
     JellyfinClient(JavaVM* vm, jobject activity) : http_(vm), codecSupport_(queryDeviceCodecSupport(vm, activity)) {}
+
+    void cancelPendingRequests() const { http_.cancelPending(); }
 
     ApiValueResult<JellyfinSession> login(
         std::string server,
@@ -311,6 +319,11 @@ public:
         const JellyfinItem& item,
         int width = 360,
         int height = 540
+    ) const;
+    ApiValueResult<std::string> downloadUserImage(
+        const JellyfinSession& session,
+        int width = 160,
+        int height = 160
     ) const;
     ApiValueResult<std::string> downloadBackdropImage(
         const JellyfinSession& session,
