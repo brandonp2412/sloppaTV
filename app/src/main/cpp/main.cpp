@@ -1811,7 +1811,21 @@ private:
     void refreshPlaybackTelemetry(bool force = false) {
         const auto now = std::chrono::steady_clock::now();
         if (!force && now - lastPlaybackTelemetryRead_ < 250ms) return;
-        cachedPlaybackPositionMs_ = player_.positionMs();
+        const int observedPositionMs = player_.positionMs();
+        if (pendingSeekTargetMs_ >= 0) {
+            const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - lastSeekIssued_
+            ).count();
+            if (shouldAcceptPostSeekTelemetry(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs)) {
+                cachedPlaybackPositionMs_ = observedPositionMs;
+                pendingSeekTargetMs_ = -1;
+                lastSeekIssued_ = {};
+            } else {
+                cachedPlaybackPositionMs_ = pendingSeekTargetMs_;
+            }
+        } else {
+            cachedPlaybackPositionMs_ = observedPositionMs;
+        }
         if (activePlaybackItem_.runtimeTicks > 0) {
             cachedPlaybackDurationMs_ = playbackPositionMsFromTicks(activePlaybackItem_.runtimeTicks);
         } else if (force || cachedPlaybackDurationMs_ <= 0) {
@@ -2308,7 +2322,9 @@ private:
         const int targetMs = std::max(0, positionMs);
         player_.seekTo(targetMs);
         cachedPlaybackPositionMs_ = targetMs;
-        playerOverlayUntil_ = std::chrono::steady_clock::now() + 3s;
+        pendingSeekTargetMs_ = targetMs;
+        lastSeekIssued_ = std::chrono::steady_clock::now();
+        playerOverlayUntil_ = lastSeekIssued_ + 3s;
     }
 
     const SubtitleCue* activeSubtitleCue() const {
@@ -2634,6 +2650,8 @@ private:
         clearTrickplayPreview();
         cachedPlaybackPositionMs_ = 0;
         cachedPlaybackDurationMs_ = 0;
+        pendingSeekTargetMs_ = -1;
+        lastSeekIssued_ = {};
         lastPlaybackTelemetryRead_ = {};
         lastPlaybackDurationProbe_ = {};
         playerOverlayUntil_ = {};
@@ -3845,6 +3863,8 @@ private:
         activePlaybackItem_ = {};
         cachedPlaybackPositionMs_ = 0;
         cachedPlaybackDurationMs_ = 0;
+        pendingSeekTargetMs_ = -1;
+        lastSeekIssued_ = {};
         lastPlaybackTelemetryRead_ = {};
         lastPlaybackDurationProbe_ = {};
         nextEpisodeRequested_ = false;
@@ -4205,6 +4225,8 @@ private:
                 lastPlaybackDurationProbe_ = {};
                 cachedPlaybackPositionMs_ = playbackPositionMsFromTicks(target->startTicks);
                 cachedPlaybackDurationMs_ = playbackPositionMsFromTicks(item.runtimeTicks);
+                pendingSeekTargetMs_ = -1;
+                lastSeekIssued_ = {};
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
                 playerControlsActive_ = false;
                 playerControlSelection_ = 0;
@@ -6241,6 +6263,8 @@ private:
     std::chrono::steady_clock::time_point lastPlaybackDurationProbe_{};
     int cachedPlaybackPositionMs_ = 0;
     int cachedPlaybackDurationMs_ = 0;
+    int pendingSeekTargetMs_ = -1;
+    std::chrono::steady_clock::time_point lastSeekIssued_{};
     std::chrono::steady_clock::time_point playerOverlayUntil_{};
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();

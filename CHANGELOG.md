@@ -88,6 +88,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Waydroid soak evidence now includes host-tested baseline/final median and peak PSS/RSS plus absolute/percentage growth summaries for leak analysis.
 - Media3 buffer preset durations are isolated into a pure Java policy with host execution, preventing accidental drift in the Large/Extra Large load-control ranges.
 - Saved user/server switching and forgetting now perform a full account-scoped media teardown: old-session playback is stopped/reported before credentials are cleared, and queues, autoplay/track carry, pending playback, navigation/detail data, artwork and diagnostics do not leak into the next profile.
+- Seeks and media-segment skips now hold the requested logical position briefly until Media3 telemetry catches up, preventing a stale pre-seek position sample from snapping the progress UI/reporting backward immediately after the jump.
 
 ## 0.1.0 - 2026-09-01
 
