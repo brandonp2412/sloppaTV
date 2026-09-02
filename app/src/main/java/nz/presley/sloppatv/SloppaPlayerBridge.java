@@ -314,8 +314,8 @@ public final class SloppaPlayerBridge {
                 assSubtitleView = subtitleView;
                 activity.attachSubtitleOverlay(subtitleView);
             }
-            created.setMediaItem(mediaItem.build());
-            if (startPositionMs > 0) created.seekTo(startPositionMs);
+            created.setMediaItem(mediaItem.build(), startPositionMs);
+            Log.i(TAG, "Media3 initial position requested=" + startPositionMs);
             created.prepare();
             created.play();
             scheduleTelemetry(created);
