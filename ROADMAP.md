@@ -163,8 +163,8 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - [~] Native `ACTION_VIEW` content intents accept validated bare Jellyfin item IDs and route authenticated launches to Details after Home initialization; the installed physical-streamer package resolves VIEW, while an actual external VIEW launch is still pending because the execution environment currently blocks that ADB start form
 - [~] Android searchable metadata and native `ACTION_SEARCH` handling route external/voice-recognizer queries into the existing Jellyfin Search screen; the installed physical-streamer package resolves SEARCH, while an actual voice/external-search launch remains pending
 - [~] Native Android `MediaSession` integration publishes playback title/episode metadata, duration, position and buffering/playing/paused state. The physical streamer verified that idle Home has no registered sloppaTV session after switching to lazy playback-only lifetime; an active-playback `dumpsys media_session` assertion and system transport callbacks remain pending, and no unsupported transport actions are advertised
-- [ ] Screensaver / DreamService equivalent
-- [ ] In-app screensaver
+- [ ] System Screensaver / `DreamService` equivalent remains unimplemented; Android exposes this as a Java service component, so matching it under the current NativeActivity-only architecture requires a deliberate tiny platform bridge rather than pretending the in-app idle screen is a system Dream
+- [~] Native in-app screensaver is implemented with persisted Off/5/10/20/30-minute idle thresholds, a low-redraw clock/brand surface that changes safe position every 30 seconds, suppression during playback/loading/Quick Connect, and first-key dismissal back to the unchanged underlying screen; host policy and Android builds pass, while timed physical activation/dismissal remains pending
 - [ ] Notification/message presentation where relevant
 - [~] Branded Android TV vector banner and adaptive launcher/round icons replace the previous flat placeholder banner; Android resource compilation is verified, while a physical launcher visual pass is still pending
 
@@ -184,7 +184,7 @@ This is a focused readability/playback regression pass, not the final codec/HDR/
 - [~] Backdrop visibility setting is persisted and gates Details backdrop fetching/rendering; physical-TV UI pass pending
 - [x] Default video zoom mode
 - [~] Persisted AVC 4.0–6.2, HEVC 4.0–6.2 and HDR Auto/SDR-only/Allow-all controls feed real PlaybackInfo negotiation. On the physical streamer, the same HEVC Main10 Level 5.0 Hell's Paradise S1E1 item selected `DirectPlay` with HEVC Auto, then rejected direct HEVC and selected/started `Transcode` when capped to HEVC 4.0. AVC and a real HDR-range title still need equivalent device assertions
-- [ ] Screensaver preferences
+- [~] Persisted in-app screensaver timeout preference offers Off/5/10/20/30 minutes and drives the native idle saver; physical timed-idle/dismissal acceptance remains pending
 - [~] User-select behavior now has a saved Users & Servers chooser and Settings `SWITCH USER` flow; physical-TV navigation/expiry/multi-server acceptance remains pending
 - [x] Diagnostics screen reports app version/ABI, Jellyfin server version, detected decoder/HDR capability and last playback path; physically verified on the Google TV Streamer against the real server (Jellyfin 10.11.11) and the streamer's detected H264/HEVC/VP8/VP9/AV1/MPEG2 plus HDR10/HDR10+/Dolby Vision/HLG capabilities
 

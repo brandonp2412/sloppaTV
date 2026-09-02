@@ -36,6 +36,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Android `ACTION_SEARCH` integration plus searchable/voice-recognizer metadata, routing external search text into the existing native Jellyfin Search screen.
 - Lazy native Android `MediaSession` publication for playback title/episode metadata, duration, position and buffering/playing/paused state without claiming unimplemented system transport callbacks.
 - Branded Android TV vector banner plus adaptive launcher/round icons replacing the previous flat placeholder banner.
+- Persisted native in-app screensaver with Off/5/10/20/30-minute idle choices, a low-redraw moving clock/brand surface, playback/loading inhibition, and first-key dismissal back to the exact underlying screen.
 
 ### Fixed
 
