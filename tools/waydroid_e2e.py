@@ -50,13 +50,21 @@ def adb(*args: str, capture: bool = False, timeout: float = 30.0) -> str:
     return result.stdout.strip() if capture else ""
 
 
-def verify_waydroid() -> None:
+def model_matches_target(model: str, target: str) -> bool:
+    if target == "waydroid":
+        return "WayDroid" in model
+    if target == "google-tv-streamer":
+        return model.strip() == "Google TV Streamer"
+    return False
+
+
+def verify_target(target: str) -> None:
     model = adb("shell", "getprop", "ro.product.model", capture=True).strip()
-    if "WayDroid" not in model:
-        raise SystemExit(f"Refusing device {SERIAL}: model is {model!r}, not Waydroid")
+    if not model_matches_target(model, target):
+        raise SystemExit(f"Refusing device {SERIAL}: model is {model!r}, expected target {target!r}")
     size = adb("shell", "wm", "size", capture=True)
     if "1920x1080" not in size:
-        raise SystemExit(f"Waydroid is not configured for 1920x1080: {size}")
+        raise SystemExit(f"Target is not configured for a 1920x1080 UI surface: {size}")
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
 
 
@@ -379,9 +387,15 @@ def soak(seconds: int, sample_seconds: int) -> None:
 
 
 def main() -> None:
-    global SERIAL, PACKAGE, COMPONENT
+    global SERIAL, PACKAGE, COMPONENT, ARTIFACTS
     parser = argparse.ArgumentParser()
-    parser.add_argument("--serial", required=True, help="ADB serial for the Waydroid test target")
+    parser.add_argument("--serial", required=True, help="ADB serial for the selected Android TV test target")
+    parser.add_argument(
+        "--target",
+        choices=("waydroid", "google-tv-streamer"),
+        default="waydroid",
+        help="Explicit target identity guard; physical TV use must be opted into",
+    )
     parser.add_argument("--package", default=DEFAULT_PACKAGE)
     parser.add_argument("--component", default=DEFAULT_COMPONENT)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -411,8 +425,11 @@ def main() -> None:
     SERIAL = args.serial
     PACKAGE = args.package
     COMPONENT = args.component
+    ARTIFACTS = ROOT / "artifacts" / (
+        "e2e-physical-tv" if args.target == "google-tv-streamer" else "e2e-waydroid"
+    )
 
-    verify_waydroid()
+    verify_target(args.target)
     if args.command == "key":
         for value in args.keys:
             key(value)
