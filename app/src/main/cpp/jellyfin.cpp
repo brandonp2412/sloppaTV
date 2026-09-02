@@ -18,6 +18,24 @@ constexpr const char* kClientName = "sloppaTV";
 constexpr const char* kClientVersion = "0.1.0";
 constexpr const char* kDeviceName = "Android TV";
 
+class ScopedJniEnv {
+public:
+    explicit ScopedJniEnv(JavaVM* vm) : vm_(vm) {
+        if (!vm_) return;
+        const jint result = vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6);
+        if (result == JNI_EDETACHED && vm_->AttachCurrentThread(&env_, nullptr) == JNI_OK) attached_ = true;
+    }
+    ~ScopedJniEnv() {
+        if (attached_ && vm_) vm_->DetachCurrentThread();
+    }
+    JNIEnv* get() const { return env_; }
+
+private:
+    JavaVM* vm_ = nullptr;
+    JNIEnv* env_ = nullptr;
+    bool attached_ = false;
+};
+
 std::string apiError(const HttpResponse& response) {
     if (!response.error.empty()) return response.error;
     std::string detail;
@@ -75,6 +93,52 @@ void retainScopedVideoItems(std::vector<JellyfinItem>& items) {
     }), items.end());
 }
 }  // namespace
+
+JellyfinClient::JellyfinClient(JavaVM* vm, jobject activity) : http_(vm), vm_(vm) {
+    if (!vm_ || !activity) return;
+    ScopedJniEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (env) activity_ = env->NewGlobalRef(activity);
+}
+
+JellyfinClient::~JellyfinClient() {
+    if (!activity_) return;
+    ScopedJniEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (env) env->DeleteGlobalRef(activity_);
+    activity_ = nullptr;
+}
+
+DeviceCodecSupport JellyfinClient::ensureDeviceCodecSupport() const {
+    std::call_once(codecSupportOnce_, [this] {
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Device capability probe started");
+        DeviceCodecSupport support = queryDeviceCodecSupport(vm_, activity_);
+        {
+            std::scoped_lock lock(codecSupportMutex_);
+            codecSupport_ = support;
+        }
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kTag,
+            "Device capability probe complete h264=%d hevc=%d av1=%d maxAudio=%d",
+            support.h264 ? 1 : 0,
+            support.hevc ? 1 : 0,
+            support.av1 ? 1 : 0,
+            support.maxAudioOutputChannels
+        );
+    });
+    std::scoped_lock lock(codecSupportMutex_);
+    return codecSupport_;
+}
+
+void JellyfinClient::warmDeviceCodecSupport() const {
+    (void) ensureDeviceCodecSupport();
+}
+
+DeviceCodecSupport JellyfinClient::deviceCodecSupport() const {
+    std::scoped_lock lock(codecSupportMutex_);
+    return codecSupport_;
+}
 
 std::string JellyfinClient::normalizeServer(std::string value) const {
     while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
@@ -550,6 +614,9 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         return result;
     }
     result.value.views = std::move(views.value);
+    if (!result.value.views.empty()) {
+        result.value.rows.push_back({"My Media", result.value.views});
+    }
 
     const std::string common =
         "&Fields=Overview,PrimaryImageAspectRatio,MediaSources"
@@ -566,7 +633,7 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         headers(&session, session.deviceId)
     ));
     if (resume.ok) {
-        if (!resume.value.empty()) result.value.rows.push_back({"CONTINUE WATCHING", std::move(resume.value)});
+        if (!resume.value.empty()) result.value.rows.push_back({"Continue Watching", std::move(resume.value)});
     } else {
         addWarning("Continue Watching unavailable");
     }
@@ -577,7 +644,7 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         headers(&session, session.deviceId)
     ));
     if (nextUp.ok) {
-        if (!nextUp.value.empty()) result.value.rows.push_back({"NEXT UP", std::move(nextUp.value)});
+        if (!nextUp.value.empty()) result.value.rows.push_back({"Next Up", std::move(nextUp.value)});
     } else {
         addWarning("Next Up unavailable");
     }
@@ -618,7 +685,7 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
             continue;
         }
         if (!latest.value.empty()) {
-            result.value.rows.push_back({"RECENTLY ADDED IN " + view.name, std::move(latest.value)});
+            result.value.rows.push_back({"Latest " + view.name, std::move(latest.value)});
         }
     }
 
@@ -629,7 +696,7 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
         headers(&session, session.deviceId)
     ));
     if (recommended.ok) {
-        if (!recommended.value.empty()) result.value.rows.push_back({"RECOMMENDED", std::move(recommended.value)});
+        if (!recommended.value.empty()) result.value.rows.push_back({"Recommended", std::move(recommended.value)});
     } else {
         addWarning("Recommendations unavailable");
     }
@@ -641,7 +708,7 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
         headers(&session, session.deviceId)
     ));
     if (favorites.ok) {
-        if (!favorites.value.empty()) result.value.rows.push_back({"FAVORITES", std::move(favorites.value)});
+        if (!favorites.value.empty()) result.value.rows.push_back({"Favorites", std::move(favorites.value)});
     } else {
         addWarning("Favorites unavailable");
     }
@@ -1160,8 +1227,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     int subtitleStreamIndex
 ) const {
     ApiValueResult<PlaybackTarget> result;
+    const DeviceCodecSupport codecSupport = ensureDeviceCodecSupport();
     const int requestedAudioChannels = std::clamp(maxAudioChannels, 2, 8);
-    maxAudioChannels = effectiveAudioChannels(requestedAudioChannels, codecSupport_.maxAudioOutputChannels);
+    maxAudioChannels = effectiveAudioChannels(requestedAudioChannels, codecSupport.maxAudioOutputChannels);
     if (maxAudioChannels != requestedAudioChannels) {
         __android_log_print(
             ANDROID_LOG_INFO,
@@ -1172,9 +1240,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         );
     }
 
-    auto videoCodecs = codecSupport_.jellyfinVideoCodecs();
-    auto audioCodecs = codecSupport_.jellyfinAudioCodecs(maxAudioChannels);
-    auto transcodeAudioCodecs = codecSupport_.jellyfinTranscodingAudioCodecs(maxAudioChannels);
+    auto videoCodecs = codecSupport.jellyfinVideoCodecs();
+    auto audioCodecs = codecSupport.jellyfinAudioCodecs(maxAudioChannels);
+    auto transcodeAudioCodecs = codecSupport.jellyfinTranscodingAudioCodecs(maxAudioChannels);
 
     auto lower = [](std::string value) {
         std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
@@ -1199,10 +1267,10 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     const bool isHdr10Plus = range.find("hdr10plus") != std::string::npos || range.find("hdr10+") != std::string::npos;
     const bool isHdr10 = !isHdr10Plus && range.find("hdr10") != std::string::npos;
     const bool isHlg = range.find("hlg") != std::string::npos;
-    const bool unsupportedHdr = (isDolbyVision && !hdrCapabilityAllowed(codecSupport_.displayDolbyVision, overrides.hdrMode))
-        || (!isDolbyVision && isHdr10Plus && !hdrCapabilityAllowed(codecSupport_.displayHdr10Plus, overrides.hdrMode))
-        || (!isDolbyVision && isHdr10 && !hdrCapabilityAllowed(codecSupport_.displayHdr10, overrides.hdrMode))
-        || (!isDolbyVision && isHlg && !hdrCapabilityAllowed(codecSupport_.displayHlg, overrides.hdrMode));
+    const bool unsupportedHdr = (isDolbyVision && !hdrCapabilityAllowed(codecSupport.displayDolbyVision, overrides.hdrMode))
+        || (!isDolbyVision && isHdr10Plus && !hdrCapabilityAllowed(codecSupport.displayHdr10Plus, overrides.hdrMode))
+        || (!isDolbyVision && isHdr10 && !hdrCapabilityAllowed(codecSupport.displayHdr10, overrides.hdrMode))
+        || (!isDolbyVision && isHlg && !hdrCapabilityAllowed(codecSupport.displayHlg, overrides.hdrMode));
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
@@ -1215,10 +1283,10 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         if (!codecLevelAllowed(item.videoLevel, overrides.maxHevcLevel)) {
             removeVideoCodec("hevc", "level exceeds user override");
         }
-        if ((item.videoBitDepth > 8 || itemProfile.find("main 10") != std::string::npos) && !codecSupport_.hevcMain10) {
+        if ((item.videoBitDepth > 8 || itemProfile.find("main 10") != std::string::npos) && !codecSupport.hevcMain10) {
             removeVideoCodec("hevc", "HEVC Main10 unsupported");
         }
-        if (codecSupport_.maxHevcWidth > 0 && (item.videoWidth > codecSupport_.maxHevcWidth || item.videoHeight > codecSupport_.maxHevcHeight)) {
+        if (codecSupport.maxHevcWidth > 0 && (item.videoWidth > codecSupport.maxHevcWidth || item.videoHeight > codecSupport.maxHevcHeight)) {
             removeVideoCodec("hevc", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) removeVideoCodec("hevc", "HDR range unsupported by connected display");
@@ -1226,16 +1294,16 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         if (!codecLevelAllowed(item.videoLevel, overrides.maxAvcLevel)) {
             removeVideoCodec("h264", "level exceeds user override");
         }
-        if (itemProfile.find("high 10") != std::string::npos && !codecSupport_.h264High10) {
+        if (itemProfile.find("high 10") != std::string::npos && !codecSupport.h264High10) {
             removeVideoCodec("h264", "H.264 High10 unsupported");
         }
-        if (codecSupport_.maxH264Width > 0 && (item.videoWidth > codecSupport_.maxH264Width || item.videoHeight > codecSupport_.maxH264Height)) {
+        if (codecSupport.maxH264Width > 0 && (item.videoWidth > codecSupport.maxH264Width || item.videoHeight > codecSupport.maxH264Height)) {
             removeVideoCodec("h264", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) removeVideoCodec("h264", "HDR range unsupported by connected display");
     } else if (itemCodec == "av1") {
-        if (item.videoBitDepth > 8 && !codecSupport_.av1Main10) removeVideoCodec("av1", "AV1 Main10 unsupported");
-        if (codecSupport_.maxAv1Width > 0 && (item.videoWidth > codecSupport_.maxAv1Width || item.videoHeight > codecSupport_.maxAv1Height)) {
+        if (item.videoBitDepth > 8 && !codecSupport.av1Main10) removeVideoCodec("av1", "AV1 Main10 unsupported");
+        if (codecSupport.maxAv1Width > 0 && (item.videoWidth > codecSupport.maxAv1Width || item.videoHeight > codecSupport.maxAv1Height)) {
             removeVideoCodec("av1", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) removeVideoCodec("av1", "HDR range unsupported by connected display");
@@ -1280,6 +1348,23 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         );
     }
 
+    json subtitleProfiles = json::array({
+        // External text files are downloaded and rendered by the native client. Embedded
+        // SRT/VTT remains DirectPlay and is selected directly from the container by Media3,
+        // which avoids Jellyfin 10.11 embedded-text extraction failures.
+        {{"Format", "vtt"}, {"Method", "External"}},
+        {{"Format", "webvtt"}, {"Method", "External"}},
+        {{"Format", "srt"}, {"Method", "External"}},
+        {{"Format", "subrip"}, {"Method", "External"}},
+        // Media3 + libass consumes exact ASS/SSA streams externally while preserving
+        // direct video playback; Encode remains the server fallback for unsupported cases.
+        {{"Format", "ass"}, {"Method", "External"}},
+        {{"Format", "ass"}, {"Method", "Encode"}},
+        {{"Format", "ssa"}, {"Method", "External"}},
+        {{"Format", "ssa"}, {"Method", "Encode"}},
+        {{"Format", "pgs"}, {"Method", "Encode"}}
+    });
+
     json profile = {
         {"Name", "sloppaTV-Native"},
         {"MaxStaticBitrate", 120000000},
@@ -1319,21 +1404,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
                 })}
             }
         })},
-        {"SubtitleProfiles", json::array({
-            // Text subtitles are downloaded separately and rendered in the client so
-            // selecting one does not force the video through a subtitle transcode.
-            {{"Format", "vtt"}, {"Method", "External"}},
-            {{"Format", "webvtt"}, {"Method", "External"}},
-            {{"Format", "srt"}, {"Method", "External"}},
-            {{"Format", "subrip"}, {"Method", "External"}},
-            // Media3 + libass consumes exact ASS/SSA streams externally while
-            // preserving direct video playback; Encode remains the server fallback.
-            {{"Format", "ass"}, {"Method", "External"}},
-            {{"Format", "ass"}, {"Method", "Encode"}},
-            {{"Format", "ssa"}, {"Method", "External"}},
-            {{"Format", "ssa"}, {"Method", "Encode"}},
-            {{"Format", "pgs"}, {"Method", "Encode"}}
-        })}
+        {"SubtitleProfiles", std::move(subtitleProfiles)}
     };
 
     const auto selectedSubtitle = std::find_if(
@@ -1387,6 +1458,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         PlaybackTarget target;
         target.playSessionId = data.value("PlaySessionId", std::string{});
         target.mediaSourceId = source.value("Id", std::string{});
+        target.audioStreamIndex = audioStreamIndex >= 0
+            ? audioStreamIndex
+            : source.value("DefaultAudioStreamIndex", -1);
         target.subtitleStreamIndex = resolvedSubtitleIndex(
             subtitleStreamIndex,
             source.value("DefaultSubtitleStreamIndex", kSubtitleOffIndex)
@@ -1407,6 +1481,15 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
                 target.subtitleCodec = stream->value("Codec", std::string{});
                 target.subtitleLanguage = stream->value("Language", std::string{});
                 const std::string delivery = stream->value("DeliveryMethod", std::string{});
+                const auto itemSubtitle = std::find_if(
+                    item.subtitles.begin(),
+                    item.subtitles.end(),
+                    [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == target.subtitleStreamIndex; }
+                );
+                const bool isExternal = stream->contains("IsExternal")
+                    ? stream->value("IsExternal", false)
+                    : (itemSubtitle != item.subtitles.end() && itemSubtitle->isExternal);
+                target.subtitleEmbedded = !isExternal;
                 std::string deliveryUrl = stream->value("DeliveryUrl", std::string{});
                 if (delivery == "External" && !deliveryUrl.empty()
                     && subtitleStrategy(target.subtitleCodec) != SubtitleStrategy::ServerTranscode) {
@@ -1451,11 +1534,13 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
-            "Playback target: %s subtitle=%d%s externalAss=%d",
+            "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d embeddedSubtitle=%d",
             playbackMethodName(target.playMethod),
+            target.audioStreamIndex,
             target.subtitleStreamIndex,
             subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
-            !target.subtitleUrl.empty()
+            !target.subtitleUrl.empty(),
+            target.subtitleEmbedded
         );
         result.value = std::move(target);
         result.ok = true;
@@ -1481,6 +1566,8 @@ ApiResult JellyfinClient::reportPlaybackStart(
         {"IsPaused", false},
         {"IsMuted", false},
         {"VolumeLevel", 100},
+        {"AudioStreamIndex", target.audioStreamIndex},
+        {"SubtitleStreamIndex", target.subtitleStreamIndex},
         {"PlayMethod", playbackMethodName(target.playMethod)}
     };
     const auto response = http_.request("POST", session.server + "/Sessions/Playing", headers(&session, session.deviceId), body.dump());
@@ -1506,6 +1593,8 @@ ApiResult JellyfinClient::reportPlaybackProgress(
         {"IsPaused", paused},
         {"IsMuted", false},
         {"VolumeLevel", 100},
+        {"AudioStreamIndex", target.audioStreamIndex},
+        {"SubtitleStreamIndex", target.subtitleStreamIndex},
         {"PlayMethod", playbackMethodName(target.playMethod)}
     };
     const auto response = http_.request("POST", session.server + "/Sessions/Playing/Progress", headers(&session, session.deviceId), body.dump());
