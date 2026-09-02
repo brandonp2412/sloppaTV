@@ -428,6 +428,7 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
                     subtitle.title = stream.value("DisplayTitle", stream.value("Title", std::string{}));
                     subtitle.forced = stream.value("IsForced", false);
                     subtitle.isDefault = stream.value("IsDefault", false);
+                    subtitle.isExternal = stream.value("IsExternal", false);
                     if (subtitle.index >= 0) item.subtitles.push_back(std::move(subtitle));
                 }
             }
@@ -1585,20 +1586,41 @@ ApiValueResult<std::string> JellyfinClient::downloadTrickplayTile(
     return result;
 }
 
+std::string JellyfinClient::staticVideoUrl(
+    const JellyfinSession& session,
+    const JellyfinItem& item
+) const {
+    if (!session.valid() || item.id.empty() || item.mediaSourceId.empty()) return {};
+    const std::string container = firstContainer(item.container);
+    if (container.empty()) return {};
+    return session.server + "/Videos/" + urlEncode(item.id) + "/stream." + urlEncode(container)
+        + "?Static=true&MediaSourceId=" + urlEncode(item.mediaSourceId)
+        + "&api_key=" + urlEncode(session.token);
+}
+
+std::string JellyfinClient::subtitleSrtUrl(
+    const JellyfinSession& session,
+    const JellyfinItem& item,
+    int subtitleIndex
+) const {
+    if (!session.valid() || item.id.empty() || item.mediaSourceId.empty() || subtitleIndex < 0) return {};
+    return session.server + "/Videos/" + urlEncode(item.id)
+        + "/" + urlEncode(item.mediaSourceId)
+        + "/Subtitles/" + std::to_string(subtitleIndex)
+        + "/Stream.srt?api_key=" + urlEncode(session.token);
+}
+
 ApiValueResult<std::string> JellyfinClient::downloadSubtitleSrt(
     const JellyfinSession& session,
     const JellyfinItem& item,
     int subtitleIndex
 ) const {
     ApiValueResult<std::string> result;
-    if (!session.valid() || item.id.empty() || item.mediaSourceId.empty() || subtitleIndex < 0) {
+    const std::string url = subtitleSrtUrl(session, item, subtitleIndex);
+    if (url.empty()) {
         result.error = "Subtitle request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Videos/" + urlEncode(item.id)
-        + "/" + urlEncode(item.mediaSourceId)
-        + "/Subtitles/" + std::to_string(subtitleIndex)
-        + "/Stream.srt?api_key=" + urlEncode(session.token);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);

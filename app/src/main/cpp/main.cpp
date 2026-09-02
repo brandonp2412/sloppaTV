@@ -6,6 +6,7 @@
 #include "deep_link.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
+#include "external_player.hpp"
 #include "image_decoder.hpp"
 #include "jellyfin.hpp"
 #include "media_player.hpp"
@@ -201,6 +202,13 @@ struct TrickplayPreviewEntry {
     uint64_t textureGeneration = 0;
 };
 
+struct PendingExternalLaunch {
+    JellyfinItem item;
+    ExternalPlayerApp player;
+    std::string url;
+    std::string subtitleUrl;
+};
+
 struct BrowseSnapshot {
     JellyfinItem container;
     std::vector<JellyfinItem> items;
@@ -360,6 +368,7 @@ struct AppSettings {
     int uiTextSize = 0;
     int safeAreaPercent = 0;
     int screensaverMinutes = 0;
+    std::string externalPlayerComponent;
 };
 
 PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
@@ -504,6 +513,7 @@ public:
           api_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm),
           mediaSession_(app->activity->vm, app->activity->clazz),
+          externalPlayer_(app->activity->vm, app->activity->clazz),
           imageDecoder_(app->activity->vm),
           videoSurface_(app->activity->vm),
           tasks_(4, [app] {
@@ -514,6 +524,7 @@ public:
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
         loadSession();
+        refreshExternalPlayers();
         if (session_.valid()) {
             resetNavigation(Screen::Home);
             loadHomeAsync();
@@ -1031,6 +1042,50 @@ private:
         return actions;
     }
 
+    void refreshExternalPlayers() {
+        externalPlayers_ = externalPlayer_.availablePlayers();
+        if (settings_.externalPlayerComponent.empty()) return;
+        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+            return player.componentName == settings_.externalPlayerComponent;
+        });
+        if (selected == externalPlayers_.end()) settings_.externalPlayerComponent.clear();
+    }
+
+    std::string externalPlayerLabel() const {
+        if (settings_.externalPlayerComponent.empty()) return "INTERNAL";
+        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+            return player.componentName == settings_.externalPlayerComponent;
+        });
+        return selected == externalPlayers_.end() ? "INTERNAL" : selected->label;
+    }
+
+    std::optional<ExternalPlayerApp> selectedExternalPlayer() const {
+        if (settings_.externalPlayerComponent.empty()) return std::nullopt;
+        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+            return player.componentName == settings_.externalPlayerComponent;
+        });
+        if (selected == externalPlayers_.end()) return std::nullopt;
+        return *selected;
+    }
+
+    void cycleExternalPlayer(int direction) {
+        if (externalPlayers_.empty()) {
+            settings_.externalPlayerComponent.clear();
+            return;
+        }
+        int index = 0;
+        if (!settings_.externalPlayerComponent.empty()) {
+            const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+                return player.componentName == settings_.externalPlayerComponent;
+            });
+            if (selected != externalPlayers_.end()) index = static_cast<int>(std::distance(externalPlayers_.begin(), selected)) + 1;
+        }
+        index = std::clamp(index + direction, 0, static_cast<int>(externalPlayers_.size()));
+        settings_.externalPlayerComponent = index == 0
+            ? std::string{}
+            : externalPlayers_[static_cast<size_t>(index - 1)].componentName;
+    }
+
     void handleSettingsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
             popScreen(Screen::Home);
@@ -1039,7 +1094,7 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_UP) settingsSelection_ = std::max(0, settingsSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(21, settingsSelection_ + 1);
+        else if (key == AKEYCODE_DPAD_DOWN) settingsSelection_ = std::min(22, settingsSelection_ + 1);
         else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
@@ -1113,11 +1168,13 @@ private:
                 settings_.screensaverMinutes = choices[static_cast<size_t>(index)];
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
+            } else if (settingsSelection_ == 20) {
+                cycleExternalPlayer(direction);
             }
             saveSession(session_);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (settingsSelection_ == 20) openDiagnostics();
-            else if (settingsSelection_ == 21) openProfiles();
+            if (settingsSelection_ == 21) openDiagnostics();
+            else if (settingsSelection_ == 22) openProfiles();
         }
     }
 
@@ -1223,6 +1280,7 @@ private:
     std::vector<std::string> itemMenuActions() const {
         std::vector<std::string> actions;
         if (detail_.type == "Series") actions.emplace_back("PLAY ALL");
+        if (selectedExternalPlayer().has_value()) actions.emplace_back("PLAY EXTERNAL");
         if (!playbackQueue_.empty()) actions.emplace_back("VIEW QUEUE");
         actions.emplace_back("REFRESH METADATA");
         if (detail_.canDelete) actions.emplace_back("DELETE MEDIA");
@@ -1266,6 +1324,9 @@ private:
             if (action == "PLAY ALL") {
                 popScreen(Screen::Details);
                 beginSeriesPlayAll();
+            } else if (action == "PLAY EXTERNAL") {
+                popScreen(Screen::Details);
+                launchExternalPlaybackAsync();
             } else if (action == "VIEW QUEUE") {
                 popScreen(Screen::Details);
                 openQueueOverlay();
@@ -1276,6 +1337,68 @@ private:
             } else {
                 popScreen(Screen::Details);
             }
+        }
+    }
+
+    void launchExternalPlaybackAsync() {
+        if (loading_ || !session_.valid() || detail_.id.empty()) return;
+        const auto player = selectedExternalPlayer();
+        if (!player) {
+            error_ = "EXTERNAL PLAYER IS NOT CONFIGURED";
+            return;
+        }
+
+        loading_ = true;
+        error_.clear();
+        const JellyfinSession session = session_;
+        const JellyfinItem selected = detail_;
+        const uint64_t generation = ++taskGeneration_;
+        if (!tasks_.submit([this, session, selected, player = *player, generation]() mutable {
+            JellyfinItem playable = selected;
+            if (playable.type == "Series") {
+                auto next = api_.getNextUpForSeries(session, playable.id);
+                if (!next.ok) {
+                    if (generation != taskGeneration_.load()) return;
+                    std::scoped_lock lock(stateMutex_);
+                    loading_ = false;
+                    error_ = "EXTERNAL PLAYER: " + next.error;
+                    return;
+                }
+                playable = std::move(next.value);
+            }
+            auto detailed = api_.getItem(session, playable.id);
+            if (detailed.ok) playable = std::move(detailed.value);
+
+            const std::string videoUrl = api_.staticVideoUrl(session, playable);
+            std::string subtitleUrl;
+            auto subtitle = std::find_if(playable.subtitles.begin(), playable.subtitles.end(), [](const JellyfinSubtitleStream& candidate) {
+                return candidate.isExternal && candidate.isDefault;
+            });
+            if (subtitle == playable.subtitles.end()) {
+                subtitle = std::find_if(playable.subtitles.begin(), playable.subtitles.end(), [](const JellyfinSubtitleStream& candidate) {
+                    return candidate.isExternal;
+                });
+            }
+            if (subtitle != playable.subtitles.end()) {
+                subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
+            }
+
+            if (generation != taskGeneration_.load()) return;
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            if (videoUrl.empty()) {
+                error_ = "EXTERNAL PLAYER: NO STATIC STREAM";
+                return;
+            }
+            pendingExternalLaunch_ = PendingExternalLaunch{
+                .item = std::move(playable),
+                .player = std::move(player),
+                .url = videoUrl,
+                .subtitleUrl = std::move(subtitleUrl),
+            };
+        })) {
+            loading_ = false;
+            error_ = "EXTERNAL PLAYER COULD NOT BE STARTED";
         }
     }
 
@@ -1907,6 +2030,7 @@ private:
     }
 
     void openSettings() {
+        refreshExternalPlayers();
         pushScreen(Screen::Settings);
         settingsSelection_ = 0;
         error_.clear();
@@ -3292,10 +3416,15 @@ private:
 
     void tick() {
         std::optional<PlaybackTarget> target;
+        std::optional<PendingExternalLaunch> externalLaunch;
         JellyfinItem item;
         bool streamRestart = false;
         {
             std::scoped_lock lock(stateMutex_);
+            if (pendingExternalLaunch_) {
+                externalLaunch = std::move(pendingExternalLaunch_);
+                pendingExternalLaunch_.reset();
+            }
             if (pendingPlayback_ && app_->window) {
                 target = std::move(pendingPlayback_);
                 pendingPlayback_.reset();
@@ -3352,6 +3481,30 @@ private:
                     replaceScreen(Screen::Player);
                 }
             }
+        }
+
+        if (externalLaunch) {
+            std::string launchError;
+            const std::string title = externalLaunch->item.seriesName.empty()
+                ? externalLaunch->item.name
+                : externalLaunch->item.seriesName + " - " + externalLaunch->item.name;
+            const int positionMs = playbackPositionMsFromTicks(externalLaunch->item.positionTicks);
+            if (!externalPlayer_.launch(
+                    externalLaunch->player,
+                    externalLaunch->url,
+                    title,
+                    positionMs,
+                    externalLaunch->subtitleUrl,
+                    launchError
+                )) {
+                std::scoped_lock lock(stateMutex_);
+                error_ = launchError.empty() ? "EXTERNAL PLAYER COULD NOT BE LAUNCHED" : launchError;
+            } else {
+                std::scoped_lock lock(stateMutex_);
+                error_.clear();
+                lastPlaybackSummary_ = "EXTERNAL / " + externalLaunch->player.label;
+            }
+            return;
         }
 
         if (target) {
@@ -4351,7 +4504,7 @@ private:
 
     void renderSettings() {
         renderHeader("SETTINGS");
-        const std::array<std::string, 22> labels{
+        const std::array<std::string, 23> labels{
             "MAX STREAMING BITRATE",
             "SKIP BACK",
             "SKIP AHEAD",
@@ -4372,10 +4525,11 @@ private:
             "UI TEXT SIZE",
             "OVERSCAN SAFE AREA",
             "IN-APP SCREENSAVER",
+            "EXTERNAL PLAYER",
             "DIAGNOSTICS",
             "SWITCH USER",
         };
-        const std::array<std::string, 22> values{
+        const std::array<std::string, 23> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             std::to_string(settings_.seekBackSeconds) + " SECONDS",
             std::to_string(settings_.seekForwardSeconds) + " SECONDS",
@@ -4396,6 +4550,7 @@ private:
             uiTextSizeName(settings_.uiTextSize),
             settings_.safeAreaPercent == 0 ? "OFF" : std::to_string(settings_.safeAreaPercent) + "% PER EDGE",
             screensaverName(settings_.screensaverMinutes),
+            externalPlayerLabel(),
             "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
         };
@@ -4408,7 +4563,7 @@ private:
             renderer_.rect(100, y, 1580, 104, focused ? kPanelAlt : kPanel);
             if (focused) renderer_.outline(96, y - 4, 1588, 112, 5, kFocus);
             renderer_.text(140, y + 31, 2.3f, labels[static_cast<size_t>(i)], kText, 760);
-            renderer_.text(965, y + 31, 2.2f, values[static_cast<size_t>(i)], i == 21 ? kMuted : kFocus, 650);
+            renderer_.text(965, y + 31, 2.2f, values[static_cast<size_t>(i)], i == 22 ? kMuted : kFocus, 650);
         }
         renderer_.text(105, 1000, 1.75f, "LEFT / RIGHT CHANGES VALUES. OK OPENS ACTIONS. SETTINGS SAVE IMMEDIATELY.", kMuted, 1700);
     }
@@ -4766,6 +4921,7 @@ private:
                 const int savedSafeArea = saved.value("safeAreaPercent", settings_.safeAreaPercent);
                 settings_.safeAreaPercent = savedSafeArea <= 0 ? 0 : (savedSafeArea <= 2 ? 2 : (savedSafeArea <= 4 ? 4 : 6));
                 settings_.screensaverMinutes = normalizedScreensaverMinutes(saved.value("screensaverMinutes", settings_.screensaverMinutes));
+                settings_.externalPlayerComponent = saved.value("externalPlayerComponent", std::string{});
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
             }
             loginFields_[0] = session_.server;
@@ -4817,6 +4973,7 @@ private:
                     {"uiTextSize", settings_.uiTextSize},
                     {"safeAreaPercent", settings_.safeAreaPercent},
                     {"screensaverMinutes", settings_.screensaverMinutes},
+                    {"externalPlayerComponent", settings_.externalPlayerComponent},
                 }},
             };
             std::ofstream output(dataPath_ + "/session.json", std::ios::trunc);
@@ -4832,6 +4989,7 @@ private:
     DisplayModeController displayMode_;
     NativeMediaPlayer player_;
     NativeMediaSession mediaSession_;
+    NativeExternalPlayer externalPlayer_;
     JniImageDecoder imageDecoder_;
     VideoSurface videoSurface_;
     TaskRunner tasks_;
@@ -4845,6 +5003,7 @@ private:
     NavigationStack<Screen> navigation_{Screen::Login};
     bool loading_ = false;
     AppSettings settings_;
+    std::vector<ExternalPlayerApp> externalPlayers_;
     int settingsSelection_ = 0;
     std::string error_;
 
@@ -4918,6 +5077,7 @@ private:
     QueueRepeatMode queueRepeatMode_ = QueueRepeatMode::Off;
     bool queueOverlayActive_ = false;
 
+    std::optional<PendingExternalLaunch> pendingExternalLaunch_;
     std::optional<PlaybackTarget> pendingPlayback_;
     JellyfinItem pendingPlaybackItem_;
     bool pendingStreamRestart_ = false;
