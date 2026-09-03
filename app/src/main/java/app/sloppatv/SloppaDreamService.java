@@ -1,4 +1,4 @@
-package nz.presley.sloppatv;
+package app.sloppatv;
 
 import android.service.dreams.DreamService;
 import android.view.Surface;

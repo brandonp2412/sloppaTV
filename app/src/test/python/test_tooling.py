@@ -44,7 +44,7 @@ class WaydroidToolingTest(unittest.TestCase):
         waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
         app_fatal = (
             "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main "
-            "Process: nz.presley.sloppatv, PID: 123"
+            "Process: app.sloppatv, PID: 123"
         )
         other_fatal = (
             "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main "
@@ -54,8 +54,8 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertEqual(waydroid_e2e.fatal_lines([other_fatal]), [])
 
     def test_anr_detection_uses_selected_package(self) -> None:
-        waydroid_e2e.PACKAGE = "nz.presley.sloppatv.custom"
-        line = "09-02 22:00:00 E ActivityManager: ANR in nz.presley.sloppatv.custom"
+        waydroid_e2e.PACKAGE = "app.sloppatv.custom"
+        line = "09-02 22:00:00 E ActivityManager: ANR in app.sloppatv.custom"
         self.assertEqual(waydroid_e2e.fatal_lines([line]), [line])
 
     def test_player_acceptance_requires_active_media_session(self) -> None:

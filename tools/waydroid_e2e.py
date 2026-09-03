@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-waydroid"
-DEFAULT_PACKAGE = "nz.presley.sloppatv"
-DEFAULT_COMPONENT = "nz.presley.sloppatv/nz.presley.sloppatv.SloppaNativeActivity"
+DEFAULT_PACKAGE = "app.sloppatv"
+DEFAULT_COMPONENT = "app.sloppatv/app.sloppatv.SloppaNativeActivity"
 SERIAL = ""
 PACKAGE = DEFAULT_PACKAGE
 COMPONENT = DEFAULT_COMPONENT

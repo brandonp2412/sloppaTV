@@ -1,4 +1,4 @@
-package nz.presley.sloppatv;
+package app.sloppatv;
 
 import android.content.Context;
 import android.net.Uri;

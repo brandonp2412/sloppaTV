@@ -1,4 +1,4 @@
-package nz.presley.sloppatv;
+package app.sloppatv;
 
 import android.app.NativeActivity;
 import android.content.Context;
