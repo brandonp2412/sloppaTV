@@ -1,0 +1,7 @@
+{
+  "name": "ci-login",
+  "steps": [
+    {"action": "restart", "wait_seconds": 3},
+    {"action": "capture", "name": "01-login"}
+  ]
+}

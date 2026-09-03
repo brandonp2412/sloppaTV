@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-03: 81 / 138 verified (58.7%); 57 partial; none unbuilt.
+Status at 2026-09-03: 82 / 139 verified (59.0%); 57 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -41,6 +41,7 @@ required for TV hardware, Android TV integration, and final performance work.
 - [x] Android `ACTION_VIEW`, in-app screensaver, and core settings persistence.
 - [x] Benchmarks beat the official client in sampled startup, memory, and DPAD.
 - [x] Single `app.sloppatv` package and an in-place signed streamer deployment.
+- [x] Automated 1920x1080 screenshot capture, validation, manifest, and CI artifact.
 
 ## Remaining acceptance and fixtures
 
@@ -74,6 +75,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ## Evidence highlights
 
+- 2026-09-03: reproducible screenshot suites added for CI and authenticated TV sessions.
 - 2026-09-03: signed Release installed and cold-launched on the streamer.
 - 2026-09-03: Waydroid playback passed motion, pause/resume, and seek checks.
 - 2026-09-03: streamer benchmark median: 222.5 ms startup and 37.6 MB PSS;

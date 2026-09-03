@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
+import struct
 import statistics
 import subprocess
 import time
@@ -55,6 +57,9 @@ def model_matches_target(model: str, target: str) -> bool:
         return "WayDroid" in model
     if target == "google-tv-streamer":
         return model.strip() == "Google TV Streamer"
+    if target == "android-tv-emulator":
+        normalized = model.strip().lower()
+        return normalized.startswith("sdk_") or "aosp tv" in normalized
     return False
 
 
@@ -75,6 +80,11 @@ def key(name: str) -> None:
 
 def launch() -> None:
     adb("shell", "am", "start", "-n", COMPONENT)
+
+
+def restart() -> None:
+    adb("shell", "am", "force-stop", PACKAGE)
+    launch()
 
 
 def process_pid() -> str:
@@ -101,6 +111,83 @@ def capture(name: str) -> Path:
     adb("shell", "screencap", "-p", remote)
     adb("pull", remote, str(local))
     return local
+
+
+def png_dimensions(path: Path) -> tuple[int, int]:
+    header = path.read_bytes()[:24]
+    if len(header) < 24 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
+        raise ValueError(f"invalid PNG screenshot: {path}")
+    return struct.unpack(">II", header[16:24])
+
+
+def screenshot_manifest_entry(path: Path) -> dict[str, int | str]:
+    width, height = png_dimensions(path)
+    return {
+        "file": path.name,
+        "width": width,
+        "height": height,
+        "bytes": path.stat().st_size,
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    }
+
+
+def load_screenshot_suite(path: Path) -> dict:
+    suite = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(suite, dict) or not isinstance(suite.get("name"), str):
+        raise ValueError("screenshot suite must have a name")
+    steps = suite.get("steps")
+    if not isinstance(steps, list) or not steps:
+        raise ValueError("screenshot suite must have at least one step")
+    allowed = {"launch", "restart", "key", "capture", "wait"}
+    for index, step in enumerate(steps):
+        if not isinstance(step, dict) or step.get("action") not in allowed:
+            raise ValueError(f"unsupported screenshot step {index}")
+        wait_seconds = step.get("wait_seconds", 0)
+        if not isinstance(wait_seconds, (int, float)) or not 0 <= wait_seconds <= 30:
+            raise ValueError(f"invalid wait_seconds in screenshot step {index}")
+        if step["action"] == "key" and not re.fullmatch(r"[A-Z0-9_]+", str(step.get("key", ""))):
+            raise ValueError(f"invalid key in screenshot step {index}")
+        if step["action"] == "capture" and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(step.get("name", ""))):
+            raise ValueError(f"invalid capture name in screenshot step {index}")
+    return suite
+
+
+def screenshot_suite(path: Path) -> Path:
+    suite = load_screenshot_suite(path)
+    screenshots: list[dict[str, int | str]] = []
+    for step in suite["steps"]:
+        action = step["action"]
+        if action == "launch":
+            launch()
+        elif action == "restart":
+            restart()
+        elif action == "key":
+            key(step["key"])
+        elif action == "capture":
+            screenshot = capture(step["name"])
+            width, height = png_dimensions(screenshot)
+            if (width, height) != (1920, 1080):
+                raise RuntimeError(f"unexpected screenshot dimensions {width}x{height}: {screenshot}")
+            screenshots.append(screenshot_manifest_entry(screenshot))
+        wait_seconds = float(step.get("wait_seconds", 0))
+        if action == "wait":
+            wait_seconds = float(step.get("wait_seconds", 1))
+        if wait_seconds:
+            time.sleep(wait_seconds)
+    if not screenshots:
+        raise RuntimeError("screenshot suite produced no screenshots")
+    manifest = {
+        "suite": suite["name"],
+        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "serial": SERIAL,
+        "package": PACKAGE,
+        "screenshots": screenshots,
+    }
+    manifest_path = ARTIFACTS / "screenshots.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    print(f"wrote {manifest_path}")
+    audit_logs("screenshots")
+    return manifest_path
 
 
 def roi_diff(a: Path, b: Path) -> float:
@@ -400,7 +487,7 @@ def main() -> None:
     parser.add_argument("--serial", required=True, help="ADB serial for the selected Android TV test target")
     parser.add_argument(
         "--target",
-        choices=("waydroid", "google-tv-streamer"),
+        choices=("waydroid", "google-tv-streamer", "android-tv-emulator"),
         default="waydroid",
         help="Explicit target identity guard; physical TV use must be opted into",
     )
@@ -415,6 +502,8 @@ def main() -> None:
     p_pair = sub.add_parser("pair")
     p_pair.add_argument("prefix")
     p_pair.add_argument("wait", type=float)
+    p_screenshots = sub.add_parser("screenshots")
+    p_screenshots.add_argument("--suite", type=Path, required=True)
     sub.add_parser("wonder-core")
     sub.add_parser("planet-core")
     sub.add_parser("lifecycle")
@@ -434,7 +523,11 @@ def main() -> None:
     PACKAGE = args.package
     COMPONENT = args.component
     ARTIFACTS = ROOT / "artifacts" / (
-        "e2e-physical-tv" if args.target == "google-tv-streamer" else "e2e-waydroid"
+        "e2e-physical-tv"
+        if args.target == "google-tv-streamer"
+        else "ci-screenshots"
+        if args.target == "android-tv-emulator"
+        else "e2e-waydroid"
     )
 
     verify_target(args.target)
@@ -446,6 +539,8 @@ def main() -> None:
         print(capture(args.name))
     elif args.command == "pair":
         pair(args.prefix, args.wait)
+    elif args.command == "screenshots":
+        screenshot_suite(args.suite)
     elif args.command == "wonder-core":
         wonder_core()
     elif args.command == "planet-core":
