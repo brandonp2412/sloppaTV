@@ -124,12 +124,9 @@ jobs:
           target: google_apis
           arch: x86_64
           profile: tv_1080p
+          emulator-port: 5554
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: |
-            export ANDROID_SERIAL="emulator-${EMULATOR_PORT}"
-            export SLOPPATV_APK
-            SLOPPATV_APK="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)"
-            ./tools/ci_screenshots.sh
+          script: ANDROID_SERIAL=emulator-5554 SLOPPATV_APK="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)" ./tools/ci_screenshots.sh
 
       - name: Upload screenshots
         if: always()
