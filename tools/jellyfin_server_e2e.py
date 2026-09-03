@@ -317,6 +317,23 @@ def verify_direct_stream_negotiation(client: Jellyfin, items: list[dict[str, Any
     }
 
 
+def authorize_quick_connect_code(
+    server: str,
+    insecure: bool,
+    username: str,
+    password: str,
+    code: str,
+) -> dict[str, Any]:
+    authorizer = Jellyfin(server, insecure, f"{DEVICE_ID}-qc-ui-authorizer")
+    try:
+        authorizer.login(username, password)
+        authorized = authorizer.request("POST", "/QuickConnect/Authorize?" + query({"code": code}))
+        require(authorized is True, "Quick Connect authorization was rejected")
+        return {"authorized": True, "code": code, "user": authorizer.username}
+    finally:
+        authorizer.logout()
+
+
 def verify_quick_connect(server: str, insecure: bool, username: str, password: str) -> dict[str, Any]:
     authorizer = Jellyfin(server, insecure, f"{DEVICE_ID}-qc-authorizer")
     target = Jellyfin(server, insecure, f"{DEVICE_ID}-qc-target")
@@ -369,10 +386,26 @@ def main() -> int:
         action="store_true",
         help="Exercise the transient Quick Connect authorize/authenticate round-trip and log out both test sessions",
     )
+    parser.add_argument(
+        "--authorize-code",
+        default="",
+        help="Authorize an existing Quick Connect code for TV UI acceptance, then exit",
+    )
     args = parser.parse_args()
 
     require(bool(args.server), "Set JELLYFIN_LOCAL_SERVER or pass --server")
     require(bool(args.username), "Set JELLYFIN_LOCAL_USERNAME or pass --username")
+
+    if args.authorize_code:
+        result = authorize_quick_connect_code(
+            args.server,
+            args.insecure,
+            args.username,
+            args.password,
+            args.authorize_code,
+        )
+        print(json.dumps(result, indent=2))
+        return 0
 
     client = Jellyfin(args.server, args.insecure)
     public = client.get("/System/Info/Public")
