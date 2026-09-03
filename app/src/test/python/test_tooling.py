@@ -92,6 +92,14 @@ class WaydroidToolingTest(unittest.TestCase):
         ):
             waydroid_e2e.require_playback_session()
 
+    def test_search_quotes_multi_word_query_for_adb_shell(self) -> None:
+        with patch.object(waydroid_e2e, "adb") as adb, patch.object(waydroid_e2e, "capture"), patch.object(
+            waydroid_e2e, "audit_logs"
+        ), patch.object(waydroid_e2e.time, "sleep"):
+            waydroid_e2e.action_search("FOLLOW MAMA AND PAPA")
+        args = adb.call_args_list[1].args
+        self.assertIn("'FOLLOW MAMA AND PAPA'", args)
+
     def test_soak_summary_uses_median_windows_and_reports_growth(self) -> None:
         samples = [
             {"total_pss_kb": 100, "total_rss_kb": 200},
