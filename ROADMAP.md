@@ -75,6 +75,9 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ## Evidence highlights
 
+- 2026-09-03: Streamer regression pass verified subtitle-off startup, explicit full-dialogue
+  ASS selection, player-overlay Back dismissal, empty-queue Down handling, and revised
+  Home/Search/Genres layouts without clearing app data.
 - 2026-09-03: reproducible screenshot suites added for CI and authenticated TV sessions.
 - 2026-09-03: signed Release installed and cold-launched on the streamer.
 - 2026-09-03: Waydroid playback passed motion, pause/resume, and seek checks.

@@ -21,6 +21,9 @@ int main() {
     assert(subtitleStrategy("ass") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("ssa") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("pgssub") == SubtitleStrategy::ServerTranscode);
+    assert(preferExternalSubtitleDelivery(SubtitleStrategy::ClientStyled, true));
+    assert(!preferExternalSubtitleDelivery(SubtitleStrategy::ClientStyled, false));
+    assert(!preferExternalSubtitleDelivery(SubtitleStrategy::ClientText, true));
     assert(codecLevelAllowed(51, 0));
     assert(codecLevelAllowed(0, 41));
     assert(codecLevelAllowed(41, 41));
