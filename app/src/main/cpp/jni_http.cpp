@@ -168,11 +168,13 @@ HttpResponse JniHttpClient::request(
             if (cached != getCache_.end()) return cached->second.response;
         }
         const auto pending = inFlightGets_.find(key);
-        if (pending != inFlightGets_.end()) {
+        if (pending != inFlightGets_.end()
+            && shouldJoinInFlightApiGet(requestGeneration, pending->second->generation)) {
             inFlight = pending->second;
         } else {
             inFlight = std::make_shared<InFlightRequest>();
-            inFlightGets_.emplace(key, inFlight);
+            inFlight->generation = requestGeneration;
+            inFlightGets_[key] = inFlight;
             owner = true;
         }
     }
@@ -205,7 +207,10 @@ HttpResponse JniHttpClient::request(
         }
         inFlight->response = response;
         inFlight->done = true;
-        inFlightGets_.erase(key);
+        const auto pending = inFlightGets_.find(key);
+        if (pending != inFlightGets_.end() && pending->second == inFlight) {
+            inFlightGets_.erase(pending);
+        }
     }
     inFlight->completed.notify_all();
     return response;

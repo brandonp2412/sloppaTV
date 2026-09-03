@@ -41,6 +41,7 @@ private:
 
     struct InFlightRequest {
         std::condition_variable completed;
+        uint64_t generation = 0;
         bool done = false;
         HttpResponse response;
     };

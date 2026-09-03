@@ -160,3 +160,16 @@ constexpr bool useNativeSubtitleRenderer(
         && (strategy == SubtitleStrategy::ClientText
             || strategy == SubtitleStrategy::ClientStyled);
 }
+
+constexpr bool useEmbeddedPlayerSubtitleRenderer(
+    SubtitleStrategy strategy,
+    bool directPlay,
+    bool subtitleEmbedded,
+    bool subtitleSelected
+) {
+    return subtitleSelected
+        && directPlay
+        && subtitleEmbedded
+        && (strategy == SubtitleStrategy::ClientText
+            || strategy == SubtitleStrategy::ClientStyled);
+}

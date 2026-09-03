@@ -1,6 +1,7 @@
 package app.sloppatv;
 
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.HandlerThread;
@@ -78,6 +79,17 @@ public final class SloppaPlayerBridge {
         playerThread = new HandlerThread("sloppaTV-exoplayer");
         playerThread.start();
         handler = new Handler(playerThread.getLooper());
+    }
+
+    private boolean isBenchmarkBuild() {
+        try {
+            String versionName = context.getPackageManager()
+                .getPackageInfo(context.getPackageName(), 0)
+                .versionName;
+            return versionName != null && versionName.endsWith("-benchmark");
+        } catch (PackageManager.NameNotFoundException ignored) {
+            return false;
+        }
     }
 
     public void start(
@@ -185,9 +197,9 @@ public final class SloppaPlayerBridge {
                 playerBuilder.setRenderersFactory(defaultRenderersFactory);
             }
             ExoPlayer created = playerBuilder.build();
-            if (context.getPackageName().endsWith(".test")) {
+            if (isBenchmarkBuild()) {
                 created.setVolume(0.0f);
-                Log.i(TAG, "Test/benchmark build audio forced to volume=0.0");
+                Log.i(TAG, "Benchmark build audio forced to volume=0.0");
             }
             created.setAudioAttributes(
                 new AudioAttributes.Builder()
@@ -434,7 +446,7 @@ public final class SloppaPlayerBridge {
         handler.post(() -> {
             ExoPlayer current = player;
             if (current == null) return;
-            if (current.isPlaying()) current.pause();
+            if (current.getPlayWhenReady()) current.pause();
             else current.play();
             updateTelemetry(current);
         });

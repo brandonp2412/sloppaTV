@@ -27,6 +27,12 @@ int main() {
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientStyled, false, true));
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientStyled, true, true));
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientText, false, true));
+    assert(useEmbeddedPlayerSubtitleRenderer(SubtitleStrategy::ClientText, true, true, true));
+    assert(useEmbeddedPlayerSubtitleRenderer(SubtitleStrategy::ClientStyled, true, true, true));
+    assert(!useEmbeddedPlayerSubtitleRenderer(SubtitleStrategy::ClientText, false, true, true));
+    assert(!useEmbeddedPlayerSubtitleRenderer(SubtitleStrategy::ClientText, true, false, true));
+    assert(!useEmbeddedPlayerSubtitleRenderer(SubtitleStrategy::ServerTranscode, true, true, true));
+    assert(!useEmbeddedPlayerSubtitleRenderer(SubtitleStrategy::ClientText, true, true, false));
     assert(codecLevelAllowed(51, 0));
     assert(codecLevelAllowed(0, 41));
     assert(codecLevelAllowed(41, 41));
