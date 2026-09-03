@@ -150,3 +150,13 @@ constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
 constexpr bool preferExternalSubtitleDelivery(SubtitleStrategy strategy, bool hasDeliveryUrl) {
     return strategy == SubtitleStrategy::ClientStyled && hasDeliveryUrl;
 }
+
+constexpr bool useNativeSubtitleRenderer(
+    SubtitleStrategy strategy,
+    bool directPlay,
+    bool subtitleSelected
+) {
+    return subtitleSelected
+        && (strategy == SubtitleStrategy::ClientText
+            || (strategy == SubtitleStrategy::ClientStyled && !directPlay));
+}

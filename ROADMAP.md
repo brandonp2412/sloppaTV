@@ -75,6 +75,9 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ## Evidence highlights
 
+- 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
+  Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
+  an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
 - 2026-09-03: Streamer regression pass verified subtitle-off startup, explicit full-dialogue
   ASS selection, player-overlay Back dismissal, empty-queue Down handling, and revised
   Home/Search/Genres layouts without clearing app data.

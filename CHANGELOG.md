@@ -62,6 +62,7 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Fixed
 
+- ASS/SSA subtitles selected during transcoded playback now use Jellyfin's SRT conversion and the native GLES subtitle renderer, avoiding the silent Media3/libass external-track failure seen on Hell's Paradise in Waydroid.
 - Launch-intent JNI now attaches the `android_main` thread to the VM instead of reusing `ANativeActivity::env`; a physical-streamer CheckJNI abort exposed the invalid cross-thread `JNIEnv*` use.
 - MediaSession lifetime is restricted to active playback so idle Home does not register or retain a sloppaTV media session.
 - Subtitle-selected transcodes that fail to prepare now retry the same item without subtitles instead of dropping immediately back to Details; the original queue language preference is retained for later items.
