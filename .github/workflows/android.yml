@@ -54,6 +54,28 @@ jobs:
             "ndk;29.0.14206865" \
             "cmake;3.22.1"
 
+      - name: Create CI signing identity
+        shell: bash
+        run: |
+          CI_KEYSTORE="$RUNNER_TEMP/sloppatv-ci.jks"
+          keytool -genkeypair \
+            -keystore "$CI_KEYSTORE" \
+            -storetype JKS \
+            -storepass sloppatv-ci \
+            -keypass sloppatv-ci \
+            -alias sloppatv-ci \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1 \
+            -dname "CN=sloppaTV CI, OU=CI, O=sloppaTV, L=Auckland, ST=Auckland, C=NZ" \
+            -noprompt
+          {
+            printf 'storeFile=%s\n' "$CI_KEYSTORE"
+            printf 'storePassword=%s\n' 'sloppatv-ci'
+            printf 'keyAlias=%s\n' 'sloppatv-ci'
+            printf 'keyPassword=%s\n' 'sloppatv-ci'
+          } > key.properties
+
       - name: Run host policy tests
         run: ./tools/run_host_tests.py
 
