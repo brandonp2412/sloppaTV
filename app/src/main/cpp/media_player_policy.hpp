@@ -6,6 +6,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <vector>
 
 enum class StartupStep {
     PrepareMedia,
@@ -106,6 +107,18 @@ inline bool transcodingUrlRepresentsDirectStream(std::string_view url) {
         begin = end + 1;
     }
     return true;
+}
+
+inline std::string serverStreamVideoCodecList(const std::vector<std::string>& directCodecs) {
+    std::string result;
+    auto append = [&](std::string_view codec) {
+        if (std::find(directCodecs.begin(), directCodecs.end(), codec) == directCodecs.end()) return;
+        if (!result.empty()) result += ',';
+        result += codec;
+    };
+    append("hevc");
+    append("h264");
+    return result.empty() ? "h264" : result;
 }
 
 constexpr bool shouldAcceptPostSeekTelemetry(
