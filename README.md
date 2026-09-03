@@ -44,20 +44,20 @@ Build the Android variants:
 ./gradlew test assembleDebug assembleBenchmark assembleRelease
 ```
 
-`debug`, `benchmark` and `release` all use the single production application ID `app.sloppatv`; do not create parallel `.test` installs. `benchmark` is non-debuggable/optimized for performance and device acceptance testing. Debug/Benchmark use the configured signing key when present, otherwise Gradle's current local Android debug key. `release` remains unsigned unless production signing credentials are supplied.
+`debug`, `benchmark` and `release` all use the single production application ID `app.sloppatv`; do not create parallel `.test` installs. `benchmark` is non-debuggable/optimized for performance and device acceptance testing. Every variant is signed with the same production key from `key.properties`; Gradle refuses to configure when it is absent or incomplete.
 
 For device deployment, always use an in-place install/update so existing app data is preserved. If Android reports a signature mismatch such as `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, stop and compare the installed APK certificate with the candidate certificate. Local debug keys can differ between environments or older installs; select the matching signing identity rather than replacing the app. Never uninstall the existing sloppaTV package, clear its data, or otherwise destroy the installed session merely to make a new APK install.
 
 ## Production signing
 
-Set all four variables before building `assembleRelease`:
+Copy `key.properties.example` to the ignored `key.properties` file, then set all four values:
 
-- `SLOPPATV_KEYSTORE_PATH`
-- `SLOPPATV_KEYSTORE_PASSWORD`
-- `SLOPPATV_KEY_ALIAS`
-- `SLOPPATV_KEY_PASSWORD`
+- `storeFile`
+- `storePassword`
+- `keyAlias`
+- `keyPassword`
 
-Partial signing configuration fails the Gradle configuration instead of silently producing a differently signed build.
+An absent or partial signing configuration fails Gradle configuration instead of silently producing an unsigned or debug-signed APK.
 
 Version code and version name are defined centrally in `gradle.properties` as `SLOPPATV_VERSION_CODE` and `SLOPPATV_VERSION_NAME`. The version name is also compiled into the native diagnostics screen.
 

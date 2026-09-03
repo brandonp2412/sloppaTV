@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
@@ -5,15 +7,18 @@ plugins {
 val sloppaVersionCode = providers.gradleProperty("SLOPPATV_VERSION_CODE").get().toInt()
 val sloppaVersionName = providers.gradleProperty("SLOPPATV_VERSION_NAME").get()
 
-val releaseSigningValues = listOf(
-    System.getenv("SLOPPATV_KEYSTORE_PATH"),
-    System.getenv("SLOPPATV_KEYSTORE_PASSWORD"),
-    System.getenv("SLOPPATV_KEY_ALIAS"),
-    System.getenv("SLOPPATV_KEY_PASSWORD"),
-)
+val releaseSigningPropertiesFile = rootProject.file("key.properties")
+val releaseSigningProperties = Properties().apply {
+    require(releaseSigningPropertiesFile.isFile) {
+        "Signing requires ${releaseSigningPropertiesFile.path}; copy key.properties.example and supply the production key details"
+    }
+    releaseSigningPropertiesFile.inputStream().use(::load)
+}
+val releaseSigningValues = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+    .map { releaseSigningProperties.getProperty(it)?.trim() }
 val releaseSigningConfigured = releaseSigningValues.all { !it.isNullOrBlank() }
-require(releaseSigningConfigured || releaseSigningValues.all { it.isNullOrBlank() }) {
-    "Release signing requires SLOPPATV_KEYSTORE_PATH, SLOPPATV_KEYSTORE_PASSWORD, SLOPPATV_KEY_ALIAS and SLOPPATV_KEY_PASSWORD together"
+require(releaseSigningConfigured) {
+    "Signing requires non-empty storeFile, storePassword, keyAlias and keyPassword entries in ${releaseSigningPropertiesFile.path}"
 }
 
 android {
@@ -46,7 +51,7 @@ android {
     signingConfigs {
         if (releaseSigningConfigured) {
             create("release") {
-                storeFile = file(releaseSigningValues[0]!!)
+                storeFile = rootProject.file(releaseSigningValues[0]!!)
                 storePassword = releaseSigningValues[1]
                 keyAlias = releaseSigningValues[2]
                 keyPassword = releaseSigningValues[3]
@@ -56,31 +61,19 @@ android {
 
     buildTypes {
         getByName("debug") {
-            // All local variants update the single sloppaTV installation. Never work around
-            // a signing mismatch by uninstalling the existing app or clearing its data.
             versionNameSuffix = "-debug"
-            signingConfig = if (releaseSigningConfigured) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
         }
         getByName("release") {
             isMinifyEnabled = false
             isDebuggable = false
-            // Production release output stays unsigned unless all signing secrets are supplied.
-            // This prevents a public/release APK from ever being silently signed with a debug key.
-            signingConfig = if (releaseSigningConfigured) signingConfigs.getByName("release") else null
+            signingConfig = signingConfigs.getByName("release")
         }
         create("benchmark") {
             initWith(getByName("release"))
             versionNameSuffix = "-benchmark"
             isDebuggable = false
-            signingConfig = if (releaseSigningConfigured) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
-            }
+            signingConfig = signingConfigs.getByName("release")
             matchingFallbacks += listOf("release")
         }
     }
