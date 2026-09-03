@@ -35,6 +35,13 @@ int main() {
     assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
     assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);
     assert(homeImageKind(false, false, true) == ArtworkKind::Backdrop);
+    assert(preferHomeLandscapeArtwork("Movie"));
+    assert(preferHomeLandscapeArtwork("Episode"));
+    assert(preferHomeLandscapeArtwork("Series"));
+    assert(preferHomeLandscapeArtwork("BoxSet"));
+    assert(!preferHomeLandscapeArtwork("UserView"));
+    assert(!preferHomeLandscapeArtwork("CollectionFolder"));
+    assert(!preferHomeLandscapeArtwork("Folder"));
 
     const ArtworkReference episodeArtwork = homeArtworkReference(
         "episode-id",
