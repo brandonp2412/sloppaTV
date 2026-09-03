@@ -6,11 +6,80 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstring>
+#include <string_view>
 #include <vector>
 
 namespace {
 constexpr const char* kTag = "sloppaTV/render";
+
+uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
+    const auto first = static_cast<unsigned char>(text[index++]);
+    if (first < 0x80) return first;
+    auto continuation = [&](int count, uint32_t value) -> uint32_t {
+        for (int offset = 0; offset < count; ++offset) {
+            if (index >= text.size()) return '?';
+            const auto byte = static_cast<unsigned char>(text[index]);
+            if ((byte & 0xC0u) != 0x80u) return '?';
+            ++index;
+            value = (value << 6u) | (byte & 0x3Fu);
+        }
+        return value;
+    };
+    if ((first & 0xE0u) == 0xC0u) return continuation(1, first & 0x1Fu);
+    if ((first & 0xF0u) == 0xE0u) return continuation(2, first & 0x0Fu);
+    if ((first & 0xF8u) == 0xF0u) return continuation(3, first & 0x07u);
+    return '?';
+}
+
+void appendDisplayCodePoint(std::string& output, uint32_t codePoint) {
+    if (codePoint < 0x80u) {
+        output.push_back(static_cast<char>(codePoint));
+        return;
+    }
+    switch (codePoint) {
+        case 0x00A0: output.push_back(' '); return;
+        case 0x00C0: case 0x00C1: case 0x00C2: case 0x00C3: case 0x00C4: case 0x00C5: output.push_back('A'); return;
+        case 0x00C6: output += "AE"; return;
+        case 0x00C7: output.push_back('C'); return;
+        case 0x00C8: case 0x00C9: case 0x00CA: case 0x00CB: output.push_back('E'); return;
+        case 0x00CC: case 0x00CD: case 0x00CE: case 0x00CF: output.push_back('I'); return;
+        case 0x00D0: output.push_back('D'); return;
+        case 0x00D1: output.push_back('N'); return;
+        case 0x00D2: case 0x00D3: case 0x00D4: case 0x00D5: case 0x00D6: case 0x00D8: output.push_back('O'); return;
+        case 0x00D9: case 0x00DA: case 0x00DB: case 0x00DC: output.push_back('U'); return;
+        case 0x00DD: output.push_back('Y'); return;
+        case 0x00DF: output += "ss"; return;
+        case 0x00E0: case 0x00E1: case 0x00E2: case 0x00E3: case 0x00E4: case 0x00E5: output.push_back('a'); return;
+        case 0x00E6: output += "ae"; return;
+        case 0x00E7: output.push_back('c'); return;
+        case 0x00E8: case 0x00E9: case 0x00EA: case 0x00EB: output.push_back('e'); return;
+        case 0x00EC: case 0x00ED: case 0x00EE: case 0x00EF: output.push_back('i'); return;
+        case 0x00F0: output.push_back('d'); return;
+        case 0x00F1: output.push_back('n'); return;
+        case 0x00F2: case 0x00F3: case 0x00F4: case 0x00F5: case 0x00F6: case 0x00F8: output.push_back('o'); return;
+        case 0x00F9: case 0x00FA: case 0x00FB: case 0x00FC: output.push_back('u'); return;
+        case 0x00FD: case 0x00FF: output.push_back('y'); return;
+        case 0x0152: output += "OE"; return;
+        case 0x0153: output += "oe"; return;
+        case 0x2018: case 0x2019: case 0x201A: case 0x2032: output.push_back('\''); return;
+        case 0x201C: case 0x201D: case 0x201E: case 0x2033: output.push_back('"'); return;
+        case 0x2013: case 0x2014: case 0x2212: output.push_back('-'); return;
+        case 0x2026: output += "..."; return;
+        case 0x2022: output.push_back('*'); return;
+        case 0x266A: case 0x266B: output.push_back('~'); return;
+        default: output.push_back('?'); return;
+    }
+}
+
+std::string displayText(std::string_view text) {
+    std::string output;
+    output.reserve(text.size());
+    size_t index = 0;
+    while (index < text.size()) appendDisplayCodePoint(output, nextUtf8CodePoint(text, index));
+    return output;
+}
 
 class ScopedEnv {
 public:
@@ -376,7 +445,7 @@ void Renderer::setUiTransform(float safeAreaFraction, float textScale) {
     uiScale_ = 1.0f - inset * 2.0f;
     uiOffsetX_ = logicalWidth() * inset;
     uiOffsetY_ = logicalHeight() * inset;
-    textScale_ = std::clamp(textScale, 0.8f, 2.0f);
+    textScale_ = std::clamp(textScale, 0.8f, 2.5f);
 }
 
 void Renderer::endFrame() {
@@ -406,6 +475,151 @@ void Renderer::rect(float x, float y, float w, float h, Color c) {
     const Vertex v1{x + w, y, c.r, c.g, c.b, c.a};
     const Vertex v2{x + w, y + h, c.r, c.g, c.b, c.a};
     const Vertex v3{x, y + h, c.r, c.g, c.b, c.a};
+    vertices_.insert(vertices_.end(), {v0, v1, v2, v0, v2, v3});
+}
+
+void Renderer::roundedRect(float x, float y, float w, float h, float radius, Color c) {
+    if (w <= 0.0f || h <= 0.0f) return;
+    x = uiOffsetX_ + x * uiScale_;
+    y = uiOffsetY_ + y * uiScale_;
+    w *= uiScale_;
+    h *= uiScale_;
+    radius = std::clamp(radius * uiScale_, 0.0f, std::min(w, h) * 0.5f);
+    if (radius <= 0.5f) {
+        const Vertex v0{x, y, c.r, c.g, c.b, c.a};
+        const Vertex v1{x + w, y, c.r, c.g, c.b, c.a};
+        const Vertex v2{x + w, y + h, c.r, c.g, c.b, c.a};
+        const Vertex v3{x, y + h, c.r, c.g, c.b, c.a};
+        vertices_.insert(vertices_.end(), {v0, v1, v2, v0, v2, v3});
+        return;
+    }
+
+    constexpr int segmentsPerCorner = 6;
+    constexpr int pointsPerCorner = segmentsPerCorner + 1;
+    constexpr int pointCount = pointsPerCorner * 4;
+    constexpr float pi = 3.14159265358979323846f;
+    std::array<Vertex, pointCount> perimeter{};
+    const std::array<std::array<float, 3>, 4> corners{{
+        {{x + w - radius, y + radius, -pi * 0.5f}},
+        {{x + w - radius, y + h - radius, 0.0f}},
+        {{x + radius, y + h - radius, pi * 0.5f}},
+        {{x + radius, y + radius, pi}},
+    }};
+    int point = 0;
+    for (const auto& corner : corners) {
+        for (int i = 0; i <= segmentsPerCorner; ++i) {
+            const float angle = corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
+            perimeter[static_cast<size_t>(point++)] = Vertex{
+                corner[0] + std::cos(angle) * radius,
+                corner[1] + std::sin(angle) * radius,
+                c.r,
+                c.g,
+                c.b,
+                c.a,
+            };
+        }
+    }
+    const Vertex center{x + w * 0.5f, y + h * 0.5f, c.r, c.g, c.b, c.a};
+    for (int i = 0; i < pointCount; ++i) {
+        vertices_.push_back(center);
+        vertices_.push_back(perimeter[static_cast<size_t>(i)]);
+        vertices_.push_back(perimeter[static_cast<size_t>((i + 1) % pointCount)]);
+    }
+}
+
+void Renderer::roundedOutline(float x, float y, float w, float h, float radius, float thickness, Color c) {
+    if (w <= 0.0f || h <= 0.0f || thickness <= 0.0f) return;
+    x = uiOffsetX_ + x * uiScale_;
+    y = uiOffsetY_ + y * uiScale_;
+    w *= uiScale_;
+    h *= uiScale_;
+    radius = std::clamp(radius * uiScale_, 0.0f, std::min(w, h) * 0.5f);
+    thickness = std::clamp(thickness * uiScale_, 0.5f, std::min(w, h) * 0.45f);
+    const float innerX = x + thickness;
+    const float innerY = y + thickness;
+    const float innerW = std::max(0.0f, w - thickness * 2.0f);
+    const float innerH = std::max(0.0f, h - thickness * 2.0f);
+    const float innerRadius = std::max(0.0f, radius - thickness);
+    if (innerW <= 0.0f || innerH <= 0.0f) {
+        const Vertex v0{x, y, c.r, c.g, c.b, c.a};
+        const Vertex v1{x + w, y, c.r, c.g, c.b, c.a};
+        const Vertex v2{x + w, y + h, c.r, c.g, c.b, c.a};
+        const Vertex v3{x, y + h, c.r, c.g, c.b, c.a};
+        vertices_.insert(vertices_.end(), {v0, v1, v2, v0, v2, v3});
+        return;
+    }
+
+    constexpr int segmentsPerCorner = 6;
+    constexpr int pointsPerCorner = segmentsPerCorner + 1;
+    constexpr int pointCount = pointsPerCorner * 4;
+    constexpr float pi = 3.14159265358979323846f;
+    std::array<Vertex, pointCount> outer{};
+    std::array<Vertex, pointCount> inner{};
+    const std::array<std::array<float, 3>, 4> outerCorners{{
+        {{x + w - radius, y + radius, -pi * 0.5f}},
+        {{x + w - radius, y + h - radius, 0.0f}},
+        {{x + radius, y + h - radius, pi * 0.5f}},
+        {{x + radius, y + radius, pi}},
+    }};
+    const std::array<std::array<float, 3>, 4> innerCorners{{
+        {{innerX + innerW - innerRadius, innerY + innerRadius, -pi * 0.5f}},
+        {{innerX + innerW - innerRadius, innerY + innerH - innerRadius, 0.0f}},
+        {{innerX + innerRadius, innerY + innerH - innerRadius, pi * 0.5f}},
+        {{innerX + innerRadius, innerY + innerRadius, pi}},
+    }};
+    int point = 0;
+    for (size_t cornerIndex = 0; cornerIndex < outerCorners.size(); ++cornerIndex) {
+        for (int i = 0; i <= segmentsPerCorner; ++i) {
+            const float offset = pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner);
+            const float outerAngle = outerCorners[cornerIndex][2] + offset;
+            const float innerAngle = innerCorners[cornerIndex][2] + offset;
+            outer[static_cast<size_t>(point)] = Vertex{
+                outerCorners[cornerIndex][0] + std::cos(outerAngle) * radius,
+                outerCorners[cornerIndex][1] + std::sin(outerAngle) * radius,
+                c.r, c.g, c.b, c.a,
+            };
+            inner[static_cast<size_t>(point)] = Vertex{
+                innerCorners[cornerIndex][0] + std::cos(innerAngle) * innerRadius,
+                innerCorners[cornerIndex][1] + std::sin(innerAngle) * innerRadius,
+                c.r, c.g, c.b, c.a,
+            };
+            ++point;
+        }
+    }
+    for (int i = 0; i < pointCount; ++i) {
+        const int next = (i + 1) % pointCount;
+        vertices_.insert(vertices_.end(), {
+            outer[static_cast<size_t>(i)],
+            outer[static_cast<size_t>(next)],
+            inner[static_cast<size_t>(next)],
+            outer[static_cast<size_t>(i)],
+            inner[static_cast<size_t>(next)],
+            inner[static_cast<size_t>(i)],
+        });
+    }
+}
+
+void Renderer::verticalGradient(float x, float y, float w, float h, Color top, Color bottom) {
+    x = uiOffsetX_ + x * uiScale_;
+    y = uiOffsetY_ + y * uiScale_;
+    w *= uiScale_;
+    h *= uiScale_;
+    const Vertex v0{x, y, top.r, top.g, top.b, top.a};
+    const Vertex v1{x + w, y, top.r, top.g, top.b, top.a};
+    const Vertex v2{x + w, y + h, bottom.r, bottom.g, bottom.b, bottom.a};
+    const Vertex v3{x, y + h, bottom.r, bottom.g, bottom.b, bottom.a};
+    vertices_.insert(vertices_.end(), {v0, v1, v2, v0, v2, v3});
+}
+
+void Renderer::horizontalGradient(float x, float y, float w, float h, Color left, Color right) {
+    x = uiOffsetX_ + x * uiScale_;
+    y = uiOffsetY_ + y * uiScale_;
+    w *= uiScale_;
+    h *= uiScale_;
+    const Vertex v0{x, y, left.r, left.g, left.b, left.a};
+    const Vertex v1{x + w, y, right.r, right.g, right.b, right.a};
+    const Vertex v2{x + w, y + h, right.r, right.g, right.b, right.a};
+    const Vertex v3{x, y + h, left.r, left.g, left.b, left.a};
     vertices_.insert(vertices_.end(), {v0, v1, v2, v0, v2, v3});
 }
 
@@ -658,6 +872,7 @@ bool Renderer::loadFontAtlas() {
 }
 
 float Renderer::textWidth(float scale, const std::string& value) const {
+    const std::string display = displayText(value);
     scale *= textScale_;
     auto advanceFor = [&](unsigned char byte) {
         if (fontTexture_ && fontAdvancesReady_ && byte >= 32 && byte <= 126) {
@@ -669,7 +884,7 @@ float Renderer::textWidth(float scale, const std::string& value) const {
 
     float longest = 0.0f;
     float current = 0.0f;
-    for (const char c : value) {
+    for (const char c : display) {
         if (c == '\n') {
             longest = std::max(longest, current);
             current = 0.0f;
@@ -681,6 +896,7 @@ float Renderer::textWidth(float scale, const std::string& value) const {
 }
 
 void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {
+    const std::string display = displayText(value);
     scale *= textScale_;
     const float originX = x;
     const float lineHeight = (fontTexture_ ? 11.0f : 9.0f) * scale;
@@ -692,7 +908,7 @@ void Renderer::text(float x, float y, float scale, const std::string& value, Col
         return (fontTexture_ ? 5.6f : 6.0f) * scale;
     };
 
-    for (char raw : value) {
+    for (char raw : display) {
         if (raw == '\r') continue;
         if (raw == '\n') {
             x = originX;

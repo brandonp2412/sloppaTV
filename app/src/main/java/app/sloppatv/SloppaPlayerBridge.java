@@ -23,6 +23,8 @@ import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.extractor.DefaultExtractorsFactory;
+import androidx.media3.extractor.ExtractorsFactory;
 import androidx.media3.ui.SubtitleView;
 
 import java.util.Collections;
@@ -30,6 +32,7 @@ import java.util.Collections;
 import io.github.peerless2012.ass.media.AssHandler;
 import io.github.peerless2012.ass.media.AssHandlerConfig;
 import io.github.peerless2012.ass.media.factory.AssRenderersFactory;
+import io.github.peerless2012.ass.media.kt.AssPlayerKt;
 import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory;
 import io.github.peerless2012.ass.media.type.AssRenderType;
 import io.github.peerless2012.ass.media.widget.AssSubtitleView;
@@ -165,8 +168,14 @@ public final class SloppaPlayerBridge {
                 // Android TV GLES stacks reject the extension's framebuffer operations.
                 localAssHandler = new AssHandler(AssRenderType.OVERLAY_CANVAS, new AssHandlerConfig());
                 AssSubtitleParserFactory parserFactory = new AssSubtitleParserFactory(localAssHandler);
+                ExtractorsFactory extractorsFactory = AssPlayerKt.withAssMkvSupport(
+                    new DefaultExtractorsFactory(),
+                    parserFactory,
+                    localAssHandler
+                );
                 DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(
-                    new DefaultDataSource.Factory(context)
+                    new DefaultDataSource.Factory(context),
+                    extractorsFactory
                 );
                 mediaSourceFactory.setSubtitleParserFactory(parserFactory);
                 playerBuilder
@@ -318,10 +327,24 @@ public final class SloppaPlayerBridge {
                     mediaItem.setSubtitleConfigurations(Collections.singletonList(subtitle));
                 }
                 localAssHandler.init(created);
-                AssSubtitleView subtitleView = new AssSubtitleView(activity, localAssHandler);
-                assHandler = localAssHandler;
+                AssHandler subtitleHandler = localAssHandler;
+                AssSubtitleView subtitleView = new AssSubtitleView(activity, subtitleHandler);
+                subtitleView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
+                    int width = right - left;
+                    int height = bottom - top;
+                    if (width <= 0 || height <= 0) return;
+                    subtitleHandler.onSurfaceSizeChanged(width, height);
+                    Log.i(TAG, "ASS subtitle overlay size=" + width + "x" + height);
+                });
+                assHandler = subtitleHandler;
                 assSubtitleView = subtitleView;
                 activity.attachSubtitleOverlay(subtitleView);
+                subtitleView.post(() -> {
+                    int width = subtitleView.getWidth();
+                    int height = subtitleView.getHeight();
+                    if (width <= 0 || height <= 0) return;
+                    subtitleHandler.onSurfaceSizeChanged(width, height);
+                });
             }
             created.setMediaItem(mediaItem.build(), startPositionMs);
             Log.i(TAG, "Media3 initial position requested=" + startPositionMs);

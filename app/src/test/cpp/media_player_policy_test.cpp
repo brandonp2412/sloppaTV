@@ -25,7 +25,7 @@ int main() {
     assert(!preferExternalSubtitleDelivery(SubtitleStrategy::ClientStyled, false));
     assert(!preferExternalSubtitleDelivery(SubtitleStrategy::ClientText, true));
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientStyled, false, true));
-    assert(!useNativeSubtitleRenderer(SubtitleStrategy::ClientStyled, true, true));
+    assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientStyled, true, true));
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientText, false, true));
     assert(codecLevelAllowed(51, 0));
     assert(codecLevelAllowed(0, 41));
