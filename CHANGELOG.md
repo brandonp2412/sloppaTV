@@ -6,6 +6,7 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Added
 
+- Android application ID and Java/JNI namespace renamed from `nz.presley.sloppatv` to `app.sloppatv`; the legacy package is preserved as a migration source rather than destructively removed.
 - Structured navigation stack replacing screen-specific return variables.
 - Native diagnostics screen for app version, ABI, Jellyfin server version, decoder/HDR capability and last playback path.
 - Jellyfin server-version compatibility warning against the current tested 10.10+ baseline.
@@ -24,7 +25,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Saved authenticated user/server profiles with native switching, forgetting, add-account flow, single-session migration and expired-token cleanup.
 - TV readability redesign with three large Home cards per row, four-column media grids, larger navigation/settings/player typography, larger focus targets and roomier spacing.
 - Aspect-aware Details artwork so episodes use a large landscape frame while movies/series retain poster presentation.
-- Single-package Debug/Benchmark acceptance deployment using the production `nz.presley.sloppatv` application ID, with in-place update/signature-diagnosis rules that preserve installed app data.
+- Single-package Debug/Benchmark acceptance deployment using the production `app.sloppatv` application ID, with in-place update/signature-diagnosis rules that preserve installed app data. The previous `nz.presley.sloppatv` identity is retained only as a legacy migration source.
 - Persisted global UI text-size presets and per-edge overscan safe-area controls, with the native renderer applying them to UI/artwork/overlays while leaving playback video edge-to-edge.
 - Persisted AVC, HEVC and HDR playback overrides that feed real Jellyfin PlaybackInfo capability negotiation rather than acting as display-only preferences.
 - Native playback queue management with Series `PLAY ALL`, `PLAY NOW`, `PLAY NEXT`, move up/down, remove and hardware/media-next integration, shared with episode autoplay.

@@ -17,12 +17,12 @@ require(releaseSigningConfigured || releaseSigningValues.all { it.isNullOrBlank(
 }
 
 android {
-    namespace = "nz.presley.sloppatv"
+    namespace = "app.sloppatv"
     compileSdk = 36
     ndkVersion = "29.0.14206865"
 
     defaultConfig {
-        applicationId = "nz.presley.sloppatv"
+        applicationId = "app.sloppatv"
         minSdk = 26
         targetSdk = 36
         versionCode = sloppaVersionCode

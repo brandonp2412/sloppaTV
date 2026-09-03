@@ -6334,7 +6334,7 @@ std::string javaString(JNIEnv* env, jstring value) {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
+Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
     JNIEnv* env,
     jclass,
     jstring action,
@@ -6349,7 +6349,7 @@ Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(
+Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(
     JNIEnv* env,
     jclass,
     jint mode,
@@ -6361,7 +6361,7 @@ Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(
+Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(
     JNIEnv* env,
     jclass,
     jint mode,
@@ -6373,7 +6373,7 @@ Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputCancelled(
+Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputCancelled(
     JNIEnv* env,
     jclass,
     jint mode,

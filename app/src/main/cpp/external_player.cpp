@@ -456,7 +456,7 @@ void NativeExternalPlayer::handleActivityResult(JNIEnv* env, int requestCode, in
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnActivityResult(
+Java_app_sloppatv_SloppaNativeActivity_nativeOnActivityResult(
     JNIEnv* env,
     jclass,
     jint requestCode,

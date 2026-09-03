@@ -100,7 +100,7 @@ void NativeMediaPlayer::startAsync(
 
     jclass activityClass = objectClass(env, activity_);
     jmethodID createBridge = activityClass
-        ? env->GetMethodID(activityClass, "createPlayerBridge", "()Lnz/presley/sloppatv/SloppaPlayerBridge;")
+        ? env->GetMethodID(activityClass, "createPlayerBridge", "()Lapp/sloppatv/SloppaPlayerBridge;")
         : nullptr;
     jobject localPlayer = createBridge ? env->CallObjectMethod(activity_, createBridge) : nullptr;
     std::string error;

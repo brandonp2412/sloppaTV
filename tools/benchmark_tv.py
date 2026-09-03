@@ -30,8 +30,8 @@ class App:
 APPS = (
     App(
         "sloppaTV",
-        "nz.presley.sloppatv",
-        "nz.presley.sloppatv/nz.presley.sloppatv.SloppaNativeActivity",
+        "app.sloppatv",
+        "app.sloppatv/app.sloppatv.SloppaNativeActivity",
         "SloppaNativeActivity",
         ("20",),  # Move from the top toolbar into the first Home media row.
     ),

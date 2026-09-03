@@ -13,7 +13,7 @@
         android:usesCleartextTraffic="true"
         android:theme="@style/AppTheme">
         <activity
-            android:name="nz.presley.sloppatv.SloppaNativeActivity"
+            android:name=".SloppaNativeActivity"
             android:banner="@drawable/banner"
             android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
             android:exported="true"
@@ -29,7 +29,7 @@
             </intent-filter>
         </activity>
         <service
-            android:name="nz.presley.sloppatv.SloppaDreamService"
+            android:name=".SloppaDreamService"
             android:exported="true"
             android:label="${appLabel}"
             android:permission="android.permission.BIND_DREAM_SERVICE">

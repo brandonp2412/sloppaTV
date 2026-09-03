@@ -89,7 +89,7 @@ void stopDreamThread() {
 }  // namespace
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobject surface) {
+Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobject surface) {
     if (!env || !surface) return;
     stopDreamThread();
     ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
@@ -105,6 +105,6 @@ Java_nz_presley_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaDreamService_nativeStopDream(JNIEnv*, jclass) {
+Java_app_sloppatv_SloppaDreamService_nativeStopDream(JNIEnv*, jclass) {
     stopDreamThread();
 }

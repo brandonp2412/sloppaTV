@@ -281,7 +281,7 @@ void NativeMediaSession::clear() {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnMediaSessionCommand(
+Java_app_sloppatv_SloppaNativeActivity_nativeOnMediaSessionCommand(
     JNIEnv*,
     jclass,
     jint command,
