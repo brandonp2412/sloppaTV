@@ -1,7 +1,9 @@
 #pragma once
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -16,6 +18,60 @@ constexpr int resolvedSubtitleIndex(int requestedIndex, int serverDefaultIndex) 
 
 constexpr bool shouldRetryFailedSubtitleTranscode(bool isTranscode, int selectedSubtitleIndex) {
     return isTranscode && selectedSubtitleIndex >= 0;
+}
+
+inline int parseSubtitleTimestamp(std::string_view input) {
+    while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front()))) input.remove_prefix(1);
+    const size_t whitespace = input.find_first_of(" \t\r\n");
+    if (whitespace != std::string_view::npos) input = input.substr(0, whitespace);
+    if (input.empty()) return -1;
+
+    const size_t firstColon = input.find(':');
+    if (firstColon == std::string_view::npos) return -1;
+    const size_t secondColon = input.find(':', firstColon + 1);
+    const size_t fraction = input.find_first_of(".,", secondColon == std::string_view::npos ? firstColon + 1 : secondColon + 1);
+    if (fraction == std::string_view::npos) return -1;
+
+    auto parseUnsigned = [](std::string_view value, int& output) {
+        if (value.empty()) return false;
+        const char* begin = value.data();
+        const char* end = begin + value.size();
+        const auto [parsed, error] = std::from_chars(begin, end, output);
+        return error == std::errc{} && parsed == end && output >= 0;
+    };
+
+    int hours = 0;
+    int minutes = 0;
+    int seconds = 0;
+    if (secondColon == std::string_view::npos) {
+        if (!parseUnsigned(input.substr(0, firstColon), minutes)
+            || !parseUnsigned(input.substr(firstColon + 1, fraction - firstColon - 1), seconds)) {
+            return -1;
+        }
+    } else {
+        if (!parseUnsigned(input.substr(0, firstColon), hours)
+            || !parseUnsigned(input.substr(firstColon + 1, secondColon - firstColon - 1), minutes)
+            || !parseUnsigned(input.substr(secondColon + 1, fraction - secondColon - 1), seconds)) {
+            return -1;
+        }
+    }
+    if (minutes > 59 || seconds > 59) return -1;
+
+    const std::string_view fractionDigits = input.substr(fraction + 1);
+    if (fractionDigits.empty()) return -1;
+    int rawFraction = 0;
+    const size_t usedDigits = std::min<size_t>(3, fractionDigits.size());
+    if (!parseUnsigned(fractionDigits.substr(0, usedDigits), rawFraction)) return -1;
+    int milliseconds = rawFraction;
+    if (usedDigits == 1) milliseconds *= 100;
+    else if (usedDigits == 2) milliseconds *= 10;
+    for (size_t index = usedDigits; index < fractionDigits.size(); ++index) {
+        if (!std::isdigit(static_cast<unsigned char>(fractionDigits[index]))) return -1;
+    }
+
+    const int64_t total = (((static_cast<int64_t>(hours) * 60) + minutes) * 60 + seconds) * 1000 + milliseconds;
+    if (total > std::numeric_limits<int>::max()) return -1;
+    return static_cast<int>(total);
 }
 
 struct SubtitlePreferenceCandidate {

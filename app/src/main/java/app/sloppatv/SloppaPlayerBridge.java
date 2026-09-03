@@ -221,7 +221,7 @@ public final class SloppaPlayerBridge {
                     if (playbackState == Player.STATE_READY) {
                         state = created.getPlayWhenReady() ? STATE_PLAYING : STATE_PAUSED;
                     } else if (playbackState == Player.STATE_BUFFERING) {
-                        state = STATE_PREPARING;
+                        state = created.getPlayWhenReady() ? STATE_PREPARING : STATE_PAUSED;
                     } else if (playbackState == Player.STATE_ENDED) {
                         positionMs = Math.max(positionMs, durationMs);
                         state = STATE_PAUSED;
@@ -232,8 +232,11 @@ public final class SloppaPlayerBridge {
                 public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
                     if (player != created) return;
                     updateTelemetry(created);
-                    if (created.getPlaybackState() == Player.STATE_READY) {
+                    int playbackState = created.getPlaybackState();
+                    if (playbackState == Player.STATE_READY) {
                         state = playWhenReady ? STATE_PLAYING : STATE_PAUSED;
+                    } else if (playbackState == Player.STATE_BUFFERING) {
+                        state = playWhenReady ? STATE_PREPARING : STATE_PAUSED;
                     }
                 }
 

@@ -285,16 +285,6 @@ struct SubtitleCue {
     std::string text;
 };
 
-int parseSubtitleTimestamp(std::string value) {
-    std::replace(value.begin(), value.end(), ',', '.');
-    int hours = 0;
-    int minutes = 0;
-    int seconds = 0;
-    int milliseconds = 0;
-    if (std::sscanf(value.c_str(), "%d:%d:%d.%d", &hours, &minutes, &seconds, &milliseconds) != 4) return -1;
-    return (((hours * 60) + minutes) * 60 + seconds) * 1000 + milliseconds;
-}
-
 std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
     std::vector<SubtitleCue> cues;
     std::istringstream stream(input);
@@ -863,9 +853,7 @@ private:
                         && restoreStatus != PlayerStatus::Idle
                         && restoreStatus != PlayerStatus::Error;
                     if (preservedPlayer) {
-                        if (shouldResumePlayback && restoreStatus == PlayerStatus::Paused) {
-                            player_.togglePause();
-                        }
+                        if (shouldResumePlayback) player_.play();
                         mediaSession_.updateState(
                             shouldResumePlayback ? MediaSessionState::Playing : MediaSessionState::Paused,
                             cachedPlaybackPositionMs_
@@ -903,8 +891,8 @@ private:
                     windowRestorePending_ = true;
                     if (status == PlayerStatus::Playing || status == PlayerStatus::Preparing) {
                         windowRestoreResumePlaying_ = true;
+                        player_.pause();
                     }
-                    if (status == PlayerStatus::Playing) player_.togglePause();
                     reportProgressAsync(true);
                     displayMode_.restore();
                     mediaSession_.updateState(MediaSessionState::Paused, cachedPlaybackPositionMs_);
@@ -914,9 +902,8 @@ private:
             case APP_CMD_GAINED_FOCUS:
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
-                if (screen_ == Screen::Player && !windowRestorePending_ && windowRestoreResumePlaying_
-                    && player_.status() == PlayerStatus::Paused) {
-                    player_.togglePause();
+                if (screen_ == Screen::Player && !windowRestorePending_ && windowRestoreResumePlaying_) {
+                    player_.play();
                     mediaSession_.updateState(MediaSessionState::Playing, cachedPlaybackPositionMs_);
                     windowRestoreResumePlaying_ = false;
                     __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
@@ -926,11 +913,9 @@ private:
                 screensaverActive_ = false;
                 if (screen_ == Screen::Player) {
                     const PlayerStatus status = player_.status();
-                    if (status == PlayerStatus::Playing) {
+                    if (status == PlayerStatus::Playing || status == PlayerStatus::Preparing) {
                         windowRestoreResumePlaying_ = true;
-                        player_.togglePause();
-                    } else if (status == PlayerStatus::Preparing) {
-                        windowRestoreResumePlaying_ = true;
+                        player_.pause();
                     }
                 }
                 break;
@@ -1795,6 +1780,7 @@ private:
                     if (generation != taskGeneration_.load()) return;
                     std::scoped_lock lock(stateMutex_);
                     loading_ = false;
+                    if (screen_ != Screen::Details || detail_.id != selected.id) return;
                     error_ = "EXTERNAL PLAYER: " + next.error;
                     return;
                 }
@@ -1820,6 +1806,7 @@ private:
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
+            if (screen_ != Screen::Details || detail_.id != selected.id) return;
             if (videoUrl.empty()) {
                 error_ = "EXTERNAL PLAYER: NO STATIC STREAM";
                 return;
@@ -2101,7 +2088,8 @@ private:
         const JellyfinSession session = session_;
         const JellyfinItem item = activePlaybackItem_;
         const std::string dataPath = dataPath_;
-        if (!tasks_.submit([this, session, item, subtitle, deliveryUrl, dataPath] {
+        const uint64_t generation = taskGeneration_.load();
+        if (!tasks_.submit([this, session, item, subtitle, deliveryUrl, dataPath, generation] {
             std::string clean;
             std::filesystem::path cacheFile;
             bool fromCache = false;
@@ -2162,15 +2150,19 @@ private:
                     subtitleFailure.c_str()
                 );
             }
+            if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
-            if (screen_ == Screen::Player && activePlaybackItem_.id == item.id && loaded) {
+            if (screen_ == Screen::Player
+                && activePlaybackItem_.id == item.id
+                && selectedSubtitleServerIndex_ == subtitle.index
+                && loaded) {
                 activeSubtitleCues_ = std::move(cues);
                 activeSubtitleLanguage_ = subtitle.language.empty() ? "SUB" : subtitle.language;
                 activeSubtitleServerIndex_ = subtitle.index;
                 activeSubtitleEnabled_ = true;
                 playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
             }
-            if (activePlaybackItem_.id == item.id) {
+            if (activePlaybackItem_.id == item.id && selectedSubtitleServerIndex_ == subtitle.index) {
                 subtitleLoadInProgress_ = false;
                 if (!loaded) {
                     selectedSubtitleServerIndex_ = -1;
@@ -2222,6 +2214,7 @@ private:
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        const uint64_t generation = ++taskGeneration_;
 
         // A Jellyfin server-stream change is a real playback-session handoff. Resolve the
         // replacement only after closing/reporting the old session: asking Jellyfin for a
@@ -2246,7 +2239,8 @@ private:
             playbackOverrides,
             audioStreamIndex,
             subtitleStreamIndex,
-            wasPaused
+            wasPaused,
+            generation
         ] {
             if (shouldReportPrevious) {
                 logPlaybackReportFailure(
@@ -2264,6 +2258,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
+            if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             subtitleLoadInProgress_ = false;
             nextTransitionLoading_ = false;
@@ -2564,16 +2559,12 @@ private:
         if (screen_ != Screen::Player) return;
         switch (command.type) {
             case MediaSessionCommandType::Play:
-                if (player_.status() == PlayerStatus::Paused) {
-                    player_.togglePause();
-                    reportProgressAsync(true);
-                }
+                player_.play();
+                reportProgressAsync(true);
                 break;
             case MediaSessionCommandType::Pause:
-                if (player_.status() == PlayerStatus::Playing) {
-                    player_.togglePause();
-                    reportProgressAsync(true);
-                }
+                player_.pause();
+                reportProgressAsync(true);
                 break;
             case MediaSessionCommandType::Stop:
                 stopPlayback();
@@ -2793,11 +2784,12 @@ private:
         episodeItems_.clear();
         episodeSelection_ = 0;
 
-        artwork_.clear();
-        homeArtwork_.clear();
+        clearArtworkCache(artwork_);
+        clearArtworkCache(homeArtwork_);
         homeArtworkUseCounter_ = 0;
-        backdrops_.clear();
-        logos_.clear();
+        clearArtworkCache(backdrops_);
+        clearArtworkCache(logos_);
+        artworkUseCounter_ = 0;
         loginFields_[1].clear();
         loginFields_[2].clear();
         quickConnectActive_ = false;
@@ -2849,7 +2841,7 @@ private:
         if (index >= savedSessions_.size()) return;
         const JellyfinSession removed = savedSessions_[index];
         const bool removedCurrent = sameSessionIdentity(session_, removed);
-        profileArtwork_.erase(profileArtworkKey(removed));
+        eraseArtworkEntry(profileArtwork_, profileArtworkKey(removed));
         savedSessions_.erase(savedSessions_.begin() + static_cast<std::ptrdiff_t>(index));
         if (removedCurrent) {
             clearCurrentSessionUi();
@@ -3536,6 +3528,7 @@ private:
             {
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
+                if (screen_ != Screen::Details || detail_.id != id) return;
                 if (!result.ok) {
                     error_ = "DETAILS: " + result.error;
                     return;
@@ -3599,9 +3592,10 @@ private:
             return;
         }
 
+        const Screen originScreen = screen_;
         const bool replacingPlayer = screen_ == Screen::Player && !activePlaybackItem_.id.empty();
         if (replacingPlayer) releaseActivePlayback(true);
-        playbackQueueIndex_ = index;
+        const int previousQueueIndex = playbackQueueIndex_;
         queueOverlayActive_ = false;
         loading_ = true;
         nextTransitionLoading_ = replacingPlayer;
@@ -3616,7 +3610,7 @@ private:
         const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
         const uint64_t generation = ++taskGeneration_;
-        tasks_.submit([this, session, queued = std::move(queued), index, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, generation]() mutable {
+        tasks_.submit([this, session, queued = std::move(queued), index, previousQueueIndex, originScreen, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, generation]() mutable {
             auto detailed = api_.getItem(session, queued.id);
             if (detailed.ok) queued = std::move(detailed.value);
             const int audioStreamIndex = audioIndexForPlaybackItem(queued, audioPreference);
@@ -3634,12 +3628,19 @@ private:
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             nextTransitionLoading_ = false;
-            if (index != playbackQueueIndex_) return;
+            if (screen_ != originScreen
+                || playbackQueueIndex_ != previousQueueIndex
+                || index < 0
+                || index >= static_cast<int>(playbackQueue_.size())
+                || playbackQueue_[static_cast<size_t>(index)].id != queued.id) {
+                return;
+            }
             if (!target.ok) {
                 if (replacingPlayer && screen_ == Screen::Player) popScreen(Screen::Details);
                 error_ = "QUEUE: " + target.error;
                 return;
             }
+            playbackQueueIndex_ = index;
             playbackQueue_[static_cast<size_t>(index)] = queued;
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(queued);
@@ -3717,6 +3718,7 @@ private:
                 if (generation != taskGeneration_.load()) return;
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
+                if (screen_ != Screen::Details || detail_.id != series.id) return;
                 error_ = episodes.ok ? "PLAY ALL: NO EPISODES" : "PLAY ALL: " + episodes.error;
                 return;
             }
@@ -3776,6 +3778,7 @@ private:
                 if (generation != taskGeneration_.load()) return;
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
+                if (screen_ != Screen::Details || detail_.id != series.id) return;
                 error_ = "PLAY ALL: NO REGULAR EPISODES";
                 return;
             }
@@ -3793,6 +3796,7 @@ private:
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
+            if (screen_ != Screen::Details || detail_.id != series.id) return;
             if (!target.ok) {
                 error_ = "PLAY ALL: " + target.error;
                 return;
@@ -3813,6 +3817,7 @@ private:
         if (loading_ || detail_.id.empty()) return;
         const bool continuingPlaybackChain = stillWatchingPrompt_;
         const bool continuingQueuedPrompt = continuingPlaybackChain && !playbackQueue_.empty();
+        int queuedPlaybackIndex = -1;
         if (!continuingPlaybackChain) {
             playbackAudioLanguagePreference_.reset();
             playbackSubtitleLanguagePreference_.reset();
@@ -3822,7 +3827,7 @@ private:
                 return item.id == detail_.id;
             });
             if (queued != playbackQueue_.end()) {
-                playbackQueueIndex_ = static_cast<int>(std::distance(playbackQueue_.begin(), queued));
+                queuedPlaybackIndex = static_cast<int>(std::distance(playbackQueue_.begin(), queued));
             } else {
                 playbackQueue_.clear();
                 playbackQueueIndex_ = -1;
@@ -3846,7 +3851,7 @@ private:
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
         const uint64_t generation = ++taskGeneration_;
 
-        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, generation] {
+        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, queuedPlaybackIndex, generation] {
             JellyfinItem playable = selected;
             if (selected.type == "Series") {
                 auto next = api_.getNextUpForSeries(session, selected.id);
@@ -3854,6 +3859,7 @@ private:
                     if (generation != taskGeneration_.load()) return;
                     std::scoped_lock lock(stateMutex_);
                     loading_ = false;
+                    if (screen_ != Screen::Details || detail_.id != selected.id) return;
                     error_ = next.error;
                     return;
                 }
@@ -3876,9 +3882,16 @@ private:
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
+            if (screen_ != Screen::Details || detail_.id != selected.id) return;
             if (!target.ok) {
                 error_ = target.error;
                 return;
+            }
+            if (queuedPlaybackIndex >= 0
+                && queuedPlaybackIndex < static_cast<int>(playbackQueue_.size())
+                && playbackQueue_[static_cast<size_t>(queuedPlaybackIndex)].id == playable.id) {
+                playbackQueueIndex_ = queuedPlaybackIndex;
+                playbackQueue_[static_cast<size_t>(queuedPlaybackIndex)] = playable;
             }
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(playable);
@@ -3973,10 +3986,14 @@ private:
     }
 
     void queueAutoplayNext(JellyfinItem nextItem) {
-        if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ + 1 < static_cast<int>(playbackQueue_.size())
-            && playbackQueue_[static_cast<size_t>(playbackQueueIndex_ + 1)].id == nextItem.id) {
-            ++playbackQueueIndex_;
-        }
+        const bool nextQueueItemMatches = playbackQueueIndex_ >= 0
+            && playbackQueueIndex_ + 1 < static_cast<int>(playbackQueue_.size())
+            && playbackQueue_[static_cast<size_t>(playbackQueueIndex_ + 1)].id == nextItem.id;
+        const int queuedNextIndex = queueAutoplayAdvanceIndex(
+            playbackQueueIndex_,
+            static_cast<int>(playbackQueue_.size()),
+            nextQueueItemMatches
+        );
         releaseActivePlayback(true);
         ++autoplayChainCount_;
         loading_ = true;
@@ -3990,7 +4007,8 @@ private:
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
         const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
-        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, nextItem = std::move(nextItem)]() mutable {
+        const uint64_t generation = ++taskGeneration_;
+        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, nextItem = std::move(nextItem), queuedNextIndex, generation]() mutable {
             auto detailed = api_.getItem(session, nextItem.id);
             if (detailed.ok) nextItem = std::move(detailed.value);
             const int audioStreamIndex = audioIndexForPlaybackItem(nextItem, audioPreference);
@@ -4004,6 +4022,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
+            if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             nextTransitionLoading_ = false;
@@ -4012,9 +4031,12 @@ private:
                 error_ = "NEXT EPISODE: " + target.error;
                 return;
             }
-            if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ < static_cast<int>(playbackQueue_.size())
-                && playbackQueue_[static_cast<size_t>(playbackQueueIndex_)].id == nextItem.id) {
-                playbackQueue_[static_cast<size_t>(playbackQueueIndex_)] = nextItem;
+            if (queuedNextIndex >= 0
+                && playbackQueueIndex_ + 1 == queuedNextIndex
+                && queuedNextIndex < static_cast<int>(playbackQueue_.size())
+                && playbackQueue_[static_cast<size_t>(queuedNextIndex)].id == nextItem.id) {
+                playbackQueueIndex_ = queuedNextIndex;
+                playbackQueue_[static_cast<size_t>(queuedNextIndex)] = nextItem;
             }
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(nextItem);
@@ -4211,6 +4233,7 @@ private:
         const int maxAudioChannels = settings_.maxAudioChannels;
         const int audioStreamIndex = selectedAudioServerIndex_;
         const int subtitleStreamIndex = selectedSubtitleServerIndex_;
+        const uint64_t generation = ++taskGeneration_;
         loading_ = true;
         playbackFallbackResolving_ = true;
         playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
@@ -4227,7 +4250,8 @@ private:
             maxAudioChannels,
             fallbackOverrides,
             audioStreamIndex,
-            subtitleStreamIndex
+            subtitleStreamIndex,
+            generation
         ]() mutable {
             if (shouldReportPrevious) {
                 logPlaybackReportFailure(
@@ -4245,6 +4269,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
+            if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             playbackFallbackResolving_ = false;
@@ -4630,17 +4655,18 @@ private:
     }
 
     std::string artworkKey(const JellyfinItem& item) const {
-        return item.id + ":primary:" + item.imageTag;
+        return session_.server + ":user:" + session_.userId + ":" + item.id + ":primary:" + item.imageTag;
     }
 
     std::string backdropKey(const JellyfinItem& item) const {
         const std::string artworkItemId = item.backdropItemId.empty() ? item.id : item.backdropItemId;
-        return artworkItemId + ":backdrop:" + item.backdropTag + ":mode:" + std::to_string(settings_.backdropMode);
+        return session_.server + ":user:" + session_.userId + ":" + artworkItemId
+            + ":backdrop:" + item.backdropTag + ":mode:" + std::to_string(settings_.backdropMode);
     }
 
     std::string logoKey(const JellyfinItem& item) const {
         const std::string artworkItemId = item.logoItemId.empty() ? item.id : item.logoItemId;
-        return artworkItemId + ":logo:" + item.logoTag;
+        return session_.server + ":user:" + session_.userId + ":" + artworkItemId + ":logo:" + item.logoTag;
     }
 
     std::string homeArtworkKey(const JellyfinItem& item) const {
@@ -4654,7 +4680,8 @@ private:
             item.backdropTag,
             item.backdropItemId
         );
-        return artwork.itemId + ":home:v5-480x270:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
+        return session_.server + ":user:" + session_.userId + ":" + artwork.itemId
+            + ":home:v5-480x270:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
     }
 
     std::string homeDiskCachePath(const std::string& key) const {
@@ -4746,20 +4773,45 @@ private:
         std::filesystem::remove(path, ec);
     }
 
-    void trimHomeArtworkCache() {
-        constexpr size_t kMaxHomeArtworkEntries = 48;
-        while (homeArtwork_.size() >= kMaxHomeArtworkEntries) {
-            auto victim = homeArtwork_.end();
-            for (auto it = homeArtwork_.begin(); it != homeArtwork_.end(); ++it) {
-                if (it->second.state == ArtworkState::Loading) continue;
-                if (victim == homeArtwork_.end() || it->second.lastUse < victim->second.lastUse) victim = it;
-            }
-            if (victim == homeArtwork_.end()) break;
-            if (victim->second.texture != 0 && victim->second.textureGeneration == renderer_.generation()) {
-                renderer_.deleteTexture(victim->second.texture);
-            }
-            homeArtwork_.erase(victim);
+    void releaseArtworkTexture(ArtworkEntry& entry) {
+        if (entry.texture != 0 && entry.textureGeneration == renderer_.generation()) {
+            renderer_.deleteTexture(entry.texture);
         }
+        entry.texture = 0;
+        entry.textureGeneration = 0;
+    }
+
+    void clearArtworkCache(std::unordered_map<std::string, ArtworkEntry>& cache) {
+        for (auto& [key, entry] : cache) {
+            (void)key;
+            releaseArtworkTexture(entry);
+        }
+        cache.clear();
+    }
+
+    void eraseArtworkEntry(std::unordered_map<std::string, ArtworkEntry>& cache, const std::string& key) {
+        const auto it = cache.find(key);
+        if (it == cache.end()) return;
+        releaseArtworkTexture(it->second);
+        cache.erase(it);
+    }
+
+    bool trimArtworkCache(std::unordered_map<std::string, ArtworkEntry>& cache, size_t maxEntries) {
+        while (cache.size() >= maxEntries) {
+            auto victim = cache.end();
+            for (auto it = cache.begin(); it != cache.end(); ++it) {
+                if (it->second.state == ArtworkState::Loading) continue;
+                if (victim == cache.end() || it->second.lastUse < victim->second.lastUse) victim = it;
+            }
+            if (victim == cache.end()) return false;
+            releaseArtworkTexture(victim->second);
+            cache.erase(victim);
+        }
+        return true;
+    }
+
+    bool trimHomeArtworkCache() {
+        return trimArtworkCache(homeArtwork_, 48);
     }
 
     void requestHomeArtwork(const JellyfinItem& item) {
@@ -4770,7 +4822,7 @@ private:
             existing->second.lastUse = ++homeArtworkUseCounter_;
             return;
         }
-        trimHomeArtworkCache();
+        if (!trimHomeArtworkCache()) return;
         ArtworkEntry entry;
         entry.lastUse = ++homeArtworkUseCounter_;
         homeArtwork_.emplace(key, std::move(entry));
@@ -4920,6 +4972,8 @@ private:
                 it->second.state = ArtworkState::Failed;
                 return;
             }
+            it->second.sourceWidth = decoded.width;
+            it->second.sourceHeight = decoded.height;
             it->second.decoded = std::move(decoded);
             it->second.state = ArtworkState::Ready;
         });
@@ -4934,10 +4988,18 @@ private:
             return false;
         }
         auto& entry = it->second;
-        if (entry.state != ArtworkState::Ready || !entry.decoded.valid()) return false;
+        if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
+            if (!entry.decoded.valid()) {
+                profileArtwork_.erase(it);
+                requestProfileArtwork(saved);
+                return false;
+            }
+            entry.sourceWidth = entry.decoded.width;
+            entry.sourceHeight = entry.decoded.height;
             entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
             entry.textureGeneration = renderer_.generation();
+            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
         }
         if (entry.texture == 0) return false;
         renderer_.image(entry.texture, x, y, size, size);
@@ -4947,8 +5009,15 @@ private:
     void requestArtwork(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty()) return;
         const std::string key = artworkKey(item);
-        if (artwork_.contains(key)) return;
-        artwork_.emplace(key, ArtworkEntry{});
+        auto existing = artwork_.find(key);
+        if (existing != artwork_.end()) {
+            existing->second.lastUse = ++artworkUseCounter_;
+            return;
+        }
+        if (!trimArtworkCache(artwork_, 12)) return;
+        ArtworkEntry entry;
+        entry.lastUse = ++artworkUseCounter_;
+        artwork_.emplace(key, std::move(entry));
 
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
@@ -4970,6 +5039,8 @@ private:
                 it->second.state = ArtworkState::Failed;
                 return;
             }
+            it->second.sourceWidth = decoded.width;
+            it->second.sourceHeight = decoded.height;
             it->second.decoded = std::move(decoded);
             it->second.state = ArtworkState::Ready;
         });
@@ -4984,10 +5055,19 @@ private:
             return false;
         }
         auto& entry = it->second;
-        if (entry.state != ArtworkState::Ready || !entry.decoded.valid()) return false;
+        entry.lastUse = ++artworkUseCounter_;
+        if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
+            if (!entry.decoded.valid()) {
+                artwork_.erase(it);
+                requestArtwork(item);
+                return false;
+            }
+            entry.sourceWidth = entry.decoded.width;
+            entry.sourceHeight = entry.decoded.height;
             entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
             entry.textureGeneration = renderer_.generation();
+            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
         }
         if (entry.texture == 0) return false;
         drawCoverTexture(entry, x, y, width, height, alpha);
@@ -4998,8 +5078,15 @@ private:
         if (!session_.valid() || item.id.empty() || item.backdropTag.empty() || settings_.backdropMode <= 0) return;
         const std::string key = backdropKey(item);
         const int backdropMode = settings_.backdropMode;
-        if (backdrops_.contains(key)) return;
-        backdrops_.emplace(key, ArtworkEntry{});
+        auto existing = backdrops_.find(key);
+        if (existing != backdrops_.end()) {
+            existing->second.lastUse = ++artworkUseCounter_;
+            return;
+        }
+        if (!trimArtworkCache(backdrops_, 8)) return;
+        ArtworkEntry entry;
+        entry.lastUse = ++artworkUseCounter_;
+        backdrops_.emplace(key, std::move(entry));
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key, backdropMode] {
@@ -5020,6 +5107,8 @@ private:
                 it->second.state = ArtworkState::Failed;
                 return;
             }
+            it->second.sourceWidth = decoded.width;
+            it->second.sourceHeight = decoded.height;
             it->second.decoded = std::move(decoded);
             it->second.state = ArtworkState::Ready;
         });
@@ -5034,10 +5123,19 @@ private:
             return false;
         }
         auto& entry = it->second;
-        if (entry.state != ArtworkState::Ready || !entry.decoded.valid()) return false;
+        entry.lastUse = ++artworkUseCounter_;
+        if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
+            if (!entry.decoded.valid()) {
+                backdrops_.erase(it);
+                requestBackdrop(item);
+                return false;
+            }
+            entry.sourceWidth = entry.decoded.width;
+            entry.sourceHeight = entry.decoded.height;
             entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
             entry.textureGeneration = renderer_.generation();
+            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
         }
         if (entry.texture == 0) return false;
         const float effectiveAlpha = settings_.backdropMode == 1 ? std::max(alpha, 0.34f) : alpha;
@@ -5049,8 +5147,15 @@ private:
     void requestLogo(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.logoTag.empty()) return;
         const std::string key = logoKey(item);
-        if (logos_.contains(key)) return;
-        logos_.emplace(key, ArtworkEntry{});
+        auto existing = logos_.find(key);
+        if (existing != logos_.end()) {
+            existing->second.lastUse = ++artworkUseCounter_;
+            return;
+        }
+        if (!trimArtworkCache(logos_, 12)) return;
+        ArtworkEntry entry;
+        entry.lastUse = ++artworkUseCounter_;
+        logos_.emplace(key, std::move(entry));
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
@@ -5070,6 +5175,8 @@ private:
                 it->second.state = ArtworkState::Failed;
                 return;
             }
+            it->second.sourceWidth = decoded.width;
+            it->second.sourceHeight = decoded.height;
             it->second.decoded = std::move(decoded);
             it->second.state = ArtworkState::Ready;
         });
@@ -5084,13 +5191,22 @@ private:
             return false;
         }
         auto& entry = it->second;
-        if (entry.state != ArtworkState::Ready || !entry.decoded.valid()) return false;
+        entry.lastUse = ++artworkUseCounter_;
+        if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
+            if (!entry.decoded.valid()) {
+                logos_.erase(it);
+                requestLogo(item);
+                return false;
+            }
+            entry.sourceWidth = entry.decoded.width;
+            entry.sourceHeight = entry.decoded.height;
             entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
             entry.textureGeneration = renderer_.generation();
+            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
         }
-        if (entry.texture == 0) return false;
-        const float aspect = static_cast<float>(entry.decoded.width) / static_cast<float>(entry.decoded.height);
+        if (entry.texture == 0 || entry.sourceWidth <= 0 || entry.sourceHeight <= 0) return false;
+        const float aspect = static_cast<float>(entry.sourceWidth) / static_cast<float>(entry.sourceHeight);
         float width = maxWidth;
         float height = width / aspect;
         if (height > maxHeight) {
@@ -6314,7 +6430,7 @@ private:
 
     void rememberSession(const JellyfinSession& session) {
         if (!session.valid()) return;
-        profileArtwork_.erase(profileArtworkKey(session));
+        eraseArtworkEntry(profileArtwork_, profileArtworkKey(session));
         const auto existing = std::find_if(savedSessions_.begin(), savedSessions_.end(), [&](const JellyfinSession& saved) {
             return sameSessionIdentity(saved, session);
         });
@@ -6330,7 +6446,7 @@ private:
     }
 
     void removeSavedSessionIdentity(const JellyfinSession& session) {
-        profileArtwork_.erase(profileArtworkKey(session));
+        eraseArtworkEntry(profileArtwork_, profileArtworkKey(session));
         std::erase_if(savedSessions_, [&](const JellyfinSession& saved) {
             return sameSessionIdentity(saved, session);
         });
@@ -6499,6 +6615,7 @@ private:
     std::unordered_map<std::string, ArtworkEntry> profileArtwork_;
     std::unordered_map<std::string, ArtworkEntry> homeArtwork_;
     uint64_t homeArtworkUseCounter_ = 0;
+    uint64_t artworkUseCounter_ = 0;
     std::mutex homeDiskCacheMutex_;
     std::unordered_map<std::string, ArtworkEntry> backdrops_;
     std::unordered_map<std::string, ArtworkEntry> logos_;

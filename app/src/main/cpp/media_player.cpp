@@ -214,18 +214,30 @@ void NativeMediaPlayer::stop() {
     __android_log_print(ANDROID_LOG_INFO, kTag, "Media3 player detached for asynchronous release");
 }
 
-void NativeMediaPlayer::togglePause() {
+void NativeMediaPlayer::invokeTransportCommand(const char* methodName, const char* operation) {
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (!env) return;
     std::scoped_lock lock(mutex_);
     if (!player_) return;
     jclass playerClass = objectClass(env, player_);
-    jmethodID method = playerClass ? env->GetMethodID(playerClass, "togglePause", "()V") : nullptr;
+    jmethodID method = playerClass ? env->GetMethodID(playerClass, methodName, "()V") : nullptr;
     if (method) env->CallVoidMethod(player_, method);
     lastSnapshotPoll_ = {};
-    clearException(env, "toggle pause");
+    clearException(env, operation);
     if (playerClass) env->DeleteLocalRef(playerClass);
+}
+
+void NativeMediaPlayer::togglePause() {
+    invokeTransportCommand("togglePause", "toggle pause");
+}
+
+void NativeMediaPlayer::pause() {
+    invokeTransportCommand("pause", "pause");
+}
+
+void NativeMediaPlayer::play() {
+    invokeTransportCommand("play", "play");
 }
 
 void NativeMediaPlayer::seekBy(int deltaMs) {
