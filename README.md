@@ -67,6 +67,29 @@ Automated viewing acceptance supports Waydroid and an explicitly selected physic
 
 A roadmap item is not considered fully verified merely because it builds. Device-visible behavior remains marked partial until the relevant Android TV/Waydroid acceptance pass has been completed. A headless Waydroid session can expose an invalid/stale Android `AudioTrack` clock; when that occurs, video/audio motion results are recorded as an emulator limitation rather than adding Waydroid-specific playback behavior to the production client.
 
+### Automated screenshots
+
+The Android pipeline boots a disposable 1920x1080 TV emulator, installs the debug APK under the production application ID, runs the clean-install screenshot suite, validates the PNG dimensions, and uploads the images plus `screenshots.json` as the `sloppaTV-screenshots` artifact. The manifest records each image's dimensions, size, and SHA-256 digest.
+
+Run the same clean-install suite on an emulator with:
+
+```sh
+ANDROID_SERIAL=emulator-5554 \
+SLOPPATV_APK=app/build/outputs/apk/debug/app-debug.apk \
+./tools/ci_screenshots.sh
+```
+
+For a logged-in Waydroid or Google TV session, use the non-destructive authenticated suite directly. It captures Home, Search, Settings, and restored Home without changing persisted settings:
+
+```sh
+./tools/waydroid_e2e.py \
+  --serial 192.168.240.112:5555 \
+  --target waydroid \
+  screenshots --suite tools/screenshot-suites/authenticated.json
+```
+
+Use `--target google-tv-streamer` with the streamer's explicit ADB serial for physical-device evidence. Screenshot suites are declarative JSON files under `tools/screenshot-suites/`; generated evidence remains ignored under `artifacts/`.
+
 ## License
 
 MIT. See [LICENSE.md](LICENSE.md).

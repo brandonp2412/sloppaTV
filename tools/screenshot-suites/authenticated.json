@@ -1,0 +1,23 @@
+{
+  "name": "authenticated",
+  "steps": [
+    {"action": "restart", "wait_seconds": 3},
+    {"action": "capture", "name": "01-home"},
+    {"action": "key", "key": "SEARCH", "wait_seconds": 1},
+    {"action": "capture", "name": "02-search"},
+    {"action": "key", "key": "BACK", "wait_seconds": 1},
+    {"action": "key", "key": "BACK", "wait_seconds": 1},
+    {"action": "key", "key": "DPAD_UP"},
+    {"action": "key", "key": "DPAD_LEFT"},
+    {"action": "key", "key": "DPAD_LEFT"},
+    {"action": "key", "key": "DPAD_LEFT"},
+    {"action": "key", "key": "DPAD_LEFT"},
+    {"action": "key", "key": "DPAD_RIGHT"},
+    {"action": "key", "key": "DPAD_RIGHT"},
+    {"action": "key", "key": "DPAD_RIGHT"},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 1},
+    {"action": "capture", "name": "03-settings"},
+    {"action": "key", "key": "BACK", "wait_seconds": 1},
+    {"action": "capture", "name": "04-home-restored"}
+  ]
+}

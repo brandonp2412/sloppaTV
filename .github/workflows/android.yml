@@ -69,3 +69,49 @@ jobs:
             app/build/outputs/apk/benchmark/*.apk
             app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+  screenshots:
+    name: Android TV screenshots
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Download APKs
+        uses: actions/download-artifact@v8
+        with:
+          name: sloppaTV-apks
+          path: artifacts/apks
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Generate screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: tv_1080p
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          script: |
+            export ANDROID_SERIAL="emulator-${EMULATOR_PORT}"
+            export SLOPPATV_APK
+            SLOPPATV_APK="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)"
+            ./tools/ci_screenshots.sh
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sloppaTV-screenshots
+          path: artifacts/ci-screenshots
+          if-no-files-found: warn
+          retention-days: 14
