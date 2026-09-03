@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 82 / 139 verified (59.0%); 57 partial; none unbuilt.
+Status at 2026-09-04: 83 / 139 verified (59.7%); 56 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -55,7 +55,7 @@ required for TV hardware, Android TV integration, and final performance work.
 ### Playback and platform
 
 - [~] Target-TV codec, HDR, audio-route, refresh-rate, and long-soak matrix.
-- [~] Playback reports need automated Jellyfin session-state assertions.
+- [x] Playback reports have automated Jellyfin session-state assertions.
 - [~] Subtitle appearance/position; ASS visual pass; Trickplay thumbnail render.
 - [~] HDR fixture and HDR-preserving server-stream path verified; new-build streamer acceptance is still required. Trickplay still needs server-generated tile data.
 - [~] External-player handoff needs a compatible installed player.
@@ -83,6 +83,10 @@ required for TV hardware, Android TV integration, and final performance work.
 - 2026-09-04: Google TV Streamer SEARCH intent and HOME/lifecycle restoration passed with the
   same app process and no sloppaTV fatal exception, native signal, or ANR. A five-minute physical-TV
   soak stayed flat (PSS -0.4%, RSS -0.2%) and also completed with a clean fatal-log audit.
+- 2026-09-04: automated physical-TV playback-report acceptance verified Jellyfin `/Sessions`
+  position advance while playing, immediate paused state with stable position, resumed state, and
+  stopped-session clearing for the active sloppaTV item. The harness mutes media during automation,
+  restores the original volume, and writes reproducible JSON evidence.
 - 2026-09-04: HDR10 acceptance found an audio-transcode regression: the HEVC Main 10 source was
   being converted to AVC because the HLS server-stream profile advertised only H.264. The corrected
   item-aware profile advertises HEVC before H.264 when HEVC remains allowed for the title. A real

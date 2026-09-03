@@ -26,6 +26,7 @@ def load_tool(name: str):
 
 benchmark_tv = load_tool("benchmark_tv")
 waydroid_e2e = load_tool("waydroid_e2e")
+playback_report_e2e = load_tool("playback_report_e2e")
 
 
 class BenchmarkToolingTest(unittest.TestCase):
@@ -35,6 +36,44 @@ class BenchmarkToolingTest(unittest.TestCase):
 
     def test_percentile_uses_upper_bucket(self) -> None:
         self.assertEqual(benchmark_tv.percentile([10.0, 20.0, 30.0, 40.0], 0.95), 40.0)
+
+
+class PlaybackReportToolingTest(unittest.TestCase):
+    def test_selects_exact_active_sloppatv_item(self) -> None:
+        sessions = [
+            {"Client": "sloppaTV", "NowPlayingItem": {"Id": "abc-def", "Name": "Target"}, "PlayState": {"IsPaused": False}},
+            {"Client": "Jellyfin Android TV", "NowPlayingItem": {"Id": "abc-def", "Name": "Other"}},
+            {"Client": "sloppaTV", "NowPlayingItem": {}},
+        ]
+        selected = playback_report_e2e.playback_session_for_item(sessions, "abcdef")
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected["NowPlayingItem"]["Name"], "Target")
+
+    def test_rejects_ambiguous_active_sloppatv_item(self) -> None:
+        sessions = [
+            {"Client": "sloppaTV", "NowPlayingItem": {"Id": "abcdef"}},
+            {"Client": "sloppaTV", "NowPlayingItem": {"Id": "abc-def"}},
+        ]
+        with self.assertRaisesRegex(RuntimeError, "Multiple active sloppaTV sessions"):
+            playback_report_e2e.playback_session_for_item(sessions, "abcdef")
+
+    def test_snapshot_exposes_only_acceptance_state(self) -> None:
+        value = playback_report_e2e.snapshot(
+            {
+                "UserName": "viewer",
+                "NowPlayingItem": {"Id": "abc", "Name": "Episode"},
+                "PlayState": {
+                    "PositionTicks": 123,
+                    "IsPaused": True,
+                    "PlayMethod": "DirectStream",
+                    "AudioStreamIndex": 2,
+                    "SubtitleStreamIndex": -1,
+                },
+            }
+        )
+        self.assertEqual(value["position_ticks"], 123)
+        self.assertTrue(value["paused"])
+        self.assertEqual(value["play_method"], "DirectStream")
 
 
 class WaydroidToolingTest(unittest.TestCase):
