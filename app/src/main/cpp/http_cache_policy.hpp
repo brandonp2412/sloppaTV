@@ -1,9 +1,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 constexpr std::size_t kMaxApiGetCacheEntries = 32;
+
+constexpr bool shouldJoinInFlightApiGet(uint64_t currentGeneration, uint64_t pendingGeneration) {
+    return currentGeneration == pendingGeneration;
+}
 
 inline bool shouldCacheApiGet(std::string_view url) {
     return url.find("/Images/") == std::string_view::npos

@@ -4047,10 +4047,12 @@ private:
     ) const {
         std::vector<ExternalSubtitleTrack> tracks;
         const SubtitleStrategy strategy = subtitleStrategy(target.subtitleCodec);
-        const bool embeddedClientSubtitle = target.playMethod == PlaybackMethod::DirectPlay
-            && target.subtitleEmbedded
-            && (strategy == SubtitleStrategy::ClientText || strategy == SubtitleStrategy::ClientStyled)
-            && target.subtitleStreamIndex >= 0;
+        const bool embeddedClientSubtitle = useEmbeddedPlayerSubtitleRenderer(
+            strategy,
+            target.playMethod == PlaybackMethod::DirectPlay,
+            target.subtitleEmbedded,
+            target.subtitleStreamIndex >= 0
+        );
         if (embeddedClientSubtitle) {
             int embeddedOrdinal = 0;
             for (const auto& subtitle : item.subtitles) {
@@ -4354,11 +4356,18 @@ private:
                     );
                     if (selectedSubtitle != item.subtitles.end()) {
                         const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
+                        const bool embeddedPlayerSubtitle = useEmbeddedPlayerSubtitleRenderer(
+                            strategy,
+                            target->playMethod == PlaybackMethod::DirectPlay,
+                            target->subtitleEmbedded,
+                            true
+                        );
                         if (useNativeSubtitleRenderer(
                                 strategy,
                                 target->playMethod == PlaybackMethod::DirectPlay,
                                 true
-                            )) {
+                            )
+                            && !embeddedPlayerSubtitle) {
                             loadSubtitleAsync(
                                 *selectedSubtitle,
                                 strategy == SubtitleStrategy::ClientText ? target->subtitleUrl : std::string{}

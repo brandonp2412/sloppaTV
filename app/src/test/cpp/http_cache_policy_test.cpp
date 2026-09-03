@@ -5,6 +5,9 @@
 int main() {
     assert(kMaxApiGetCacheEntries >= 8);
     assert(kMaxApiGetCacheEntries <= 64);
+    assert(shouldJoinInFlightApiGet(0, 0));
+    assert(shouldJoinInFlightApiGet(7, 7));
+    assert(!shouldJoinInFlightApiGet(7, 8));
 
     assert(shouldCacheApiGet("https://jellyfin.example/Users/me/Items?ParentId=123"));
     assert(shouldCacheApiGet("https://jellyfin.example/Items/123"));
