@@ -78,6 +78,10 @@ constexpr ArtworkKind homeImageKind(bool hasPrimary, bool hasThumb, bool hasBack
     return ArtworkKind::None;
 }
 
+inline bool preferHomeLandscapeArtwork(const std::string& itemType) {
+    return itemType != "UserView" && itemType != "CollectionFolder" && itemType != "Folder";
+}
+
 inline ArtworkReference homeArtworkReference(
     const std::string& itemId,
     const std::string& primaryTag,

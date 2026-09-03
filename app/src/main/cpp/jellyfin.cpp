@@ -1789,7 +1789,7 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
         item.imageTag,
         item.seriesId,
         item.seriesPrimaryImageTag,
-        item.type == "Episode",
+        preferHomeLandscapeArtwork(item.type),
         item.thumbTag,
         item.backdropTag,
         item.backdropItemId
