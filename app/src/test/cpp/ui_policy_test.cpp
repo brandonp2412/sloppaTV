@@ -13,6 +13,14 @@ int main() {
     assert(!isTopMediaGridSelection(5));
     assert(mediaCardWidth() == 320.0f);
     assert(mediaTitleScale() == 2.45f);
+    assert(usesLandscapeMediaCard("Episode"));
+    assert(usesLandscapeMediaCard("CollectionFolder"));
+    assert(usesLandscapeMediaCard("BoxSet"));
+    assert(usesLandscapeMediaCard("Folder"));
+    assert(!usesLandscapeMediaCard("Movie"));
+    assert(!usesLandscapeMediaCard("Series"));
+    assert(searchMediaRowHeight(true) == 430.0f);
+    assert(searchMediaRowHeight(false) == 300.0f);
     assert(detailActionTextScale(5) == 1.8f);
     assert(detailActionTextScale(10) == 1.8f);
     assert(detailActionTextScale(11) == 1.6f);

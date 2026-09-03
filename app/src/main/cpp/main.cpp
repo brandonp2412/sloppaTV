@@ -5547,7 +5547,7 @@ private:
     }
 
     void renderMediaArtworkCard(const JellyfinItem& item, float x, float y, float slotWidth, bool focused, bool showState = true) {
-        const bool landscape = item.type == "Episode" || item.type == "CollectionFolder" || item.type == "BoxSet" || item.type == "Folder";
+        const bool landscape = usesLandscapeMediaCard(item.type);
         const float imageWidth = landscape ? slotWidth : 232.0f;
         const float imageHeight = landscape ? 180.0f : 348.0f;
         const float imageX = x + (slotWidth - imageWidth) * 0.5f;
@@ -5581,12 +5581,13 @@ private:
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
         const float titleY = y + imageHeight + 18.0f;
-        renderer_.text(x + 2.0f, titleY, 2.05f, fitTextLines(item.name, 2.05f, slotWidth - 4.0f, 2), kText, slotWidth - 4.0f);
+        renderer_.text(x + 2.0f, titleY, 2.05f, fitTextLines(item.name, 2.05f, slotWidth - 4.0f, 1), kText, slotWidth - 4.0f);
         const std::string secondary = episodeLabel(item);
-        if (!secondary.empty()) renderer_.text(x + 2.0f, titleY + 54.0f, 1.45f, secondary, kMuted, slotWidth - 4.0f);
+        if (!secondary.empty()) renderer_.text(x + 2.0f, titleY + 46.0f, 1.45f, secondary, kMuted, slotWidth - 4.0f);
         if (showState) {
-            if (item.favorite) renderer_.text(x + 2.0f, titleY + 91.0f, 1.25f, "FAVORITE", kFocus, slotWidth - 4.0f);
-            else if (settings_.showWatchedIndicators && item.played) renderer_.text(x + 2.0f, titleY + 91.0f, 1.25f, "WATCHED", kTertiary, slotWidth - 4.0f);
+            const float stateY = titleY + (secondary.empty() ? 48.0f : 82.0f);
+            if (item.favorite) renderer_.text(x + 2.0f, stateY, 1.25f, "FAVORITE", kFocus, slotWidth - 4.0f);
+            else if (settings_.showWatchedIndicators && item.played) renderer_.text(x + 2.0f, stateY, 1.25f, "WATCHED", kTertiary, slotWidth - 4.0f);
         }
     }
 
@@ -5682,15 +5683,31 @@ private:
         constexpr int columns = mediaGridColumns();
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
+        auto rowHasPortrait = [&](int row) {
+            const int begin = row * columns;
+            const int end = std::min(begin + columns, static_cast<int>(searchResults_.size()));
+            for (int index = begin; index < end; ++index) {
+                const auto& item = searchResults_[static_cast<size_t>(index)];
+                if (!usesLandscapeMediaCard(item.type)) return true;
+            }
+            return false;
+        };
         const int selectedRow = searchSelection_ / columns;
-        const int firstRow = std::max(0, selectedRow - 1);
-        for (int index = firstRow * columns; index < static_cast<int>(searchResults_.size()); ++index) {
-            const int row = index / columns - firstRow;
-            const int col = index % columns;
-            if (row >= 2) break;
-            const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-            const float y = 315.0f + static_cast<float>(row) * 385.0f;
-            renderMediaArtworkCard(searchResults_[static_cast<size_t>(index)], x, y, slotWidth, index == searchSelection_);
+        const int firstRow = selectedRow > 0 && rowHasPortrait(selectedRow) ? selectedRow : std::max(0, selectedRow - 1);
+        float y = 315.0f;
+        for (int visibleRow = 0, absoluteRow = firstRow; visibleRow < 2; ++visibleRow, ++absoluteRow) {
+            const int begin = absoluteRow * columns;
+            if (begin >= static_cast<int>(searchResults_.size())) break;
+            const bool portraitRow = rowHasPortrait(absoluteRow);
+            const float rowHeight = searchMediaRowHeight(portraitRow);
+            if (visibleRow > 0 && y + rowHeight > 1060.0f) break;
+            const int end = std::min(begin + columns, static_cast<int>(searchResults_.size()));
+            for (int index = begin; index < end; ++index) {
+                const int col = index % columns;
+                const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
+                renderMediaArtworkCard(searchResults_[static_cast<size_t>(index)], x, y, slotWidth, index == searchSelection_);
+            }
+            y += rowHeight;
         }
     }
 

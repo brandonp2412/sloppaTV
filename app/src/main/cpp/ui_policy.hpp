@@ -40,6 +40,10 @@ constexpr bool isTopMediaGridSelection(int selection) {
 }
 constexpr float mediaCardWidth() { return 320.0f; }
 constexpr float mediaTitleScale() { return 2.45f; }
+constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
+    return itemType == "Episode" || itemType == "CollectionFolder" || itemType == "BoxSet" || itemType == "Folder";
+}
+constexpr float searchMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 430.0f : 300.0f; }
 constexpr float detailActionTextScale(std::size_t labelLength) {
     // Details can expose six actions at once. Long labels must remain single-line
     // even under the Extra Large global TV text preset.
