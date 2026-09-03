@@ -3,6 +3,7 @@
 **/build/
 build/
 local.properties
+key.properties
 *.iml
 .idea/
 artifacts/*.png

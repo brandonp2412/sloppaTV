@@ -1,0 +1,6 @@
+# Copy this file to key.properties. key.properties is intentionally ignored by Git.
+# Use an absolute path, or a path relative to the repository root.
+storeFile=/absolute/path/to/sloppatv-release.jks
+storePassword=replace-with-keystore-password
+keyAlias=replace-with-key-alias
+keyPassword=replace-with-key-password
