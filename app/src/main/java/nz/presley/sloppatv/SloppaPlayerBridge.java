@@ -310,6 +310,7 @@ public final class SloppaPlayerBridge {
             if (useLibass) {
                 if (subtitleUrl != null && !subtitleUrl.isEmpty()) {
                     MediaItem.SubtitleConfiguration subtitle = new MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitleUrl))
+                        .setId("sloppatv-ass-external")
                         .setMimeType(MimeTypes.TEXT_SSA)
                         .setLanguage(subtitleLanguage == null || subtitleLanguage.isEmpty() ? null : subtitleLanguage)
                         .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)

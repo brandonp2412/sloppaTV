@@ -44,7 +44,9 @@ Build the Android variants:
 ./gradlew test assembleDebug assembleBenchmark assembleRelease
 ```
 
-`debug` is intended for development. `benchmark` is non-debuggable/optimized but uses the local Android debug key so it can be installed for performance and device acceptance testing. `release` is production-oriented and remains unsigned unless production signing credentials are supplied.
+`debug`, `benchmark` and `release` all use the single production application ID `nz.presley.sloppatv`; do not create parallel `.test` installs. `benchmark` is non-debuggable/optimized for performance and device acceptance testing. Debug/Benchmark use the configured signing key when present, otherwise Gradle's current local Android debug key. `release` remains unsigned unless production signing credentials are supplied.
+
+For device deployment, always use an in-place install/update so existing app data is preserved. If Android reports a signature mismatch such as `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, stop and compare the installed APK certificate with the candidate certificate. Local debug keys can differ between environments or older installs; select the matching signing identity rather than replacing the app. Never uninstall the existing sloppaTV package, clear its data, or otherwise destroy the installed session merely to make a new APK install.
 
 ## Production signing
 
@@ -61,7 +63,7 @@ Version code and version name are defined centrally in `gradle.properties` as `S
 
 ## Device acceptance
 
-Automated viewing acceptance is designed around Waydroid rather than a personal physical TV. `tools/waydroid_e2e.py` requires an explicit ADB serial and validates that the target is Waydroid before running. In addition to the title-specific playback scenarios, it provides repeatable lifecycle/HOME restoration, runtime VIEW/SEARCH intent, MediaSession dump, fatal-log audit, and memory/CPU soak commands. Evidence is written under `artifacts/e2e-waydroid/`. Real-device performance comparison uses `tools/benchmark_tv.py`; `--final-suite` selects the sample counts required by `PERFORMANCE.md`.
+Automated viewing acceptance supports Waydroid and an explicitly selected physical Google TV Streamer target. `tools/waydroid_e2e.py` requires an explicit ADB serial and target guard before running. In addition to the title-specific playback scenarios, it provides repeatable lifecycle/HOME restoration, runtime VIEW/SEARCH intent, MediaSession dump, fatal-log audit, and memory/CPU soak commands. Device testing uses the same `nz.presley.sloppatv` package as normal deployment and must update it in place. Evidence is written under `artifacts/e2e-waydroid/` or the physical-TV artifact directory selected by the harness. Real-device performance comparison uses `tools/benchmark_tv.py`; `--final-suite` selects the sample counts required by `PERFORMANCE.md`.
 
 A roadmap item is not considered fully verified merely because it builds. Device-visible behavior remains marked partial until the relevant Android TV/Waydroid acceptance pass has been completed. A headless Waydroid session can expose an invalid/stale Android `AudioTrack` clock; when that occurs, video/audio motion results are recorded as an emulator limitation rather than adding Waydroid-specific playback behavior to the production client.
 

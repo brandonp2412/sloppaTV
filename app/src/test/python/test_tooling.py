@@ -4,6 +4,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -43,7 +44,7 @@ class WaydroidToolingTest(unittest.TestCase):
         waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
         app_fatal = (
             "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main "
-            "Process: nz.presley.sloppatv.test, PID: 123"
+            "Process: nz.presley.sloppatv, PID: 123"
         )
         other_fatal = (
             "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main "
@@ -56,6 +57,18 @@ class WaydroidToolingTest(unittest.TestCase):
         waydroid_e2e.PACKAGE = "nz.presley.sloppatv.custom"
         line = "09-02 22:00:00 E ActivityManager: ANR in nz.presley.sloppatv.custom"
         self.assertEqual(waydroid_e2e.fatal_lines([line]), [line])
+
+    def test_player_acceptance_requires_active_media_session(self) -> None:
+        waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
+        with patch.object(waydroid_e2e, "adb", return_value="Media button session is com.example.other/player"):
+            with self.assertRaisesRegex(RuntimeError, "playback is not active"):
+                waydroid_e2e.require_playback_session()
+        with patch.object(
+            waydroid_e2e,
+            "adb",
+            return_value=f"Media button session is {waydroid_e2e.DEFAULT_PACKAGE}/sloppaTV",
+        ):
+            waydroid_e2e.require_playback_session()
 
     def test_soak_summary_uses_median_windows_and_reports_growth(self) -> None:
         samples = [
