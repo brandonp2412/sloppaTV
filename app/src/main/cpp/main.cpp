@@ -4015,7 +4015,12 @@ private:
     ) const {
         std::vector<ExternalSubtitleTrack> tracks;
         const SubtitleStrategy strategy = subtitleStrategy(target.subtitleCodec);
-        if (preferExternalSubtitleDelivery(strategy, !target.subtitleUrl.empty())) {
+        if (!useNativeSubtitleRenderer(
+                strategy,
+                target.playMethod == PlaybackMethod::DirectPlay,
+                target.subtitleStreamIndex >= 0
+            )
+            && preferExternalSubtitleDelivery(strategy, !target.subtitleUrl.empty())) {
             tracks.push_back({
                 .path = target.subtitleUrl,
                 .codec = target.subtitleCodec,
@@ -4316,10 +4321,19 @@ private:
                             return subtitle.index == selectedSubtitleServerIndex_;
                         }
                     );
-                    if (selectedSubtitle != item.subtitles.end()
-                        && subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ClientText
-                        && !(target->playMethod == PlaybackMethod::DirectPlay && target->subtitleEmbedded)) {
-                        loadSubtitleAsync(*selectedSubtitle, target->subtitleUrl);
+                    if (selectedSubtitle != item.subtitles.end()) {
+                        const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
+                        if (useNativeSubtitleRenderer(
+                                strategy,
+                                target->playMethod == PlaybackMethod::DirectPlay,
+                                true
+                            )
+                            && !(target->playMethod == PlaybackMethod::DirectPlay && target->subtitleEmbedded)) {
+                            loadSubtitleAsync(
+                                *selectedSubtitle,
+                                strategy == SubtitleStrategy::ClientText ? target->subtitleUrl : std::string{}
+                            );
+                        }
                     }
                 }
                 pendingAudioStreamIndex_ = -1;
