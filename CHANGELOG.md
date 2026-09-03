@@ -19,7 +19,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Centralized version code/name properties compiled into native diagnostics.
 - Distinct Jellyfin `DirectPlay`, `DirectStream` and `Transcode` playback-method reporting.
 - Persisted subtitle size, background and vertical-position controls for the native SRT renderer.
-- Native Details item-options menu with default metadata refresh and permission-aware media deletion.
+- Native Details item-options menu with full metadata refresh and permission-aware media deletion.
 - Two-step destructive delete confirmation with Cancel selected by default.
 - Persisted 2-channel/8-channel maximum-audio capability negotiation in PlaybackInfo and the Jellyfin device profile.
 - Saved authenticated user/server profiles with native switching, forgetting, add-account flow, single-session migration and expired-token cleanup.
