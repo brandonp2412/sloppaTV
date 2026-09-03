@@ -147,47 +147,6 @@ std::string joinGenres(const std::vector<std::string>& genres, size_t limit = 5)
     return result;
 }
 
-std::string sanitizeSubRip(std::string text) {
-    auto replaceAll = [](std::string& value, std::string_view from, std::string_view to) {
-        size_t position = 0;
-        while ((position = value.find(from, position)) != std::string::npos) {
-            value.replace(position, from.size(), to);
-            position += to.size();
-        }
-    };
-    replaceAll(text, "&nbsp;", " ");
-    replaceAll(text, "&amp;", "&");
-    replaceAll(text, "&lt;", "<");
-    replaceAll(text, "&gt;", ">");
-    replaceAll(text, "&quot;", "\"");
-    replaceAll(text, "&#39;", "'");
-
-    std::string clean;
-    clean.reserve(text.size());
-    bool inHtmlTag = false;
-    for (size_t index = 0; index < text.size();) {
-        if (!inHtmlTag && text[index] == '{' && index + 1 < text.size() && text[index + 1] == '\\') {
-            const size_t end = text.find('}', index + 2);
-            if (end != std::string::npos) {
-                index = end + 1;
-                continue;
-            }
-        }
-        if (text[index] == '<') {
-            inHtmlTag = true;
-            ++index;
-            continue;
-        }
-        if (inHtmlTag) {
-            if (text[index] == '>') inHtmlTag = false;
-            ++index;
-            continue;
-        }
-        clean.push_back(text[index++]);
-    }
-    return clean;
-}
-
 std::string generateDeviceId() {
     std::random_device rd;
     std::mt19937_64 generator(
@@ -2111,7 +2070,7 @@ private:
             if (clean.empty()) {
                 auto response = fetchSubtitle();
                 if (response.ok && !response.value.empty()) {
-                    clean = sanitizeSubRip(std::move(response.value));
+                    clean = sanitizeSubtitleText(std::move(response.value));
                     if (!cacheFile.empty() && !clean.empty()) {
                         std::error_code ec;
                         std::filesystem::create_directories(cacheFile.parent_path(), ec);
@@ -2124,14 +2083,14 @@ private:
                     subtitleFailure = response.error.empty() ? "empty subtitle response" : response.error;
                 }
             }
-            clean = sanitizeSubRip(std::move(clean));
+            clean = sanitizeSubtitleText(std::move(clean));
             std::vector<SubtitleCue> cues = parseSubRipCues(clean);
             if (cues.empty() && fromCache) {
                 std::error_code ec;
                 std::filesystem::remove(cacheFile, ec);
                 auto response = fetchSubtitle();
                 if (response.ok) {
-                    clean = sanitizeSubRip(std::move(response.value));
+                    clean = sanitizeSubtitleText(std::move(response.value));
                     cues = parseSubRipCues(clean);
                 } else {
                     subtitleFailure = response.error.empty() ? "subtitle cache refresh failed" : response.error;

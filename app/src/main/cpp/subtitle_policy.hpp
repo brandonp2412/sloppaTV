@@ -20,6 +20,75 @@ constexpr bool shouldRetryFailedSubtitleTranscode(bool isTranscode, int selected
     return isTranscode && selectedSubtitleIndex >= 0;
 }
 
+inline std::string sanitizeSubtitleText(std::string text) {
+    auto replaceAll = [](std::string& value, std::string_view from, std::string_view to) {
+        size_t position = 0;
+        while ((position = value.find(from, position)) != std::string::npos) {
+            value.replace(position, from.size(), to);
+            position += to.size();
+        }
+    };
+    replaceAll(text, "&nbsp;", " ");
+    replaceAll(text, "&amp;", "&");
+    replaceAll(text, "&lt;", "<");
+    replaceAll(text, "&gt;", ">");
+    replaceAll(text, "&quot;", "\"");
+    replaceAll(text, "&#39;", "'");
+
+    auto isMarkupTag = [](std::string_view body) {
+        while (!body.empty() && std::isspace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
+        if (!body.empty() && body.front() == '/') body.remove_prefix(1);
+        while (!body.empty() && std::isspace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
+        size_t length = 0;
+        while (length < body.size()) {
+            const unsigned char c = static_cast<unsigned char>(body[length]);
+            if (!std::isalnum(c)) break;
+            ++length;
+        }
+        if (length == 0) return false;
+        std::string name(body.substr(0, length));
+        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return name == "i" || name == "b" || name == "u" || name == "s"
+            || name == "font" || name == "c" || name == "v" || name == "lang"
+            || name == "ruby" || name == "rt" || name == "br";
+    };
+
+    std::string clean;
+    clean.reserve(text.size());
+    for (size_t index = 0; index < text.size();) {
+        if (text[index] == '{' && index + 1 < text.size() && text[index + 1] == '\\') {
+            const size_t end = text.find('}', index + 2);
+            if (end != std::string::npos) {
+                index = end + 1;
+                continue;
+            }
+        }
+        if (text[index] == '<') {
+            const size_t end = text.find('>', index + 1);
+            if (end != std::string::npos) {
+                const std::string_view body(text.data() + index + 1, end - index - 1);
+                if (isMarkupTag(body)) {
+                    std::string_view normalized = body;
+                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
+                    if (!normalized.empty() && normalized.front() == '/') normalized.remove_prefix(1);
+                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
+                    if (normalized.size() >= 2
+                        && std::tolower(static_cast<unsigned char>(normalized[0])) == 'b'
+                        && std::tolower(static_cast<unsigned char>(normalized[1])) == 'r') {
+                        if (!clean.empty() && clean.back() != ' ') clean.push_back(' ');
+                    }
+                    index = end + 1;
+                    continue;
+                }
+            }
+        }
+        clean.push_back(text[index++]);
+    }
+    return clean;
+}
+
 inline int parseSubtitleTimestamp(std::string_view input) {
     while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front()))) input.remove_prefix(1);
     const size_t whitespace = input.find_first_of(" \t\r\n");

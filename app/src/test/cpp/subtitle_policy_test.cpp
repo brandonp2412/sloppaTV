@@ -23,6 +23,14 @@ int main() {
     assert(parseSubtitleTimestamp("00:60.000") == -1);
     assert(parseSubtitleTimestamp("not-a-timestamp") == -1);
 
+    assert(sanitizeSubtitleText("<i>Hello</i>") == "Hello");
+    assert(sanitizeSubtitleText("&lt;b&gt;Hello&lt;/b&gt;") == "Hello");
+    assert(sanitizeSubtitleText("A<br>B") == "A B");
+    assert(sanitizeSubtitleText("I <3 TV") == "I <3 TV");
+    assert(sanitizeSubtitleText("2 < 3") == "2 < 3");
+    assert(sanitizeSubtitleText("{\\an8}Top") == "Top");
+    assert(sanitizeSubtitleText("<v Roger>Hello</v>") == "Hello");
+
     const std::vector<SubtitlePreferenceCandidate> subtitles{
         {2, "eng"},
         {4, "jpn"},
