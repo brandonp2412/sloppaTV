@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 86 / 139 verified (61.9%); 53 partial; none unbuilt.
+Status at 2026-09-04: 87 / 139 verified (62.6%); 52 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -54,11 +54,11 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Playback and platform
 
-- [~] Target-TV codec, HDR, audio-route, refresh-rate, and long-soak matrix.
+- [~] Target-TV codec, HDR, audio-route, and long-soak matrix; physical 23.976 Hz refresh-rate switching is verified.
 - [x] Playback reports have automated Jellyfin session-state assertions.
 - [~] Subtitle appearance/position; ASS visual pass; Trickplay thumbnail render.
 - [~] HDR fixture and HDR-preserving server-stream path verified on the Google TV Streamer; Trickplay still needs server-generated tile data.
-- [~] External-player discovery is verified with VLC; play/return handoff still needs an acceptance route with reliably muted HDMI audio.
+- [x] External-player discovery, selection, silent playback handoff, and return are verified on the Google TV Streamer.
 - [~] Voice search needs a real microphone/recognizer invocation.
 - [~] DreamService needs normal-idle render/dismissal acceptance.
 - [x] Launcher banner/icon reinstalled and visually verified with the matching key.
@@ -112,12 +112,21 @@ required for TV hardware, Android TV integration, and final performance work.
   Jellyfin stream probe changed from H.264 8-bit BT.709 to HEVC Main 10 10-bit BT.2020/PQ while
   transcoding TrueHD to AAC. Production-signed streamer acceptance now confirms DirectStream,
   `c2.mtk.hevc.decoder`, HDR color metadata, a 1920x1080 video surface, and first-frame render.
-- 2026-09-04: installing official VLC 3.7.1 on the streamer exposed Android package-visibility
-  filtering. The first `<queries>` declaration still returned zero players because the queried
-  intent carries a URI scheme; adding the supported wildcard scheme (`android:scheme="*"`) makes
-  sloppaTV detect two external video handlers and exposes VLC in Settings on the production build.
-  Actual VLC play/return acceptance is still pending because the active HDMI volume route remains
-  fixed at 15 from Android's shell interfaces.
+- 2026-09-04: external-player acceptance is complete. Installing VLC first exposed Android
+  package-visibility filtering; adding the wildcard URI scheme (`android:scheme="*"`) made real
+  video handlers visible in Settings. VLC's first-run storage flow was unsuitable for unattended
+  acceptance, so an official mpv-android build was selected instead and a disposable video-only
+  Jellyfin fixture avoided all HDMI-audio side effects. `is.xyz.mpv/.MPVActivity` became the resumed
+  activity and rendered the stream; Back returned to `app.sloppatv/.SloppaNativeActivity`, where
+  sloppaTV received `success=1`, `completedKnown=1`, and `completed=1`. The player setting was then
+  restored to INTERNAL, both temporary player apps were removed, and the fixture was deleted.
+- 2026-09-04: physical refresh-rate matching is verified with a disposable video-only 23.976 fps
+  fixture. With Google TV's Match content frame rate preference at its original `Never` value,
+  sloppaTV correctly requested fixed-source 23.976 fps but Android kept the display at 60 Hz. With
+  that user preference temporarily changed to `Always`, the same request switched the actual
+  3840x2160 output from 60.000004 Hz to 23.976 Hz; leaving playback logged a successful preference
+  clear and restored 60 Hz. The Google TV preference and sloppaTV's own matching setting were both
+  restored to their original disabled state afterward, and the fixture was removed.
 - 2026-09-04: production-signed caracal branding is visually accepted on the Google TV launcher: the
   installed `sloppaTV` tile renders the caracal artwork, app name, and Jellyfin-for-TV subtitle after
   an in-place update with the matching production key.
