@@ -24,6 +24,7 @@ CPP_TESTS = [
     "screensaver_policy_test.cpp",
     "subtitle_policy_test.cpp",
     "trickplay_policy_test.cpp",
+    "unicode_text_test.cpp",
     "navigation_stack_test.cpp",
     "version_policy_test.cpp",
 ]
