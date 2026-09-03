@@ -64,6 +64,7 @@ constexpr Color kPanelAlt{0.090f, 0.100f, 0.126f, 0.96f};
 constexpr Color kPanelElevated{0.135f, 0.122f, 0.190f, 0.98f};
 constexpr Color kText{0.975f, 0.982f, 0.995f, 1.0f};
 constexpr Color kMuted{0.73f, 0.76f, 0.82f, 1.0f};
+constexpr Color kSecondaryText{0.86f, 0.88f, 0.93f, 1.0f};
 constexpr Color kTertiary{0.50f, 0.54f, 0.62f, 1.0f};
 constexpr Color kFocus{0.66f, 0.45f, 1.0f, 1.0f};
 constexpr Color kFocusSoft{0.42f, 0.24f, 0.76f, 0.55f};
@@ -2046,13 +2047,17 @@ private:
         auto preferred = std::find_if(
             activePlaybackItem_.subtitles.begin(),
             activePlaybackItem_.subtitles.end(),
-            [](const JellyfinSubtitleStream& subtitle) { return subtitle.isDefault; }
+            [](const JellyfinSubtitleStream& subtitle) {
+                return subtitle.isDefault && !isLikelySignsOnlySubtitle(subtitle.title);
+            }
         );
         if (preferred == activePlaybackItem_.subtitles.end()) {
             preferred = std::find_if(
                 activePlaybackItem_.subtitles.begin(),
                 activePlaybackItem_.subtitles.end(),
-                [](const JellyfinSubtitleStream& subtitle) { return !subtitle.forced; }
+                [](const JellyfinSubtitleStream& subtitle) {
+                    return !subtitle.forced && !isLikelySignsOnlySubtitle(subtitle.title);
+                }
             );
         }
         if (preferred == activePlaybackItem_.subtitles.end()) preferred = activePlaybackItem_.subtitles.begin();
@@ -2467,9 +2472,20 @@ private:
     }
 
     void handlePlayerKey(int32_t key) {
-        playerOverlayUntil_ = std::chrono::steady_clock::now() + (playerControlsActive_ ? 10s : 5s);
+        const auto now = std::chrono::steady_clock::now();
+        const bool timedOverlayVisible = now < playerOverlayUntil_;
+        if (key == AKEYCODE_BACK) {
+            if (playerBackAction(playerControlsActive_, timedOverlayVisible) == PlayerBackAction::DismissOverlay) {
+                playerControlsActive_ = false;
+                playerOverlayUntil_ = now;
+            } else {
+                stopPlayback();
+            }
+            return;
+        }
+        playerOverlayUntil_ = now + (playerControlsActive_ ? 10s : 5s);
         if (playerControlsActive_) {
-            if (key == AKEYCODE_BACK || key == AKEYCODE_DPAD_DOWN) {
+            if (key == AKEYCODE_DPAD_DOWN) {
                 playerControlsActive_ = false;
             } else if (key == AKEYCODE_DPAD_LEFT) {
                 playerControlSelection_ = std::max(0, playerControlSelection_ - 1);
@@ -2480,9 +2496,7 @@ private:
             }
             return;
         }
-        if (key == AKEYCODE_BACK) {
-            stopPlayback();
-        } else if (key == AKEYCODE_DPAD_DOWN) {
+        if (key == AKEYCODE_DPAD_DOWN) {
             openQueueOverlay();
         } else if (key == AKEYCODE_MEDIA_NEXT && playbackQueueIndex_ >= 0) {
             const int next = queueNextIndex(
@@ -3525,7 +3539,7 @@ private:
 
     void openQueueOverlay() {
         if (playbackQueue_.empty()) {
-            error_ = "QUEUE IS EMPTY";
+            if (!queueOverlayShouldShowError(false)) error_.clear();
             return;
         }
         queueOverlayActive_ = true;
@@ -4001,6 +4015,14 @@ private:
     ) const {
         std::vector<ExternalSubtitleTrack> tracks;
         const SubtitleStrategy strategy = subtitleStrategy(target.subtitleCodec);
+        if (preferExternalSubtitleDelivery(strategy, !target.subtitleUrl.empty())) {
+            tracks.push_back({
+                .path = target.subtitleUrl,
+                .codec = target.subtitleCodec,
+                .language = target.subtitleLanguage,
+            });
+            return tracks;
+        }
         const bool embeddedClientSubtitle = target.playMethod == PlaybackMethod::DirectPlay
             && target.subtitleEmbedded
             && (strategy == SubtitleStrategy::ClientText || strategy == SubtitleStrategy::ClientStyled)
@@ -4020,13 +4042,6 @@ private:
                 }
                 ++embeddedOrdinal;
             }
-        }
-        if (!target.subtitleUrl.empty() && strategy == SubtitleStrategy::ClientStyled) {
-            tracks.push_back({
-                .path = target.subtitleUrl,
-                .codec = target.subtitleCodec,
-                .language = target.subtitleLanguage,
-            });
         }
         return tracks;
     }
@@ -5270,8 +5285,7 @@ private:
             const int row = firstRow + slot;
             if (row >= static_cast<int>(home_.rows.size())) break;
             const auto& section = home_.rows[static_cast<size_t>(row)];
-            static constexpr std::array<float, 3> rowTops{145.0f, 430.0f, 785.0f};
-            renderHomeRow(section.title, section.items, row, rowTops[static_cast<size_t>(slot)]);
+            renderHomeRow(section.title, section.items, row, homeRowTop(slot));
         }
     }
 
@@ -5352,7 +5366,7 @@ private:
 
                 if (!secondary.empty()) {
                     secondary = singleLine(secondary, secondaryScale, cardW);
-                    renderer_.text(x + 2.0f, imageY + cardH + 49.0f, secondaryScale, secondary, kMuted, cardW - 4.0f);
+                    renderer_.text(x + 2.0f, imageY + cardH + 49.0f, secondaryScale, secondary, kSecondaryText, cardW - 4.0f);
                 }
             }
 
@@ -5431,8 +5445,8 @@ private:
     void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
         const auto bounds = focusedBounds(x, y, width, height, focused, 1.035f);
         renderer_.rect(bounds[0], bounds[1], bounds[2], bounds[3], focused ? kPanelElevated : kPanel);
-        renderer_.text(bounds[0] + 28.0f, bounds[1] + 32.0f, 1.45f, item.type, kTertiary, bounds[2] - 56.0f);
-        renderer_.text(bounds[0] + 28.0f, bounds[1] + 82.0f, 3.0f, item.name, kText, bounds[2] - 56.0f);
+        renderer_.text(syntheticTileTextX(x), y + 32.0f, 1.45f, item.type, kTertiary, width - 56.0f);
+        renderer_.text(syntheticTileTextX(x), syntheticTileTextY(y), 3.0f, item.name, kText, width - 56.0f);
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3]);
     }
 
@@ -5492,15 +5506,16 @@ private:
 
     void renderSearch() {
         renderHeader("SEARCH");
-        renderer_.rect(88.0f, 158.0f, 1360.0f, 86.0f, kPanel);
-        if (!searchKeyboard_ && searchResults_.empty()) drawFocusHalo(88.0f, 158.0f, 1360.0f, 86.0f);
-        renderer_.text(122.0f, 186.0f, 3.0f, searchQuery_.empty() ? "SEARCH MOVIES, SHOWS AND EPISODES" : searchQuery_, searchQuery_.empty() ? kMuted : kText, 1280.0f);
-        drawFocusedSurface(1475.0f, 158.0f, 340.0f, 86.0f, searchKeyboard_, searchKeyboard_);
-        renderer_.text(1510.0f, 187.0f, 2.15f, searchKeyboard_ ? "FALLBACK KEYS" : "TV KEYBOARD", kText, 270.0f);
+        constexpr float searchTop = 205.0f;
+        renderer_.rect(88.0f, searchTop, 1360.0f, 86.0f, kPanel);
+        if (!searchKeyboard_ && searchResults_.empty()) drawFocusHalo(88.0f, searchTop, 1360.0f, 86.0f);
+        renderer_.text(122.0f, searchTop + 27.0f, 3.0f, searchQuery_.empty() ? "SEARCH MOVIES, SHOWS AND EPISODES" : searchQuery_, searchQuery_.empty() ? kMuted : kText, 1280.0f);
+        drawFocusedSurface(1475.0f, searchTop, 340.0f, 86.0f, searchKeyboard_, searchKeyboard_);
+        renderer_.text(1510.0f, searchTop + 28.0f, 2.15f, searchKeyboard_ ? "FALLBACK KEYS" : "TV KEYBOARD", kText, 270.0f);
 
         if (searchKeyboard_) {
-            renderKeyboard(285.0f);
-            renderer_.text(105.0f, 815.0f, 2.0f, "LEFT / RIGHT WRAPS. DONE RUNS THE SEARCH.", kMuted);
+            renderKeyboard(330.0f);
+            renderer_.text(105.0f, 860.0f, 2.0f, "LEFT / RIGHT WRAPS. DONE RUNS THE SEARCH.", kMuted);
             return;
         }
 
@@ -5519,7 +5534,7 @@ private:
             const int col = index % columns;
             if (row >= 2) break;
             const float x = 90.0f + static_cast<float>(col) * (slotWidth + xGap);
-            const float y = 285.0f + static_cast<float>(row) * 390.0f;
+            const float y = 330.0f + static_cast<float>(row) * 390.0f;
             renderMediaArtworkCard(searchResults_[static_cast<size_t>(index)], x, y, slotWidth, index == searchSelection_);
         }
     }

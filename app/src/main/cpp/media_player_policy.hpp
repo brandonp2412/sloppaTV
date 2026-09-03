@@ -146,3 +146,7 @@ constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
     if (codec == "ass" || codec == "ssa") return SubtitleStrategy::ClientStyled;
     return SubtitleStrategy::ServerTranscode;
 }
+
+constexpr bool preferExternalSubtitleDelivery(SubtitleStrategy strategy, bool hasDeliveryUrl) {
+    return strategy == SubtitleStrategy::ClientStyled && hasDeliveryUrl;
+}

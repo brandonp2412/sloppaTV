@@ -20,11 +20,17 @@ int main() {
         {7, "ENG"},
     };
 
-    assert(subtitleIndexForQueuePreference(subtitles, std::nullopt) == kSubtitleServerDefaultIndex);
+    // Playback begins without subtitles. This prevents release-group adverts and
+    // forced/default tracks from appearing until the viewer explicitly enables one.
+    assert(subtitleIndexForQueuePreference(subtitles, std::nullopt) == kSubtitleOffIndex);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{""}) == kSubtitleOffIndex);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"eng"}) == 2);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"ENG"}) == 2);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"jpn"}) == 4);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"fra"}) == kSubtitleOffIndex);
+    assert(isLikelySignsOnlySubtitle("English [Signs/Songs]"));
+    assert(isLikelySignsOnlySubtitle("Signs & Songs"));
+    assert(!isLikelySignsOnlySubtitle("English"));
+    assert(!isLikelySignsOnlySubtitle("English Dialogue"));
     return 0;
 }

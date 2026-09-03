@@ -80,5 +80,14 @@ int main() {
 
     assert(subtitleLoadCompleted(false, false));
     assert(subtitleLoadCompleted(true, false));
+    assert(playerBackAction(true, true) == PlayerBackAction::DismissOverlay);
+    assert(playerBackAction(false, true) == PlayerBackAction::DismissOverlay);
+    assert(playerBackAction(false, false) == PlayerBackAction::ExitPlayback);
+    assert(!queueOverlayShouldShowError(false));
+    assert(homeRowTop(0) == 145.0f);
+    assert(homeRowTop(1) == 430.0f);
+    assert(homeRowTop(2) >= 825.0f);
+    assert(syntheticTileTextX(90.0f) == 118.0f);
+    assert(syntheticTileTextY(260.0f) == 342.0f);
     return 0;
 }

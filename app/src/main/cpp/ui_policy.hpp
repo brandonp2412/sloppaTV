@@ -19,6 +19,11 @@ enum class ArtworkKind {
     None,
 };
 
+enum class PlayerBackAction {
+    DismissOverlay,
+    ExitPlayback,
+};
+
 struct ArtworkReference {
     std::string itemId;
     std::string tag;
@@ -47,6 +52,21 @@ constexpr float uiTextScale(int option) {
 constexpr float uiSafeAreaFraction(int percent) {
     return static_cast<float>(percent < 0 ? 0 : (percent > 6 ? 6 : percent)) / 100.0f;
 }
+
+constexpr PlayerBackAction playerBackAction(bool controlsActive, bool timedOverlayVisible) {
+    return controlsActive || timedOverlayVisible
+        ? PlayerBackAction::DismissOverlay
+        : PlayerBackAction::ExitPlayback;
+}
+
+constexpr bool queueOverlayShouldShowError(bool /*hasItems*/) { return false; }
+
+constexpr float homeRowTop(int slot) {
+    return slot <= 0 ? 145.0f : (slot == 1 ? 430.0f : 825.0f);
+}
+
+constexpr float syntheticTileTextX(float tileX) { return tileX + 28.0f; }
+constexpr float syntheticTileTextY(float tileY) { return tileY + 82.0f; }
 
 constexpr int wrappedIndex(int index, int delta, int count) {
     if (count <= 0) return 0;
