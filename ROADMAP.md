@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 85 / 139 verified (61.2%); 54 partial; none unbuilt.
+Status at 2026-09-04: 86 / 139 verified (61.9%); 53 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -61,7 +61,7 @@ required for TV hardware, Android TV integration, and final performance work.
 - [~] External-player discovery is verified with VLC; play/return handoff still needs an acceptance route with reliably muted HDMI audio.
 - [~] Voice search needs a real microphone/recognizer invocation.
 - [~] DreamService needs normal-idle render/dismissal acceptance.
-- [~] Launcher banner/icon needs reinstall verification with the matching key.
+- [x] Launcher banner/icon reinstalled and visually verified with the matching key.
 
 ### Settings, resilience, and release
 
@@ -100,7 +100,8 @@ required for TV hardware, Android TV integration, and final performance work.
   firewall also blocks inbound unicast UDP.
 - 2026-09-04: Google TV Streamer SEARCH intent and HOME/lifecycle restoration passed with the
   same app process and no sloppaTV fatal exception, native signal, or ANR. A five-minute physical-TV
-  soak stayed flat (PSS -0.4%, RSS -0.2%) and also completed with a clean fatal-log audit.
+  soak stayed flat (PSS -0.4%, RSS -0.2%); a later 15-minute static soak collected 31 samples and also
+  stayed flat at -0.1% PSS growth and effectively 0.0% RSS growth with a clean fatal-log audit.
 - 2026-09-04: automated physical-TV playback-report acceptance verified Jellyfin `/Sessions`
   position advance while playing, immediate paused state with stable position, resumed state, and
   stopped-session clearing for the active sloppaTV item. The harness mutes media during automation,
@@ -117,6 +118,18 @@ required for TV hardware, Android TV integration, and final performance work.
   sloppaTV detect two external video handlers and exposes VLC in Settings on the production build.
   Actual VLC play/return acceptance is still pending because the active HDMI volume route remains
   fixed at 15 from Android's shell interfaces.
+- 2026-09-04: production-signed caracal branding is visually accepted on the Google TV launcher: the
+  installed `sloppaTV` tile renders the caracal artwork, app name, and Jellyfin-for-TV subtitle after
+  an in-place update with the matching production key.
+- 2026-09-04: repeated clean production-key builds have identical ZIP entries, metadata, timestamps,
+  and payload hashes; whole-APK SHA-256 differs only in the Android APK Signing Block. CI still creates
+  a fresh one-day signing identity on every run, so stable CI artifact signing remains unresolved and
+  the combined release-engineering item stays partial.
+- 2026-09-04: the production-signed 20/5/5 physical-TV performance suite measured sloppaTV versus the
+  installed `org.jellyfin.androidtv` development build (`0.0.0-dev.1`) on the same Google TV Streamer.
+  sloppaTV cold-launch median was 242.5 ms versus 404.0 ms, settled PSS 40,192 KB versus 152,328 KB,
+  and rapid-DPAD p95 16.73 ms versus 33.34 ms. Median frame cadence and sampled idle CPU tied at
+  16.67 ms and 0.0%. Raw samples are tracked under `docs/benchmarks/` and summarized in the README.
 - 2026-09-04: physical-TV capture tooling now wakes a sleeping target before visual acceptance;
   this was added after a sleeping streamer produced valid-size but entirely black screenshots.
 - 2026-09-04: the production-signed streamer install exposed overlapping Search result metadata.

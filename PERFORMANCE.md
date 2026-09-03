@@ -79,9 +79,51 @@ The latest couch-readability redesign was rechecked on the physical Google TV St
 
 The larger cards/text therefore did not regress the sampled navigation tail latency. A final multi-run signed-release SurfaceFlinger suite is still required after the scoped feature set is frozen; this single Benchmark run is a regression checkpoint, not the final release claim.
 
+### Production-signed final-suite checkpoint — 2026-09-04
+
+A fresh canonical `--final-suite` run was completed on the physical Google TV Streamer using the production-signed sloppaTV `0.1.0` APK at commit `fea00884daf1b616bb24bd41b1be1a25b1b833d0`. The comparator was the currently installed `org.jellyfin.androidtv` package, which reports version `0.0.0-dev.1`. Both apps used their persisted sessions against the same Jellyfin server. Because the installed comparator is a development build, these numbers describe this exact installed Jellyfin Android TV build rather than every upstream Jellyfin release.
+
+The exact command was:
+
+```sh
+python3 tools/benchmark_tv.py \
+  --serial 192.168.1.114:5555 \
+  --final-suite \
+  --json-out artifacts/e2e-physical-tv/final-benchmark-2026-09-04.json
+```
+
+Twenty alternating process-cold launch samples:
+
+- sloppaTV: **293, 265, 222, 269, 294, 239, 243, 228, 249, 233, 276, 242, 219, 247, 221, 252, 227, 229, 244, 218 ms**; median **242.5 ms**, mean **245.5 ms**, range **218–294 ms**.
+- Jellyfin Android TV: **552, 383, 396, 395, 406, 441, 418, 379, 404, 237, 388, 247, 408, 413, 410, 401, 638, 441, 397, 404 ms**; median **404.0 ms**, mean **407.9 ms**, range **237–638 ms**.
+- Relative launch result: sloppaTV was **40.0% lower median latency** and **39.8% lower mean latency**; equivalently, Jellyfin's median took about **1.67x** as long on this Activity-manager metric.
+
+Five-run settled-Home memory medians after a 6-second settle:
+
+| Metric | sloppaTV | Jellyfin Android TV | sloppaTV reduction |
+| --- | ---: | ---: | ---: |
+| Total PSS | **40,192 KB** | 152,328 KB | **73.6%** |
+| Total RSS | **112,878 KB** | 233,341 KB | **51.6%** |
+| Java Heap | **4,036 KB** | 41,888 KB | **90.4%** |
+| Native Heap | **8,980 KB** | 18,172 KB | **50.6%** |
+
+Five 80-event rapid-DPAD runs per client:
+
+| Metric | sloppaTV | Jellyfin Android TV | Result |
+| --- | ---: | ---: | ---: |
+| Median frame interval | 16.67 ms | 16.67 ms | tie |
+| p95 frame interval | **16.73 ms** | 33.34 ms | **49.8% lower** |
+| Intervals over 20 ms | **0.8%** | 10.3% | **9.5 percentage points lower** |
+| Intervals over 33.4 ms | **0.8%** | 3.2% | **2.4 percentage points lower** |
+| Sampled idle CPU | 0.0% | 0.0% | tie |
+
+The five sloppaTV p95 samples were **16.71, 16.74, 16.73, 16.71, 16.73 ms**. The five Jellyfin p95 samples were **33.34, 33.34, 33.34, 33.34, 33.36 ms**. sloppaTV did not beat Jellyfin on median frame interval or sampled idle CPU; both tied on those measurements.
+
+Machine-readable raw evidence is tracked in [`docs/benchmarks/google-tv-streamer-2026-09-04.json`](docs/benchmarks/google-tv-streamer-2026-09-04.json). Immediately before this benchmark, a 15-minute static physical-TV soak collected 31 samples and ended at **-0.1% PSS growth** and effectively flat RSS with no sloppaTV fatal/ANR audit finding; this is useful resilience evidence but does not replace the 30-minute Home/navigation and 60-minute playback soaks required by the final gate.
+
 ### Final-sample-count Benchmark checkpoint — 2026-09-03
 
-The canonical `--final-suite` sample counts were run on the physical Google TV Streamer using the currently installed non-debuggable sloppaTV Benchmark package and the installed official Jellyfin Android TV client. This satisfies the sample-count portion of the final gate, but it is still a checkpoint rather than the release claim because the installed benchmark predates the newest tiny UI/manifest/network-error commits and is not production-signed.
+The canonical `--final-suite` sample counts were run on the physical Google TV Streamer using the currently installed non-debuggable sloppaTV Benchmark package and the installed Jellyfin Android TV client. This satisfies the sample-count portion of the final gate, but it is still a checkpoint rather than the release claim because the installed benchmark predates the newest tiny UI/manifest/network-error commits and is not production-signed.
 
 - 20 alternating process-cold sloppaTV launches: **218, 229, 209, 260, 228, 270, 207, 237, 219, 201, 210, 218, 293, 228, 211, 225, 216, 240, 337, 220 ms**; median **222.5 ms**, mean **233.8 ms**.
 - 20 alternating Jellyfin launches: **551, 445, 403, 470, 397, 394, 405, 266, 410, 422, 404, 420, 415, 278, 417, 418, 413, 468, 415, 391 ms**; median **414.0 ms**, mean **410.1 ms**.
@@ -90,7 +132,7 @@ The canonical `--final-suite` sample counts were run on the physical Google TV S
 - Sampled idle CPU remained **0.0%** for both applications.
 - Relative result: sloppaTV was **46.3% lower startup median**, **75.0% lower PSS**, **51.6% lower RSS**, **90.7% lower Java heap**, and **49.9% lower navigation p95** in this run.
 
-Machine-readable raw evidence is kept locally as `artifacts/e2e-physical-tv/final-benchmark-2026-09-03.json`; physical evidence directories are intentionally gitignored. The remaining final-gate work is equal-source H.264/HEVC playback startup comparison, long Home/playback soaks, and repetition on the final production-signed APK.
+Machine-readable raw evidence is kept locally as `artifacts/e2e-physical-tv/final-benchmark-2026-09-03.json`; physical evidence directories are intentionally gitignored. This checkpoint was superseded by the production-signed 2026-09-04 startup/memory/navigation suite above; equal-source playback comparison and the long Home/playback soaks remain.
 
 ### Idle behavior
 
@@ -100,11 +142,11 @@ sloppaTV static screens are event-driven. The last sampled populated Home measur
 
 Before declaring the project complete, run at least:
 
-- 20 alternating cold launches per app. **Completed on the 2026-09-03 Benchmark checkpoint; repeat on the final signed APK.**
-- 5 settled Home-memory samples per app. **Completed on the 2026-09-03 Benchmark checkpoint; repeat on the final signed APK.**
-- 5 rapid-DPAD SurfaceFlinger runs per app. **Completed on the 2026-09-03 Benchmark checkpoint; repeat on the final signed APK.**
+- 20 alternating cold launches per app. **Completed on the production-signed 2026-09-04 run.**
+- 5 settled Home-memory samples per app. **Completed on the production-signed 2026-09-04 run.**
+- 5 rapid-DPAD SurfaceFlinger runs per app. **Completed on the production-signed 2026-09-04 run.**
 - equal-source playback startup comparisons for at least H.264 and HEVC Main10 direct play.
 - a 30-minute Home/navigation soak and a 60-minute playback soak while tracking PSS and crashes.
-- the same suite against the final signed release APK.
+- complete the remaining playback and soak measurements against the final signed release APK.
 
 The final report must include raw samples and must state any metric where sloppaTV does not beat Jellyfin TV rather than hiding it.

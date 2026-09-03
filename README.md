@@ -14,6 +14,27 @@ Supported scope is Movies, Series and Episodes. Music, photos, Live TV/DVR, laun
 
 See [ROADMAP.md](ROADMAP.md) for feature status and [PERFORMANCE.md](PERFORMANCE.md) for the current benchmark evidence and measurement rules.
 
+## Performance vs Jellyfin Android TV
+
+Fresh physical-device measurements from 2026-09-04 use the same Google TV Streamer, the same Jellyfin server, 20 alternating process-cold launches per app, five settled-Home memory samples per app, and five 80-event rapid-DPAD SurfaceFlinger runs per app. sloppaTV was the production-signed `0.1.0` build at commit [`fea0088`](https://github.com/brandonp2412/sloppaTV/commit/fea00884daf1b616bb24bd41b1be1a25b1b833d0). The comparator was the currently installed [Jellyfin Android TV](https://github.com/jellyfin/jellyfin-androidtv) package `org.jellyfin.androidtv`, which reports version `0.0.0-dev.1`; this is therefore a comparison with that installed Jellyfin development build rather than a claim about every upstream release.
+
+| Metric | sloppaTV | Jellyfin Android TV | Result |
+| --- | ---: | ---: | ---: |
+| Cold launch median | **242.5 ms** | 404.0 ms | **40.0% lower** |
+| Cold launch mean | **245.5 ms** | 407.9 ms | **39.8% lower** |
+| Settled total PSS | **40,192 KB** | 152,328 KB | **73.6% lower** |
+| Settled total RSS | **112,878 KB** | 233,341 KB | **51.6% lower** |
+| Java heap | **4,036 KB** | 41,888 KB | **90.4% lower** |
+| Native heap | **8,980 KB** | 18,172 KB | **50.6% lower** |
+| DPAD frame interval median | 16.67 ms | 16.67 ms | tie |
+| DPAD frame interval p95 | **16.73 ms** | 33.34 ms | **49.8% lower** |
+| DPAD intervals over 20 ms | **0.8%** | 10.3% | **9.5 pp lower** |
+| Sampled idle CPU | 0.0% | 0.0% | tie |
+
+On these measurements Jellyfin's median cold launch took about **1.67x as long** as sloppaTV's; sloppaTV used roughly **one quarter of Jellyfin's PSS** and kept the sampled navigation p95 near one 60 Hz frame rather than two. Median navigation cadence and sampled idle CPU were ties, not wins.
+
+The exact command, methodology, previous checkpoints and limitations are documented in [PERFORMANCE.md](PERFORMANCE.md). The machine-readable raw samples for this run are tracked at [`docs/benchmarks/google-tv-streamer-2026-09-04.json`](docs/benchmarks/google-tv-streamer-2026-09-04.json).
+
 ## Requirements
 
 - Android SDK 36
