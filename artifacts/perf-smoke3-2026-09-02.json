@@ -1,0 +1,147 @@
+{
+  "captured_at": "2026-09-02T09:11:33.435683+00:00",
+  "parameters": {
+    "runs": 1,
+    "memory_runs": 1,
+    "nav_runs": 1,
+    "nav_events": 20,
+    "settle_seconds": 3.0
+  },
+  "apps": [
+    {
+      "name": "sloppaTV",
+      "package": "nz.presley.sloppatv.test",
+      "activity": "nz.presley.sloppatv.test/nz.presley.sloppatv.SloppaNativeActivity",
+      "layer_contains": "SloppaNativeActivity",
+      "setup_keys": [
+        "20"
+      ]
+    },
+    {
+      "name": "Jellyfin",
+      "package": "org.jellyfin.androidtv",
+      "activity": "org.jellyfin.androidtv/.ui.startup.StartupActivity",
+      "layer_contains": "MainActivity",
+      "setup_keys": [
+        "20"
+      ]
+    }
+  ],
+  "startup": {
+    "sloppaTV": {
+      "samples_ms": [
+        159
+      ],
+      "median_ms": 159,
+      "mean_ms": 159,
+      "min_ms": 159,
+      "max_ms": 159
+    },
+    "Jellyfin": {
+      "samples_ms": [
+        290
+      ],
+      "median_ms": 290,
+      "mean_ms": 290,
+      "min_ms": 290,
+      "max_ms": 290
+    }
+  },
+  "memory": {
+    "sloppaTV": {
+      "total_pss_kb": 222147.0,
+      "total_rss_kb": 363464.0,
+      "java_heap_kb": 13940.0,
+      "native_heap_kb": 165412.0
+    },
+    "Jellyfin": {
+      "total_pss_kb": 230368.0,
+      "total_rss_kb": 387624.0,
+      "java_heap_kb": 24444.0,
+      "native_heap_kb": 157220.0
+    }
+  },
+  "memory_samples": {
+    "sloppaTV": [
+      {
+        "total_pss_kb": 222147,
+        "total_rss_kb": 363464,
+        "java_heap_kb": 13940,
+        "native_heap_kb": 165412
+      }
+    ],
+    "Jellyfin": [
+      {
+        "total_pss_kb": 230368,
+        "total_rss_kb": 387624,
+        "java_heap_kb": 24444,
+        "native_heap_kb": 157220
+      }
+    ]
+  },
+  "idle_cpu_pct": {
+    "sloppaTV": 0.0,
+    "Jellyfin": 0.0
+  },
+  "idle_cpu_samples_pct": {
+    "sloppaTV": [
+      0.0
+    ],
+    "Jellyfin": [
+      0.0
+    ]
+  },
+  "navigation": {
+    "sloppaTV": {
+      "frames": 99.0,
+      "median_interval_ms": 16.67,
+      "p95_interval_ms": 16.67,
+      "over_20ms_pct": 1.0,
+      "over_33_4ms_pct": 0.0,
+      "dropped_frames": 0.0,
+      "average_fps": 59.39
+    },
+    "Jellyfin": {
+      "frames": 22.0,
+      "median_interval_ms": 16.67,
+      "p95_interval_ms": 16.67,
+      "over_20ms_pct": 0.0,
+      "over_33_4ms_pct": 0.0,
+      "dropped_frames": 0.0,
+      "average_fps": 60.0
+    }
+  },
+  "navigation_samples": {
+    "sloppaTV": [
+      {
+        "frames": 99,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 16.67,
+        "over_20ms_pct": 1.0,
+        "over_33_4ms_pct": 0.0,
+        "dropped_frames": 0,
+        "average_fps": 59.39
+      }
+    ],
+    "Jellyfin": [
+      {
+        "frames": 22,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 16.67,
+        "over_20ms_pct": 0.0,
+        "over_33_4ms_pct": 0.0,
+        "dropped_frames": 0,
+        "average_fps": 60.0
+      }
+    ]
+  },
+  "comparison": {
+    "startup_median_lower_pct": 45.2,
+    "startup_mean_lower_pct": 45.2,
+    "pss_lower_pct": 3.6,
+    "rss_lower_pct": 6.2,
+    "java_heap_lower_pct": 43.0,
+    "navigation_p95_lower_pct": 0.0,
+    "navigation_over_20ms_lower_pct": 0.0
+  }
+}
