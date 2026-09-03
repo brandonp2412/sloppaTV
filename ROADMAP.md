@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-03: 82 / 139 verified (59.0%); 57 partial; none unbuilt.
+Status at 2026-09-04: 82 / 139 verified (59.0%); 57 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -75,6 +75,21 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ## Evidence highlights
 
+- 2026-09-04: real-server acceptance against Jellyfin 10.11.11 passed transient Quick Connect
+  authorization/authentication, seasons/episodes hierarchy, collections, ASS external delivery,
+  constrained-bitrate transcoding, and semantic DirectStream negotiation. The 1,000-item scan
+  still contains no Trickplay or HDR fixtures and the acceptance user currently has no favorite
+  movies, so those fixture-dependent items remain partial.
+- 2026-09-04: Google TV Streamer SEARCH intent and HOME/lifecycle restoration passed with the
+  same app process and no sloppaTV fatal exception, native signal, or ANR. A five-minute physical-TV
+  soak stayed flat (PSS -0.4%, RSS -0.2%) and also completed with a clean fatal-log audit.
+- 2026-09-04: physical-TV capture tooling now wakes a sleeping target before visual acceptance;
+  this was added after a sleeping streamer produced valid-size but entirely black screenshots.
+- 2026-09-04: the production-signed streamer install exposed overlapping Search result metadata.
+  A local layout fix now uses bounded single-line card titles and row heights that account for
+  portrait versus landscape media. Host tests and Release assembly pass; device acceptance of this
+  fix is blocked non-destructively because Astra currently points at a temporary Bughunt signing
+  key whose certificate does not match the production certificate already installed on the TV.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

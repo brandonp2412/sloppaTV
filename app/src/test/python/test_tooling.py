@@ -49,6 +49,19 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertTrue(waydroid_e2e.model_matches_target("AOSP TV on x86_64", "android-tv-emulator"))
         self.assertFalse(waydroid_e2e.model_matches_target("Google TV Streamer", "android-tv-emulator"))
 
+    def test_power_state_parser_requires_awake(self) -> None:
+        self.assertTrue(waydroid_e2e.power_state_is_awake("mWakefulness=Awake\nmWakefulnessChanging=false"))
+        self.assertFalse(waydroid_e2e.power_state_is_awake("mWakefulness=Asleep\nmWakefulnessChanging=false"))
+
+    def test_ensure_awake_wakes_sleeping_target(self) -> None:
+        with patch.object(
+            waydroid_e2e,
+            "adb",
+            side_effect=["mWakefulness=Asleep", "mWakefulness=Awake"],
+        ), patch.object(waydroid_e2e, "key") as key, patch.object(waydroid_e2e.time, "sleep"):
+            waydroid_e2e.ensure_awake()
+        key.assert_called_once_with("WAKEUP")
+
     def test_fatal_log_detection_is_scoped_to_app(self) -> None:
         waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
         app_fatal = (

@@ -63,6 +63,23 @@ def model_matches_target(model: str, target: str) -> bool:
     return False
 
 
+def power_state_is_awake(output: str) -> bool:
+    return bool(re.search(r"\bmWakefulness=Awake\b", output))
+
+
+def ensure_awake() -> None:
+    power = adb("shell", "dumpsys", "power", capture=True)
+    if power_state_is_awake(power):
+        return
+    key("WAKEUP")
+    for _ in range(10):
+        time.sleep(0.2)
+        power = adb("shell", "dumpsys", "power", capture=True)
+        if power_state_is_awake(power):
+            return
+    raise RuntimeError("Android TV target did not wake for visual acceptance")
+
+
 def verify_target(target: str) -> None:
     model = adb("shell", "getprop", "ro.product.model", capture=True).strip()
     if not model_matches_target(model, target):
@@ -70,6 +87,7 @@ def verify_target(target: str) -> None:
     size = adb("shell", "wm", "size", capture=True)
     if "1920x1080" not in size:
         raise SystemExit(f"Target is not configured for a 1920x1080 UI surface: {size}")
+    ensure_awake()
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
 
 
