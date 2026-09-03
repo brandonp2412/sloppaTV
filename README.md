@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/sloppatv-theme.png" alt="sloppaTV low-poly caracal artwork" width="100%">
+</p>
+
 # sloppaTV
 
 sloppaTV is an experimental Android TV client for Jellyfin focused on a fast, remote-first, Netflix-style on-demand viewing experience.
