@@ -57,8 +57,8 @@ required for TV hardware, Android TV integration, and final performance work.
 - [~] Target-TV codec, HDR, audio-route, refresh-rate, and long-soak matrix.
 - [x] Playback reports have automated Jellyfin session-state assertions.
 - [~] Subtitle appearance/position; ASS visual pass; Trickplay thumbnail render.
-- [~] HDR fixture and HDR-preserving server-stream path verified; new-build streamer acceptance is still required. Trickplay still needs server-generated tile data.
-- [~] External-player fixture is available; package-visibility fix needs new-build Android acceptance.
+- [~] HDR fixture and HDR-preserving server-stream path verified on the Google TV Streamer; Trickplay still needs server-generated tile data.
+- [~] External-player discovery is verified with VLC; play/return handoff still needs an acceptance route with reliably muted HDMI audio.
 - [~] Voice search needs a real microphone/recognizer invocation.
 - [~] DreamService needs normal-idle render/dismissal acceptance.
 - [~] Launcher banner/icon needs reinstall verification with the matching key.
@@ -91,21 +91,29 @@ required for TV hardware, Android TV integration, and final performance work.
   being converted to AVC because the HLS server-stream profile advertised only H.264. The corrected
   item-aware profile advertises HEVC before H.264 when HEVC remains allowed for the title. A real
   Jellyfin stream probe changed from H.264 8-bit BT.709 to HEVC Main 10 10-bit BT.2020/PQ while
-  transcoding TrueHD to AAC. Host/unit/Release builds pass; streamer acceptance of the new APK is
-  still blocked until Astra has the installed production signing key rather than the temporary
-  bughunt identity.
+  transcoding TrueHD to AAC. Production-signed streamer acceptance now confirms DirectStream,
+  `c2.mtk.hevc.decoder`, HDR color metadata, a 1920x1080 video surface, and first-frame render.
 - 2026-09-04: installing official VLC 3.7.1 on the streamer exposed Android package-visibility
-  filtering: the system resolves VLC for `ACTION_VIEW video/*`, while sloppaTV reported zero players.
-  The manifest now declares the matching `<queries>` intent, regression coverage passes, and the
-  merged Release manifest contains the query. New-build handoff acceptance still requires the
-  production signing key.
+  filtering. The first `<queries>` declaration still returned zero players because the queried
+  intent carries a URI scheme; adding the supported wildcard scheme (`android:scheme="*"`) makes
+  sloppaTV detect two external video handlers and exposes VLC in Settings on the production build.
+  Actual VLC play/return acceptance is still pending because the active HDMI volume route remains
+  fixed at 15 from Android's shell interfaces.
 - 2026-09-04: physical-TV capture tooling now wakes a sleeping target before visual acceptance;
   this was added after a sleeping streamer produced valid-size but entirely black screenshots.
 - 2026-09-04: the production-signed streamer install exposed overlapping Search result metadata.
-  A local layout fix now uses bounded single-line card titles and row heights that account for
-  portrait versus landscape media. Host tests and Release assembly pass; device acceptance of this
-  fix is blocked non-destructively because Astra currently points at a temporary Bughunt signing
-  key whose certificate does not match the production certificate already installed on the TV.
+  Bounded single-line card titles and portrait/landscape-aware row heights are now accepted on the
+  physical streamer against both mixed `Friends` results and a single HDR episode, with no metadata
+  collisions and a clean fatal/ANR log audit.
+- 2026-09-04: Glass's production signing material was recovered onto Astra after verifying its
+  Release certificate SHA-256 exactly matches the installed `app.sloppatv` certificate. A clean
+  detached `origin/main` Release then updated the streamer successfully with `adb install -r`,
+  preserving app data. The separate unpublished local caracal-branding commit was not deployed.
+- 2026-09-04: Settings acceptance exercised and restored AUTO/LARGE/EXTRA LARGE buffers, direct
+  versus stereo audio mode, FIT/FILL zoom, refresh-rate matching, and a temporary Quick Connect
+  user switch. Cleanup accidentally removed the saved `lounge` profile instead of the temporary
+  account; the TV is currently usable on the saved `jellyfin` profile, but `lounge` must be
+  reauthorized before user-switching acceptance can be considered complete.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
