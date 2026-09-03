@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 87 / 139 verified (62.6%); 52 partial; none unbuilt.
+Status at 2026-09-04: 88 / 139 verified (63.3%); 51 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -56,8 +56,8 @@ required for TV hardware, Android TV integration, and final performance work.
 
 - [~] Target-TV codec, HDR, audio-route, and long-soak matrix; physical 23.976 Hz refresh-rate switching is verified.
 - [x] Playback reports have automated Jellyfin session-state assertions.
-- [~] Subtitle appearance/position; ASS visual pass; Trickplay thumbnail render.
-- [~] HDR fixture and HDR-preserving server-stream path verified on the Google TV Streamer; Trickplay still needs server-generated tile data.
+- [~] Subtitle appearance/position and dedicated ASS visual pass remain; Trickplay thumbnail rendering is physically verified.
+- [x] HDR fixture/HDR-preserving server-stream path and generated Trickplay tile rendering are verified on the Google TV Streamer.
 - [x] External-player discovery, selection, silent playback handoff, and return are verified on the Google TV Streamer.
 - [~] Voice search needs a real microphone/recognizer invocation.
 - [~] DreamService needs normal-idle render/dismissal acceptance.
@@ -112,6 +112,12 @@ required for TV hardware, Android TV integration, and final performance work.
   Jellyfin stream probe changed from H.264 8-bit BT.709 to HEVC Main 10 10-bit BT.2020/PQ while
   transcoding TrueHD to AAC. Production-signed streamer acceptance now confirms DirectStream,
   `c2.mtk.hevc.decoder`, HDR color metadata, a 1920x1080 video surface, and first-frame render.
+- 2026-09-04: Trickplay acceptance is complete with an isolated disposable Jellyfin library. Normal
+  libraries remained disabled for Trickplay while the temporary library generated a 320x180 sheet
+  containing six thumbnails at 10-second intervals for a 60-second video-only fixture. On the physical
+  streamer, pausing and seeking +10 seconds rendered the bordered Trickplay preview with the correct
+  `0:11` timestamp. The temporary library and media were removed afterward and all normal library
+  Trickplay settings were confirmed restored to disabled.
 - 2026-09-04: external-player acceptance is complete. Installing VLC first exposed Android
   package-visibility filtering; adding the wildcard URI scheme (`android:scheme="*"`) made real
   video handlers visible in Settings. VLC's first-run storage flow was unsuitable for unattended
