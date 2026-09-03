@@ -1166,8 +1166,8 @@ ApiResult JellyfinClient::refreshMetadata(
         return result;
     }
     const std::string url = session.server + "/Items/" + urlEncode(item.id) + "/Refresh"
-        + "?metadataRefreshMode=Default&imageRefreshMode=Default"
-          "&replaceAllMetadata=false&replaceAllImages=false&regenerateTrickplay=false";
+        + "?metadataRefreshMode=FullRefresh&imageRefreshMode=FullRefresh"
+          "&replaceAllMetadata=true&replaceAllImages=false&regenerateTrickplay=false";
     const auto response = http_.request("POST", url, headers(&session, session.deviceId));
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
