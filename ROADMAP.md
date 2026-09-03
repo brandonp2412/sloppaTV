@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 83 / 139 verified (59.7%); 56 partial; none unbuilt.
+Status at 2026-09-04: 85 / 139 verified (61.2%); 54 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -49,8 +49,8 @@ required for TV hardware, Android TV integration, and final performance work.
 
 - [~] Quick Connect TV UI; LAN discovery; profile, user, and server switching.
 - [~] Navigation regression; server version edge cases; mixed/folder browsing.
-- [~] Seasons, nested folders, populated favorites, direct item-options keys.
-- [~] Delete and refresh permissions plus server-side mutation completion.
+- [x] Seasons, nested folders, populated favorites, direct item-options keys.
+- [x] Delete and refresh permissions plus server-side mutation completion.
 
 ### Playback and platform
 
@@ -78,8 +78,26 @@ required for TV hardware, Android TV integration, and final performance work.
 - 2026-09-04: real-server acceptance against Jellyfin 10.11.11 passed transient Quick Connect
   authorization/authentication, seasons/episodes hierarchy, collections, ASS external delivery,
   constrained-bitrate transcoding, and semantic DirectStream negotiation. An expanded 5,000-item
-  scan found 12 HDR10 HEVC Main 10 titles but no Trickplay data; the acceptance user currently has
-  no favorite movies, so Trickplay and populated-favorites acceptance remain fixture-dependent.
+  scan found 12 HDR10 HEVC Main 10 titles but no Trickplay data, so Trickplay remains fixture-dependent.
+- 2026-09-04: browsing acceptance closed seasons/nested-folder/favorites/options coverage. The
+  production streamer opened the real `Back to the Future` folder from Movies and rendered its three
+  child films; both `MENU` and `INFO` opened Item Options. `Big Buck Bunny` was temporarily favorited,
+  appeared as the sole Movies Favorites item, then was unfavorited and the server was confirmed back
+  at zero favorite movies.
+- 2026-09-04: refresh/delete acceptance is complete with disposable media fixtures. Explicit refresh
+  previously used `metadataRefreshMode=Default`, which accepted the request but did not reread an
+  edited local NFO. Matching explicit-refresh semantics used by other Jellyfin clients (`FullRefresh`
+  plus `replaceAllMetadata=true`) made a TV-triggered refresh change the same server item from
+  `SloppaTV Refresh After` to `SloppaTV App Refresh Verified`. A separate 15-second test movie under
+  `/media` verified `CanDelete`, the destructive confirmation UI, server-side DELETE completion (404),
+  and physical fixture removal. All fixture files were removed and library directory modes restored.
+- 2026-09-04: LAN discovery is blocked by Astra infrastructure rather than sloppaTV parsing. Jellyfin
+  10.11.11 has AutoDiscovery enabled and listens on UDP 7359; direct local probes return valid server
+  JSON, while inbound UDP from Glass and the streamer receives no reply. `/etc/nftables.conf` uses an
+  input policy of `drop` and permits LAN UDP only on 137/138, excluding 7359. The required narrow fix
+  is to allow UDP 7359 only from the existing private LAN source ranges; this tunnel cannot modify the
+  root-owned firewall configuration. An experimental /24 unicast scan was removed after confirming the
+  firewall also blocks inbound unicast UDP.
 - 2026-09-04: Google TV Streamer SEARCH intent and HOME/lifecycle restoration passed with the
   same app process and no sloppaTV fatal exception, native signal, or ANR. A five-minute physical-TV
   soak stayed flat (PSS -0.4%, RSS -0.2%) and also completed with a clean fatal-log audit.
@@ -106,9 +124,9 @@ required for TV hardware, Android TV integration, and final performance work.
   physical streamer against both mixed `Friends` results and a single HDR episode, with no metadata
   collisions and a clean fatal/ANR log audit.
 - 2026-09-04: Glass's production signing material was recovered onto Astra after verifying its
-  Release certificate SHA-256 exactly matches the installed `app.sloppatv` certificate. A clean
-  detached `origin/main` Release then updated the streamer successfully with `adb install -r`,
-  preserving app data. The separate unpublished local caracal-branding commit was not deployed.
+  Release certificate SHA-256 exactly matches the installed `app.sloppatv` certificate. Clean
+  production-signed Releases now update the streamer successfully with `adb install -r` while
+  preserving app data; later acceptance builds include the merged caracal branding commit.
 - 2026-09-04: Settings acceptance exercised and restored AUTO/LARGE/EXTRA LARGE buffers, direct
   versus stereo audio mode, FIT/FILL zoom, refresh-rate matching, and a temporary Quick Connect
   user switch. Cleanup accidentally removed the saved `lounge` profile instead of the temporary

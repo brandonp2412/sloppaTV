@@ -56,6 +56,14 @@ class ManifestToolingTest(unittest.TestCase):
         )
 
 
+class JellyfinRequestToolingTest(unittest.TestCase):
+    def test_explicit_metadata_refresh_requests_full_metadata_replacement(self) -> None:
+        source = (ROOT / "app" / "src" / "main" / "cpp" / "jellyfin.cpp").read_text()
+        self.assertIn("metadataRefreshMode=FullRefresh", source)
+        self.assertIn("imageRefreshMode=FullRefresh", source)
+        self.assertIn("replaceAllMetadata=true", source)
+
+
 class PlaybackReportToolingTest(unittest.TestCase):
     def test_selects_exact_active_sloppatv_item(self) -> None:
         sessions = [
