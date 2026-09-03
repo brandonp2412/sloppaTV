@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import patch
 
@@ -36,6 +37,22 @@ class BenchmarkToolingTest(unittest.TestCase):
 
     def test_percentile_uses_upper_bucket(self) -> None:
         self.assertEqual(benchmark_tv.percentile([10.0, 20.0, 30.0, 40.0], 0.95), 40.0)
+
+
+class ManifestToolingTest(unittest.TestCase):
+    def test_external_video_players_are_visible_to_package_manager(self) -> None:
+        manifest = ET.parse(ROOT / "app" / "src" / "main" / "AndroidManifest.xml").getroot()
+        android = "{http://schemas.android.com/apk/res/android}"
+        intents = manifest.findall("./queries/intent")
+        self.assertTrue(
+            any(
+                intent.find("action") is not None
+                and intent.find("action").get(android + "name") == "android.intent.action.VIEW"
+                and intent.find("data") is not None
+                and intent.find("data").get(android + "mimeType") == "video/*"
+                for intent in intents
+            )
+        )
 
 
 class PlaybackReportToolingTest(unittest.TestCase):

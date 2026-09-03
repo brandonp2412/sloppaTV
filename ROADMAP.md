@@ -58,7 +58,7 @@ required for TV hardware, Android TV integration, and final performance work.
 - [x] Playback reports have automated Jellyfin session-state assertions.
 - [~] Subtitle appearance/position; ASS visual pass; Trickplay thumbnail render.
 - [~] HDR fixture and HDR-preserving server-stream path verified; new-build streamer acceptance is still required. Trickplay still needs server-generated tile data.
-- [~] External-player handoff needs a compatible installed player.
+- [~] External-player fixture is available; package-visibility fix needs new-build Android acceptance.
 - [~] Voice search needs a real microphone/recognizer invocation.
 - [~] DreamService needs normal-idle render/dismissal acceptance.
 - [~] Launcher banner/icon needs reinstall verification with the matching key.
@@ -94,6 +94,11 @@ required for TV hardware, Android TV integration, and final performance work.
   transcoding TrueHD to AAC. Host/unit/Release builds pass; streamer acceptance of the new APK is
   still blocked until Astra has the installed production signing key rather than the temporary
   bughunt identity.
+- 2026-09-04: installing official VLC 3.7.1 on the streamer exposed Android package-visibility
+  filtering: the system resolves VLC for `ACTION_VIEW video/*`, while sloppaTV reported zero players.
+  The manifest now declares the matching `<queries>` intent, regression coverage passes, and the
+  merged Release manifest contains the query. New-build handoff acceptance still requires the
+  production signing key.
 - 2026-09-04: physical-TV capture tooling now wakes a sleeping target before visual acceptance;
   this was added after a sleeping streamer produced valid-size but entirely black screenshots.
 - 2026-09-04: the production-signed streamer install exposed overlapping Search result metadata.
