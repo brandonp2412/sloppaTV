@@ -12,8 +12,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-waydroid"
-DEFAULT_PACKAGE = "nz.presley.sloppatv.test"
-DEFAULT_COMPONENT = "nz.presley.sloppatv.test/nz.presley.sloppatv.SloppaNativeActivity"
+DEFAULT_PACKAGE = "nz.presley.sloppatv"
+DEFAULT_COMPONENT = "nz.presley.sloppatv/nz.presley.sloppatv.SloppaNativeActivity"
 SERIAL = ""
 PACKAGE = DEFAULT_PACKAGE
 COMPONENT = DEFAULT_COMPONENT
@@ -87,6 +87,12 @@ def require_running() -> str:
     if not pid:
         raise RuntimeError(f"{PACKAGE} is not running")
     return pid
+
+
+def require_playback_session() -> None:
+    sessions = adb("shell", "dumpsys", "media_session", capture=True, timeout=60.0)
+    if f"{PACKAGE}/sloppaTV" not in sessions:
+        raise RuntimeError("sloppaTV playback is not active; open a title before running this player acceptance command")
 
 
 def capture(name: str) -> Path:
@@ -192,6 +198,7 @@ def memory_snapshot() -> dict[str, int | float | str]:
 def wonder_core() -> None:
     adb("logcat", "-c")
     require_running()
+    require_playback_session()
     key("DPAD_UP")
     time.sleep(0.4)
     capture("wonder-controls")
@@ -223,6 +230,7 @@ def wonder_core() -> None:
 def planet_core() -> None:
     adb("logcat", "-c")
     require_running()
+    require_playback_session()
     capture("planet-skip-before")
     key("DPAD_CENTER")
     time.sleep(2.0)

@@ -739,6 +739,26 @@ public:
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
         }
+        systemTextInputMode_ = mode;
+        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
+    void onSystemTextInputCancelled(int mode, const std::string& value) {
+        std::scoped_lock lock(stateMutex_);
+        const std::string text = value.substr(0, 160);
+        systemTextInputMode_ = -1;
+        if (mode == kTextInputSearch) {
+            searchQuery_ = text;
+            searchKeyboard_ = false;
+        } else if (mode == kTextInputSettingsSearch) {
+            settingsSearchQuery_ = text;
+            settingsSearchFocused_ = true;
+            const auto matches = matchingSettings(settingsSearchQuery_);
+            if (!matches.empty()) settingsSelection_ = matches.front();
+        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
+            loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
+        }
         renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
@@ -746,6 +766,7 @@ public:
     void onSystemTextInputDone(int mode, const std::string& value) {
         std::scoped_lock lock(stateMutex_);
         const std::string text = value.substr(0, 160);
+        systemTextInputMode_ = -1;
         if (mode == kTextInputSearch) {
             searchQuery_ = text;
             searchKeyboard_ = false;
@@ -891,6 +912,7 @@ private:
         const auto inputNow = std::chrono::steady_clock::now();
         renderBurstUntil_ = inputNow + 150ms;
         std::scoped_lock lock(stateMutex_);
+        if (systemTextInputMode_ >= 0) return 0;
         lastInteraction_ = inputNow;
         if (screensaverActive_) {
             screensaverActive_ = false;
@@ -983,10 +1005,12 @@ private:
         if (jHint) env->DeleteLocalRef(jHint);
         if (jInitial) env->DeleteLocalRef(jInitial);
         if (activityClass) env->DeleteLocalRef(activityClass);
+        if (shown == JNI_TRUE) systemTextInputMode_ = mode;
         return shown == JNI_TRUE;
     }
 
     void hideSystemTextInput() {
+        systemTextInputMode_ = -1;
         if (!app_ || !app_->activity || !app_->activity->vm || !app_->activity->clazz) return;
         ScopedLaunchEnv scoped(app_->activity->vm);
         JNIEnv* env = scoped.get();
@@ -6206,6 +6230,7 @@ private:
     std::array<std::string, 3> loginFields_{};
     int loginField_ = 0;
     bool loginKeyboard_ = false;
+    int systemTextInputMode_ = -1;
     bool quickConnectActive_ = false;
     std::string quickConnectCode_;
     std::string discoveryStatus_;
@@ -6345,6 +6370,18 @@ Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(
     const std::string value = javaString(env, text);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemTextInputDone(static_cast<int>(mode), value);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_nz_presley_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputCancelled(
+    JNIEnv* env,
+    jclass,
+    jint mode,
+    jstring text
+) {
+    const std::string value = javaString(env, text);
+    std::scoped_lock lock(gActiveAppMutex);
+    if (gActiveApp) gActiveApp->onSystemTextInputCancelled(static_cast<int>(mode), value);
 }
 
 void android_main(android_app* app) {

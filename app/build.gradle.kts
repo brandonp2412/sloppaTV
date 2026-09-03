@@ -16,17 +16,6 @@ require(releaseSigningConfigured || releaseSigningValues.all { it.isNullOrBlank(
     "Release signing requires SLOPPATV_KEYSTORE_PATH, SLOPPATV_KEYSTORE_PASSWORD, SLOPPATV_KEY_ALIAS and SLOPPATV_KEY_PASSWORD together"
 }
 
-val testSigningValues = listOf(
-    System.getenv("SLOPPATV_TEST_KEYSTORE_PATH"),
-    System.getenv("SLOPPATV_TEST_KEYSTORE_PASSWORD"),
-    System.getenv("SLOPPATV_TEST_KEY_ALIAS"),
-    System.getenv("SLOPPATV_TEST_KEY_PASSWORD"),
-)
-val testSigningConfigured = testSigningValues.all { !it.isNullOrBlank() }
-require(testSigningConfigured || testSigningValues.all { it.isNullOrBlank() }) {
-    "Test signing requires SLOPPATV_TEST_KEYSTORE_PATH, SLOPPATV_TEST_KEYSTORE_PASSWORD, SLOPPATV_TEST_KEY_ALIAS and SLOPPATV_TEST_KEY_PASSWORD together"
-}
-
 android {
     namespace = "nz.presley.sloppatv"
     compileSdk = 36
@@ -63,23 +52,18 @@ android {
                 keyPassword = releaseSigningValues[3]
             }
         }
-        if (testSigningConfigured) {
-            create("acceptanceTest") {
-                storeFile = file(testSigningValues[0]!!)
-                storePassword = testSigningValues[1]
-                keyAlias = testSigningValues[2]
-                keyPassword = testSigningValues[3]
-            }
-        }
     }
 
     buildTypes {
         getByName("debug") {
-            // Install developer builds beside a user's production TV install. This also
-            // lets real-device acceptance use a separate signing key without wiping data.
-            applicationIdSuffix = ".test"
-            versionNameSuffix = "-test"
-            manifestPlaceholders["appLabel"] = "sloppaTV Test"
+            // All local variants update the single sloppaTV installation. Never work around
+            // a signing mismatch by uninstalling the existing app or clearing its data.
+            versionNameSuffix = "-debug"
+            signingConfig = if (releaseSigningConfigured) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
         getByName("release") {
             isMinifyEnabled = false
@@ -90,12 +74,10 @@ android {
         }
         create("benchmark") {
             initWith(getByName("release"))
-            applicationIdSuffix = ".test"
             versionNameSuffix = "-benchmark"
-            manifestPlaceholders["appLabel"] = "sloppaTV Test"
             isDebuggable = false
-            signingConfig = if (testSigningConfigured) {
-                signingConfigs.getByName("acceptanceTest")
+            signingConfig = if (releaseSigningConfigured) {
+                signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")
             }

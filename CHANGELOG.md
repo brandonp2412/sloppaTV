@@ -24,7 +24,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Saved authenticated user/server profiles with native switching, forgetting, add-account flow, single-session migration and expired-token cleanup.
 - TV readability redesign with three large Home cards per row, four-column media grids, larger navigation/settings/player typography, larger focus targets and roomier spacing.
 - Aspect-aware Details artwork so episodes use a large landscape frame while movies/series retain poster presentation.
-- Side-by-side `.test` application IDs for Debug/Benchmark acceptance builds so real-device testing never requires replacing or clearing an installed production client.
+- Single-package Debug/Benchmark acceptance deployment using the production `nz.presley.sloppatv` application ID, with in-place update/signature-diagnosis rules that preserve installed app data.
 - Persisted global UI text-size presets and per-edge overscan safe-area controls, with the native renderer applying them to UI/artwork/overlays while leaving playback video edge-to-edge.
 - Persisted AVC, HEVC and HDR playback overrides that feed real Jellyfin PlaybackInfo capability negotiation rather than acting as display-only preferences.
 - Native playback queue management with Series `PLAY ALL`, `PLAY NOW`, `PLAY NEXT`, move up/down, remove and hardware/media-next integration, shared with episode autoplay.
@@ -73,10 +73,12 @@ All notable user-visible and release-engineering changes are recorded here.
 - Audio stream-copy and transcode-output negotiation now respects the selected stream codec/channel count and attached-route stereo/surround constraints instead of leaving `AllowAudioStreamCopy` unconditional.
 - Media3 playback startup no longer resolves application classes from attached native worker threads, and Android `MediaSession` creation is marshalled onto the Activity main thread; both crashes were reproduced during real resume playback and fixed.
 - NativeActivity explicitly loads the app library through the application classloader so Java-to-native system-keyboard callbacks resolve reliably; real IME typing now updates native Search/Settings/login state without `UnsatisfiedLinkError`.
+- Android TV system-IME input now owns remote key events while its hidden EditText is active, and Back commits cancellation state without leaking into native navigation; this prevents login/search/settings actions from firing before the IME callback has committed the edited value.
 - The fallback native virtual keyboard wraps horizontally at both row edges and remains available only when the configured Android TV IME cannot be opened.
 - Home episode artwork now preserves the owner ID for inherited Jellyfin backdrops, preventing `ParentBackdropImageTag` from being requested against the episode ID; card rendering uses higher-resolution requests and aspect-preserving center crop rather than stretching.
 - Home, browse, search, similar/person and season/episode list requests no longer fetch Details/playback-only Overview/full MediaSources payloads. Current real-server samples shrank representative Continue Watching, Latest Movies, 60-movie browse, Friends search and 97-record Friends Play All JSON by 69–87% while retaining the list/card metadata sloppaTV consumes; full details/media sources are still fetched on demand before Details/playback.
 - Embedded text-subtitle delivery no longer depends on Jellyfin's unusable external SubRip/SRT extraction URL during DirectPlay; Media3 demuxes the embedded track directly while external subtitle failures remain nonfatal.
+- External ASS/SSA Media3 subtitle configurations now carry a stable non-null track ID, preventing `ass-media` 0.5.1 from throwing while creating an external libass track; the real Wonder Egg transcode/ASS path now reaches READY with moving video on Waydroid.
 - Detached/replaced ExoPlayer instances can no longer overwrite the active bridge state through late release/error callbacks.
 - DirectPlay audio switching now updates the active Media3 track in place and playback reporting carries the selected Jellyfin audio/subtitle stream indices.
 - Manually selected audio language now follows the current queue/autoplay chain when the next episode exposes the same language, falls back to Jellyfin's server preference when unavailable, and resets on unrelated manual playback.
@@ -86,6 +88,7 @@ All notable user-visible and release-engineering changes are recorded here.
 - Jellyfin 10.11 remux/server-stream URLs are classified as DirectStream when their `TranscodeReasons` contain only Jellyfin's direct-stream-safe container/audio reasons, avoiding full-transcode misreporting when the server intentionally returns `SupportsDirectStream=false`.
 - The real-server acceptance harness now proves max-bitrate negotiation on one source at both unconstrained and constrained caps, requiring DirectPlay at the high cap and a bitrate-limited server stream at the low cap.
 - Waydroid soak evidence now includes host-tested baseline/final median and peak PSS/RSS plus absolute/percentage growth summaries for leak analysis.
+- Player-specific Waydroid acceptance commands now require an active sloppaTV MediaSession before sending playback keys, preventing Home-screen runs from producing false motion/pause/seek evidence.
 - Media3 buffer preset durations are isolated in host-tested C++ playback policy; the Java bridge now only receives the resolved durations and applies them to `DefaultLoadControl`, keeping non-platform playback policy native.
 - Physical-streamer acceptance now proves the configured Still Watching threshold/Keep Watching continuation and Android system MediaSession Play/Pause dispatch end-to-end.
 - Long Details action labels use a slightly smaller local scale so `KEEP WATCHING` and `MARK WATCHED` remain single-line under the Extra Large global TV text preset.

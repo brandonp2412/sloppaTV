@@ -18,6 +18,7 @@ import android.os.Looper;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
@@ -112,7 +113,19 @@ public final class SloppaNativeActivity extends NativeActivity {
         final String inputHint = hint == null ? "" : hint;
         runOnUiThread(() -> {
             removeNativeTextInput(false);
-            EditText input = new EditText(this);
+            EditText input = new EditText(this) {
+                @Override
+                public boolean onKeyPreIme(int keyCode, KeyEvent event) {
+                    if (keyCode == KeyEvent.KEYCODE_BACK) {
+                        if (event.getAction() == KeyEvent.ACTION_UP) {
+                            nativeOnSystemTextInputCancelled(mode, getText().toString());
+                            post(() -> removeNativeTextInput(false));
+                        }
+                        return true;
+                    }
+                    return super.onKeyPreIme(keyCode, event);
+                }
+            };
             nativeTextInput = input;
             input.setSingleLine(true);
             input.setHint(inputHint);
@@ -343,4 +356,5 @@ public final class SloppaNativeActivity extends NativeActivity {
     private static native void nativeOnMediaSessionCommand(int command, long positionMs);
     private static native void nativeOnSystemTextInputChanged(int mode, String text);
     private static native void nativeOnSystemTextInputDone(int mode, String text);
+    private static native void nativeOnSystemTextInputCancelled(int mode, String text);
 }
