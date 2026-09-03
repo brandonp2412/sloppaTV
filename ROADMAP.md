@@ -57,7 +57,7 @@ required for TV hardware, Android TV integration, and final performance work.
 - [~] Target-TV codec, HDR, audio-route, refresh-rate, and long-soak matrix.
 - [~] Playback reports need automated Jellyfin session-state assertions.
 - [~] Subtitle appearance/position; ASS visual pass; Trickplay thumbnail render.
-- [~] HDR needs an HDR title; Trickplay needs server-generated tile data.
+- [~] HDR fixture identified on the real server; Trickplay still needs server-generated tile data.
 - [~] External-player handoff needs a compatible installed player.
 - [~] Voice search needs a real microphone/recognizer invocation.
 - [~] DreamService needs normal-idle render/dismissal acceptance.
@@ -77,9 +77,9 @@ required for TV hardware, Android TV integration, and final performance work.
 
 - 2026-09-04: real-server acceptance against Jellyfin 10.11.11 passed transient Quick Connect
   authorization/authentication, seasons/episodes hierarchy, collections, ASS external delivery,
-  constrained-bitrate transcoding, and semantic DirectStream negotiation. The 1,000-item scan
-  still contains no Trickplay or HDR fixtures and the acceptance user currently has no favorite
-  movies, so those fixture-dependent items remain partial.
+  constrained-bitrate transcoding, and semantic DirectStream negotiation. An expanded 5,000-item
+  scan found 12 HDR10 HEVC Main 10 titles but no Trickplay data; the acceptance user currently has
+  no favorite movies, so Trickplay and populated-favorites acceptance remain fixture-dependent.
 - 2026-09-04: Google TV Streamer SEARCH intent and HOME/lifecycle restoration passed with the
   same app process and no sloppaTV fatal exception, native signal, or ANR. A five-minute physical-TV
   soak stayed flat (PSS -0.4%, RSS -0.2%) and also completed with a clean fatal-log audit.

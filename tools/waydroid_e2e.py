@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import re
+import shlex
 import struct
 import statistics
 import subprocess
@@ -406,7 +407,7 @@ def action_search(query: str) -> None:
         "android.intent.action.SEARCH",
         "--es",
         "query",
-        query,
+        shlex.quote(query),
         "-n",
         COMPONENT,
     )
