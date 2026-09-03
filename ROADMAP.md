@@ -57,7 +57,7 @@ required for TV hardware, Android TV integration, and final performance work.
 - [~] Target-TV codec, HDR, audio-route, refresh-rate, and long-soak matrix.
 - [~] Playback reports need automated Jellyfin session-state assertions.
 - [~] Subtitle appearance/position; ASS visual pass; Trickplay thumbnail render.
-- [~] HDR fixture identified on the real server; Trickplay still needs server-generated tile data.
+- [~] HDR fixture and HDR-preserving server-stream path verified; new-build streamer acceptance is still required. Trickplay still needs server-generated tile data.
 - [~] External-player handoff needs a compatible installed player.
 - [~] Voice search needs a real microphone/recognizer invocation.
 - [~] DreamService needs normal-idle render/dismissal acceptance.
@@ -83,6 +83,13 @@ required for TV hardware, Android TV integration, and final performance work.
 - 2026-09-04: Google TV Streamer SEARCH intent and HOME/lifecycle restoration passed with the
   same app process and no sloppaTV fatal exception, native signal, or ANR. A five-minute physical-TV
   soak stayed flat (PSS -0.4%, RSS -0.2%) and also completed with a clean fatal-log audit.
+- 2026-09-04: HDR10 acceptance found an audio-transcode regression: the HEVC Main 10 source was
+  being converted to AVC because the HLS server-stream profile advertised only H.264. The corrected
+  item-aware profile advertises HEVC before H.264 when HEVC remains allowed for the title. A real
+  Jellyfin stream probe changed from H.264 8-bit BT.709 to HEVC Main 10 10-bit BT.2020/PQ while
+  transcoding TrueHD to AAC. Host/unit/Release builds pass; streamer acceptance of the new APK is
+  still blocked until Astra has the installed production signing key rather than the temporary
+  bughunt identity.
 - 2026-09-04: physical-TV capture tooling now wakes a sleeping target before visual acceptance;
   this was added after a sleeping streamer produced valid-size but entirely black screenshots.
 - 2026-09-04: the production-signed streamer install exposed overlapping Search result metadata.

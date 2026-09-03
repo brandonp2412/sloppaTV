@@ -76,6 +76,10 @@ int main() {
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=VideoBitDepthNotSupported"));
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported,SubtitleCodecNotSupported"));
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?foo=bar"));
+    assert(serverStreamVideoCodecList({"h264"}) == "h264");
+    assert(serverStreamVideoCodecList({"vp9", "hevc", "h264", "av1"}) == "hevc,h264");
+    assert(serverStreamVideoCodecList({"vp9", "h264"}) == "h264");
+    assert(serverStreamVideoCodecList({"vp9"}) == "h264");
 
     assert(shouldAcceptPostSeekTelemetry(10'000, -1, 0));
     assert(shouldAcceptPostSeekTelemetry(20'800, 20'000, 50));

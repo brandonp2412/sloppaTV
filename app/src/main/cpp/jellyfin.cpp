@@ -1306,6 +1306,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     if (audioCodecs.empty()) audioCodecs.emplace_back("aac");
     if (transcodeAudioCodecs.empty()) transcodeAudioCodecs.emplace_back("aac");
     const std::string videoCodecList = joinCodecs(videoCodecs);
+    const std::string serverStreamVideoCodecs = serverStreamVideoCodecList(videoCodecs);
     const std::string audioCodecList = joinCodecs(audioCodecs);
     const std::string transcodeAudioCodecList = joinCodecs(transcodeAudioCodecs);
 
@@ -1373,7 +1374,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             {
                 {"Container", "ts"},
                 {"Type", "Video"},
-                {"VideoCodec", "h264"},
+                {"VideoCodec", serverStreamVideoCodecs},
                 {"AudioCodec", transcodeAudioCodecList},
                 {"Protocol", "hls"},
                 {"Context", "Streaming"},
