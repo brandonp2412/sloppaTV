@@ -35,6 +35,10 @@ public:
     void setUiTransform(float safeAreaFraction, float textScale);
 
     void rect(float x, float y, float w, float h, Color color);
+    void roundedRect(float x, float y, float w, float h, float radius, Color color);
+    void roundedOutline(float x, float y, float w, float h, float radius, float thickness, Color color);
+    void verticalGradient(float x, float y, float w, float h, Color top, Color bottom);
+    void horizontalGradient(float x, float y, float w, float h, Color left, Color right);
     void outline(float x, float y, float w, float h, float thickness, Color color);
     void text(float x, float y, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
     float textWidth(float scale, const std::string& value) const;

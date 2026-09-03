@@ -153,10 +153,10 @@ constexpr bool preferExternalSubtitleDelivery(SubtitleStrategy strategy, bool ha
 
 constexpr bool useNativeSubtitleRenderer(
     SubtitleStrategy strategy,
-    bool directPlay,
+    bool /*directPlay*/,
     bool subtitleSelected
 ) {
     return subtitleSelected
         && (strategy == SubtitleStrategy::ClientText
-            || (strategy == SubtitleStrategy::ClientStyled && !directPlay));
+            || strategy == SubtitleStrategy::ClientStyled);
 }
