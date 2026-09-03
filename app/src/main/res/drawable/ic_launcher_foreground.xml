@@ -1,15 +1,4 @@
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="#8F61FF"
-        android:pathData="M18,20C18,14 23,9 29,9h50c6,0 11,5 11,11v60c0,6 -5,11 -11,11H29c-6,0 -11,-5 -11,-11z" />
-    <path
-        android:fillColor="#F8F8FC"
-        android:pathData="M43,33L43,67L72,50z" />
-    <path
-        android:fillColor="#F8F8FC"
-        android:pathData="M33,91h42v5h-42z" />
-</vector>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/sloppatv_launcher_art"
+    android:gravity="fill"
+    android:filter="true" />
