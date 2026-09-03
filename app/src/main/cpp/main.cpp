@@ -2997,6 +2997,7 @@ private:
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
+            if (screen_ != Screen::Browse || activeLibrary_.id != container.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
@@ -3035,6 +3036,7 @@ private:
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
+            if (screen_ != Screen::Seasons || seriesDetail_.id != seriesId) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
@@ -3061,6 +3063,11 @@ private:
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
+            if (screen_ != Screen::Episodes
+                || seriesDetail_.id != seriesId
+                || selectedSeason_.id != seasonId) {
+                return;
+            }
             if (!result.ok) {
                 error_ = result.error;
                 return;
@@ -3102,20 +3109,25 @@ private:
         const bool desired = !detail_.favorite;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
+        const uint64_t generation = taskGeneration_.load();
         loading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, desired] {
+        tasks_.submit([this, session, item, desired, generation] {
             auto result = api_.setFavorite(session, item, desired);
             std::scoped_lock lock(stateMutex_);
+            if (result.ok) {
+                JellyfinItem updated = item;
+                updated.favorite = desired;
+                updateCachedUserData(updated);
+            }
+            if (generation != taskGeneration_.load()) return;
             loading_ = false;
+            if (screen_ != Screen::Details || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            if (detail_.id == item.id) {
-                detail_.favorite = desired;
-                updateCachedUserData(detail_);
-            }
+            detail_.favorite = desired;
         });
     }
 
@@ -3124,21 +3136,27 @@ private:
         const bool desired = !detail_.played;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
+        const uint64_t generation = taskGeneration_.load();
         loading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, desired] {
+        tasks_.submit([this, session, item, desired, generation] {
             auto result = api_.setPlayed(session, item, desired);
             std::scoped_lock lock(stateMutex_);
+            if (result.ok) {
+                JellyfinItem updated = item;
+                updated.played = desired;
+                if (desired) updated.positionTicks = 0;
+                updateCachedUserData(updated);
+            }
+            if (generation != taskGeneration_.load()) return;
             loading_ = false;
+            if (screen_ != Screen::Details || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            if (detail_.id == item.id) {
-                detail_.played = desired;
-                if (desired) detail_.positionTicks = 0;
-                updateCachedUserData(detail_);
-            }
+            detail_.played = desired;
+            if (desired) detail_.positionTicks = 0;
         });
     }
 
@@ -3160,20 +3178,21 @@ private:
         if (loading_ || detail_.id.empty()) return;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
+        const uint64_t generation = taskGeneration_.load();
         loading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item] {
+        tasks_.submit([this, session, item, generation] {
             auto result = api_.refreshMetadata(session, item);
             std::scoped_lock lock(stateMutex_);
+            if (generation != taskGeneration_.load()) return;
             loading_ = false;
+            if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            if (screen_ == Screen::ItemMenu && detail_.id == item.id) {
-                popScreen(Screen::Details);
-                showNotice("METADATA REFRESH REQUESTED");
-            }
+            popScreen(Screen::Details);
+            showNotice("METADATA REFRESH REQUESTED");
         });
     }
 
@@ -3181,27 +3200,28 @@ private:
         if (loading_ || detail_.id.empty() || !detail_.canDelete) return;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
+        const uint64_t generation = taskGeneration_.load();
         loading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item] {
+        tasks_.submit([this, session, item, generation] {
             auto result = api_.deleteItem(session, item);
             std::scoped_lock lock(stateMutex_);
+            if (result.ok) removeCachedItem(item.id);
+            if (generation != taskGeneration_.load()) return;
             loading_ = false;
+            if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 deleteConfirmation_ = false;
                 deleteConfirmationSelection_ = 1;
                 return;
             }
-            removeCachedItem(item.id);
-            if (detail_.id == item.id) detail_ = {};
+            detail_ = {};
             deleteConfirmation_ = false;
             deleteConfirmationSelection_ = 1;
-            if (screen_ == Screen::ItemMenu) {
-                popScreen(Screen::Home);
-                if (screen_ == Screen::Details) popScreen(Screen::Home);
-                showNotice("MEDIA DELETED");
-            }
+            popScreen(Screen::Home);
+            if (screen_ == Screen::Details) popScreen(Screen::Home);
+            showNotice("MEDIA DELETED");
         });
     }
 
@@ -3499,6 +3519,7 @@ private:
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
+            if (screen_ != Screen::Search || searchQuery_ != query) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
