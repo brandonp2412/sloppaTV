@@ -53,6 +53,11 @@ constexpr bool queueCanShuffle(int currentIndex, int size) {
     return size - queueShuffleBegin(currentIndex, size) > 1;
 }
 
+constexpr int queueAutoplayAdvanceIndex(int currentIndex, int size, bool nextItemMatches) {
+    if (!nextItemMatches || currentIndex < 0 || currentIndex + 1 >= size) return -1;
+    return currentIndex + 1;
+}
+
 constexpr QueueRepeatMode nextQueueRepeatMode(QueueRepeatMode mode) {
     return mode == QueueRepeatMode::Off ? QueueRepeatMode::One
         : (mode == QueueRepeatMode::One ? QueueRepeatMode::All : QueueRepeatMode::Off);

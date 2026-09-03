@@ -14,6 +14,15 @@ int main() {
     assert(!shouldRetryFailedSubtitleTranscode(false, 2));
     assert(!shouldRetryFailedSubtitleTranscode(true, kSubtitleOffIndex));
 
+    assert(parseSubtitleTimestamp("00:00:01,250") == 1250);
+    assert(parseSubtitleTimestamp("01:02:03.004") == 3723004);
+    assert(parseSubtitleTimestamp("01:02.500") == 62500);
+    assert(parseSubtitleTimestamp("00:01.5") == 1500);
+    assert(parseSubtitleTimestamp("00:01.05") == 1050);
+    assert(parseSubtitleTimestamp("00:01.005 align:start position:50%") == 1005);
+    assert(parseSubtitleTimestamp("00:60.000") == -1);
+    assert(parseSubtitleTimestamp("not-a-timestamp") == -1);
+
     const std::vector<SubtitlePreferenceCandidate> subtitles{
         {2, "eng"},
         {4, "jpn"},

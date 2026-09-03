@@ -46,6 +46,8 @@ public:
     );
     void stop();
     void togglePause();
+    void pause();
+    void play();
     void seekBy(int deltaMs);
     void seekTo(int positionMs);
     bool selectEmbeddedAudioOrdinal(int ordinal);
@@ -66,6 +68,8 @@ public:
     [[nodiscard]] int selectedSubtitleTrack() const;
 
 private:
+    void invokeTransportCommand(const char* methodName, const char* operation);
+
     JavaVM* vm_ = nullptr;
     jobject activity_ = nullptr;
     mutable std::mutex mutex_;

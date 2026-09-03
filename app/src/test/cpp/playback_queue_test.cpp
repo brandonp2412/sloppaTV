@@ -37,6 +37,12 @@ int main() {
     assert(queueCanShuffle(0, 4));
     assert(!queueCanShuffle(2, 4));
 
+    assert(queueAutoplayAdvanceIndex(0, 3, true) == 1);
+    assert(queueAutoplayAdvanceIndex(1, 3, true) == 2);
+    assert(queueAutoplayAdvanceIndex(2, 3, true) == -1);
+    assert(queueAutoplayAdvanceIndex(0, 3, false) == -1);
+    assert(queueAutoplayAdvanceIndex(-1, 3, true) == -1);
+
     assert(nextQueueRepeatMode(QueueRepeatMode::Off) == QueueRepeatMode::One);
     assert(nextQueueRepeatMode(QueueRepeatMode::One) == QueueRepeatMode::All);
     assert(nextQueueRepeatMode(QueueRepeatMode::All) == QueueRepeatMode::Off);
