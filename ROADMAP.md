@@ -8,11 +8,21 @@ Performance is part of parity: where the official client and sloppaTV implement 
 
 ## Status legend
 
-- [x] Implemented and verified on target Android TV hardware
-- [~] Implemented, but not yet fully end-to-end verified or has a known limitation
+- [x] Implemented and end-to-end verified at the level appropriate to the feature
+- [~] Implemented, but not yet fully end-to-end verified or has a known limitation/blocker
 - [ ] Not implemented
 
+Waydroid is sufficient to close hardware-independent behavior when the real Jellyfin server is involved where relevant and the acceptance test exercises the complete user-visible flow, remote/navigation behavior, lifecycle behavior and resulting server state. The physical Google TV Streamer remains mandatory for behavior that materially depends on actual TV hardware or Android TV device integration, including display/HDR/refresh-rate behavior, audio-route/passthrough behavior, launcher integration, real microphone/voice integration, sleep/wake behavior, physical-system screensaver behavior, and final target-hardware performance validation.
+
+A fixture/environment limitation does not make an item complete. If an in-scope feature requires HDR media, Trickplay data, a compatible external player, a second account/server, suitable library structure or another reproducible fixture, that fixture must be provided and the behavior verified before the item becomes `[x]`. Deliberately removed behavior is complete only when the roadmap explicitly defines it as out of scope rather than leaving it indefinitely partial.
+
+## Definition of done — 100%
+
+**The project is done only when 100% of the in-scope roadmap items are `[x]`.** There is no acceptable residual `[~]` or `[ ]` count for release/parity completion. External blockers, missing fixtures, long-soak work, signing/reproducibility work and hardware-only validation remain real work until resolved, or until the scope is explicitly and intentionally changed. Milestone completion does not override this rule.
+
 ## Current status — 2026-09-03
+
+Current strict completion: **81 / 138 in-scope items `[x]` (58.7%)**, with **57 `[~]`** and **0 `[ ]`**. Implementation coverage is effectively complete, but the project remains **not done** until the 57 partial rows are closed and this reaches **138 / 138 `[x]`**.
 
 ### Native foundation
 
@@ -123,7 +133,7 @@ Performance is part of parity: where the official client and sloppaTV implement 
 
 ### Waydroid viewing-acceptance checkpoint — 2026-09-01
 
-Current automated/device acceptance is intentionally being run on a 1920x1080 Waydroid TV-like target rather than physical Android TV hardware.
+Current automated/device acceptance uses a 1920x1080 Waydroid TV-like target for hardware-independent flows. Passing a complete Waydroid E2E flow can now close a roadmap item when that behavior does not materially depend on physical TV hardware; hardware-dependent rows still require the Google TV Streamer or the relevant real output/display fixture.
 
 Verified on the current Waydroid worktree/build:
 
@@ -256,15 +266,15 @@ Status: **complete**. Login → authenticated Home → real Details → resume/p
 
 ### M1 — Usable daily-driver core
 
-Status: **well underway**. The Netflix-style Home, direct Movies/Shows entry, real direct playback, dual-audio switching, native subtitles, media-segment skipping and episode autoplay are working. Collections/Genres/A-Z/Favorites browse filters and richer Details discovery are build-clean but await the next awake-TV visual pass. Remaining core blockers include Still Watching threshold E2E, real HDR title validation, trickplay data/server support and final UI/reliability polish.
+Status: **late-stage / nearly complete**. The daily-driver path is implemented: Netflix-style Home, direct Movies/Shows entry, search/browse discovery, real playback, audio/subtitle switching, media-segment skipping, episode autoplay, Still Watching, Collections/Genres/A-Z/cast discovery, queues and core settings are working. Remaining M1 work is primarily turning implemented-but-partial flows into deterministic E2E-verified behavior and resolving fixture-dependent cases; M1 is not complete until every row assigned to the daily-driver core is `[x]`.
 
 ### M2 — Netflix-style on-demand parity
 
-Movie/show browse parity, collections/genres/A-Z/favorites/people, polished Home rows, queues, full relevant playback settings, and a complete fast remote-control experience. Music, photos, Live TV/DVR and launcher TV channels remain out of scope.
+Status: **substantially implemented, verification incomplete**. Movie/show browse parity, collections/genres/A-Z/favorites/people, polished Home rows, queues, relevant playback settings and the fast remote-control experience are largely present. The remaining work is dominated by E2E closure, edge cases, fixture-dependent capabilities and hardware-sensitive playback/platform behavior. Music, photos, Live TV/DVR and launcher TV channels remain out of scope. M2 becomes complete only when every in-scope parity row is `[x]`.
 
 ### M3 — Parity hardening
 
-Close every remaining observable behavior/settings gap within the scoped Netflix-style feature set. Run release-mode comparative startup/navigation/playback benchmarks, long-running soak/leak tests, codec/HDR matrices and reproducible signed builds on target hardware.
+Status: **actively underway**. Close every remaining observable behavior/settings gap within the scoped Netflix-style feature set; finish release-mode comparative startup/navigation/playback benchmarks, long-running soak/leak tests, codec/HDR/audio matrices, signing, package-migration validation and reproducible signed builds. M3—and therefore the project—is complete only at **100% `[x]`** across the in-scope roadmap.
 
 ## Performance contract
 
@@ -278,4 +288,8 @@ A feature is not considered performance-complete because it is written in C++. F
 
 ## Definition of parity
 
-A roadmap item is not complete merely because an endpoint or screen exists. It must work against a real Jellyfin server on the target Android TV hardware, preserve expected remote-control navigation behavior, survive lifecycle/relaunch cases, and have no known material regression versus the equivalent official Android TV feature.
+A roadmap item is not complete merely because an endpoint or screen exists. It must work end-to-end against a real Jellyfin server where the feature is server-backed, preserve expected remote-control navigation behavior, survive relevant lifecycle/relaunch cases, and have no known material regression versus the equivalent official Android TV feature.
+
+For hardware-independent behavior, deterministic Waydroid E2E acceptance at the 1920x1080 TV target is sufficient when it proves the full user-visible flow and relevant server state. For hardware-dependent behavior, verification must use the physical Google TV Streamer and any required real display/audio/input fixture. Host/unit tests and API-only harnesses support these checks but do not replace E2E acceptance for user-visible behavior.
+
+**Parity/done = 100% of in-scope roadmap rows `[x]`.** Any remaining `[~]` or `[ ]` means the project is not done.
