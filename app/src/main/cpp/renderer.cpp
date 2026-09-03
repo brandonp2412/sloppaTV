@@ -369,7 +369,7 @@ void Renderer::shutdown() {
 void Renderer::beginFrame() {
     if (!ready()) return;
     glViewport(0, 0, surfaceWidth_, surfaceHeight_);
-    glClearColor(0.043f, 0.047f, 0.059f, 1.0f);
+    glClearColor(0.000f, 0.027f, 0.082f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     vertices_.clear();
 }

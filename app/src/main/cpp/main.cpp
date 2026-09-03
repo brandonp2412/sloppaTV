@@ -1,3 +1,4 @@
+#include <android/asset_manager.h>
 #include <android/input.h>
 #include <android/log.h>
 #include <android/native_activity.h>
@@ -58,16 +59,17 @@ using namespace std::chrono_literals;
 namespace {
 constexpr const char* kTag = "sloppaTV";
 
-constexpr Color kBackground{0.006f, 0.008f, 0.013f, 1.0f};
-constexpr Color kPanel{0.038f, 0.044f, 0.058f, 0.90f};
-constexpr Color kPanelAlt{0.070f, 0.078f, 0.098f, 0.92f};
-constexpr Color kPanelElevated{0.112f, 0.095f, 0.158f, 0.96f};
+constexpr Color kBackground{0.000f, 0.027f, 0.082f, 1.0f};
+constexpr Color kPanel{0.035f, 0.075f, 0.133f, 0.90f};
+constexpr Color kPanelAlt{0.090f, 0.118f, 0.153f, 0.92f};
+constexpr Color kPanelElevated{0.082f, 0.192f, 0.298f, 0.96f};
 constexpr Color kText{0.985f, 0.988f, 0.998f, 1.0f};
-constexpr Color kMuted{0.70f, 0.73f, 0.80f, 1.0f};
-constexpr Color kSecondaryText{0.84f, 0.86f, 0.91f, 1.0f};
-constexpr Color kTertiary{0.45f, 0.49f, 0.58f, 1.0f};
-constexpr Color kFocus{0.67f, 0.46f, 1.0f, 1.0f};
-constexpr Color kFocusSoft{0.36f, 0.20f, 0.62f, 0.68f};
+constexpr Color kMuted{0.67f, 0.72f, 0.79f, 1.0f};
+constexpr Color kSecondaryText{0.84f, 0.87f, 0.92f, 1.0f};
+constexpr Color kTertiary{0.45f, 0.52f, 0.61f, 1.0f};
+constexpr Color kFocus{0.153f, 0.439f, 0.694f, 1.0f};
+constexpr Color kFocusSoft{0.067f, 0.259f, 0.431f, 0.76f};
+constexpr Color kBrandGold{0.757f, 0.596f, 0.431f, 1.0f};
 constexpr Color kError{0.95f, 0.28f, 0.30f, 1.0f};
 
 void logPlaybackReportFailure(const char* stage, const std::string& itemId, const ApiResult& result) {
@@ -594,6 +596,7 @@ public:
           ) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
+        loadBundledBrandMark();
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
@@ -632,6 +635,7 @@ public:
         ++taskGeneration_;
         tasks_.shutdown();
         stopPlayback();
+        if (brandMarkTexture_ != 0 && renderer_.ready()) renderer_.deleteTexture(brandMarkTexture_);
         renderer_.shutdown();
     }
 
@@ -5369,11 +5373,58 @@ private:
         }
     }
 
+    void loadBundledBrandMark() {
+        AAssetManager* manager = app_ && app_->activity ? app_->activity->assetManager : nullptr;
+        if (!manager) {
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark asset manager unavailable");
+            return;
+        }
+        AAsset* asset = AAssetManager_open(manager, "sloppatv_brand_mark.png", AASSET_MODE_BUFFER);
+        if (!asset) {
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark asset unavailable");
+            return;
+        }
+        const off_t length = AAsset_getLength(asset);
+        std::string encoded(length > 0 ? static_cast<size_t>(length) : 0, '\0');
+        const int bytesRead = encoded.empty() ? 0 : AAsset_read(asset, encoded.data(), encoded.size());
+        AAsset_close(asset);
+        if (bytesRead <= 0) {
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark asset was empty");
+            return;
+        }
+        encoded.resize(static_cast<size_t>(bytesRead));
+        std::string decodeError;
+        brandMarkDecoded_ = imageDecoder_.decode(encoded, decodeError);
+        if (!brandMarkDecoded_.valid()) {
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark decode failed: %s", decodeError.c_str());
+        }
+    }
+
+    bool drawBrandMark(float x, float y, float size) {
+        if (!brandMarkDecoded_.valid() || !renderer_.ready()) return false;
+        if (brandMarkTextureGeneration_ != renderer_.generation()) {
+            brandMarkTexture_ = 0;
+            brandMarkTextureGeneration_ = renderer_.generation();
+        }
+        if (brandMarkTexture_ == 0) {
+            brandMarkTexture_ = renderer_.createTexture(
+                brandMarkDecoded_.width,
+                brandMarkDecoded_.height,
+                brandMarkDecoded_.rgba.data()
+            );
+        }
+        if (brandMarkTexture_ == 0) return false;
+        renderer_.image(brandMarkTexture_, x, y, size, size);
+        return true;
+    }
+
     void renderHome() {
         renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
 
         const bool toolbarFocused = homeRow_ < 0;
-        renderer_.text(72.0f, 44.0f, 3.25f, "SLOPPATV", kText, 430.0f);
+        const bool hasBrandMark = drawBrandMark(72.0f, 27.0f, 72.0f);
+        renderer_.text(hasBrandMark ? 160.0f : 72.0f, 44.0f, 3.10f, "sloppaTV", kText, 430.0f);
+        renderer_.roundedRect(hasBrandMark ? 160.0f : 72.0f, 99.0f, 86.0f, 3.0f, 1.5f, kBrandGold);
 
         const std::array<std::string, 3> navLabels{"HOME", "SEARCH", "SETTINGS"};
         const std::array<int, 3> navIndices{1, 2, 3};
@@ -6616,6 +6667,9 @@ private:
     std::mutex homeDiskCacheMutex_;
     std::unordered_map<std::string, ArtworkEntry> backdrops_;
     std::unordered_map<std::string, ArtworkEntry> logos_;
+    DecodedImage brandMarkDecoded_;
+    GLuint brandMarkTexture_ = 0;
+    uint64_t brandMarkTextureGeneration_ = 0;
     std::vector<int> homeSelection_;
     int homeRow_ = 0;
     int navIndex_ = 1;
