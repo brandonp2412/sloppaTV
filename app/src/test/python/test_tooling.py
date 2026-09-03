@@ -50,6 +50,7 @@ class ManifestToolingTest(unittest.TestCase):
                 and intent.find("action").get(android + "name") == "android.intent.action.VIEW"
                 and intent.find("data") is not None
                 and intent.find("data").get(android + "mimeType") == "video/*"
+                and intent.find("data").get(android + "scheme") == "*"
                 for intent in intents
             )
         )
