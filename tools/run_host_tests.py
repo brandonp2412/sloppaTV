@@ -19,6 +19,7 @@ CPP_TESTS = [
     "http_cache_policy_test.cpp",
     "http_error_policy_test.cpp",
     "http_retry_policy_test.cpp",
+    "home_screen_test.cpp",
     "media_player_policy_test.cpp",
     "ui_policy_test.cpp",
     "playback_queue_test.cpp",

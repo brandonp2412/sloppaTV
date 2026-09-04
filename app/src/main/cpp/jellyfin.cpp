@@ -1,8 +1,8 @@
 #include "jellyfin.hpp"
 #include "audio_policy.hpp"
+#include "home_screen.hpp"
 #include "jni_env.hpp"
 #include "media_player_policy.hpp"
-#include "ui_policy.hpp"
 
 #include <android/log.h>
 
