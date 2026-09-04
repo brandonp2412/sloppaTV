@@ -282,7 +282,15 @@ required for TV hardware, Android TV integration, and final performance work.
   scrolling, filtering, common/advanced switching, mutation effects, and value formatting. The optimized Release
   passed the authenticated physical-TV screenshot suite; manual streamer acceptance also verified NORMAL -> LARGE ->
   NORMAL restoration, search focus, full-list scrolling to Advanced Settings, and the advanced/common transition with
-  no fatal/native-signal/ANR finding. `main.cpp` is now 6,663 lines, down from 7,194 before the architecture pass.
+  no fatal/native-signal/ANR finding.
+- 2026-09-04: the Home vertical slice now owns row/toolbar focus, per-row selection, visible-row scrolling, long-press
+  state, and Home artwork-selection policy. Home-only helpers were removed from the generic UI policy module and their
+  tests moved beside Home behavior. The full host suite and optimized Release build pass; the physical streamer passed
+  the authenticated screenshot suite, row navigation/scrolling and long-press item-menu acceptance with no fatal,
+  native-signal or ANR finding. A 10-startup/3-memory/3-navigation optimized-device checkpoint measured 240.0 ms median
+  cold launch, 39,725 KB PSS, 0.0% idle CPU, 16.67 ms navigation median, 16.71 ms p95 and 0.8% intervals over 20 ms,
+  matching or improving the prior 16.67/16.73/0.8% navigation checkpoint rather than introducing a hot-path regression.
+  `main.cpp` is now 6,647 lines, down from 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

@@ -10,6 +10,7 @@
 #include "discovery.hpp"
 #include "display_mode.hpp"
 #include "external_player.hpp"
+#include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "jellyfin.hpp"
 #include "jni_env.hpp"
@@ -698,17 +699,15 @@ private:
         if (systemTextInputMode_ >= 0) return 0;
 
         if (action == AKEY_EVENT_ACTION_UP) {
-            if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeCenterPending_) {
-                const bool activate = !homeCenterLongPressed_ && screen_ == Screen::Home;
-                homeCenterPending_ = false;
-                homeCenterLongPressed_ = false;
+            if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending()) {
+                const bool activate = homeState_.consumeCenterRelease(screen_ == Screen::Home);
                 if (activate) handleHomeKey(key);
                 return 1;
             }
             return 0;
         }
         if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            && homeCenterPending_ && homeCenterLongPressed_) {
+            && homeState_.centerPending() && homeState_.centerLongPressed()) {
             return 1;
         }
 
@@ -729,25 +728,20 @@ private:
         }
 
         if (screen_ == Screen::Home
-            && homeRow_ >= 0
+            && homeState_.row() >= 0
             && (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)) {
             const int repeatCount = AKeyEvent_getRepeatCount(event);
             if (repeatCount == 0) {
-                homeCenterPending_ = true;
-                homeCenterLongPressed_ = false;
+                homeState_.beginCenterPress();
                 return 1;
             }
-            if (homeCenterPending_ && !homeCenterLongPressed_
-                && homeRow_ < static_cast<int>(home_.rows.size())) {
-                auto& section = home_.rows[static_cast<size_t>(homeRow_)];
+            if (homeState_.centerPending() && !homeState_.centerLongPressed()
+                && homeState_.row() < static_cast<int>(home_.rows.size())) {
+                auto& section = home_.rows[static_cast<size_t>(homeState_.row())];
                 if (section.title != "My Media" && !section.items.empty()) {
-                    const int selection = std::clamp(
-                        homeSelection_[static_cast<size_t>(homeRow_)],
-                        0,
-                        static_cast<int>(section.items.size()) - 1
-                    );
+                    const int selection = homeState_.selection(homeState_.row(), static_cast<int>(section.items.size()));
                     openItemMenuForItem(section.items[static_cast<size_t>(selection)]);
-                    homeCenterLongPressed_ = true;
+                    homeState_.markCenterLongPressed();
                 }
                 return 1;
             }
@@ -1047,56 +1041,55 @@ private:
             openSearch();
             return;
         }
-        if (homeRow_ < 0) {
-            if (key == AKEYCODE_DPAD_LEFT) navIndex_ = std::max(0, navIndex_ - 1);
-            else if (key == AKEYCODE_DPAD_RIGHT) navIndex_ = std::min(3, navIndex_ + 1);
-            else if (key == AKEYCODE_DPAD_DOWN && !home_.rows.empty()) homeRow_ = 0;
+        if (homeState_.row() < 0) {
+            if (key == AKEYCODE_DPAD_LEFT) homeState_.moveToolbar(-1);
+            else if (key == AKEYCODE_DPAD_RIGHT) homeState_.moveToolbar(1);
+            else if (key == AKEYCODE_DPAD_DOWN && !home_.rows.empty()) homeState_.setRow(0);
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (navIndex_ == 0) openProfiles();
-                else if (navIndex_ == 2) openSearch();
-                else if (navIndex_ == 3) openSettings();
+                if (homeState_.navIndex() == 0) openProfiles();
+                else if (homeState_.navIndex() == 2) openSearch();
+                else if (homeState_.navIndex() == 3) openSettings();
             }
+            homeState_.updateViewport(static_cast<int>(home_.rows.size()));
             return;
         }
-        if (home_.rows.empty() || homeRow_ >= static_cast<int>(home_.rows.size())) {
-            homeRow_ = -1;
+        if (home_.rows.empty() || homeState_.row() >= static_cast<int>(home_.rows.size())) {
+            homeState_.focusToolbar(homeState_.navIndex());
             return;
         }
 
-        auto& section = home_.rows[static_cast<size_t>(homeRow_)];
+        const int rowIndex = homeState_.row();
+        auto& section = home_.rows[static_cast<size_t>(rowIndex)];
         auto& items = section.items;
-        int& selection = homeSelection_[static_cast<size_t>(homeRow_)];
-        if (key == AKEYCODE_DPAD_LEFT && !items.empty()) selection = std::max(0, selection - 1);
-        else if (key == AKEYCODE_DPAD_RIGHT && !items.empty()) selection = std::min(static_cast<int>(items.size()) - 1, selection + 1);
-        else if (key == AKEYCODE_DPAD_UP) {
-            if (homeRow_ == 0) homeRow_ = -1;
-            else --homeRow_;
+        if (key == AKEYCODE_DPAD_LEFT && !items.empty()) {
+            homeState_.moveSelection(rowIndex, -1, static_cast<int>(items.size()));
+        } else if (key == AKEYCODE_DPAD_RIGHT && !items.empty()) {
+            homeState_.moveSelection(rowIndex, 1, static_cast<int>(items.size()));
+        } else if (key == AKEYCODE_DPAD_UP) {
+            homeState_.moveRow(-1, static_cast<int>(home_.rows.size()));
         } else if (key == AKEYCODE_DPAD_DOWN) {
-            if (homeRow_ + 1 < static_cast<int>(home_.rows.size())) ++homeRow_;
+            homeState_.moveRow(1, static_cast<int>(home_.rows.size()));
         } else if (isItemContextKey(key) && !items.empty() && section.title != "My Media") {
+            const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             openItemMenuForItem(items[static_cast<size_t>(selection)]);
             return;
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
+            const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             if (section.title == "My Media") openLibrary(items[static_cast<size_t>(selection)]);
             else openDetails(items[static_cast<size_t>(selection)]);
             return;
         }
-        homeFirstVisibleRow_ = homeFirstVisibleRow(
-            homeFirstVisibleRow_,
-            homeRow_,
-            static_cast<int>(home_.rows.size()),
-            2
-        );
-        if (homeRow_ >= 0 && homeRow_ < static_cast<int>(homeSelection_.size())) {
-            prefetchHomeWindow(homeRow_, homeSelection_[static_cast<size_t>(homeRow_)]);
+        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+        if (homeState_.row() >= 0 && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
+            const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+            prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
         }
     }
 
     void handleLibrariesKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
             popScreen(Screen::Home);
-            homeRow_ = -1;
-            navIndex_ = 1;
+            homeState_.focusToolbar(1);
             return;
         }
         if (home_.views.empty()) return;
@@ -1135,7 +1128,7 @@ private:
                 populateLetterChoices();
             } else {
                 popScreen(Screen::Home);
-                if (screen_ == Screen::Home) homeRow_ = -1;
+                if (screen_ == Screen::Home) homeState_.focusToolbar(1);
                 browseItems_.clear();
             }
             return;
@@ -1204,7 +1197,10 @@ private:
                 ++searchRequestGeneration_;
                 hideSystemTextInput();
                 popScreen(Screen::Home);
-                if (screen_ == Screen::Home) homeRow_ = 0;
+                if (screen_ == Screen::Home) {
+                    homeState_.setRow(0);
+                    homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+                }
             }
             return;
         }
@@ -1313,8 +1309,7 @@ private:
         if (key == AKEYCODE_BACK) {
             hideSystemTextInput();
             popScreen(Screen::Home);
-            if (screen_ == Screen::Home) homeRow_ = -1;
-            navIndex_ = 3;
+            if (screen_ == Screen::Home) homeState_.focusToolbar(3);
             return;
         }
         if (key == AKEYCODE_SEARCH) {
@@ -2525,10 +2520,7 @@ private:
         serverInfo_ = {};
         serverInfoLoading_ = false;
         home_ = {};
-        homeSelection_.clear();
-        homeRow_ = 0;
-        homeFirstVisibleRow_ = 0;
-        navIndex_ = 1;
+        homeState_.reset();
         librarySelection_ = 0;
         activeLibrary_ = {};
         browseItems_.clear();
@@ -2612,8 +2604,8 @@ private:
         loginFields_[0] = session_.server;
         loginFields_[1] = session_.username;
         resetNavigation(Screen::Home);
-        homeRow_ = 0;
-        homeFirstVisibleRow_ = 0;
+        homeState_.setRow(0);
+        homeState_.setFirstVisibleRow(0);
         saveSession(session_);
         loadHomeAsync();
     }
@@ -2874,11 +2866,10 @@ private:
     }
 
     void clampHomeSelections() {
-        const size_t count = std::min(home_.rows.size(), homeSelection_.size());
-        for (size_t row = 0; row < count; ++row) {
-            const int itemCount = static_cast<int>(home_.rows[row].items.size());
-            homeSelection_[row] = itemCount <= 0 ? 0 : std::clamp(homeSelection_[row], 0, itemCount - 1);
-        }
+        std::vector<int> itemCounts;
+        itemCounts.reserve(home_.rows.size());
+        for (const auto& row : home_.rows) itemCounts.push_back(static_cast<int>(row.items.size()));
+        homeState_.clampSelections(itemCounts);
     }
 
     void toggleHiddenFromHome() {
@@ -3108,8 +3099,8 @@ private:
                 loginFields_[2].clear();
                 resetNavigation(Screen::Home);
                 loading_ = false;
-                homeRow_ = 0;
-                homeFirstVisibleRow_ = 0;
+                homeState_.setRow(0);
+                homeState_.setFirstVisibleRow(0);
                 error_.clear();
                 saveSession(session_);
             }
@@ -3189,8 +3180,8 @@ private:
                     quickConnectCode_.clear();
                     loading_ = false;
                     resetNavigation(Screen::Home);
-                    homeRow_ = 0;
-                    homeFirstVisibleRow_ = 0;
+                    homeState_.setRow(0);
+                    homeState_.setFirstVisibleRow(0);
                     error_.clear();
                     saveSession(session_);
                 }
@@ -3218,14 +3209,14 @@ private:
         std::unordered_map<std::string, std::string> selectedItemByRow;
         {
             std::scoped_lock lock(stateMutex_);
-            navFocused = homeRow_ < 0;
-            if (!navFocused && homeRow_ < static_cast<int>(home_.rows.size())) {
-                focusedRowTitle = home_.rows[static_cast<size_t>(homeRow_)].title;
+            navFocused = homeState_.row() < 0;
+            if (!navFocused && homeState_.row() < static_cast<int>(home_.rows.size())) {
+                focusedRowTitle = home_.rows[static_cast<size_t>(homeState_.row())].title;
             }
-            for (size_t row = 0; row < home_.rows.size() && row < homeSelection_.size(); ++row) {
+            for (size_t row = 0; row < home_.rows.size() && row < homeState_.selectionCount(); ++row) {
                 const auto& items = home_.rows[row].items;
                 if (items.empty()) continue;
-                const int selected = std::clamp(homeSelection_[row], 0, static_cast<int>(items.size()) - 1);
+                const int selected = homeState_.selection(static_cast<int>(row), static_cast<int>(items.size()));
                 selectedItemByRow[home_.rows[row].title] = items[static_cast<size_t>(selected)].id;
             }
             loading_ = true;
@@ -3272,13 +3263,14 @@ private:
 
                 loading_ = false;
                 home_ = std::move(core.value);
-                homeSelection_ = std::move(restoredSelections);
-                homeRow_ = home_.rows.empty() ? -1 : std::clamp(coreRestoredRow, -1, static_cast<int>(home_.rows.size()) - 1);
-                homeFirstVisibleRow_ = homeFirstVisibleRow(
-                    homeFirstVisibleRow_, homeRow_, static_cast<int>(home_.rows.size()), 2
-                );
+                homeState_.setSelections(std::move(restoredSelections));
+                homeState_.setRow(home_.rows.empty() ? -1 : std::clamp(coreRestoredRow, -1, static_cast<int>(home_.rows.size()) - 1));
+                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
                 error_ = home_.warning;
-                if (homeRow_ >= 0) prefetchHomeWindow(homeRow_, homeSelection_[static_cast<size_t>(homeRow_)]);
+                if (homeState_.row() >= 0) {
+                    const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+                    prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+                }
                 const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - homeLoadStarted).count();
                 __android_log_print(ANDROID_LOG_INFO, kTag, "Home primary rows ready in %lld ms", static_cast<long long>(coreMs));
                 if (!pendingDeepLinkItemId_.empty()) {
@@ -3321,22 +3313,23 @@ private:
                         });
                         if (item != section.items.end()) restoredSelection = static_cast<int>(std::distance(section.items.begin(), item));
                     }
-                    if (!navFocused && section.title == focusedRowTitle && homeRow_ == coreRestoredRow) {
-                        homeRow_ = static_cast<int>(home_.rows.size());
-                    }
+                    const bool focusAppended = !navFocused
+                        && section.title == focusedRowTitle
+                        && homeState_.row() == coreRestoredRow;
                     home_.rows.push_back(std::move(section));
-                    homeSelection_.push_back(restoredSelection);
+                    homeState_.appendSelection(restoredSelection);
+                    if (focusAppended) homeState_.setRow(static_cast<int>(home_.rows.size()) - 1);
                 }
                 if (!secondary.value.warning.empty()) {
                     if (!home_.warning.empty()) home_.warning += " | ";
                     home_.warning += secondary.value.warning;
                     error_ = home_.warning;
                 }
-                homeFirstVisibleRow_ = homeFirstVisibleRow(
-                    homeFirstVisibleRow_, homeRow_, static_cast<int>(home_.rows.size()), 2
-                );
-                if (homeRow_ >= static_cast<int>(baseRowCount) && homeRow_ < static_cast<int>(homeSelection_.size())) {
-                    prefetchHomeWindow(homeRow_, homeSelection_[static_cast<size_t>(homeRow_)]);
+                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+                if (homeState_.row() >= static_cast<int>(baseRowCount)
+                    && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
+                    const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+                    prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
                 }
                 const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - homeLoadStarted).count();
                 __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms", static_cast<long long>(fullMs));
@@ -5260,17 +5253,13 @@ private:
         bool backdropVisible = false;
         if (settings_.backdropMode > 0 && !home_.rows.empty()) {
             const int backdropRow = std::clamp(
-                homeRow_ >= 0 ? homeRow_ : homeFirstVisibleRow_,
+                homeState_.row() >= 0 ? homeState_.row() : homeState_.firstVisibleRow(),
                 0,
                 static_cast<int>(home_.rows.size()) - 1
             );
             const auto& row = home_.rows[static_cast<size_t>(backdropRow)];
-            if (!row.items.empty() && backdropRow < static_cast<int>(homeSelection_.size())) {
-                const int selection = std::clamp(
-                    homeSelection_[static_cast<size_t>(backdropRow)],
-                    0,
-                    static_cast<int>(row.items.size()) - 1
-                );
+            if (!row.items.empty() && backdropRow < static_cast<int>(homeState_.selectionCount())) {
+                const int selection = homeState_.selection(backdropRow, static_cast<int>(row.items.size()));
                 backdropVisible = drawBackdrop(row.items[static_cast<size_t>(selection)], 0.24f);
             }
         }
@@ -5280,7 +5269,7 @@ private:
             renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.01f, 0.012f, 0.018f, 0.34f});
         }
 
-        const bool toolbarFocused = homeRow_ < 0;
+        const bool toolbarFocused = homeState_.row() < 0;
         const bool hasBrandMark = drawBrandMark(72.0f, 27.0f, 72.0f);
         renderer_.text(hasBrandMark ? 160.0f : 72.0f, 42.0f, 3.35f, "sloppaTV", kText, 430.0f);
         renderer_.roundedRect(hasBrandMark ? 160.0f : 72.0f, 99.0f, 86.0f, 3.0f, 1.5f, kBrandGold);
@@ -5290,7 +5279,7 @@ private:
         const std::array<float, 3> navXs{1165.0f, 1315.0f, 1490.0f};
         const std::array<float, 3> navWidths{110.0f, 130.0f, 150.0f};
         for (size_t i = 0; i < navLabels.size(); ++i) {
-            const bool focused = toolbarFocused && navIndex_ == navIndices[i];
+            const bool focused = toolbarFocused && homeState_.navIndex() == navIndices[i];
             const bool active = navIndices[i] == 1;
             if (focused) {
                 renderer_.roundedRect(navXs[i] - 14.0f, 40.0f, navWidths[i] + 28.0f, 54.0f, 22.0f,
@@ -5306,7 +5295,7 @@ private:
         const float profileX = 1660.0f;
         const float profileY = 36.0f;
         const float profileSize = 62.0f;
-        const bool profileFocused = toolbarFocused && navIndex_ == 0;
+        const bool profileFocused = toolbarFocused && homeState_.navIndex() == 0;
         const auto profileBounds = focusedBounds(profileX, profileY, profileSize, profileSize, profileFocused, 1.10f);
         renderer_.roundedRect(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], 31.0f,
             profileFocused ? kPanelElevated : kPanelAlt);
@@ -5334,8 +5323,8 @@ private:
         }
 
         const int firstVisibleRow = homeFirstVisibleRow(
-            homeFirstVisibleRow_,
-            homeRow_,
+            homeState_.firstVisibleRow(),
+            homeState_.row(),
             static_cast<int>(home_.rows.size()),
             2
         );
@@ -5358,10 +5347,10 @@ private:
 
     void renderHomeRow(const std::string& title, const std::vector<JellyfinItem>& items, int row, float top) {
         if (items.empty()) return;
-        const int selected = std::clamp(homeSelection_[static_cast<size_t>(row)], 0, static_cast<int>(items.size()) - 1);
+        const int selected = homeState_.selection(row, static_cast<int>(items.size()));
 
         if (title == "My Media") {
-            renderer_.text(72.0f, top, 3.05f, "MY MEDIA", homeRow_ == row ? kText : kSecondaryText, 420.0f);
+            renderer_.text(72.0f, top, 3.05f, "MY MEDIA", homeState_.row() == row ? kText : kSecondaryText, 420.0f);
             constexpr float cardW = 420.0f;
             constexpr float cardH = 225.0f;
             constexpr float gap = 28.0f;
@@ -5369,7 +5358,7 @@ private:
             float x = 72.0f;
             for (int index = 0; index < static_cast<int>(items.size()); ++index) {
                 if (x + cardW > 1885.0f && index > 0) break;
-                const bool focused = homeRow_ == row && index == selected;
+            const bool focused = homeState_.row() == row && index == selected;
                 const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, 1.07f);
                 if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, 24.0f,
                     Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
@@ -5387,7 +5376,7 @@ private:
             return;
         }
 
-        renderer_.text(72.0f, top, 3.05f, title, homeRow_ == row ? kText : kSecondaryText, 900.0f);
+        renderer_.text(72.0f, top, 3.05f, title, homeState_.row() == row ? kText : kSecondaryText, 900.0f);
         const int start = std::max(0, selected - 1);
         constexpr float cardH = 202.0f;
         constexpr float cardW = 350.0f;
@@ -5404,7 +5393,7 @@ private:
         for (int index = start; index < static_cast<int>(items.size()); ++index) {
             if (x + cardW > 1908.0f && index > start) break;
             const auto& item = items[static_cast<size_t>(index)];
-            const bool focused = homeRow_ == row && index == selected;
+            const bool focused = homeState_.row() == row && index == selected;
             const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, 1.045f);
             if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, 22.0f,
                 Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
@@ -6463,13 +6452,8 @@ private:
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;
-    std::vector<int> homeSelection_;
+    HomeScreenState homeState_;
     std::unordered_set<std::string> hiddenHomeItems_;
-    int homeRow_ = 0;
-    int homeFirstVisibleRow_ = 0;
-    int navIndex_ = 1;
-    bool homeCenterPending_ = false;
-    bool homeCenterLongPressed_ = false;
     int librarySelection_ = 0;
     JellyfinItem activeLibrary_;
     std::vector<JellyfinItem> browseItems_;

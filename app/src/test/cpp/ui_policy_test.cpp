@@ -35,52 +35,6 @@ int main() {
     assert(wrappedIndex(9, 1, 10) == 0);
     assert(wrappedIndex(2, 1, 5) == 3);
     assert(wrappedIndex(4, 1, 5) == 0);
-    assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
-    assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);
-    assert(homeImageKind(false, false, true) == ArtworkKind::Backdrop);
-    assert(preferHomeLandscapeArtwork("Movie"));
-    assert(preferHomeLandscapeArtwork("Episode"));
-    assert(preferHomeLandscapeArtwork("Series"));
-    assert(preferHomeLandscapeArtwork("BoxSet"));
-    assert(!preferHomeLandscapeArtwork("UserView"));
-    assert(!preferHomeLandscapeArtwork("CollectionFolder"));
-    assert(!preferHomeLandscapeArtwork("Folder"));
-
-    const ArtworkReference episodeArtwork = homeArtworkReference(
-        "episode-id",
-        "episode-tag",
-        "series-id",
-        "series-tag",
-        true,
-        "thumb-tag",
-        "backdrop-tag",
-        "episode-id"
-    );
-    assert(episodeArtwork.itemId == "episode-id");
-    assert(episodeArtwork.tag == "thumb-tag");
-    assert(episodeArtwork.kind == ArtworkKind::Thumb);
-
-    const ArtworkReference episodePrimaryArtwork = homeArtworkReference(
-        "episode-id", "episode-primary", "series-id", "series-tag", true, "", "", "series-id"
-    );
-    assert(episodePrimaryArtwork.itemId == "episode-id");
-    assert(episodePrimaryArtwork.tag == "episode-primary");
-    assert(episodePrimaryArtwork.kind == ArtworkKind::Primary);
-
-    const ArtworkReference parentBackdropArtwork = homeArtworkReference(
-        "episode-id", "", "series-id", "series-tag", true, "", "backdrop-tag", "series-id"
-    );
-    assert(parentBackdropArtwork.itemId == "series-id");
-    assert(parentBackdropArtwork.tag == "backdrop-tag");
-    assert(parentBackdropArtwork.kind == ArtworkKind::Backdrop);
-
-    const ArtworkReference thumbArtwork = homeArtworkReference(
-        "movie-id", "", "", "", false, "thumb-tag", "backdrop-tag", "movie-id"
-    );
-    assert(thumbArtwork.itemId == "movie-id");
-    assert(thumbArtwork.tag == "thumb-tag");
-    assert(thumbArtwork.kind == ArtworkKind::Thumb);
-
     assert(playerBackAction(true, true) == PlayerBackAction::DismissOverlay);
     assert(playerBackAction(false, true) == PlayerBackAction::DismissOverlay);
     assert(playerBackAction(false, false) == PlayerBackAction::ExitPlayback);
@@ -89,16 +43,5 @@ int main() {
     assert(subtitleBottomY(false, 2) == 810.0f);
     assert(subtitleBottomY(true, 0) == 790.0f);
     assert(subtitleBottomY(true, 2) == 600.0f);
-    assert(homeRowTop(0) == 170.0f);
-    assert(homeRowTop(1) == 490.0f);
-    assert(homeRowTop(2) == 825.0f);
-    assert(homeFirstVisibleRow(0, 0, 5) == 0);
-    assert(homeFirstVisibleRow(0, 1, 5) == 0);
-    assert(homeFirstVisibleRow(0, 2, 5) == 1);
-    assert(homeFirstVisibleRow(1, 1, 5) == 1);
-    assert(homeFirstVisibleRow(1, 0, 5) == 0);
-    assert(homeFirstVisibleRow(3, -1, 5) == 3);
-    assert(syntheticTileTextX(90.0f) == 118.0f);
-    assert(syntheticTileTextY(260.0f) == 342.0f);
     return 0;
 }

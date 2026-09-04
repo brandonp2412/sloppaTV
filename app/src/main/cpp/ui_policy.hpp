@@ -11,22 +11,9 @@ enum class PlayerControlKind {
     Subtitles,
 };
 
-enum class ArtworkKind {
-    Primary,
-    Thumb,
-    Backdrop,
-    None,
-};
-
 enum class PlayerBackAction {
     DismissOverlay,
     ExitPlayback,
-};
-
-struct ArtworkReference {
-    std::string itemId;
-    std::string tag;
-    ArtworkKind kind = ArtworkKind::None;
 };
 
 constexpr std::size_t playerControlCount() {
@@ -69,72 +56,13 @@ constexpr float subtitleBottomY(bool playbackOverlayVisible, int position) {
     return base - static_cast<float>(clamped) * 95.0f;
 }
 
-constexpr float homeRowTop(int slot) {
-    return slot <= 0 ? 170.0f : (slot == 1 ? 490.0f : 825.0f);
-}
-
-constexpr int homeFirstVisibleRow(int currentFirst, int focusedRow, int totalRows, int visibleRows = 2) {
-    if (totalRows <= 0 || visibleRows <= 0) return 0;
-    const int maxFirst = std::max(0, totalRows - visibleRows);
-    int first = std::clamp(currentFirst, 0, maxFirst);
-    if (focusedRow < 0) return first;
-    const int focused = std::clamp(focusedRow, 0, totalRows - 1);
-    if (focused < first) first = focused;
-    else if (focused >= first + visibleRows) first = focused - visibleRows + 1;
-    return std::clamp(first, 0, maxFirst);
-}
-
-constexpr float syntheticTileTextX(float tileX) { return tileX + 28.0f; }
-constexpr float syntheticTileTextY(float tileY) { return tileY + 82.0f; }
-
 constexpr int wrappedIndex(int index, int delta, int count) {
     if (count <= 0) return 0;
     const int value = (index + delta) % count;
     return value < 0 ? value + count : value;
 }
 
-
 constexpr PlayerControlKind playerControlKind(std::size_t index) {
     return index == 0 ? PlayerControlKind::PlayPause
         : (index == 1 ? PlayerControlKind::Audio : PlayerControlKind::Subtitles);
-}
-
-constexpr ArtworkKind homeImageKind(bool hasPrimary, bool hasThumb, bool hasBackdrop) {
-    if (hasPrimary) return ArtworkKind::Primary;
-    if (hasThumb) return ArtworkKind::Thumb;
-    if (hasBackdrop) return ArtworkKind::Backdrop;
-    return ArtworkKind::None;
-}
-
-inline bool preferHomeLandscapeArtwork(const std::string& itemType) {
-    return itemType != "UserView" && itemType != "CollectionFolder" && itemType != "Folder";
-}
-
-inline ArtworkReference homeArtworkReference(
-    const std::string& itemId,
-    const std::string& primaryTag,
-    const std::string& seriesId,
-    const std::string& seriesPrimaryTag,
-    bool preferSeries,
-    const std::string& thumbTag,
-    const std::string& backdropTag,
-    const std::string& backdropItemId
-) {
-    const std::string backdropOwner = backdropItemId.empty() ? itemId : backdropItemId;
-    const bool ownBackdrop = !backdropTag.empty() && backdropOwner == itemId;
-
-    // Episode Home cards are landscape. Prefer item-specific art first. A parsed
-    // ParentBackdropImageTag belongs to ParentBackdropItemId, not the episode ID.
-    if (preferSeries && !thumbTag.empty()) return {itemId, thumbTag, ArtworkKind::Thumb};
-    if (preferSeries && ownBackdrop) return {itemId, backdropTag, ArtworkKind::Backdrop};
-    if (preferSeries && !primaryTag.empty()) return {itemId, primaryTag, ArtworkKind::Primary};
-    if (preferSeries && !backdropTag.empty()) return {backdropOwner, backdropTag, ArtworkKind::Backdrop};
-    if (preferSeries && !seriesId.empty() && !seriesPrimaryTag.empty()) {
-        return {seriesId, seriesPrimaryTag, ArtworkKind::Primary};
-    }
-
-    const ArtworkKind kind = homeImageKind(!primaryTag.empty(), !thumbTag.empty(), !backdropTag.empty());
-    const std::string& tag = kind == ArtworkKind::Primary ? primaryTag
-        : (kind == ArtworkKind::Thumb ? thumbTag : backdropTag);
-    return {kind == ArtworkKind::Backdrop ? backdropOwner : itemId, tag, kind};
 }
