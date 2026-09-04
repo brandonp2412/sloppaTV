@@ -7,6 +7,7 @@
 #include "app_settings.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
+#include "details_screen.hpp"
 #include "deep_link.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
@@ -989,9 +990,7 @@ private:
         if (item.id.empty() || !supportsItemContextMenu(item)) return;
         detail_ = item;
         pushScreen(Screen::ItemMenu);
-        itemMenuSelection_ = 0;
-        deleteConfirmation_ = false;
-        deleteConfirmationSelection_ = 1;
+        detailsState_.beginItemMenu();
         error_.clear();
 
         const JellyfinSession session = session_;
@@ -1190,19 +1189,7 @@ private:
     }
 
     std::vector<std::string> detailActions() const {
-        std::vector<std::string> actions;
-        actions.emplace_back(
-            stillWatchingPrompt_
-                ? "KEEP WATCHING"
-                : (detail_.type == "Series" ? "PLAY NEXT" : (detail_.positionTicks > 0 ? "RESUME" : "PLAY"))
-        );
-        if (detail_.type == "Series") actions.emplace_back("EPISODES");
-        actions.emplace_back(detail_.favorite ? "UNFAVORITE" : "FAVORITE");
-        actions.emplace_back(detail_.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        if (!detail_.people.empty()) actions.emplace_back("CAST");
-        actions.emplace_back("MORE");
-        actions.emplace_back("BACK");
-        return actions;
+        return detailsState_.actions(detail_, stillWatchingPrompt_);
     }
 
     void refreshExternalPlayers() {
@@ -1319,26 +1306,26 @@ private:
             return;
         }
         const auto actions = detailActions();
-        if (detailsSimilarFocused_) {
+        if (detailsState_.similarFocused()) {
             if (key == AKEYCODE_DPAD_UP) {
-                detailsSimilarFocused_ = false;
-            } else if (key == AKEYCODE_DPAD_LEFT && !detailsSimilar_.empty()) {
-                detailsSimilarSelection_ = std::max(0, detailsSimilarSelection_ - 1);
-            } else if (key == AKEYCODE_DPAD_RIGHT && !detailsSimilar_.empty()) {
-                detailsSimilarSelection_ = std::min(static_cast<int>(detailsSimilar_.size()) - 1, detailsSimilarSelection_ + 1);
-            } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !detailsSimilar_.empty()) {
-                openDetails(detailsSimilar_[static_cast<size_t>(detailsSimilarSelection_)]);
+                detailsState_.setSimilarFocused(false);
+            } else if (key == AKEYCODE_DPAD_LEFT) {
+                detailsState_.moveSimilar(-1);
+            } else if (key == AKEYCODE_DPAD_RIGHT) {
+                detailsState_.moveSimilar(1);
+            } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+                if (const auto* selected = detailsState_.selectedSimilar()) openDetails(*selected);
             }
             return;
         }
         if (key == AKEYCODE_DPAD_LEFT) {
-            detailsButton_ = std::max(0, detailsButton_ - 1);
+            detailsState_.moveAction(-1, static_cast<int>(actions.size()));
         } else if (key == AKEYCODE_DPAD_RIGHT) {
-            detailsButton_ = std::min(static_cast<int>(actions.size()) - 1, detailsButton_ + 1);
-        } else if (key == AKEYCODE_DPAD_DOWN && !detailsSimilar_.empty()) {
-            detailsSimilarFocused_ = true;
+            detailsState_.moveAction(1, static_cast<int>(actions.size()));
+        } else if (key == AKEYCODE_DPAD_DOWN && !detailsState_.similar().empty()) {
+            detailsState_.setSimilarFocused(true);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const std::string& action = actions[static_cast<size_t>(detailsButton_)];
+            const std::string& action = actions[static_cast<size_t>(detailsState_.actionSelection())];
             if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING") beginPlayback();
             else if (action == "EPISODES") openSeasons();
             else if (action == "FAVORITE" || action == "UNFAVORITE") toggleFavoriteAsync();
@@ -1356,7 +1343,7 @@ private:
     void openCast() {
         if (detail_.people.empty()) return;
         pushScreen(Screen::Cast);
-        castSelection_ = 0;
+        detailsState_.resetCastSelection();
         error_.clear();
     }
 
@@ -1366,10 +1353,14 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (!detail_.people.empty()) openPersonItems(detail_.people[static_cast<size_t>(castSelection_)]);
+            if (const auto* person = detailsState_.selectedCastPerson(detail_.people)) openPersonItems(*person);
             return;
         }
-        moveGridSelectionByCount(key, static_cast<int>(detail_.people.size()), castSelection_);
+        constexpr int columns = mediaGridColumns();
+        if (key == AKEYCODE_DPAD_LEFT) detailsState_.moveCastSelection(detail_.people, -1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.moveCastSelection(detail_.people, 1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP) detailsState_.moveCastSelection(detail_.people, 0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveCastSelection(detail_.people, 0, 1, columns);
     }
 
     void openPersonItems(const JellyfinPerson& person) {
@@ -1415,52 +1406,42 @@ private:
     }
 
     std::vector<std::string> itemMenuActions() const {
-        std::vector<std::string> actions;
-        if (detail_.type == "Series") actions.emplace_back("PLAY ALL");
-        if (selectedExternalPlayer().has_value()) actions.emplace_back("PLAY EXTERNAL");
-        if (!playbackQueue_.empty()) actions.emplace_back("VIEW QUEUE");
-        actions.emplace_back(detail_.favorite ? "UNFAVORITE" : "FAVORITE");
-        actions.emplace_back(detail_.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        actions.emplace_back(isHiddenFromHome(detail_) ? "SHOW ON HOME" : "HIDE FROM HOME");
-        actions.emplace_back("REFRESH METADATA");
-        if (detail_.canDelete) actions.emplace_back("DELETE MEDIA");
-        actions.emplace_back("BACK");
-        return actions;
+        return detailsState_.itemMenuActions(
+            detail_,
+            selectedExternalPlayer().has_value(),
+            !playbackQueue_.empty(),
+            isHiddenFromHome(detail_)
+        );
     }
 
     void openItemMenu() {
         if (detail_.id.empty()) return;
         pushScreen(Screen::ItemMenu);
-        itemMenuSelection_ = 0;
-        deleteConfirmation_ = false;
-        deleteConfirmationSelection_ = 1;
+        detailsState_.beginItemMenu();
         error_.clear();
     }
 
     void handleItemMenuKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            deleteConfirmation_ = false;
+            detailsState_.setDeleteConfirmation(false);
             popScreen(Screen::Details);
             return;
         }
-        if (deleteConfirmation_) {
-            if (key == AKEYCODE_DPAD_UP || key == AKEYCODE_DPAD_LEFT) deleteConfirmationSelection_ = 0;
-            else if (key == AKEYCODE_DPAD_DOWN || key == AKEYCODE_DPAD_RIGHT) deleteConfirmationSelection_ = 1;
+        if (detailsState_.deleteConfirmation()) {
+            if (key == AKEYCODE_DPAD_UP || key == AKEYCODE_DPAD_LEFT) detailsState_.setDeleteConfirmationSelection(0);
+            else if (key == AKEYCODE_DPAD_DOWN || key == AKEYCODE_DPAD_RIGHT) detailsState_.setDeleteConfirmationSelection(1);
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (deleteConfirmationSelection_ == 0) deleteCurrentItemAsync();
-                else {
-                    deleteConfirmation_ = false;
-                    deleteConfirmationSelection_ = 1;
-                }
+                if (detailsState_.deleteConfirmationSelection() == 0) deleteCurrentItemAsync();
+                else detailsState_.setDeleteConfirmation(false);
             }
             return;
         }
 
         const auto actions = itemMenuActions();
-        if (key == AKEYCODE_DPAD_UP) itemMenuSelection_ = std::max(0, itemMenuSelection_ - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) itemMenuSelection_ = std::min(static_cast<int>(actions.size()) - 1, itemMenuSelection_ + 1);
+        if (key == AKEYCODE_DPAD_UP) detailsState_.moveItemMenu(-1, static_cast<int>(actions.size()));
+        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveItemMenu(1, static_cast<int>(actions.size()));
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const std::string& action = actions[static_cast<size_t>(itemMenuSelection_)];
+            const std::string& action = actions[static_cast<size_t>(detailsState_.itemMenuSelection())];
             if (action == "PLAY ALL") {
                 popScreen(Screen::Details);
                 if (screen_ != Screen::Details) pushScreen(Screen::Details);
@@ -1480,8 +1461,7 @@ private:
                 toggleHiddenFromHome();
             } else if (action == "REFRESH METADATA") refreshCurrentItemMetadataAsync();
             else if (action == "DELETE MEDIA") {
-                deleteConfirmation_ = true;
-                deleteConfirmationSelection_ = 1;
+                detailsState_.setDeleteConfirmation(true);
             } else {
                 popScreen(Screen::Details);
             }
@@ -2471,14 +2451,7 @@ private:
         browseState_.clear();
         searchState_.reset();
         detail_ = {};
-        detailsButton_ = 0;
-        itemMenuSelection_ = 0;
-        deleteConfirmation_ = false;
-        deleteConfirmationSelection_ = 1;
-        detailsSimilar_.clear();
-        detailsSimilarSelection_ = 0;
-        detailsSimilarFocused_ = false;
-        castSelection_ = 0;
+        detailsState_.reset();
         selectedPerson_ = {};
         personItems_.clear();
         personItemSelection_ = 0;
@@ -2769,7 +2742,7 @@ private:
         for (auto& row : home_.rows) for (auto& item : row.items) apply(item);
         for (auto& item : browseState_.items()) apply(item);
         for (auto& item : searchState_.results()) apply(item);
-        for (auto& item : detailsSimilar_) apply(item);
+        for (auto& item : detailsState_.similar()) apply(item);
         for (auto& item : seasonItems_) apply(item);
         for (auto& item : episodeItems_) apply(item);
 
@@ -2851,7 +2824,7 @@ private:
         for (auto& row : home_.rows) remove(row.items);
         browseState_.removeItem(itemId);
         remove(searchState_.results());
-        remove(detailsSimilar_);
+        remove(detailsState_.similar());
         remove(seasonItems_);
         remove(episodeItems_);
     }
@@ -2894,13 +2867,11 @@ private:
             if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
-                deleteConfirmation_ = false;
-                deleteConfirmationSelection_ = 1;
+                detailsState_.setDeleteConfirmation(false);
                 return;
             }
             detail_ = {};
-            deleteConfirmation_ = false;
-            deleteConfirmationSelection_ = 1;
+            detailsState_.setDeleteConfirmation(false);
             popScreen(Screen::Home);
             if (screen_ == Screen::Details) popScreen(Screen::Home);
             showNotice("MEDIA DELETED");
@@ -3235,10 +3206,7 @@ private:
         pushScreen(Screen::Details);
         stillWatchingPrompt_ = false;
         detail_ = item;
-        detailsButton_ = 0;
-        detailsSimilar_.clear();
-        detailsSimilarSelection_ = 0;
-        detailsSimilarFocused_ = false;
+        detailsState_.beginDetails();
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -3262,8 +3230,7 @@ private:
             if (!requestEpochs_.content.active(generation) || !similar.ok) return;
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Details || detail_.id != id) return;
-            detailsSimilar_ = std::move(similar.value);
-            detailsSimilarSelection_ = 0;
+            detailsState_.setSimilar(std::move(similar.value));
         });
     }
 
@@ -3776,7 +3743,7 @@ private:
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
         detail_ = std::move(nextItem);
-        detailsButton_ = 0;
+        detailsState_.beginDetails();
         popScreen(Screen::Details);
         stillWatchingPrompt_ = true;
         error_.clear();
@@ -5889,7 +5856,7 @@ private:
     void renderItemMenu() {
         renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, 0.46f});
 
-        if (deleteConfirmation_) {
+        if (detailsState_.deleteConfirmation()) {
             renderer_.roundedRect(405.0f, 275.0f, 1110.0f, 520.0f, 34.0f, Color{0.025f, 0.029f, 0.040f, 0.98f});
             renderer_.text(470.0f, 335.0f, 3.25f, "DELETE THIS MEDIA?", kError, 980.0f);
             renderer_.text(
@@ -5904,7 +5871,7 @@ private:
             const std::array<std::string, 2> actions{"DELETE PERMANENTLY", "CANCEL"};
             for (int i = 0; i < 2; ++i) {
                 const float x = i == 0 ? 470.0f : 995.0f;
-                const bool focused = deleteConfirmationSelection_ == i;
+                const bool focused = detailsState_.deleteConfirmationSelection() == i;
                 const auto bounds = drawFocusedSurface(x, 610.0f, 450.0f, 92.0f, focused, false, i == 0);
                 renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], i == 0 ? 1.75f : 2.0f,
                     actions[static_cast<size_t>(i)], focused || i == 1 ? kText : kMuted);
@@ -5930,7 +5897,7 @@ private:
         const float firstActionY = panelY + 136.0f;
         for (size_t i = 0; i < actions.size(); ++i) {
             const float y = firstActionY + static_cast<float>(i) * rowStep;
-            const bool focused = itemMenuSelection_ == static_cast<int>(i);
+            const bool focused = detailsState_.itemMenuSelection() == static_cast<int>(i);
             const bool destructive = actions[i] == "DELETE MEDIA";
             const bool primary = actions[i] == "PLAY ALL" || actions[i] == "PLAY EXTERNAL" || actions[i] == "VIEW QUEUE";
             const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, primary && focused, destructive);
@@ -6018,7 +5985,7 @@ private:
         constexpr float xGap = 32.0f;
         constexpr float imageWidth = 190.0f;
         constexpr float imageHeight = 285.0f;
-        const int selectedRow = castSelection_ / columns;
+        const int selectedRow = detailsState_.castSelection() / columns;
         const int firstRow = std::max(0, selectedRow - 1);
         for (int index = firstRow * columns; index < static_cast<int>(detail_.people.size()); ++index) {
             const int row = index / columns - firstRow;
@@ -6026,7 +5993,7 @@ private:
             if (row >= 2) break;
             const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
             const float y = 195.0f + static_cast<float>(row) * 420.0f;
-            const bool focused = index == castSelection_;
+            const bool focused = index == detailsState_.castSelection();
             const float imageX = x + (slotWidth - imageWidth) * 0.5f;
             const auto bounds = focusedBounds(imageX, y, imageWidth, imageHeight, focused);
             renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, focused ? kPanelElevated : kPanelAlt);
@@ -6138,7 +6105,7 @@ private:
         float actionX = contentX;
         for (size_t i = 0; i < actions.size(); ++i) {
             const bool primary = i == 0;
-            const bool focused = !detailsSimilarFocused_ && detailsButton_ == static_cast<int>(i);
+            const bool focused = !detailsState_.similarFocused() && detailsState_.actionSelection() == static_cast<int>(i);
             const float width = primary ? 250.0f : std::max(145.0f, renderer_.textWidth(1.80f, actions[i]) + 46.0f);
             if (primary) {
                 const auto bounds = focusedBounds(actionX, actionY, width, 64.0f, focused, 1.05f);
@@ -6159,21 +6126,22 @@ private:
             renderer_.roundedRect(contentX, 700.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, kFocus);
         }
 
-        if (!detailsSimilar_.empty()) {
-            renderer_.text(72.0f, 748.0f, 2.30f, "MORE LIKE THIS", detailsSimilarFocused_ ? kText : kSecondaryText, 440.0f);
+        const auto& similarItems = detailsState_.similar();
+        if (!similarItems.empty()) {
+            renderer_.text(72.0f, 748.0f, 2.30f, "MORE LIKE THIS", detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
             constexpr int visible = 5;
-            const int maxStart = std::max(0, static_cast<int>(detailsSimilar_.size()) - visible);
-            const int start = std::clamp(detailsSimilarSelection_ - 1, 0, maxStart);
+            const int maxStart = std::max(0, static_cast<int>(similarItems.size()) - visible);
+            const int start = std::clamp(detailsState_.similarSelection() - 1, 0, maxStart);
             constexpr float cardWidth = 320.0f;
             constexpr float cardHeight = 144.0f;
             constexpr float cardGap = 26.0f;
             for (int slot = 0; slot < visible; ++slot) {
                 const int index = start + slot;
-                if (index >= static_cast<int>(detailsSimilar_.size())) break;
-                const auto& similar = detailsSimilar_[static_cast<size_t>(index)];
+                if (index >= static_cast<int>(similarItems.size())) break;
+                const auto& similar = similarItems[static_cast<size_t>(index)];
                 const float x = 72.0f + static_cast<float>(slot) * (cardWidth + cardGap);
                 const float y = 800.0f;
-                const bool focused = detailsSimilarFocused_ && index == detailsSimilarSelection_;
+                const bool focused = detailsState_.similarFocused() && index == detailsState_.similarSelection();
                 const auto bounds = focusedBounds(x, y, cardWidth, cardHeight, focused, 1.075f);
                 if (!drawHomeArtwork(similar, bounds[0], bounds[1], bounds[2], bounds[3])) {
                     renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 12.0f, kPanelAlt);
@@ -6336,14 +6304,7 @@ private:
     int keyboardCol_ = 0;
 
     JellyfinItem detail_;
-    int detailsButton_ = 0;
-    int itemMenuSelection_ = 0;
-    bool deleteConfirmation_ = false;
-    int deleteConfirmationSelection_ = 1;
-    std::vector<JellyfinItem> detailsSimilar_;
-    int detailsSimilarSelection_ = 0;
-    bool detailsSimilarFocused_ = false;
-    int castSelection_ = 0;
+    DetailsScreenState detailsState_;
     JellyfinPerson selectedPerson_;
     std::vector<JellyfinItem> personItems_;
     int personItemSelection_ = 0;
