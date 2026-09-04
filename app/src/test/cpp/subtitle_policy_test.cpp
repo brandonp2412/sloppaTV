@@ -13,6 +13,10 @@ int main() {
     assert(shouldRetryFailedSubtitleTranscode(true, 2));
     assert(!shouldRetryFailedSubtitleTranscode(false, 2));
     assert(!shouldRetryFailedSubtitleTranscode(true, kSubtitleOffIndex));
+    assert(shouldApplyLoadedSubtitle("item", "item", 3, 3, true));
+    assert(!shouldApplyLoadedSubtitle("item", "other", 3, 3, true));
+    assert(!shouldApplyLoadedSubtitle("item", "item", 3, 4, true));
+    assert(!shouldApplyLoadedSubtitle("item", "item", 3, 3, false));
 
     assert(parseSubtitleTimestamp("00:00:01,250") == 1250);
     assert(parseSubtitleTimestamp("01:02:03.004") == 3723004);

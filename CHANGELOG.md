@@ -47,8 +47,8 @@ All notable user-visible and release-engineering changes are recorded here.
 - Android MediaSession transport callbacks for Play, Pause, Stop, Seek, Next and Previous, forwarded through the minimal platform bridge into the native player/queue.
 - Media3/ExoPlayer 1.11 playback backend with persisted Auto/Large/Extra Large buffering presets matching the Android TV reference client's `DefaultLoadControl` ranges.
 - Route-aware Android audio-output capability probing for AC3, E-AC3, DTS, DTS-HD and TrueHD, with PlaybackInfo direct-play/downmix negotiation capped to the currently attached output route.
-- Direct-play ASS/SSA subtitles through the Media3 libass extension with exact embedded-track ordinal selection, using a Canvas overlay for broader Android TV GLES compatibility.
-- DirectPlay embedded SRT/VTT rendering through Media3's text pipeline, including exact duplicate-language track selection without relying on Jellyfin's embedded-subtitle extraction endpoint.
+- DirectPlay embedded SRT/VTT rendering through the native GLES subtitle path, including exact duplicate-language track selection.
+- DirectPlay ASS/SSA selection through Jellyfin's SRT conversion into the same native GLES subtitle renderer, avoiding NativeActivity overlay-layer incompatibilities on Google TV.
 - In-place DirectPlay embedded-audio switching through exact Media3 audio-track ordinals, avoiding a PlaybackInfo/player restart for ordinary track changes.
 - `singleTask` runtime VIEW/SEARCH intent delivery into the existing native app loop so launcher/deep-link/search re-entry does not create a second playback Activity.
 - Read-only real-server integration harness covering authentication, scoped libraries, Home endpoints, search, browse and artwork/HDR/trickplay inventory.
@@ -62,6 +62,8 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Fixed
 
+- Direct-play embedded subtitles no longer disappear when a fast local subtitle fetch finishes before the Player screen transition; cue application is keyed to the active item/selected stream instead of transient screen state.
+- Embedded SRT/VTT and ASS/SSA no longer depend on Java subtitle overlay views above NativeActivity's EGL surface; styled ASS/SSA tracks use Jellyfin's SRT conversion and all supported text subtitles render through the native GLES path.
 - ASS/SSA subtitles selected during transcoded playback now use Jellyfin's SRT conversion and the native GLES subtitle renderer, avoiding the silent Media3/libass external-track failure seen on Hell's Paradise in Waydroid.
 - Launch-intent JNI now attaches the `android_main` thread to the VM instead of reusing `ANativeActivity::env`; a physical-streamer CheckJNI abort exposed the invalid cross-thread `JNIEnv*` use.
 - MediaSession lifetime is restricted to active playback so idle Home does not register or retain a sloppaTV media session.

@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 98 / 139 verified (70.5%); 41 partial; none unbuilt.
+Status at 2026-09-04: 99 / 139 verified (71.2%); 40 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -36,7 +36,7 @@ required for TV hardware, Android TV integration, and final performance work.
 - [x] Focus restoration, large-text and overscan-safe layouts, diagnostics.
 - [x] Media3 playback in GLES, resume, native video surface, and MediaSession.
 - [x] DirectPlay, DirectStream, and Transcode reporting/classification.
-- [x] Embedded audio/text switching; ASS/SSA via libass; SRT/VTT support.
+- [x] Embedded audio/text switching; SRT/VTT and ASS/SSA render through the native subtitle path.
 - [x] Quality negotiation, queueing, autoplay, Still Watching, and Play All.
 - [x] Android `ACTION_VIEW`, in-app screensaver, and core settings persistence.
 - [x] Benchmarks beat the official client in sampled startup, memory, and DPAD.
@@ -56,7 +56,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 - [~] Target-TV codec, HDR, audio-route, and long-soak matrix; physical 23.976 Hz refresh-rate switching is verified.
 - [x] Playback reports have automated Jellyfin session-state assertions.
-- [~] Subtitle appearance/position and dedicated ASS visual pass remain; physical ASS selection currently initializes libass but fails to render cue pixels, while Trickplay thumbnail rendering is physically verified.
+- [x] Subtitle size/background/position and dedicated ASS/SRT visual passes are physically verified on the Google TV Streamer.
 - [x] HDR fixture/HDR-preserving server-stream path and generated Trickplay tile rendering are verified on the Google TV Streamer.
 - [x] External-player discovery, selection, silent playback handoff, and return are verified on the Google TV Streamer.
 - [~] Voice search needs a real microphone/recognizer invocation.
@@ -143,12 +143,13 @@ required for TV hardware, Android TV integration, and final performance work.
   no app fatal exception, native signal, or ANR; together with the prior 31-sample 15-minute soak this closes the
   dedicated teardown/crash and memory-profile acceptance subitems. All changed settings were restored and all
   disposable libraries/files were removed afterward.
-- 2026-09-04: a dedicated physical ASS regression fixture isolated a remaining subtitle bug without audio or
-  user-library mutation. Media3 selects the exact embedded English ASS stream and libass creates its track/render,
-  receives 1920x1080 geometry, and resolves a fallback font, but no subtitle pixels appear during known fresh cues.
-  Experimental geometry/time-forwarding patches did not pass visual acceptance, were reverted, and the streamer
-  was reinstalled in place with the clean pushed production-signed build. The subtitle visual row therefore remains
-  partial rather than accepting initialization logs as rendered-subtitle evidence.
+- 2026-09-04: a silent isolated subtitle library reproduced the physical NativeActivity overlay failure with both
+  embedded SRT and ASS: Media3 delivered the selected SRT cue and libass built the ASS track/render, but Java overlay
+  views produced no pixels above the native EGL surface. Selected SRT/VTT now stay on the native GLES renderer and
+  selected ASS/SSA use Jellyfin's `Stream.srt` conversion into that same renderer. A fast local-server race was also
+  fixed so subtitle cues can commit before the Player screen transition instead of being silently discarded. Physical
+  captures verified SRT and ASS dialogue plus LARGE/ON/HIGH versus SMALL/OFF/LOW size, background, and position
+  variants. The original LARGE/OFF/HIGH settings were restored and the temporary library/files were removed.
 - 2026-09-04: production-signed caracal branding is visually accepted on the Google TV launcher: the
   installed `sloppaTV` tile renders the caracal artwork, app name, and Jellyfin-for-TV subtitle after
   an in-place update with the matching production key.

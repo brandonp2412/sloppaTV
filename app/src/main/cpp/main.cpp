@@ -2115,10 +2115,22 @@ private:
             }
             if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
-            if (screen_ == Screen::Player
-                && activePlaybackItem_.id == item.id
-                && selectedSubtitleServerIndex_ == subtitle.index
-                && loaded) {
+            if (shouldApplyLoadedSubtitle(
+                    activePlaybackItem_.id,
+                    item.id,
+                    selectedSubtitleServerIndex_,
+                    subtitle.index,
+                    loaded
+                )) {
+                __android_log_print(
+                    ANDROID_LOG_INFO,
+                    kTag,
+                    "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
+                    item.id.c_str(),
+                    subtitle.index,
+                    subtitle.codec.c_str(),
+                    cues.size()
+                );
                 activeSubtitleCues_ = std::move(cues);
                 activeSubtitleLanguage_ = subtitle.language.empty() ? "SUB" : subtitle.language;
                 activeSubtitleServerIndex_ = subtitle.index;
