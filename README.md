@@ -4,9 +4,7 @@
 
 # sloppaTV
 
-Fast native Android TV client for Jellyfin, designed for remote-first couch use.
-
-Scope: Movies, Series and Episodes. Music, photos, Live TV/DVR, launcher recommendations and server administration are intentionally out of scope.
+A jellyfin Android client in C++
 
 Current status: **27/30 acceptance areas verified (90%)**. All in-scope areas are implemented; the remaining work is LAN discovery acceptance, real-microphone voice-search acceptance, and stable production signing in CI. The 30 acceptance areas are listed in [ROADMAP.md](ROADMAP.md).
 
