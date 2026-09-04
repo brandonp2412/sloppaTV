@@ -1,0 +1,98 @@
+{
+  "captured_at_utc": "2026-09-04",
+  "target": "Google TV Streamer 192.168.1.114:5555",
+  "build_type": "production-signed Release",
+  "baseline_apk_sha256": "f809da013c6b5ecc686c66925b2820401522c393288ba3b9b25ceb30fff79254",
+  "after_apk_sha256": "ef7e5241b5e7b4cc684396a554c4a4b8edd02b923ebc64ff1742ba58f2dbcbdd",
+  "method": "Exact installed pre-change APK versus the production-signed post-change Release on the same physical target. Canonical 20 startup / 5 settled-memory / 5 rapid-DPAD suites were run before and after. Because the first sequential memory batches showed a small RSS shift while PSS and frame metrics stayed effectively flat, a second 5-old / 5-new build-interleaved settled-memory control was run immediately afterward and the final candidate was reinstalled at the end.",
+  "parameters": {
+    "startup_runs": 20,
+    "memory_runs": 5,
+    "navigation_runs": 5,
+    "navigation_events_per_run": 80,
+    "settle_seconds": 6.0,
+    "interleaved_memory_runs_per_build": 5
+  },
+  "baseline": {
+    "startup_ms": [317, 271, 221, 263, 234, 242, 246, 230, 225, 245, 243, 240, 217, 245, 225, 258, 257, 256, 221, 328],
+    "memory_samples_kb": [
+      {"pss": 44327, "rss": 109146, "java_heap": 4132, "native_heap": 8392},
+      {"pss": 44180, "rss": 109042, "java_heap": 4088, "native_heap": 8332},
+      {"pss": 44140, "rss": 108998, "java_heap": 4036, "native_heap": 8408},
+      {"pss": 44940, "rss": 109802, "java_heap": 4108, "native_heap": 9052},
+      {"pss": 44459, "rss": 109318, "java_heap": 4092, "native_heap": 8580}
+    ],
+    "idle_cpu_pct": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "navigation_samples": [
+      {"median_ms": 16.67, "p95_ms": 16.74, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.74, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8}
+    ]
+  },
+  "after": {
+    "startup_ms": [229, 247, 225, 273, 236, 241, 246, 276, 280, 263, 249, 260, 252, 271, 217, 266, 262, 284, 231, 252],
+    "memory_samples_kb": [
+      {"pss": 45021, "rss": 111446, "java_heap": 4072, "native_heap": 9032},
+      {"pss": 44467, "rss": 110910, "java_heap": 4108, "native_heap": 8428},
+      {"pss": 44474, "rss": 110919, "java_heap": 4092, "native_heap": 8476},
+      {"pss": 45361, "rss": 111802, "java_heap": 4100, "native_heap": 9556},
+      {"pss": 44150, "rss": 110606, "java_heap": 4140, "native_heap": 8036}
+    ],
+    "idle_cpu_pct": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "navigation_samples": [
+      {"median_ms": 16.67, "p95_ms": 16.74, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.74, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.73, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.73, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8}
+    ]
+  },
+  "interleaved_memory_control_kb": {
+    "baseline": {
+      "pss": [46702, 46750, 44986, 44934, 46153],
+      "rss": [113202, 113279, 111523, 111483, 112707],
+      "java_heap": [4296, 4096, 4060, 4072, 4104],
+      "native_heap": [10116, 10468, 8828, 8844, 9968],
+      "graphics": [14446, 14411, 14411, 14447, 14411]
+    },
+    "after": {
+      "pss": [45115, 43758, 44952, 46004, 44475],
+      "rss": [111623, 110286, 111474, 112547, 111027],
+      "java_heap": [4116, 4076, 4108, 4064, 4072],
+      "native_heap": [8824, 7676, 8560, 9904, 8284],
+      "graphics": [14411, 14446, 14446, 14411, 14447]
+    }
+  },
+  "summary": {
+    "startup_median_ms": {"baseline": 244.0, "after": 252.0, "delta_pct": 3.279},
+    "startup_mean_ms": {"baseline": 249.2, "after": 253.0, "delta_pct": 1.525},
+    "startup_mean_monte_carlo_permutation_p": 0.640,
+    "navigation_median_ms": {"baseline": 16.67, "after": 16.67},
+    "navigation_p95_ms": {"baseline": 16.72, "after": 16.73},
+    "navigation_over_20ms_pct": {"baseline": 0.8, "after": 0.8},
+    "idle_cpu_median_pct": {"baseline": 0.0, "after": 0.0},
+    "sequential_memory_median_kb": {
+      "pss": {"baseline": 44327, "after": 44474, "delta_pct": 0.332},
+      "rss": {"baseline": 109146, "after": 110919, "delta_pct": 1.624},
+      "java_heap": {"baseline": 4092, "after": 4100, "delta_pct": 0.196},
+      "native_heap": {"baseline": 8408, "after": 8476, "delta_pct": 0.809}
+    },
+    "interleaved_memory_median_kb": {
+      "pss": {"baseline": 46153, "after": 44952, "delta_pct": -2.602},
+      "rss": {"baseline": 112707, "after": 111474, "delta_pct": -1.094},
+      "java_heap": {"baseline": 4096, "after": 4076, "delta_pct": -0.488},
+      "native_heap": {"baseline": 9968, "after": 8560, "delta_pct": -14.125},
+      "graphics": {"baseline": 14411, "after": 14446, "delta_pct": 0.243}
+    },
+    "interleaved_memory_exact_permutation_p_for_mean_delta": {
+      "pss": 0.087,
+      "rss": 0.071,
+      "java_heap": 0.635,
+      "native_heap": 0.048,
+      "graphics": 0.921
+    },
+    "interpretation": "No measurable navigation, dropped-frame, idle-CPU, startup, PSS, RSS, Java-heap or graphics regression was established. Startup moved slightly upward in the sequential run but the mean difference was not distinguishable in a 200,000-draw permutation check. The first sequential memory batches showed a small RSS increase; the immediate build-interleaved control reversed both PSS and RSS direction while graphics memory stayed effectively flat, so the sequential RSS shift is treated as run-order/allocator variance rather than a consistent feature regression."
+  }
+}

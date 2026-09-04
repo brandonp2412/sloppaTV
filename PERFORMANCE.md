@@ -90,6 +90,18 @@ The card/button/text-field centering pass and rounded-edge antialiasing were che
 
 The memory sample ranges overlap strongly; exact 5-vs-5 permutation checks on the mean deltas were not distinguishable at this sample size (all p >= 0.119). The upward memory medians are therefore retained as measurement noise/inconclusive rather than hidden or claimed as an improvement. The hot-path result is no measurable latency, frame-cadence, dropped-frame, or idle-CPU regression. Raw before/after samples are tracked in [`docs/benchmarks/ui-centering-regression-2026-09-04.json`](docs/benchmarks/ui-centering-regression-2026-09-04.json).
 
+### Home navigation, live search and Settings regression check — 2026-09-04
+
+The Home viewport/context-menu/live-search/Settings pass was checked against the exact previously installed production-signed APK on the same physical Google TV Streamer. Both binaries used the same signing identity and persisted account/settings state. The canonical 20 startup / 5 settled-memory / 5 rapid-DPAD suite was run on the old APK and then on the new Release.
+
+- startup median: **244.0 ms → 252.0 ms** (+3.28%); mean: **249.2 ms → 253.0 ms** (+1.52%). The 3.8 ms mean shift was not distinguishable in a deterministic 200,000-draw two-sided permutation check (**p ≈ 0.640**).
+- navigation: **16.67 ms median → 16.67 ms**, **16.72 ms p95 → 16.73 ms**, and **0.8% >20 ms → 0.8%** across five 80-event runs per build.
+- sampled idle CPU remained **0.0%** for every sloppaTV sample before and after.
+- the first sequential settled-memory batches moved PSS **44,327 → 44,474 KB** (+0.33%) and RSS **109,146 → 110,919 KB** (+1.62%). Because that RSS shift was larger than the other memory changes, it was not dismissed as noise without a follow-up check.
+- an immediate build-interleaved 5-old / 5-new memory control then reversed the direction: median PSS **46,153 → 44,952 KB** (-2.60%) and RSS **112,707 → 111,474 KB** (-1.09%). Java heap also fell **4,096 → 4,076 KB**, while graphics memory was effectively flat at **14,411 → 14,446 KB** (+0.24%). Exact 5-vs-5 permutation p-values for the interleaved mean deltas were 0.087 PSS, 0.071 RSS, 0.635 Java heap, and 0.921 graphics.
+
+Taken together, the repeated same-device measurements establish no consistent startup, frame-cadence, dropped-frame, idle-CPU, PSS, RSS, Java-heap, or graphics regression attributable to this pass. The initial sequential RSS increase is retained in the evidence rather than hidden; its reversal under build interleaving is why it is classified as run-order/allocator variance instead of a demonstrated regression. Raw and interleaved samples are tracked in [`docs/benchmarks/home-navigation-settings-regression-2026-09-04.json`](docs/benchmarks/home-navigation-settings-regression-2026-09-04.json).
+
 ### Production-signed final-suite checkpoint — 2026-09-04
 
 A fresh canonical `--final-suite` run was completed on the physical Google TV Streamer using the production-signed sloppaTV `0.1.0` APK at commit `fea00884daf1b616bb24bd41b1be1a25b1b833d0`. The comparator was the currently installed `org.jellyfin.androidtv` package, which reports version `0.0.0-dev.1`. Both apps used their persisted sessions against the same Jellyfin server. Because the installed comparator is a development build, these numbers describe this exact installed Jellyfin Android TV build rather than every upstream Jellyfin release.

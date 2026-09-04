@@ -70,6 +70,17 @@ constexpr float homeRowTop(int slot) {
     return slot <= 0 ? 170.0f : (slot == 1 ? 490.0f : 825.0f);
 }
 
+constexpr int homeFirstVisibleRow(int currentFirst, int focusedRow, int totalRows, int visibleRows = 2) {
+    if (totalRows <= 0 || visibleRows <= 0) return 0;
+    const int maxFirst = std::max(0, totalRows - visibleRows);
+    int first = std::clamp(currentFirst, 0, maxFirst);
+    if (focusedRow < 0) return first;
+    const int focused = std::clamp(focusedRow, 0, totalRows - 1);
+    if (focused < first) first = focused;
+    else if (focused >= first + visibleRows) first = focused - visibleRows + 1;
+    return std::clamp(first, 0, maxFirst);
+}
+
 constexpr float syntheticTileTextX(float tileX) { return tileX + 28.0f; }
 constexpr float syntheticTileTextY(float tileY) { return tileY + 82.0f; }
 

@@ -232,6 +232,23 @@ required for TV hardware, Android TV integration, and final performance work.
   startup 252.5 -> 246.0 ms median, identical 16.67/16.73 ms navigation median/p95 and 0.0% idle CPU;
   the sub-1.2% upward memory medians had strongly overlapping samples and no distinguishable 5-vs-5
   permutation result. Raw before/after evidence is tracked under `docs/benchmarks/`.
+- 2026-09-04: Home/navigation/Search/Settings acceptance is complete for the couch-UI pass. Long-holding
+  a Home media card opens a compact popover over the existing screen, repeat key events remain consumed
+  until button-up, and the first Favorite action does not fire repeatedly. Home vertical focus now holds
+  the current two-row viewport until focus would leave it; physical 0→1, 1→2, and 2→1 transitions verified
+  the expected no-scroll/one-scroll/no-scroll behavior. Search executes after a 180 ms typing debounce and
+  physically returned `spy` results without a submit action; episode hits render inherited series cover art.
+  Backdrops now render on Home when enabled, Home labels are larger, and Settings opens on common controls
+  without the unusable section rail, with codec/bitrate/HDR/device controls behind Advanced Settings.
+  A real Brooklyn Nine-Nine `48 Hours` Continue Watching card was hidden, disappeared from Home, then the
+  Brooklyn Nine-Nine series was searched and `PLAY NEXT` reached Media3 READY/first-frame playback; after
+  playback exit and Home reload the hidden `48 Hours` card was present again. Media volume was restored to
+  15/15 and the app-scoped fatal/native-signal/ANR audit was clean. The exact pre-change APK versus new
+  production-signed Release 20/5/5 regression suites showed unchanged 16.67 ms navigation median, 16.72→16.73
+  ms p95, 0.8% >20 ms and 0.0% idle CPU; startup mean moved 249.2→253.0 ms but was not distinguishable in a
+  200,000-draw permutation check (p≈0.640). A follow-up 5-old/5-new build-interleaved memory control reversed
+  the initial sequential RSS shift, with median PSS 46,153→44,952 KB and RSS 112,707→111,474 KB. Raw evidence
+  is tracked in `docs/benchmarks/home-navigation-settings-regression-2026-09-04.json`.
 - 2026-09-04: physical-TV capture tooling now wakes a sleeping target before visual acceptance;
   this was added after a sleeping streamer produced valid-size but entirely black screenshots.
 - 2026-09-04: the production-signed streamer install exposed overlapping Search result metadata.
