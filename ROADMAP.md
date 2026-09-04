@@ -409,6 +409,13 @@ required for TV hardware, Android TV integration, and final performance work.
   checkpoint measured 246.0 ms median cold launch, 39,975 KB PSS, 0.0% idle CPU and 16.67/16.74 ms navigation median/p95
   with 0.8% intervals over 20 ms, within the established run-to-run range. `main.cpp` is now 6,205 lines versus 7,194 before
   the architecture pass.
+- 2026-09-05: Android launch-intent decoding is now isolated in `launch_intent.{hpp,cpp}` instead of a ~100-line JNI parser in
+  `main.cpp`. Cold-start and runtime intents share one normalization path for Jellyfin item VIEWs and SEARCH queries, with a
+  host test covering action routing and normalization. The full host suite and optimized Release build pass. Physical streamer
+  acceptance verified a cold-start VIEW opening Brooklyn Nine-Nine `48 Hours` and a runtime SEARCH for `Brooklyn` returning
+  Brooklyn Nine-Nine, with clean fatal/native-signal/ANR logs. The matching 10/3/3 checkpoint measured 244.5 ms median cold
+  launch, 40,006 KB PSS, 0.0% idle CPU and 16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, effectively
+  unchanged from the immediately preceding checkpoint. `main.cpp` is now 6,126 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
