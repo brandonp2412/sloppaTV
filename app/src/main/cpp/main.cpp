@@ -5986,18 +5986,6 @@ private:
 };
 }  // namespace
 
-std::string javaString(JNIEnv* env, jstring value) {
-    if (!env || !value) return {};
-    const char* chars = env->GetStringUTFChars(value, nullptr);
-    if (!chars) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        return {};
-    }
-    std::string result(chars);
-    env->ReleaseStringUTFChars(value, chars);
-    return result;
-}
-
 extern "C" JNIEXPORT void JNICALL
 Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
     JNIEnv* env,
@@ -6006,9 +5994,9 @@ Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
     jstring data,
     jstring query
 ) {
-    const std::string actionValue = javaString(env, action);
-    const std::string dataValue = javaString(env, data);
-    const std::string queryValue = javaString(env, query);
+    const std::string actionValue = jniString(env, action);
+    const std::string dataValue = jniString(env, data);
+    const std::string queryValue = jniString(env, query);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onNewLaunchIntent(actionValue, dataValue, queryValue);
 }
@@ -6020,7 +6008,7 @@ Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(
     jint mode,
     jstring text
 ) {
-    const std::string value = javaString(env, text);
+    const std::string value = jniString(env, text);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemTextInputChanged(static_cast<int>(mode), value);
 }
@@ -6032,7 +6020,7 @@ Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(
     jint mode,
     jstring text
 ) {
-    const std::string value = javaString(env, text);
+    const std::string value = jniString(env, text);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemTextInputDone(static_cast<int>(mode), value);
 }
@@ -6044,7 +6032,7 @@ Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputCancelled(
     jint mode,
     jstring text
 ) {
-    const std::string value = javaString(env, text);
+    const std::string value = jniString(env, text);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemTextInputCancelled(static_cast<int>(mode), value);
 }

@@ -20,18 +20,6 @@ bool clearException(JNIEnv* env, const char* operation, std::string* error = nul
     return true;
 }
 
-std::string fromJString(JNIEnv* env, jstring value) {
-    if (!env || !value) return {};
-    const char* chars = env->GetStringUTFChars(value, nullptr);
-    if (!chars) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        return {};
-    }
-    std::string result(chars);
-    env->ReleaseStringUTFChars(value, chars);
-    return result;
-}
-
 jclass objectClass(JNIEnv* env, jobject object) {
     if (!env || !object) return nullptr;
     jclass result = env->GetObjectClass(object);
@@ -316,7 +304,7 @@ std::string NativeMediaPlayer::error() const {
     jclass playerClass = objectClass(env, player_);
     jmethodID method = playerClass ? env->GetMethodID(playerClass, "getError", "()Ljava/lang/String;") : nullptr;
     auto value = method ? static_cast<jstring>(env->CallObjectMethod(player_, method)) : nullptr;
-    std::string result = value ? fromJString(env, value) : error_;
+    std::string result = value ? jniString(env, value) : error_;
     if (value) env->DeleteLocalRef(value);
     clearException(env, "error read");
     if (playerClass) env->DeleteLocalRef(playerClass);

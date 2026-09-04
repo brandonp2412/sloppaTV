@@ -28,15 +28,6 @@ bool clearException(JNIEnv* env, const char* operation, std::string* error = nul
     return true;
 }
 
-std::string fromJString(JNIEnv* env, jstring value) {
-    if (!env || !value) return {};
-    const char* chars = env->GetStringUTFChars(value, nullptr);
-    if (!chars) return {};
-    std::string result(chars);
-    env->ReleaseStringUTFChars(value, chars);
-    return result;
-}
-
 jobject createVideoIntent(JNIEnv* env, const std::string& url) {
     jclass intentClass = env->FindClass("android/content/Intent");
     jclass uriClass = env->FindClass("android/net/Uri");
@@ -201,7 +192,7 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
     jmethodID getPackageName = env->GetMethodID(activityClass, "getPackageName", "()Ljava/lang/String;");
     jobject packageManager = getPackageManager ? env->CallObjectMethod(activity_, getPackageManager) : nullptr;
     jstring ownPackageValue = getPackageName ? static_cast<jstring>(env->CallObjectMethod(activity_, getPackageName)) : nullptr;
-    const std::string ownPackage = fromJString(env, ownPackageValue);
+    const std::string ownPackage = jniString(env, ownPackageValue);
     if (ownPackageValue) env->DeleteLocalRef(ownPackageValue);
     if (!packageManager || clearException(env, "package manager lookup")) {
         if (packageManager) env->DeleteLocalRef(packageManager);
@@ -247,8 +238,8 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
             jfieldID nameField = activityInfoClass ? env->GetFieldID(activityInfoClass, "name", "Ljava/lang/String;") : nullptr;
             jstring packageValue = packageField ? static_cast<jstring>(env->GetObjectField(activityInfo, packageField)) : nullptr;
             jstring nameValue = nameField ? static_cast<jstring>(env->GetObjectField(activityInfo, nameField)) : nullptr;
-            const std::string packageName = fromJString(env, packageValue);
-            const std::string activityName = fromJString(env, nameValue);
+            const std::string packageName = jniString(env, packageValue);
+            const std::string activityName = jniString(env, nameValue);
             if (packageValue) env->DeleteLocalRef(packageValue);
             if (nameValue) env->DeleteLocalRef(nameValue);
 
@@ -264,7 +255,7 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
                         jclass labelClass = env->GetObjectClass(labelValue);
                         jmethodID toString = labelClass ? env->GetMethodID(labelClass, "toString", "()Ljava/lang/String;") : nullptr;
                         jstring labelString = toString ? static_cast<jstring>(env->CallObjectMethod(labelValue, toString)) : nullptr;
-                        const std::string parsedLabel = fromJString(env, labelString);
+                        const std::string parsedLabel = jniString(env, labelString);
                         if (!parsedLabel.empty()) label = parsedLabel;
                         if (labelString) env->DeleteLocalRef(labelString);
                         if (labelClass) env->DeleteLocalRef(labelClass);

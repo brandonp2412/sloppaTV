@@ -440,6 +440,13 @@ required for TV hardware, Android TV integration, and final performance work.
   restoration was preserved, playback remained paused at 3:51, and logs reported the preserved-context restore path with no
   fatal/native-signal/ANR finding. The matching 10/3/3 checkpoint measured 244.0 ms median cold launch, 39,919 KB PSS, 0.0% idle
   CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms, within the established run-to-run range.
+- 2026-09-05: JNI string conversion now has one shared implementation in `jni_env.hpp` instead of duplicated UTF acquire/release
+  helpers in the app callback bridge, launch-intent bridge, Media3 adapter, external-player adapter, device-capability probe and
+  HTTP exception path. This leaves subsystem-specific JNI exception reporting local while centralizing only the mechanical string
+  lifetime behavior. The full host suite and optimized Release build pass. Physical streamer acceptance cold-started through a
+  Jellyfin VIEW intent to Brooklyn Nine-Nine `48 Hours` with the authenticated session intact and clean fatal/native-signal/ANR
+  logs. The matching 10/3/3 checkpoint measured 236.5 ms median cold launch, 39,532 KB PSS, 0.0% idle CPU and 16.67/16.72 ms
+  navigation median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 6,056 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

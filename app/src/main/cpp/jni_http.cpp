@@ -30,11 +30,7 @@ bool clearException(JNIEnv* env, const char* where, std::string& error) {
             if (toString && !env->ExceptionCheck()) {
                 auto description = static_cast<jstring>(env->CallObjectMethod(exception, toString));
                 if (description && !env->ExceptionCheck()) {
-                    const char* chars = env->GetStringUTFChars(description, nullptr);
-                    if (chars) {
-                        detail = chars;
-                        env->ReleaseStringUTFChars(description, chars);
-                    }
+                    detail = jniString(env, description);
                     env->DeleteLocalRef(description);
                 }
             }
