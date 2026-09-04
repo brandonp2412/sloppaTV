@@ -14,7 +14,7 @@ Target device: the same Android TV test target used for both sloppaTV and the in
 
 `tools/benchmark_tv.py` is the canonical benchmark harness. It records startup, settled memory, idle CPU, SurfaceFlinger navigation cadence and percentage deltas, and can emit JSON evidence. Pass `--final-suite` to enforce the final-gate 20 startup / 5 memory / 5 navigation sample counts; missing cold-launch samples fail explicitly instead of silently weakening the result.
 
-## Current release-candidate evidence — 2026-09-01
+## Release-candidate evidence — 2026-09-01
 
 The measurements below predate the build-type split and used the then-current Android `release` build type (`isDebuggable=false`, native C++ optimized) signed locally with the standard Android debug key solely for installation on the test TV. Equivalent installable performance/device testing now uses the non-debuggable `benchmark` build type; `release` remains unsigned unless production signing credentials are explicitly supplied.
 
