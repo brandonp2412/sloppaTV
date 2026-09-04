@@ -23,6 +23,7 @@ CPP_TESTS = [
     "http_error_policy_test.cpp",
     "http_retry_policy_test.cpp",
     "home_screen_test.cpp",
+    "launch_intent_test.cpp",
     "media_player_policy_test.cpp",
     "playback_profile_test.cpp",
     "playback_transition_test.cpp",

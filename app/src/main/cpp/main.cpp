@@ -17,6 +17,7 @@
 #include "image_decoder.hpp"
 #include "jellyfin.hpp"
 #include "jni_env.hpp"
+#include "launch_intent.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
@@ -255,11 +256,6 @@ char keyCodeToChar(int32_t keyCode, int32_t metaState) {
     }
 }
 
-struct LaunchRequest {
-    std::string itemId;
-    std::string searchQuery;
-};
-
 StoredSession storedSessionFromRuntime(const JellyfinSession& session) {
     return {
         .server = session.server,
@@ -277,76 +273,6 @@ JellyfinSession runtimeSessionFromStored(const StoredSession& session, const std
         .token = session.token,
         .deviceId = deviceId,
     };
-}
-
-LaunchRequest readLaunchRequest(android_app* app) {
-    LaunchRequest request;
-    if (!app || !app->activity || !app->activity->vm || !app->activity->clazz) return request;
-    ScopedJniEnv scoped(app->activity->vm);
-    JNIEnv* env = scoped.get();
-    if (!env) return request;
-    jobject activity = app->activity->clazz;
-    jclass activityClass = env->GetObjectClass(activity);
-    if (!activityClass) return request;
-    jmethodID getIntent = env->GetMethodID(activityClass, "getIntent", "()Landroid/content/Intent;");
-    if (!getIntent || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        env->DeleteLocalRef(activityClass);
-        return request;
-    }
-    jobject intent = env->CallObjectMethod(activity, getIntent);
-    if (!intent || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        env->DeleteLocalRef(activityClass);
-        return request;
-    }
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID getAction = intentClass ? env->GetMethodID(intentClass, "getAction", "()Ljava/lang/String;") : nullptr;
-    jmethodID getDataString = intentClass ? env->GetMethodID(intentClass, "getDataString", "()Ljava/lang/String;") : nullptr;
-    jmethodID getStringExtra = intentClass ? env->GetMethodID(intentClass, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;") : nullptr;
-    if (!getAction || !getDataString || !getStringExtra || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        if (intentClass) env->DeleteLocalRef(intentClass);
-        env->DeleteLocalRef(intent);
-        env->DeleteLocalRef(activityClass);
-        return request;
-    }
-
-    auto toString = [&](jstring value) {
-        std::string result;
-        if (!value) return result;
-        const char* chars = env->GetStringUTFChars(value, nullptr);
-        if (chars) {
-            result = chars;
-            env->ReleaseStringUTFChars(value, chars);
-        } else if (env->ExceptionCheck()) {
-            env->ExceptionClear();
-        }
-        return result;
-    };
-
-    auto actionValue = static_cast<jstring>(env->CallObjectMethod(intent, getAction));
-    auto dataValue = static_cast<jstring>(env->CallObjectMethod(intent, getDataString));
-    const std::string action = toString(actionValue);
-    const std::string data = toString(dataValue);
-    if (action == "android.intent.action.VIEW") {
-        request.itemId = normalizeJellyfinItemId(data);
-    } else if (action == "android.intent.action.SEARCH") {
-        jstring queryKey = env->NewStringUTF("query");
-        auto queryValue = queryKey
-            ? static_cast<jstring>(env->CallObjectMethod(intent, getStringExtra, queryKey))
-            : nullptr;
-        request.searchQuery = normalizeExternalSearchQuery(toString(queryValue));
-        if (queryValue) env->DeleteLocalRef(queryValue);
-        if (queryKey) env->DeleteLocalRef(queryKey);
-    }
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    if (actionValue) env->DeleteLocalRef(actionValue);
-    if (dataValue) env->DeleteLocalRef(dataValue);
-    env->DeleteLocalRef(intentClass);
-    env->DeleteLocalRef(intent);
-    env->DeleteLocalRef(activityClass);
-    return request;
 }
 
 class SloppaApp;
@@ -555,12 +481,7 @@ public:
     }
 
     void onNewLaunchIntent(const std::string& action, const std::string& data, const std::string& query) {
-        LaunchRequest request;
-        if (action == "android.intent.action.VIEW") {
-            request.itemId = normalizeJellyfinItemId(data);
-        } else if (action == "android.intent.action.SEARCH") {
-            request.searchQuery = normalizeExternalSearchQuery(query);
-        }
+        LaunchRequest request = launchRequestFromIntentParts(action, data, query);
         if (request.itemId.empty() && request.searchQuery.empty()) return;
         {
             std::scoped_lock lock(stateMutex_);
