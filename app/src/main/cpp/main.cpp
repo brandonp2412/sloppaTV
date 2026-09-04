@@ -1366,9 +1366,7 @@ private:
     void openPersonItems(const JellyfinPerson& person) {
         if (!session_.valid() || person.id.empty()) return;
         pushScreen(Screen::PersonItems);
-        selectedPerson_ = person;
-        personItems_.clear();
-        personItemSelection_ = 0;
+        detailsState_.beginPerson(person);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -1379,13 +1377,12 @@ private:
             if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            if (screen_ != Screen::PersonItems || selectedPerson_.id != personId) return;
+            if (screen_ != Screen::PersonItems || detailsState_.selectedPerson().id != personId) return;
             if (!result.ok) {
                 error_ = "PERSON: " + result.error;
                 return;
             }
-            personItems_ = std::move(result.value);
-            personItemSelection_ = 0;
+            detailsState_.setPersonItems(std::move(result.value));
         });
     }
 
@@ -1394,15 +1391,19 @@ private:
             popScreen(Screen::Cast);
             return;
         }
-        if (isItemContextKey(key) && !personItems_.empty()) {
-            openItemMenuForItem(personItems_[static_cast<size_t>(personItemSelection_)]);
+        if (isItemContextKey(key)) {
+            if (const auto* item = detailsState_.selectedPersonItem()) openItemMenuForItem(*item);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (!personItems_.empty()) openDetails(personItems_[static_cast<size_t>(personItemSelection_)]);
+            if (const auto* item = detailsState_.selectedPersonItem()) openDetails(*item);
             return;
         }
-        moveGridSelection(key, personItems_, personItemSelection_);
+        constexpr int columns = mediaGridColumns();
+        if (key == AKEYCODE_DPAD_LEFT) detailsState_.movePersonItem(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.movePersonItem(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP) detailsState_.movePersonItem(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.movePersonItem(0, 1, columns);
     }
 
     std::vector<std::string> itemMenuActions() const {
@@ -1554,15 +1555,19 @@ private:
 
     void handleSeasonsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            detail_ = seriesDetail_;
+            detail_ = detailsState_.seriesDetail();
             popScreen(Screen::Details);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (!seasonItems_.empty()) openEpisodes(seasonItems_[static_cast<size_t>(seasonSelection_)]);
+            if (const auto* season = detailsState_.selectedSeasonItem()) openEpisodes(*season);
             return;
         }
-        moveGridSelection(key, seasonItems_, seasonSelection_);
+        constexpr int columns = mediaGridColumns();
+        if (key == AKEYCODE_DPAD_LEFT) detailsState_.moveSeason(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.moveSeason(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP) detailsState_.moveSeason(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveSeason(0, 1, columns);
     }
 
     void handleEpisodesKey(int32_t key) {
@@ -1570,15 +1575,19 @@ private:
             popScreen(Screen::Seasons);
             return;
         }
-        if (isItemContextKey(key) && !episodeItems_.empty()) {
-            openItemMenuForItem(episodeItems_[static_cast<size_t>(episodeSelection_)]);
+        if (isItemContextKey(key)) {
+            if (const auto* episode = detailsState_.selectedEpisodeItem()) openItemMenuForItem(*episode);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (!episodeItems_.empty()) openDetails(episodeItems_[static_cast<size_t>(episodeSelection_)]);
+            if (const auto* episode = detailsState_.selectedEpisodeItem()) openDetails(*episode);
             return;
         }
-        moveGridSelection(key, episodeItems_, episodeSelection_);
+        constexpr int columns = mediaGridColumns();
+        if (key == AKEYCODE_DPAD_LEFT) detailsState_.moveEpisode(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.moveEpisode(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP) detailsState_.moveEpisode(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveEpisode(0, 1, columns);
     }
 
     void refreshPlaybackTelemetry(bool force = false) {
@@ -2452,15 +2461,6 @@ private:
         searchState_.reset();
         detail_ = {};
         detailsState_.reset();
-        selectedPerson_ = {};
-        personItems_.clear();
-        personItemSelection_ = 0;
-        seriesDetail_ = {};
-        seasonItems_.clear();
-        seasonSelection_ = 0;
-        selectedSeason_ = {};
-        episodeItems_.clear();
-        episodeSelection_ = 0;
 
         clearArtworkCache(artwork_);
         clearArtworkCache(homeArtwork_);
@@ -2632,41 +2632,35 @@ private:
 
     void openSeasons() {
         if (loading_ || detail_.id.empty() || detail_.type != "Series") return;
-        seriesDetail_ = detail_;
-        seasonItems_.clear();
-        episodeItems_.clear();
-        seasonSelection_ = 0;
+        detailsState_.beginSeries(detail_);
         pushScreen(Screen::Seasons);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const std::string seriesId = seriesDetail_.id;
+        const std::string seriesId = detailsState_.seriesDetail().id;
         const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, seriesId, generation] {
             auto result = api_.getSeasons(session, seriesId);
             if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            if (screen_ != Screen::Seasons || seriesDetail_.id != seriesId) return;
+            if (screen_ != Screen::Seasons || detailsState_.seriesDetail().id != seriesId) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            seasonItems_ = std::move(result.value);
-            seasonSelection_ = 0;
+            detailsState_.setSeasons(std::move(result.value));
         });
     }
 
     void openEpisodes(const JellyfinItem& season) {
-        if (loading_ || seriesDetail_.id.empty() || season.id.empty()) return;
-        selectedSeason_ = season;
-        episodeItems_.clear();
-        episodeSelection_ = 0;
+        if (loading_ || detailsState_.seriesDetail().id.empty() || season.id.empty()) return;
+        detailsState_.beginSeason(season);
         pushScreen(Screen::Episodes);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const std::string seriesId = seriesDetail_.id;
+        const std::string seriesId = detailsState_.seriesDetail().id;
         const std::string seasonId = season.id;
         const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, seriesId, seasonId, generation] {
@@ -2675,16 +2669,15 @@ private:
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::Episodes
-                || seriesDetail_.id != seriesId
-                || selectedSeason_.id != seasonId) {
+                || detailsState_.seriesDetail().id != seriesId
+                || detailsState_.selectedSeason().id != seasonId) {
                 return;
             }
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            episodeItems_ = std::move(result.value);
-            episodeSelection_ = 0;
+            detailsState_.setEpisodes(std::move(result.value));
         });
     }
 
@@ -2742,9 +2735,7 @@ private:
         for (auto& row : home_.rows) for (auto& item : row.items) apply(item);
         for (auto& item : browseState_.items()) apply(item);
         for (auto& item : searchState_.results()) apply(item);
-        for (auto& item : detailsState_.similar()) apply(item);
-        for (auto& item : seasonItems_) apply(item);
-        for (auto& item : episodeItems_) apply(item);
+        detailsState_.updateCachedUserData(updated);
 
         for (auto& row : home_.rows) {
             if (row.title == "FAVORITES") {
@@ -2824,9 +2815,7 @@ private:
         for (auto& row : home_.rows) remove(row.items);
         browseState_.removeItem(itemId);
         remove(searchState_.results());
-        remove(detailsState_.similar());
-        remove(seasonItems_);
-        remove(episodeItems_);
+        detailsState_.removeItem(itemId);
     }
 
     void refreshCurrentItemMetadataAsync() {
@@ -6008,17 +5997,21 @@ private:
     }
 
     void renderPersonItems() {
-        const std::string heading = selectedPerson_.name.empty() ? "PERSON" : "FEATURING " + selectedPerson_.name;
-        renderMediaGrid(heading, personItems_, personItemSelection_);
+        const auto& person = detailsState_.selectedPerson();
+        const std::string heading = person.name.empty() ? "PERSON" : "FEATURING " + person.name;
+        renderMediaGrid(heading, detailsState_.personItems(), detailsState_.personItemSelection());
     }
 
     void renderSeasons() {
-        renderMediaGrid(seriesDetail_.name.empty() ? "SEASONS" : seriesDetail_.name + " - SEASONS", seasonItems_, seasonSelection_);
+        const auto& series = detailsState_.seriesDetail();
+        renderMediaGrid(series.name.empty() ? "SEASONS" : series.name + " - SEASONS", detailsState_.seasons(), detailsState_.seasonSelection());
     }
 
     void renderEpisodes() {
-        const std::string heading = selectedSeason_.name.empty() ? "EPISODES" : seriesDetail_.name + " - " + selectedSeason_.name;
-        renderMediaGrid(heading, episodeItems_, episodeSelection_);
+        const auto& series = detailsState_.seriesDetail();
+        const auto& season = detailsState_.selectedSeason();
+        const std::string heading = season.name.empty() ? "EPISODES" : series.name + " - " + season.name;
+        renderMediaGrid(heading, detailsState_.episodes(), detailsState_.episodeSelection());
     }
 
     void renderDetails() {
@@ -6305,15 +6298,6 @@ private:
 
     JellyfinItem detail_;
     DetailsScreenState detailsState_;
-    JellyfinPerson selectedPerson_;
-    std::vector<JellyfinItem> personItems_;
-    int personItemSelection_ = 0;
-    JellyfinItem seriesDetail_;
-    std::vector<JellyfinItem> seasonItems_;
-    int seasonSelection_ = 0;
-    JellyfinItem selectedSeason_;
-    std::vector<JellyfinItem> episodeItems_;
-    int episodeSelection_ = 0;
 
     std::vector<JellyfinItem> playbackQueue_;
     int playbackQueueIndex_ = -1;
