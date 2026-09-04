@@ -3,6 +3,7 @@
 #include "home_screen.hpp"
 #include "jni_env.hpp"
 #include "media_player_policy.hpp"
+#include "playback_profile.hpp"
 
 #include <android/log.h>
 
@@ -1180,96 +1181,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     ApiValueResult<PlaybackTarget> result;
     const DeviceCodecSupport codecSupport = ensureDeviceCodecSupport();
     const int requestedAudioChannels = std::clamp(maxAudioChannels, 2, 8);
-    maxAudioChannels = effectiveAudioChannels(requestedAudioChannels, codecSupport.maxAudioOutputChannels);
-    if (maxAudioChannels != requestedAudioChannels) {
-        __android_log_print(
-            ANDROID_LOG_INFO,
-            kTag,
-            "Audio output route limits requested %d channels to %d",
-            requestedAudioChannels,
-            maxAudioChannels
-        );
-    }
-
-    auto videoCodecs = codecSupport.jellyfinVideoCodecs();
-    auto audioCodecs = codecSupport.jellyfinAudioCodecs(maxAudioChannels);
-    auto transcodeAudioCodecs = codecSupport.jellyfinTranscodingAudioCodecs(maxAudioChannels);
-
-    auto lower = [](std::string value) {
-        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        return value;
-    };
-    bool directVideoSupported = true;
-    auto removeVideoCodec = [&](const std::string& codec, const char* reason) {
-        const auto before = videoCodecs.size();
-        videoCodecs.erase(std::remove(videoCodecs.begin(), videoCodecs.end(), codec), videoCodecs.end());
-        if (videoCodecs.size() != before) {
-            directVideoSupported = false;
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Not advertising direct %s for this item: %s", codec.c_str(), reason);
-        }
-    };
-
-    const std::string itemCodec = lower(item.videoCodec);
-    const std::string itemProfile = lower(item.videoProfile);
-    const std::string range = lower(item.videoRangeType);
-    const bool isDolbyVision = range.find("dovi") != std::string::npos;
-    const bool isHdr10Plus = range.find("hdr10plus") != std::string::npos || range.find("hdr10+") != std::string::npos;
-    const bool isHdr10 = !isHdr10Plus && range.find("hdr10") != std::string::npos;
-    const bool isHlg = range.find("hlg") != std::string::npos;
-    const bool unsupportedHdr = (isDolbyVision && !hdrCapabilityAllowed(codecSupport.displayDolbyVision, overrides.hdrMode))
-        || (!isDolbyVision && isHdr10Plus && !hdrCapabilityAllowed(codecSupport.displayHdr10Plus, overrides.hdrMode))
-        || (!isDolbyVision && isHdr10 && !hdrCapabilityAllowed(codecSupport.displayHdr10, overrides.hdrMode))
-        || (!isDolbyVision && isHlg && !hdrCapabilityAllowed(codecSupport.displayHlg, overrides.hdrMode));
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d forceTranscode=%d)",
-        itemCodec.c_str(), item.videoProfile.c_str(), item.videoLevel, item.videoRangeType.c_str(),
-        overrides.maxAvcLevel, overrides.maxHevcLevel, static_cast<int>(overrides.hdrMode), overrides.forceTranscode
-    );
-
-    if (itemCodec == "hevc") {
-        if (!codecLevelAllowed(item.videoLevel, overrides.maxHevcLevel)) {
-            removeVideoCodec("hevc", "level exceeds user override");
-        }
-        if ((item.videoBitDepth > 8 || itemProfile.find("main 10") != std::string::npos) && !codecSupport.hevcMain10) {
-            removeVideoCodec("hevc", "HEVC Main10 unsupported");
-        }
-        if (codecSupport.maxHevcWidth > 0 && (item.videoWidth > codecSupport.maxHevcWidth || item.videoHeight > codecSupport.maxHevcHeight)) {
-            removeVideoCodec("hevc", "resolution exceeds decoder capability");
-        }
-        if (unsupportedHdr) removeVideoCodec("hevc", "HDR range unsupported by connected display");
-    } else if (itemCodec == "h264") {
-        if (!codecLevelAllowed(item.videoLevel, overrides.maxAvcLevel)) {
-            removeVideoCodec("h264", "level exceeds user override");
-        }
-        if (itemProfile.find("high 10") != std::string::npos && !codecSupport.h264High10) {
-            removeVideoCodec("h264", "H.264 High10 unsupported");
-        }
-        if (codecSupport.maxH264Width > 0 && (item.videoWidth > codecSupport.maxH264Width || item.videoHeight > codecSupport.maxH264Height)) {
-            removeVideoCodec("h264", "resolution exceeds decoder capability");
-        }
-        if (unsupportedHdr) removeVideoCodec("h264", "HDR range unsupported by connected display");
-    } else if (itemCodec == "av1") {
-        if (item.videoBitDepth > 8 && !codecSupport.av1Main10) removeVideoCodec("av1", "AV1 Main10 unsupported");
-        if (codecSupport.maxAv1Width > 0 && (item.videoWidth > codecSupport.maxAv1Width || item.videoHeight > codecSupport.maxAv1Height)) {
-            removeVideoCodec("av1", "resolution exceeds decoder capability");
-        }
-        if (unsupportedHdr) removeVideoCodec("av1", "HDR range unsupported by connected display");
-    } else if ((itemCodec == "vp9" || itemCodec == "vp8") && unsupportedHdr) {
-        removeVideoCodec(itemCodec, "HDR range unsupported by connected display");
-    }
-
-    if (videoCodecs.empty()) videoCodecs.emplace_back("h264");
-    if (audioCodecs.empty()) audioCodecs.emplace_back("aac");
-    if (transcodeAudioCodecs.empty()) transcodeAudioCodecs.emplace_back("aac");
-    const std::string videoCodecList = joinCodecs(videoCodecs);
-    const std::string serverStreamVideoCodecs = serverStreamVideoCodecList(videoCodecs);
-    const std::string audioCodecList = joinCodecs(audioCodecs);
-    const std::string transcodeAudioCodecList = joinCodecs(transcodeAudioCodecs);
-
+    const int effectiveChannels = effectiveAudioChannels(requestedAudioChannels, codecSupport.maxAudioOutputChannels);
     const JellyfinAudioStream* selectedAudio = nullptr;
     if (!item.audios.empty()) {
         if (audioStreamIndex >= 0) {
@@ -1285,8 +1197,88 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             selectedAudio = preferred == item.audios.end() ? &item.audios.front() : &*preferred;
         }
     }
-    const bool allowAudioStreamCopy = selectedAudio
-        && audioStreamCopyAllowed(audioCodecs, selectedAudio->codec, selectedAudio->channels, maxAudioChannels);
+    const auto selectedSubtitle = std::find_if(
+        item.subtitles.begin(),
+        item.subtitles.end(),
+        [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == subtitleStreamIndex; }
+    );
+
+    const PlaybackDeviceCapabilityInput deviceInput{
+        .videoCodecs = codecSupport.jellyfinVideoCodecs(),
+        .audioCodecs = codecSupport.jellyfinAudioCodecs(effectiveChannels),
+        .transcodeAudioCodecs = codecSupport.jellyfinTranscodingAudioCodecs(effectiveChannels),
+        .h264High10 = codecSupport.h264High10,
+        .hevcMain10 = codecSupport.hevcMain10,
+        .av1Main10 = codecSupport.av1Main10,
+        .maxH264Width = codecSupport.maxH264Width,
+        .maxH264Height = codecSupport.maxH264Height,
+        .maxHevcWidth = codecSupport.maxHevcWidth,
+        .maxHevcHeight = codecSupport.maxHevcHeight,
+        .maxAv1Width = codecSupport.maxAv1Width,
+        .maxAv1Height = codecSupport.maxAv1Height,
+        .displayHdr10 = codecSupport.displayHdr10,
+        .displayHdr10Plus = codecSupport.displayHdr10Plus,
+        .displayDolbyVision = codecSupport.displayDolbyVision,
+        .displayHlg = codecSupport.displayHlg,
+        .maxAudioOutputChannels = codecSupport.maxAudioOutputChannels,
+    };
+    const PlaybackVideoCapabilityInput videoInput{
+        .codec = item.videoCodec,
+        .profile = item.videoProfile,
+        .rangeType = item.videoRangeType,
+        .bitDepth = item.videoBitDepth,
+        .level = item.videoLevel,
+        .width = item.videoWidth,
+        .height = item.videoHeight,
+    };
+    const PlaybackAudioCapabilityInput audioInput{
+        .selected = selectedAudio != nullptr,
+        .codec = selectedAudio ? selectedAudio->codec : std::string{},
+        .channels = selectedAudio ? selectedAudio->channels : 0,
+    };
+    const PlaybackSubtitleCapabilityInput subtitleInput{
+        .selected = subtitleStreamIndex >= 0,
+        .codec = selectedSubtitle != item.subtitles.end() ? selectedSubtitle->codec : std::string{},
+    };
+    const PlaybackProfilePlan plan = makePlaybackProfilePlan(
+        deviceInput,
+        videoInput,
+        audioInput,
+        subtitleInput,
+        requestedAudioChannels,
+        overrides
+    );
+    maxAudioChannels = plan.maxAudioChannels;
+    if (maxAudioChannels != requestedAudioChannels) {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kTag,
+            "Audio output route limits requested %d channels to %d",
+            requestedAudioChannels,
+            maxAudioChannels
+        );
+    }
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kTag,
+        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d forceTranscode=%d)",
+        item.videoCodec.c_str(), item.videoProfile.c_str(), item.videoLevel, item.videoRangeType.c_str(),
+        overrides.maxAvcLevel, overrides.maxHevcLevel, static_cast<int>(overrides.hdrMode), overrides.forceTranscode
+    );
+    for (const auto& rejection : plan.videoRejections) {
+        __android_log_print(
+            ANDROID_LOG_INFO,
+            kTag,
+            "Not advertising direct %s for this item: %s",
+            rejection.codec.c_str(),
+            rejection.reason.c_str()
+        );
+    }
+
+    const std::string videoCodecList = joinCodecs(plan.videoCodecs);
+    const std::string serverStreamVideoCodecs = serverStreamVideoCodecList(plan.videoCodecs);
+    const std::string audioCodecList = joinCodecs(plan.audioCodecs);
+    const std::string transcodeAudioCodecList = joinCodecs(plan.transcodeAudioCodecs);
     if (selectedAudio) {
         __android_log_print(
             ANDROID_LOG_INFO,
@@ -1295,15 +1287,14 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             selectedAudio->codec.c_str(),
             selectedAudio->channels,
             maxAudioChannels,
-            allowAudioStreamCopy,
+            plan.allowAudioStreamCopy,
             transcodeAudioCodecList.c_str()
         );
     }
 
     json subtitleProfiles = json::array({
-        // External text files are downloaded and rendered by the native client. Embedded
-        // SRT/VTT remains DirectPlay and is selected directly from the container by Media3,
-        // which avoids Jellyfin 10.11 embedded-text extraction failures.
+        // Text subtitles are delivered separately and rendered by the native client, so
+        // selecting them does not require Media3 to own subtitle presentation.
         {{"Format", "vtt"}, {"Method", "External"}},
         {{"Format", "webvtt"}, {"Method", "External"}},
         {{"Format", "srt"}, {"Method", "External"}},
@@ -1359,15 +1350,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         {"SubtitleProfiles", std::move(subtitleProfiles)}
     };
 
-    const auto selectedSubtitle = std::find_if(
-        item.subtitles.begin(),
-        item.subtitles.end(),
-        [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == subtitleStreamIndex; }
-    );
-    const bool clientSubtitle = selectedSubtitle != item.subtitles.end()
-        && subtitleStrategy(selectedSubtitle->codec) != SubtitleStrategy::ServerTranscode;
-    const bool serverSubtitle = subtitleStreamIndex >= 0 && !clientSubtitle;
-    const bool preferServerStream = serverSubtitle;
+    const PlaybackRequestFlags requestFlags = playbackRequestFlags(plan, overrides);
     json body = {
         {"UserId", session.userId},
         {"StartTimeTicks", item.positionTicks},
@@ -1375,11 +1358,11 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         {"DeviceProfile", profile},
         {"AudioStreamIndex", audioStreamIndex >= 0 ? json(audioStreamIndex) : json(nullptr)},
         {"MaxAudioChannels", maxAudioChannels},
-        {"EnableDirectPlay", !overrides.forceTranscode && directVideoSupported && !preferServerStream},
-        {"EnableDirectStream", !overrides.forceTranscode && directVideoSupported && !preferServerStream},
+        {"EnableDirectPlay", requestFlags.enableDirectPlay},
+        {"EnableDirectStream", requestFlags.enableDirectStream},
         {"EnableTranscoding", true},
-        {"AllowVideoStreamCopy", !overrides.forceTranscode && directVideoSupported && !serverSubtitle},
-        {"AllowAudioStreamCopy", allowAudioStreamCopy},
+        {"AllowVideoStreamCopy", requestFlags.allowVideoStreamCopy},
+        {"AllowAudioStreamCopy", requestFlags.allowAudioStreamCopy},
         {"AutoOpenLiveStream", true}
     };
     if (subtitleStreamIndex != kSubtitleServerDefaultIndex) {
@@ -1444,16 +1427,16 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             }
         }
 
-        const bool direct = !overrides.forceTranscode && source.value("SupportsDirectPlay", false);
-        const bool directStream = !overrides.forceTranscode && source.value("SupportsDirectStream", false);
-        const bool transcode = source.value("SupportsTranscoding", false);
         const std::string transcodingUrl = source.value("TranscodingUrl", std::string{});
-        // Jellyfin 10.11 can intentionally expose video remux/direct-stream work through
-        // TranscodingUrl while SupportsDirectStream is false. Infer DirectStream only
-        // when every reported reason belongs to Jellyfin's own direct-stream reason set;
-        // subtitle/video conversion reasons remain full Transcode.
-        const bool semanticDirectStream = !overrides.forceTranscode
-            && (directStream || transcodingUrlRepresentsDirectStream(transcodingUrl));
+        const PlaybackServerRoute route = choosePlaybackServerRoute(
+            {
+                .supportsDirectPlay = source.value("SupportsDirectPlay", false),
+                .supportsDirectStream = source.value("SupportsDirectStream", false),
+                .supportsTranscoding = source.value("SupportsTranscoding", false),
+                .transcodingUrl = transcodingUrl,
+            },
+            overrides
+        );
         const std::string container = firstContainer(source.value("Container", item.container));
         if (!transcodingUrl.empty()) {
             target.fallbackTranscodeUrl = transcodingUrl.rfind("http://", 0) == 0 || transcodingUrl.rfind("https://", 0) == 0
@@ -1462,18 +1445,18 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             target.fallbackTranscodeUrl = addApiKey(std::move(target.fallbackTranscodeUrl), urlEncode(session.token));
         }
 
-        if (direct) {
+        if (route == PlaybackServerRoute::DirectPlay) {
             target.url = session.server + "/Videos/" + item.id + "/stream." + container
                 + "?Static=true&MediaSourceId=" + urlEncode(target.mediaSourceId)
                 + "&api_key=" + urlEncode(session.token);
             target.playMethod = PlaybackMethod::DirectPlay;
-        } else if ((directStream || transcode) && !target.fallbackTranscodeUrl.empty()) {
+        } else if (route == PlaybackServerRoute::DirectStream || route == PlaybackServerRoute::Transcode) {
             target.url = target.fallbackTranscodeUrl;
             target.fallbackTranscodeUrl.clear();
             target.transcoding = true;
-            target.playMethod = overrides.forceTranscode
-                ? PlaybackMethod::Transcode
-                : (semanticDirectStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode);
+            target.playMethod = route == PlaybackServerRoute::DirectStream
+                ? PlaybackMethod::DirectStream
+                : PlaybackMethod::Transcode;
         } else {
             result.error = "No direct-play, direct-stream or transcode path was offered by Jellyfin";
             return result;

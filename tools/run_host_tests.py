@@ -21,6 +21,7 @@ CPP_TESTS = [
     "http_retry_policy_test.cpp",
     "home_screen_test.cpp",
     "media_player_policy_test.cpp",
+    "playback_profile_test.cpp",
     "ui_policy_test.cpp",
     "playback_queue_test.cpp",
     "request_epoch_test.cpp",
