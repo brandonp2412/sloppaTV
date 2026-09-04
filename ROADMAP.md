@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 107 / 139 verified (77.0%); 32 partial; none unbuilt.
+Status at 2026-09-04: 110 / 139 verified (79.1%); 29 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -47,14 +47,14 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Accounts, navigation, and browsing
 
-- [~] LAN discovery plus profile, user, and server switching remain; Quick Connect TV UI is physically verified.
+- [~] LAN discovery and distinct-user switching remain; Quick Connect, saved-profile lifecycle/expiry cleanup, and saved-server endpoint switching are physically verified.
 - [x] Navigation regression, server-version edge cases, and Movies/Shows/Mixed/folder browsing are physically verified.
 - [x] Seasons, nested folders, populated favorites, direct item-options keys.
 - [x] Delete and refresh permissions plus server-side mutation completion.
 
 ### Playback and platform
 
-- [~] Broader target-TV codec/receiver and long-soak matrix remains; AVC/HEVC/HDR override negotiation and physical 23.976 Hz refresh-rate switching are verified.
+- [x] Target-TV representative codec/audio-route and dynamic long-play soak matrix, AVC/HEVC/HDR override negotiation, and physical 23.976 Hz refresh-rate switching are verified.
 - [x] Playback reports have automated Jellyfin session-state assertions.
 - [x] Subtitle size/background/position and dedicated ASS/SRT visual passes are physically verified on the Google TV Streamer.
 - [x] HDR fixture/HDR-preserving server-stream path and generated Trickplay tile rendering are verified on the Google TV Streamer.
@@ -158,6 +158,20 @@ required for TV hardware, Android TV integration, and final performance work.
   Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
   input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
   signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
+- 2026-09-04: the broader physical playback matrix is complete on the Google TV Streamer. Six real-library
+  cases reached live Jellyfin DirectPlay while muted: AV1 Main10 + Opus stereo, H.264 High10 10-bit + AAC,
+  H.264 + E-AC3 5.1, H.264 + AC3 5.1, H.264 + DTS 5.1, and HEVC Main10 + FLAC 5.1. A separate 10-minute
+  dynamic HDR10 HEVC playback soak remained active as Jellyfin DirectStream and advanced normally. The
+  initial decoder/buffer warm-up raised memory to its operating plateau; across the 24 samples from 126 s
+  onward, median PSS changed from 233,804 KB to 233,693 KB (-0.05%) and RSS from 305,117 KB to 305,733 KB
+  (+0.2%), with no sloppaTV fatal exception, native signal, or ANR. Media volume was restored to 15/15.
+- 2026-09-04: saved-server/profile lifecycle acceptance is physically complete without touching the missing
+  `lounge` user. The existing `jellyfin` account was Quick-Connected through the still-valid alternate
+  `https://arr.presley.nz/jellyfin` endpoint, producing two saved endpoint profiles. Switching back to the
+  canonical endpoint exercised the real expired-token path: Home received 401, the stale profile was removed,
+  and Login displayed `SESSION EXPIRED - LOG IN AGAIN`. Canonical Quick Connect then issued a fresh session,
+  Home loaded normally, the temporary alternate endpoint was forgotten through the UI, and the chooser was
+  restored to exactly one `jellyfin` profile at `https://jellyfin.presley.nz`. Final app audit was clean.
 - 2026-09-04: persisted AVC/HEVC/HDR playback overrides are physically accepted on the production
   Google TV build. `1917` (H.264 High Level 4.1) DirectPlayed with AVC AUTO, then AVC 4.0 explicitly
   removed direct H.264 from the device profile and the same item reached READY through Transcode.
