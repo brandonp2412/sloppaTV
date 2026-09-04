@@ -23,6 +23,7 @@ CPP_TESTS = [
     "media_player_policy_test.cpp",
     "ui_policy_test.cpp",
     "playback_queue_test.cpp",
+    "request_epoch_test.cpp",
     "screensaver_policy_test.cpp",
     "settings_screen_test.cpp",
     "subtitle_policy_test.cpp",

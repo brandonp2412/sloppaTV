@@ -19,6 +19,7 @@
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
 #include "playback_queue.hpp"
+#include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
@@ -31,7 +32,6 @@
 
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <chrono>
 #include <cctype>
 #include <cstdint>
@@ -430,7 +430,7 @@ public:
 
     ~SloppaApp() {
         api_.cancelPendingRequests();
-        ++taskGeneration_;
+        requestEpochs_.invalidateAll();
         tasks_.shutdown();
         stopPlayback();
         if (brandMarkTexture_ != 0 && renderer_.ready()) renderer_.deleteTexture(brandMarkTexture_);
@@ -460,7 +460,7 @@ public:
                 std::scoped_lock lock(stateMutex_);
                 if (screen_ == Screen::Player || burstActive) timeoutMs = 0;
                 else if (screensaverActive_) timeoutMs = 30000;
-                else if (loading_ || quickConnectActive_) timeoutMs = 100;
+                else if (loading_ || homeLoading_ || mutationLoading_ || quickConnectActive_) timeoutMs = 100;
                 else {
                     const int64_t delayMs = screensaverDelayMs(settings_.screensaverMinutes);
                     if (delayMs > 0) {
@@ -510,7 +510,7 @@ public:
                         settings_.screensaverMinutes,
                         idleMs,
                         false,
-                        loading_ || quickConnectActive_
+                        loading_ || homeLoading_ || mutationLoading_ || quickConnectActive_
                     );
                 }
                 screensaver = screensaverActive_;
@@ -799,7 +799,7 @@ private:
     }
 
     void scheduleLiveSearch() {
-        ++searchRequestGeneration_;
+        requestEpochs_.search.invalidate();
         searchSelection_ = 0;
         if (searchQuery_.empty()) {
             searchDebouncePending_ = false;
@@ -819,7 +819,7 @@ private:
         if (screen_ != Screen::Search) {
             searchDebouncePending_ = false;
             searchLoading_ = false;
-            ++searchRequestGeneration_;
+            requestEpochs_.search.invalidate();
             return;
         }
         if (std::chrono::steady_clock::now() < searchDebounceDeadline_) return;
@@ -924,7 +924,7 @@ private:
         if (quickConnectActive_) {
             if (key == AKEYCODE_BACK) {
                 api_.cancelPendingRequests();
-                ++taskGeneration_;
+                requestEpochs_.auth.invalidate();
                 quickConnectActive_ = false;
                 quickConnectCode_.clear();
                 loading_ = false;
@@ -1194,7 +1194,7 @@ private:
             } else {
                 searchDebouncePending_ = false;
                 searchLoading_ = false;
-                ++searchRequestGeneration_;
+                requestEpochs_.search.invalidate();
                 hideSystemTextInput();
                 popScreen(Screen::Home);
                 if (screen_ == Screen::Home) {
@@ -1438,10 +1438,10 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const std::string personId = person.id;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, personId, generation] {
             auto result = api_.getItemsForPerson(session, personId, 60);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::PersonItems || selectedPerson_.id != personId) return;
@@ -1556,13 +1556,13 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const JellyfinItem selected = detail_;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.playback.begin();
         if (!tasks_.submit([this, session, selected, player = *player, generation]() mutable {
             JellyfinItem playable = selected;
             if (playable.type == "Series") {
                 auto next = api_.getNextUpForSeries(session, playable.id);
                 if (!next.ok) {
-                    if (generation != taskGeneration_.load()) return;
+                    if (!requestEpochs_.playback.active(generation)) return;
                     std::scoped_lock lock(stateMutex_);
                     loading_ = false;
                     if (screen_ != Screen::Details || detail_.id != selected.id) return;
@@ -1588,7 +1588,7 @@ private:
                 subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
             }
 
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::Details || detail_.id != selected.id) return;
@@ -1852,7 +1852,7 @@ private:
         const JellyfinSession session = session_;
         const JellyfinItem item = activePlaybackItem_;
         const std::string dataPath = dataPath_;
-        const uint64_t generation = taskGeneration_.load();
+        const uint64_t generation = requestEpochs_.playback.snapshot();
         if (!tasks_.submit([this, session, item, subtitle, deliveryUrl, dataPath, generation] {
             std::string clean;
             std::filesystem::path cacheFile;
@@ -1914,7 +1914,7 @@ private:
                     subtitleFailure.c_str()
                 );
             }
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             if (shouldApplyLoadedSubtitle(
                     activePlaybackItem_.id,
@@ -1990,7 +1990,7 @@ private:
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.playback.begin();
 
         // A Jellyfin server-stream change is a real playback-session handoff. Resolve the
         // replacement only after closing/reporting the old session: asking Jellyfin for a
@@ -2034,7 +2034,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             subtitleLoadInProgress_ = false;
             nextTransitionLoading_ = false;
@@ -2431,8 +2431,10 @@ private:
         error_.clear();
         serverInfo_ = {};
         const JellyfinSession session = session_;
-        tasks_.submit([this, session] {
+        const uint64_t generation = requestEpochs_.content.begin();
+        tasks_.submit([this, session, generation] {
             auto result = api_.getServerInfo(session);
+            if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Diagnostics) return;
             loading_ = false;
@@ -2457,7 +2459,7 @@ private:
         // still available. No queue, track preference, pending playback or browsed item
         // from one Jellyfin user should survive into another account.
         api_.cancelPendingRequests();
-        ++taskGeneration_;
+        requestEpochs_.invalidateAll();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle || !activePlaybackItem_.id.empty()) {
             releaseActivePlayback(true);
         }
@@ -2568,6 +2570,8 @@ private:
         quickConnectCode_.clear();
         discoveryStatus_.clear();
         loading_ = false;
+        homeLoading_ = false;
+        mutationLoading_ = false;
         error_.clear();
         notice_.clear();
         noticeUntil_ = {};
@@ -2741,7 +2745,7 @@ private:
         const JellyfinSession session = session_;
         const JellyfinItem container = activeLibrary_;
         const int startIndex = append ? browseNextIndex_ : 0;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.content.begin();
         const BrowseContentMode mode = browseContentMode_;
         const std::string genre = browseGenre_;
         const std::string letter = browseLetter_;
@@ -2767,7 +2771,7 @@ private:
             } else {
                 result.ok = true;
             }
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::Browse || activeLibrary_.id != container.id) return;
@@ -2803,10 +2807,10 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const std::string seriesId = seriesDetail_.id;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, seriesId, generation] {
             auto result = api_.getSeasons(session, seriesId);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::Seasons || seriesDetail_.id != seriesId) return;
@@ -2830,10 +2834,10 @@ private:
         const JellyfinSession session = session_;
         const std::string seriesId = seriesDetail_.id;
         const std::string seasonId = season.id;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, seriesId, seasonId, generation] {
             auto result = api_.getEpisodes(session, seriesId, seasonId);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::Episodes
@@ -2923,23 +2927,23 @@ private:
     }
 
     void toggleFavoriteAsync() {
-        if (loading_ || detail_.id.empty()) return;
+        if (loading_ || mutationLoading_ || detail_.id.empty()) return;
         const bool desired = !detail_.favorite;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
-        const uint64_t generation = taskGeneration_.load();
-        loading_ = true;
+        const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
+        mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, desired, generation] {
+        tasks_.submit([this, session, item, desired, sessionEpoch] {
             auto result = api_.setFavorite(session, item, desired);
             std::scoped_lock lock(stateMutex_);
+            if (!requestEpochs_.session.active(sessionEpoch)) return;
             if (result.ok) {
                 JellyfinItem updated = item;
                 updated.favorite = desired;
                 updateCachedUserData(updated);
             }
-            if (generation != taskGeneration_.load()) return;
-            loading_ = false;
+            mutationLoading_ = false;
             if ((screen_ != Screen::Details && screen_ != Screen::ItemMenu) || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
@@ -2950,24 +2954,24 @@ private:
     }
 
     void togglePlayedAsync() {
-        if (loading_ || detail_.id.empty()) return;
+        if (loading_ || mutationLoading_ || detail_.id.empty()) return;
         const bool desired = !detail_.played;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
-        const uint64_t generation = taskGeneration_.load();
-        loading_ = true;
+        const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
+        mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, desired, generation] {
+        tasks_.submit([this, session, item, desired, sessionEpoch] {
             auto result = api_.setPlayed(session, item, desired);
             std::scoped_lock lock(stateMutex_);
+            if (!requestEpochs_.session.active(sessionEpoch)) return;
             if (result.ok) {
                 JellyfinItem updated = item;
                 updated.played = desired;
                 if (desired) updated.positionTicks = 0;
                 updateCachedUserData(updated);
             }
-            if (generation != taskGeneration_.load()) return;
-            loading_ = false;
+            mutationLoading_ = false;
             if ((screen_ != Screen::Details && screen_ != Screen::ItemMenu) || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
@@ -2993,17 +2997,17 @@ private:
     }
 
     void refreshCurrentItemMetadataAsync() {
-        if (loading_ || detail_.id.empty()) return;
+        if (loading_ || mutationLoading_ || detail_.id.empty()) return;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
-        const uint64_t generation = taskGeneration_.load();
-        loading_ = true;
+        const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
+        mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, generation] {
+        tasks_.submit([this, session, item, sessionEpoch] {
             auto result = api_.refreshMetadata(session, item);
             std::scoped_lock lock(stateMutex_);
-            if (generation != taskGeneration_.load()) return;
-            loading_ = false;
+            if (!requestEpochs_.session.active(sessionEpoch)) return;
+            mutationLoading_ = false;
             if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
@@ -3015,18 +3019,18 @@ private:
     }
 
     void deleteCurrentItemAsync() {
-        if (loading_ || detail_.id.empty() || !detail_.canDelete) return;
+        if (loading_ || mutationLoading_ || detail_.id.empty() || !detail_.canDelete) return;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
-        const uint64_t generation = taskGeneration_.load();
-        loading_ = true;
+        const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
+        mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, generation] {
+        tasks_.submit([this, session, item, sessionEpoch] {
             auto result = api_.deleteItem(session, item);
             std::scoped_lock lock(stateMutex_);
+            if (!requestEpochs_.session.active(sessionEpoch)) return;
             if (result.ok) removeCachedItem(item.id);
-            if (generation != taskGeneration_.load()) return;
-            loading_ = false;
+            mutationLoading_ = false;
             if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
@@ -3055,10 +3059,10 @@ private:
         loading_ = true;
         error_.clear();
         discoveryStatus_ = "SEARCHING LOCAL NETWORK...";
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.auth.begin();
         tasks_.submit([this, generation] {
             auto servers = discoverJellyfinServers(1600);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.auth.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (servers.empty()) {
@@ -3080,11 +3084,11 @@ private:
         error_.clear();
         const auto fields = loginFields_;
         const std::string deviceId = deviceId_;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.auth.begin();
 
         tasks_.submit([this, fields, deviceId, generation] {
             auto result = api_.login(fields[0], fields[1], fields[2], deviceId);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.auth.active(generation)) return;
             if (!result.ok) {
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
@@ -3093,6 +3097,7 @@ private:
             }
             {
                 std::scoped_lock lock(stateMutex_);
+                requestEpochs_.session.invalidate();
                 session_ = result.value;
                 loginFields_[0] = session_.server;
                 loginFields_[1] = session_.username;
@@ -3122,11 +3127,11 @@ private:
         quickConnectActive_ = true;
         quickConnectCode_ = "------";
         error_.clear();
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.auth.begin();
 
         tasks_.submit([this, server, deviceId, generation] {
             auto initiated = api_.initiateQuickConnect(server, deviceId);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.auth.active(generation)) return;
             if (!initiated.ok) {
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
@@ -3146,7 +3151,7 @@ private:
 
             for (int attempt = 0; attempt < 60; ++attempt) {
                 std::this_thread::sleep_for(5s);
-                if (generation != taskGeneration_.load()) return;
+                if (!requestEpochs_.auth.active(generation)) return;
 
                 auto state = api_.pollQuickConnect(request, deviceId);
                 if (!state.ok) {
@@ -3160,7 +3165,7 @@ private:
                 if (!state.value) continue;
 
                 auto authenticated = api_.completeQuickConnect(request, deviceId);
-                if (generation != taskGeneration_.load()) return;
+                if (!requestEpochs_.auth.active(generation)) return;
                 if (!authenticated.ok) {
                     std::scoped_lock lock(stateMutex_);
                     loading_ = false;
@@ -3172,6 +3177,7 @@ private:
 
                 {
                     std::scoped_lock lock(stateMutex_);
+                    requestEpochs_.session.invalidate();
                     session_ = authenticated.value;
                     loginFields_[0] = session_.server;
                     loginFields_[1] = session_.username;
@@ -3189,7 +3195,7 @@ private:
                 return;
             }
 
-            if (generation == taskGeneration_.load()) {
+            if (requestEpochs_.auth.active(generation)) {
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
                 quickConnectActive_ = false;
@@ -3219,26 +3225,30 @@ private:
                 const int selected = homeState_.selection(static_cast<int>(row), static_cast<int>(items.size()));
                 selectedItemByRow[home_.rows[row].title] = items[static_cast<size_t>(selected)].id;
             }
-            loading_ = true;
+            homeLoading_ = true;
         }
 
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.home.begin();
         const auto homeLoadStarted = std::chrono::steady_clock::now();
         tasks_.submit([this, session, generation, navFocused, focusedRowTitle, selectedItemByRow = std::move(selectedItemByRow), homeLoadStarted] {
             auto core = api_.loadHomeCore(session);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.home.active(generation)) return;
             if (!core.ok) {
                 std::scoped_lock lock(stateMutex_);
-                loading_ = false;
+                homeLoading_ = false;
                 if (core.error.find("HTTP 401") != std::string::npos) {
                     const JellyfinSession expired = session_;
                     removeSavedSessionIdentity(expired);
+                    requestEpochs_.invalidateAll();
+                    loading_ = false;
+                    mutationLoading_ = false;
+                    searchLoading_ = false;
                     session_.token.clear();
                     session_.userId.clear();
                     resetNavigation(Screen::Login);
                     error_ = "SESSION EXPIRED - LOG IN AGAIN";
                     saveSession(session_);
-                } else {
+                } else if (screen_ == Screen::Home) {
                     error_ = core.error;
                 }
                 return;
@@ -3261,12 +3271,12 @@ private:
                     if (item != section.items.end()) restoredSelections[row] = static_cast<int>(std::distance(section.items.begin(), item));
                 }
 
-                loading_ = false;
+                homeLoading_ = false;
                 home_ = std::move(core.value);
                 homeState_.setSelections(std::move(restoredSelections));
                 homeState_.setRow(home_.rows.empty() ? -1 : std::clamp(coreRestoredRow, -1, static_cast<int>(home_.rows.size()) - 1));
                 homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-                error_ = home_.warning;
+                if (screen_ == Screen::Home) error_ = home_.warning;
                 if (homeState_.row() >= 0) {
                     const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
                     prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
@@ -3294,11 +3304,12 @@ private:
 
             tasks_.submit([this, session, generation, views = std::move(views), navFocused, focusedRowTitle, selectedItemByRow, coreRestoredRow, homeLoadStarted] {
                 auto secondary = api_.loadHomeSecondary(session, views);
-                if (generation != taskGeneration_.load()) return;
+                if (!requestEpochs_.home.active(generation)) return;
                 std::scoped_lock lock(stateMutex_);
                 if (!secondary.ok) {
-                    if (!error_.empty()) error_ += " | ";
-                    error_ += "SECONDARY HOME ROWS UNAVAILABLE";
+                    if (!home_.warning.empty()) home_.warning += " | ";
+                    home_.warning += "SECONDARY HOME ROWS UNAVAILABLE";
+                    if (screen_ == Screen::Home) error_ = home_.warning;
                     return;
                 }
 
@@ -3323,7 +3334,7 @@ private:
                 if (!secondary.value.warning.empty()) {
                     if (!home_.warning.empty()) home_.warning += " | ";
                     home_.warning += secondary.value.warning;
-                    error_ = home_.warning;
+                    if (screen_ == Screen::Home) error_ = home_.warning;
                 }
                 homeState_.updateViewport(static_cast<int>(home_.rows.size()));
                 if (homeState_.row() >= static_cast<int>(baseRowCount)
@@ -3348,11 +3359,11 @@ private:
         }
         searchLoading_ = true;
         error_.clear();
-        const uint64_t generation = ++searchRequestGeneration_;
+        const uint64_t generation = requestEpochs_.search.begin();
         tasks_.submit([this, session, query, generation] {
             auto result = api_.search(session, query);
             std::scoped_lock lock(stateMutex_);
-            if (generation != searchRequestGeneration_.load()) return;
+            if (!requestEpochs_.search.active(generation)) return;
             searchLoading_ = false;
             if (screen_ != Screen::Search || searchQuery_ != query) return;
             if (!result.ok) {
@@ -3377,10 +3388,10 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const std::string id = item.id;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, id, generation] {
             auto result = api_.getItem(session, id);
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.content.active(generation)) return;
             {
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
@@ -3393,7 +3404,7 @@ private:
             }
 
             auto similar = api_.getSimilar(session, id, 18);
-            if (generation != taskGeneration_.load() || !similar.ok) return;
+            if (!requestEpochs_.content.active(generation) || !similar.ok) return;
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Details || detail_.id != id) return;
             detailsSimilar_ = std::move(similar.value);
@@ -3465,7 +3476,7 @@ private:
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
         const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.playback.begin();
         tasks_.submit([this, session, queued = std::move(queued), index, previousQueueIndex, originScreen, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, generation]() mutable {
             auto detailed = api_.getItem(session, queued.id);
             if (detailed.ok) queued = std::move(detailed.value);
@@ -3480,7 +3491,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             nextTransitionLoading_ = false;
@@ -3567,11 +3578,11 @@ private:
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.playback.begin();
         tasks_.submit([this, session, series, maxStreamingBitrate, maxAudioChannels, playbackOverrides, generation] {
             auto episodes = api_.getSeriesEpisodes(session, series.id, 1000);
             if (!episodes.ok || episodes.value.empty()) {
-                if (generation != taskGeneration_.load()) return;
+                if (!requestEpochs_.playback.active(generation)) return;
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
                 if (screen_ != Screen::Details || detail_.id != series.id) return;
@@ -3631,7 +3642,7 @@ private:
             }
             episodes.value = std::move(deduplicated);
             if (episodes.value.empty()) {
-                if (generation != taskGeneration_.load()) return;
+                if (!requestEpochs_.playback.active(generation)) return;
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
                 if (screen_ != Screen::Details || detail_.id != series.id) return;
@@ -3649,7 +3660,7 @@ private:
                 maxAudioChannels,
                 playbackOverrides
             );
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::Details || detail_.id != series.id) return;
@@ -3707,14 +3718,14 @@ private:
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
         const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.playback.begin();
 
         tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, queuedPlaybackIndex, generation] {
             JellyfinItem playable = selected;
             if (selected.type == "Series") {
                 auto next = api_.getNextUpForSeries(session, selected.id);
                 if (!next.ok) {
-                    if (generation != taskGeneration_.load()) return;
+                    if (!requestEpochs_.playback.active(generation)) return;
                     std::scoped_lock lock(stateMutex_);
                     loading_ = false;
                     if (screen_ != Screen::Details || detail_.id != selected.id) return;
@@ -3737,7 +3748,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (screen_ != Screen::Details || detail_.id != selected.id) return;
@@ -3802,6 +3813,7 @@ private:
     }
 
     void releaseActivePlayback(bool reportStop) {
+        requestEpochs_.playback.invalidate();
         if (player_.status() == PlayerStatus::Playing || player_.status() == PlayerStatus::Paused) {
             refreshPlaybackTelemetry(true);
         }
@@ -3867,7 +3879,7 @@ private:
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
         const auto audioPreference = playbackAudioLanguagePreference_;
         const auto subtitlePreference = playbackSubtitleLanguagePreference_;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.playback.begin();
         tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, nextItem = std::move(nextItem), queuedNextIndex, generation]() mutable {
             auto detailed = api_.getItem(session, nextItem.id);
             if (detailed.ok) nextItem = std::move(detailed.value);
@@ -3882,7 +3894,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             nextTransitionLoading_ = false;
@@ -3959,8 +3971,9 @@ private:
         }
 
         api_.cancelPendingRequests();
-        ++taskGeneration_;
+        requestEpochs_.invalidateTransient();
         loading_ = false;
+        homeLoading_ = false;
         quickConnectActive_ = false;
         hideSystemTextInput();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle) {
@@ -4049,7 +4062,7 @@ private:
         const int maxAudioChannels = settings_.maxAudioChannels;
         const int audioStreamIndex = selectedAudioServerIndex_;
         const int subtitleStreamIndex = selectedSubtitleServerIndex_;
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = requestEpochs_.playback.begin();
         loading_ = true;
         playbackFallbackResolving_ = true;
         playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
@@ -4085,7 +4098,7 @@ private:
                 audioStreamIndex,
                 subtitleStreamIndex
             );
-            if (generation != taskGeneration_.load()) return;
+            if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             playbackFallbackResolving_ = false;
@@ -5318,7 +5331,7 @@ private:
         }
 
         if (home_.rows.empty()) {
-            renderer_.text(72.0f, 220.0f, 2.3f, loading_ ? "LOADING HOME..." : "NO VIDEO HOME SECTIONS", kMuted);
+            renderer_.text(72.0f, 220.0f, 2.3f, homeLoading_ ? "LOADING HOME..." : "NO VIDEO HOME SECTIONS", kMuted);
             return;
         }
 
@@ -6322,7 +6335,7 @@ private:
     }
 
     void renderStatus() {
-        if (loading_) {
+        if (loading_ || homeLoading_ || mutationLoading_) {
             renderer_.rect(1490, 985, 350, 55, kPanelAlt);
             renderer_.text(1545, 1004, 1.9f, "LOADING...", kText);
         }
@@ -6416,13 +6429,15 @@ private:
     TaskRunner tasks_;
 
     mutable std::recursive_mutex stateMutex_;
-    std::atomic<uint64_t> taskGeneration_{0};
+    RequestEpochs requestEpochs_;
     std::string dataPath_;
     std::string deviceId_;
 
     Screen screen_ = Screen::Login;
     NavigationStack<Screen> navigation_{Screen::Login};
     bool loading_ = false;
+    bool homeLoading_ = false;
+    bool mutationLoading_ = false;
     AppSettings settings_;
     SettingsScreenState settingsScreen_;
     std::vector<ExternalPlayerApp> externalPlayers_;
@@ -6482,7 +6497,6 @@ private:
     bool searchLoading_ = false;
     bool searchDebouncePending_ = false;
     std::chrono::steady_clock::time_point searchDebounceDeadline_{};
-    std::atomic<uint64_t> searchRequestGeneration_{0};
 
     int keyboardRow_ = 0;
     int keyboardCol_ = 0;
