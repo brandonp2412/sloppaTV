@@ -18,6 +18,7 @@ CPP_TESTS = [
     "browse_screen_test.cpp",
     "deep_link_test.cpp",
     "details_screen_test.cpp",
+    "external_playback_state_test.cpp",
     "external_player_policy_test.cpp",
     "http_cache_policy_test.cpp",
     "http_error_policy_test.cpp",

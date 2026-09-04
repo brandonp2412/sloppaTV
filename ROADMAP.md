@@ -416,6 +416,14 @@ required for TV hardware, Android TV integration, and final performance work.
   Brooklyn Nine-Nine, with clean fatal/native-signal/ANR logs. The matching 10/3/3 checkpoint measured 244.5 ms median cold
   launch, 40,006 KB PSS, 0.0% idle CPU and 16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, effectively
   unchanged from the immediately preceding checkpoint. `main.cpp` is now 6,126 lines versus 7,194 before the architecture pass.
+- 2026-09-05: External-player handoff ownership now lives in `ExternalPlaybackState`, with the pure external-player app/result
+  value types split out of the JNI adapter header. Pending launch and active-result correlation no longer live as two independent
+  `SloppaApp` optionals; host tests cover staging, pending consumption, active ownership, result handoff and reset. The full host
+  suite and optimized Release build pass. The physical streamer has no app resolving the external video-player intent, so the
+  real external-player launch/return branch remains unavailable for device acceptance; the installed Release cold-launched to
+  the authenticated Home screen with clean fatal/native-signal/ANR logs. The matching 10/3/3 checkpoint measured 248.0 ms median
+  cold launch, 39,931 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms, within the
+  established run-to-run range.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

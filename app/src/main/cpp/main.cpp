@@ -12,6 +12,7 @@
 #include "deep_link.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
+#include "external_playback_state.hpp"
 #include "external_player.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
@@ -205,13 +206,6 @@ struct ArtworkEntry {
     GLuint texture = 0;
     uint64_t textureGeneration = 0;
     uint64_t lastUse = 0;
-};
-
-struct PendingExternalLaunch {
-    JellyfinItem item;
-    ExternalPlayerApp player;
-    std::string url;
-    std::string subtitleUrl;
 };
 
 constexpr int kTextInputSearch = 1;
@@ -1428,12 +1422,12 @@ private:
             }
             restoreHomeVisibilityForPlayback(selected);
             restoreHomeVisibilityForPlayback(playable);
-            pendingExternalLaunch_ = PendingExternalLaunch{
+            externalPlaybackState_.stage(ExternalPlaybackLaunch{
                 .item = std::move(playable),
                 .player = std::move(player),
                 .url = videoUrl,
                 .subtitleUrl = std::move(subtitleUrl),
-            };
+            });
         })) {
             loading_ = false;
             error_ = "EXTERNAL PLAYER COULD NOT BE STARTED";
@@ -2240,8 +2234,7 @@ private:
         windowRestorePending_ = false;
         windowRestoreResumePlaying_ = false;
         nextPlaybackItem_.reset();
-        pendingExternalLaunch_.reset();
-        activeExternalPlayback_.reset();
+        externalPlaybackState_.reset();
         activeTarget_ = {};
         activePlaybackItem_ = {};
         activeMediaSegments_.clear();
@@ -3679,18 +3672,16 @@ private:
         std::optional<PlaybackTarget> target;
         JellyfinItem item;
         bool streamRestart = false;
-        std::optional<PendingExternalLaunch> externalLaunch;
-        std::optional<PendingExternalLaunch> completedExternalPlayback;
+        std::optional<ExternalPlaybackLaunch> externalLaunch;
+        std::optional<ExternalPlaybackLaunch> completedExternalPlayback;
         const auto externalResult = externalPlayer_.takeResult();
         {
             std::scoped_lock lock(stateMutex_);
-            if (externalResult && activeExternalPlayback_) {
-                completedExternalPlayback = std::move(activeExternalPlayback_);
-                activeExternalPlayback_.reset();
+            if (externalResult && externalPlaybackState_.hasActive()) {
+                completedExternalPlayback = externalPlaybackState_.takeActive();
             }
-            if (pendingExternalLaunch_) {
-                externalLaunch = std::move(pendingExternalLaunch_);
-                pendingExternalLaunch_.reset();
+            if (externalPlaybackState_.hasPending()) {
+                externalLaunch = externalPlaybackState_.takePending();
             }
             if (transitionState_.hasPending() && app_->window) {
                 playbackTransition = transitionState_.take();
@@ -3821,7 +3812,7 @@ private:
                 std::scoped_lock lock(stateMutex_);
                 error_.clear();
                 lastPlaybackSummary_ = "EXTERNAL / " + externalLaunch->player.label;
-                activeExternalPlayback_ = std::move(externalLaunch);
+                externalPlaybackState_.beginActive(std::move(*externalLaunch));
             }
             return;
         }
@@ -6015,8 +6006,7 @@ private:
 
     PlaybackQueueState queueState_;
 
-    std::optional<PendingExternalLaunch> pendingExternalLaunch_;
-    std::optional<PendingExternalLaunch> activeExternalPlayback_;
+    ExternalPlaybackState externalPlaybackState_;
     PlaybackTransitionState transitionState_;
     bool windowRestorePending_ = false;
     bool windowRestoreResumePlaying_ = false;
