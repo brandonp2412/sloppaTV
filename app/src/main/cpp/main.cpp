@@ -4,6 +4,7 @@
 #include <android/native_activity.h>
 #include <android_native_app_glue.h>
 
+#include "account_screen.hpp"
 #include "app_settings.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
@@ -445,7 +446,7 @@ public:
                 std::scoped_lock lock(stateMutex_);
                 if (screen_ == Screen::Player || burstActive) timeoutMs = 0;
                 else if (screensaverActive_) timeoutMs = 30000;
-                else if (loading_ || homeLoading_ || mutationLoading_ || quickConnectActive_) timeoutMs = 100;
+                else if (loading_ || homeLoading_ || mutationLoading_ || accountState_.quickConnectActive()) timeoutMs = 100;
                 else {
                     const int64_t delayMs = screensaverDelayMs(settings_.screensaverMinutes);
                     if (delayMs > 0) {
@@ -495,7 +496,7 @@ public:
                         settings_.screensaverMinutes,
                         idleMs,
                         false,
-                        loading_ || homeLoading_ || mutationLoading_ || quickConnectActive_
+                        loading_ || homeLoading_ || mutationLoading_ || accountState_.quickConnectActive()
                     );
                 }
                 screensaver = screensaverActive_;
@@ -515,7 +516,7 @@ public:
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
+            accountState_.setField(mode - kTextInputLoginServer, text);
         }
         systemTextInputMode_ = mode;
         renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
@@ -533,7 +534,7 @@ public:
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
+            accountState_.setField(mode - kTextInputLoginServer, text);
         }
         renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
         if (app_ && app_->looper) ALooper_wake(app_->looper);
@@ -552,8 +553,7 @@ public:
             settingsScreen_.setSearchText(text);
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             const int field = mode - kTextInputLoginServer;
-            loginFields_[static_cast<size_t>(field)] = text;
-            loginField_ = std::min(3, field + 1);
+            accountState_.finishTextField(field, text);
         }
         renderBurstUntil_ = std::chrono::steady_clock::now() + 500ms;
         if (app_ && app_->looper) ALooper_wake(app_->looper);
@@ -756,8 +756,8 @@ private:
     }
 
     bool handleTypedCharacter(char c) {
-        if (screen_ == Screen::Login && loginField_ >= 0 && loginField_ < 3) {
-            loginFields_[static_cast<size_t>(loginField_)].push_back(c);
+        if (screen_ == Screen::Login && accountState_.loginFocus() >= 0 && accountState_.loginFocus() < 3) {
+            accountState_.appendToFocusedField(c);
             return true;
         }
         if (screen_ == Screen::Search) {
@@ -769,11 +769,7 @@ private:
     }
 
     bool handleBackspace() {
-        if (screen_ == Screen::Login && loginField_ >= 0 && loginField_ < 3) {
-            auto& value = loginFields_[static_cast<size_t>(loginField_)];
-            if (!value.empty()) value.pop_back();
-            return true;
-        }
+        if (screen_ == Screen::Login && accountState_.backspaceFocusedField()) return true;
         if (screen_ == Screen::Search && searchState_.backspace()) {
             scheduleLiveSearch();
             return true;
@@ -882,36 +878,33 @@ private:
             }
             return;
         }
-        if (loginField_ < 0 || loginField_ >= 3) return;
-        auto& target = loginFields_[static_cast<size_t>(loginField_)];
+        if (accountState_.loginFocus() < 0 || accountState_.loginFocus() >= 3) return;
         switch (key.action) {
-            case KeyAction::Insert: target += key.value; break;
-            case KeyAction::Backspace:
-                if (!target.empty()) target.pop_back();
+            case KeyAction::Insert:
+                for (char value : key.value) accountState_.appendToFocusedField(value);
                 break;
-            case KeyAction::Done: loginKeyboard_ = false; break;
+            case KeyAction::Backspace: accountState_.backspaceFocusedField(); break;
+            case KeyAction::Done: accountState_.setKeyboardActive(false); break;
         }
     }
 
     void handleLoginKey(int32_t key) {
-        if (quickConnectActive_) {
+        if (accountState_.quickConnectActive()) {
             if (key == AKEYCODE_BACK) {
                 api_.cancelPendingRequests();
                 requestEpochs_.auth.invalidate();
-                quickConnectActive_ = false;
-                quickConnectCode_.clear();
+                accountState_.endQuickConnect(true);
                 loading_ = false;
                 error_.clear();
-                loginField_ = 4;
             }
             return;
         }
         if (key == AKEYCODE_BACK) {
-            if (loginKeyboard_) loginKeyboard_ = false;
+            if (accountState_.keyboardActive()) accountState_.setKeyboardActive(false);
             else ANativeActivity_finish(app_->activity);
             return;
         }
-        if (loginKeyboard_) {
+        if (accountState_.keyboardActive()) {
             if (key == AKEYCODE_DPAD_LEFT) moveKeyboard(-1, 0);
             else if (key == AKEYCODE_DPAD_RIGHT) moveKeyboard(1, 0);
             else if (key == AKEYCODE_DPAD_UP) moveKeyboard(0, -1);
@@ -921,32 +914,30 @@ private:
         }
 
         if (key == AKEYCODE_DPAD_UP) {
-            loginField_ = loginField_ >= 3 ? 2 : std::max(0, loginField_ - 1);
+            accountState_.moveLoginVertical(-1);
         } else if (key == AKEYCODE_DPAD_DOWN) {
-            if (loginField_ < 2) ++loginField_;
-            else if (loginField_ == 2) loginField_ = 3;
-        } else if ((key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) && loginField_ >= 3) {
-            const int maxAction = savedSessions_.empty() ? 5 : 6;
-            if (key == AKEYCODE_DPAD_LEFT) loginField_ = loginField_ <= 3 ? maxAction : loginField_ - 1;
-            else loginField_ = loginField_ >= maxAction ? 3 : loginField_ + 1;
+            accountState_.moveLoginVertical(1);
+        } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
+            accountState_.moveLoginAction(key == AKEYCODE_DPAD_LEFT ? -1 : 1, !savedSessions_.empty());
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (loginField_ < 3) {
-                const int mode = kTextInputLoginServer + loginField_;
+            const int focus = accountState_.loginFocus();
+            if (focus < AccountScreenState::kLoginAction) {
+                const int mode = kTextInputLoginServer + focus;
                 static constexpr std::array<const char*, 3> hints{
                     "Jellyfin server URL", "Jellyfin username", "Jellyfin password"
                 };
-                loginKeyboard_ = !showSystemTextInput(
-                    loginFields_[static_cast<size_t>(loginField_)],
-                    hints[static_cast<size_t>(loginField_)],
+                accountState_.setKeyboardActive(!showSystemTextInput(
+                    accountState_.field(focus),
+                    hints[static_cast<size_t>(focus)],
                     mode,
-                    loginField_ == 2
-                );
-                if (loginKeyboard_) keyboardRow_ = keyboardCol_ = 0;
-            } else if (loginField_ == 3) {
+                    focus == AccountScreenState::kPasswordField
+                ));
+                if (accountState_.keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
+            } else if (focus == AccountScreenState::kLoginAction) {
                 loginAsync();
-            } else if (loginField_ == 4) {
+            } else if (focus == AccountScreenState::kQuickConnectAction) {
                 quickConnectAsync();
-            } else if (loginField_ == 5) {
+            } else if (focus == AccountScreenState::kDiscoverAction) {
                 discoverServersAsync();
             } else {
                 openProfiles();
@@ -961,19 +952,17 @@ private:
         }
         const int addIndex = static_cast<int>(savedSessions_.size());
         if (key == AKEYCODE_DPAD_UP) {
-            profilesSelection_ = std::max(0, profilesSelection_ - 1);
-            profileAction_ = 0;
+            accountState_.moveProfile(-1, addIndex);
         } else if (key == AKEYCODE_DPAD_DOWN) {
-            profilesSelection_ = std::min(addIndex, profilesSelection_ + 1);
-            profileAction_ = 0;
-        } else if ((key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) && profilesSelection_ < addIndex) {
-            profileAction_ = profileAction_ == 0 ? 1 : 0;
+            accountState_.moveProfile(1, addIndex);
+        } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
+            accountState_.toggleProfileAction(addIndex);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (profilesSelection_ == addIndex) {
+            if (accountState_.profileSelection() == addIndex) {
                 startAddAccount();
-            } else if (profilesSelection_ >= 0 && profilesSelection_ < addIndex) {
-                if (profileAction_ == 0) switchSavedSession(static_cast<size_t>(profilesSelection_));
-                else forgetSavedSession(static_cast<size_t>(profilesSelection_));
+            } else if (accountState_.profileSelection() >= 0 && accountState_.profileSelection() < addIndex) {
+                if (accountState_.profileAction() == 0) switchSavedSession(static_cast<size_t>(accountState_.profileSelection()));
+                else forgetSavedSession(static_cast<size_t>(accountState_.profileSelection()));
             }
         }
     }
@@ -2453,11 +2442,7 @@ private:
         clearArtworkCache(backdrops_);
         clearArtworkCache(logos_);
         artworkUseCounter_ = 0;
-        loginFields_[1].clear();
-        loginFields_[2].clear();
-        quickConnectActive_ = false;
-        quickConnectCode_.clear();
-        discoveryStatus_.clear();
+        accountState_.clearSessionUi();
         loading_ = false;
         homeLoading_ = false;
         mutationLoading_ = false;
@@ -2475,17 +2460,15 @@ private:
             return;
         }
         pushScreen(Screen::Profiles);
-        profilesSelection_ = std::clamp(profilesSelection_, 0, static_cast<int>(savedSessions_.size()));
-        profileAction_ = 0;
+        accountState_.beginProfiles(static_cast<int>(savedSessions_.size()));
         error_.clear();
     }
 
     void startAddAccount() {
         const std::string existingServer = session_.server;
         clearCurrentSessionUi();
-        if (!existingServer.empty()) loginFields_[0] = existingServer;
+        accountState_.beginAddAccount(existingServer);
         resetNavigation(Screen::Login);
-        loginField_ = 0;
         saveSession(session_);
     }
 
@@ -2494,8 +2477,7 @@ private:
         clearCurrentSessionUi();
         session_ = savedSessions_[index];
         session_.deviceId = deviceId_;
-        loginFields_[0] = session_.server;
-        loginFields_[1] = session_.username;
+        accountState_.setAuthenticatedAccount(session_.server, session_.username);
         resetNavigation(Screen::Home);
         homeState_.setRow(0);
         homeState_.setFirstVisibleRow(0);
@@ -2513,8 +2495,7 @@ private:
             clearCurrentSessionUi();
             resetNavigation(Screen::Profiles);
         }
-        profilesSelection_ = std::clamp(profilesSelection_, 0, static_cast<int>(savedSessions_.size()));
-        profileAction_ = 0;
+        accountState_.beginProfiles(static_cast<int>(savedSessions_.size()));
         saveSession(session_);
         if (savedSessions_.empty()) startAddAccount();
     }
@@ -2863,7 +2844,7 @@ private:
         if (loading_) return;
         loading_ = true;
         error_.clear();
-        discoveryStatus_ = "SEARCHING LOCAL NETWORK...";
+        accountState_.setDiscoveryStatus("SEARCHING LOCAL NETWORK...");
         const uint64_t generation = requestEpochs_.auth.begin();
         tasks_.submit([this, generation] {
             auto servers = discoverJellyfinServers(1600);
@@ -2871,14 +2852,15 @@ private:
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             if (servers.empty()) {
-                discoveryStatus_.clear();
+                accountState_.clearDiscoveryStatus();
                 error_ = "NO JELLYFIN SERVER FOUND ON THIS NETWORK";
                 return;
             }
-            loginFields_[0] = servers.front().address;
-            discoveryStatus_ = "FOUND " + (servers.front().name.empty() ? std::string("JELLYFIN") : servers.front().name);
-            if (servers.size() > 1) discoveryStatus_ += " + " + std::to_string(servers.size() - 1) + " MORE";
-            loginField_ = 1;
+            accountState_.setField(AccountScreenState::kServerField, servers.front().address);
+            std::string discoveryStatus = "FOUND " + (servers.front().name.empty() ? std::string("JELLYFIN") : servers.front().name);
+            if (servers.size() > 1) discoveryStatus += " + " + std::to_string(servers.size() - 1) + " MORE";
+            accountState_.setDiscoveryStatus(std::move(discoveryStatus));
+            accountState_.setLoginFocus(AccountScreenState::kUsernameField);
             error_.clear();
         });
     }
@@ -2887,7 +2869,7 @@ private:
         if (loading_) return;
         loading_ = true;
         error_.clear();
-        const auto fields = loginFields_;
+        const auto fields = accountState_.fields();
         const std::string deviceId = deviceId_;
         const uint64_t generation = requestEpochs_.auth.begin();
 
@@ -2904,9 +2886,7 @@ private:
                 std::scoped_lock lock(stateMutex_);
                 requestEpochs_.session.invalidate();
                 session_ = result.value;
-                loginFields_[0] = session_.server;
-                loginFields_[1] = session_.username;
-                loginFields_[2].clear();
+                accountState_.setAuthenticatedAccount(session_.server, session_.username);
                 resetNavigation(Screen::Home);
                 loading_ = false;
                 homeState_.setRow(0);
@@ -2919,18 +2899,17 @@ private:
     }
 
     void quickConnectAsync() {
-        if (loading_ || quickConnectActive_) return;
-        if (loginFields_[0].empty()) {
+        if (loading_ || accountState_.quickConnectActive()) return;
+        if (accountState_.field(AccountScreenState::kServerField).empty()) {
             error_ = "ENTER THE JELLYFIN SERVER ADDRESS FIRST";
-            loginField_ = 0;
+            accountState_.setLoginFocus(AccountScreenState::kServerField);
             return;
         }
 
-        const std::string server = loginFields_[0];
+        const std::string server = accountState_.field(AccountScreenState::kServerField);
         const std::string deviceId = deviceId_;
         loading_ = true;
-        quickConnectActive_ = true;
-        quickConnectCode_ = "------";
+        accountState_.beginQuickConnect();
         error_.clear();
         const uint64_t generation = requestEpochs_.auth.begin();
 
@@ -2940,8 +2919,7 @@ private:
             if (!initiated.ok) {
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
-                quickConnectActive_ = false;
-                quickConnectCode_.clear();
+                accountState_.endQuickConnect();
                 error_ = initiated.error;
                 return;
             }
@@ -2949,8 +2927,8 @@ private:
             const QuickConnectRequest request = initiated.value;
             {
                 std::scoped_lock lock(stateMutex_);
-                loginFields_[0] = request.server;
-                quickConnectCode_ = request.code;
+                accountState_.setField(AccountScreenState::kServerField, request.server);
+                accountState_.setQuickConnectCode(request.code);
                 loading_ = false;
             }
 
@@ -2962,8 +2940,7 @@ private:
                 if (!state.ok) {
                     std::scoped_lock lock(stateMutex_);
                     loading_ = false;
-                    quickConnectActive_ = false;
-                    quickConnectCode_.clear();
+                    accountState_.endQuickConnect();
                     error_ = state.error;
                     return;
                 }
@@ -2974,8 +2951,7 @@ private:
                 if (!authenticated.ok) {
                     std::scoped_lock lock(stateMutex_);
                     loading_ = false;
-                    quickConnectActive_ = false;
-                    quickConnectCode_.clear();
+                    accountState_.endQuickConnect();
                     error_ = authenticated.error;
                     return;
                 }
@@ -2984,11 +2960,7 @@ private:
                     std::scoped_lock lock(stateMutex_);
                     requestEpochs_.session.invalidate();
                     session_ = authenticated.value;
-                    loginFields_[0] = session_.server;
-                    loginFields_[1] = session_.username;
-                    loginFields_[2].clear();
-                    quickConnectActive_ = false;
-                    quickConnectCode_.clear();
+                    accountState_.setAuthenticatedAccount(session_.server, session_.username);
                     loading_ = false;
                     resetNavigation(Screen::Home);
                     homeState_.setRow(0);
@@ -3003,8 +2975,7 @@ private:
             if (requestEpochs_.auth.active(generation)) {
                 std::scoped_lock lock(stateMutex_);
                 loading_ = false;
-                quickConnectActive_ = false;
-                quickConnectCode_.clear();
+                accountState_.endQuickConnect();
                 error_ = "QUICK CONNECT TIMED OUT - TRY AGAIN";
             }
         });
@@ -3726,7 +3697,7 @@ private:
         requestEpochs_.invalidateTransient();
         loading_ = false;
         homeLoading_ = false;
-        quickConnectActive_ = false;
+        accountState_.endQuickConnect();
         hideSystemTextInput();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle) {
             releaseActivePlayback(true);
@@ -4855,11 +4826,11 @@ private:
         renderer_.text(676.0f, 76.0f, 6.6f, "SLOPPATV", kText, 700.0f);
         renderer_.text(730.0f, 150.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
 
-        if (quickConnectActive_) {
+        if (accountState_.quickConnectActive()) {
             renderer_.roundedRect(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, Color{0.035f, 0.040f, 0.055f, 0.92f});
             renderer_.text(775.0f, 300.0f, 2.4f, "QUICK CONNECT", kMuted, 400.0f);
-            const float codeWidth = renderer_.textWidth(8.8f, quickConnectCode_);
-            renderer_.text(960.0f - codeWidth * 0.5f, 390.0f, 8.8f, quickConnectCode_, kText, 760.0f);
+            const float codeWidth = renderer_.textWidth(8.8f, accountState_.quickConnectCode());
+            renderer_.text(960.0f - codeWidth * 0.5f, 390.0f, 8.8f, accountState_.quickConnectCode(), kText, 760.0f);
             renderer_.text(625.0f, 560.0f, 2.25f, "1  OPEN JELLYFIN ON ANOTHER DEVICE", kText, 700.0f);
             renderer_.text(625.0f, 620.0f, 2.25f, "2  SETTINGS  >  QUICK CONNECT  >  ENTER CODE", kText, 700.0f);
             renderer_.text(695.0f, 710.0f, 1.9f, loading_ ? "STARTING..." : "WAITING FOR AUTHORIZATION...", kFocus, 560.0f);
@@ -4872,36 +4843,38 @@ private:
         for (int i = 0; i < 3; ++i) {
             const float y = 320.0f + static_cast<float>(i) * 118.0f;
             renderer_.text(495.0f, y - 30.0f, 1.45f, labels[static_cast<size_t>(i)], kMuted);
-            const bool focused = !loginKeyboard_ && loginField_ == i;
+            const bool focused = !accountState_.keyboardActive() && accountState_.loginFocus() == i;
             const auto bounds = drawFocusedSurface(490.0f, y, 940.0f, 70.0f, focused);
-            std::string value = loginFields_[static_cast<size_t>(i)];
+            std::string value = accountState_.field(i);
             if (i == 2 && !value.empty()) value.assign(value.size(), '*');
             if (value.empty()) value = i == 0 ? "HTTPS://YOUR-JELLYFIN-SERVER" : "";
             renderer_.textVerticallyCentered(bounds[0] + 30.0f, bounds[1], bounds[3], 2.35f, value,
                 value.empty() ? kTertiary : kText, bounds[2] - 60.0f);
         }
 
-        const bool loginFocused = loginField_ == 3 && !loginKeyboard_;
+        const bool loginFocused = accountState_.loginFocus() == AccountScreenState::kLoginAction && !accountState_.keyboardActive();
         const auto loginBounds = drawFocusedSurface(490.0f, 690.0f, 330.0f, 72.0f, loginFocused, true);
         renderer_.textCentered(loginBounds[0], loginBounds[1], loginBounds[2], loginBounds[3], 2.15f, "LOG IN", kText);
-        const bool quickFocused = loginField_ == 4 && !loginKeyboard_;
+        const bool quickFocused = accountState_.loginFocus() == AccountScreenState::kQuickConnectAction && !accountState_.keyboardActive();
         const auto quickBounds = drawFocusedSurface(840.0f, 690.0f, 310.0f, 72.0f, quickFocused);
         renderer_.textCentered(quickBounds[0], quickBounds[1], quickBounds[2], quickBounds[3], 1.8f, "QUICK CONNECT", kText);
-        const bool discoverFocused = loginField_ == 5 && !loginKeyboard_;
+        const bool discoverFocused = accountState_.loginFocus() == AccountScreenState::kDiscoverAction && !accountState_.keyboardActive();
         const auto discoverBounds = drawFocusedSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
         renderer_.textCentered(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f, "DISCOVER", kText);
 
         if (!savedSessions_.empty()) {
-            const bool savedFocused = loginField_ == 6 && !loginKeyboard_;
+            const bool savedFocused = accountState_.loginFocus() == AccountScreenState::kSavedUsersAction && !accountState_.keyboardActive();
             const auto savedBounds = drawFocusedSurface(650.0f, 785.0f, 620.0f, 58.0f, savedFocused);
             renderer_.textCentered(savedBounds[0], savedBounds[1], savedBounds[2], savedBounds[3], 1.65f,
                 "SAVED USERS (" + std::to_string(savedSessions_.size()) + ")", savedFocused ? kText : kMuted);
         }
-        if (!loginKeyboard_) {
-            const std::string hint = !discoveryStatus_.empty() ? discoveryStatus_ : "DISCOVER SEARCHES YOUR LOCAL NETWORK";
-            renderer_.text(555.0f, 870.0f, 1.65f, hint, discoveryStatus_.empty() ? kTertiary : kFocus, 810.0f);
+        if (!accountState_.keyboardActive()) {
+            const std::string hint = !accountState_.discoveryStatus().empty()
+                ? accountState_.discoveryStatus()
+                : "DISCOVER SEARCHES YOUR LOCAL NETWORK";
+            renderer_.text(555.0f, 870.0f, 1.65f, hint, accountState_.discoveryStatus().empty() ? kTertiary : kFocus, 810.0f);
         }
-        if (loginKeyboard_) renderKeyboard(610.0f);
+        if (accountState_.keyboardActive()) renderKeyboard(610.0f);
     }
 
     void renderProfiles() {
@@ -4910,12 +4883,12 @@ private:
         const int totalRows = static_cast<int>(savedSessions_.size()) + 1;
         constexpr int visibleRows = 5;
         const int maxFirst = std::max(0, totalRows - visibleRows);
-        const int first = std::clamp(profilesSelection_ - visibleRows + 1, 0, maxFirst);
+        const int first = std::clamp(accountState_.profileSelection() - visibleRows + 1, 0, maxFirst);
         for (int slot = 0; slot < visibleRows; ++slot) {
             const int index = first + slot;
             if (index >= totalRows) break;
             const float y = 245.0f + static_cast<float>(slot) * 138.0f;
-            const bool focused = index == profilesSelection_;
+            const bool focused = index == accountState_.profileSelection();
             if (index == static_cast<int>(savedSessions_.size())) {
                 const auto bounds = drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false);
                 renderer_.textCentered(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", kFocus);
@@ -4923,7 +4896,7 @@ private:
                     "ADD ANOTHER ACCOUNT", kText, bounds[2] - 160.0f);
                 continue;
             }
-            drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false, focused && profileAction_ == 1);
+            drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false, focused && accountState_.profileAction() == 1);
             const auto& saved = savedSessions_[static_cast<size_t>(index)];
             if (!drawProfileArtwork(saved, 280.0f, y + 12.0f, 84.0f)) {
                 renderer_.roundedRect(280.0f, y + 12.0f, 84.0f, 84.0f, 24.0f, kPanelAlt);
@@ -4932,8 +4905,8 @@ private:
             }
             renderer_.text(395.0f, y + 20.0f, 2.45f, saved.username.empty() ? "USER" : saved.username, kText, 480.0f);
             renderer_.text(395.0f, y + 65.0f, 1.55f, saved.server, kMuted, 650.0f);
-            const bool useFocused = focused && profileAction_ == 0;
-            const bool forgetFocused = focused && profileAction_ == 1;
+            const bool useFocused = focused && accountState_.profileAction() == 0;
+            const bool forgetFocused = focused && accountState_.profileAction() == 1;
             const auto useBounds = drawFocusedSurface(1110.0f, y + 18.0f, 210.0f, 72.0f, useFocused, true);
             renderer_.textCentered(useBounds[0], useBounds[1], useBounds[2], useBounds[3], 1.85f, "USE", kText);
             const auto forgetBounds = drawFocusedSurface(1340.0f, y + 18.0f, 270.0f, 72.0f, forgetFocused, false, true);
@@ -6146,8 +6119,7 @@ private:
         settings_ = std::move(stored.settings);
         if (session_.valid()) rememberSession(session_);
         videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
-        loginFields_[0] = session_.server;
-        loginFields_[1] = session_.username;
+        accountState_.setAuthenticatedAccount(session_.server, session_.username);
     }
 
     void saveSession(const JellyfinSession& session) {
@@ -6199,8 +6171,7 @@ private:
     std::string pendingSearchQuery_;
     std::optional<LaunchRequest> pendingRuntimeLaunchRequest_;
     std::vector<JellyfinSession> savedSessions_;
-    int profilesSelection_ = 0;
-    int profileAction_ = 0;
+    AccountScreenState accountState_;
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
@@ -6220,13 +6191,7 @@ private:
     int librarySelection_ = 0;
     BrowseScreenState browseState_;
 
-    std::array<std::string, 3> loginFields_{};
-    int loginField_ = 0;
-    bool loginKeyboard_ = false;
     int systemTextInputMode_ = -1;
-    bool quickConnectActive_ = false;
-    std::string quickConnectCode_;
-    std::string discoveryStatus_;
 
     SearchScreenState searchState_;
 

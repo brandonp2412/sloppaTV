@@ -357,6 +357,17 @@ required for TV hardware, Android TV integration, and final performance work.
   measured 248/243 ms median cold launch, 39,810/39,875 KB PSS, 0.0% idle CPU and 16.67/16.73-16.74 ms navigation
   median/p95 with 0.8% intervals over 20 ms, remaining within the established run-to-run range. Media volume was restored
   to 15/15 and the streamer returned to sleep.
+- 2026-09-05: Login, Quick Connect, discovery and saved-profile focus now live together in `AccountScreenState` instead of
+  eight independent `SloppaApp` fields. It owns the three login values, field/action focus, fallback-keyboard mode, Quick
+  Connect code/lifetime, discovery status, saved-profile selection and USE/FORGET action focus; authentication/network work
+  remains in the app coordinator. Host tests cover field editing, login/action wrapping, Quick Connect lifecycle, discovery
+  status, account initialization and profile navigation. The full host suite and optimized Release build pass. Physical
+  streamer acceptance verified saved-profile row/action navigation, the Add Another Account login screen, wrapping from the
+  login action row to SAVED USERS, and restoring the original `lounge` session without deleting accounts or clearing app
+  data. No fatal/native-signal/ANR finding was observed. The matching 10/3/3 checkpoint measured 240.0 ms median cold launch,
+  39,647 KB PSS, 0.0% idle CPU and 16.67/16.74 ms navigation median/p95 with 0.8% intervals over 20 ms, remaining within the
+  established run-to-run range. `main.cpp` is now 6,337 lines versus 7,194 before the architecture pass. Media volume was
+  restored to 15/15 and the streamer returned to sleep.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

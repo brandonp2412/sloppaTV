@@ -12,6 +12,7 @@ PY_TEST_DIR = ROOT / "app" / "src" / "test" / "python"
 BUILD_DIR = ROOT / "build" / "host-tests"
 
 CPP_TESTS = [
+    "account_screen_test.cpp",
     "app_settings_test.cpp",
     "audio_policy_test.cpp",
     "browse_screen_test.cpp",
