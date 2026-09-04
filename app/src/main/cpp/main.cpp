@@ -481,12 +481,12 @@ private:
                 }
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
-                if (screen_ == Screen::Player && windowRestorePending_ && renderer_.ready() && !activeTarget_.url.empty()) {
+                if (screen_ == Screen::Player && playerScreenState_.windowRestorePending() && renderer_.ready() && !activeTarget_.url.empty()) {
                     if (settings_.refreshRateSwitching && activePlaybackItem_.videoFrameRate > 0.0f) {
                         displayMode_.matchVideo(app_->window, activePlaybackItem_.videoFrameRate);
                     }
                     const PlayerStatus restoreStatus = player_.status();
-                    const bool shouldResumePlayback = windowRestoreResumePlaying_;
+                    const bool shouldResumePlayback = playerScreenState_.resumeOnFocusRequested();
                     const bool preservedPlayer = reusedRendererContext
                         && videoSurface_.ready()
                         && restoreStatus != PlayerStatus::Idle
@@ -517,8 +517,7 @@ private:
                         __android_log_print(ANDROID_LOG_WARN, kTag, "GLES context was not reusable during window restore; recreated playback surface");
                     }
                     playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                    windowRestorePending_ = false;
-                    windowRestoreResumePlaying_ = false;
+                    playerScreenState_.completeWindowRestore();
                 }
                 break;
             }
@@ -526,11 +525,9 @@ private:
                 if (screen_ == Screen::Player && !activeTarget_.url.empty()) {
                     const PlayerStatus status = player_.status();
                     refreshPlaybackTelemetry(true);
-                    windowRestorePending_ = true;
-                    if (status == PlayerStatus::Playing || status == PlayerStatus::Preparing) {
-                        windowRestoreResumePlaying_ = true;
-                        player_.pause();
-                    }
+                    const bool resumePlayback = status == PlayerStatus::Playing || status == PlayerStatus::Preparing;
+                    playerScreenState_.beginWindowRestore(resumePlayback);
+                    if (resumePlayback) player_.pause();
                     reportProgressAsync(true);
                     displayMode_.restore();
                     mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
@@ -540,10 +537,9 @@ private:
             case APP_CMD_GAINED_FOCUS:
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
-                if (screen_ == Screen::Player && !windowRestorePending_ && windowRestoreResumePlaying_) {
+                if (screen_ == Screen::Player && playerScreenState_.takeResumeOnFocus()) {
                     player_.play();
                     mediaSession_.updateState(MediaSessionState::Playing, playerScreenState_.positionMs());
-                    windowRestoreResumePlaying_ = false;
                     __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
                 }
                 break;
@@ -552,7 +548,7 @@ private:
                 if (screen_ == Screen::Player) {
                     const PlayerStatus status = player_.status();
                     if (status == PlayerStatus::Playing || status == PlayerStatus::Preparing) {
-                        windowRestoreResumePlaying_ = true;
+                        playerScreenState_.requestResumeOnFocus();
                         player_.pause();
                     }
                 }
@@ -2213,8 +2209,6 @@ private:
         stillWatchingPrompt_ = false;
         trackState_.clearLanguagePreferences();
         transitionState_.reset();
-        windowRestorePending_ = false;
-        windowRestoreResumePlaying_ = false;
         nextPlaybackItem_.reset();
         externalPlaybackState_.reset();
         activeTarget_ = {};
@@ -5968,8 +5962,6 @@ private:
 
     ExternalPlaybackState externalPlaybackState_;
     PlaybackTransitionState transitionState_;
-    bool windowRestorePending_ = false;
-    bool windowRestoreResumePlaying_ = false;
     PlaybackTarget activeTarget_;
     JellyfinItem activePlaybackItem_;
     std::optional<JellyfinItem> nextPlaybackItem_;

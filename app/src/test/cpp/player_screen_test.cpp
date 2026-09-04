@@ -47,12 +47,27 @@ int main() {
     assert(state.positionMs() == 15'000);
     assert(state.pendingSeekTargetMs() == -1);
 
+    assert(!state.windowRestorePending());
+    assert(!state.resumeOnFocusRequested());
+    state.beginWindowRestore(true);
+    assert(state.windowRestorePending());
+    assert(state.resumeOnFocusRequested());
+    assert(!state.takeResumeOnFocus());
+    state.completeWindowRestore();
+    assert(!state.windowRestorePending());
+    assert(!state.resumeOnFocusRequested());
+    state.requestResumeOnFocus();
+    assert(state.takeResumeOnFocus());
+    assert(!state.resumeOnFocusRequested());
+
     state.resetSession();
     assert(!state.controlsActive());
     assert(state.controlSelection() == 0);
     assert(state.positionMs() == 0);
     assert(state.durationMs() == 0);
     assert(state.pendingSeekTargetMs() == -1);
+    assert(!state.windowRestorePending());
+    assert(!state.resumeOnFocusRequested());
 
     return 0;
 }
