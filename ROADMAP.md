@@ -518,6 +518,15 @@ required for TV hardware, Android TV integration, and final performance work.
   exactly to 3:51, with no fatal/native-signal/ANR, parse failure or playback-report failure. The matching 10/3/3 checkpoint measured
   240.0 ms median cold launch, 39,333 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms.
   `jellyfin.cpp` is now 1,688 lines versus 1,841 before this extraction.
+- 2026-09-05: Jellyfin PlaybackInfo request/response JSON is now isolated in `playback_info.{hpp,cpp}` instead of being embedded in
+  `JellyfinClient::resolvePlayback()`. The new boundary owns DeviceProfile/request serialization and server-offer parsing, including
+  default stream selection and external-text-subtitle delivery, with dedicated host coverage for direct, forced-transcode, server
+  default subtitle, PGS and malformed/no-source cases. `resolvePlayback()` is down from 311 to 212 lines and `jellyfin.cpp` from
+  1,688 to 1,581 lines. The full host suite and optimized Release build pass. Physical streamer acceptance resolved and played
+  Brooklyn Nine-Nine `48 Hours` through the server-offered DirectStream route, loaded the real media-segment response, and restored
+  playback exactly to 3:51 with no fatal/native-signal/ANR, PlaybackInfo parse error or playback-report failure. The matching 10/3/3
+  checkpoint measured 234.0 ms median cold launch, 39,103 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8%
+  intervals over 20 ms.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

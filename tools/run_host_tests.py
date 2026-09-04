@@ -52,6 +52,7 @@ CPP_TESTS = [
 
 LINKED_CPP_TESTS = [
     ("jellyfin_item_parser_test.cpp", ["jellyfin_item_parser.cpp"], []),
+    ("playback_info_test.cpp", ["playback_info.cpp"], []),
     ("session_store_test.cpp", ["session_store.cpp"], []),
     ("task_runner_test.cpp", ["task_runner.cpp"], ["-pthread"]),
 ]
