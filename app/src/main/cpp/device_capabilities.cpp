@@ -13,15 +13,6 @@ constexpr const char* kTag = "sloppaTV/capabilities";
 
 using ScopedEnv = ScopedJniEnv;
 
-std::string fromJString(JNIEnv* env, jstring value) {
-    if (!env || !value) return {};
-    const char* chars = env->GetStringUTFChars(value, nullptr);
-    if (!chars) return {};
-    std::string result(chars);
-    env->ReleaseStringUTFChars(value, chars);
-    return result;
-}
-
 bool has(const std::unordered_set<std::string>& types, const char* mime) {
     return types.contains(mime);
 }
@@ -231,7 +222,7 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
                     const jsize count = env->GetArrayLength(types);
                     for (jsize typeIndex = 0; typeIndex < count; ++typeIndex) {
                         auto value = static_cast<jstring>(env->GetObjectArrayElement(types, typeIndex));
-                        std::string mime = fromJString(env, value);
+                        std::string mime = jniString(env, value);
                         std::transform(mime.begin(), mime.end(), mime.begin(), [](unsigned char c) {
                             return static_cast<char>(std::tolower(c));
                         });

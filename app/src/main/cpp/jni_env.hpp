@@ -2,6 +2,20 @@
 
 #include <jni.h>
 
+#include <string>
+
+inline std::string jniString(JNIEnv* env, jstring value) {
+    if (!env || !value) return {};
+    const char* chars = env->GetStringUTFChars(value, nullptr);
+    if (!chars) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        return {};
+    }
+    std::string result(chars);
+    env->ReleaseStringUTFChars(value, chars);
+    return result;
+}
+
 class ScopedJniEnv {
 public:
     explicit ScopedJniEnv(JavaVM* vm) : vm_(vm) {
