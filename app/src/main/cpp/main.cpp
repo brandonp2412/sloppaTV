@@ -25,6 +25,7 @@
 #include "navigation_stack.hpp"
 #include "playback_continuation.hpp"
 #include "playback_queue.hpp"
+#include "playback_telemetry.hpp"
 #include "playback_transition.hpp"
 #include "player_screen.hpp"
 #include "player_tracks.hpp"
@@ -1477,19 +1478,18 @@ private:
 
     void refreshPlaybackTelemetry(bool force = false) {
         const auto now = std::chrono::steady_clock::now();
-        if (!force && now - lastPlaybackTelemetryRead_ < 250ms) return;
+        if (!telemetryState_.shouldReadPlayback(now, force)) return;
         playerScreenState_.applyObservedPosition(player_.positionMs(), now);
         if (activePlaybackItem_.runtimeTicks > 0) {
             playerScreenState_.setDurationMs(playbackPositionMsFromTicks(activePlaybackItem_.runtimeTicks));
         } else if (force || playerScreenState_.durationMs() <= 0) {
-            if (force || lastPlaybackDurationProbe_ == std::chrono::steady_clock::time_point{}
-                || now - lastPlaybackDurationProbe_ >= 2s) {
+            if (telemetryState_.shouldProbeDuration(now, force)) {
                 const int duration = player_.durationMs();
                 if (duration > 0) playerScreenState_.setDurationMs(duration);
-                lastPlaybackDurationProbe_ = now;
+                telemetryState_.markDurationProbe(now);
             }
         }
-        lastPlaybackTelemetryRead_ = now;
+        telemetryState_.markPlaybackRead(now);
     }
 
     std::string playerTrackLabel(int type) const {
@@ -1782,7 +1782,7 @@ private:
         JellyfinItem item = activePlaybackItem_;
         item.positionTicks = playbackTicksFromPositionMs(targetPositionMs);
         const PlaybackTarget previousTarget = activeTarget_;
-        const bool shouldReportPrevious = playbackStartReported_ && !previousTarget.url.empty();
+        const bool shouldReportPrevious = telemetryState_.playbackStartReported() && !previousTarget.url.empty();
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
@@ -1796,7 +1796,7 @@ private:
         transitionState_.setLoading(true);
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         playerScreenState_.setPositionMs(targetPositionMs);
-        playbackStartReported_ = false;
+        telemetryState_.clearPlaybackStartReported();
         player_.stop();
         videoSurface_.release();
 
@@ -2221,13 +2221,11 @@ private:
         activePlaybackItem_ = {};
         activeMediaSegments_.clear();
         mediaSegmentsRequested_ = false;
-        playbackStartReported_ = false;
+        telemetryState_.reset();
         playbackFallbackAttempted_ = false;
         playerScreenState_.resetSession();
         trackState_.resetSession();
         clearTrickplayPreview();
-        lastPlaybackTelemetryRead_ = {};
-        lastPlaybackDurationProbe_ = {};
         lastPlaybackSummary_.clear();
 
         if (hadAuthenticatedSession) {
@@ -3358,7 +3356,7 @@ private:
         const auto session = session_;
         const auto item = activePlaybackItem_;
         const auto target = activeTarget_;
-        const bool shouldReport = reportStop && playbackStartReported_ && session.valid()
+        const bool shouldReport = reportStop && telemetryState_.playbackStartReported() && session.valid()
             && !item.id.empty() && !target.url.empty();
         if (!item.id.empty() && detail_.id == item.id) {
             detail_.positionTicks = ticks;
@@ -3368,13 +3366,12 @@ private:
         displayMode_.restore();
         mediaSession_.clear();
         clearTrickplayPreview();
-        playbackStartReported_ = false;
+        telemetryState_.clearPlaybackStartReported();
         transitionState_.setFallbackResolving(false);
         activeTarget_ = {};
         activePlaybackItem_ = {};
         playerScreenState_.resetPosition();
-        lastPlaybackTelemetryRead_ = {};
-        lastPlaybackDurationProbe_ = {};
+        telemetryState_.resetReadIntervals();
         continuationState_.clearNextEpisode();
         trackState_.resetPlayback();
         mediaSegmentsRequested_ = false;
@@ -3530,17 +3527,16 @@ private:
         JellyfinItem item = activePlaybackItem_;
         const JellyfinSession session = session_;
         const int64_t resumeTicks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
-        const bool shouldReportPrevious = playbackStartReported_ && !failedTarget.url.empty();
+        const bool shouldReportPrevious = telemetryState_.playbackStartReported() && !failedTarget.url.empty();
         item.positionTicks = resumeTicks;
 
         player_.stop();
         videoSurface_.release();
-        playbackStartReported_ = false;
+        telemetryState_.clearPlaybackStartReported();
         playbackFallbackAttempted_ = true;
         playerScreenState_.setPositionMs(playbackPositionMsFromTicks(resumeTicks));
         playerScreenState_.setDurationMs(playbackPositionMsFromTicks(item.runtimeTicks));
-        lastPlaybackTelemetryRead_ = {};
-        lastPlaybackDurationProbe_ = {};
+        telemetryState_.resetReadIntervals();
 
         // Some PlaybackInfo responses include a TranscodingUrl beside DirectPlay. Use
         // that immediately when available; it avoids a second round-trip to Jellyfin.
@@ -3675,11 +3671,8 @@ private:
         if (!item.videoCodec.empty()) playbackSummary << " / " << item.videoCodec;
         if (item.videoWidth > 0 && item.videoHeight > 0) playbackSummary << " / " << item.videoWidth << 'X' << item.videoHeight;
         lastPlaybackSummary_ = playbackSummary.str();
-        playbackStartReported_ = false;
         playbackFallbackAttempted_ = false;
-        lastProgressReport_ = std::chrono::steady_clock::now();
-        lastPlaybackTelemetryRead_ = {};
-        lastPlaybackDurationProbe_ = {};
+        telemetryState_.beginPlayback(std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(
             playbackPositionMsFromTicks(target.startTicks),
             playbackPositionMsFromTicks(item.runtimeTicks)
@@ -3865,8 +3858,7 @@ private:
             playerScreenState_.positionMs()
         );
         if (!mediaSegmentsRequested_) requestMediaSegmentsAsync();
-        if (!playbackStartReported_) {
-            playbackStartReported_ = true;
+        if (telemetryState_.markPlaybackStartReported()) {
             const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
             const auto session = session_;
             const auto itemCopy = activePlaybackItem_;
@@ -3880,8 +3872,8 @@ private:
             });
         }
         const auto now = std::chrono::steady_clock::now();
-        if (now - lastProgressReport_ >= 10s) {
-            lastProgressReport_ = now;
+        if (telemetryState_.progressReportDue(now)) {
+            telemetryState_.markProgressReport(now);
             reportProgressAsync(false);
         }
         if (!continuationState_.nextEpisodeRequested() && activePlaybackItem_.type == "Episode"
@@ -3922,7 +3914,7 @@ private:
     }
 
     void reportProgressAsync(bool immediate) {
-        if (screen_ != Screen::Player || !activeTarget_.url.size() || !session_.valid() || !playbackStartReported_) return;
+        if (screen_ != Screen::Player || !activeTarget_.url.size() || !session_.valid() || !telemetryState_.playbackStartReported()) return;
         if (!immediate && player_.status() == PlayerStatus::Preparing) return;
         const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
         const bool paused = player_.status() == PlayerStatus::Paused;
@@ -5986,15 +5978,12 @@ private:
     PlaybackContinuationState continuationState_;
     std::vector<JellyfinMediaSegment> activeMediaSegments_;
     bool mediaSegmentsRequested_ = false;
-    bool playbackStartReported_ = false;
     bool playbackFallbackAttempted_ = false;
+    PlaybackTelemetryState telemetryState_;
     VideoZoomMode videoZoomMode_ = VideoZoomMode::Fit;
     PlayerScreenState playerScreenState_;
     PlayerTrackState trackState_;
     TrickplayPreviewState trickplayState_;
-    std::chrono::steady_clock::time_point lastProgressReport_{};
-    std::chrono::steady_clock::time_point lastPlaybackTelemetryRead_{};
-    std::chrono::steady_clock::time_point lastPlaybackDurationProbe_{};
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;

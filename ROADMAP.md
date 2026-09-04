@@ -454,6 +454,14 @@ required for TV hardware, Android TV integration, and final performance work.
   its real media-segment response while paused, with no fatal/native-signal/ANR finding. The matching 10/3/3 checkpoint measured
   243.0 ms median cold launch, 41,036 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over
   20 ms, within the established run-to-run range. `main.cpp` is now 6,050 lines versus 7,194 before the architecture pass.
+- 2026-09-05: Playback reporting/read cadence now lives in `PlaybackTelemetryState` instead of four independent `SloppaApp`
+  fields. The state owns the one-shot PlaybackStart latch, the 250 ms position-read throttle, the 2-second duration-probe throttle
+  and the 10-second progress-report cadence, with dedicated host timing/lifecycle coverage. The full host suite and optimized
+  Release build pass. Physical streamer acceptance resumed Brooklyn Nine-Nine `48 Hours`, paused it while the real media-segment
+  request completed, kept the player stable through a >10-second paused progress interval, then restored the pre-test position to
+  exactly 3:51; no fatal/native-signal/ANR or playback-report failure was observed. Two matching 10/3/3 checkpoints measured
+  249/252 ms median cold launch, 39,722/39,719 KB PSS, 0.0% idle CPU and 16.67/16.72 ms navigation median/p95 with 0.8% intervals
+  over 20 ms. The startup samples remain inside the established same-device Release range while memory/navigation are flat.
 - 2026-09-05: The 269-line frame `tick()` orchestrator is now decomposed into explicit runtime-intent, pending-work collection,
   external-playback completion/launch, playback-transition start and active-player phases. `tick()` itself is 12 lines, while each
   phase keeps its own locking and early-return semantics instead of interleaving unrelated lifecycle branches in one function. The
