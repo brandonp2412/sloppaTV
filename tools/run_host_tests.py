@@ -50,72 +50,48 @@ CPP_TESTS = [
     "version_policy_test.cpp",
 ]
 
+LINKED_CPP_TESTS = [
+    ("jellyfin_item_parser_test.cpp", ["jellyfin_item_parser.cpp"], []),
+    ("session_store_test.cpp", ["session_store.cpp"], []),
+    ("task_runner_test.cpp", ["task_runner.cpp"], ["-pthread"]),
+]
+
 
 def run(command: list[str]) -> None:
     print("+", " ".join(command), flush=True)
     subprocess.run(command, cwd=ROOT, check=True)
 
 
-def main() -> int:
-    BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    for test_name in CPP_TESTS:
-        source = CPP_TEST_DIR / test_name
-        binary = BUILD_DIR / source.stem
-        run([
-            "g++",
-            "-std=c++20",
-            "-Wall",
-            "-Wextra",
-            "-Wpedantic",
-            "-Werror",
-            "-I",
-            str(CPP_DIR),
-            "-I",
-            str(CPP_DIR / "third_party"),
-            str(source),
-            "-o",
-            str(binary),
-        ])
-        run([str(binary)])
-
-    task_runner_test = CPP_TEST_DIR / "task_runner_test.cpp"
-    task_runner_binary = BUILD_DIR / task_runner_test.stem
-    run([
+def run_cpp_test(test_name: str, extra_sources: list[str] | None = None, extra_flags: list[str] | None = None) -> None:
+    source = CPP_TEST_DIR / test_name
+    binary = BUILD_DIR / source.stem
+    command = [
         "g++",
         "-std=c++20",
         "-Wall",
         "-Wextra",
         "-Wpedantic",
         "-Werror",
-        "-pthread",
-        "-I",
-        str(CPP_DIR),
-        str(task_runner_test),
-        str(CPP_DIR / "task_runner.cpp"),
-        "-o",
-        str(task_runner_binary),
-    ])
-    run([str(task_runner_binary)])
-
-    session_store_test = CPP_TEST_DIR / "session_store_test.cpp"
-    session_store_binary = BUILD_DIR / session_store_test.stem
-    run([
-        "g++",
-        "-std=c++20",
-        "-Wall",
-        "-Wextra",
-        "-Wpedantic",
-        "-Werror",
+        *(extra_flags or []),
         "-I",
         str(CPP_DIR),
         "-I",
         str(CPP_DIR / "third_party"),
-        str(session_store_test),
-        str(CPP_DIR / "session_store.cpp"),
+        str(source),
+        *(str(CPP_DIR / extra) for extra in (extra_sources or [])),
         "-o",
-        str(session_store_binary),
-    ])
-    run([str(session_store_binary)])
+        str(binary),
+    ]
+    run(command)
+    run([str(binary)])
+
+
+def main() -> int:
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    for test_name in CPP_TESTS:
+        run_cpp_test(test_name)
+    for test_name, extra_sources, extra_flags in LINKED_CPP_TESTS:
+        run_cpp_test(test_name, extra_sources, extra_flags)
 
     run([sys.executable, "-m", "unittest", "discover", "-s", str(PY_TEST_DIR), "-p", "test_*.py"])
     return 0
