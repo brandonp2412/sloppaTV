@@ -1,6 +1,7 @@
 #pragma once
 
 #include "external_player_policy.hpp"
+#include "external_player_types.hpp"
 
 #include <jni.h>
 
@@ -8,19 +9,6 @@
 #include <optional>
 #include <string>
 #include <vector>
-
-struct ExternalPlayerApp {
-    std::string componentName;
-    std::string packageName;
-    std::string label;
-};
-
-struct ExternalPlayerResult {
-    bool success = false;
-    bool completionKnown = false;
-    bool completed = false;
-    int64_t positionMs = -1;
-};
 
 class NativeExternalPlayer {
 public:
