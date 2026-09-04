@@ -4,6 +4,7 @@
 #include "jellyfin_item_parser.hpp"
 #include "jni_env.hpp"
 #include "media_player_policy.hpp"
+#include "playback_info.hpp"
 #include "playback_profile.hpp"
 
 #include <android/log.h>
@@ -52,15 +53,6 @@ std::string firstContainer(std::string container) {
         return !std::isalnum(c);
     }), container.end());
     return container.empty() ? "mp4" : container;
-}
-
-std::string joinCodecs(const std::vector<std::string>& codecs) {
-    std::ostringstream out;
-    for (size_t index = 0; index < codecs.size(); ++index) {
-        if (index) out << ',';
-        out << codecs[index];
-    }
-    return out.str();
 }
 
 bool isScopedVideoItem(const JellyfinItem& item) {
@@ -1112,99 +1104,28 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         );
     }
 
-    const std::string videoCodecList = joinCodecs(plan.videoCodecs);
-    const std::string serverStreamVideoCodecs = serverStreamVideoCodecList(plan.videoCodecs);
-    const std::string audioCodecList = joinCodecs(plan.audioCodecs);
-    const std::string transcodeAudioCodecList = joinCodecs(plan.transcodeAudioCodecs);
     if (selectedAudio) {
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
-            "Audio capability check: codec=%s channels=%d max=%d streamCopy=%d transcode=%s",
+            "Audio capability check: codec=%s channels=%d max=%d streamCopy=%d",
             selectedAudio->codec.c_str(),
             selectedAudio->channels,
             maxAudioChannels,
-            plan.allowAudioStreamCopy,
-            transcodeAudioCodecList.c_str()
+            plan.allowAudioStreamCopy
         );
     }
 
-    json subtitleProfiles = json::array({
-        // Text subtitles are delivered separately and rendered by the native client, so
-        // selecting them does not require Media3 to own subtitle presentation.
-        {{"Format", "vtt"}, {"Method", "External"}},
-        {{"Format", "webvtt"}, {"Method", "External"}},
-        {{"Format", "srt"}, {"Method", "External"}},
-        {{"Format", "subrip"}, {"Method", "External"}},
-        // The native client requests text/styled subtitle delivery independently of video
-        // playback; Encode remains the server fallback for unsupported subtitle formats.
-        {{"Format", "ass"}, {"Method", "External"}},
-        {{"Format", "ass"}, {"Method", "Encode"}},
-        {{"Format", "ssa"}, {"Method", "External"}},
-        {{"Format", "ssa"}, {"Method", "Encode"}},
-        {{"Format", "pgs"}, {"Method", "Encode"}}
-    });
-
-    json profile = {
-        {"Name", "sloppaTV-Native"},
-        {"MaxStaticBitrate", 120000000},
-        {"MaxStreamingBitrate", std::max(1000000, maxStreamingBitrate)},
-        {"MusicStreamingTranscodingBitrate", 192000},
-        {"DirectPlayProfiles", json::array({
-            {
-                {"Container", "mkv,matroska,mp4,m4v,mov,ts,mpegts,webm"},
-                {"Type", "Video"},
-                {"VideoCodec", videoCodecList},
-                {"AudioCodec", audioCodecList}
-            }
-        })},
-        {"TranscodingProfiles", json::array({
-            {
-                {"Container", "ts"},
-                {"Type", "Video"},
-                {"VideoCodec", serverStreamVideoCodecs},
-                {"AudioCodec", transcodeAudioCodecList},
-                {"Protocol", "hls"},
-                {"Context", "Streaming"},
-                {"CopyTimestamps", false},
-                {"EnableSubtitlesInManifest", true},
-                {"MaxAudioChannels", std::to_string(maxAudioChannels)}
-            }
-        })},
-        {"CodecProfiles", json::array({
-            {
-                {"Type", "VideoAudio"},
-                {"Conditions", json::array({
-                    {
-                        {"Condition", "LessThanEqual"},
-                        {"Property", "AudioChannels"},
-                        {"Value", std::to_string(maxAudioChannels)},
-                        {"IsRequired", false}
-                    }
-                })}
-            }
-        })},
-        {"SubtitleProfiles", std::move(subtitleProfiles)}
-    };
-
-    const PlaybackRequestFlags requestFlags = playbackRequestFlags(plan, overrides);
-    json body = {
-        {"UserId", session.userId},
-        {"StartTimeTicks", item.positionTicks},
-        {"MediaSourceId", item.mediaSourceId.empty() ? json(nullptr) : json(item.mediaSourceId)},
-        {"DeviceProfile", profile},
-        {"AudioStreamIndex", audioStreamIndex >= 0 ? json(audioStreamIndex) : json(nullptr)},
-        {"MaxAudioChannels", maxAudioChannels},
-        {"EnableDirectPlay", requestFlags.enableDirectPlay},
-        {"EnableDirectStream", requestFlags.enableDirectStream},
-        {"EnableTranscoding", true},
-        {"AllowVideoStreamCopy", requestFlags.allowVideoStreamCopy},
-        {"AllowAudioStreamCopy", requestFlags.allowAudioStreamCopy},
-        {"AutoOpenLiveStream", true}
-    };
-    if (subtitleStreamIndex != kSubtitleServerDefaultIndex) {
-        body["SubtitleStreamIndex"] = subtitleStreamIndex;
-    }
+    const std::string requestBody = buildPlaybackInfoRequestBody(
+        session,
+        item,
+        plan,
+        overrides,
+        maxStreamingBitrate,
+        maxAudioChannels,
+        audioStreamIndex,
+        subtitleStreamIndex
+    );
 
     std::string url = session.server + "/Items/" + item.id + "/PlaybackInfo?UserId=" + session.userId
         + "&StartTimeTicks=" + std::to_string(item.positionTicks)
@@ -1214,106 +1135,78 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     }
     url += "&IsPlayback=true&AutoOpenLiveStream=true&MaxStreamingBitrate=" + std::to_string(std::max(1000000, maxStreamingBitrate));
 
-    const auto response = http_.request("POST", url, headers(&session, session.deviceId), body.dump());
+    const auto response = http_.request("POST", url, headers(&session, session.deviceId), requestBody);
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
     }
 
-    try {
-        const auto data = json::parse(response.body);
-        if (!data.contains("MediaSources") || !data["MediaSources"].is_array() || data["MediaSources"].empty()) {
-            result.error = "Jellyfin returned no playable media source";
-            return result;
-        }
-        const auto& source = data["MediaSources"][0];
-        PlaybackTarget target;
-        target.playSessionId = data.value("PlaySessionId", std::string{});
-        target.mediaSourceId = source.value("Id", std::string{});
-        target.audioStreamIndex = audioStreamIndex >= 0
-            ? audioStreamIndex
-            : source.value("DefaultAudioStreamIndex", -1);
-        target.subtitleStreamIndex = resolvedSubtitleIndex(
-            subtitleStreamIndex,
-            source.value("DefaultSubtitleStreamIndex", kSubtitleOffIndex)
-        );
-        target.startTicks = item.positionTicks;
-
-        if (target.subtitleStreamIndex >= 0 && source.contains("MediaStreams") && source["MediaStreams"].is_array()) {
-            const auto stream = std::find_if(
-                source["MediaStreams"].begin(),
-                source["MediaStreams"].end(),
-                [&](const json& candidate) {
-                    return candidate.is_object()
-                        && candidate.value("Type", std::string{}) == "Subtitle"
-                        && candidate.value("Index", -1) == target.subtitleStreamIndex;
-                }
-            );
-            if (stream != source["MediaStreams"].end()) {
-                const std::string subtitleCodec = stream->value("Codec", std::string{});
-                const std::string delivery = stream->value("DeliveryMethod", std::string{});
-                std::string deliveryUrl = stream->value("DeliveryUrl", std::string{});
-                if (delivery == "External" && !deliveryUrl.empty()
-                    && subtitleStrategy(subtitleCodec) != SubtitleStrategy::ServerTranscode) {
-                    if (deliveryUrl.rfind("http://", 0) != 0 && deliveryUrl.rfind("https://", 0) != 0) {
-                        if (deliveryUrl.front() != '/') deliveryUrl.insert(deliveryUrl.begin(), '/');
-                        deliveryUrl = session.server + deliveryUrl;
-                    }
-                    target.subtitleUrl = std::move(deliveryUrl);
-                }
-            }
-        }
-
-        const std::string transcodingUrl = source.value("TranscodingUrl", std::string{});
-        const PlaybackServerRoute route = choosePlaybackServerRoute(
-            {
-                .supportsDirectPlay = source.value("SupportsDirectPlay", false),
-                .supportsDirectStream = source.value("SupportsDirectStream", false),
-                .supportsTranscoding = source.value("SupportsTranscoding", false),
-                .transcodingUrl = transcodingUrl,
-            },
-            overrides
-        );
-        const std::string container = firstContainer(source.value("Container", item.container));
-        if (!transcodingUrl.empty()) {
-            target.fallbackTranscodeUrl = transcodingUrl.rfind("http://", 0) == 0 || transcodingUrl.rfind("https://", 0) == 0
-                ? transcodingUrl
-                : session.server + transcodingUrl;
-            target.fallbackTranscodeUrl = addApiKey(std::move(target.fallbackTranscodeUrl), urlEncode(session.token));
-        }
-
-        if (route == PlaybackServerRoute::DirectPlay) {
-            target.url = session.server + "/Videos/" + item.id + "/stream." + container
-                + "?Static=true&MediaSourceId=" + urlEncode(target.mediaSourceId)
-                + "&api_key=" + urlEncode(session.token);
-            target.playMethod = PlaybackMethod::DirectPlay;
-        } else if (route == PlaybackServerRoute::DirectStream || route == PlaybackServerRoute::Transcode) {
-            target.url = target.fallbackTranscodeUrl;
-            target.fallbackTranscodeUrl.clear();
-            target.transcoding = true;
-            target.playMethod = route == PlaybackServerRoute::DirectStream
-                ? PlaybackMethod::DirectStream
-                : PlaybackMethod::Transcode;
-        } else {
-            result.error = "No direct-play, direct-stream or transcode path was offered by Jellyfin";
-            return result;
-        }
-
-        __android_log_print(
-            ANDROID_LOG_INFO,
-            kTag,
-            "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d",
-            playbackMethodName(target.playMethod),
-            target.audioStreamIndex,
-            target.subtitleStreamIndex,
-            subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
-            !target.subtitleUrl.empty()
-        );
-        result.value = std::move(target);
-        result.ok = true;
-    } catch (const std::exception& e) {
-        result.error = std::string("Unable to parse playback info: ") + e.what();
+    auto offerResult = parsePlaybackInfoOffer(response.body, audioStreamIndex, subtitleStreamIndex);
+    if (!offerResult.ok) {
+        result.error = std::move(offerResult.error);
+        return result;
     }
+    auto& offer = offerResult.value;
+    PlaybackTarget target;
+    target.playSessionId = std::move(offer.playSessionId);
+    target.mediaSourceId = std::move(offer.mediaSourceId);
+    target.audioStreamIndex = offer.audioStreamIndex;
+    target.subtitleStreamIndex = offer.subtitleStreamIndex;
+    target.startTicks = item.positionTicks;
+    if (!offer.subtitleDeliveryUrl.empty()) {
+        if (offer.subtitleDeliveryUrl.rfind("http://", 0) != 0 && offer.subtitleDeliveryUrl.rfind("https://", 0) != 0) {
+            if (offer.subtitleDeliveryUrl.front() != '/') offer.subtitleDeliveryUrl.insert(offer.subtitleDeliveryUrl.begin(), '/');
+            offer.subtitleDeliveryUrl = session.server + offer.subtitleDeliveryUrl;
+        }
+        target.subtitleUrl = std::move(offer.subtitleDeliveryUrl);
+    }
+
+    const PlaybackServerRoute route = choosePlaybackServerRoute(
+        {
+            .supportsDirectPlay = offer.supportsDirectPlay,
+            .supportsDirectStream = offer.supportsDirectStream,
+            .supportsTranscoding = offer.supportsTranscoding,
+            .transcodingUrl = offer.transcodingUrl,
+        },
+        overrides
+    );
+    const std::string container = firstContainer(offer.container.empty() ? item.container : offer.container);
+    if (!offer.transcodingUrl.empty()) {
+        target.fallbackTranscodeUrl = offer.transcodingUrl.rfind("http://", 0) == 0 || offer.transcodingUrl.rfind("https://", 0) == 0
+            ? std::move(offer.transcodingUrl)
+            : session.server + offer.transcodingUrl;
+        target.fallbackTranscodeUrl = addApiKey(std::move(target.fallbackTranscodeUrl), urlEncode(session.token));
+    }
+
+    if (route == PlaybackServerRoute::DirectPlay) {
+        target.url = session.server + "/Videos/" + item.id + "/stream." + container
+            + "?Static=true&MediaSourceId=" + urlEncode(target.mediaSourceId)
+            + "&api_key=" + urlEncode(session.token);
+        target.playMethod = PlaybackMethod::DirectPlay;
+    } else if (route == PlaybackServerRoute::DirectStream || route == PlaybackServerRoute::Transcode) {
+        target.url = target.fallbackTranscodeUrl;
+        target.fallbackTranscodeUrl.clear();
+        target.transcoding = true;
+        target.playMethod = route == PlaybackServerRoute::DirectStream
+            ? PlaybackMethod::DirectStream
+            : PlaybackMethod::Transcode;
+    } else {
+        result.error = "No direct-play, direct-stream or transcode path was offered by Jellyfin";
+        return result;
+    }
+
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kTag,
+        "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d",
+        playbackMethodName(target.playMethod),
+        target.audioStreamIndex,
+        target.subtitleStreamIndex,
+        subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
+        !target.subtitleUrl.empty()
+    );
+    result.value = std::move(target);
+    result.ok = true;
     return result;
 }
 
