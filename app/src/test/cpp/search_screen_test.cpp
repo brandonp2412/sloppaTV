@@ -43,7 +43,12 @@ int main() {
     state.setLoading(true);
     std::vector<JellyfinItem> stale(1);
     assert(!state.finishSearch("bro", std::move(stale)));
+    assert(state.loading());
     assert(state.results().size() == 7);
+    assert(!state.failSearch("bro"));
+    assert(state.loading());
+    assert(state.failSearch("brook"));
+    assert(!state.loading());
 
     assert(state.backspace());
     assert(state.query() == "broo");
