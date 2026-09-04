@@ -23,6 +23,7 @@
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
+#include "playback_continuation.hpp"
 #include "playback_queue.hpp"
 #include "playback_transition.hpp"
 #include "player_screen.hpp"
@@ -1066,7 +1067,7 @@ private:
     }
 
     std::vector<std::string> detailActions() const {
-        return detailsState_.actions(detail_, stillWatchingPrompt_);
+        return detailsState_.actions(detail_, continuationState_.stillWatchingPrompt());
     }
 
     void refreshExternalPlayers() {
@@ -1177,8 +1178,8 @@ private:
 
     void handleDetailsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            stillWatchingPrompt_ = false;
-            autoplayChainCount_ = 0;
+            continuationState_.setStillWatchingPrompt(false);
+            continuationState_.resetAutoplayChain();
             popScreen(Screen::Home);
             return;
         }
@@ -1210,8 +1211,8 @@ private:
             else if (action == "CAST") openCast();
             else if (action == "MORE") openItemMenu();
             else if (action == "BACK") {
-                stillWatchingPrompt_ = false;
-                autoplayChainCount_ = 0;
+                continuationState_.setStillWatchingPrompt(false);
+                continuationState_.resetAutoplayChain();
                 popScreen(Screen::Home);
             }
         }
@@ -2205,17 +2206,14 @@ private:
         }
 
         queueState_.reset();
-        autoplayChainCount_ = 0;
-        stillWatchingPrompt_ = false;
+        continuationState_.reset();
         trackState_.clearLanguagePreferences();
         transitionState_.reset();
-        nextPlaybackItem_.reset();
         externalPlaybackState_.reset();
         activeTarget_ = {};
         activePlaybackItem_ = {};
         activeMediaSegments_.clear();
         mediaSegmentsRequested_ = false;
-        nextEpisodeRequested_ = false;
         playbackStartReported_ = false;
         playbackFallbackAttempted_ = false;
         playerScreenState_.resetSession();
@@ -2957,7 +2955,7 @@ private:
 
     void openDetails(const JellyfinItem& item) {
         pushScreen(Screen::Details);
-        stillWatchingPrompt_ = false;
+        continuationState_.setStillWatchingPrompt(false);
         detail_ = item;
         detailsState_.beginDetails();
         loading_ = true;
@@ -2989,8 +2987,8 @@ private:
 
     void syncNextPlaybackFromQueue() {
         const int next = queueState_.nextIndex(false);
-        if (const auto* item = queueState_.itemAt(next)) nextPlaybackItem_ = *item;
-        else nextPlaybackItem_.reset();
+        if (const auto* item = queueState_.itemAt(next)) continuationState_.setNextItem(*item);
+        else continuationState_.clearNextItem();
     }
 
     void shuffleRemainingQueue() {
@@ -3027,7 +3025,7 @@ private:
         queueState_.closeOverlay();
         loading_ = true;
         transitionState_.setLoading(replacingPlayer);
-        stillWatchingPrompt_ = false;
+        continuationState_.setStillWatchingPrompt(false);
         error_.clear();
         const JellyfinSession session = session_;
         JellyfinItem queued = *queueState_.itemAt(index);
@@ -3124,8 +3122,8 @@ private:
         if (loading_ || detail_.type != "Series" || detail_.id.empty() || !session_.valid()) return;
         loading_ = true;
         error_.clear();
-        autoplayChainCount_ = 0;
-        stillWatchingPrompt_ = false;
+        continuationState_.resetAutoplayChain();
+        continuationState_.setStillWatchingPrompt(false);
         trackState_.clearLanguagePreferences();
         const JellyfinSession session = session_;
         const JellyfinItem series = detail_;
@@ -3232,7 +3230,7 @@ private:
 
     void beginPlayback() {
         if (loading_ || detail_.id.empty()) return;
-        const bool continuingPlaybackChain = stillWatchingPrompt_;
+        const bool continuingPlaybackChain = continuationState_.stillWatchingPrompt();
         const bool continuingQueuedPrompt = continuingPlaybackChain && !queueState_.empty();
         int queuedPlaybackIndex = -1;
         if (!continuingPlaybackChain) trackState_.clearLanguagePreferences();
@@ -3242,8 +3240,8 @@ private:
         } else {
             queueState_.reset();
         }
-        autoplayChainCount_ = 0;
-        stillWatchingPrompt_ = false;
+        continuationState_.resetAutoplayChain();
+        continuationState_.setStillWatchingPrompt(false);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -3321,15 +3319,15 @@ private:
 
     void requestNextEpisodeAsync() {
         if (queueState_.currentIndex() >= 0 && queueState_.currentIndex() < queueState_.size()) {
-            nextEpisodeRequested_ = true;
+            continuationState_.markNextEpisodeRequested();
             syncNextPlaybackFromQueue();
             return;
         }
-        if (nextEpisodeRequested_ || !session_.valid() || activePlaybackItem_.type != "Episode"
-            || activePlaybackItem_.seriesId.empty() || activePlaybackItem_.id.empty()) {
+        if (!session_.valid() || activePlaybackItem_.type != "Episode"
+            || activePlaybackItem_.seriesId.empty() || activePlaybackItem_.id.empty()
+            || !continuationState_.beginNextEpisodeRequest()) {
             return;
         }
-        nextEpisodeRequested_ = true;
         const JellyfinSession session = session_;
         const std::string seriesId = activePlaybackItem_.seriesId;
         const std::string currentItemId = activePlaybackItem_.id;
@@ -3340,7 +3338,7 @@ private:
             JellyfinItem item = detailed.ok ? std::move(detailed.value) : std::move(next.value);
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Player || activePlaybackItem_.id != currentItemId) return;
-            nextPlaybackItem_ = std::move(item);
+            continuationState_.setNextItem(std::move(item));
         });
     }
 
@@ -3370,8 +3368,7 @@ private:
         playerScreenState_.resetPosition();
         lastPlaybackTelemetryRead_ = {};
         lastPlaybackDurationProbe_ = {};
-        nextEpisodeRequested_ = false;
-        nextPlaybackItem_.reset();
+        continuationState_.clearNextEpisode();
         trackState_.resetPlayback();
         mediaSegmentsRequested_ = false;
         activeMediaSegments_.clear();
@@ -3385,11 +3382,11 @@ private:
     void queueAutoplayNext(JellyfinItem nextItem) {
         const int queuedNextIndex = queueState_.autoplayAdvanceIndex(nextItem);
         releaseActivePlayback(true);
-        ++autoplayChainCount_;
+        continuationState_.incrementAutoplayChain();
         loading_ = true;
         transitionState_.setLoading(true);
         detail_ = nextItem;
-        stillWatchingPrompt_ = false;
+        continuationState_.setStillWatchingPrompt(false);
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         const JellyfinSession session = session_;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
@@ -3433,13 +3430,13 @@ private:
 
     void showStillWatching(JellyfinItem nextItem) {
         releaseActivePlayback(true);
-        autoplayChainCount_ = 0;
+        continuationState_.resetAutoplayChain();
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
         detail_ = std::move(nextItem);
         detailsState_.beginDetails();
         popScreen(Screen::Details);
-        stillWatchingPrompt_ = true;
+        continuationState_.setStillWatchingPrompt(true);
         error_.clear();
     }
 
@@ -3688,8 +3685,7 @@ private:
                     );
                     videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
                     if (!streamRestart) {
-                        nextEpisodeRequested_ = false;
-                        nextPlaybackItem_.reset();
+                        continuationState_.clearNextEpisode();
                         syncNextPlaybackFromQueue();
                     }
                     trackState_.resetPlayback();
@@ -3878,7 +3874,7 @@ private:
                 lastProgressReport_ = now;
                 reportProgressAsync(false);
             }
-            if (!nextEpisodeRequested_ && activePlaybackItem_.type == "Episode"
+            if (!continuationState_.nextEpisodeRequested() && activePlaybackItem_.type == "Episode"
                 && playerScreenState_.positionMs() >= 30000) {
                 requestNextEpisodeAsync();
             }
@@ -3888,16 +3884,16 @@ private:
                     const int next = queueState_.nextIndex(false);
                     if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex());
                     else stopPlayback();
-                } else if (nextPlaybackItem_) {
-                    JellyfinItem next = *nextPlaybackItem_;
-                    if (shouldAutoplayNextEpisode(settings_.autoplayNext, autoplayChainCount_, settings_.stillWatchingAfter)) {
+                } else if (continuationState_.nextItem()) {
+                    JellyfinItem next = *continuationState_.nextItem();
+                    if (shouldAutoplayNextEpisode(settings_.autoplayNext, continuationState_.autoplayChainCount(), settings_.stillWatchingAfter)) {
                         queueAutoplayNext(std::move(next));
                     } else {
                         showStillWatching(std::move(next));
                     }
                 } else {
                     stopPlayback();
-                    autoplayChainCount_ = 0;
+                    continuationState_.resetAutoplayChain();
                 }
             }
         }
@@ -5192,7 +5188,7 @@ private:
         const int remainingMs = playerScreenState_.durationMs() > 0
             ? std::max(0, playerScreenState_.durationMs() - playerScreenState_.positionMs())
             : 0;
-        const bool showNextUp = nextPlaybackItem_.has_value() && remainingMs > 0 && remainingMs <= 30000;
+        const bool showNextUp = continuationState_.nextItem().has_value() && remainingMs > 0 && remainingMs <= 30000;
         const auto skipSegment = activeSkippableSegment();
         const bool showOverlay = status == PlayerStatus::Preparing
             || status == PlayerStatus::Paused
@@ -5248,13 +5244,14 @@ private:
             Color{0.0f, 0.0f, 0.0f, 0.0f},
             Color{0.0f, 0.0f, 0.0f, 0.90f});
 
-        if (showNextUp && nextPlaybackItem_) {
+        if (showNextUp && continuationState_.nextItem()) {
+            const auto& nextItem = *continuationState_.nextItem();
             renderer_.roundedRect(1195.0f, 185.0f, 625.0f, 205.0f, 26.0f, Color{0.02f, 0.024f, 0.034f, 0.90f});
-            const bool hasNextArtwork = drawHomeArtwork(*nextPlaybackItem_, 1210.0f, 200.0f, 260.0f, 146.0f);
+            const bool hasNextArtwork = drawHomeArtwork(nextItem, 1210.0f, 200.0f, 260.0f, 146.0f);
             const float textX = hasNextArtwork ? 1500.0f : 1230.0f;
             renderer_.text(textX, 205.0f, 1.65f, "NEXT UP  |  " + std::to_string(std::max(0, remainingMs / 1000)) + "S", kFocus, 285.0f);
-            renderer_.text(textX, 250.0f, 2.15f, nextPlaybackItem_->name, kText, 285.0f);
-            const std::string nextLabel = episodeLabel(*nextPlaybackItem_);
+            renderer_.text(textX, 250.0f, 2.15f, nextItem.name, kText, 285.0f);
+            const std::string nextLabel = episodeLabel(nextItem);
             if (!nextLabel.empty()) renderer_.text(textX, 315.0f, 1.5f, nextLabel, kMuted, 285.0f);
         }
 
@@ -5730,7 +5727,7 @@ private:
             renderer_.text(1710.0f, 50.0f, 2.10f, clock.str(), kMuted, 140.0f);
         }
 
-        if (stillWatchingPrompt_) {
+        if (continuationState_.stillWatchingPrompt()) {
             renderer_.roundedRect(1110.0f, 54.0f, 580.0f, 54.0f, 20.0f, Color{0.12f, 0.08f, 0.18f, 0.90f});
             renderer_.textCentered(1110.0f, 54.0f, 580.0f, 54.0f, 1.95f, "STILL WATCHING?  OK TO CONTINUE", kText);
         }
@@ -5964,11 +5961,9 @@ private:
     PlaybackTransitionState transitionState_;
     PlaybackTarget activeTarget_;
     JellyfinItem activePlaybackItem_;
-    std::optional<JellyfinItem> nextPlaybackItem_;
+    PlaybackContinuationState continuationState_;
     std::vector<JellyfinMediaSegment> activeMediaSegments_;
     bool mediaSegmentsRequested_ = false;
-    bool nextEpisodeRequested_ = false;
-    int autoplayChainCount_ = 0;
     bool playbackStartReported_ = false;
     bool playbackFallbackAttempted_ = false;
     VideoZoomMode videoZoomMode_ = VideoZoomMode::Fit;
@@ -5981,7 +5976,6 @@ private:
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;
-    bool stillWatchingPrompt_ = false;
     std::string lastPlaybackSummary_;
 };
 }  // namespace
