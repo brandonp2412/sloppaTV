@@ -301,7 +301,7 @@ required for TV hardware, Android TV integration, and final performance work.
   10/3/3 performance checkpoint measured 242.5 ms median cold launch, 39,968 KB PSS, 0.0% idle CPU and 16.67/16.72 ms
   navigation median/p95 with 0.8% intervals over 20 ms, effectively unchanged from the immediately preceding
   240.0 ms, 39,725 KB, 0.0%, 16.67/16.71 ms and 0.8% checkpoint.
-  `main.cpp` is now 6,525 lines, down from 7,194 before the architecture pass despite adding explicit request ownership.
+  `main.cpp` is now 6,495 lines, down from 7,194 before the architecture pass despite adding explicit request ownership.
 - 2026-09-04: Jellyfin playback negotiation now delegates device/video/audio/subtitle capability planning, direct-request
   flags, and server-route classification to the host-testable `playback_profile.hpp` instead of embedding those decisions
   inside the HTTP method. Tests cover codec level/profile/resolution/HDR rejection, audio-route limits, client-vs-server
@@ -320,6 +320,14 @@ required for TV hardware, Android TV integration, and final performance work.
   finding. A matching 10/3/3 optimized-device checkpoint measured 237.5 ms median cold launch, 39,543 KB PSS, 0.0% idle
   CPU, and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms, effectively flat or improved versus the
   immediately preceding 242.5 ms, 39,968 KB, 0.0%, 16.67/16.72 ms and 0.8% checkpoint.
+- 2026-09-04: Search query/results/selection, fallback-keyboard state, loading, and live-search debounce now belong to
+  `SearchScreenState` instead of seven unrelated `SloppaApp` fields. Host tests cover debounce timing/cancellation,
+  stale-result rejection, query editing, result replacement and grid navigation. The full host suite and optimized Release
+  build pass. Physical streamer acceptance verified ACTION_SEARCH for `brooklyn`, then live editing through the Android TV
+  text input to `fallout`, with the result grid updating to the new query and no fatal/native-signal/ANR finding. A matching
+  10/3/3 checkpoint measured 237.0 ms median cold launch, 39,399 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation
+  median/p95 with 0.8% intervals over 20 ms, unchanged or slightly improved from the preceding Browse checkpoint. Media
+  volume was restored to 15/15 and the streamer returned to sleep.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

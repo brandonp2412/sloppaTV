@@ -22,6 +22,7 @@
 #include "playback_queue.hpp"
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
+#include "search_screen.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
 #include "ui_policy.hpp"
@@ -451,9 +452,9 @@ public:
                         timeoutMs = static_cast<int>(std::clamp<int64_t>(delayMs - idleMs, 0, delayMs));
                     }
                 }
-                if (searchDebouncePending_) {
+                if (searchState_.debouncePending()) {
                     const int64_t searchDelayMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        searchDebounceDeadline_ - pollNow
+                        searchState_.debounceDeadline() - pollNow
                     ).count();
                     const int searchTimeoutMs = static_cast<int>(std::max<int64_t>(0, searchDelayMs));
                     timeoutMs = timeoutMs < 0 ? searchTimeoutMs : std::min(timeoutMs, searchTimeoutMs);
@@ -507,8 +508,8 @@ public:
         std::scoped_lock lock(stateMutex_);
         const std::string text = value.substr(0, 160);
         if (mode == kTextInputSearch) {
-            searchQuery_ = text;
-            searchKeyboard_ = false;
+            searchState_.setQuery(text);
+            searchState_.setKeyboard(false);
             scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
@@ -525,8 +526,8 @@ public:
         const std::string text = value.substr(0, 160);
         systemTextInputMode_ = -1;
         if (mode == kTextInputSearch) {
-            searchQuery_ = text;
-            searchKeyboard_ = false;
+            searchState_.setQuery(text);
+            searchState_.setKeyboard(false);
             scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
@@ -542,10 +543,9 @@ public:
         const std::string text = value.substr(0, 160);
         systemTextInputMode_ = -1;
         if (mode == kTextInputSearch) {
-            searchQuery_ = text;
-            searchKeyboard_ = false;
-            searchSelection_ = 0;
-            searchDebouncePending_ = false;
+            searchState_.setQuery(text);
+            searchState_.setKeyboard(false);
+            searchState_.cancelPending();
             searchAsync();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
@@ -760,7 +760,7 @@ private:
             return true;
         }
         if (screen_ == Screen::Search) {
-            searchQuery_.push_back(c);
+            searchState_.append(c);
             scheduleLiveSearch();
             return true;
         }
@@ -773,8 +773,7 @@ private:
             if (!value.empty()) value.pop_back();
             return true;
         }
-        if (screen_ == Screen::Search && !searchQuery_.empty()) {
-            searchQuery_.pop_back();
+        if (screen_ == Screen::Search && searchState_.backspace()) {
             scheduleLiveSearch();
             return true;
         }
@@ -783,30 +782,22 @@ private:
 
     void scheduleLiveSearch() {
         requestEpochs_.search.invalidate();
-        searchSelection_ = 0;
-        if (searchQuery_.empty()) {
-            searchDebouncePending_ = false;
-            searchLoading_ = false;
-            searchResults_.clear();
+        if (!searchState_.scheduleDebounce(std::chrono::steady_clock::now())) {
             error_.clear();
             return;
         }
-        searchDebouncePending_ = true;
-        searchDebounceDeadline_ = std::chrono::steady_clock::now() + 180ms;
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     void runDueLiveSearch() {
         std::scoped_lock lock(stateMutex_);
-        if (!searchDebouncePending_) return;
+        if (!searchState_.debouncePending()) return;
         if (screen_ != Screen::Search) {
-            searchDebouncePending_ = false;
-            searchLoading_ = false;
+            searchState_.cancelPending();
             requestEpochs_.search.invalidate();
             return;
         }
-        if (std::chrono::steady_clock::now() < searchDebounceDeadline_) return;
-        searchDebouncePending_ = false;
+        if (!searchState_.debounceDue(std::chrono::steady_clock::now())) return;
         searchAsync();
     }
 
@@ -874,32 +865,30 @@ private:
     void activateKeyboardKey(bool forSearch) {
         const auto& rows = keyboardRows();
         const auto& key = rows[static_cast<size_t>(keyboardRow_)][static_cast<size_t>(keyboardCol_)];
-        std::string* target = nullptr;
         if (forSearch) {
-            target = &searchQuery_;
-        } else if (loginField_ >= 0 && loginField_ < 3) {
-            target = &loginFields_[static_cast<size_t>(loginField_)];
-        }
-        if (!target) return;
-
-        switch (key.action) {
-            case KeyAction::Insert:
-                *target += key.value;
-                if (forSearch) scheduleLiveSearch();
-                break;
-            case KeyAction::Backspace:
-                if (!target->empty()) target->pop_back();
-                if (forSearch) scheduleLiveSearch();
-                break;
-            case KeyAction::Done:
-                if (forSearch) {
-                    searchKeyboard_ = false;
-                    searchSelection_ = 0;
+            switch (key.action) {
+                case KeyAction::Insert:
+                    for (char value : key.value) searchState_.append(value);
+                    scheduleLiveSearch();
+                    break;
+                case KeyAction::Backspace:
+                    if (searchState_.backspace()) scheduleLiveSearch();
+                    break;
+                case KeyAction::Done:
+                    searchState_.setKeyboard(false);
                     searchAsync();
-                } else {
-                    loginKeyboard_ = false;
-                }
+                    break;
+            }
+            return;
+        }
+        if (loginField_ < 0 || loginField_ >= 3) return;
+        auto& target = loginFields_[static_cast<size_t>(loginField_)];
+        switch (key.action) {
+            case KeyAction::Insert: target += key.value; break;
+            case KeyAction::Backspace:
+                if (!target.empty()) target.pop_back();
                 break;
+            case KeyAction::Done: loginKeyboard_ = false; break;
         }
     }
 
@@ -1150,11 +1139,10 @@ private:
 
     void handleSearchKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            if (searchKeyboard_) {
-                searchKeyboard_ = false;
+            if (searchState_.keyboard()) {
+                searchState_.setKeyboard(false);
             } else {
-                searchDebouncePending_ = false;
-                searchLoading_ = false;
+                searchState_.cancelPending();
                 requestEpochs_.search.invalidate();
                 hideSystemTextInput();
                 popScreen(Screen::Home);
@@ -1165,10 +1153,9 @@ private:
             }
             return;
         }
-        if (searchKeyboard_) {
+        if (searchState_.keyboard()) {
             if (key == AKEYCODE_ENTER) {
-                searchKeyboard_ = false;
-                searchSelection_ = 0;
+                searchState_.setKeyboard(false);
                 searchAsync();
             } else if (key == AKEYCODE_DPAD_LEFT) moveKeyboard(-1, 0);
             else if (key == AKEYCODE_DPAD_RIGHT) moveKeyboard(1, 0);
@@ -1178,32 +1165,28 @@ private:
             return;
         }
 
+        const auto& results = searchState_.results();
         if (key == AKEYCODE_SEARCH
-            || (key == AKEYCODE_DPAD_UP && (searchResults_.empty() || isTopMediaGridSelection(searchSelection_)))
-            || ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && searchResults_.empty())) {
-            searchKeyboard_ = !showSystemTextInput(searchQuery_, "Search Jellyfin", kTextInputSearch);
-            if (searchKeyboard_) keyboardRow_ = keyboardCol_ = 0;
+            || (key == AKEYCODE_DPAD_UP && (results.empty() || isTopMediaGridSelection(searchState_.selection())))
+            || ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && results.empty())) {
+            searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin", kTextInputSearch));
+            if (searchState_.keyboard()) keyboardRow_ = keyboardCol_ = 0;
             return;
         }
-        if (searchResults_.empty()) return;
+        if (results.empty()) return;
         if (isItemContextKey(key)) {
-            openItemMenuForItem(searchResults_[static_cast<size_t>(searchSelection_)]);
+            openItemMenuForItem(results[static_cast<size_t>(searchState_.selection())]);
+            return;
+        }
+        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            openDetails(results[static_cast<size_t>(searchState_.selection())]);
             return;
         }
         constexpr int columns = mediaGridColumns();
-        const int rows = static_cast<int>((searchResults_.size() + columns - 1) / columns);
-        int row = searchSelection_ / columns;
-        int col = searchSelection_ % columns;
-        if (key == AKEYCODE_DPAD_LEFT) col = std::max(0, col - 1);
-        else if (key == AKEYCODE_DPAD_RIGHT) col = std::min(columns - 1, col + 1);
-        else if (key == AKEYCODE_DPAD_UP) row = std::max(0, row - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) row = std::min(rows - 1, row + 1);
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            openDetails(searchResults_[static_cast<size_t>(searchSelection_)]);
-            return;
-        }
-        const int next = row * columns + col;
-        if (next >= 0 && next < static_cast<int>(searchResults_.size())) searchSelection_ = next;
+        if (key == AKEYCODE_DPAD_LEFT) searchState_.moveSelection(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT) searchState_.moveSelection(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP) searchState_.moveSelection(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN) searchState_.moveSelection(0, 1, columns);
     }
 
     std::vector<std::string> detailActions() const {
@@ -2486,10 +2469,7 @@ private:
         homeState_.reset();
         librarySelection_ = 0;
         browseState_.clear();
-        searchQuery_.clear();
-        searchResults_.clear();
-        searchSelection_ = 0;
-        searchKeyboard_ = true;
+        searchState_.reset();
         detail_ = {};
         detailsButton_ = 0;
         itemMenuSelection_ = 0;
@@ -2788,7 +2768,7 @@ private:
         };
         for (auto& row : home_.rows) for (auto& item : row.items) apply(item);
         for (auto& item : browseState_.items()) apply(item);
-        for (auto& item : searchResults_) apply(item);
+        for (auto& item : searchState_.results()) apply(item);
         for (auto& item : detailsSimilar_) apply(item);
         for (auto& item : seasonItems_) apply(item);
         for (auto& item : episodeItems_) apply(item);
@@ -2870,7 +2850,7 @@ private:
         };
         for (auto& row : home_.rows) remove(row.items);
         browseState_.removeItem(itemId);
-        remove(searchResults_);
+        remove(searchState_.results());
         remove(detailsSimilar_);
         remove(seasonItems_);
         remove(episodeItems_);
@@ -2929,7 +2909,7 @@ private:
 
     void openSearch() {
         pushScreen(Screen::Search);
-        searchKeyboard_ = !showSystemTextInput(searchQuery_, "Search Jellyfin", kTextInputSearch);
+        searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin", kTextInputSearch));
         keyboardRow_ = keyboardCol_ = 0;
         error_.clear();
     }
@@ -3122,7 +3102,7 @@ private:
                     requestEpochs_.invalidateAll();
                     loading_ = false;
                     mutationLoading_ = false;
-                    searchLoading_ = false;
+                    searchState_.setLoading(false);
                     session_.token.clear();
                     session_.userId.clear();
                     resetNavigation(Screen::Login);
@@ -3172,9 +3152,9 @@ private:
                     return;
                 }
                 if (!pendingSearchQuery_.empty()) {
-                    searchQuery_ = std::move(pendingSearchQuery_);
+                    searchState_.setQuery(std::move(pendingSearchQuery_));
                     pendingSearchQuery_.clear();
-                    searchKeyboard_ = false;
+                    searchState_.setKeyboard(false);
                     pushScreen(Screen::Search);
                     __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_SEARCH query");
                     searchAsync();
@@ -3229,29 +3209,24 @@ private:
     }
 
     void searchAsync() {
-        if (!session_.valid()) return;
+        if (!session_.valid() || !searchState_.beginSearch()) return;
         const JellyfinSession session = session_;
-        const std::string query = searchQuery_;
-        if (query.empty()) {
-            searchLoading_ = false;
-            searchResults_.clear();
-            return;
-        }
-        searchLoading_ = true;
+        const std::string query = searchState_.query();
         error_.clear();
         const uint64_t generation = requestEpochs_.search.begin();
         tasks_.submit([this, session, query, generation] {
             auto result = api_.search(session, query);
             std::scoped_lock lock(stateMutex_);
             if (!requestEpochs_.search.active(generation)) return;
-            searchLoading_ = false;
-            if (screen_ != Screen::Search || searchQuery_ != query) return;
-            if (!result.ok) {
-                error_ = result.error;
+            if (screen_ != Screen::Search) {
+                searchState_.setLoading(false);
                 return;
             }
-            searchResults_ = std::move(result.value);
-            searchSelection_ = 0;
+            if (!result.ok) {
+                if (searchState_.failSearch(query)) error_ = result.error;
+                return;
+            }
+            if (!searchState_.finishSearch(query, std::move(result.value))) return;
             error_.clear();
         });
     }
@@ -3874,9 +3849,8 @@ private:
             __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_VIEW Jellyfin item %s", linked.id.c_str());
             openDetails(linked);
         } else if (!request.searchQuery.empty()) {
-            searchQuery_ = request.searchQuery;
-            searchKeyboard_ = false;
-            searchSelection_ = 0;
+            searchState_.setQuery(request.searchQuery);
+            searchState_.setKeyboard(false);
             pushScreen(Screen::Search);
             __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_SEARCH query");
             searchAsync();
@@ -5471,27 +5445,29 @@ private:
     }
 
     void renderSearch() {
+        const auto& results = searchState_.results();
+        const auto& query = searchState_.query();
         renderer_.text(72.0f, 58.0f, 4.0f, "SEARCH", kText, 520.0f);
         constexpr float searchTop = 145.0f;
         constexpr float searchWidth = 1450.0f;
         renderer_.roundedRect(72.0f, searchTop, searchWidth, 68.0f, 22.0f, Color{0.035f, 0.04f, 0.052f, 0.90f});
-        if (!searchKeyboard_ && searchResults_.empty()) {
+        if (!searchState_.keyboard() && results.empty()) {
             renderer_.roundedOutline(70.0f, searchTop - 2.0f, searchWidth + 4.0f, 72.0f, 24.0f, 2.5f, kFocus);
         }
         renderer_.textVerticallyCentered(106.0f, searchTop, 68.0f, 2.15f,
-            searchQuery_.empty() ? "Movies, shows and episodes" : searchQuery_,
-            searchQuery_.empty() ? kMuted : kText, searchWidth - 68.0f);
+            query.empty() ? "Movies, shows and episodes" : query,
+            query.empty() ? kMuted : kText, searchWidth - 68.0f);
         renderer_.text(1575.0f, searchTop + 22.0f, 1.45f,
-            searchKeyboard_ ? "FALLBACK KEYS" : "OK TO TYPE", searchKeyboard_ ? kFocus : kSecondaryText, 250.0f);
+            searchState_.keyboard() ? "FALLBACK KEYS" : "OK TO TYPE", searchState_.keyboard() ? kFocus : kSecondaryText, 250.0f);
 
-        if (searchKeyboard_) {
+        if (searchState_.keyboard()) {
             renderKeyboard(270.0f);
             renderer_.text(650.0f, 900.0f, 1.38f, "DONE RUNS SEARCH   |   BACK CLOSES KEYS", kMuted, 680.0f);
             return;
         }
 
-        if (searchResults_.empty()) {
-            renderer_.text(72.0f, 300.0f, 2.15f, searchLoading_ ? "SEARCHING..." : "TYPE A TITLE, ACTOR OR EPISODE", kSecondaryText, 780.0f);
+        if (results.empty()) {
+            renderer_.text(72.0f, 300.0f, 2.15f, searchState_.loading() ? "SEARCHING..." : "TYPE A TITLE, ACTOR OR EPISODE", kSecondaryText, 780.0f);
             renderer_.text(72.0f, 350.0f, 1.45f, "Use the TV keyboard or press SEARCH from anywhere in sloppaTV.", kMuted, 900.0f);
             return;
         }
@@ -5502,9 +5478,9 @@ private:
         constexpr float xGap = 32.0f;
         auto rowHasPortrait = [&](int row) {
             const int begin = row * columns;
-            const int end = std::min(begin + columns, static_cast<int>(searchResults_.size()));
+            const int end = std::min(begin + columns, static_cast<int>(results.size()));
             for (int index = begin; index < end; ++index) {
-                const auto& item = searchResults_[static_cast<size_t>(index)];
+                const auto& item = results[static_cast<size_t>(index)];
                 const bool seriesCoverForEpisode = item.type == "Episode"
                     && !item.seriesId.empty()
                     && !item.seriesPrimaryImageTag.empty();
@@ -5512,20 +5488,20 @@ private:
             }
             return false;
         };
-        const int selectedRow = searchSelection_ / columns;
+        const int selectedRow = searchState_.selection() / columns;
         const int firstRow = selectedRow > 0 && rowHasPortrait(selectedRow) ? selectedRow : std::max(0, selectedRow - 1);
         float y = 315.0f;
         for (int visibleRow = 0, absoluteRow = firstRow; visibleRow < 2; ++visibleRow, ++absoluteRow) {
             const int begin = absoluteRow * columns;
-            if (begin >= static_cast<int>(searchResults_.size())) break;
+            if (begin >= static_cast<int>(results.size())) break;
             const bool portraitRow = rowHasPortrait(absoluteRow);
             const float rowHeight = searchMediaRowHeight(portraitRow);
             if (visibleRow > 0 && y + rowHeight > 1060.0f) break;
-            const int end = std::min(begin + columns, static_cast<int>(searchResults_.size()));
+            const int end = std::min(begin + columns, static_cast<int>(results.size()));
             for (int index = begin; index < end; ++index) {
                 const int col = index % columns;
                 const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-                renderMediaArtworkCard(searchResults_[static_cast<size_t>(index)], x, y, slotWidth, index == searchSelection_, true, true);
+                renderMediaArtworkCard(results[static_cast<size_t>(index)], x, y, slotWidth, index == searchState_.selection(), true, true);
             }
             y += rowHeight;
         }
@@ -6354,13 +6330,7 @@ private:
     std::string quickConnectCode_;
     std::string discoveryStatus_;
 
-    std::string searchQuery_;
-    std::vector<JellyfinItem> searchResults_;
-    int searchSelection_ = 0;
-    bool searchKeyboard_ = true;
-    bool searchLoading_ = false;
-    bool searchDebouncePending_ = false;
-    std::chrono::steady_clock::time_point searchDebounceDeadline_{};
+    SearchScreenState searchState_;
 
     int keyboardRow_ = 0;
     int keyboardCol_ = 0;
