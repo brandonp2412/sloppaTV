@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 88 / 139 verified (63.3%); 51 partial; none unbuilt.
+Status at 2026-09-04: 98 / 139 verified (70.5%); 41 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -48,7 +48,7 @@ required for TV hardware, Android TV integration, and final performance work.
 ### Accounts, navigation, and browsing
 
 - [~] Quick Connect TV UI; LAN discovery; profile, user, and server switching.
-- [~] Navigation regression; server version edge cases; mixed/folder browsing.
+- [~] Navigation regression and server-version edge cases remain; Movies/Shows/Mixed/folder browsing is physically verified.
 - [x] Seasons, nested folders, populated favorites, direct item-options keys.
 - [x] Delete and refresh permissions plus server-side mutation completion.
 
@@ -56,7 +56,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 - [~] Target-TV codec, HDR, audio-route, and long-soak matrix; physical 23.976 Hz refresh-rate switching is verified.
 - [x] Playback reports have automated Jellyfin session-state assertions.
-- [~] Subtitle appearance/position and dedicated ASS visual pass remain; Trickplay thumbnail rendering is physically verified.
+- [~] Subtitle appearance/position and dedicated ASS visual pass remain; physical ASS selection currently initializes libass but fails to render cue pixels, while Trickplay thumbnail rendering is physically verified.
 - [x] HDR fixture/HDR-preserving server-stream path and generated Trickplay tile rendering are verified on the Google TV Streamer.
 - [x] External-player discovery, selection, silent playback handoff, and return are verified on the Google TV Streamer.
 - [~] Voice search needs a real microphone/recognizer invocation.
@@ -65,8 +65,8 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Settings, resilience, and release
 
-- [~] Buffer presets, audio mode, display preferences, and user switching E2E.
-- [~] Wake/retry, lifecycle, crash/ANR, and memory long-soak coverage.
+- [~] Buffer presets, audio mode, display preferences, and user switching E2E; watched-indicator, clock, backdrop, zoom, and refresh-rate display preferences are physically verified and restored.
+- [~] Wake/retry remains outstanding; lifecycle, repeated player teardown, crash/ANR auditing, and memory soak coverage are physically verified.
 - [~] Production signing, reproducibility, and stable CI artifact signing.
 
 ## Acceptance policy
@@ -133,6 +133,22 @@ required for TV hardware, Android TV integration, and final performance work.
   3840x2160 output from 60.000004 Hz to 23.976 Hz; leaving playback logged a successful preference
   clear and restored 60 Hz. The Google TV preference and sloppaTV's own matching setting were both
   restored to their original disabled state afterward, and the fixture was removed.
+- 2026-09-04: a batched physical-TV acceptance pass closed ten previously-partial subitems. A disposable
+  Mixed library containing two video-only movies opened from the real Home `MY MEDIA` row and rendered a
+  populated native grid, completing Mixed/folder browse acceptance. Watched indicators were toggled OFF/ON
+  against a played disposable item and visibly disappeared/reappeared; Clock was toggled OFF/ON on Home;
+  Backdrops were exercised as OFF and CLEAR on Hell's Paradise Details and restored to BLURRED. The native
+  player visibly exposes only the intended PAUSE/AUDIO/SUBTITLES control set. Existing physical metadata-refresh
+  acceptance supplies the native notice/banner visual pass. A 20-cycle silent player enter/exit stress produced
+  no app fatal exception, native signal, or ANR; together with the prior 31-sample 15-minute soak this closes the
+  dedicated teardown/crash and memory-profile acceptance subitems. All changed settings were restored and all
+  disposable libraries/files were removed afterward.
+- 2026-09-04: a dedicated physical ASS regression fixture isolated a remaining subtitle bug without audio or
+  user-library mutation. Media3 selects the exact embedded English ASS stream and libass creates its track/render,
+  receives 1920x1080 geometry, and resolves a fallback font, but no subtitle pixels appear during known fresh cues.
+  Experimental geometry/time-forwarding patches did not pass visual acceptance, were reverted, and the streamer
+  was reinstalled in place with the clean pushed production-signed build. The subtitle visual row therefore remains
+  partial rather than accepting initialization logs as rendered-subtitle evidence.
 - 2026-09-04: production-signed caracal branding is visually accepted on the Google TV launcher: the
   installed `sloppaTV` tile renders the caracal artwork, app name, and Jellyfin-for-TV subtitle after
   an in-place update with the matching production key.
