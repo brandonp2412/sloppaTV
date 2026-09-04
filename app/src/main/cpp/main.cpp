@@ -64,7 +64,6 @@
 #include <sstream>
 #include <string>
 #include <thread>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -2692,27 +2691,16 @@ private:
         if (!session.valid()) return;
         requestServerInfoNoticeAsync();
 
-        bool navFocused = false;
-        std::string focusedRowTitle;
-        std::unordered_map<std::string, std::string> selectedItemByRow;
+        HomeSelectionSnapshot homeSnapshot;
         {
             std::scoped_lock lock(stateMutex_);
-            navFocused = homeState_.row() < 0;
-            if (!navFocused && homeState_.row() < static_cast<int>(home_.rows.size())) {
-                focusedRowTitle = home_.rows[static_cast<size_t>(homeState_.row())].title;
-            }
-            for (size_t row = 0; row < home_.rows.size() && row < homeState_.selectionCount(); ++row) {
-                const auto& items = home_.rows[row].items;
-                if (items.empty()) continue;
-                const int selected = homeState_.selection(static_cast<int>(row), static_cast<int>(items.size()));
-                selectedItemByRow[home_.rows[row].title] = items[static_cast<size_t>(selected)].id;
-            }
+            homeSnapshot = homeState_.snapshot(home_.rows);
             homeLoading_ = true;
         }
 
         const uint64_t generation = requestEpochs_.home.begin();
         const auto homeLoadStarted = std::chrono::steady_clock::now();
-        tasks_.submit([this, session, generation, navFocused, focusedRowTitle, selectedItemByRow = std::move(selectedItemByRow), homeLoadStarted] {
+        tasks_.submit([this, session, generation, homeSnapshot = std::move(homeSnapshot), homeLoadStarted] {
             auto core = api_.loadHomeCore(session);
             if (!requestEpochs_.home.active(generation)) return;
             if (!core.ok) {
@@ -2739,25 +2727,14 @@ private:
 
             filterHiddenHomeItems(core.value);
             std::vector<JellyfinItem> views = core.value.views;
-            int coreRestoredRow = navFocused ? -1 : 0;
+            HomeRestorePlan coreRestore = HomeScreenState::restorePlan(homeSnapshot, core.value.rows);
+            const int coreRestoredRow = coreRestore.focusedRow;
             {
                 std::scoped_lock lock(stateMutex_);
-                std::vector<int> restoredSelections(core.value.rows.size(), 0);
-                for (size_t row = 0; row < core.value.rows.size(); ++row) {
-                    const auto& section = core.value.rows[row];
-                    if (!navFocused && section.title == focusedRowTitle) coreRestoredRow = static_cast<int>(row);
-                    const auto saved = selectedItemByRow.find(section.title);
-                    if (saved == selectedItemByRow.end()) continue;
-                    const auto item = std::find_if(section.items.begin(), section.items.end(), [&](const JellyfinItem& candidate) {
-                        return candidate.id == saved->second;
-                    });
-                    if (item != section.items.end()) restoredSelections[row] = static_cast<int>(std::distance(section.items.begin(), item));
-                }
-
                 homeLoading_ = false;
                 home_ = std::move(core.value);
-                homeState_.setSelections(std::move(restoredSelections));
-                homeState_.setRow(home_.rows.empty() ? -1 : std::clamp(coreRestoredRow, -1, static_cast<int>(home_.rows.size()) - 1));
+                homeState_.setSelections(std::move(coreRestore.selections));
+                homeState_.setRow(coreRestoredRow);
                 homeState_.updateViewport(static_cast<int>(home_.rows.size()));
                 if (screen_ == Screen::Home) error_ = home_.warning;
                 if (homeState_.row() >= 0) {
@@ -2785,7 +2762,7 @@ private:
                 }
             }
 
-            tasks_.submit([this, session, generation, views = std::move(views), navFocused, focusedRowTitle, selectedItemByRow, coreRestoredRow, homeLoadStarted] {
+            tasks_.submit([this, session, generation, views = std::move(views), homeSnapshot, coreRestoredRow, homeLoadStarted] {
                 auto secondary = api_.loadHomeSecondary(session, views);
                 if (!requestEpochs_.home.active(generation)) return;
                 std::scoped_lock lock(stateMutex_);
@@ -2799,16 +2776,9 @@ private:
                 filterHiddenHomeItems(secondary.value);
                 const size_t baseRowCount = home_.rows.size();
                 for (auto& section : secondary.value.rows) {
-                    int restoredSelection = 0;
-                    const auto saved = selectedItemByRow.find(section.title);
-                    if (saved != selectedItemByRow.end()) {
-                        const auto item = std::find_if(section.items.begin(), section.items.end(), [&](const JellyfinItem& candidate) {
-                            return candidate.id == saved->second;
-                        });
-                        if (item != section.items.end()) restoredSelection = static_cast<int>(std::distance(section.items.begin(), item));
-                    }
-                    const bool focusAppended = !navFocused
-                        && section.title == focusedRowTitle
+                    const int restoredSelection = HomeScreenState::restoredSelection(homeSnapshot, section);
+                    const bool focusAppended = !homeSnapshot.toolbarFocused
+                        && section.title == homeSnapshot.focusedRowTitle
                         && homeState_.row() == coreRestoredRow;
                     home_.rows.push_back(std::move(section));
                     homeState_.appendSelection(restoredSelection);

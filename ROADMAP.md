@@ -501,6 +501,15 @@ required for TV hardware, Android TV integration, and final performance work.
   paused cleanly and restored the saved position exactly to 3:51 with no fatal/native-signal/ANR or playback-report failure. The
   matching 10/3/3 checkpoint measured 241.0 ms median cold launch, 39,371 KB PSS, 0.0% idle CPU and 16.67/16.74 ms navigation
   median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 5,724 lines versus 7,194 before the architecture pass.
+- 2026-09-05: Home refresh selection capture/restoration now lives in `HomeScreenState` instead of a large `loadHomeAsync()` block
+  that manually rebuilt row-title/item-ID maps and recomputed focused rows in `SloppaApp`. `HomeSelectionSnapshot` captures the
+  current focus/selection identity and produces a restore plan for refreshed rows, with dedicated host coverage for reordered rows
+  and item positions. The full host suite and optimized Release build pass. Physical streamer acceptance selected the second
+  Continue Watching card (`Pilot`), opened a different episode through ACTION_VIEW, exercised real DirectPlay and the stop-triggered
+  Home refresh, restored playback exactly to 3:51, and returned to Home with `Pilot` still focused after the refreshed rows landed;
+  no fatal/native-signal/ANR or playback-report failure was observed. The matching checkpoint measured 243.5 ms median cold launch,
+  39,325 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 5,694 lines
+  versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

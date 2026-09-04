@@ -1,7 +1,10 @@
 #pragma once
 
+#include "jellyfin_types.hpp"
+
 #include <algorithm>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 enum class ArtworkKind {
@@ -15,6 +18,17 @@ struct ArtworkReference {
     std::string itemId;
     std::string tag;
     ArtworkKind kind = ArtworkKind::None;
+};
+
+struct HomeSelectionSnapshot {
+    bool toolbarFocused = false;
+    std::string focusedRowTitle;
+    std::unordered_map<std::string, std::string> selectedItemByRow;
+};
+
+struct HomeRestorePlan {
+    int focusedRow = -1;
+    std::vector<int> selections;
 };
 
 constexpr int homeFirstVisibleRow(int currentFirst, int focusedRow, int totalRows, int visibleRows = 2) {
@@ -107,6 +121,51 @@ public:
         for (size_t row = 0; row < count; ++row) {
             selections_[row] = itemCounts[row] <= 0 ? 0 : std::clamp(selections_[row], 0, itemCounts[row] - 1);
         }
+    }
+
+    [[nodiscard]] HomeSelectionSnapshot snapshot(const std::vector<JellyfinHomeRow>& rows) const {
+        HomeSelectionSnapshot result;
+        result.toolbarFocused = row_ < 0;
+        if (!result.toolbarFocused && row_ < static_cast<int>(rows.size())) {
+            result.focusedRowTitle = rows[static_cast<size_t>(row_)].title;
+        }
+        for (size_t row = 0; row < rows.size() && row < selections_.size(); ++row) {
+            const auto& items = rows[row].items;
+            if (items.empty()) continue;
+            const int selected = selection(static_cast<int>(row), static_cast<int>(items.size()));
+            result.selectedItemByRow[rows[row].title] = items[static_cast<size_t>(selected)].id;
+        }
+        return result;
+    }
+
+    [[nodiscard]] static int restoredSelection(
+        const HomeSelectionSnapshot& snapshot,
+        const JellyfinHomeRow& row
+    ) {
+        const auto saved = snapshot.selectedItemByRow.find(row.title);
+        if (saved == snapshot.selectedItemByRow.end()) return 0;
+        const auto item = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& candidate) {
+            return candidate.id == saved->second;
+        });
+        return item == row.items.end() ? 0 : static_cast<int>(std::distance(row.items.begin(), item));
+    }
+
+    [[nodiscard]] static HomeRestorePlan restorePlan(
+        const HomeSelectionSnapshot& snapshot,
+        const std::vector<JellyfinHomeRow>& rows
+    ) {
+        HomeRestorePlan plan;
+        plan.focusedRow = snapshot.toolbarFocused ? -1 : 0;
+        plan.selections.reserve(rows.size());
+        for (size_t index = 0; index < rows.size(); ++index) {
+            const auto& row = rows[index];
+            if (!snapshot.toolbarFocused && row.title == snapshot.focusedRowTitle) {
+                plan.focusedRow = static_cast<int>(index);
+            }
+            plan.selections.push_back(restoredSelection(snapshot, row));
+        }
+        if (rows.empty()) plan.focusedRow = -1;
+        return plan;
     }
 
     [[nodiscard]] int selection(int row, int itemCount) const {
