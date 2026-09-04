@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 106 / 139 verified (76.3%); 33 partial; none unbuilt.
+Status at 2026-09-04: 107 / 139 verified (77.0%); 32 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -54,7 +54,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Playback and platform
 
-- [~] Target-TV codec, HDR, audio-route, and long-soak matrix; physical 23.976 Hz refresh-rate switching is verified.
+- [~] Broader target-TV codec/receiver and long-soak matrix remains; AVC/HEVC/HDR override negotiation and physical 23.976 Hz refresh-rate switching are verified.
 - [x] Playback reports have automated Jellyfin session-state assertions.
 - [x] Subtitle size/background/position and dedicated ASS/SRT visual passes are physically verified on the Google TV Streamer.
 - [x] HDR fixture/HDR-preserving server-stream path and generated Trickplay tile rendering are verified on the Google TV Streamer.
@@ -158,6 +158,13 @@ required for TV hardware, Android TV integration, and final performance work.
   Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
   input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
   signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
+- 2026-09-04: persisted AVC/HEVC/HDR playback overrides are physically accepted on the production
+  Google TV build. `1917` (H.264 High Level 4.1) DirectPlayed with AVC AUTO, then AVC 4.0 explicitly
+  removed direct H.264 from the device profile and the same item reached READY through Transcode.
+  SPY x FAMILY `FOLLOW MAMA AND PAPA` (HEVC Main 10 Level 5.1 HDR10) used HDR-preserving HEVC
+  DirectStream with HDR AUTO, switched to H.264/AAC Transcode under SDR ONLY after direct HEVC was
+  rejected for HDR, and returned to HEVC DirectStream under ALLOW ALL. AVC and HDR were restored to
+  AUTO, media volume was restored to 15/15, and the final app-scoped fatal/native-signal/ANR audit was clean.
 - 2026-09-04: Quick Connect TV UI is physically accepted on the production Google TV build. From
   USERS & SERVERS, ADD ANOTHER ACCOUNT retained the current server, QUICK CONNECT rendered code
   `265624` with the authorization instructions/waiting state, and the normal Jellyfin Quick Connect
