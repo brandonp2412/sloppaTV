@@ -275,8 +275,8 @@ required for TV hardware, Android TV integration, and final performance work.
   lifetime handling into one JNI utility; removed unused Jellyfin/player APIs and the unreachable Media3/libass subtitle
   overlay path; and dropped the now-unused `ass-media`/`media3-ui` dependencies. The full host suite and optimized
   `assembleRelease` pass, the signed release updated the physical Google TV Streamer in place with its existing session
-  intact, and the app rendered normally after wake. A fresh physical playback smoke pass is externally blocked because
-  the streamer's saved Jellyfin hostname currently fails DNS resolution; no app crash or fatal/ANR was observed.
+  intact, and the app rendered normally after wake. The first playback smoke was temporarily blocked by local DNS;
+  connectivity later recovered and subsequent physical playback acceptance passed.
 - 2026-09-04: the Settings vertical slice now owns its search/filter/navigation state, setting mutation rules,
   side-effect flags, and displayed values instead of scattering those across `SloppaApp`. Host tests cover focus,
   scrolling, filtering, common/advanced switching, mutation effects, and value formatting. The optimized Release
@@ -290,6 +290,17 @@ required for TV hardware, Android TV integration, and final performance work.
   native-signal or ANR finding. A 10-startup/3-memory/3-navigation optimized-device checkpoint measured 240.0 ms median
   cold launch, 39,725 KB PSS, 0.0% idle CPU, 16.67 ms navigation median, 16.71 ms p95 and 0.8% intervals over 20 ms,
   matching or improving the prior 16.67/16.73/0.8% navigation checkpoint rather than introducing a hot-path regression.
+- 2026-09-04: asynchronous ownership is now split into independent auth, Home, Search, content, playback and session
+  epochs instead of one global generation counter. Starting Details no longer cancels Home enrichment, Search no longer
+  invalidates unrelated content, and server mutations are tied only to the authenticated-session lifetime. Home refresh
+  and server-mutation busy state are also separate from foreground loading so a background completion cannot clear an
+  unrelated screen's loading state or leak a Home-only warning onto another screen. Host tests cover epoch invalidation
+  and cross-domain independence; the optimized Release build and authenticated streamer screenshot suite pass. Physical
+  DirectPlay of Brooklyn Nine-Nine `48 Hours` then passed Jellyfin session-state acceptance through progress, pause,
+  stable pause, resume and stop with media volume restored to 15/15 and no fatal/native-signal/ANR finding. The matching
+  10/3/3 performance checkpoint measured 242.5 ms median cold launch, 39,968 KB PSS, 0.0% idle CPU and 16.67/16.72 ms
+  navigation median/p95 with 0.8% intervals over 20 ms, effectively unchanged from the immediately preceding
+  240.0 ms, 39,725 KB, 0.0%, 16.67/16.71 ms and 0.8% checkpoint.
   `main.cpp` is now 6,647 lines, down from 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
