@@ -66,6 +66,12 @@ constexpr PlayerBackAction playerBackAction(bool controlsActive, bool timedOverl
 
 constexpr bool queueOverlayShouldShowError(bool /*hasItems*/) { return false; }
 
+constexpr float subtitleBottomY(bool playbackOverlayVisible, int position) {
+    const int clamped = std::clamp(position, 0, 2);
+    const float base = playbackOverlayVisible ? 790.0f : 1000.0f;
+    return base - static_cast<float>(clamped) * 95.0f;
+}
+
 constexpr float homeRowTop(int slot) {
     return slot <= 0 ? 170.0f : (slot == 1 ? 490.0f : 825.0f);
 }

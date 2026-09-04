@@ -6130,8 +6130,7 @@ private:
             const float boxWidth = std::clamp(widest + horizontalPadding * 2.0f, 320.0f, 1520.0f);
             const float boxHeight = verticalPadding * 2.0f + lineHeight * static_cast<float>(lines.size());
             const float boxX = (Renderer::logicalWidth() - boxWidth) * 0.5f;
-            const float bottomY = (showOverlay ? 650.0f : 955.0f)
-                - static_cast<float>(settings_.subtitlePosition) * 115.0f;
+            const float bottomY = subtitleBottomY(showOverlay, settings_.subtitlePosition);
             const float boxY = bottomY - boxHeight;
             if (settings_.subtitleBackground) {
                 renderer_.roundedRect(boxX, boxY, boxWidth, boxHeight, 22.0f, Color{0.0f, 0.0f, 0.0f, 0.80f});
