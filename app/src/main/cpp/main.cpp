@@ -46,6 +46,7 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -347,7 +348,7 @@ std::string hdrOverrideName(int mode) {
 
 std::string backdropModeName(int mode) {
     switch (std::clamp(mode, 0, 2)) {
-        case 1: return "BLURRED";
+        case 1: return "DIMMED";
         case 2: return "CLEAR";
         default: return "OFF";
     }
@@ -404,8 +405,10 @@ constexpr int kTextInputSettingsSearch = 2;
 constexpr int kTextInputLoginServer = 10;
 constexpr int kTextInputLoginPassword = 12;
 
-const std::array<std::string, 24>& settingsLabels() {
-    static const std::array<std::string, 24> labels{
+constexpr int kAdvancedSettingsToggle = 24;
+
+const std::array<std::string, 25>& settingsLabels() {
+    static const std::array<std::string, 25> labels{
         "MAX STREAMING BITRATE",
         "PLAYBACK BUFFER",
         "SKIP BACK",
@@ -430,16 +433,37 @@ const std::array<std::string, 24>& settingsLabels() {
         "EXTERNAL PLAYER",
         "DIAGNOSTICS",
         "SWITCH USER",
+        "ADVANCED SETTINGS",
     };
     return labels;
 }
 
-std::vector<int> matchingSettings(const std::string& query) {
+std::vector<int> matchingSettings(const std::string& query, bool advanced) {
+    static constexpr std::array<int, 15> commonOrder{
+        18, 10, 11, 13, 12, 5, 6, 2, 3, 8, 9, 14, 20, 23, kAdvancedSettingsToggle,
+    };
+    static constexpr std::array<int, 12> advancedOrder{
+        0, 1, 4, 7, 17, 19, 15, 16, 21, 22, 23, kAdvancedSettingsToggle,
+    };
+
     std::vector<int> matches;
     const auto& labels = settingsLabels();
-    for (size_t i = 0; i < labels.size(); ++i) {
-        if (containsCaseInsensitive(labels[i], query)) matches.push_back(static_cast<int>(i));
+    if (!query.empty()) {
+        const auto appendMatches = [&](const auto& order) {
+            for (const int i : order) {
+                const std::string label = advanced && i == kAdvancedSettingsToggle
+                    ? "BASIC SETTINGS"
+                    : labels[static_cast<size_t>(i)];
+                if (containsCaseInsensitive(label, query)) matches.push_back(i);
+            }
+        };
+        if (advanced) appendMatches(advancedOrder);
+        else appendMatches(commonOrder);
+        return matches;
     }
+
+    if (advanced) matches.assign(advancedOrder.begin(), advancedOrder.end());
+    else matches.assign(commonOrder.begin(), commonOrder.end());
     return matches;
 }
 
@@ -670,6 +694,13 @@ public:
                         timeoutMs = static_cast<int>(std::clamp<int64_t>(delayMs - idleMs, 0, delayMs));
                     }
                 }
+                if (searchDebouncePending_) {
+                    const int64_t searchDelayMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        searchDebounceDeadline_ - pollNow
+                    ).count();
+                    const int searchTimeoutMs = static_cast<int>(std::max<int64_t>(0, searchDelayMs));
+                    timeoutMs = timeoutMs < 0 ? searchTimeoutMs : std::min(timeoutMs, searchTimeoutMs);
+                }
             }
 
             int events = 0;
@@ -689,6 +720,7 @@ public:
                 if (pollResult == ALOOPER_POLL_WAKE) shouldRender = true;
             }
 
+            runDueLiveSearch();
             tick();
             bool playerScreen = false;
             bool screensaver = false;
@@ -720,10 +752,12 @@ public:
         if (mode == kTextInputSearch) {
             searchQuery_ = text;
             searchKeyboard_ = false;
+            scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
             settingsSearchQuery_ = text;
             settingsSearchFocused_ = true;
-            const auto matches = matchingSettings(settingsSearchQuery_);
+            settingsFirstVisible_ = 0;
+            const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
             if (!matches.empty()) settingsSelection_ = matches.front();
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
@@ -740,10 +774,12 @@ public:
         if (mode == kTextInputSearch) {
             searchQuery_ = text;
             searchKeyboard_ = false;
+            scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
             settingsSearchQuery_ = text;
             settingsSearchFocused_ = true;
-            const auto matches = matchingSettings(settingsSearchQuery_);
+            settingsFirstVisible_ = 0;
+            const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
             if (!matches.empty()) settingsSelection_ = matches.front();
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
@@ -760,11 +796,13 @@ public:
             searchQuery_ = text;
             searchKeyboard_ = false;
             searchSelection_ = 0;
+            searchDebouncePending_ = false;
             searchAsync();
         } else if (mode == kTextInputSettingsSearch) {
             settingsSearchQuery_ = text;
             settingsSearchFocused_ = true;
-            const auto matches = matchingSettings(settingsSearchQuery_);
+            settingsFirstVisible_ = 0;
+            const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
             if (!matches.empty()) settingsSelection_ = matches.front();
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             const int field = mode - kTextInputLoginServer;
@@ -889,7 +927,8 @@ private:
 
     int32_t onInput(AInputEvent* event) {
         if (AInputEvent_getType(event) != AINPUT_EVENT_TYPE_KEY) return 0;
-        if (AKeyEvent_getAction(event) != AKEY_EVENT_ACTION_DOWN) return 0;
+        const int32_t action = AKeyEvent_getAction(event);
+        if (action != AKEY_EVENT_ACTION_DOWN && action != AKEY_EVENT_ACTION_UP) return 0;
 
         const int32_t key = AKeyEvent_getKeyCode(event);
         const int32_t meta = AKeyEvent_getMetaState(event);
@@ -897,6 +936,22 @@ private:
         renderBurstUntil_ = inputNow + 150ms;
         std::scoped_lock lock(stateMutex_);
         if (systemTextInputMode_ >= 0) return 0;
+
+        if (action == AKEY_EVENT_ACTION_UP) {
+            if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeCenterPending_) {
+                const bool activate = !homeCenterLongPressed_ && screen_ == Screen::Home;
+                homeCenterPending_ = false;
+                homeCenterLongPressed_ = false;
+                if (activate) handleHomeKey(key);
+                return 1;
+            }
+            return 0;
+        }
+        if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            && homeCenterPending_ && homeCenterLongPressed_) {
+            return 1;
+        }
+
         lastInteraction_ = inputNow;
         if (screensaverActive_) {
             screensaverActive_ = false;
@@ -911,6 +966,31 @@ private:
         if (screen_ == Screen::Player) {
             handlePlayerKey(key);
             return 1;
+        }
+
+        if (screen_ == Screen::Home
+            && homeRow_ >= 0
+            && (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)) {
+            const int repeatCount = AKeyEvent_getRepeatCount(event);
+            if (repeatCount == 0) {
+                homeCenterPending_ = true;
+                homeCenterLongPressed_ = false;
+                return 1;
+            }
+            if (homeCenterPending_ && !homeCenterLongPressed_
+                && homeRow_ < static_cast<int>(home_.rows.size())) {
+                auto& section = home_.rows[static_cast<size_t>(homeRow_)];
+                if (section.title != "My Media" && !section.items.empty()) {
+                    const int selection = std::clamp(
+                        homeSelection_[static_cast<size_t>(homeRow_)],
+                        0,
+                        static_cast<int>(section.items.size()) - 1
+                    );
+                    openItemMenuForItem(section.items[static_cast<size_t>(selection)]);
+                    homeCenterLongPressed_ = true;
+                }
+                return 1;
+            }
         }
 
         const char typed = keyCodeToChar(key, meta);
@@ -944,6 +1024,7 @@ private:
         }
         if (screen_ == Screen::Search) {
             searchQuery_.push_back(c);
+            scheduleLiveSearch();
             return true;
         }
         return false;
@@ -957,9 +1038,39 @@ private:
         }
         if (screen_ == Screen::Search && !searchQuery_.empty()) {
             searchQuery_.pop_back();
+            scheduleLiveSearch();
             return true;
         }
         return false;
+    }
+
+    void scheduleLiveSearch() {
+        ++searchRequestGeneration_;
+        searchSelection_ = 0;
+        if (searchQuery_.empty()) {
+            searchDebouncePending_ = false;
+            searchLoading_ = false;
+            searchResults_.clear();
+            error_.clear();
+            return;
+        }
+        searchDebouncePending_ = true;
+        searchDebounceDeadline_ = std::chrono::steady_clock::now() + 180ms;
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
+    void runDueLiveSearch() {
+        std::scoped_lock lock(stateMutex_);
+        if (!searchDebouncePending_) return;
+        if (screen_ != Screen::Search) {
+            searchDebouncePending_ = false;
+            searchLoading_ = false;
+            ++searchRequestGeneration_;
+            return;
+        }
+        if (std::chrono::steady_clock::now() < searchDebounceDeadline_) return;
+        searchDebouncePending_ = false;
+        searchAsync();
     }
 
     bool showSystemTextInput(const std::string& initial, const std::string& hint, int mode, bool password = false) {
@@ -1037,9 +1148,11 @@ private:
         switch (key.action) {
             case KeyAction::Insert:
                 *target += key.value;
+                if (forSearch) scheduleLiveSearch();
                 break;
             case KeyAction::Backspace:
                 if (!target->empty()) target->pop_back();
+                if (forSearch) scheduleLiveSearch();
                 break;
             case KeyAction::Done:
                 if (forSearch) {
@@ -1208,6 +1321,12 @@ private:
             else openDetails(items[static_cast<size_t>(selection)]);
             return;
         }
+        homeFirstVisibleRow_ = homeFirstVisibleRow(
+            homeFirstVisibleRow_,
+            homeRow_,
+            static_cast<int>(home_.rows.size()),
+            2
+        );
         if (homeRow_ >= 0 && homeRow_ < static_cast<int>(homeSelection_.size())) {
             prefetchHomeWindow(homeRow_, homeSelection_[static_cast<size_t>(homeRow_)]);
         }
@@ -1320,6 +1439,9 @@ private:
             if (searchKeyboard_) {
                 searchKeyboard_ = false;
             } else {
+                searchDebouncePending_ = false;
+                searchLoading_ = false;
+                ++searchRequestGeneration_;
                 hideSystemTextInput();
                 popScreen(Screen::Home);
                 if (screen_ == Screen::Home) homeRow_ = 0;
@@ -1441,10 +1563,11 @@ private:
             return;
         }
 
-        const auto matches = matchingSettings(settingsSearchQuery_);
+        const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
         if (settingsSearchFocused_) {
             if (key == AKEYCODE_DPAD_DOWN && !matches.empty()) {
                 settingsSearchFocused_ = false;
+                settingsFirstVisible_ = 0;
                 settingsSelection_ = matches.front();
             } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
                 showSystemTextInput(settingsSearchQuery_, "Search settings", kTextInputSettingsSearch);
@@ -1455,17 +1578,29 @@ private:
         auto selected = std::find(matches.begin(), matches.end(), settingsSelection_);
         int selectedPosition = selected == matches.end() ? 0 : static_cast<int>(std::distance(matches.begin(), selected));
         if (key == AKEYCODE_DPAD_UP) {
-            if (selectedPosition <= 0) settingsSearchFocused_ = true;
-            else settingsSelection_ = matches[static_cast<size_t>(selectedPosition - 1)];
+            if (selectedPosition <= 0) {
+                settingsSearchFocused_ = true;
+            } else {
+                --selectedPosition;
+                settingsSelection_ = matches[static_cast<size_t>(selectedPosition)];
+                settingsFirstVisible_ = homeFirstVisibleRow(
+                    settingsFirstVisible_, selectedPosition, static_cast<int>(matches.size()), 6
+                );
+            }
             return;
         }
         if (key == AKEYCODE_DPAD_DOWN) {
             if (!matches.empty() && selectedPosition + 1 < static_cast<int>(matches.size())) {
-                settingsSelection_ = matches[static_cast<size_t>(selectedPosition + 1)];
+                ++selectedPosition;
+                settingsSelection_ = matches[static_cast<size_t>(selectedPosition)];
+                settingsFirstVisible_ = homeFirstVisibleRow(
+                    settingsFirstVisible_, selectedPosition, static_cast<int>(matches.size()), 6
+                );
             }
             return;
         }
         if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
+            if (settingsSelection_ == kAdvancedSettingsToggle) return;
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             if (settingsSelection_ == 0) {
                 static constexpr std::array<int, 6> choices{20, 40, 80, 120, 160, 200};
@@ -1545,8 +1680,18 @@ private:
             }
             saveSession(session_);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (settingsSelection_ == 22) openDiagnostics();
-            else if (settingsSelection_ == 23) openProfiles();
+            if (settingsSelection_ == 22) {
+                openDiagnostics();
+            } else if (settingsSelection_ == 23) {
+                openProfiles();
+            } else if (settingsSelection_ == kAdvancedSettingsToggle) {
+                advancedSettings_ = !advancedSettings_;
+                settingsSearchQuery_.clear();
+                const auto nextMatches = matchingSettings(settingsSearchQuery_, advancedSettings_);
+                settingsFirstVisible_ = 0;
+                if (!nextMatches.empty()) settingsSelection_ = nextMatches.front();
+                settingsSearchFocused_ = false;
+            }
         }
     }
 
@@ -1664,6 +1809,9 @@ private:
         if (detail_.type == "Series") actions.emplace_back("PLAY ALL");
         if (selectedExternalPlayer().has_value()) actions.emplace_back("PLAY EXTERNAL");
         if (!playbackQueue_.empty()) actions.emplace_back("VIEW QUEUE");
+        actions.emplace_back(detail_.favorite ? "UNFAVORITE" : "FAVORITE");
+        actions.emplace_back(detail_.played ? "MARK UNWATCHED" : "MARK WATCHED");
+        actions.emplace_back(isHiddenFromHome(detail_) ? "SHOW ON HOME" : "HIDE FROM HOME");
         actions.emplace_back("REFRESH METADATA");
         if (detail_.canDelete) actions.emplace_back("DELETE MEDIA");
         actions.emplace_back("BACK");
@@ -1705,13 +1853,21 @@ private:
             const std::string& action = actions[static_cast<size_t>(itemMenuSelection_)];
             if (action == "PLAY ALL") {
                 popScreen(Screen::Details);
+                if (screen_ != Screen::Details) pushScreen(Screen::Details);
                 beginSeriesPlayAll();
             } else if (action == "PLAY EXTERNAL") {
                 popScreen(Screen::Details);
+                if (screen_ != Screen::Details) pushScreen(Screen::Details);
                 launchExternalPlaybackAsync();
             } else if (action == "VIEW QUEUE") {
                 popScreen(Screen::Details);
                 openQueueOverlay();
+            } else if (action == "FAVORITE" || action == "UNFAVORITE") {
+                toggleFavoriteAsync();
+            } else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") {
+                togglePlayedAsync();
+            } else if (action == "HIDE FROM HOME" || action == "SHOW ON HOME") {
+                toggleHiddenFromHome();
             } else if (action == "REFRESH METADATA") refreshCurrentItemMetadataAsync();
             else if (action == "DELETE MEDIA") {
                 deleteConfirmation_ = true;
@@ -1774,6 +1930,8 @@ private:
                 error_ = "EXTERNAL PLAYER: NO STATIC STREAM";
                 return;
             }
+            restoreHomeVisibilityForPlayback(selected);
+            restoreHomeVisibilityForPlayback(playable);
             pendingExternalLaunch_ = PendingExternalLaunch{
                 .item = std::move(playable),
                 .player = std::move(player),
@@ -2619,9 +2777,12 @@ private:
     void openSettings() {
         refreshExternalPlayers();
         pushScreen(Screen::Settings);
-        settingsSelection_ = 0;
+        advancedSettings_ = false;
         settingsSearchQuery_.clear();
-        settingsSearchFocused_ = true;
+        const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
+        settingsSelection_ = matches.empty() ? 18 : matches.front();
+        settingsFirstVisible_ = 0;
+        settingsSearchFocused_ = false;
         error_.clear();
     }
 
@@ -2723,6 +2884,7 @@ private:
         home_ = {};
         homeSelection_.clear();
         homeRow_ = 0;
+        homeFirstVisibleRow_ = 0;
         navIndex_ = 1;
         librarySelection_ = 0;
         activeLibrary_ = {};
@@ -2808,6 +2970,7 @@ private:
         loginFields_[1] = session_.username;
         resetNavigation(Screen::Home);
         homeRow_ = 0;
+        homeFirstVisibleRow_ = 0;
         saveSession(session_);
         loadHomeAsync();
     }
@@ -3052,6 +3215,51 @@ private:
         });
     }
 
+    std::string hiddenHomeKey(const std::string& itemId) const {
+        return session_.server + "\n" + session_.userId + "\n" + itemId;
+    }
+
+    bool isHiddenFromHome(const JellyfinItem& item) const {
+        return !item.id.empty() && hiddenHomeItems_.contains(hiddenHomeKey(item.id));
+    }
+
+    void filterHiddenHomeItems(JellyfinHomeData& data) const {
+        for (auto& row : data.rows) {
+            if (row.title == "My Media") continue;
+            std::erase_if(row.items, [&](const JellyfinItem& item) { return isHiddenFromHome(item); });
+        }
+    }
+
+    void clampHomeSelections() {
+        const size_t count = std::min(home_.rows.size(), homeSelection_.size());
+        for (size_t row = 0; row < count; ++row) {
+            const int itemCount = static_cast<int>(home_.rows[row].items.size());
+            homeSelection_[row] = itemCount <= 0 ? 0 : std::clamp(homeSelection_[row], 0, itemCount - 1);
+        }
+    }
+
+    void toggleHiddenFromHome() {
+        if (detail_.id.empty()) return;
+        const std::string key = hiddenHomeKey(detail_.id);
+        const bool hiding = !hiddenHomeItems_.contains(key);
+        if (hiding) hiddenHomeItems_.insert(key);
+        else hiddenHomeItems_.erase(key);
+        filterHiddenHomeItems(home_);
+        clampHomeSelections();
+        saveSession(session_);
+        showNotice(hiding ? "HIDDEN FROM HOME" : "HOME VISIBILITY RESTORED");
+    }
+
+    void restoreHomeVisibilityForPlayback(const JellyfinItem& item) {
+        bool changed = false;
+        auto restore = [&](const std::string& itemId) {
+            if (!itemId.empty()) changed = hiddenHomeItems_.erase(hiddenHomeKey(itemId)) > 0 || changed;
+        };
+        restore(item.id);
+        restore(item.seriesId);
+        if (changed) saveSession(session_);
+    }
+
     void updateCachedUserData(const JellyfinItem& updated) {
         auto apply = [&](JellyfinItem& item) {
             if (item.id != updated.id) return;
@@ -3071,12 +3279,13 @@ private:
                 const auto existing = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& item) {
                     return item.id == updated.id;
                 });
-                if (updated.favorite && existing == row.items.end()) row.items.push_back(updated);
+                if (updated.favorite && existing == row.items.end() && !isHiddenFromHome(updated)) row.items.push_back(updated);
                 else if (!updated.favorite && existing != row.items.end()) row.items.erase(existing);
             } else if (row.title == "CONTINUE WATCHING" && updated.played) {
                 std::erase_if(row.items, [&](const JellyfinItem& item) { return item.id == updated.id; });
             }
         }
+        clampHomeSelections();
     }
 
     void toggleFavoriteAsync() {
@@ -3097,7 +3306,7 @@ private:
             }
             if (generation != taskGeneration_.load()) return;
             loading_ = false;
-            if (screen_ != Screen::Details || detail_.id != item.id) return;
+            if ((screen_ != Screen::Details && screen_ != Screen::ItemMenu) || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
@@ -3125,7 +3334,7 @@ private:
             }
             if (generation != taskGeneration_.load()) return;
             loading_ = false;
-            if (screen_ != Screen::Details || detail_.id != item.id) return;
+            if ((screen_ != Screen::Details && screen_ != Screen::ItemMenu) || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
@@ -3257,6 +3466,7 @@ private:
                 resetNavigation(Screen::Home);
                 loading_ = false;
                 homeRow_ = 0;
+                homeFirstVisibleRow_ = 0;
                 error_.clear();
                 saveSession(session_);
             }
@@ -3337,6 +3547,7 @@ private:
                     loading_ = false;
                     resetNavigation(Screen::Home);
                     homeRow_ = 0;
+                    homeFirstVisibleRow_ = 0;
                     error_.clear();
                     saveSession(session_);
                 }
@@ -3399,6 +3610,7 @@ private:
                 return;
             }
 
+            filterHiddenHomeItems(core.value);
             std::vector<JellyfinItem> views = core.value.views;
             int coreRestoredRow = navFocused ? -1 : 0;
             {
@@ -3419,6 +3631,9 @@ private:
                 home_ = std::move(core.value);
                 homeSelection_ = std::move(restoredSelections);
                 homeRow_ = home_.rows.empty() ? -1 : std::clamp(coreRestoredRow, -1, static_cast<int>(home_.rows.size()) - 1);
+                homeFirstVisibleRow_ = homeFirstVisibleRow(
+                    homeFirstVisibleRow_, homeRow_, static_cast<int>(home_.rows.size()), 2
+                );
                 error_ = home_.warning;
                 if (homeRow_ >= 0) prefetchHomeWindow(homeRow_, homeSelection_[static_cast<size_t>(homeRow_)]);
                 const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - homeLoadStarted).count();
@@ -3452,6 +3667,7 @@ private:
                     return;
                 }
 
+                filterHiddenHomeItems(secondary.value);
                 const size_t baseRowCount = home_.rows.size();
                 for (auto& section : secondary.value.rows) {
                     int restoredSelection = 0;
@@ -3473,6 +3689,9 @@ private:
                     home_.warning += secondary.value.warning;
                     error_ = home_.warning;
                 }
+                homeFirstVisibleRow_ = homeFirstVisibleRow(
+                    homeFirstVisibleRow_, homeRow_, static_cast<int>(home_.rows.size()), 2
+                );
                 if (homeRow_ >= static_cast<int>(baseRowCount) && homeRow_ < static_cast<int>(homeSelection_.size())) {
                     prefetchHomeWindow(homeRow_, homeSelection_[static_cast<size_t>(homeRow_)]);
                 }
@@ -3483,17 +3702,22 @@ private:
     }
 
     void searchAsync() {
-        if (!session_.valid() || loading_) return;
+        if (!session_.valid()) return;
         const JellyfinSession session = session_;
         const std::string query = searchQuery_;
-        loading_ = true;
+        if (query.empty()) {
+            searchLoading_ = false;
+            searchResults_.clear();
+            return;
+        }
+        searchLoading_ = true;
         error_.clear();
-        const uint64_t generation = ++taskGeneration_;
+        const uint64_t generation = ++searchRequestGeneration_;
         tasks_.submit([this, session, query, generation] {
             auto result = api_.search(session, query);
-            if (generation != taskGeneration_.load()) return;
             std::scoped_lock lock(stateMutex_);
-            loading_ = false;
+            if (generation != searchRequestGeneration_.load()) return;
+            searchLoading_ = false;
             if (screen_ != Screen::Search || searchQuery_ != query) return;
             if (!result.ok) {
                 error_ = result.error;
@@ -3804,6 +4028,8 @@ private:
             queueSelection_ = queueDefaultSelection(0, static_cast<int>(playbackQueue_.size()));
             queueActionSelection_ = 0;
             queueOverlayActive_ = false;
+            restoreHomeVisibilityForPlayback(series);
+            restoreHomeVisibilityForPlayback(first);
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(first);
         });
@@ -3889,6 +4115,8 @@ private:
                 playbackQueueIndex_ = queuedPlaybackIndex;
                 playbackQueue_[static_cast<size_t>(queuedPlaybackIndex)] = playable;
             }
+            restoreHomeVisibilityForPlayback(selected);
+            restoreHomeVisibilityForPlayback(playable);
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(playable);
         });
@@ -4624,22 +4852,30 @@ private:
             uiSafeAreaFraction(settings_.safeAreaPercent),
             uiTextScale(settings_.uiTextSize)
         );
-        switch (screen_) {
-            case Screen::Login: renderLogin(); break;
-            case Screen::Profiles: renderProfiles(); break;
-            case Screen::Home: renderHome(); break;
-            case Screen::Libraries: renderLibraries(); break;
-            case Screen::Browse: renderBrowse(); break;
-            case Screen::Search: renderSearch(); break;
-            case Screen::Settings: renderSettings(); break;
-            case Screen::Diagnostics: renderDiagnostics(); break;
-            case Screen::Details: renderDetails(); break;
-            case Screen::Cast: renderCast(); break;
-            case Screen::PersonItems: renderPersonItems(); break;
-            case Screen::ItemMenu: renderItemMenu(); break;
-            case Screen::Seasons: renderSeasons(); break;
-            case Screen::Episodes: renderEpisodes(); break;
-            case Screen::Player: renderPlayer(); break;
+        auto renderScreen = [&](Screen target) {
+            switch (target) {
+                case Screen::Login: renderLogin(); break;
+                case Screen::Profiles: renderProfiles(); break;
+                case Screen::Home: renderHome(); break;
+                case Screen::Libraries: renderLibraries(); break;
+                case Screen::Browse: renderBrowse(); break;
+                case Screen::Search: renderSearch(); break;
+                case Screen::Settings: renderSettings(); break;
+                case Screen::Diagnostics: renderDiagnostics(); break;
+                case Screen::Details: renderDetails(); break;
+                case Screen::Cast: renderCast(); break;
+                case Screen::PersonItems: renderPersonItems(); break;
+                case Screen::ItemMenu: renderDetails(); break;
+                case Screen::Seasons: renderSeasons(); break;
+                case Screen::Episodes: renderEpisodes(); break;
+                case Screen::Player: renderPlayer(); break;
+            }
+        };
+        if (screen_ == Screen::ItemMenu) {
+            renderScreen(navigation_.previousOr(Screen::Details));
+            renderItemMenu();
+        } else {
+            renderScreen(screen_);
         }
         if (queueOverlayActive_) renderQueueOverlay();
         renderStatus();
@@ -5073,7 +5309,6 @@ private:
     void requestBackdrop(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.backdropTag.empty() || settings_.backdropMode <= 0) return;
         const std::string key = backdropKey(item);
-        const int backdropMode = settings_.backdropMode;
         auto existing = backdrops_.find(key);
         if (existing != backdrops_.end()) {
             existing->second.lastUse = ++artworkUseCounter_;
@@ -5085,9 +5320,8 @@ private:
         backdrops_.emplace(key, std::move(entry));
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
-        tasks_.submit([this, session, itemCopy, key, backdropMode] {
-            const bool blurred = backdropMode == 1;
-            auto bytes = api_.downloadBackdropImage(session, itemCopy, blurred ? 320 : 1280, blurred ? 180 : 720);
+        tasks_.submit([this, session, itemCopy, key] {
+            auto bytes = api_.downloadBackdropImage(session, itemCopy, 1280, 720);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
                 auto it = backdrops_.find(key);
@@ -5136,7 +5370,7 @@ private:
         if (entry.texture == 0) return false;
         const float effectiveAlpha = settings_.backdropMode == 1 ? std::max(alpha, 0.34f) : alpha;
         renderer_.image(entry.texture, 0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), effectiveAlpha);
-        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, settings_.backdropMode == 1 ? 0.22f : 0.12f});
+        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, settings_.backdropMode == 1 ? 0.26f : 0.12f});
         return true;
     }
 
@@ -5435,11 +5669,32 @@ private:
     }
 
     void renderHome() {
-        renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
+        bool backdropVisible = false;
+        if (settings_.backdropMode > 0 && !home_.rows.empty()) {
+            const int backdropRow = std::clamp(
+                homeRow_ >= 0 ? homeRow_ : homeFirstVisibleRow_,
+                0,
+                static_cast<int>(home_.rows.size()) - 1
+            );
+            const auto& row = home_.rows[static_cast<size_t>(backdropRow)];
+            if (!row.items.empty() && backdropRow < static_cast<int>(homeSelection_.size())) {
+                const int selection = std::clamp(
+                    homeSelection_[static_cast<size_t>(backdropRow)],
+                    0,
+                    static_cast<int>(row.items.size()) - 1
+                );
+                backdropVisible = drawBackdrop(row.items[static_cast<size_t>(selection)], 0.24f);
+            }
+        }
+        if (!backdropVisible) {
+            renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
+        } else {
+            renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.01f, 0.012f, 0.018f, 0.34f});
+        }
 
         const bool toolbarFocused = homeRow_ < 0;
         const bool hasBrandMark = drawBrandMark(72.0f, 27.0f, 72.0f);
-        renderer_.text(hasBrandMark ? 160.0f : 72.0f, 44.0f, 3.10f, "sloppaTV", kText, 430.0f);
+        renderer_.text(hasBrandMark ? 160.0f : 72.0f, 42.0f, 3.35f, "sloppaTV", kText, 430.0f);
         renderer_.roundedRect(hasBrandMark ? 160.0f : 72.0f, 99.0f, 86.0f, 3.0f, 1.5f, kBrandGold);
 
         const std::array<std::string, 3> navLabels{"HOME", "SEARCH", "SETTINGS"};
@@ -5452,10 +5707,10 @@ private:
             if (focused) {
                 renderer_.roundedRect(navXs[i] - 14.0f, 40.0f, navWidths[i] + 28.0f, 54.0f, 22.0f,
                     Color{0.12f, 0.10f, 0.16f, 0.88f});
-                renderer_.textCentered(navXs[i] - 14.0f, 40.0f, navWidths[i] + 28.0f, 54.0f, 1.85f,
+                renderer_.textCentered(navXs[i] - 14.0f, 40.0f, navWidths[i] + 28.0f, 54.0f, 2.0f,
                     navLabels[i], kText);
             } else {
-                renderer_.textCentered(navXs[i], 40.0f, navWidths[i], 54.0f, 1.85f, navLabels[i], active ? kText : kMuted);
+                renderer_.textCentered(navXs[i], 40.0f, navWidths[i], 54.0f, 2.0f, navLabels[i], active ? kText : kMuted);
             }
             if (active) renderer_.roundedRect(navXs[i], 94.0f, 38.0f, 3.0f, 1.5f, kFocus);
         }
@@ -5490,9 +5745,12 @@ private:
             return;
         }
 
-        int firstVisibleRow = homeRow_ >= 0 ? homeRow_ : 0;
-        firstVisibleRow = std::clamp(firstVisibleRow, 0, static_cast<int>(home_.rows.size()) - 1);
-        if (firstVisibleRow + 1 >= static_cast<int>(home_.rows.size()) && firstVisibleRow > 0) --firstVisibleRow;
+        const int firstVisibleRow = homeFirstVisibleRow(
+            homeFirstVisibleRow_,
+            homeRow_,
+            static_cast<int>(home_.rows.size()),
+            2
+        );
         renderHomeRow(
             home_.rows[static_cast<size_t>(firstVisibleRow)].title,
             home_.rows[static_cast<size_t>(firstVisibleRow)].items,
@@ -5515,7 +5773,7 @@ private:
         const int selected = std::clamp(homeSelection_[static_cast<size_t>(row)], 0, static_cast<int>(items.size()) - 1);
 
         if (title == "My Media") {
-            renderer_.text(72.0f, top, 2.75f, "MY MEDIA", homeRow_ == row ? kText : kSecondaryText, 420.0f);
+            renderer_.text(72.0f, top, 3.05f, "MY MEDIA", homeRow_ == row ? kText : kSecondaryText, 420.0f);
             constexpr float cardW = 420.0f;
             constexpr float cardH = 225.0f;
             constexpr float gap = 28.0f;
@@ -5534,19 +5792,19 @@ private:
                         2.45f, items[static_cast<size_t>(index)].name, kText);
                 }
                 if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
-                renderer_.text(x + 4.0f, imageY + cardH + 12.0f, 1.75f,
+                renderer_.text(x + 4.0f, imageY + cardH + 12.0f, 2.05f,
                     items[static_cast<size_t>(index)].name, focused ? kText : kSecondaryText, cardW - 8.0f);
                 x += cardW + gap;
             }
             return;
         }
 
-        renderer_.text(72.0f, top, 2.75f, title, homeRow_ == row ? kText : kSecondaryText, 900.0f);
+        renderer_.text(72.0f, top, 3.05f, title, homeRow_ == row ? kText : kSecondaryText, 900.0f);
         const int start = std::max(0, selected - 1);
         constexpr float cardH = 202.0f;
-        constexpr float cardW = 360.0f;
-        constexpr float gap = 12.0f;
-        const float imageY = top + 52.0f;
+        constexpr float cardW = 350.0f;
+        constexpr float gap = 24.0f;
+        const float imageY = top + 70.0f;
         float x = 54.0f;
 
         auto singleLine = [&](std::string value, float scale, float width) {
@@ -5559,7 +5817,7 @@ private:
             if (x + cardW > 1908.0f && index > start) break;
             const auto& item = items[static_cast<size_t>(index)];
             const bool focused = homeRow_ == row && index == selected;
-            const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, 1.085f);
+            const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, 1.045f);
             if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, 22.0f,
                 Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
             const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3]);
@@ -5573,8 +5831,20 @@ private:
             if (focused) renderer_.roundedOutline(bounds[0] - 2.0f, bounds[1] - 2.0f, bounds[2] + 4.0f, bounds[3] + 4.0f, 15.0f, 2.5f, kFocus);
 
             std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
-            primary = singleLine(primary, 2.15f, cardW - 18.0f);
-            renderer_.text(x + 2.0f, imageY + cardH + 10.0f, 2.15f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
+            primary = singleLine(primary, 2.45f, cardW - 18.0f);
+            const float titleY = imageY + cardH + 10.0f;
+            renderer_.text(x + 2.0f, titleY, 2.45f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
+            if (item.type == "Episode") {
+                std::string episode = episodeNumberLabel(item);
+                if (!item.name.empty() && item.name != item.seriesName) {
+                    if (!episode.empty()) episode += "  |  ";
+                    episode += item.name;
+                }
+                if (!episode.empty()) {
+                    renderer_.text(x + 2.0f, titleY + 48.0f, 1.58f,
+                        singleLine(episode, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
+                }
+            }
             x += cardW + gap;
         }
     }
@@ -5609,8 +5879,20 @@ private:
         }
     }
 
-    void renderMediaArtworkCard(const JellyfinItem& item, float x, float y, float slotWidth, bool focused, bool showState = true) {
-        const bool landscape = usesLandscapeMediaCard(item.type);
+    void renderMediaArtworkCard(
+        const JellyfinItem& item,
+        float x,
+        float y,
+        float slotWidth,
+        bool focused,
+        bool showState = true,
+        bool preferSeriesCover = false
+    ) {
+        const bool seriesCoverForEpisode = preferSeriesCover
+            && item.type == "Episode"
+            && !item.seriesId.empty()
+            && !item.seriesPrimaryImageTag.empty();
+        const bool landscape = usesLandscapeMediaCard(item.type) && !seriesCoverForEpisode;
         const float imageWidth = landscape ? slotWidth : 232.0f;
         const float imageHeight = landscape ? 180.0f : 348.0f;
         const float imageX = x + (slotWidth - imageWidth) * 0.5f;
@@ -5620,7 +5902,13 @@ private:
                 Color{kFocus.r, kFocus.g, kFocus.b, 0.09f});
         }
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, kPanelAlt);
-        const bool hasArtwork = drawArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3]);
+        JellyfinItem cover = item;
+        if (seriesCoverForEpisode) {
+            cover.id = item.seriesId;
+            cover.imageTag = item.seriesPrimaryImageTag;
+            cover.type = "Series";
+        }
+        const bool hasArtwork = drawArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3]);
         if (!hasArtwork) {
             renderer_.roundedRect(bounds[0] + 1.0f, bounds[1] + 1.0f, bounds[2] - 2.0f, bounds[3] - 2.0f, 15.0f, kPanel);
             if (landscape) {
@@ -5635,17 +5923,20 @@ private:
             renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f,
                 static_cast<float>((bounds[2] - 20.0f) * fraction), 5.0f, 2.5f, kFocus);
         }
+        if (showState && (item.favorite || (settings_.showWatchedIndicators && item.played))) {
+            const std::string label = item.favorite ? "FAVORITE" : "WATCHED";
+            const float badgeWidth = item.favorite ? 132.0f : 118.0f;
+            const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
+            const float badgeY = bounds[1] + 12.0f;
+            renderer_.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, Color{0.02f, 0.04f, 0.07f, 0.88f});
+            renderer_.textCentered(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, item.favorite ? kFocus : kSecondaryText);
+        }
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
         const float titleY = y + imageHeight + 18.0f;
         renderer_.text(x + 2.0f, titleY, 2.05f, fitTextLines(item.name, 2.05f, slotWidth - 4.0f, 1), kText, slotWidth - 4.0f);
         const std::string secondary = episodeLabel(item);
         if (!secondary.empty()) renderer_.text(x + 2.0f, titleY + 46.0f, 1.45f, secondary, kMuted, slotWidth - 4.0f);
-        if (showState) {
-            const float stateY = titleY + (secondary.empty() ? 48.0f : 82.0f);
-            if (item.favorite) renderer_.text(x + 2.0f, stateY, 1.25f, "FAVORITE", kFocus, slotWidth - 4.0f);
-            else if (settings_.showWatchedIndicators && item.played) renderer_.text(x + 2.0f, stateY, 1.25f, "WATCHED", kTertiary, slotWidth - 4.0f);
-        }
     }
 
     void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
@@ -5736,7 +6027,7 @@ private:
         }
 
         if (searchResults_.empty()) {
-            renderer_.text(72.0f, 300.0f, 2.15f, loading_ ? "SEARCHING..." : "TYPE A TITLE, ACTOR OR EPISODE", kSecondaryText, 780.0f);
+            renderer_.text(72.0f, 300.0f, 2.15f, searchLoading_ ? "SEARCHING..." : "TYPE A TITLE, ACTOR OR EPISODE", kSecondaryText, 780.0f);
             renderer_.text(72.0f, 350.0f, 1.45f, "Use the TV keyboard or press SEARCH from anywhere in sloppaTV.", kMuted, 900.0f);
             return;
         }
@@ -5750,7 +6041,10 @@ private:
             const int end = std::min(begin + columns, static_cast<int>(searchResults_.size()));
             for (int index = begin; index < end; ++index) {
                 const auto& item = searchResults_[static_cast<size_t>(index)];
-                if (!usesLandscapeMediaCard(item.type)) return true;
+                const bool seriesCoverForEpisode = item.type == "Episode"
+                    && !item.seriesId.empty()
+                    && !item.seriesPrimaryImageTag.empty();
+                if (!usesLandscapeMediaCard(item.type) || seriesCoverForEpisode) return true;
             }
             return false;
         };
@@ -5767,7 +6061,7 @@ private:
             for (int index = begin; index < end; ++index) {
                 const int col = index % columns;
                 const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-                renderMediaArtworkCard(searchResults_[static_cast<size_t>(index)], x, y, slotWidth, index == searchSelection_);
+                renderMediaArtworkCard(searchResults_[static_cast<size_t>(index)], x, y, slotWidth, index == searchSelection_, true, true);
             }
             y += rowHeight;
         }
@@ -6041,7 +6335,7 @@ private:
     void renderSettings() {
         renderer_.text(72.0f, 58.0f, 4.0f, "SETTINGS", kText, 560.0f);
         const auto& labels = settingsLabels();
-        const std::array<std::string, 24> values{
+        const std::array<std::string, 25> values{
             std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
             playbackBufferName(settings_.playbackBufferPreset),
             std::to_string(settings_.seekBackSeconds) + " SECONDS",
@@ -6068,15 +6362,7 @@ private:
             externalPlayerLabel(),
             "DEVICE / SERVER / PLAYBACK",
             session_.username.empty() ? "CURRENT USER" : session_.username,
-        };
-        auto settingSection = [](int index) -> const char* {
-            if (index <= 3 || index == 5 || index == 6) return "PLAYBACK";
-            if (index == 4 || index == 7 || (index >= 15 && index <= 17)) return "VIDEO";
-            if (index == 14) return "AUDIO";
-            if (index >= 11 && index <= 13) return "SUBTITLES";
-            if ((index >= 8 && index <= 10) || index == 18 || index == 19) return "APPEARANCE";
-            if (index >= 20 && index <= 22) return "SYSTEM";
-            return "ACCOUNT";
+            advancedSettings_ ? "SHOW COMMON" : "SHOW TECHNICAL",
         };
 
         renderer_.roundedRect(1070.0f, 52.0f, 760.0f, 58.0f, 20.0f, Color{0.035f, 0.04f, 0.052f, 0.88f});
@@ -6086,49 +6372,50 @@ private:
             settingsSearchQuery_.empty() ? kMuted : kText, 570.0f);
         renderer_.textCentered(1640.0f, 52.0f, 170.0f, 58.0f, 1.60f, "SEARCH", settingsSearchFocused_ ? kFocus : kMuted);
 
-        const auto matches = matchingSettings(settingsSearchQuery_);
+        const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
         if (matches.empty()) {
-            renderer_.text(700.0f, 445.0f, 3.2f, "NO SETTINGS MATCH", kText, 620.0f);
-            renderer_.text(640.0f, 510.0f, 1.75f, "PRESS OK OR SEARCH TO EDIT THE FILTER", kMuted, 760.0f);
+            renderer_.text(610.0f, 445.0f, 3.2f, "NO SETTINGS MATCH", kText, 700.0f);
+            renderer_.text(570.0f, 510.0f, 1.75f, "PRESS OK OR SEARCH TO EDIT THE FILTER", kMuted, 820.0f);
             return;
         }
 
-        const std::array<std::string, 7> sections{"PLAYBACK", "VIDEO", "AUDIO", "SUBTITLES", "APPEARANCE", "SYSTEM", "ACCOUNT"};
-        const std::string activeSection = settingSection(settingsSelection_);
-        for (size_t sectionIndex = 0; sectionIndex < sections.size(); ++sectionIndex) {
-            const float y = 225.0f + static_cast<float>(sectionIndex) * 90.0f;
-            const bool active = sections[sectionIndex] == activeSection;
-            renderer_.text(86.0f, y, 2.05f, sections[sectionIndex], active ? kText : kMuted, 280.0f);
-            if (active) renderer_.roundedRect(86.0f, y + 37.0f, 58.0f, 3.0f, 1.5f, kFocus);
-        }
+        renderer_.text(120.0f, 165.0f, 2.10f,
+            advancedSettings_ ? "ADVANCED / TECHNICAL" : "COMMON SETTINGS", kSecondaryText, 620.0f);
+        renderer_.text(120.0f, 205.0f, 1.40f,
+            advancedSettings_
+                ? "Codec overrides, compatibility and device-level controls"
+                : "The settings you are most likely to change",
+            kMuted,
+            920.0f);
 
-        auto selected = std::find(matches.begin(), matches.end(), settingsSelection_);
-        const int selectedPosition = selected == matches.end() ? 0 : static_cast<int>(std::distance(matches.begin(), selected));
-        constexpr int visibleRows = 5;
+        constexpr int visibleRows = 6;
         const int maxFirst = std::max(0, static_cast<int>(matches.size()) - visibleRows);
-        const int first = std::clamp(selectedPosition - 2, 0, maxFirst);
-        renderer_.text(430.0f, 178.0f, 2.50f, activeSection, kSecondaryText, 440.0f);
+        const int first = std::clamp(settingsFirstVisible_, 0, maxFirst);
         for (int slot = 0; slot < visibleRows; ++slot) {
             const int matchPosition = first + slot;
             if (matchPosition >= static_cast<int>(matches.size())) break;
             const int i = matches[static_cast<size_t>(matchPosition)];
-            const float y = 245.0f + static_cast<float>(slot) * 132.0f;
+            const float y = 270.0f + static_cast<float>(slot) * 112.0f;
             const bool focused = !settingsSearchFocused_ && i == settingsSelection_;
-            const bool actionRow = i == 22 || i == 23;
+            const bool actionRow = i == 22 || i == 23 || i == kAdvancedSettingsToggle;
             if (focused) {
-                renderer_.roundedRect(410.0f, y - 10.0f, 1420.0f, 104.0f, 24.0f, Color{0.07f, 0.065f, 0.09f, 0.72f});
-                renderer_.roundedRect(410.0f, y + 91.0f, 58.0f, 3.0f, 1.5f, kFocus);
+                renderer_.roundedRect(110.0f, y - 8.0f, 1700.0f, 88.0f, 22.0f, Color{0.07f, 0.065f, 0.09f, 0.72f});
+                renderer_.roundedRect(110.0f, y + 77.0f, 64.0f, 3.0f, 1.5f, kFocus);
             } else {
-                renderer_.rect(432.0f, y + 96.0f, 1365.0f, 1.0f, Color{0.25f, 0.27f, 0.32f, 0.14f});
+                renderer_.rect(132.0f, y + 82.0f, 1650.0f, 1.0f, Color{0.25f, 0.27f, 0.32f, 0.14f});
             }
-            renderer_.textVerticallyCentered(440.0f, y - 10.0f, 104.0f, 2.20f, labels[static_cast<size_t>(i)],
-                focused ? kText : kSecondaryText, 760.0f);
-            const float valueScale = actionRow ? 1.75f : 1.95f;
+            const std::string rowLabel = i == kAdvancedSettingsToggle && advancedSettings_
+                ? "BASIC SETTINGS"
+                : labels[static_cast<size_t>(i)];
+            renderer_.textVerticallyCentered(145.0f, y - 8.0f, 88.0f, 2.20f, rowLabel,
+                focused ? kText : kSecondaryText, 900.0f);
+            const float valueScale = actionRow ? 1.70f : 1.95f;
             const float valueWidth = renderer_.textWidth(valueScale, values[static_cast<size_t>(i)]);
-            renderer_.textVerticallyCentered(std::max(1180.0f, 1775.0f - valueWidth), y - 10.0f, 104.0f, valueScale,
-                values[static_cast<size_t>(i)], actionRow ? kText : (focused ? kFocus : kMuted), 580.0f);
+            renderer_.textVerticallyCentered(std::max(1190.0f, 1760.0f - valueWidth), y - 8.0f, 88.0f, valueScale,
+                values[static_cast<size_t>(i)], actionRow ? (focused ? kFocus : kText) : (focused ? kFocus : kMuted), 570.0f);
         }
-        renderer_.text(555.0f, 980.0f, 1.60f, "LEFT / RIGHT CHANGE   |   SEARCH FILTER   |   CHANGES SAVE IMMEDIATELY", kTertiary, 1160.0f);
+        renderer_.text(470.0f, 985.0f, 1.52f,
+            "LEFT / RIGHT CHANGE   |   UP TO SEARCH   |   CHANGES SAVE IMMEDIATELY", kTertiary, 1120.0f);
     }
 
     void renderDiagnostics() {
@@ -6183,15 +6470,10 @@ private:
     }
 
     void renderItemMenu() {
-        const bool backdropVisible = settings_.backdropMode > 0 && drawBackdrop(detail_, 0.36f);
-        if (backdropVisible) drawBackdropScrims();
-        else renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
-        renderHeader("ITEM OPTIONS");
-        renderer_.text(95.0f, 205.0f, 4.4f, detail_.name.empty() ? "ITEM" : detail_.name, kText, 900.0f);
-        renderer_.text(98.0f, 280.0f, 1.8f, detail_.type.empty() ? "MEDIA" : detail_.type, kMuted, 520.0f);
+        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, 0.46f});
 
         if (deleteConfirmation_) {
-            renderer_.roundedRect(405.0f, 275.0f, 1110.0f, 520.0f, 34.0f, Color{0.025f, 0.029f, 0.040f, 0.96f});
+            renderer_.roundedRect(405.0f, 275.0f, 1110.0f, 520.0f, 34.0f, Color{0.025f, 0.029f, 0.040f, 0.98f});
             renderer_.text(470.0f, 335.0f, 3.25f, "DELETE THIS MEDIA?", kError, 980.0f);
             renderer_.text(
                 470.0f,
@@ -6214,22 +6496,32 @@ private:
             return;
         }
 
-        renderer_.roundedRect(1060.0f, 155.0f, 760.0f, 790.0f, 34.0f, Color{0.025f, 0.029f, 0.040f, 0.92f});
-        renderer_.text(1115.0f, 205.0f, 2.45f, "ACTIONS", kMuted, 610.0f);
         const auto actions = itemMenuActions();
+        constexpr float panelX = 1110.0f;
+        constexpr float panelWidth = 700.0f;
+        constexpr float rowStep = 66.0f;
+        const float panelHeight = 170.0f + static_cast<float>(actions.size()) * rowStep + 46.0f;
+        const float panelY = std::max(72.0f, (Renderer::logicalHeight() - panelHeight) * 0.5f);
+        renderer_.roundedRect(panelX, panelY, panelWidth, panelHeight, 32.0f, Color{0.025f, 0.029f, 0.040f, 0.98f});
+        renderer_.roundedOutline(panelX, panelY, panelWidth, panelHeight, 32.0f, 1.5f, Color{0.30f, 0.32f, 0.40f, 0.42f});
+        renderer_.text(panelX + 38.0f, panelY + 30.0f, 2.35f,
+            fitTextLines(detail_.name.empty() ? "ITEM" : detail_.name, 2.35f, panelWidth - 76.0f, 1), kText, panelWidth - 76.0f);
+        renderer_.text(panelX + 40.0f, panelY + 79.0f, 1.35f,
+            detail_.type.empty() ? "MEDIA" : detail_.type, kMuted, panelWidth - 80.0f);
+        renderer_.rect(panelX + 34.0f, panelY + 118.0f, panelWidth - 68.0f, 1.0f, Color{0.30f, 0.32f, 0.40f, 0.22f});
+
+        const float firstActionY = panelY + 136.0f;
         for (size_t i = 0; i < actions.size(); ++i) {
-            const float y = 270.0f + static_cast<float>(i) * 108.0f;
+            const float y = firstActionY + static_cast<float>(i) * rowStep;
             const bool focused = itemMenuSelection_ == static_cast<int>(i);
             const bool destructive = actions[i] == "DELETE MEDIA";
             const bool primary = actions[i] == "PLAY ALL" || actions[i] == "PLAY EXTERNAL" || actions[i] == "VIEW QUEUE";
-            const auto bounds = drawFocusedSurface(1110.0f, y, 660.0f, 82.0f, focused, primary && focused, destructive);
-            renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 2.0f, actions[i],
-                destructive && !focused ? kMuted : kText);
+            const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, primary && focused, destructive);
+            renderer_.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, actions[i],
+                destructive && !focused ? kMuted : kText, bounds[2] - 48.0f);
         }
-        if (!detail_.canDelete) {
-            renderer_.text(1115.0f, 850.0f, 1.4f, "DELETE UNAVAILABLE FOR THIS ITEM", kTertiary, 600.0f);
-        }
-        renderer_.text(1215.0f, 900.0f, 1.45f, "OK SELECT   |   BACK RETURN", kTertiary, 450.0f);
+        renderer_.text(panelX + 170.0f, panelY + panelHeight - 34.0f, 1.30f,
+            "OK SELECT   |   BACK CLOSE", kTertiary, 390.0f);
     }
 
     std::string fitTextLines(const std::string& value, float scale, float maxWidth, int maxLines) const {
@@ -6377,7 +6669,10 @@ private:
         const bool episode = detail_.type == "Episode";
         const std::string mainTitle = episode && !detail_.seriesName.empty() ? detail_.seriesName : detail_.name;
         const bool hasLogo = drawLogo(detail_, contentX, 132.0f, 700.0f, 138.0f);
-        if (!hasLogo) renderer_.text(contentX, 142.0f, 6.0f, mainTitle.empty() ? "LOADING..." : mainTitle, kText, contentWidth);
+        if (!hasLogo) {
+            renderer_.text(contentX, 142.0f, 6.0f,
+                fitTextLines(mainTitle.empty() ? "LOADING..." : mainTitle, 6.0f, contentWidth, 1), kText, contentWidth);
+        }
 
         const std::string episodeNumber = episodeNumberLabel(detail_);
         const std::string secondary = episode
@@ -6385,7 +6680,10 @@ private:
                 ? episodeNumber
                 : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail_.name)
             : episodeLabel(detail_);
-        if (!secondary.empty()) renderer_.text(contentX, hasLogo ? 286.0f : 270.0f, 2.80f, secondary, kSecondaryText, contentWidth);
+        if (!secondary.empty()) {
+            renderer_.text(contentX, 286.0f, 2.80f,
+                fitTextLines(secondary, 2.80f, contentWidth, 1), kSecondaryText, contentWidth);
+        }
 
         std::string metadata;
         auto appendMetadata = [&](const std::string& value) {
@@ -6403,10 +6701,11 @@ private:
         }
         const std::string genres = joinGenres(detail_.genres);
         if (!genres.empty()) appendMetadata(genres);
-        renderer_.text(contentX, hasLogo ? 340.0f : 330.0f, 1.80f, metadata, kMuted, contentWidth);
+        renderer_.text(contentX, 340.0f, 1.80f,
+            fitTextLines(metadata, 1.80f, contentWidth, 1), kMuted, contentWidth);
 
         if (!detail_.overview.empty()) {
-            renderer_.text(contentX, hasLogo ? 392.0f : 382.0f, 2.35f,
+            renderer_.text(contentX, 392.0f, 2.35f,
                 fitTextLines(detail_.overview, 2.35f, contentWidth, 3), Color{0.92f, 0.93f, 0.96f, 0.96f}, contentWidth);
         }
         std::string state;
@@ -6525,6 +6824,12 @@ private:
             input >> data;
             deviceId_ = data.value("deviceId", deviceId_);
             savedSessions_.clear();
+            hiddenHomeItems_.clear();
+            if (data.contains("hiddenHomeItems") && data["hiddenHomeItems"].is_array()) {
+                for (const auto& hidden : data["hiddenHomeItems"]) {
+                    if (hidden.is_string()) hiddenHomeItems_.insert(hidden.get<std::string>());
+                }
+            }
             if (data.contains("savedSessions") && data["savedSessions"].is_array()) {
                 for (const auto& saved : data["savedSessions"]) {
                     if (!saved.is_object()) continue;
@@ -6596,8 +6901,11 @@ private:
                     {"token", candidate.token},
                 });
             }
+            json hiddenHome = json::array();
+            for (const auto& key : hiddenHomeItems_) hiddenHome.push_back(key);
             json data = {
                 {"deviceId", deviceId_},
+                {"hiddenHomeItems", std::move(hiddenHome)},
                 {"server", session.server},
                 {"username", session.username},
                 {"userId", session.userId},
@@ -6657,8 +6965,10 @@ private:
     AppSettings settings_;
     std::vector<ExternalPlayerApp> externalPlayers_;
     int settingsSelection_ = 0;
+    int settingsFirstVisible_ = 0;
     std::string settingsSearchQuery_;
     bool settingsSearchFocused_ = false;
+    bool advancedSettings_ = false;
     std::string error_;
     std::string notice_;
     std::chrono::steady_clock::time_point noticeUntil_{};
@@ -6686,8 +6996,12 @@ private:
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;
     std::vector<int> homeSelection_;
+    std::unordered_set<std::string> hiddenHomeItems_;
     int homeRow_ = 0;
+    int homeFirstVisibleRow_ = 0;
     int navIndex_ = 1;
+    bool homeCenterPending_ = false;
+    bool homeCenterLongPressed_ = false;
     int librarySelection_ = 0;
     JellyfinItem activeLibrary_;
     std::vector<JellyfinItem> browseItems_;
@@ -6713,6 +7027,10 @@ private:
     std::vector<JellyfinItem> searchResults_;
     int searchSelection_ = 0;
     bool searchKeyboard_ = true;
+    bool searchLoading_ = false;
+    bool searchDebouncePending_ = false;
+    std::chrono::steady_clock::time_point searchDebounceDeadline_{};
+    std::atomic<uint64_t> searchRequestGeneration_{0};
 
     int keyboardRow_ = 0;
     int keyboardCol_ = 0;

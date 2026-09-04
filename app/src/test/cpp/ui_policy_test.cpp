@@ -95,6 +95,12 @@ int main() {
     assert(homeRowTop(0) == 170.0f);
     assert(homeRowTop(1) == 490.0f);
     assert(homeRowTop(2) == 825.0f);
+    assert(homeFirstVisibleRow(0, 0, 5) == 0);
+    assert(homeFirstVisibleRow(0, 1, 5) == 0);
+    assert(homeFirstVisibleRow(0, 2, 5) == 1);
+    assert(homeFirstVisibleRow(1, 1, 5) == 1);
+    assert(homeFirstVisibleRow(1, 0, 5) == 0);
+    assert(homeFirstVisibleRow(3, -1, 5) == 3);
     assert(syntheticTileTextX(90.0f) == 118.0f);
     assert(syntheticTileTextY(260.0f) == 342.0f);
     return 0;
