@@ -171,7 +171,6 @@ enum class Screen {
     Login,
     Profiles,
     Home,
-    Libraries,
     Browse,
     Search,
     Settings,
@@ -623,7 +622,6 @@ private:
             case Screen::Login: handleLoginKey(key); break;
             case Screen::Profiles: handleProfilesKey(key); break;
             case Screen::Home: handleHomeKey(key); break;
-            case Screen::Libraries: handleLibrariesKey(key); break;
             case Screen::Browse: handleBrowseKey(key); break;
             case Screen::Search: handleSearchKey(key); break;
             case Screen::Settings: handleSettingsKey(key); break;
@@ -927,20 +925,6 @@ private:
         if (homeState_.row() >= 0 && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
             const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
             prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
-        }
-    }
-
-    void handleLibrariesKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
-            popScreen(Screen::Home);
-            homeState_.focusToolbar(1);
-            return;
-        }
-        if (home_.views.empty()) return;
-        if (key == AKEYCODE_DPAD_LEFT) librarySelection_ = std::max(0, librarySelection_ - 1);
-        else if (key == AKEYCODE_DPAD_RIGHT) librarySelection_ = std::min(static_cast<int>(home_.views.size()) - 1, librarySelection_ + 1);
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            openLibrary(home_.views[static_cast<size_t>(librarySelection_)]);
         }
     }
 
@@ -2176,7 +2160,6 @@ private:
         serverInfoLoading_ = false;
         home_ = {};
         homeState_.reset();
-        librarySelection_ = 0;
         browseState_.clear();
         searchState_.reset();
         detail_ = {};
@@ -2244,12 +2227,6 @@ private:
         accountState_.beginProfiles(static_cast<int>(sessionRegistry_.size()));
         saveSession(session_);
         if (sessionRegistry_.empty()) startAddAccount();
-    }
-
-    void openLibraries() {
-        pushScreen(Screen::Libraries);
-        librarySelection_ = std::clamp(librarySelection_, 0, std::max(0, static_cast<int>(home_.views.size()) - 1));
-        error_.clear();
     }
 
     static constexpr int kBrowsePageSize = 60;
@@ -3884,7 +3861,6 @@ private:
                 case Screen::Login: renderLogin(); break;
                 case Screen::Profiles: renderProfiles(); break;
                 case Screen::Home: renderHome(); break;
-                case Screen::Libraries: renderLibraries(); break;
                 case Screen::Browse: renderBrowse(); break;
                 case Screen::Search: renderSearch(); break;
                 case Screen::Settings: renderSettings(); break;
@@ -4327,12 +4303,6 @@ private:
         return bounds;
     }
 
-    void drawBottomScrim(float x, float y, float width, float height, float strength = 0.82f) {
-        renderer_.verticalGradient(x, y, width, height,
-            Color{0.0f, 0.0f, 0.0f, 0.02f},
-            Color{0.0f, 0.0f, 0.0f, strength});
-    }
-
 
     void renderHeader(const std::string& title) {
         renderer_.text(72, 46, 3.9f, "SLOPPATV", kText);
@@ -4689,35 +4659,6 @@ private:
         }
     }
 
-    void renderLibraries() {
-        renderHeader("LIBRARIES");
-        if (home_.views.empty()) {
-            renderer_.text(690.0f, 430.0f, 3.5f, loading_ ? "LOADING LIBRARIES..." : "NO LIBRARIES", kText, 600.0f);
-            return;
-        }
-        renderer_.text(90.0f, 185.0f, 2.2f, "CHOOSE A LIBRARY", kMuted, 520.0f);
-        const int selected = std::clamp(librarySelection_, 0, static_cast<int>(home_.views.size()) - 1);
-        const int start = std::max(0, selected - 2);
-        constexpr int visible = 4;
-        constexpr float cardW = 405.0f;
-        constexpr float cardH = 250.0f;
-        constexpr float gap = 35.0f;
-        for (int slot = 0; slot < visible; ++slot) {
-            const int index = start + slot;
-            if (index >= static_cast<int>(home_.views.size())) break;
-            const float x = 90.0f + static_cast<float>(slot) * (cardW + gap);
-            const float y = 270.0f;
-            const bool focused = index == selected;
-            const auto bounds = focusedBounds(x, y, cardW, cardH, focused);
-            renderer_.rect(bounds[0], bounds[1], bounds[2], bounds[3], focused ? kPanelElevated : kPanel);
-            const auto& view = home_.views[static_cast<size_t>(index)];
-            const bool hasArtwork = drawHomeArtwork(view, bounds[0], bounds[1], bounds[2], bounds[3]);
-            if (!hasArtwork) renderer_.rect(bounds[0] + 1.0f, bounds[1] + 1.0f, bounds[2] - 2.0f, bounds[3] - 2.0f, kPanelAlt);
-            drawBottomScrim(bounds[0], bounds[1] + bounds[3] * 0.56f, bounds[2], bounds[3] * 0.44f, 0.82f);
-            renderer_.text(bounds[0] + 22.0f, bounds[1] + bounds[3] - 58.0f, 2.5f, view.name, kText, bounds[2] - 44.0f);
-            if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3]);
-        }
-    }
 
     void renderMediaArtworkCard(
         const JellyfinItem& item,
@@ -5691,7 +5632,6 @@ private:
     uint64_t brandMarkTextureGeneration_ = 0;
     HomeScreenState homeState_;
     std::unordered_set<std::string> hiddenHomeItems_;
-    int librarySelection_ = 0;
     BrowseScreenState browseState_;
 
     int systemTextInputMode_ = -1;

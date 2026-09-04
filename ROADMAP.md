@@ -479,6 +479,13 @@ required for TV hardware, Android TV integration, and final performance work.
   257.5 ms median startup / 40,047 KB PSS; an immediate confirmation measured 247.0 ms / 39,775 KB. Both held 0.0% idle CPU and
   16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 5,994 lines versus 7,194 before the
   architecture pass.
+- 2026-09-05: Removed the unreachable standalone `Libraries` screen. My Media cards on Home already open their target library
+  directly, and repository-wide reference analysis confirmed `openLibraries()` had no production caller, leaving its screen enum,
+  key handler, selection state, renderer and bottom-scrim helper as dead residue. The full host suite and optimized Release build
+  pass. Physical streamer acceptance opened the Collections My Media card directly into its Browse grid with artwork intact and
+  no fatal/native-signal/ANR finding. The matching 10/3/3 checkpoint measured 238.5 ms median cold launch, 40,392 KB PSS, 0.0% idle
+  CPU and 16.67/16.71 ms navigation median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 5,736 lines versus 7,194 before
+  the architecture pass.
 - 2026-09-05: Artwork cache ownership is now explicit instead of five raw `SloppaApp` maps plus duplicated LRU/counter/entry
   lifecycle code. `ArtworkCache` owns loading/ready/failed state, per-cache LRU eviction, decoded-image completion and release-aware
   erase/clear behavior; Home's on-disk 48 MB/256-file image cache is separately localized in `HomeImageDiskCache`. Dedicated host
