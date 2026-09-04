@@ -301,7 +301,7 @@ required for TV hardware, Android TV integration, and final performance work.
   10/3/3 performance checkpoint measured 242.5 ms median cold launch, 39,968 KB PSS, 0.0% idle CPU and 16.67/16.72 ms
   navigation median/p95 with 0.8% intervals over 20 ms, effectively unchanged from the immediately preceding
   240.0 ms, 39,725 KB, 0.0%, 16.67/16.71 ms and 0.8% checkpoint.
-  `main.cpp` is now 6,661 lines, down from 7,194 before the architecture pass despite adding explicit request ownership.
+  `main.cpp` is now 6,525 lines, down from 7,194 before the architecture pass despite adding explicit request ownership.
 - 2026-09-04: Jellyfin playback negotiation now delegates device/video/audio/subtitle capability planning, direct-request
   flags, and server-route classification to the host-testable `playback_profile.hpp` instead of embedding those decisions
   inside the HTTP method. Tests cover codec level/profile/resolution/HDR rejection, audio-route limits, client-vs-server
@@ -311,6 +311,15 @@ required for TV hardware, Android TV integration, and final performance work.
   track remained DirectPlay, loaded 593 native cues, and rendered subtitles on screen. The corresponding resolved-target
   to first-frame checkpoints were 0.994 s without subtitles and 1.001 s after the subtitle stream restart. No fatal,
   native-signal or ANR finding was observed; media volume was restored to 15/15 and the streamer returned to sleep.
+- 2026-09-04: Jellyfin data-only domain structs now live in `jellyfin_types.hpp`, leaving `jellyfin.hpp` focused on the
+  client/API boundary instead of forcing feature state to depend on JNI/HTTP declarations. The Browse vertical slice now
+  owns its content mode, filter focus/selection, pagination, genre/letter state, nested-container history, headings, and
+  cached-item removal in `BrowseScreenState`; host tests cover filter transitions and nested restoration. The full host
+  suite and optimized Release build pass. Physical streamer acceptance verified Movies browsing, Genres -> Action -> Back,
+  A-Z -> A -> Back, and Collections -> Braveheart Collection -> member -> Back restoration with no fatal/native-signal/ANR
+  finding. A matching 10/3/3 optimized-device checkpoint measured 237.5 ms median cold launch, 39,543 KB PSS, 0.0% idle
+  CPU, and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms, effectively flat or improved versus the
+  immediately preceding 242.5 ms, 39,968 KB, 0.0%, 16.67/16.72 ms and 0.8% checkpoint.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
