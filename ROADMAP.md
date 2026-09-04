@@ -479,6 +479,14 @@ required for TV hardware, Android TV integration, and final performance work.
   257.5 ms median startup / 40,047 KB PSS; an immediate confirmation measured 247.0 ms / 39,775 KB. Both held 0.0% idle CPU and
   16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 5,994 lines versus 7,194 before the
   architecture pass.
+- 2026-09-05: Artwork cache ownership is now explicit instead of five raw `SloppaApp` maps plus duplicated LRU/counter/entry
+  lifecycle code. `ArtworkCache` owns loading/ready/failed state, per-cache LRU eviction, decoded-image completion and release-aware
+  erase/clear behavior; Home's on-disk 48 MB/256-file image cache is separately localized in `HomeImageDiskCache`. Dedicated host
+  tests cover loading saturation, LRU eviction/release, decoded-image lifecycle and disk read/replace/erase behavior. The full host
+  suite and optimized Release build pass. Physical streamer acceptance rendered populated Home artwork and a Brooklyn Nine-Nine
+  Details backdrop/logo after an in-place install, with no fatal/native-signal/ANR or artwork/decode failure. The matching 10/3/3
+  checkpoint measured 240.5 ms median cold launch, 39,429 KB PSS, 0.0% idle CPU and 16.67/16.71 ms navigation median/p95 with
+  0.8% intervals over 20 ms. `main.cpp` is now 5,796 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
