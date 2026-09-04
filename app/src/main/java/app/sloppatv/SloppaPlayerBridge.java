@@ -160,6 +160,11 @@ public final class SloppaPlayerBridge {
                     )
                     .build()
                 : new DefaultLoadControl();
+            Log.i(TAG, "Media3 buffer config custom=" + customBufferDurations
+                + " minMs=" + minBufferMs
+                + " maxMs=" + maxBufferMs
+                + " startMs=" + bufferForPlaybackMs
+                + " rebufferMs=" + bufferForPlaybackAfterRebufferMs);
 
             DefaultRenderersFactory defaultRenderersFactory = new DefaultRenderersFactory(context)
                 .setEnableDecoderFallback(true)
@@ -232,6 +237,9 @@ public final class SloppaPlayerBridge {
                 public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
                     if (player != created) return;
                     updateTelemetry(created);
+                    Log.i(TAG, "Media3 playWhenReady=" + playWhenReady
+                        + " positionMs=" + created.getCurrentPosition()
+                        + " bufferedMs=" + created.getBufferedPosition());
                     int playbackState = created.getPlaybackState();
                     if (playbackState == Player.STATE_READY) {
                         state = playWhenReady ? STATE_PLAYING : STATE_PAUSED;
