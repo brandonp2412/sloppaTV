@@ -389,6 +389,16 @@ required for TV hardware, Android TV integration, and final performance work.
   finding was observed. The matching 10/3/3 checkpoint measured 244.5 ms median cold launch, 39,864 KB PSS, 0.0% idle CPU and
   16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, within the established run-to-run range. `main.cpp` is
   now 6,253 lines versus 7,194 before the architecture pass.
+- 2026-09-05: Trickplay preview ownership now lives in `TrickplayPreviewState`, with the pure decoded-image value type split out
+  of the JNI decoder header. Preview item/tile identity, loading/failure state, decoded pixels, texture generation, seek
+  position and visibility lifetime no longer sit as independent `SloppaApp` fields. Host tests cover tile identity, preview
+  expiry, decoded-image readiness, texture lifecycle metadata, failure and reset; the full host suite and optimized Release
+  build pass. Physical streamer acceptance resumed Brooklyn Nine-Nine `48 Hours` at the preserved 3:51 position, exercised a
+  paused seek to 4:01 and back to 3:51 through the trickplay request path, then stopped without changing the saved progress.
+  This item does not expose a visible trickplay tile on the streamer, so acceptance covered the no-preview path plus clean
+  fatal/native-signal/ANR logs. The matching 10/3/3 checkpoint measured 234.5 ms median cold launch, 40,529 KB PSS, 0.0% idle
+  CPU and 16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, within the established run-to-run range.
+  `main.cpp` is now 6,229 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
