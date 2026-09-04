@@ -52,6 +52,32 @@ int main() {
     assert(imported.at(0)->deviceId == "device-3");
     assert(imported.at(1)->deviceId == "device-3");
 
+    std::vector<StoredSession> oversized;
+    oversized.push_back(SessionRegistry::toStored(second));
+    auto duplicateSecond = SessionRegistry::toStored(second);
+    duplicateSecond.token = "older-token";
+    oversized.push_back(duplicateSecond);
+    oversized.push_back({
+        .server = "https://invalid.test",
+        .username = "",
+        .userId = "",
+        .token = "",
+    });
+    for (int i = 0; i < 20; ++i) {
+        oversized.push_back(SessionRegistry::toStored(session(
+            "https://server-" + std::to_string(i) + ".test",
+            "user-" + std::to_string(i),
+            "token-" + std::to_string(i)
+        )));
+    }
+    SessionRegistry bounded;
+    bounded.importStored(oversized, "device-bounded");
+    assert(bounded.size() == 16);
+    assert(bounded.at(0)->userId == "user-2");
+    assert(bounded.at(0)->token == "token-c");
+    assert(bounded.at(1)->userId == "user-0");
+    assert(bounded.at(15)->userId == "user-14");
+
     assert(SessionRegistry::sameIdentity(*imported.at(0), second));
     assert(imported.removeIdentity(second));
     assert(imported.size() == 1);

@@ -82,9 +82,25 @@ int main() {
     assert(inherited.logoTag == "parent-logo" && inherited.logoItemId == "series-1");
     assert(inherited.backdropTag == "parent-backdrop" && inherited.backdropItemId == "series-1");
 
-    const auto items = parseJellyfinItems(nlohmann::json::array({value, {{"Name", "Missing Id"}}}));
-    assert(items.size() == 1);
+    const nlohmann::json secondValid = {
+        {"Id", "movie-2"},
+        {"Name", "Second"},
+        {"Type", "Movie"}
+    };
+    const nlohmann::json malformed = {
+        {"Id", "broken"},
+        {"ProductionYear", "not-a-number"}
+    };
+    const auto items = parseJellyfinItems(nlohmann::json::array({
+        value,
+        nullptr,
+        {{"Name", "Missing Id"}},
+        malformed,
+        secondValid
+    }));
+    assert(items.size() == 2);
     assert(items[0].id == "episode-1");
+    assert(items[1].id == "movie-2");
     assert(parseJellyfinItems(nlohmann::json::object()).empty());
     return 0;
 }

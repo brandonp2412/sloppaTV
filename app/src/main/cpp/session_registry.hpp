@@ -36,8 +36,17 @@ public:
 
     void importStored(const std::vector<StoredSession>& stored, const std::string& deviceId) {
         sessions_.clear();
-        sessions_.reserve(stored.size());
-        for (const auto& session : stored) sessions_.push_back(fromStored(session, deviceId));
+        sessions_.reserve(std::min(stored.size(), kMaxSavedSessions));
+        for (const auto& persisted : stored) {
+            JellyfinSession session = fromStored(persisted, deviceId);
+            if (!session.valid()) continue;
+            const auto duplicate = std::find_if(sessions_.begin(), sessions_.end(), [&](const JellyfinSession& candidate) {
+                return sameIdentity(candidate, session);
+            });
+            if (duplicate != sessions_.end()) continue;
+            sessions_.push_back(std::move(session));
+            if (sessions_.size() >= kMaxSavedSessions) break;
+        }
     }
 
     [[nodiscard]] std::vector<StoredSession> exportStored() const {
@@ -60,7 +69,6 @@ public:
             *existing = std::move(saved);
             std::rotate(sessions_.begin(), existing, std::next(existing));
         }
-        constexpr std::size_t kMaxSavedSessions = 16;
         if (sessions_.size() > kMaxSavedSessions) sessions_.resize(kMaxSavedSessions);
     }
 
@@ -86,5 +94,6 @@ public:
     [[nodiscard]] const std::vector<JellyfinSession>& sessions() const { return sessions_; }
 
 private:
+    static constexpr std::size_t kMaxSavedSessions = 16;
     std::vector<JellyfinSession> sessions_;
 };

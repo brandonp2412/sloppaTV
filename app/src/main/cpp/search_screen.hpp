@@ -92,16 +92,17 @@ public:
     }
 
     [[nodiscard]] bool finishSearch(const std::string& query, std::vector<JellyfinItem> results) {
-        loading_ = false;
         if (query_ != query) return false;
+        loading_ = false;
         results_ = std::move(results);
         selection_ = 0;
         return true;
     }
 
     [[nodiscard]] bool failSearch(const std::string& query) {
+        if (query_ != query) return false;
         loading_ = false;
-        return query_ == query;
+        return true;
     }
 
     void clearResults() {

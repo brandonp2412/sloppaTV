@@ -160,8 +160,13 @@ std::vector<JellyfinItem> parseJellyfinItems(const json& values) {
     if (!values.is_array()) return items;
     items.reserve(values.size());
     for (const auto& value : values) {
-        JellyfinItem item = parseJellyfinItem(value);
-        if (!item.id.empty()) items.push_back(std::move(item));
+        if (!value.is_object()) continue;
+        try {
+            JellyfinItem item = parseJellyfinItem(value);
+            if (!item.id.empty()) items.push_back(std::move(item));
+        } catch (const json::exception&) {
+            // A malformed library entry should not discard the rest of a valid page.
+        }
     }
     return items;
 }
