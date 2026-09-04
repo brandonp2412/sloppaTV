@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 110 / 139 verified (79.1%); 29 partial; none unbuilt.
+Status at 2026-09-04: 111 / 139 verified (79.9%); 28 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -47,7 +47,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Accounts, navigation, and browsing
 
-- [~] LAN discovery and distinct-user switching remain; Quick Connect, saved-profile lifecycle/expiry cleanup, and saved-server endpoint switching are physically verified.
+- [~] LAN discovery remains; distinct-user switching, Quick Connect, saved-profile lifecycle/expiry cleanup, and saved-server endpoint switching are physically verified.
 - [x] Navigation regression, server-version edge cases, and Movies/Shows/Mixed/folder browsing are physically verified.
 - [x] Seasons, nested folders, populated favorites, direct item-options keys.
 - [x] Delete and refresh permissions plus server-side mutation completion.
@@ -65,7 +65,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Settings, resilience, and release
 
-- [~] User switching E2E remains; buffer presets, audio mode, watched-indicator, clock, backdrop, zoom, and refresh-rate display preferences are physically verified and restored.
+- [x] User switching E2E, buffer presets, audio mode, watched-indicator, clock, backdrop, zoom, and refresh-rate display preferences are physically verified and restored.
 - [x] Wake/retry, lifecycle, repeated player teardown, crash/ANR auditing, and memory soak coverage are physically verified.
 - [~] Production signing, reproducibility, and stable CI artifact signing.
 
@@ -261,9 +261,11 @@ required for TV hardware, Android TV integration, and final performance work.
   preserving app data; later acceptance builds include the merged caracal branding commit.
 - 2026-09-04: Settings acceptance exercised and restored AUTO/LARGE/EXTRA LARGE buffers, direct
   versus stereo audio mode, FIT/FILL zoom, refresh-rate matching, and a temporary Quick Connect
-  user switch. Cleanup accidentally removed the saved `lounge` profile instead of the temporary
-  account; the TV is currently usable on the saved `jellyfin` profile, but `lounge` must be
-  reauthorized before user-switching acceptance can be considered complete.
+  user switch. A later physical check found both saved `lounge` and `jellyfin` profiles present on
+  the canonical `https://jellyfin.presley.nz` endpoint. Switching `lounge` -> `jellyfin` rendered
+  the distinct `jellyfin` Home and avatar in 178 ms primary-row readiness; switching back to
+  `lounge` restored its distinct Home in 173 ms. Both transitions completed without a sloppaTV
+  fatal/native-signal/ANR finding, and the original `lounge` session was restored afterward.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
