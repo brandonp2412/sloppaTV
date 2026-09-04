@@ -301,7 +301,16 @@ required for TV hardware, Android TV integration, and final performance work.
   10/3/3 performance checkpoint measured 242.5 ms median cold launch, 39,968 KB PSS, 0.0% idle CPU and 16.67/16.72 ms
   navigation median/p95 with 0.8% intervals over 20 ms, effectively unchanged from the immediately preceding
   240.0 ms, 39,725 KB, 0.0%, 16.67/16.71 ms and 0.8% checkpoint.
-  `main.cpp` is now 6,647 lines, down from 7,194 before the architecture pass.
+  `main.cpp` is now 6,661 lines, down from 7,194 before the architecture pass despite adding explicit request ownership.
+- 2026-09-04: Jellyfin playback negotiation now delegates device/video/audio/subtitle capability planning, direct-request
+  flags, and server-route classification to the host-testable `playback_profile.hpp` instead of embedding those decisions
+  inside the HTTP method. Tests cover codec level/profile/resolution/HDR rejection, audio-route limits, client-vs-server
+  subtitle handling, force-transcode behavior, and Jellyfin's semantic DirectStream case. The full host suite and optimized
+  Release build pass, as does the real-server negotiation probe against Jellyfin 10.11.11. On the physical Google TV
+  Streamer, Brooklyn Nine-Nine `48 Hours` remained DirectPlay with its AAC stream, then switching on its external SUBRIP
+  track remained DirectPlay, loaded 593 native cues, and rendered subtitles on screen. The corresponding resolved-target
+  to first-frame checkpoints were 0.994 s without subtitles and 1.001 s after the subtitle stream restart. No fatal,
+  native-signal or ANR finding was observed; media volume was restored to 15/15 and the streamer returned to sleep.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
