@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 101 / 139 verified (72.7%); 38 partial; none unbuilt.
+Status at 2026-09-04: 103 / 139 verified (74.1%); 36 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -65,7 +65,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Settings, resilience, and release
 
-- [~] Buffer presets, audio mode, display preferences, and user switching E2E; watched-indicator, clock, backdrop, zoom, and refresh-rate display preferences are physically verified and restored.
+- [~] User switching E2E remains; buffer presets, audio mode, watched-indicator, clock, backdrop, zoom, and refresh-rate display preferences are physically verified and restored.
 - [x] Wake/retry, lifecycle, repeated player teardown, crash/ANR auditing, and memory soak coverage are physically verified.
 - [~] Production signing, reproducibility, and stable CI artifact signing.
 
@@ -158,6 +158,14 @@ required for TV hardware, Android TV integration, and final performance work.
   Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
   input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
   signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
+- 2026-09-04: playback-buffer and audio-output settings are physically accepted on the Google TV
+  Streamer. The same Hell's Paradise episode produced about 50.6 s buffered with AUTO, 106.2 s with
+  LARGE, and 213.2 s with EXTRA LARGE after their respective settling intervals; Media3 also logged
+  the configured default/50-120 s/80-240 s load-control policies. Firefly `Trash` (AAC 5.1) selected
+  DirectPlay with the 8-channel direct route, while DOWNMIX TO STEREO capped negotiation to two channels,
+  disabled audio stream copy, selected DirectStream, and Jellyfin `/Sessions` reported AAC stereo with
+  `AudioChannelsNotSupported` as the only transcode reason. Buffer and audio settings were restored to
+  AUTO and DIRECT / 8CH ROUTE, playback was stopped, and media volume was restored to 15/15 afterward.
 - 2026-09-04: the resilience gate is physically complete. A production-key Debug build temporarily
   used an opaque backed-up session plus an ADB-reverse loopback Jellyfin fixture on Glass. The fixture
   intentionally severed the first safe `/Views` GET; the real JNI/HttpURLConnection path logged an
