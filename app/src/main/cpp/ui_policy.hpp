@@ -5,21 +5,6 @@
 #include <string>
 #include <string_view>
 
-enum class PlayerControlKind {
-    PlayPause,
-    Audio,
-    Subtitles,
-};
-
-enum class PlayerBackAction {
-    DismissOverlay,
-    ExitPlayback,
-};
-
-constexpr std::size_t playerControlCount() {
-    return 3;
-}
-
 constexpr int mediaGridColumns() { return 5; }
 constexpr bool isTopMediaGridSelection(int selection) {
     return selection >= 0 && selection < mediaGridColumns();
@@ -44,11 +29,6 @@ constexpr float uiSafeAreaFraction(int percent) {
     return static_cast<float>(percent < 0 ? 0 : (percent > 6 ? 6 : percent)) / 100.0f;
 }
 
-constexpr PlayerBackAction playerBackAction(bool controlsActive, bool timedOverlayVisible) {
-    return controlsActive || timedOverlayVisible
-        ? PlayerBackAction::DismissOverlay
-        : PlayerBackAction::ExitPlayback;
-}
 
 constexpr float subtitleBottomY(bool playbackOverlayVisible, int position) {
     const int clamped = std::clamp(position, 0, 2);
@@ -60,9 +40,4 @@ constexpr int wrappedIndex(int index, int delta, int count) {
     if (count <= 0) return 0;
     const int value = (index + delta) % count;
     return value < 0 ? value + count : value;
-}
-
-constexpr PlayerControlKind playerControlKind(std::size_t index) {
-    return index == 0 ? PlayerControlKind::PlayPause
-        : (index == 1 ? PlayerControlKind::Audio : PlayerControlKind::Subtitles);
 }

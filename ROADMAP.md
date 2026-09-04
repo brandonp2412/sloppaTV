@@ -379,6 +379,16 @@ required for TV hardware, Android TV integration, and final performance work.
   252/239 ms median cold launch, 40,332/39,936 KB PSS, 0.0% idle CPU and 16.67/16.72-16.73 ms navigation median/p95 with 0.8%
   intervals over 20 ms, matching the established run-to-run range. `main.cpp` is now 6,292 lines versus 7,194 before the
   architecture pass.
+- 2026-09-05: Player control/overlay and seek telemetry state now lives in `PlayerScreenState` instead of seven independent
+  `SloppaApp` fields. It owns control focus, overlay lifetime, cached position/duration, pending seek targets and the post-seek
+  telemetry holdoff; the corresponding player-only policy was removed from the generic `ui_policy.hpp`. Host tests cover
+  control clamping, overlay/back behavior, playback initialization, seek holdoff/acceptance and session reset; the full host
+  suite and optimized Release build pass. Physical streamer acceptance resumed Brooklyn Nine-Nine `48 Hours` at the preserved
+  3:51 position, verified player control focus, Back dismissing controls without exiting, a paused 3:51 -> 4:01 -> 3:51 seek
+  round trip, and a subsequent Back exiting playback while preserving the original progress. No fatal/native-signal/ANR
+  finding was observed. The matching 10/3/3 checkpoint measured 244.5 ms median cold launch, 39,864 KB PSS, 0.0% idle CPU and
+  16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, within the established run-to-run range. `main.cpp` is
+  now 6,253 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
