@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 100 / 139 verified (71.9%); 39 partial; none unbuilt.
+Status at 2026-09-04: 101 / 139 verified (72.7%); 38 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -66,7 +66,7 @@ required for TV hardware, Android TV integration, and final performance work.
 ### Settings, resilience, and release
 
 - [~] Buffer presets, audio mode, display preferences, and user switching E2E; watched-indicator, clock, backdrop, zoom, and refresh-rate display preferences are physically verified and restored.
-- [~] Wake/retry remains outstanding; lifecycle, repeated player teardown, crash/ANR auditing, and memory soak coverage are physically verified.
+- [x] Wake/retry, lifecycle, repeated player teardown, crash/ANR auditing, and memory soak coverage are physically verified.
 - [~] Production signing, reproducibility, and stable CI artifact signing.
 
 ## Acceptance policy
@@ -158,6 +158,14 @@ required for TV hardware, Android TV integration, and final performance work.
   Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
   input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
   signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
+- 2026-09-04: the resilience gate is physically complete. A production-key Debug build temporarily
+  used an opaque backed-up session plus an ADB-reverse loopback Jellyfin fixture on Glass. The fixture
+  intentionally severed the first safe `/Views` GET; the real JNI/HttpURLConnection path logged an
+  unexpected-end-of-stream failure, waited 250 ms, retried, and rendered the fixture Home successfully
+  in 488 ms. A separate physical sleep/wake cycle changed Android from Awake to Asleep to Awake while
+  preserving the same sloppaTV PID and restored `SloppaNativeActivity` with a clean 1920x1080 EGL
+  reattach and no fatal exception, native signal, or ANR. The original session was restored byte-for-byte,
+  ADB reverse was removed, and the production Release was reinstalled in place afterward.
 - 2026-09-04: repeated clean production-key builds have identical ZIP entries, metadata, timestamps,
   and payload hashes; whole-APK SHA-256 differs only in the Android APK Signing Block. CI now accepts
   a stable production keystore and credentials from Actions secrets, with an ephemeral identity fallback
