@@ -6,6 +6,7 @@
 
 #include "app_settings.hpp"
 #include "audio_policy.hpp"
+#include "browse_screen.hpp"
 #include "deep_link.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
@@ -212,24 +213,6 @@ struct PendingExternalLaunch {
     ExternalPlayerApp player;
     std::string url;
     std::string subtitleUrl;
-};
-
-struct BrowseSnapshot {
-    JellyfinItem container;
-    std::vector<JellyfinItem> items;
-    int selection = 0;
-    int nextIndex = 0;
-    bool hasMore = false;
-};
-
-enum class BrowseContentMode {
-    All,
-    Favorites,
-    Genres,
-    GenreItems,
-    Letters,
-    LetterItems,
-    Collections,
 };
 
 constexpr int kTextInputSearch = 1;
@@ -1106,73 +1089,47 @@ private:
 
     void handleBrowseKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            browseFilterFocused_ = false;
-            if (!browseStack_.empty()) {
-                auto previous = std::move(browseStack_.back());
-                browseStack_.pop_back();
-                activeLibrary_ = std::move(previous.container);
-                browseItems_ = std::move(previous.items);
-                browseSelection_ = previous.selection;
-                browseNextIndex_ = previous.nextIndex;
-                browseHasMore_ = previous.hasMore;
-            } else if (browseContentMode_ == BrowseContentMode::GenreItems) {
-                browseContentMode_ = BrowseContentMode::Genres;
-                browseGenre_.clear();
-                browseItems_.clear();
-                browseSelection_ = 0;
-                browseNextIndex_ = 0;
+            const BrowseBackAction action = browseState_.back();
+            if (action == BrowseBackAction::Reload) {
                 loadBrowsePageAsync(false);
-            } else if (browseContentMode_ == BrowseContentMode::LetterItems) {
-                browseContentMode_ = BrowseContentMode::Letters;
-                browseLetter_.clear();
-                populateLetterChoices();
-            } else {
+            } else if (action == BrowseBackAction::LocalPage) {
+                loading_ = false;
+                error_.clear();
+            } else if (action == BrowseBackAction::Exit) {
                 popScreen(Screen::Home);
                 if (screen_ == Screen::Home) homeState_.focusToolbar(1);
-                browseItems_.clear();
             }
             return;
         }
 
-        if (browseFilterFocused_ && browseHasFilterBar()) {
-            const auto labels = browseFilterLabels();
-            if (key == AKEYCODE_DPAD_LEFT) browseFilterSelection_ = std::max(0, browseFilterSelection_ - 1);
-            else if (key == AKEYCODE_DPAD_RIGHT) browseFilterSelection_ = std::min(static_cast<int>(labels.size()) - 1, browseFilterSelection_ + 1);
-            else if (key == AKEYCODE_DPAD_DOWN) browseFilterFocused_ = false;
+        if (browseState_.filterFocused() && browseState_.hasFilterBar()) {
+            if (key == AKEYCODE_DPAD_LEFT) browseState_.moveFilter(-1);
+            else if (key == AKEYCODE_DPAD_RIGHT) browseState_.moveFilter(1);
+            else if (key == AKEYCODE_DPAD_DOWN) browseState_.setFilterFocused(false);
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                browseFilterFocused_ = false;
-                applyBrowseFilter(browseFilterSelection_);
+                browseState_.setFilterFocused(false);
+                applyBrowseFilter(browseState_.filterSelection());
             }
             return;
         }
 
-        if (key == AKEYCODE_DPAD_UP && browseHasFilterBar() && isTopMediaGridSelection(browseSelection_)) {
-            browseFilterFocused_ = true;
+        if (key == AKEYCODE_DPAD_UP && browseState_.hasFilterBar() && isTopMediaGridSelection(browseState_.selection())) {
+            browseState_.setFilterFocused(true);
             return;
         }
-        if (browseItems_.empty()) return;
+        if (browseState_.items().empty()) return;
         if (isItemContextKey(key)) {
-            const auto& selected = browseItems_[static_cast<size_t>(browseSelection_)];
+            const auto& selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
             if (supportsItemContextMenu(selected)) openItemMenuForItem(selected);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const auto selected = browseItems_[static_cast<size_t>(browseSelection_)];
+            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
             if (selected.type == "Genre") {
-                browseGenre_ = selected.name;
-                browseContentMode_ = BrowseContentMode::GenreItems;
-                browseItems_.clear();
-                browseSelection_ = 0;
-                browseNextIndex_ = 0;
-                browseHasMore_ = false;
+                browseState_.selectGenre(selected.name);
                 loadBrowsePageAsync(false);
             } else if (selected.type == "Letter") {
-                browseLetter_ = selected.name;
-                browseContentMode_ = BrowseContentMode::LetterItems;
-                browseItems_.clear();
-                browseSelection_ = 0;
-                browseNextIndex_ = 0;
-                browseHasMore_ = false;
+                browseState_.selectLetter(selected.name);
                 loadBrowsePageAsync(false);
             } else if (isBrowsableContainer(selected)) {
                 openBrowseContainer(selected, true);
@@ -1181,8 +1138,12 @@ private:
             }
             return;
         }
-        moveGridSelection(key, browseItems_, browseSelection_);
-        if (browseHasMore_ && !loading_ && browseSelection_ >= static_cast<int>(browseItems_.size()) - 12) {
+        int selection = browseState_.selection();
+        auto& items = browseState_.items();
+        moveGridSelection(key, items, selection);
+        browseState_.setSelection(selection);
+        if (browseState_.hasMore() && !loading_
+            && browseState_.selection() >= static_cast<int>(items.size()) - 12) {
             loadMoreBrowseAsync();
         }
     }
@@ -2524,17 +2485,7 @@ private:
         home_ = {};
         homeState_.reset();
         librarySelection_ = 0;
-        activeLibrary_ = {};
-        browseItems_.clear();
-        browseSelection_ = 0;
-        browseNextIndex_ = 0;
-        browseHasMore_ = false;
-        browseStack_.clear();
-        browseContentMode_ = BrowseContentMode::All;
-        browseFilterFocused_ = false;
-        browseFilterSelection_ = 0;
-        browseGenre_.clear();
-        browseLetter_.clear();
+        browseState_.clear();
         searchQuery_.clear();
         searchResults_.clear();
         searchSelection_ = 0;
@@ -2640,13 +2591,9 @@ private:
 
     void openLibrary(const JellyfinItem& library) {
         if (loading_ || library.id.empty()) return;
-        browseStack_.clear();
-        browseFilterFocused_ = false;
-        browseFilterSelection_ = 0;
-        browseContentMode_ = BrowseContentMode::All;
-        browseGenre_.clear();
-        browseLetter_.clear();
-        openBrowseContainer(library, false);
+        browseState_.resetForLibrary(library);
+        pushScreen(Screen::Browse);
+        loadBrowsePageAsync(false);
     }
 
     void openLibraryByCollectionType(const std::string& collectionType) {
@@ -2661,95 +2608,40 @@ private:
         openLibrary(*library);
     }
 
-    bool browseHasFilterBar() const {
-        return browseStack_.empty() && (activeLibrary_.collectionType == "movies"
-            || activeLibrary_.collectionType == "tvshows" || activeLibrary_.collectionType == "mixed");
-    }
-
-    std::vector<std::string> browseFilterLabels() const {
-        std::vector<std::string> labels{"ALL", "FAVORITES", "GENRES", "A-Z"};
-        if (activeLibrary_.collectionType == "movies") labels.emplace_back("COLLECTIONS");
-        return labels;
-    }
-
-    void populateLetterChoices() {
-        browseItems_.clear();
-        browseItems_.reserve(26);
-        for (char c = 'A'; c <= 'Z'; ++c) {
-            JellyfinItem item;
-            item.id = std::string(1, c);
-            item.name = item.id;
-            item.type = "Letter";
-            browseItems_.push_back(std::move(item));
-        }
-        browseSelection_ = 0;
-        browseNextIndex_ = static_cast<int>(browseItems_.size());
-        browseHasMore_ = false;
-        loading_ = false;
-        error_.clear();
-    }
-
     void applyBrowseFilter(int selection) {
-        if (loading_ || !browseHasFilterBar()) return;
-        const auto labels = browseFilterLabels();
-        if (labels.empty()) return;
-        browseFilterSelection_ = std::clamp(selection, 0, static_cast<int>(labels.size()) - 1);
-        browseItems_.clear();
-        browseSelection_ = 0;
-        browseNextIndex_ = 0;
-        browseHasMore_ = false;
-        browseGenre_.clear();
-        browseLetter_.clear();
-        switch (browseFilterSelection_) {
-            case 1: browseContentMode_ = BrowseContentMode::Favorites; break;
-            case 2: browseContentMode_ = BrowseContentMode::Genres; break;
-            case 3:
-                browseContentMode_ = BrowseContentMode::Letters;
-                populateLetterChoices();
-                return;
-            case 4: browseContentMode_ = BrowseContentMode::Collections; break;
-            default: browseContentMode_ = BrowseContentMode::All; break;
+        if (loading_) return;
+        if (browseState_.applyFilter(selection)) {
+            loadBrowsePageAsync(false);
+        } else {
+            loading_ = false;
+            error_.clear();
         }
-        loadBrowsePageAsync(false);
     }
 
     void openBrowseContainer(const JellyfinItem& container, bool pushCurrent) {
         if (loading_ || container.id.empty()) return;
-        if (pushCurrent && !activeLibrary_.id.empty()) {
-            browseStack_.push_back(BrowseSnapshot{
-                activeLibrary_,
-                std::move(browseItems_),
-                browseSelection_,
-                browseNextIndex_,
-                browseHasMore_,
-            });
-        }
+        browseState_.openContainer(container, pushCurrent);
         pushScreen(Screen::Browse);
-        activeLibrary_ = container;
-        browseItems_.clear();
-        browseSelection_ = 0;
-        browseNextIndex_ = 0;
-        browseHasMore_ = false;
         loadBrowsePageAsync(false);
     }
 
     void loadMoreBrowseAsync() {
-        if (loading_ || !browseHasMore_ || activeLibrary_.id.empty()) return;
+        if (loading_ || !browseState_.hasMore() || browseState_.activeContainer().id.empty()) return;
         loadBrowsePageAsync(true);
     }
 
     void loadBrowsePageAsync(bool append) {
-        if (loading_ || activeLibrary_.id.empty()) return;
+        if (loading_ || browseState_.activeContainer().id.empty()) return;
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const JellyfinItem container = activeLibrary_;
-        const int startIndex = append ? browseNextIndex_ : 0;
+        const JellyfinItem container = browseState_.activeContainer();
+        const int startIndex = append ? browseState_.nextIndex() : 0;
         const uint64_t generation = requestEpochs_.content.begin();
-        const BrowseContentMode mode = browseContentMode_;
-        const std::string genre = browseGenre_;
-        const std::string letter = browseLetter_;
-        const bool nested = !browseStack_.empty();
+        const BrowseContentMode mode = browseState_.mode();
+        const std::string genre = browseState_.genre();
+        const std::string letter = browseState_.letter();
+        const bool nested = browseState_.nested();
         tasks_.submit([this, session, container, startIndex, append, generation, mode, genre, letter, nested] {
             ApiValueResult<std::vector<JellyfinItem>> result;
             if (nested || mode == BrowseContentMode::All) {
@@ -2774,24 +2666,13 @@ private:
             if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            if (screen_ != Screen::Browse || activeLibrary_.id != container.id) return;
+            if (screen_ != Screen::Browse || browseState_.activeContainer().id != container.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            const int received = static_cast<int>(result.value.size());
-            if (!append) {
-                browseItems_ = std::move(result.value);
-                browseSelection_ = 0;
-            } else {
-                browseItems_.insert(
-                    browseItems_.end(),
-                    std::make_move_iterator(result.value.begin()),
-                    std::make_move_iterator(result.value.end())
-                );
-            }
-            browseNextIndex_ = startIndex + received;
-            browseHasMore_ = mode != BrowseContentMode::Genres && received == kBrowsePageSize;
+            if (append) browseState_.appendPage(std::move(result.value), startIndex, kBrowsePageSize);
+            else browseState_.replacePage(std::move(result.value), kBrowsePageSize);
             error_.clear();
         });
     }
@@ -2906,7 +2787,7 @@ private:
             item.positionTicks = updated.positionTicks;
         };
         for (auto& row : home_.rows) for (auto& item : row.items) apply(item);
-        for (auto& item : browseItems_) apply(item);
+        for (auto& item : browseState_.items()) apply(item);
         for (auto& item : searchResults_) apply(item);
         for (auto& item : detailsSimilar_) apply(item);
         for (auto& item : seasonItems_) apply(item);
@@ -2988,12 +2869,11 @@ private:
             std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
         };
         for (auto& row : home_.rows) remove(row.items);
-        remove(browseItems_);
+        browseState_.removeItem(itemId);
         remove(searchResults_);
         remove(detailsSimilar_);
         remove(seasonItems_);
         remove(episodeItems_);
-        for (auto& snapshot : browseStack_) remove(snapshot.items);
     }
 
     void refreshCurrentItemMetadataAsync() {
@@ -5539,22 +5419,15 @@ private:
     }
 
     void renderBrowse() {
-        std::string heading = activeLibrary_.name.empty() ? "LIBRARY" : activeLibrary_.name;
-        if (browseContentMode_ == BrowseContentMode::Favorites) heading += " - FAVORITES";
-        else if (browseContentMode_ == BrowseContentMode::Genres) heading += " - GENRES";
-        else if (browseContentMode_ == BrowseContentMode::GenreItems && !browseGenre_.empty()) heading += " - " + browseGenre_;
-        else if (browseContentMode_ == BrowseContentMode::Letters) heading += " - A-Z";
-        else if (browseContentMode_ == BrowseContentMode::LetterItems && !browseLetter_.empty()) heading += " - " + browseLetter_;
-        else if (browseContentMode_ == BrowseContentMode::Collections) heading = "COLLECTIONS";
-        renderHeader(heading);
+        renderHeader(browseState_.heading());
 
-        if (browseHasFilterBar()) {
-            const auto labels = browseFilterLabels();
+        if (browseState_.hasFilterBar()) {
+            const auto labels = browseState_.filterLabels();
             float x = 88.0f;
             for (size_t index = 0; index < labels.size(); ++index) {
                 const float width = labels[index] == "COLLECTIONS" ? 235.0f : 176.0f;
-                const bool focused = browseFilterFocused_ && static_cast<int>(index) == browseFilterSelection_;
-                const bool active = static_cast<int>(index) == browseFilterSelection_;
+                const bool focused = browseState_.filterFocused() && static_cast<int>(index) == browseState_.filterSelection();
+                const bool active = static_cast<int>(index) == browseState_.filterSelection();
                 if (focused) {
                     const auto bounds = drawFocusedSurface(x, 160.0f, width, 58.0f, true, false);
                     renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f, labels[index], kText);
@@ -5566,7 +5439,8 @@ private:
             }
         }
 
-        if (browseItems_.empty()) {
+        const auto& items = browseState_.items();
+        if (items.empty()) {
             renderer_.text(690.0f, 450.0f, 3.5f, loading_ ? "LOADING..." : "NOTHING HERE", kText, 600.0f);
             renderer_.text(690.0f, 520.0f, 1.8f, loading_ ? "FETCHING YOUR JELLYFIN LIBRARY" : "TRY ANOTHER FILTER", kMuted, 600.0f);
             return;
@@ -5575,19 +5449,19 @@ private:
         constexpr int columns = mediaGridColumns();
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
-        const bool syntheticPage = browseContentMode_ == BrowseContentMode::Genres || browseContentMode_ == BrowseContentMode::Letters;
+        const bool syntheticPage = browseState_.syntheticPage();
         const float rowStep = syntheticPage ? 190.0f : 430.0f;
         const int visibleRows = syntheticPage ? 4 : 2;
-        const int selectedRow = browseSelection_ / columns;
+        const int selectedRow = browseState_.selection() / columns;
         const int firstRow = std::max(0, selectedRow - 1);
-        for (int index = firstRow * columns; index < static_cast<int>(browseItems_.size()); ++index) {
+        for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
             const int row = index / columns - firstRow;
             const int col = index % columns;
             if (row >= visibleRows) break;
             const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
             const float y = 250.0f + static_cast<float>(row) * rowStep;
-            const bool focused = !browseFilterFocused_ && index == browseSelection_;
-            const auto& item = browseItems_[static_cast<size_t>(index)];
+            const bool focused = !browseState_.filterFocused() && index == browseState_.selection();
+            const auto& item = items[static_cast<size_t>(index)];
             if (syntheticPage) renderTextTile(item, x, y, slotWidth, 160.0f, focused);
             else {
                 const bool showState = item.type != "BoxSet" && item.type != "CollectionFolder";
@@ -6470,17 +6344,7 @@ private:
     HomeScreenState homeState_;
     std::unordered_set<std::string> hiddenHomeItems_;
     int librarySelection_ = 0;
-    JellyfinItem activeLibrary_;
-    std::vector<JellyfinItem> browseItems_;
-    int browseSelection_ = 0;
-    int browseNextIndex_ = 0;
-    bool browseHasMore_ = false;
-    std::vector<BrowseSnapshot> browseStack_;
-    BrowseContentMode browseContentMode_ = BrowseContentMode::All;
-    bool browseFilterFocused_ = false;
-    int browseFilterSelection_ = 0;
-    std::string browseGenre_;
-    std::string browseLetter_;
+    BrowseScreenState browseState_;
 
     std::array<std::string, 3> loginFields_{};
     int loginField_ = 0;
