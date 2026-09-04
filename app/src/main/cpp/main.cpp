@@ -33,6 +33,7 @@
 #include "renderer.hpp"
 #include "task_runner.hpp"
 #include "trickplay_policy.hpp"
+#include "trickplay_preview.hpp"
 #include "video_surface.hpp"
 #include "version_policy.hpp"
 
@@ -202,15 +203,6 @@ struct ArtworkEntry {
     GLuint texture = 0;
     uint64_t textureGeneration = 0;
     uint64_t lastUse = 0;
-};
-
-struct TrickplayPreviewEntry {
-    std::string itemId;
-    int tileIndex = -1;
-    ArtworkState state = ArtworkState::Failed;
-    DecodedImage decoded;
-    GLuint texture = 0;
-    uint64_t textureGeneration = 0;
 };
 
 struct PendingExternalLaunch {
@@ -1954,12 +1946,10 @@ private:
     }
 
     void clearTrickplayPreview() {
-        if (trickplayPreview_.texture != 0 && trickplayPreview_.textureGeneration == renderer_.generation()) {
-            renderer_.deleteTexture(trickplayPreview_.texture);
+        if (trickplayState_.texture() != 0 && trickplayState_.textureGeneration() == renderer_.generation()) {
+            renderer_.deleteTexture(trickplayState_.texture());
         }
-        trickplayPreview_ = {};
-        trickplayPreviewPositionMs_ = -1;
-        trickplayPreviewUntil_ = {};
+        trickplayState_.reset();
     }
 
     void requestTrickplayPreview(int positionMs) {
@@ -1974,21 +1964,13 @@ private:
         );
         if (!frame.valid()) return;
 
-        trickplayPreviewPositionMs_ = std::max(0, positionMs);
-        trickplayPreviewUntil_ = std::chrono::steady_clock::now() + 4s;
-        if (trickplayPreview_.itemId == activePlaybackItem_.id
-            && trickplayPreview_.tileIndex == frame.tileIndex
-            && trickplayPreview_.state != ArtworkState::Failed) {
-            return;
-        }
+        trickplayState_.showAt(positionMs, std::chrono::steady_clock::now());
+        if (trickplayState_.matchesTile(activePlaybackItem_.id, frame.tileIndex) && !trickplayState_.failed()) return;
 
-        if (trickplayPreview_.texture != 0 && trickplayPreview_.textureGeneration == renderer_.generation()) {
-            renderer_.deleteTexture(trickplayPreview_.texture);
+        if (trickplayState_.texture() != 0 && trickplayState_.textureGeneration() == renderer_.generation()) {
+            renderer_.deleteTexture(trickplayState_.texture());
         }
-        trickplayPreview_ = {};
-        trickplayPreview_.itemId = activePlaybackItem_.id;
-        trickplayPreview_.tileIndex = frame.tileIndex;
-        trickplayPreview_.state = ArtworkState::Loading;
+        trickplayState_.beginTile(activePlaybackItem_.id, frame.tileIndex);
         const JellyfinSession session = session_;
         const JellyfinItem item = activePlaybackItem_;
         const int tileIndex = frame.tileIndex;
@@ -1998,9 +1980,9 @@ private:
             std::string decodeError;
             if (image.ok) decoded = imageDecoder_.decode(image.value, decodeError);
             std::scoped_lock lock(stateMutex_);
-            if (trickplayPreview_.itemId != item.id || trickplayPreview_.tileIndex != tileIndex) return;
+            if (!trickplayState_.matchesTile(item.id, tileIndex)) return;
             if (!image.ok || !decoded.valid()) {
-                trickplayPreview_.state = ArtworkState::Failed;
+                trickplayState_.markFailed();
                 __android_log_print(
                     ANDROID_LOG_WARN,
                     kTag,
@@ -2010,39 +1992,34 @@ private:
                 );
                 return;
             }
-            trickplayPreview_.decoded = std::move(decoded);
-            trickplayPreview_.state = ArtworkState::Ready;
+            trickplayState_.applyDecoded(std::move(decoded));
         })) {
-            trickplayPreview_.state = ArtworkState::Failed;
+            trickplayState_.markFailed();
         }
     }
 
     bool drawTrickplayPreview() {
-        if (std::chrono::steady_clock::now() >= trickplayPreviewUntil_
-            || trickplayPreviewPositionMs_ < 0
-            || trickplayPreview_.state != ArtworkState::Ready
-            || trickplayPreview_.itemId != activePlaybackItem_.id
+        if (!trickplayState_.visible(std::chrono::steady_clock::now(), activePlaybackItem_.id)
             || !activePlaybackItem_.trickplay.valid()) {
             return false;
         }
         const auto& info = activePlaybackItem_.trickplay;
         const TrickplayFrame frame = trickplayFrameForPosition(
-            trickplayPreviewPositionMs_,
+            trickplayState_.positionMs(),
             info.intervalMs,
             info.thumbnailCount,
             info.tileWidth,
             info.tileHeight
         );
-        if (!frame.valid() || frame.tileIndex != trickplayPreview_.tileIndex || !trickplayPreview_.decoded.valid()) return false;
-        if (trickplayPreview_.texture == 0 || trickplayPreview_.textureGeneration != renderer_.generation()) {
-            trickplayPreview_.texture = renderer_.createTexture(
-                trickplayPreview_.decoded.width,
-                trickplayPreview_.decoded.height,
-                trickplayPreview_.decoded.rgba.data()
+        if (!frame.valid() || frame.tileIndex != trickplayState_.tileIndex()) return false;
+        if (trickplayState_.texture() == 0 || trickplayState_.textureGeneration() != renderer_.generation()) {
+            const auto& decoded = trickplayState_.decoded();
+            trickplayState_.setTexture(
+                renderer_.createTexture(decoded.width, decoded.height, decoded.rgba.data()),
+                renderer_.generation()
             );
-            trickplayPreview_.textureGeneration = renderer_.generation();
         }
-        if (trickplayPreview_.texture == 0) return false;
+        if (trickplayState_.texture() == 0) return false;
 
         constexpr float previewWidth = 420.0f;
         const float previewHeight = std::clamp(
@@ -2051,13 +2028,14 @@ private:
             270.0f
         );
         const double progress = playerScreenState_.durationMs() > 0
-            ? std::clamp(static_cast<double>(trickplayPreviewPositionMs_) / playerScreenState_.durationMs(), 0.0, 1.0)
+            ? std::clamp(static_cast<double>(trickplayState_.positionMs()) / playerScreenState_.durationMs(), 0.0, 1.0)
             : 0.5;
         const float centerX = 155.0f + static_cast<float>(1610.0 * progress);
         const float x = std::clamp(centerX - previewWidth * 0.5f, 80.0f, Renderer::logicalWidth() - 80.0f - previewWidth);
         constexpr float y = 555.0f;
-        const float sourceWidth = static_cast<float>(trickplayPreview_.decoded.width);
-        const float sourceHeight = static_cast<float>(trickplayPreview_.decoded.height);
+        const auto& decoded = trickplayState_.decoded();
+        const float sourceWidth = static_cast<float>(decoded.width);
+        const float sourceHeight = static_cast<float>(decoded.height);
         const float u0 = std::clamp((frame.cellX * info.width) / sourceWidth, 0.0f, 1.0f);
         const float v0 = std::clamp((frame.cellY * info.height) / sourceHeight, 0.0f, 1.0f);
         const float u1 = std::clamp(((frame.cellX + 1) * info.width) / sourceWidth, 0.0f, 1.0f);
@@ -2066,8 +2044,8 @@ private:
 
         renderer_.rect(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, Color{0.0f, 0.0f, 0.0f, 0.90f});
         renderer_.outline(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, 4.0f, kFocus);
-        renderer_.imageRegion(trickplayPreview_.texture, x, y, previewWidth, previewHeight, u0, v0, u1, v1);
-        renderer_.text(x + 14.0f, y + previewHeight + 13.0f, 1.65f, formatPlaybackTime(trickplayPreviewPositionMs_), kText, previewWidth - 28.0f);
+        renderer_.imageRegion(trickplayState_.texture(), x, y, previewWidth, previewHeight, u0, v0, u1, v1);
+        renderer_.text(x + 14.0f, y + previewHeight + 13.0f, 1.65f, formatPlaybackTime(trickplayState_.positionMs()), kText, previewWidth - 28.0f);
         return true;
     }
 
@@ -6157,9 +6135,7 @@ private:
     VideoZoomMode videoZoomMode_ = VideoZoomMode::Fit;
     PlayerScreenState playerScreenState_;
     PlayerTrackState trackState_;
-    TrickplayPreviewEntry trickplayPreview_;
-    int trickplayPreviewPositionMs_ = -1;
-    std::chrono::steady_clock::time_point trickplayPreviewUntil_{};
+    TrickplayPreviewState trickplayState_;
     std::chrono::steady_clock::time_point lastProgressReport_{};
     std::chrono::steady_clock::time_point lastPlaybackTelemetryRead_{};
     std::chrono::steady_clock::time_point lastPlaybackDurationProbe_{};
