@@ -2,6 +2,7 @@
 
 #include "decoded_image.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -22,10 +23,14 @@ struct ArtworkEntry {
     uint32_t texture = 0;
     uint64_t textureGeneration = 0;
     uint64_t lastUse = 0;
+    std::chrono::steady_clock::time_point retryAfter{};
 };
 
 class ArtworkCache {
 public:
+    using Clock = std::chrono::steady_clock;
+    using TimePoint = Clock::time_point;
+
     explicit ArtworkCache(size_t maxEntries = 0) : maxEntries_(maxEntries) {}
 
     ArtworkEntry* find(const std::string& key) {
@@ -41,8 +46,17 @@ public:
     }
 
     template <typename Release>
-    bool beginLoad(const std::string& key, Release&& release) {
-        if (find(key)) return false;
+    bool beginLoad(const std::string& key, Release&& release, TimePoint now = Clock::now()) {
+        const auto existing = entries_.find(key);
+        if (existing != entries_.end()) {
+            existing->second.lastUse = ++useCounter_;
+            if (existing->second.state != ArtworkState::Failed || now < existing->second.retryAfter) return false;
+            release(existing->second);
+            const uint64_t lastUse = existing->second.lastUse;
+            existing->second = ArtworkEntry{};
+            existing->second.lastUse = lastUse;
+            return true;
+        }
         if (!makeRoom(std::forward<Release>(release))) return false;
         ArtworkEntry entry;
         entry.lastUse = ++useCounter_;
@@ -50,9 +64,11 @@ public:
         return true;
     }
 
-    void markFailed(const std::string& key) {
+    void markFailed(const std::string& key, TimePoint now = Clock::now()) {
         const auto it = entries_.find(key);
-        if (it != entries_.end()) it->second.state = ArtworkState::Failed;
+        if (it == entries_.end()) return;
+        it->second.state = ArtworkState::Failed;
+        it->second.retryAfter = now + std::chrono::seconds(30);
     }
 
     bool markReady(const std::string& key, DecodedImage decoded) {
