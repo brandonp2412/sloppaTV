@@ -454,6 +454,15 @@ required for TV hardware, Android TV integration, and final performance work.
   its real media-segment response while paused, with no fatal/native-signal/ANR finding. The matching 10/3/3 checkpoint measured
   243.0 ms median cold launch, 41,036 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over
   20 ms, within the established run-to-run range. `main.cpp` is now 6,050 lines versus 7,194 before the architecture pass.
+- 2026-09-05: The 269-line frame `tick()` orchestrator is now decomposed into explicit runtime-intent, pending-work collection,
+  external-playback completion/launch, playback-transition start and active-player phases. `tick()` itself is 12 lines, while each
+  phase keeps its own locking and early-return semantics instead of interleaving unrelated lifecycle branches in one function. The
+  full host suite and optimized Release build pass. Physical streamer acceptance exercised a real DirectPlay transition, active
+  player telemetry/media-segment path, pause, seek and stop on Brooklyn Nine-Nine `48 Hours`, then returned progress to 3:52 (one
+  second from the prior 3:51 checkpoint) with no fatal/native-signal/ANR finding. The matching 10/3/3 checkpoint measured 238.0 ms
+  median cold launch, 39,857 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms. The
+  decomposition intentionally trades a small line-count increase for substantially lower per-function complexity and clearer
+  lifecycle locality; `main.cpp` is 6,072 lines.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
