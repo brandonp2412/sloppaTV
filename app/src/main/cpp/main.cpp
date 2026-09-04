@@ -3988,6 +3988,10 @@ private:
             return false;
         }
         auto& entry = *cached;
+        if (entry.state == ArtworkState::Failed) {
+            requestHomeArtwork(item);
+            return false;
+        }
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
@@ -4048,6 +4052,10 @@ private:
             return false;
         }
         auto& entry = *cached;
+        if (entry.state == ArtworkState::Failed) {
+            requestProfileArtwork(saved);
+            return false;
+        }
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
@@ -4101,6 +4109,10 @@ private:
             return false;
         }
         auto& entry = *cached;
+        if (entry.state == ArtworkState::Failed) {
+            requestArtwork(item);
+            return false;
+        }
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
@@ -4152,6 +4164,10 @@ private:
             return false;
         }
         auto& entry = *cached;
+        if (entry.state == ArtworkState::Failed) {
+            requestBackdrop(item);
+            return false;
+        }
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
@@ -4205,6 +4221,10 @@ private:
             return false;
         }
         auto& entry = *cached;
+        if (entry.state == ArtworkState::Failed) {
+            requestLogo(item);
+            return false;
+        }
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {

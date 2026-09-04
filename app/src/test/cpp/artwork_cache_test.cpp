@@ -1,6 +1,7 @@
 #include "artwork_cache.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <vector>
 
@@ -56,6 +57,15 @@ int main() {
     assert(released.size() == 2 && released.back() == 11);
     cache.clear(release);
     assert(cache.size() == 0);
+
+    ArtworkCache retryCache(1);
+    const auto failedAt = ArtworkCache::Clock::now();
+    assert(retryCache.beginLoad("retry", release, failedAt));
+    retryCache.markFailed("retry", failedAt);
+    assert(retryCache.peek("retry") && retryCache.peek("retry")->state == ArtworkState::Failed);
+    assert(!retryCache.beginLoad("retry", release, failedAt + std::chrono::seconds(29)));
+    assert(retryCache.beginLoad("retry", release, failedAt + std::chrono::seconds(30)));
+    assert(retryCache.peek("retry") && retryCache.peek("retry")->state == ArtworkState::Loading);
 
     ArtworkCache unbounded;
     for (int index = 0; index < 50; ++index) {
