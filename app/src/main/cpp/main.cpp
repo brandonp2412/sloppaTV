@@ -6,6 +6,7 @@
 
 #include "account_screen.hpp"
 #include "app_settings.hpp"
+#include "artwork_cache.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
 #include "details_screen.hpp"
@@ -14,6 +15,7 @@
 #include "display_mode.hpp"
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
+#include "home_image_disk_cache.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "jellyfin.hpp"
@@ -195,22 +197,6 @@ struct VirtualKey {
     KeyAction action = KeyAction::Insert;
 };
 
-enum class ArtworkState {
-    Loading,
-    Ready,
-    Failed,
-};
-
-struct ArtworkEntry {
-    ArtworkState state = ArtworkState::Loading;
-    DecodedImage decoded;
-    int sourceWidth = 0;
-    int sourceHeight = 0;
-    GLuint texture = 0;
-    uint64_t textureGeneration = 0;
-    uint64_t lastUse = 0;
-};
-
 constexpr int kTextInputSearch = 1;
 constexpr int kTextInputSettingsSearch = 2;
 constexpr int kTextInputLoginServer = 10;
@@ -286,6 +272,7 @@ public:
           ) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
+        homeDiskCache_.setDataPath(dataPath_);
         loadBundledBrandMark();
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
@@ -2197,10 +2184,8 @@ private:
 
         clearArtworkCache(artwork_);
         clearArtworkCache(homeArtwork_);
-        homeArtworkUseCounter_ = 0;
         clearArtworkCache(backdrops_);
         clearArtworkCache(logos_);
-        artworkUseCounter_ = 0;
         accountState_.clearSessionUi();
         loading_ = false;
         homeLoading_ = false;
@@ -3958,95 +3943,6 @@ private:
             + ":home:v5-480x270:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
     }
 
-    std::string homeDiskCachePath(const std::string& key) const {
-        if (dataPath_.empty()) return {};
-        uint64_t hash = 1469598103934665603ULL;
-        for (const unsigned char value : key) {
-            hash ^= value;
-            hash *= 1099511628211ULL;
-        }
-        std::ostringstream name;
-        name << std::hex << hash << ".img";
-        return dataPath_ + "/home-image-cache/" + name.str();
-    }
-
-    void trimHomeDiskCacheLocked() {
-        if (dataPath_.empty()) return;
-        namespace fs = std::filesystem;
-        const fs::path directory = fs::path(dataPath_) / "home-image-cache";
-        std::error_code ec;
-        if (!fs::exists(directory, ec)) return;
-
-        struct CachedFile {
-            fs::path path;
-            uintmax_t size = 0;
-            fs::file_time_type modified{};
-        };
-        std::vector<CachedFile> files;
-        uintmax_t totalBytes = 0;
-        for (fs::directory_iterator it(directory, ec), end; !ec && it != end; it.increment(ec)) {
-            if (!it->is_regular_file(ec)) continue;
-            CachedFile file;
-            file.path = it->path();
-            file.size = it->file_size(ec);
-            if (ec) { ec.clear(); continue; }
-            file.modified = it->last_write_time(ec);
-            if (ec) { ec.clear(); continue; }
-            totalBytes += file.size;
-            files.push_back(std::move(file));
-        }
-
-        constexpr uintmax_t kMaxDiskBytes = 48ULL * 1024ULL * 1024ULL;
-        constexpr size_t kMaxDiskFiles = 256;
-        if (totalBytes <= kMaxDiskBytes && files.size() <= kMaxDiskFiles) return;
-        std::sort(files.begin(), files.end(), [](const CachedFile& left, const CachedFile& right) {
-            return left.modified < right.modified;
-        });
-        size_t index = 0;
-        while (index < files.size() && (totalBytes > kMaxDiskBytes || files.size() - index > kMaxDiskFiles)) {
-            fs::remove(files[index].path, ec);
-            if (!ec) totalBytes = files[index].size > totalBytes ? 0 : totalBytes - files[index].size;
-            else ec.clear();
-            ++index;
-        }
-    }
-
-    std::optional<std::string> readHomeDiskCache(const std::string& key) {
-        const std::string path = homeDiskCachePath(key);
-        if (path.empty()) return std::nullopt;
-        std::scoped_lock lock(homeDiskCacheMutex_);
-        std::ifstream input(path, std::ios::binary);
-        if (!input) return std::nullopt;
-        std::string bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-        if (bytes.empty()) return std::nullopt;
-        std::error_code ec;
-        std::filesystem::last_write_time(path, std::filesystem::file_time_type::clock::now(), ec);
-        return bytes;
-    }
-
-    void writeHomeDiskCache(const std::string& key, const std::string& bytes) {
-        if (bytes.empty()) return;
-        const std::string path = homeDiskCachePath(key);
-        if (path.empty()) return;
-        std::scoped_lock lock(homeDiskCacheMutex_);
-        std::error_code ec;
-        std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
-        if (ec) return;
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        if (!output) return;
-        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-        output.close();
-        trimHomeDiskCacheLocked();
-    }
-
-    void eraseHomeDiskCache(const std::string& key) {
-        const std::string path = homeDiskCachePath(key);
-        if (path.empty()) return;
-        std::scoped_lock lock(homeDiskCacheMutex_);
-        std::error_code ec;
-        std::filesystem::remove(path, ec);
-    }
-
     void releaseArtworkTexture(ArtworkEntry& entry) {
         if (entry.texture != 0 && entry.textureGeneration == renderer_.generation()) {
             renderer_.deleteTexture(entry.texture);
@@ -4055,58 +3951,25 @@ private:
         entry.textureGeneration = 0;
     }
 
-    void clearArtworkCache(std::unordered_map<std::string, ArtworkEntry>& cache) {
-        for (auto& [key, entry] : cache) {
-            (void)key;
-            releaseArtworkTexture(entry);
-        }
-        cache.clear();
+    void clearArtworkCache(ArtworkCache& cache) {
+        cache.clear([this](ArtworkEntry& entry) { releaseArtworkTexture(entry); });
     }
 
-    void eraseArtworkEntry(std::unordered_map<std::string, ArtworkEntry>& cache, const std::string& key) {
-        const auto it = cache.find(key);
-        if (it == cache.end()) return;
-        releaseArtworkTexture(it->second);
-        cache.erase(it);
-    }
-
-    bool trimArtworkCache(std::unordered_map<std::string, ArtworkEntry>& cache, size_t maxEntries) {
-        while (cache.size() >= maxEntries) {
-            auto victim = cache.end();
-            for (auto it = cache.begin(); it != cache.end(); ++it) {
-                if (it->second.state == ArtworkState::Loading) continue;
-                if (victim == cache.end() || it->second.lastUse < victim->second.lastUse) victim = it;
-            }
-            if (victim == cache.end()) return false;
-            releaseArtworkTexture(victim->second);
-            cache.erase(victim);
-        }
-        return true;
-    }
-
-    bool trimHomeArtworkCache() {
-        return trimArtworkCache(homeArtwork_, 48);
+    void eraseArtworkEntry(ArtworkCache& cache, const std::string& key) {
+        cache.erase(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); });
     }
 
     void requestHomeArtwork(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty()) return;
         const std::string key = homeArtworkKey(item);
-        auto existing = homeArtwork_.find(key);
-        if (existing != homeArtwork_.end()) {
-            existing->second.lastUse = ++homeArtworkUseCounter_;
-            return;
-        }
-        if (!trimHomeArtworkCache()) return;
-        ArtworkEntry entry;
-        entry.lastUse = ++homeArtworkUseCounter_;
-        homeArtwork_.emplace(key, std::move(entry));
+        if (!homeArtwork_.beginLoad(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
 
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
             bool fromDisk = false;
             std::string encoded;
-            if (auto cached = readHomeDiskCache(key)) {
+            if (auto cached = homeDiskCache_.read(key)) {
                 encoded = std::move(*cached);
                 fromDisk = true;
             } else {
@@ -4121,8 +3984,7 @@ private:
                         bytes.error.c_str()
                     );
                     std::scoped_lock lock(stateMutex_);
-                    auto it = homeArtwork_.find(key);
-                    if (it != homeArtwork_.end()) it->second.state = ArtworkState::Failed;
+                    homeArtwork_.markFailed(key);
                     return;
                 }
                 encoded = std::move(bytes.value);
@@ -4131,7 +3993,7 @@ private:
             std::string decodeError;
             DecodedImage decoded = imageDecoder_.decode(encoded, decodeError);
             if (!decoded.valid() && fromDisk) {
-                eraseHomeDiskCache(key);
+                homeDiskCache_.erase(key);
                 auto bytes = api_.downloadHomeImage(session, itemCopy, 480, 270);
                 if (bytes.ok) {
                     encoded = std::move(bytes.value);
@@ -4140,11 +4002,9 @@ private:
                     fromDisk = false;
                 }
             }
-            if (decoded.valid() && !fromDisk) writeHomeDiskCache(key, encoded);
+            if (decoded.valid() && !fromDisk) homeDiskCache_.write(key, encoded);
 
             std::scoped_lock lock(stateMutex_);
-            auto it = homeArtwork_.find(key);
-            if (it == homeArtwork_.end()) return;
             if (!decoded.valid()) {
                 __android_log_print(
                     ANDROID_LOG_WARN,
@@ -4153,13 +4013,10 @@ private:
                     itemCopy.id.c_str(),
                     decodeError.c_str()
                 );
-                it->second.state = ArtworkState::Failed;
+                homeArtwork_.markFailed(key);
                 return;
             }
-            it->second.sourceWidth = decoded.width;
-            it->second.sourceHeight = decoded.height;
-            it->second.decoded = std::move(decoded);
-            it->second.state = ArtworkState::Ready;
+            homeArtwork_.markReady(key, std::move(decoded));
         });
     }
 
@@ -4188,17 +4045,16 @@ private:
     bool drawHomeArtwork(const JellyfinItem& item, float x, float y, float width, float height) {
         if (item.id.empty()) return false;
         const std::string key = homeArtworkKey(item);
-        auto it = homeArtwork_.find(key);
-        if (it == homeArtwork_.end()) {
+        auto* cached = homeArtwork_.find(key);
+        if (!cached) {
             requestHomeArtwork(item);
             return false;
         }
-        auto& entry = it->second;
-        entry.lastUse = ++homeArtworkUseCounter_;
+        auto& entry = *cached;
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
-                homeArtwork_.erase(it);
+                eraseArtworkEntry(homeArtwork_, key);
                 requestHomeArtwork(item);
                 return false;
             }
@@ -4227,45 +4083,38 @@ private:
     void requestProfileArtwork(const JellyfinSession& saved) {
         if (!saved.valid()) return;
         const std::string key = profileArtworkKey(saved);
-        if (profileArtwork_.contains(key)) return;
-        profileArtwork_.emplace(key, ArtworkEntry{});
+        if (!profileArtwork_.beginLoad(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
         tasks_.submit([this, saved, key] {
             auto bytes = api_.downloadUserImage(saved, 180, 180);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
-                auto it = profileArtwork_.find(key);
-                if (it != profileArtwork_.end()) it->second.state = ArtworkState::Failed;
+                profileArtwork_.markFailed(key);
                 return;
             }
             std::string decodeError;
             DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
             std::scoped_lock lock(stateMutex_);
-            auto it = profileArtwork_.find(key);
-            if (it == profileArtwork_.end()) return;
             if (!decoded.valid()) {
-                it->second.state = ArtworkState::Failed;
+                profileArtwork_.markFailed(key);
                 return;
             }
-            it->second.sourceWidth = decoded.width;
-            it->second.sourceHeight = decoded.height;
-            it->second.decoded = std::move(decoded);
-            it->second.state = ArtworkState::Ready;
+            profileArtwork_.markReady(key, std::move(decoded));
         });
     }
 
     bool drawProfileArtwork(const JellyfinSession& saved, float x, float y, float size) {
         if (!saved.valid()) return false;
         const std::string key = profileArtworkKey(saved);
-        auto it = profileArtwork_.find(key);
-        if (it == profileArtwork_.end()) {
+        auto* cached = profileArtwork_.find(key);
+        if (!cached) {
             requestProfileArtwork(saved);
             return false;
         }
-        auto& entry = it->second;
+        auto& entry = *cached;
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
-                profileArtwork_.erase(it);
+                eraseArtworkEntry(profileArtwork_, key);
                 requestProfileArtwork(saved);
                 return false;
             }
@@ -4283,15 +4132,7 @@ private:
     void requestArtwork(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty()) return;
         const std::string key = artworkKey(item);
-        auto existing = artwork_.find(key);
-        if (existing != artwork_.end()) {
-            existing->second.lastUse = ++artworkUseCounter_;
-            return;
-        }
-        if (!trimArtworkCache(artwork_, 12)) return;
-        ArtworkEntry entry;
-        entry.lastUse = ++artworkUseCounter_;
-        artwork_.emplace(key, std::move(entry));
+        if (!artwork_.beginLoad(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
 
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
@@ -4299,41 +4140,34 @@ private:
             auto bytes = api_.downloadPrimaryImage(session, itemCopy, 720, 1080);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
-                auto it = artwork_.find(key);
-                if (it != artwork_.end()) it->second.state = ArtworkState::Failed;
+                artwork_.markFailed(key);
                 return;
             }
 
             std::string decodeError;
             DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
             std::scoped_lock lock(stateMutex_);
-            auto it = artwork_.find(key);
-            if (it == artwork_.end()) return;
             if (!decoded.valid()) {
-                it->second.state = ArtworkState::Failed;
+                artwork_.markFailed(key);
                 return;
             }
-            it->second.sourceWidth = decoded.width;
-            it->second.sourceHeight = decoded.height;
-            it->second.decoded = std::move(decoded);
-            it->second.state = ArtworkState::Ready;
+            artwork_.markReady(key, std::move(decoded));
         });
     }
 
     bool drawArtwork(const JellyfinItem& item, float x, float y, float width, float height, float alpha = 1.0f) {
         if (item.id.empty()) return false;
         const std::string key = artworkKey(item);
-        auto it = artwork_.find(key);
-        if (it == artwork_.end()) {
+        auto* cached = artwork_.find(key);
+        if (!cached) {
             requestArtwork(item);
             return false;
         }
-        auto& entry = it->second;
-        entry.lastUse = ++artworkUseCounter_;
+        auto& entry = *cached;
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
-                artwork_.erase(it);
+                eraseArtworkEntry(artwork_, key);
                 requestArtwork(item);
                 return false;
             }
@@ -4351,55 +4185,40 @@ private:
     void requestBackdrop(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.backdropTag.empty() || settings_.backdropMode <= 0) return;
         const std::string key = backdropKey(item);
-        auto existing = backdrops_.find(key);
-        if (existing != backdrops_.end()) {
-            existing->second.lastUse = ++artworkUseCounter_;
-            return;
-        }
-        if (!trimArtworkCache(backdrops_, 8)) return;
-        ArtworkEntry entry;
-        entry.lastUse = ++artworkUseCounter_;
-        backdrops_.emplace(key, std::move(entry));
+        if (!backdrops_.beginLoad(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
             auto bytes = api_.downloadBackdropImage(session, itemCopy, 1280, 720);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
-                auto it = backdrops_.find(key);
-                if (it != backdrops_.end()) it->second.state = ArtworkState::Failed;
+                backdrops_.markFailed(key);
                 return;
             }
             std::string decodeError;
             DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
             std::scoped_lock lock(stateMutex_);
-            auto it = backdrops_.find(key);
-            if (it == backdrops_.end()) return;
             if (!decoded.valid()) {
-                it->second.state = ArtworkState::Failed;
+                backdrops_.markFailed(key);
                 return;
             }
-            it->second.sourceWidth = decoded.width;
-            it->second.sourceHeight = decoded.height;
-            it->second.decoded = std::move(decoded);
-            it->second.state = ArtworkState::Ready;
+            backdrops_.markReady(key, std::move(decoded));
         });
     }
 
     bool drawBackdrop(const JellyfinItem& item, float alpha = 0.28f) {
         if (settings_.backdropMode <= 0 || item.id.empty() || item.backdropTag.empty()) return false;
         const std::string key = backdropKey(item);
-        auto it = backdrops_.find(key);
-        if (it == backdrops_.end()) {
+        auto* cached = backdrops_.find(key);
+        if (!cached) {
             requestBackdrop(item);
             return false;
         }
-        auto& entry = it->second;
-        entry.lastUse = ++artworkUseCounter_;
+        auto& entry = *cached;
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
-                backdrops_.erase(it);
+                eraseArtworkEntry(backdrops_, key);
                 requestBackdrop(item);
                 return false;
             }
@@ -4419,55 +4238,40 @@ private:
     void requestLogo(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.logoTag.empty()) return;
         const std::string key = logoKey(item);
-        auto existing = logos_.find(key);
-        if (existing != logos_.end()) {
-            existing->second.lastUse = ++artworkUseCounter_;
-            return;
-        }
-        if (!trimArtworkCache(logos_, 12)) return;
-        ArtworkEntry entry;
-        entry.lastUse = ++artworkUseCounter_;
-        logos_.emplace(key, std::move(entry));
+        if (!logos_.beginLoad(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
             auto bytes = api_.downloadLogoImage(session, itemCopy, 800, 240);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
-                auto it = logos_.find(key);
-                if (it != logos_.end()) it->second.state = ArtworkState::Failed;
+                logos_.markFailed(key);
                 return;
             }
             std::string decodeError;
             DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
             std::scoped_lock lock(stateMutex_);
-            auto it = logos_.find(key);
-            if (it == logos_.end()) return;
             if (!decoded.valid()) {
-                it->second.state = ArtworkState::Failed;
+                logos_.markFailed(key);
                 return;
             }
-            it->second.sourceWidth = decoded.width;
-            it->second.sourceHeight = decoded.height;
-            it->second.decoded = std::move(decoded);
-            it->second.state = ArtworkState::Ready;
+            logos_.markReady(key, std::move(decoded));
         });
     }
 
     bool drawLogo(const JellyfinItem& item, float x, float y, float maxWidth, float maxHeight) {
         if (item.id.empty() || item.logoTag.empty()) return false;
         const std::string key = logoKey(item);
-        auto it = logos_.find(key);
-        if (it == logos_.end()) {
+        auto* cached = logos_.find(key);
+        if (!cached) {
             requestLogo(item);
             return false;
         }
-        auto& entry = it->second;
-        entry.lastUse = ++artworkUseCounter_;
+        auto& entry = *cached;
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
-                logos_.erase(it);
+                eraseArtworkEntry(logos_, key);
                 requestLogo(item);
                 return false;
             }
@@ -5876,14 +5680,12 @@ private:
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
-    std::unordered_map<std::string, ArtworkEntry> artwork_;
-    std::unordered_map<std::string, ArtworkEntry> profileArtwork_;
-    std::unordered_map<std::string, ArtworkEntry> homeArtwork_;
-    uint64_t homeArtworkUseCounter_ = 0;
-    uint64_t artworkUseCounter_ = 0;
-    std::mutex homeDiskCacheMutex_;
-    std::unordered_map<std::string, ArtworkEntry> backdrops_;
-    std::unordered_map<std::string, ArtworkEntry> logos_;
+    ArtworkCache artwork_{12};
+    ArtworkCache profileArtwork_;
+    ArtworkCache homeArtwork_{48};
+    HomeImageDiskCache homeDiskCache_;
+    ArtworkCache backdrops_{8};
+    ArtworkCache logos_{12};
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;
