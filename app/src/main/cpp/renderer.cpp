@@ -432,32 +432,54 @@ void Renderer::roundedRect(float x, float y, float w, float h, float radius, Col
     constexpr int pointsPerCorner = segmentsPerCorner + 1;
     constexpr int pointCount = pointsPerCorner * 4;
     constexpr float pi = 3.14159265358979323846f;
-    std::array<Vertex, pointCount> perimeter{};
-    const std::array<std::array<float, 3>, 4> corners{{
-        {{x + w - radius, y + radius, -pi * 0.5f}},
-        {{x + w - radius, y + h - radius, 0.0f}},
-        {{x + radius, y + h - radius, pi * 0.5f}},
-        {{x + radius, y + radius, pi}},
-    }};
-    int point = 0;
-    for (const auto& corner : corners) {
-        for (int i = 0; i <= segmentsPerCorner; ++i) {
-            const float angle = corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
-            perimeter[static_cast<size_t>(point++)] = Vertex{
-                corner[0] + std::cos(angle) * radius,
-                corner[1] + std::sin(angle) * radius,
-                c.r,
-                c.g,
-                c.b,
-                c.a,
-            };
+    const float feather = std::min({1.0f, radius * 0.4f, w * 0.2f, h * 0.2f});
+
+    auto perimeter = [&](float inset, float alpha) {
+        std::array<Vertex, pointCount> points{};
+        const float px = x + inset;
+        const float py = y + inset;
+        const float pw = std::max(0.0f, w - inset * 2.0f);
+        const float ph = std::max(0.0f, h - inset * 2.0f);
+        const float pr = std::clamp(radius - inset, 0.0f, std::min(pw, ph) * 0.5f);
+        const std::array<std::array<float, 3>, 4> corners{{
+            {{px + pw - pr, py + pr, -pi * 0.5f}},
+            {{px + pw - pr, py + ph - pr, 0.0f}},
+            {{px + pr, py + ph - pr, pi * 0.5f}},
+            {{px + pr, py + pr, pi}},
+        }};
+        int point = 0;
+        for (const auto& corner : corners) {
+            for (int i = 0; i <= segmentsPerCorner; ++i) {
+                const float angle = corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
+                points[static_cast<size_t>(point++)] = Vertex{
+                    corner[0] + std::cos(angle) * pr,
+                    corner[1] + std::sin(angle) * pr,
+                    c.r,
+                    c.g,
+                    c.b,
+                    alpha,
+                };
+            }
         }
-    }
+        return points;
+    };
+
+    const auto edge = perimeter(0.0f, 0.0f);
+    const auto opaque = perimeter(feather, c.a);
     const Vertex center{x + w * 0.5f, y + h * 0.5f, c.r, c.g, c.b, c.a};
     for (int i = 0; i < pointCount; ++i) {
-        vertices_.push_back(center);
-        vertices_.push_back(perimeter[static_cast<size_t>(i)]);
-        vertices_.push_back(perimeter[static_cast<size_t>((i + 1) % pointCount)]);
+        const int next = (i + 1) % pointCount;
+        vertices_.insert(vertices_.end(), {
+            center,
+            opaque[static_cast<size_t>(i)],
+            opaque[static_cast<size_t>(next)],
+            opaque[static_cast<size_t>(i)],
+            edge[static_cast<size_t>(i)],
+            edge[static_cast<size_t>(next)],
+            opaque[static_cast<size_t>(i)],
+            edge[static_cast<size_t>(next)],
+            opaque[static_cast<size_t>(next)],
+        });
     }
 }
 
@@ -469,11 +491,8 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
     h *= uiScale_;
     radius = std::clamp(radius * uiScale_, 0.0f, std::min(w, h) * 0.5f);
     thickness = std::clamp(thickness * uiScale_, 0.5f, std::min(w, h) * 0.45f);
-    const float innerX = x + thickness;
-    const float innerY = y + thickness;
     const float innerW = std::max(0.0f, w - thickness * 2.0f);
     const float innerH = std::max(0.0f, h - thickness * 2.0f);
-    const float innerRadius = std::max(0.0f, radius - thickness);
     if (innerW <= 0.0f || innerH <= 0.0f) {
         const Vertex v0{x, y, c.r, c.g, c.b, c.a};
         const Vertex v1{x + w, y, c.r, c.g, c.b, c.a};
@@ -487,50 +506,58 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
     constexpr int pointsPerCorner = segmentsPerCorner + 1;
     constexpr int pointCount = pointsPerCorner * 4;
     constexpr float pi = 3.14159265358979323846f;
-    std::array<Vertex, pointCount> outer{};
-    std::array<Vertex, pointCount> inner{};
-    const std::array<std::array<float, 3>, 4> outerCorners{{
-        {{x + w - radius, y + radius, -pi * 0.5f}},
-        {{x + w - radius, y + h - radius, 0.0f}},
-        {{x + radius, y + h - radius, pi * 0.5f}},
-        {{x + radius, y + radius, pi}},
-    }};
-    const std::array<std::array<float, 3>, 4> innerCorners{{
-        {{innerX + innerW - innerRadius, innerY + innerRadius, -pi * 0.5f}},
-        {{innerX + innerW - innerRadius, innerY + innerH - innerRadius, 0.0f}},
-        {{innerX + innerRadius, innerY + innerH - innerRadius, pi * 0.5f}},
-        {{innerX + innerRadius, innerY + innerRadius, pi}},
-    }};
-    int point = 0;
-    for (size_t cornerIndex = 0; cornerIndex < outerCorners.size(); ++cornerIndex) {
-        for (int i = 0; i <= segmentsPerCorner; ++i) {
-            const float offset = pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner);
-            const float outerAngle = outerCorners[cornerIndex][2] + offset;
-            const float innerAngle = innerCorners[cornerIndex][2] + offset;
-            outer[static_cast<size_t>(point)] = Vertex{
-                outerCorners[cornerIndex][0] + std::cos(outerAngle) * radius,
-                outerCorners[cornerIndex][1] + std::sin(outerAngle) * radius,
-                c.r, c.g, c.b, c.a,
-            };
-            inner[static_cast<size_t>(point)] = Vertex{
-                innerCorners[cornerIndex][0] + std::cos(innerAngle) * innerRadius,
-                innerCorners[cornerIndex][1] + std::sin(innerAngle) * innerRadius,
-                c.r, c.g, c.b, c.a,
-            };
-            ++point;
+    const float feather = std::min({1.0f, thickness * 0.35f, std::max(0.25f, radius * 0.25f)});
+
+    auto perimeter = [&](float inset, float alpha) {
+        std::array<Vertex, pointCount> points{};
+        const float px = x + inset;
+        const float py = y + inset;
+        const float pw = std::max(0.0f, w - inset * 2.0f);
+        const float ph = std::max(0.0f, h - inset * 2.0f);
+        const float pr = std::clamp(radius - inset, 0.0f, std::min(pw, ph) * 0.5f);
+        const std::array<std::array<float, 3>, 4> corners{{
+            {{px + pw - pr, py + pr, -pi * 0.5f}},
+            {{px + pw - pr, py + ph - pr, 0.0f}},
+            {{px + pr, py + ph - pr, pi * 0.5f}},
+            {{px + pr, py + pr, pi}},
+        }};
+        int point = 0;
+        for (const auto& corner : corners) {
+            for (int i = 0; i <= segmentsPerCorner; ++i) {
+                const float angle = corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
+                points[static_cast<size_t>(point++)] = Vertex{
+                    corner[0] + std::cos(angle) * pr,
+                    corner[1] + std::sin(angle) * pr,
+                    c.r,
+                    c.g,
+                    c.b,
+                    alpha,
+                };
+            }
         }
-    }
-    for (int i = 0; i < pointCount; ++i) {
-        const int next = (i + 1) % pointCount;
-        vertices_.insert(vertices_.end(), {
-            outer[static_cast<size_t>(i)],
-            outer[static_cast<size_t>(next)],
-            inner[static_cast<size_t>(next)],
-            outer[static_cast<size_t>(i)],
-            inner[static_cast<size_t>(next)],
-            inner[static_cast<size_t>(i)],
-        });
-    }
+        return points;
+    };
+
+    const auto outerEdge = perimeter(0.0f, 0.0f);
+    const auto outerOpaque = perimeter(feather, c.a);
+    const auto innerOpaque = perimeter(thickness - feather, c.a);
+    const auto innerEdge = perimeter(thickness, 0.0f);
+    auto appendRing = [&](const auto& outer, const auto& inner) {
+        for (int i = 0; i < pointCount; ++i) {
+            const int next = (i + 1) % pointCount;
+            vertices_.insert(vertices_.end(), {
+                outer[static_cast<size_t>(i)],
+                outer[static_cast<size_t>(next)],
+                inner[static_cast<size_t>(next)],
+                outer[static_cast<size_t>(i)],
+                inner[static_cast<size_t>(next)],
+                inner[static_cast<size_t>(i)],
+            });
+        }
+    };
+    appendRing(outerEdge, outerOpaque);
+    appendRing(outerOpaque, innerOpaque);
+    appendRing(innerOpaque, innerEdge);
 }
 
 void Renderer::verticalGradient(float x, float y, float w, float h, Color top, Color bottom) {
@@ -827,6 +854,28 @@ float Renderer::textWidth(float scale, const std::string& value) const {
         }
     }
     return std::max(longest, current);
+}
+
+void Renderer::textCentered(float x, float y, float w, float h, float scale, const std::string& value, Color color) {
+    const float width = textWidth(scale, value);
+    const float textX = x + std::max(0.0f, (w - width) * 0.5f);
+    textVerticallyCentered(textX, y, h, scale, value, color, std::max(0.0f, w));
+}
+
+void Renderer::textVerticallyCentered(
+    float x,
+    float y,
+    float h,
+    float scale,
+    const std::string& value,
+    Color color,
+    float maxWidth
+) {
+    const float effectiveScale = scale * textScale_;
+    const float visualHeight = (fontTexture_ ? 10.0f : 7.0f) * effectiveScale;
+    const float atlasOffset = fontTexture_ ? 0.45f * effectiveScale : 0.0f;
+    const float textY = y + (h - visualHeight) * 0.5f + atlasOffset;
+    text(x, textY, scale, value, color, maxWidth);
 }
 
 void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {

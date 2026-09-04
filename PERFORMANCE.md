@@ -79,6 +79,17 @@ The latest couch-readability redesign was rechecked on the physical Google TV St
 
 The larger cards/text therefore did not regress the sampled navigation tail latency. A final multi-run signed-release SurfaceFlinger suite is still required after the scoped feature set is frozen; this single Benchmark run is a regression checkpoint, not the final release claim.
 
+### UI centering and rounded-edge regression check — 2026-09-04
+
+The card/button/text-field centering pass and rounded-edge antialiasing were checked against the exact clean `e53a913` tree on the same Google TV Streamer using the optimized Benchmark build and the canonical 20 startup / 5 settled-memory / 5 rapid-DPAD workload before and after the change.
+
+- startup median: **252.5 ms → 246.0 ms**; mean: **249.7 ms → 249.1 ms**
+- navigation: **16.67 ms median / 16.73 ms p95 / 0.8% >20 ms** both before and after
+- sampled idle CPU: **0.0%** for all five sloppaTV samples before and after
+- settled-memory medians: PSS **44,154 → 44,576 KB** (+0.96%), RSS **113,079 → 113,571 KB** (+0.44%), Java heap **4,036 → 4,052 KB** (+0.40%), native heap **9,040 → 9,140 KB** (+1.11%)
+
+The memory sample ranges overlap strongly; exact 5-vs-5 permutation checks on the mean deltas were not distinguishable at this sample size (all p >= 0.119). The upward memory medians are therefore retained as measurement noise/inconclusive rather than hidden or claimed as an improvement. The hot-path result is no measurable latency, frame-cadence, dropped-frame, or idle-CPU regression. Raw before/after samples are tracked in [`docs/benchmarks/ui-centering-regression-2026-09-04.json`](docs/benchmarks/ui-centering-regression-2026-09-04.json).
+
 ### Production-signed final-suite checkpoint — 2026-09-04
 
 A fresh canonical `--final-suite` run was completed on the physical Google TV Streamer using the production-signed sloppaTV `0.1.0` APK at commit `fea00884daf1b616bb24bd41b1be1a25b1b833d0`. The comparator was the currently installed `org.jellyfin.androidtv` package, which reports version `0.0.0-dev.1`. Both apps used their persisted sessions against the same Jellyfin server. Because the installed comparator is a development build, these numbers describe this exact installed Jellyfin Android TV build rather than every upstream Jellyfin release.
