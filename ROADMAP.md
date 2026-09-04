@@ -149,7 +149,11 @@ required for TV hardware, Android TV integration, and final performance work.
   selected ASS/SSA use Jellyfin's `Stream.srt` conversion into that same renderer. A fast local-server race was also
   fixed so subtitle cues can commit before the Player screen transition instead of being silently discarded. Physical
   captures verified SRT and ASS dialogue plus LARGE/ON/HIGH versus SMALL/OFF/LOW size, background, and position
-  variants. The original LARGE/OFF/HIGH settings were restored and the temporary library/files were removed.
+  variants. A later physical SPY x FAMILY S1E1 pass lowered the LOW subtitle baseline closer to the bottom edge while
+  keeping active player controls clear: a live English cue rendered at the new no-overlay baseline and another cue
+  remained above the progress/control area while the timed overlay was visible. Media3 stayed READY, the app-scoped
+  fatal/native-signal/ANR audit was clean, and the setting itself was left unchanged. The original isolated-fixture
+  settings were restored and the temporary library/files were removed.
 - 2026-09-04: production-signed caracal branding is visually accepted on the Google TV launcher: the
   installed `sloppaTV` tile renders the caracal artwork, app name, and Jellyfin-for-TV subtitle after
   an in-place update with the matching production key.

@@ -92,6 +92,11 @@ int main() {
     assert(playerBackAction(false, true) == PlayerBackAction::DismissOverlay);
     assert(playerBackAction(false, false) == PlayerBackAction::ExitPlayback);
     assert(!queueOverlayShouldShowError(false));
+    assert(subtitleBottomY(false, 0) == 1000.0f);
+    assert(subtitleBottomY(false, 1) == 905.0f);
+    assert(subtitleBottomY(false, 2) == 810.0f);
+    assert(subtitleBottomY(true, 0) == 790.0f);
+    assert(subtitleBottomY(true, 2) == 600.0f);
     assert(homeRowTop(0) == 170.0f);
     assert(homeRowTop(1) == 490.0f);
     assert(homeRowTop(2) == 825.0f);
