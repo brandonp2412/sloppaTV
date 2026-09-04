@@ -494,6 +494,13 @@ required for TV hardware, Android TV integration, and final performance work.
   Details backdrop/logo after an in-place install, with no fatal/native-signal/ANR or artwork/decode failure. The matching 10/3/3
   checkpoint measured 240.5 ms median cold launch, 39,429 KB PSS, 0.0% idle CPU and 16.67/16.71 ms navigation median/p95 with
   0.8% intervals over 20 ms. `main.cpp` is now 5,796 lines versus 7,194 before the architecture pass.
+- 2026-09-05: Media-segment request/cache state, direct-play fallback-attempt state and the active video-zoom mode now live in
+  `PlaybackSessionState` instead of four unrelated `SloppaApp` fields. The state owns duplicate-request gating, segment lifecycle,
+  active skip-segment lookup, fallback lifecycle and zoom mode, with dedicated host coverage. The full host suite and optimized
+  Release build pass. Physical streamer acceptance resumed Brooklyn Nine-Nine `48 Hours`, loaded the real media-segment response,
+  paused cleanly and restored the saved position exactly to 3:51 with no fatal/native-signal/ANR or playback-report failure. The
+  matching 10/3/3 checkpoint measured 241.0 ms median cold launch, 39,371 KB PSS, 0.0% idle CPU and 16.67/16.74 ms navigation
+  median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 5,724 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
