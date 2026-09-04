@@ -41,6 +41,8 @@ public:
     void horizontalGradient(float x, float y, float w, float h, Color left, Color right);
     void outline(float x, float y, float w, float h, float thickness, Color color);
     void text(float x, float y, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
+    void textCentered(float x, float y, float w, float h, float scale, const std::string& value, Color color);
+    void textVerticallyCentered(float x, float y, float h, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
     float textWidth(float scale, const std::string& value) const;
     GLuint createTexture(int width, int height, const uint8_t* rgbaPixels);
     void deleteTexture(GLuint texture);

@@ -223,6 +223,15 @@ required for TV hardware, Android TV integration, and final performance work.
   sloppaTV cold-launch median was 242.5 ms versus 404.0 ms, settled PSS 40,192 KB versus 152,328 KB,
   and rapid-DPAD p95 16.73 ms versus 33.34 ms. Median frame cadence and sampled idle CPU tied at
   16.67 ms and 0.0%. Raw samples are tracked under `docs/benchmarks/` and summarized in the README.
+- 2026-09-04: card/button/text-field labels now use measured horizontal and vertical centering, including
+  login controls, keyboard keys, profile actions, browse filters, Search/Settings fields, queue actions,
+  player/detail primary actions, confirmation buttons, status pills, and artwork-placeholder cards.
+  Rounded rectangles/outlines now feather their edges instead of exposing six-segment corner faceting.
+  Physical-streamer Home, Settings, focused Settings, and placeholder-card screenshots were inspected
+  with a clean fatal/ANR audit. An exact clean-tree versus modified 20/5/5 Benchmark comparison found
+  startup 252.5 -> 246.0 ms median, identical 16.67/16.73 ms navigation median/p95 and 0.0% idle CPU;
+  the sub-1.2% upward memory medians had strongly overlapping samples and no distinguishable 5-vs-5
+  permutation result. Raw before/after evidence is tracked under `docs/benchmarks/`.
 - 2026-09-04: physical-TV capture tooling now wakes a sleeping target before visual acceptance;
   this was added after a sleeping streamer produced valid-size but entirely black screenshots.
 - 2026-09-04: the production-signed streamer install exposed overlapping Search result metadata.

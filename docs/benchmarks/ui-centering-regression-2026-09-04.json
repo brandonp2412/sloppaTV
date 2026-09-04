@@ -1,0 +1,74 @@
+{
+  "captured_at_utc": {
+    "baseline": "2026-09-04T03:03:02.502584+00:00",
+    "after": "2026-09-04T03:08:52.952440+00:00"
+  },
+  "target": "Google TV Streamer 192.168.1.114:5555",
+  "build_type": "Benchmark",
+  "baseline_commit": "e53a913",
+  "method": "Same physical target, optimized non-debuggable Benchmark build, canonical 20 startup / 5 settled-memory / 5 rapid-DPAD runs before and after the UI centering and rounded-edge rendering change.",
+  "parameters": {
+    "startup_runs": 20,
+    "memory_runs": 5,
+    "navigation_runs": 5,
+    "navigation_events_per_run": 80,
+    "settle_seconds": 6.0
+  },
+  "baseline": {
+    "startup_ms": [203, 257, 266, 252, 229, 258, 214, 252, 253, 289, 235, 278, 262, 272, 234, 242, 215, 268, 264, 251],
+    "memory_samples_kb": [
+      {"pss": 43672, "rss": 112624, "java_heap": 4036, "native_heap": 8512},
+      {"pss": 43592, "rss": 112515, "java_heap": 4076, "native_heap": 8564},
+      {"pss": 44850, "rss": 113747, "java_heap": 4036, "native_heap": 9816},
+      {"pss": 44275, "rss": 113200, "java_heap": 4020, "native_heap": 9280},
+      {"pss": 44154, "rss": 113079, "java_heap": 4044, "native_heap": 9040}
+    ],
+    "idle_cpu_pct": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "navigation_samples": [
+      {"median_ms": 16.67, "p95_ms": 16.73, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.74, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.73, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8}
+    ]
+  },
+  "after": {
+    "startup_ms": [234, 251, 253, 272, 224, 241, 243, 269, 230, 223, 270, 240, 237, 250, 254, 246, 239, 246, 278, 281],
+    "memory_samples_kb": [
+      {"pss": 44576, "rss": 113571, "java_heap": 4088, "native_heap": 9140},
+      {"pss": 44381, "rss": 113351, "java_heap": 4232, "native_heap": 9132},
+      {"pss": 44910, "rss": 113871, "java_heap": 4052, "native_heap": 9816},
+      {"pss": 43657, "rss": 112619, "java_heap": 4052, "native_heap": 8732},
+      {"pss": 44750, "rss": 113719, "java_heap": 4052, "native_heap": 9784}
+    ],
+    "idle_cpu_pct": [0.0, 0.0, 0.0, 0.0, 0.0],
+    "navigation_samples": [
+      {"median_ms": 16.66, "p95_ms": 16.73, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.66, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.72, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.73, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8},
+      {"median_ms": 16.67, "p95_ms": 16.73, "over_20ms_pct": 0.8, "over_33_4ms_pct": 0.8}
+    ]
+  },
+  "summary": {
+    "startup_median_ms": {"baseline": 252.5, "after": 246.0, "after_delta_pct": -2.57},
+    "startup_mean_ms": {"baseline": 249.7, "after": 249.1, "after_delta_pct": -0.24},
+    "navigation_median_ms": {"baseline": 16.67, "after": 16.67},
+    "navigation_p95_ms": {"baseline": 16.73, "after": 16.73},
+    "navigation_over_20ms_pct": {"baseline": 0.8, "after": 0.8},
+    "idle_cpu_median_pct": {"baseline": 0.0, "after": 0.0},
+    "memory_median_kb": {
+      "pss": {"baseline": 44154, "after": 44576, "delta_pct": 0.96},
+      "rss": {"baseline": 113079, "after": 113571, "delta_pct": 0.44},
+      "java_heap": {"baseline": 4036, "after": 4052, "delta_pct": 0.40},
+      "native_heap": {"baseline": 9040, "after": 9140, "delta_pct": 1.11}
+    },
+    "memory_exact_permutation_p_for_mean_delta": {
+      "pss": 0.286,
+      "rss": 0.230,
+      "java_heap": 0.119,
+      "native_heap": 0.365
+    },
+    "interpretation": "No measurable latency, frame-cadence, dropped-frame, or idle-CPU regression. The small upward memory medians are within strongly overlapping five-sample ranges and were not distinguishable in exact 5-vs-5 permutation checks; they are retained here rather than hidden."
+  }
+}
