@@ -18,11 +18,6 @@ struct JellyfinSession {
     }
 };
 
-struct JellyfinChapter {
-    std::string name;
-    int64_t startTicks = 0;
-};
-
 struct JellyfinMediaSegment {
     std::string type;
     int64_t startTicks = 0;
@@ -97,7 +92,6 @@ struct JellyfinItem {
     std::vector<std::string> genres;
     std::vector<std::string> cast;
     std::vector<JellyfinPerson> people;
-    std::vector<JellyfinChapter> chapters;
     std::vector<JellyfinAudioStream> audios;
     std::vector<JellyfinSubtitleStream> subtitles;
     JellyfinTrickplayInfo trickplay;

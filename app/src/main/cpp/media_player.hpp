@@ -34,7 +34,6 @@ public:
     void seekBy(int deltaMs);
     void seekTo(int positionMs);
     bool selectEmbeddedAudioOrdinal(int ordinal);
-    bool setPlaybackSpeed(float speed);
 
     [[nodiscard]] PlayerStatus status() const;
     [[nodiscard]] std::string error() const;
@@ -42,7 +41,6 @@ public:
     [[nodiscard]] int durationMs() const;
     [[nodiscard]] int videoWidth() const;
     [[nodiscard]] int videoHeight() const;
-    [[nodiscard]] float playbackSpeed() const;
 
 private:
     void invokeTransportCommand(const char* methodName, const char* operation);
@@ -55,6 +53,5 @@ private:
     mutable PlayerStatus cachedStatus_ = PlayerStatus::Idle;
     mutable int cachedVideoWidth_ = 0;
     mutable int cachedVideoHeight_ = 0;
-    mutable float cachedPlaybackSpeed_ = 1.0f;
     mutable std::chrono::steady_clock::time_point lastSnapshotPoll_{};
 };

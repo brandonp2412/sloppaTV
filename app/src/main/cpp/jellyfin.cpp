@@ -416,16 +416,6 @@ JellyfinItem JellyfinClient::parseItem(const json& value) const {
             if (item.people.size() >= 12) break;
         }
     }
-    if (value.contains("Chapters") && value["Chapters"].is_array()) {
-        for (const auto& chapter : value["Chapters"]) {
-            if (!chapter.is_object()) continue;
-            JellyfinChapter parsed;
-            parsed.name = chapter.value("Name", std::string{});
-            parsed.startTicks = chapter.value("StartPositionTicks", static_cast<int64_t>(0));
-            item.chapters.push_back(std::move(parsed));
-        }
-    }
-
     if (value.contains("UserData") && value["UserData"].is_object()) {
         item.positionTicks = value["UserData"].value("PlaybackPositionTicks", static_cast<int64_t>(0));
         item.favorite = value["UserData"].value("IsFavorite", false);
@@ -864,7 +854,7 @@ ApiValueResult<JellyfinItem> JellyfinClient::getItem(const JellyfinSession& sess
     const auto response = http_.request(
         "GET",
         session.server + "/Users/" + session.userId + "/Items/" + itemId
-            + "?Fields=Chapters,MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,CommunityRating,OfficialRating,CanDelete,Trickplay",
+            + "?Fields=MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,CommunityRating,OfficialRating,CanDelete,Trickplay",
         headers(&session, session.deviceId)
     );
     if (!response.ok()) {
