@@ -17,6 +17,8 @@ public:
         controlsActive_ = false;
         controlSelection_ = 0;
         overlayUntil_ = {};
+        windowRestorePending_ = false;
+        resumeOnFocus_ = false;
         resetPosition();
     }
 
@@ -104,6 +106,23 @@ public:
 
     [[nodiscard]] int pendingSeekTargetMs() const { return pendingSeekTargetMs_; }
 
+    void beginWindowRestore(bool resumePlayback) {
+        windowRestorePending_ = true;
+        if (resumePlayback) resumeOnFocus_ = true;
+    }
+    [[nodiscard]] bool windowRestorePending() const { return windowRestorePending_; }
+    [[nodiscard]] bool resumeOnFocusRequested() const { return resumeOnFocus_; }
+    void completeWindowRestore() {
+        windowRestorePending_ = false;
+        resumeOnFocus_ = false;
+    }
+    void requestResumeOnFocus() { resumeOnFocus_ = true; }
+    [[nodiscard]] bool takeResumeOnFocus() {
+        if (windowRestorePending_ || !resumeOnFocus_) return false;
+        resumeOnFocus_ = false;
+        return true;
+    }
+
 private:
     bool controlsActive_ = false;
     int controlSelection_ = 0;
@@ -112,4 +131,6 @@ private:
     int durationMs_ = 0;
     int pendingSeekTargetMs_ = -1;
     TimePoint lastSeekIssued_{};
+    bool windowRestorePending_ = false;
+    bool resumeOnFocus_ = false;
 };
