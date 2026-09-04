@@ -72,5 +72,39 @@ int main() {
     state.markCenterLongPressed();
     assert(state.centerLongPressed());
     assert(!state.consumeCenterRelease(true));
+
+    JellyfinHomeRow continueWatching;
+    continueWatching.title = "Continue Watching";
+    continueWatching.items = {JellyfinItem{}, JellyfinItem{}, JellyfinItem{}};
+    continueWatching.items[0].id = "a";
+    continueWatching.items[1].id = "b";
+    continueWatching.items[2].id = "c";
+    JellyfinHomeRow nextUp;
+    nextUp.title = "Next Up";
+    nextUp.items = {JellyfinItem{}, JellyfinItem{}};
+    nextUp.items[0].id = "d";
+    nextUp.items[1].id = "e";
+
+    state.setSelections({2, 1});
+    state.setRow(1);
+    const auto snapshot = state.snapshot({continueWatching, nextUp});
+    assert(!snapshot.toolbarFocused);
+    assert(snapshot.focusedRowTitle == "Next Up");
+    assert(snapshot.selectedItemByRow.at("Continue Watching") == "c");
+    assert(snapshot.selectedItemByRow.at("Next Up") == "e");
+
+    JellyfinHomeRow reorderedNext = nextUp;
+    reorderedNext.items = {nextUp.items[1], nextUp.items[0]};
+    const auto plan = HomeScreenState::restorePlan(snapshot, {reorderedNext, continueWatching});
+    assert(plan.focusedRow == 0);
+    assert(plan.selections.size() == 2);
+    assert(plan.selections[0] == 0);
+    assert(plan.selections[1] == 2);
+
+    state.focusToolbar(2);
+    const auto toolbarSnapshot = state.snapshot({continueWatching, nextUp});
+    const auto toolbarPlan = HomeScreenState::restorePlan(toolbarSnapshot, {nextUp, continueWatching});
+    assert(toolbarSnapshot.toolbarFocused);
+    assert(toolbarPlan.focusedRow == -1);
     return 0;
 }
