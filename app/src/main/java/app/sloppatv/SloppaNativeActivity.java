@@ -19,7 +19,6 @@ import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.KeyEvent;
-import android.view.View;
 import android.view.ViewGroup;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -228,30 +227,6 @@ public final class SloppaNativeActivity extends NativeActivity {
             advances[index] = paint.measureText(String.valueOf((char) (32 + index)));
         }
         return advances;
-    }
-
-    public void attachSubtitleOverlay(View view) {
-        if (view == null) return;
-        runOnUiThread(() -> {
-            if (view.getParent() != null) return;
-            addContentView(
-                view,
-                new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.MATCH_PARENT
-                )
-            );
-            view.bringToFront();
-        });
-    }
-
-    public void detachSubtitleOverlay(View view) {
-        if (view == null) return;
-        runOnUiThread(() -> {
-            if (view.getParent() instanceof ViewGroup) {
-                ((ViewGroup) view.getParent()).removeView(view);
-            }
-        });
     }
 
     /**

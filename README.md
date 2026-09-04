@@ -6,7 +6,7 @@
 
 sloppaTV is an experimental Android TV client for Jellyfin focused on a fast, remote-first, Netflix-style on-demand viewing experience.
 
-The application, navigation, Jellyfin policy/state, queueing, playback reporting and primary UI rendering are implemented in C++20 with Android NDK `NativeActivity` and GLES3. JNI is used where Android exposes no practical NDK equivalent, including HTTP, Media3/ExoPlayer construction, audio-route probing, image decoding and codec/display capability discovery. Small Java platform bridges host ExoPlayer/libass, forward activity/MediaSession callbacks, attach the subtitle overlay, and own the system `DreamService` Surface lifecycle; they do not own application navigation or Jellyfin playback policy.
+The application, navigation, Jellyfin policy/state, queueing, playback reporting, subtitle rendering and primary UI rendering are implemented in C++20 with Android NDK `NativeActivity` and GLES3. JNI is used where Android exposes no practical NDK equivalent, including HTTP, Media3/ExoPlayer construction, audio-route probing, image decoding and codec/display capability discovery. Small Java platform bridges host ExoPlayer, forward activity/MediaSession callbacks, and own the system `DreamService` Surface lifecycle; they do not own application navigation, Jellyfin playback policy, or subtitle presentation.
 
 ## Scope
 

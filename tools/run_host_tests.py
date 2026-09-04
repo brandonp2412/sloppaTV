@@ -12,6 +12,7 @@ PY_TEST_DIR = ROOT / "app" / "src" / "test" / "python"
 BUILD_DIR = ROOT / "build" / "host-tests"
 
 CPP_TESTS = [
+    "app_settings_test.cpp",
     "audio_policy_test.cpp",
     "deep_link_test.cpp",
     "external_player_policy_test.cpp",
@@ -49,6 +50,8 @@ def main() -> int:
             "-Werror",
             "-I",
             str(CPP_DIR),
+            "-I",
+            str(CPP_DIR / "third_party"),
             str(source),
             "-o",
             str(binary),
@@ -74,6 +77,25 @@ def main() -> int:
     ])
     run([str(task_runner_binary)])
 
+    session_store_test = CPP_TEST_DIR / "session_store_test.cpp"
+    session_store_binary = BUILD_DIR / session_store_test.stem
+    run([
+        "g++",
+        "-std=c++20",
+        "-Wall",
+        "-Wextra",
+        "-Wpedantic",
+        "-Werror",
+        "-I",
+        str(CPP_DIR),
+        "-I",
+        str(CPP_DIR / "third_party"),
+        str(session_store_test),
+        str(CPP_DIR / "session_store.cpp"),
+        "-o",
+        str(session_store_binary),
+    ])
+    run([str(session_store_binary)])
 
     run([sys.executable, "-m", "unittest", "discover", "-s", str(PY_TEST_DIR), "-p", "test_*.py"])
     return 0

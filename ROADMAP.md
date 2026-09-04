@@ -270,6 +270,13 @@ required for TV hardware, Android TV integration, and final performance work.
   the distinct `jellyfin` Home and avatar in 178 ms primary-row readiness; switching back to
   `lounge` restored its distinct Home in 173 ms. Both transitions completed without a sloppaTV
   fatal/native-signal/ANR finding, and the original `lounge` session was restored afterward.
+- 2026-09-04: architecture cleanup reduced the `SloppaApp` monolith by moving settings/search presentation policy,
+  session persistence, and subtitle parsing into cohesive host-testable units; consolidated duplicated JVM attach/detach
+  lifetime handling into one JNI utility; removed unused Jellyfin/player APIs and the unreachable Media3/libass subtitle
+  overlay path; and dropped the now-unused `ass-media`/`media3-ui` dependencies. The full host suite and optimized
+  `assembleRelease` pass, the signed release updated the physical Google TV Streamer in place with its existing session
+  intact, and the app rendered normally after wake. A fresh physical playback smoke pass is externally blocked because
+  the streamer's saved Jellyfin hostname currently fails DNS resolution; no app crash or fatal/ANR was observed.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

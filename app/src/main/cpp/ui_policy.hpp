@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cctype>
 #include <cstddef>
 #include <string>
 #include <string_view>
@@ -64,8 +63,6 @@ constexpr PlayerBackAction playerBackAction(bool controlsActive, bool timedOverl
         : PlayerBackAction::ExitPlayback;
 }
 
-constexpr bool queueOverlayShouldShowError(bool /*hasItems*/) { return false; }
-
 constexpr float subtitleBottomY(bool playbackOverlayVisible, int position) {
     const int clamped = std::clamp(position, 0, 2);
     const float base = playbackOverlayVisible ? 790.0f : 1000.0f;
@@ -96,17 +93,6 @@ constexpr int wrappedIndex(int index, int delta, int count) {
     return value < 0 ? value + count : value;
 }
 
-inline bool containsCaseInsensitive(std::string_view text, std::string_view query) {
-    if (query.empty()) return true;
-    if (query.size() > text.size()) return false;
-    return std::search(
-        text.begin(), text.end(),
-        query.begin(), query.end(),
-        [](unsigned char left, unsigned char right) {
-            return std::toupper(left) == std::toupper(right);
-        }
-    ) != text.end();
-}
 
 constexpr PlayerControlKind playerControlKind(std::size_t index) {
     return index == 0 ? PlayerControlKind::PlayPause
@@ -151,8 +137,4 @@ inline ArtworkReference homeArtworkReference(
     const std::string& tag = kind == ArtworkKind::Primary ? primaryTag
         : (kind == ArtworkKind::Thumb ? thumbTag : backdropTag);
     return {kind == ArtworkKind::Backdrop ? backdropOwner : itemId, tag, kind};
-}
-
-constexpr bool subtitleLoadCompleted(bool /*downloadSucceeded*/, bool /*cuesParsed*/) {
-    return true;
 }

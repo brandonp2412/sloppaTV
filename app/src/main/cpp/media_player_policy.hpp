@@ -28,6 +28,13 @@ enum class HdrOverrideMode {
     AllowAllHdr = 2,
 };
 
+struct PlaybackOverrides {
+    int maxAvcLevel = 0;
+    int maxHevcLevel = 0;
+    HdrOverrideMode hdrMode = HdrOverrideMode::Auto;
+    bool forceTranscode = false;
+};
+
 struct PlaybackBufferDurations {
     int minBufferMs = -1;
     int maxBufferMs = -1;
@@ -160,25 +167,8 @@ constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
     return SubtitleStrategy::ServerTranscode;
 }
 
-constexpr bool preferExternalSubtitleDelivery(SubtitleStrategy strategy, bool hasDeliveryUrl) {
-    return strategy == SubtitleStrategy::ClientStyled && hasDeliveryUrl;
-}
-
-constexpr bool useNativeSubtitleRenderer(
-    SubtitleStrategy strategy,
-    bool /*directPlay*/,
-    bool subtitleSelected
-) {
+constexpr bool useNativeSubtitleRenderer(SubtitleStrategy strategy, bool subtitleSelected) {
     return subtitleSelected
         && (strategy == SubtitleStrategy::ClientText
             || strategy == SubtitleStrategy::ClientStyled);
-}
-
-constexpr bool useEmbeddedPlayerSubtitleRenderer(
-    SubtitleStrategy,
-    bool,
-    bool,
-    bool
-) {
-    return false;
 }

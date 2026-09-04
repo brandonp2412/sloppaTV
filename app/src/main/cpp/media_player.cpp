@@ -1,4 +1,5 @@
 #include "media_player.hpp"
+#include "jni_env.hpp"
 #include "media_player_policy.hpp"
 
 #include <android/log.h>
@@ -9,20 +10,7 @@
 namespace {
 constexpr const char* kTag = "sloppaTV/player";
 
-class ScopedEnv {
-public:
-    explicit ScopedEnv(JavaVM* vm) : vm_(vm) {
-        if (!vm_) return;
-        const jint result = vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6);
-        if (result == JNI_EDETACHED && vm_->AttachCurrentThread(&env_, nullptr) == JNI_OK) attached_ = true;
-    }
-    ~ScopedEnv() { if (attached_ && vm_) vm_->DetachCurrentThread(); }
-    JNIEnv* get() const { return env_; }
-private:
-    JavaVM* vm_ = nullptr;
-    JNIEnv* env_ = nullptr;
-    bool attached_ = false;
-};
+using ScopedEnv = ScopedJniEnv;
 
 bool clearException(JNIEnv* env, const char* operation, std::string* error = nullptr) {
     if (!env || !env->ExceptionCheck()) return false;
@@ -80,8 +68,7 @@ void NativeMediaPlayer::startAsync(
     jobject surface,
     int64_t startPositionMs,
     int bufferPreset,
-    int embeddedAudioOrdinal,
-    std::vector<ExternalSubtitleTrack> externalSubtitles
+    int embeddedAudioOrdinal
 ) {
     stop();
     if (!activity_ || !surface || url.empty()) {
@@ -118,7 +105,7 @@ void NativeMediaPlayer::startAsync(
         ? env->GetMethodID(
             playerClass,
             "start",
-            "(Ljava/lang/String;Landroid/view/Surface;JIIIIIILjava/lang/String;Ljava/lang/String;Ljava/lang/String;)V"
+            "(Ljava/lang/String;Landroid/view/Surface;JIIIII)V"
         )
         : nullptr;
     if (!start || clearException(env, "player bridge lookup", &error)) {
@@ -130,12 +117,7 @@ void NativeMediaPlayer::startAsync(
         return;
     }
 
-    const ExternalSubtitleTrack* subtitle = externalSubtitles.empty() ? nullptr : &externalSubtitles.front();
     jstring jUrl = env->NewStringUTF(url.c_str());
-    const jint embeddedSubtitleOrdinal = subtitle ? static_cast<jint>(subtitle->embeddedOrdinal) : static_cast<jint>(-1);
-    jstring jSubtitleUrl = subtitle && !subtitle->path.empty() ? env->NewStringUTF(subtitle->path.c_str()) : nullptr;
-    jstring jSubtitleCodec = subtitle && !subtitle->codec.empty() ? env->NewStringUTF(subtitle->codec.c_str()) : nullptr;
-    jstring jSubtitleLanguage = subtitle && !subtitle->language.empty() ? env->NewStringUTF(subtitle->language.c_str()) : nullptr;
     env->CallVoidMethod(
         localPlayer,
         start,
@@ -146,16 +128,9 @@ void NativeMediaPlayer::startAsync(
         static_cast<jint>(bufferDurations.maxBufferMs),
         static_cast<jint>(bufferDurations.bufferForPlaybackMs),
         static_cast<jint>(bufferDurations.bufferForPlaybackAfterRebufferMs),
-        static_cast<jint>(embeddedAudioOrdinal),
-        embeddedSubtitleOrdinal,
-        jSubtitleUrl,
-        jSubtitleCodec,
-        jSubtitleLanguage
+        static_cast<jint>(embeddedAudioOrdinal)
     );
     if (jUrl) env->DeleteLocalRef(jUrl);
-    if (jSubtitleUrl) env->DeleteLocalRef(jSubtitleUrl);
-    if (jSubtitleCodec) env->DeleteLocalRef(jSubtitleCodec);
-    if (jSubtitleLanguage) env->DeleteLocalRef(jSubtitleLanguage);
     if (clearException(env, "playback start", &error)) {
         env->DeleteLocalRef(playerClass);
         env->DeleteLocalRef(localPlayer);
@@ -297,10 +272,6 @@ bool NativeMediaPlayer::setPlaybackSpeed(float speed) {
     return ok;
 }
 
-bool NativeMediaPlayer::selectTrack(int) { return false; }
-bool NativeMediaPlayer::deselectTrack(int) { return false; }
-bool NativeMediaPlayer::addExternalSubtitle(const std::string&, const std::string&, bool) { return false; }
-
 PlayerStatus NativeMediaPlayer::status() const {
     const auto now = std::chrono::steady_clock::now();
     ScopedEnv scoped(vm_);
@@ -397,7 +368,3 @@ float NativeMediaPlayer::playbackSpeed() const {
     std::scoped_lock lock(mutex_);
     return cachedPlaybackSpeed_;
 }
-
-std::vector<PlayerTrack> NativeMediaPlayer::tracks() const { return {}; }
-int NativeMediaPlayer::selectedAudioTrack() const { return -1; }
-int NativeMediaPlayer::selectedSubtitleTrack() const { return -1; }
