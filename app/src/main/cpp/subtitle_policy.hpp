@@ -20,6 +20,18 @@ constexpr bool shouldRetryFailedSubtitleTranscode(bool isTranscode, int selected
     return isTranscode && selectedSubtitleIndex >= 0;
 }
 
+constexpr bool shouldApplyLoadedSubtitle(
+    std::string_view activeItemId,
+    std::string_view loadedItemId,
+    int selectedSubtitleIndex,
+    int loadedSubtitleIndex,
+    bool loaded
+) {
+    return loaded
+        && activeItemId == loadedItemId
+        && selectedSubtitleIndex == loadedSubtitleIndex;
+}
+
 inline std::string sanitizeSubtitleText(std::string text) {
     auto replaceAll = [](std::string& value, std::string_view from, std::string_view to) {
         size_t position = 0;

@@ -175,14 +175,10 @@ constexpr bool useNativeSubtitleRenderer(
 }
 
 constexpr bool useEmbeddedPlayerSubtitleRenderer(
-    SubtitleStrategy strategy,
-    bool directPlay,
-    bool subtitleEmbedded,
-    bool subtitleSelected
+    SubtitleStrategy,
+    bool,
+    bool,
+    bool
 ) {
-    return subtitleSelected
-        && directPlay
-        && subtitleEmbedded
-        && (strategy == SubtitleStrategy::ClientText
-            || strategy == SubtitleStrategy::ClientStyled);
+    return false;
 }
