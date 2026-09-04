@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 103 / 139 verified (74.1%); 36 partial; none unbuilt.
+Status at 2026-09-04: 104 / 139 verified (74.8%); 35 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -48,7 +48,7 @@ required for TV hardware, Android TV integration, and final performance work.
 ### Accounts, navigation, and browsing
 
 - [~] Quick Connect TV UI; LAN discovery; profile, user, and server switching.
-- [~] Navigation regression and server-version edge cases remain; Movies/Shows/Mixed/folder browsing is physically verified.
+- [~] Navigation regression remains; server-version edge cases and Movies/Shows/Mixed/folder browsing are physically verified.
 - [x] Seasons, nested folders, populated favorites, direct item-options keys.
 - [x] Delete and refresh permissions plus server-side mutation completion.
 
@@ -158,6 +158,12 @@ required for TV hardware, Android TV integration, and final performance work.
   Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
   input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
   signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
+- 2026-09-04: server-version compatibility notices are physically accepted with the isolated loopback
+  Jellyfin fixture on the Google TV Streamer. A synthetic 10.9.11 server loaded Home while showing the
+  persistent below-10.10 upgrade warning, and a synthetic `dev` version loaded Home while showing the
+  transient unrecognized-version compatibility warning. Both runs completed without a sloppaTV fatal
+  exception or ANR. The original session was restored byte-for-byte, ADB reverse was removed, and the
+  production Release returned to the real server afterward.
 - 2026-09-04: playback-buffer and audio-output settings are physically accepted on the Google TV
   Streamer. The same Hell's Paradise episode produced about 50.6 s buffered with AUTO, 106.2 s with
   LARGE, and 213.2 s with EXTRA LARGE after their respective settling intervals; Media3 also logged
