@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 104 / 139 verified (74.8%); 35 partial; none unbuilt.
+Status at 2026-09-04: 105 / 139 verified (75.5%); 34 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -48,7 +48,7 @@ required for TV hardware, Android TV integration, and final performance work.
 ### Accounts, navigation, and browsing
 
 - [~] Quick Connect TV UI; LAN discovery; profile, user, and server switching.
-- [~] Navigation regression remains; server-version edge cases and Movies/Shows/Mixed/folder browsing are physically verified.
+- [x] Navigation regression, server-version edge cases, and Movies/Shows/Mixed/folder browsing are physically verified.
 - [x] Seasons, nested folders, populated favorites, direct item-options keys.
 - [x] Delete and refresh permissions plus server-side mutation completion.
 
@@ -158,6 +158,12 @@ required for TV hardware, Android TV integration, and final performance work.
   Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
   input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
   signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
+- 2026-09-04: physical navigation-stack regression is complete on the production Google TV build.
+  External `ACTION_VIEW` opened Firefly `Trash` Details and Back restored Home; external `ACTION_SEARCH`
+  for `1917` rendered Search and Back restored Home; Home Movies opened the real Movies grid, `1917`
+  Details, Back restored the same Movies grid/focus, and a second Back restored Home; Settings likewise
+  returned to Home through Back. The final app-scoped log audit found no fatal exception, native signal,
+  or ANR across the sequence.
 - 2026-09-04: server-version compatibility notices are physically accepted with the isolated loopback
   Jellyfin fixture on the Google TV Streamer. A synthetic 10.9.11 server loaded Home while showing the
   persistent below-10.10 upgrade warning, and a synthetic `dev` version loaded Home while showing the
