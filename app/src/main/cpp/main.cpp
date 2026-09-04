@@ -20,6 +20,7 @@
 #include "playback_queue.hpp"
 #include "screensaver_policy.hpp"
 #include "session_store.hpp"
+#include "settings_screen.hpp"
 #include "ui_policy.hpp"
 #include "renderer.hpp"
 #include "task_runner.hpp"
@@ -526,11 +527,7 @@ public:
             searchKeyboard_ = false;
             scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
-            settingsSearchQuery_ = text;
-            settingsSearchFocused_ = true;
-            settingsFirstVisible_ = 0;
-            const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
-            if (!matches.empty()) settingsSelection_ = matches.front();
+            settingsScreen_.setSearchText(text);
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
         }
@@ -548,11 +545,7 @@ public:
             searchKeyboard_ = false;
             scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
-            settingsSearchQuery_ = text;
-            settingsSearchFocused_ = true;
-            settingsFirstVisible_ = 0;
-            const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
-            if (!matches.empty()) settingsSelection_ = matches.front();
+            settingsScreen_.setSearchText(text);
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             loginFields_[static_cast<size_t>(mode - kTextInputLoginServer)] = text;
         }
@@ -571,11 +564,7 @@ public:
             searchDebouncePending_ = false;
             searchAsync();
         } else if (mode == kTextInputSettingsSearch) {
-            settingsSearchQuery_ = text;
-            settingsSearchFocused_ = true;
-            settingsFirstVisible_ = 0;
-            const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
-            if (!matches.empty()) settingsSelection_ = matches.front();
+            settingsScreen_.setSearchText(text);
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             const int field = mode - kTextInputLoginServer;
             loginFields_[static_cast<size_t>(field)] = text;
@@ -1329,139 +1318,50 @@ private:
             return;
         }
         if (key == AKEYCODE_SEARCH) {
-            settingsSearchFocused_ = true;
-            showSystemTextInput(settingsSearchQuery_, "Search settings", kTextInputSettingsSearch);
+            settingsScreen_.focusSearch();
+            showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
             return;
         }
-
-        const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
-        if (settingsSearchFocused_) {
-            if (key == AKEYCODE_DPAD_DOWN && !matches.empty()) {
-                settingsSearchFocused_ = false;
-                settingsFirstVisible_ = 0;
-                settingsSelection_ = matches.front();
+        if (settingsScreen_.searchFocused()) {
+            if (key == AKEYCODE_DPAD_DOWN) {
+                settingsScreen_.moveDown();
             } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                showSystemTextInput(settingsSearchQuery_, "Search settings", kTextInputSettingsSearch);
+                showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
             }
             return;
         }
-
-        auto selected = std::find(matches.begin(), matches.end(), settingsSelection_);
-        int selectedPosition = selected == matches.end() ? 0 : static_cast<int>(std::distance(matches.begin(), selected));
         if (key == AKEYCODE_DPAD_UP) {
-            if (selectedPosition <= 0) {
-                settingsSearchFocused_ = true;
-            } else {
-                --selectedPosition;
-                settingsSelection_ = matches[static_cast<size_t>(selectedPosition)];
-                settingsFirstVisible_ = homeFirstVisibleRow(
-                    settingsFirstVisible_, selectedPosition, static_cast<int>(matches.size()), 6
-                );
-            }
+            settingsScreen_.moveUp();
             return;
         }
         if (key == AKEYCODE_DPAD_DOWN) {
-            if (!matches.empty() && selectedPosition + 1 < static_cast<int>(matches.size())) {
-                ++selectedPosition;
-                settingsSelection_ = matches[static_cast<size_t>(selectedPosition)];
-                settingsFirstVisible_ = homeFirstVisibleRow(
-                    settingsFirstVisible_, selectedPosition, static_cast<int>(matches.size()), 6
-                );
-            }
+            settingsScreen_.moveDown();
             return;
         }
         if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
-            if (settingsSelection_ == kAdvancedSettingsToggle) return;
+            const int selection = settingsScreen_.selection();
+            if (selection == kAdvancedSettingsToggle) return;
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
-            if (settingsSelection_ == 0) {
-                static constexpr std::array<int, 6> choices{20, 40, 80, 120, 160, 200};
-                auto it = std::find(choices.begin(), choices.end(), settings_.maxBitrateMbps);
-                int index = it == choices.end() ? 3 : static_cast<int>(std::distance(choices.begin(), it));
-                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-                settings_.maxBitrateMbps = choices[static_cast<size_t>(index)];
-            } else if (settingsSelection_ == 1) {
-                settings_.playbackBufferPreset = std::clamp(settings_.playbackBufferPreset + direction, 0, 2);
-            } else if (settingsSelection_ == 2 || settingsSelection_ == 3) {
-                static constexpr std::array<int, 6> choices{5, 10, 15, 20, 30, 60};
-                int& value = settingsSelection_ == 2 ? settings_.seekBackSeconds : settings_.seekForwardSeconds;
-                auto it = std::find(choices.begin(), choices.end(), value);
-                int index = it == choices.end() ? 1 : static_cast<int>(std::distance(choices.begin(), it));
-                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-                value = choices[static_cast<size_t>(index)];
-            } else if (settingsSelection_ == 4) {
-                settings_.zoomMode = std::clamp(settings_.zoomMode + direction, 0, 2);
-                videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
-            } else if (settingsSelection_ == 5) {
-                settings_.autoplayNext = !settings_.autoplayNext;
-            } else if (settingsSelection_ == 6) {
-                static constexpr std::array<int, 5> choices{2, 3, 4, 5, 6};
-                auto it = std::find(choices.begin(), choices.end(), settings_.stillWatchingAfter);
-                int index = it == choices.end() ? 1 : static_cast<int>(std::distance(choices.begin(), it));
-                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-                settings_.stillWatchingAfter = choices[static_cast<size_t>(index)];
-            } else if (settingsSelection_ == 7) {
-                settings_.refreshRateSwitching = !settings_.refreshRateSwitching;
-                if (!settings_.refreshRateSwitching) displayMode_.restore();
-            } else if (settingsSelection_ == 8) {
-                settings_.showWatchedIndicators = !settings_.showWatchedIndicators;
-            } else if (settingsSelection_ == 9) {
-                settings_.showClock = !settings_.showClock;
-            } else if (settingsSelection_ == 10) {
-                settings_.backdropMode = std::clamp(settings_.backdropMode + direction, 0, 2);
-            } else if (settingsSelection_ == 11) {
-                settings_.subtitleSize = std::clamp(settings_.subtitleSize + direction, 0, 2);
-            } else if (settingsSelection_ == 12) {
-                settings_.subtitleBackground = !settings_.subtitleBackground;
-            } else if (settingsSelection_ == 13) {
-                settings_.subtitlePosition = std::clamp(settings_.subtitlePosition + direction, 0, 2);
-            } else if (settingsSelection_ == 14) {
-                settings_.maxAudioChannels = settings_.maxAudioChannels <= 2 ? 8 : 2;
-            } else if (settingsSelection_ == 15) {
-                static constexpr std::array<int, 10> choices{0, 40, 41, 42, 50, 51, 52, 60, 61, 62};
-                auto it = std::find(choices.begin(), choices.end(), settings_.avcLevelOverride);
-                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
-                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-                settings_.avcLevelOverride = choices[static_cast<size_t>(index)];
-            } else if (settingsSelection_ == 16) {
-                static constexpr std::array<int, 9> choices{0, 120, 123, 150, 153, 156, 180, 183, 186};
-                auto it = std::find(choices.begin(), choices.end(), settings_.hevcLevelOverride);
-                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
-                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-                settings_.hevcLevelOverride = choices[static_cast<size_t>(index)];
-            } else if (settingsSelection_ == 17) {
-                settings_.hdrOverride = std::clamp(settings_.hdrOverride + direction, 0, 2);
-            } else if (settingsSelection_ == 18) {
-                settings_.uiTextSize = std::clamp(settings_.uiTextSize + direction, 0, 2);
-            } else if (settingsSelection_ == 19) {
-                static constexpr std::array<int, 4> choices{0, 2, 4, 6};
-                auto it = std::find(choices.begin(), choices.end(), settings_.safeAreaPercent);
-                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
-                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-                settings_.safeAreaPercent = choices[static_cast<size_t>(index)];
-            } else if (settingsSelection_ == 20) {
-                static constexpr std::array<int, 5> choices{0, 5, 10, 20, 30};
-                auto it = std::find(choices.begin(), choices.end(), settings_.screensaverMinutes);
-                int index = it == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), it));
-                index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-                settings_.screensaverMinutes = choices[static_cast<size_t>(index)];
+            const SettingChangeEffect effects = adjustSetting(settings_, selection, direction);
+            if (effects == SettingChangeEffect::None) return;
+            if (selection == 4) videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
+            if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
+            if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
-            } else if (settingsSelection_ == 21) {
-                cycleExternalPlayer(direction);
             }
-            saveSession(session_);
-        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (settingsSelection_ == 22) {
+            if (hasSettingEffect(effects, SettingChangeEffect::CycleExternalPlayer)) cycleExternalPlayer(direction);
+            if (hasSettingEffect(effects, SettingChangeEffect::Save)) saveSession(session_);
+            return;
+        }
+        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            const int selection = settingsScreen_.selection();
+            if (selection == 22) {
                 openDiagnostics();
-            } else if (settingsSelection_ == 23) {
+            } else if (selection == 23) {
                 openProfiles();
-            } else if (settingsSelection_ == kAdvancedSettingsToggle) {
-                advancedSettings_ = !advancedSettings_;
-                settingsSearchQuery_.clear();
-                const auto nextMatches = matchingSettings(settingsSearchQuery_, advancedSettings_);
-                settingsFirstVisible_ = 0;
-                if (!nextMatches.empty()) settingsSelection_ = nextMatches.front();
-                settingsSearchFocused_ = false;
+            } else if (selection == kAdvancedSettingsToggle) {
+                settingsScreen_.toggleAdvanced();
             }
         }
     }
@@ -2525,12 +2425,7 @@ private:
     void openSettings() {
         refreshExternalPlayers();
         pushScreen(Screen::Settings);
-        advancedSettings_ = false;
-        settingsSearchQuery_.clear();
-        const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
-        settingsSelection_ = matches.empty() ? 18 : matches.front();
-        settingsFirstVisible_ = 0;
-        settingsSearchFocused_ = false;
+        settingsScreen_.reset();
         error_.clear();
     }
 
@@ -6027,44 +5922,22 @@ private:
     void renderSettings() {
         renderer_.text(72.0f, 58.0f, 4.0f, "SETTINGS", kText, 560.0f);
         const auto& labels = settingsLabels();
-        const std::array<std::string, 25> values{
-            std::to_string(settings_.maxBitrateMbps) + " MBIT/S",
-            playbackBufferName(settings_.playbackBufferPreset),
-            std::to_string(settings_.seekBackSeconds) + " SECONDS",
-            std::to_string(settings_.seekForwardSeconds) + " SECONDS",
-            videoZoomName(static_cast<VideoZoomMode>(settings_.zoomMode)),
-            settings_.autoplayNext ? "ON" : "OFF",
-            std::to_string(settings_.stillWatchingAfter) + " AUTOPLAYS",
-            settings_.refreshRateSwitching ? "ON" : "OFF",
-            settings_.showWatchedIndicators ? "ON" : "OFF",
-            settings_.showClock ? "ON" : "OFF",
-            backdropModeName(settings_.backdropMode),
-            subtitleSizeName(settings_.subtitleSize),
-            settings_.subtitleBackground ? "ON" : "OFF",
-            subtitlePositionName(settings_.subtitlePosition),
-            settings_.maxAudioChannels <= 2
-                ? "DOWNMIX TO STEREO"
-                : "DIRECT / " + std::to_string(std::max(2, api_.deviceCodecSupport().maxAudioOutputChannels)) + "CH ROUTE",
-            avcLevelName(settings_.avcLevelOverride),
-            hevcLevelName(settings_.hevcLevelOverride),
-            hdrOverrideName(settings_.hdrOverride),
-            uiTextSizeName(settings_.uiTextSize),
-            settings_.safeAreaPercent == 0 ? "OFF" : std::to_string(settings_.safeAreaPercent) + "% PER EDGE",
-            screensaverName(settings_.screensaverMinutes),
+        const auto values = settingsValues(
+            settings_,
+            api_.deviceCodecSupport().maxAudioOutputChannels,
             externalPlayerLabel(),
-            "DEVICE / SERVER / PLAYBACK",
-            session_.username.empty() ? "CURRENT USER" : session_.username,
-            advancedSettings_ ? "SHOW COMMON" : "SHOW TECHNICAL",
-        };
+            session_.username,
+            settingsScreen_.advanced()
+        );
 
         renderer_.roundedRect(1070.0f, 52.0f, 760.0f, 58.0f, 20.0f, Color{0.035f, 0.04f, 0.052f, 0.88f});
-        if (settingsSearchFocused_) renderer_.roundedOutline(1068.0f, 50.0f, 764.0f, 62.0f, 22.0f, 2.5f, kFocus);
+        if (settingsScreen_.searchFocused()) renderer_.roundedOutline(1068.0f, 50.0f, 764.0f, 62.0f, 22.0f, 2.5f, kFocus);
         renderer_.textVerticallyCentered(1102.0f, 52.0f, 58.0f, 2.20f,
-            settingsSearchQuery_.empty() ? "Search settings" : settingsSearchQuery_,
-            settingsSearchQuery_.empty() ? kMuted : kText, 570.0f);
-        renderer_.textCentered(1640.0f, 52.0f, 170.0f, 58.0f, 1.60f, "SEARCH", settingsSearchFocused_ ? kFocus : kMuted);
+            settingsScreen_.searchQuery().empty() ? "Search settings" : settingsScreen_.searchQuery(),
+            settingsScreen_.searchQuery().empty() ? kMuted : kText, 570.0f);
+        renderer_.textCentered(1640.0f, 52.0f, 170.0f, 58.0f, 1.60f, "SEARCH", settingsScreen_.searchFocused() ? kFocus : kMuted);
 
-        const auto matches = matchingSettings(settingsSearchQuery_, advancedSettings_);
+        const auto matches = settingsScreen_.matches();
         if (matches.empty()) {
             renderer_.text(610.0f, 445.0f, 3.2f, "NO SETTINGS MATCH", kText, 700.0f);
             renderer_.text(570.0f, 510.0f, 1.75f, "PRESS OK OR SEARCH TO EDIT THE FILTER", kMuted, 820.0f);
@@ -6072,9 +5945,9 @@ private:
         }
 
         renderer_.text(120.0f, 165.0f, 2.10f,
-            advancedSettings_ ? "ADVANCED / TECHNICAL" : "COMMON SETTINGS", kSecondaryText, 620.0f);
+            settingsScreen_.advanced() ? "ADVANCED / TECHNICAL" : "COMMON SETTINGS", kSecondaryText, 620.0f);
         renderer_.text(120.0f, 205.0f, 1.40f,
-            advancedSettings_
+            settingsScreen_.advanced()
                 ? "Codec overrides, compatibility and device-level controls"
                 : "The settings you are most likely to change",
             kMuted,
@@ -6082,13 +5955,13 @@ private:
 
         constexpr int visibleRows = 6;
         const int maxFirst = std::max(0, static_cast<int>(matches.size()) - visibleRows);
-        const int first = std::clamp(settingsFirstVisible_, 0, maxFirst);
+        const int first = std::clamp(settingsScreen_.firstVisible(), 0, maxFirst);
         for (int slot = 0; slot < visibleRows; ++slot) {
             const int matchPosition = first + slot;
             if (matchPosition >= static_cast<int>(matches.size())) break;
             const int i = matches[static_cast<size_t>(matchPosition)];
             const float y = 270.0f + static_cast<float>(slot) * 112.0f;
-            const bool focused = !settingsSearchFocused_ && i == settingsSelection_;
+            const bool focused = !settingsScreen_.searchFocused() && i == settingsScreen_.selection();
             const bool actionRow = i == 22 || i == 23 || i == kAdvancedSettingsToggle;
             if (focused) {
                 renderer_.roundedRect(110.0f, y - 8.0f, 1700.0f, 88.0f, 22.0f, Color{0.07f, 0.065f, 0.09f, 0.72f});
@@ -6096,7 +5969,7 @@ private:
             } else {
                 renderer_.rect(132.0f, y + 82.0f, 1650.0f, 1.0f, Color{0.25f, 0.27f, 0.32f, 0.14f});
             }
-            const std::string rowLabel = i == kAdvancedSettingsToggle && advancedSettings_
+            const std::string rowLabel = i == kAdvancedSettingsToggle && settingsScreen_.advanced()
                 ? "BASIC SETTINGS"
                 : labels[static_cast<size_t>(i)];
             renderer_.textVerticallyCentered(145.0f, y - 8.0f, 88.0f, 2.20f, rowLabel,
@@ -6562,12 +6435,8 @@ private:
     NavigationStack<Screen> navigation_{Screen::Login};
     bool loading_ = false;
     AppSettings settings_;
+    SettingsScreenState settingsScreen_;
     std::vector<ExternalPlayerApp> externalPlayers_;
-    int settingsSelection_ = 0;
-    int settingsFirstVisible_ = 0;
-    std::string settingsSearchQuery_;
-    bool settingsSearchFocused_ = false;
-    bool advancedSettings_ = false;
     std::string error_;
     std::string notice_;
     std::chrono::steady_clock::time_point noticeUntil_{};

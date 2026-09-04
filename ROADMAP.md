@@ -277,6 +277,12 @@ required for TV hardware, Android TV integration, and final performance work.
   `assembleRelease` pass, the signed release updated the physical Google TV Streamer in place with its existing session
   intact, and the app rendered normally after wake. A fresh physical playback smoke pass is externally blocked because
   the streamer's saved Jellyfin hostname currently fails DNS resolution; no app crash or fatal/ANR was observed.
+- 2026-09-04: the Settings vertical slice now owns its search/filter/navigation state, setting mutation rules,
+  side-effect flags, and displayed values instead of scattering those across `SloppaApp`. Host tests cover focus,
+  scrolling, filtering, common/advanced switching, mutation effects, and value formatting. The optimized Release
+  passed the authenticated physical-TV screenshot suite; manual streamer acceptance also verified NORMAL -> LARGE ->
+  NORMAL restoration, search focus, full-list scrolling to Advanced Settings, and the advanced/common transition with
+  no fatal/native-signal/ANR finding. `main.cpp` is now 6,663 lines, down from 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
