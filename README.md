@@ -14,18 +14,6 @@ Home/browse/search/details, multiple users and servers, Quick Connect, watched/f
 
 The app/UI policy and rendering are C++20 using Android `NativeActivity` and GLES3. Media3 and Android-only services use small Java/JNI bridges.
 
-## Performance
-
-Same-device Google TV Streamer measurements from 2026-09-04 against the installed Jellyfin Android TV development build:
-
-| Metric | sloppaTV | Jellyfin Android TV dev build |
-| --- | ---: | ---: |
-| Cold launch median | **242.5 ms** | 404.0 ms |
-| Settled PSS | **40,192 KB** | 152,328 KB |
-| Rapid-DPAD p95 | **16.73 ms** | 33.34 ms |
-
-Methodology and raw evidence: [PERFORMANCE.md](PERFORMANCE.md) and [`docs/benchmarks/google-tv-streamer-2026-09-04.json`](docs/benchmarks/google-tv-streamer-2026-09-04.json).
-
 ## Build
 
 Requires JDK 21, Android SDK 36, NDK `29.0.14206865`, CMake 3.22.1, and a C++20 host compiler.
