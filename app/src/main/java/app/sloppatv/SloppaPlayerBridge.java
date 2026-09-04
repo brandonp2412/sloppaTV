@@ -47,7 +47,6 @@ public final class SloppaPlayerBridge {
     private volatile long durationMs;
     private volatile int videoWidth;
     private volatile int videoHeight;
-    private volatile float playbackSpeed = 1.0f;
     private volatile boolean released;
 
     public SloppaPlayerBridge(SloppaNativeActivity activity) {
@@ -308,7 +307,6 @@ public final class SloppaPlayerBridge {
         positionMs = Math.max(0L, expectedPlayer.getCurrentPosition());
         long duration = expectedPlayer.getDuration();
         durationMs = duration == C.TIME_UNSET ? 0L : Math.max(0L, duration);
-        playbackSpeed = expectedPlayer.getPlaybackParameters().speed;
         VideoSize size = expectedPlayer.getVideoSize();
         videoWidth = size.width;
         videoHeight = size.height;
@@ -372,14 +370,6 @@ public final class SloppaPlayerBridge {
         });
     }
 
-    public void setPlaybackSpeed(float speed) {
-        final float bounded = Math.max(0.25f, Math.min(2.0f, speed));
-        playbackSpeed = bounded;
-        handler.post(() -> {
-            ExoPlayer current = player;
-            if (current != null) current.setPlaybackSpeed(bounded);
-        });
-    }
 
     public int getState() { return state; }
     public String getError() { return error; }
@@ -387,7 +377,6 @@ public final class SloppaPlayerBridge {
     public long getDurationMs() { return durationMs; }
     public int getVideoWidth() { return videoWidth; }
     public int getVideoHeight() { return videoHeight; }
-    public float getPlaybackSpeed() { return playbackSpeed; }
 
     public void release() {
         if (released) return;

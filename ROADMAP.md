@@ -471,6 +471,14 @@ required for TV hardware, Android TV integration, and final performance work.
   median cold launch, 39,857 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms. The
   decomposition intentionally trades a small line-count increase for substantially lower per-function complexity and clearer
   lifecycle locality; `main.cpp` is 6,072 lines.
+- 2026-09-05: Removed abandoned playback-speed and chapter-control paths that had no production caller, including the native/Java
+  playback-speed JNI surface and chapter parsing/request payload. Also removed dead `SloppaApp` helpers for zoom cycling, notice
+  clearing, library-by-collection lookup and backdrop scrims. The full host suite and optimized Release build pass. Physical
+  streamer acceptance resumed Brooklyn Nine-Nine `48 Hours`, loaded its real media-segment response and remained paused at the
+  preserved 3:51 position with no fatal/native-signal/ANR or playback-report failure. The first 10/3/3 checkpoint was noisy at
+  257.5 ms median startup / 40,047 KB PSS; an immediate confirmation measured 247.0 ms / 39,775 KB. Both held 0.0% idle CPU and
+  16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 5,994 lines versus 7,194 before the
+  architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

@@ -144,7 +144,6 @@ void NativeMediaPlayer::startAsync(
         cachedStatus_ = PlayerStatus::Preparing;
         cachedVideoWidth_ = 0;
         cachedVideoHeight_ = 0;
-        cachedPlaybackSpeed_ = 1.0f;
         lastSnapshotPoll_ = {};
     }
     __android_log_print(ANDROID_LOG_INFO, kTag, "Media3 playback requested (buffer preset %d)", bufferPreset);
@@ -160,7 +159,6 @@ void NativeMediaPlayer::stop() {
         cachedStatus_ = PlayerStatus::Idle;
         cachedVideoWidth_ = 0;
         cachedVideoHeight_ = 0;
-        cachedPlaybackSpeed_ = 1.0f;
         lastSnapshotPoll_ = {};
     }
     if (!playerToRelease) return;
@@ -244,21 +242,6 @@ bool NativeMediaPlayer::selectEmbeddedAudioOrdinal(int ordinal) {
     return ok;
 }
 
-bool NativeMediaPlayer::setPlaybackSpeed(float speed) {
-    ScopedEnv scoped(vm_);
-    JNIEnv* env = scoped.get();
-    if (!env) return false;
-    std::scoped_lock lock(mutex_);
-    if (!player_) return false;
-    jclass playerClass = objectClass(env, player_);
-    jmethodID method = playerClass ? env->GetMethodID(playerClass, "setPlaybackSpeed", "(F)V") : nullptr;
-    const float bounded = std::clamp(speed, 0.25f, 2.0f);
-    if (method) env->CallVoidMethod(player_, method, static_cast<jfloat>(bounded));
-    cachedPlaybackSpeed_ = bounded;
-    const bool ok = method && !clearException(env, "playback speed");
-    if (playerClass) env->DeleteLocalRef(playerClass);
-    return ok;
-}
 
 PlayerStatus NativeMediaPlayer::status() const {
     const auto now = std::chrono::steady_clock::now();
@@ -276,11 +259,9 @@ PlayerStatus NativeMediaPlayer::status() const {
     jmethodID stateMethod = playerClass ? env->GetMethodID(playerClass, "getState", "()I") : nullptr;
     jmethodID widthMethod = playerClass ? env->GetMethodID(playerClass, "getVideoWidth", "()I") : nullptr;
     jmethodID heightMethod = playerClass ? env->GetMethodID(playerClass, "getVideoHeight", "()I") : nullptr;
-    jmethodID speedMethod = playerClass ? env->GetMethodID(playerClass, "getPlaybackSpeed", "()F") : nullptr;
     const jint state = stateMethod ? env->CallIntMethod(player_, stateMethod) : 4;
     if (!env->ExceptionCheck() && widthMethod) cachedVideoWidth_ = std::max(0, static_cast<int>(env->CallIntMethod(player_, widthMethod)));
     if (!env->ExceptionCheck() && heightMethod) cachedVideoHeight_ = std::max(0, static_cast<int>(env->CallIntMethod(player_, heightMethod)));
-    if (!env->ExceptionCheck() && speedMethod) cachedPlaybackSpeed_ = env->CallFloatMethod(player_, speedMethod);
     clearException(env, "state snapshot read");
     if (playerClass) env->DeleteLocalRef(playerClass);
 
@@ -349,10 +330,4 @@ int NativeMediaPlayer::videoHeight() const {
     (void)status();
     std::scoped_lock lock(mutex_);
     return cachedVideoHeight_;
-}
-
-float NativeMediaPlayer::playbackSpeed() const {
-    (void)status();
-    std::scoped_lock lock(mutex_);
-    return cachedPlaybackSpeed_;
 }

@@ -1957,49 +1957,6 @@ private:
         return trackState_.activeSubtitleCue(playerScreenState_.positionMs());
     }
 
-    void cyclePlaybackSpeed() {
-        static constexpr std::array<float, 6> speeds{0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f};
-        const float current = player_.playbackSpeed();
-        size_t best = 0;
-        for (size_t i = 1; i < speeds.size(); ++i) {
-            if (std::abs(speeds[i] - current) < std::abs(speeds[best] - current)) best = i;
-        }
-        player_.setPlaybackSpeed(speeds[(best + 1) % speeds.size()]);
-    }
-
-    void cycleVideoZoom() {
-        const int next = (static_cast<int>(videoZoomMode_) + 1) % 3;
-        videoZoomMode_ = static_cast<VideoZoomMode>(next);
-        settings_.zoomMode = next;
-        saveSession(session_);
-    }
-
-    int currentChapterIndex() const {
-        if (activePlaybackItem_.chapters.empty()) return -1;
-        const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
-        int current = 0;
-        for (size_t i = 1; i < activePlaybackItem_.chapters.size(); ++i) {
-            if (activePlaybackItem_.chapters[i].startTicks > positionTicks) break;
-            current = static_cast<int>(i);
-        }
-        return current;
-    }
-
-    std::string chapterControlLabel() const {
-        if (activePlaybackItem_.chapters.empty()) return "CHAPTER --";
-        const int current = std::max(0, currentChapterIndex());
-        return "CHAPTER " + std::to_string(current + 1) + "/" + std::to_string(activePlaybackItem_.chapters.size());
-    }
-
-    void cycleChapter() {
-        if (activePlaybackItem_.chapters.empty()) return;
-        const int current = std::max(0, currentChapterIndex());
-        const int next = (current + 1) % static_cast<int>(activePlaybackItem_.chapters.size());
-        const int targetMs = static_cast<int>(activePlaybackItem_.chapters[static_cast<size_t>(next)].startTicks / 10000);
-        seekPlaybackTo(targetMs);
-        reportProgressAsync(false);
-    }
-
     std::optional<JellyfinMediaSegment> activeSkippableSegment() const {
         const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
         for (const auto& segment : activeMediaSegments_) {
@@ -2133,12 +2090,6 @@ private:
         noticeUntil_ = persistent ? std::chrono::steady_clock::time_point::max() : now + duration;
         renderBurstUntil_ = std::max(renderBurstUntil_, now + 350ms);
         if (app_ && app_->looper) ALooper_wake(app_->looper);
-    }
-
-    void clearNotice() {
-        notice_.clear();
-        noticePersistent_ = false;
-        noticeUntil_ = {};
     }
 
     void requestServerInfoNoticeAsync() {
@@ -2323,18 +2274,6 @@ private:
         browseState_.resetForLibrary(library);
         pushScreen(Screen::Browse);
         loadBrowsePageAsync(false);
-    }
-
-    void openLibraryByCollectionType(const std::string& collectionType) {
-        const auto library = std::find_if(home_.views.begin(), home_.views.end(), [&](const JellyfinItem& view) {
-            return view.collectionType == collectionType;
-        });
-        if (library == home_.views.end()) {
-            error_ = collectionType == "movies" ? "NO MOVIE LIBRARY FOUND" : "NO SHOW LIBRARY FOUND";
-            openLibraries();
-            return;
-        }
-        openLibrary(*library);
     }
 
     void applyBrowseFilter(int selection) {
@@ -4590,12 +4529,6 @@ private:
             Color{0.0f, 0.0f, 0.0f, strength});
     }
 
-    void drawBackdropScrims() {
-        renderer_.verticalGradient(0, 0, 1920, 1080,
-            Color{0.0f, 0.0f, 0.0f, 0.14f},
-            Color{0.0f, 0.0f, 0.0f, 0.78f});
-        renderer_.rect(0, 0, 760, 1080, Color{0.0f, 0.0f, 0.0f, 0.38f});
-    }
 
     void renderHeader(const std::string& title) {
         renderer_.text(72, 46, 3.9f, "SLOPPATV", kText);
