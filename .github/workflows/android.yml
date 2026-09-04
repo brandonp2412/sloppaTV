@@ -54,27 +54,44 @@ jobs:
             "ndk;29.0.14206865" \
             "cmake;3.22.1"
 
-      - name: Create CI signing identity
+      - name: Configure signing identity
         shell: bash
+        env:
+          SLOPPATV_KEYSTORE_BASE64: ${{ secrets.SLOPPATV_KEYSTORE_BASE64 }}
+          SLOPPATV_STORE_PASSWORD: ${{ secrets.SLOPPATV_STORE_PASSWORD }}
+          SLOPPATV_KEY_ALIAS: ${{ secrets.SLOPPATV_KEY_ALIAS }}
+          SLOPPATV_KEY_PASSWORD: ${{ secrets.SLOPPATV_KEY_PASSWORD }}
         run: |
           CI_KEYSTORE="$RUNNER_TEMP/sloppatv-ci.jks"
-          keytool -genkeypair \
-            -keystore "$CI_KEYSTORE" \
-            -storetype JKS \
-            -storepass sloppatv-ci \
-            -keypass sloppatv-ci \
-            -alias sloppatv-ci \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 1 \
-            -dname "CN=sloppaTV CI, OU=CI, O=sloppaTV, L=Auckland, ST=Auckland, C=NZ" \
-            -noprompt
-          {
-            printf 'storeFile=%s\n' "$CI_KEYSTORE"
-            printf 'storePassword=%s\n' 'sloppatv-ci'
-            printf 'keyAlias=%s\n' 'sloppatv-ci'
-            printf 'keyPassword=%s\n' 'sloppatv-ci'
-          } > key.properties
+          if [[ -n "$SLOPPATV_KEYSTORE_BASE64" && -n "$SLOPPATV_STORE_PASSWORD" && -n "$SLOPPATV_KEY_ALIAS" && -n "$SLOPPATV_KEY_PASSWORD" ]]; then
+            printf '%s' "$SLOPPATV_KEYSTORE_BASE64" | base64 --decode > "$CI_KEYSTORE"
+            {
+              printf 'storeFile=%s\n' "$CI_KEYSTORE"
+              printf 'storePassword=%s\n' "$SLOPPATV_STORE_PASSWORD"
+              printf 'keyAlias=%s\n' "$SLOPPATV_KEY_ALIAS"
+              printf 'keyPassword=%s\n' "$SLOPPATV_KEY_PASSWORD"
+            } > key.properties
+            printf 'SLOPPATV_SIGNING_MODE=stable\n' >> "$GITHUB_ENV"
+          else
+            keytool -genkeypair \
+              -keystore "$CI_KEYSTORE" \
+              -storetype JKS \
+              -storepass sloppatv-ci \
+              -keypass sloppatv-ci \
+              -alias sloppatv-ci \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 1 \
+              -dname "CN=sloppaTV CI, OU=CI, O=sloppaTV, L=Auckland, ST=Auckland, C=NZ" \
+              -noprompt
+            {
+              printf 'storeFile=%s\n' "$CI_KEYSTORE"
+              printf 'storePassword=%s\n' 'sloppatv-ci'
+              printf 'keyAlias=%s\n' 'sloppatv-ci'
+              printf 'keyPassword=%s\n' 'sloppatv-ci'
+            } > key.properties
+            printf 'SLOPPATV_SIGNING_MODE=ephemeral\n' >> "$GITHUB_ENV"
+          fi
 
       - name: Run host policy tests
         run: ./tools/run_host_tests.py
