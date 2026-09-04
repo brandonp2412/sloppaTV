@@ -347,6 +347,16 @@ required for TV hardware, Android TV integration, and final performance work.
   No fatal/native-signal/ANR finding was observed. The matching 10/3/3 checkpoint measured 241.0 ms median cold launch,
   40,471 KB PSS, 0.0% idle CPU and 16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, remaining within
   the established run-to-run range. Media volume was restored to 15/15 and the streamer returned to sleep.
+- 2026-09-05: Playback queue ownership is now localized in `PlaybackQueueState` rather than six independent `SloppaApp`
+  fields. Queue item/current-index state, overlay visibility, item/action focus, repeat mode, reordering, removal, shuffle,
+  and autoplay advancement now move together behind one feature boundary, while playback resolution remains in the app
+  coordinator. Host tests cover queue replacement, selection clamping, movement/removal, repeat cycling, lookup/matching,
+  shuffle and autoplay behavior; the full host suite and optimized Release build pass. Physical streamer acceptance used
+  Brooklyn Nine-Nine `PLAY ALL` to build a 152-item queue, opened and navigated the overlay, cycled repeat through ONE/ALL
+  and back to OFF, closed it, and stopped playback with no fatal/native-signal/ANR finding. Two confirming 10/3/3 checkpoints
+  measured 248/243 ms median cold launch, 39,810/39,875 KB PSS, 0.0% idle CPU and 16.67/16.73-16.74 ms navigation
+  median/p95 with 0.8% intervals over 20 ms, remaining within the established run-to-run range. Media volume was restored
+  to 15/15 and the streamer returned to sleep.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

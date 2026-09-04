@@ -701,7 +701,7 @@ private:
             return 1;
         }
 
-        if (queueOverlayActive_) {
+        if (queueState_.overlayActive()) {
             handleQueueOverlayKey(key);
             return 1;
         }
@@ -1410,7 +1410,7 @@ private:
         return detailsState_.itemMenuActions(
             detail_,
             selectedExternalPlayer().has_value(),
-            !playbackQueue_.empty(),
+            !queueState_.empty(),
             isHiddenFromHome(detail_)
         );
     }
@@ -2234,13 +2234,8 @@ private:
         }
         if (key == AKEYCODE_DPAD_DOWN) {
             openQueueOverlay();
-        } else if (key == AKEYCODE_MEDIA_NEXT && playbackQueueIndex_ >= 0) {
-            const int next = queueNextIndex(
-                playbackQueueIndex_,
-                static_cast<int>(playbackQueue_.size()),
-                queueRepeatMode_,
-                true
-            );
+        } else if (key == AKEYCODE_MEDIA_NEXT && queueState_.currentIndex() >= 0) {
+            const int next = queueState_.nextIndex(true);
             if (next >= 0) playQueuedIndexAsync(next);
         } else if (key == AKEYCODE_DPAD_UP) {
             playerControlsActive_ = true;
@@ -2289,19 +2284,14 @@ private:
                 break;
             }
             case MediaSessionCommandType::Next:
-                if (playbackQueueIndex_ >= 0) {
-                    const int next = queueNextIndex(
-                        playbackQueueIndex_,
-                        static_cast<int>(playbackQueue_.size()),
-                        queueRepeatMode_,
-                        true
-                    );
+                if (queueState_.currentIndex() >= 0) {
+                    const int next = queueState_.nextIndex(true);
                     if (next >= 0) playQueuedIndexAsync(next);
                 }
                 break;
             case MediaSessionCommandType::Previous:
-                if (playbackQueueIndex_ > 0) {
-                    playQueuedIndexAsync(playbackQueueIndex_ - 1);
+                if (queueState_.currentIndex() > 0) {
+                    playQueuedIndexAsync(queueState_.currentIndex() - 1);
                 } else {
                     requestTrickplayPreview(0);
                     seekPlaybackTo(0);
@@ -2397,12 +2387,7 @@ private:
             releaseActivePlayback(true);
         }
 
-        playbackQueue_.clear();
-        playbackQueueIndex_ = -1;
-        queueSelection_ = 0;
-        queueActionSelection_ = 0;
-        queueRepeatMode_ = QueueRepeatMode::Off;
-        queueOverlayActive_ = false;
+        queueState_.reset();
         autoplayChainCount_ = 0;
         stillWatchingPrompt_ = false;
         playbackAudioLanguagePreference_.reset();
@@ -3224,63 +3209,49 @@ private:
     }
 
     void syncNextPlaybackFromQueue() {
-        const int size = static_cast<int>(playbackQueue_.size());
-        const int next = queueNextIndex(playbackQueueIndex_, size, queueRepeatMode_, false);
-        if (next >= 0) nextPlaybackItem_ = playbackQueue_[static_cast<size_t>(next)];
+        const int next = queueState_.nextIndex(false);
+        if (const auto* item = queueState_.itemAt(next)) nextPlaybackItem_ = *item;
         else nextPlaybackItem_.reset();
     }
 
     void shuffleRemainingQueue() {
-        const int size = static_cast<int>(playbackQueue_.size());
-        const int begin = queueShuffleBegin(playbackQueueIndex_, size);
-        if (!queueCanShuffle(playbackQueueIndex_, size)) return;
         static thread_local std::mt19937 generator(std::random_device{}());
-        std::shuffle(playbackQueue_.begin() + begin, playbackQueue_.end(), generator);
-        queueSelection_ = queueDefaultSelection(playbackQueueIndex_, size);
+        if (!queueState_.shuffleRemaining(generator)) return;
         syncNextPlaybackFromQueue();
     }
 
     void openQueueOverlay() {
-        if (playbackQueue_.empty()) {
+        if (!queueState_.openOverlay()) {
             error_.clear();
             return;
         }
-        queueOverlayActive_ = true;
-        queueSelection_ = queueDefaultSelection(playbackQueueIndex_, static_cast<int>(playbackQueue_.size()));
-        queueActionSelection_ = 0;
         error_.clear();
         playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
     }
 
     void moveQueuedItem(int from, int to) {
-        const int size = static_cast<int>(playbackQueue_.size());
-        if (from < 0 || from >= size || to < 0 || to >= size || from == to) return;
-        JellyfinItem item = std::move(playbackQueue_[static_cast<size_t>(from)]);
-        playbackQueue_.erase(playbackQueue_.begin() + from);
-        playbackQueue_.insert(playbackQueue_.begin() + to, std::move(item));
-        queueSelection_ = to;
+        if (!queueState_.moveItem(from, to)) return;
         syncNextPlaybackFromQueue();
     }
 
     void playQueuedIndexAsync(int index, bool restartCurrent = false) {
-        const int size = static_cast<int>(playbackQueue_.size());
-        if (loading_ || index < 0 || index >= size || !session_.valid()) return;
-        if (index == playbackQueueIndex_ && screen_ == Screen::Player && !restartCurrent) {
-            queueOverlayActive_ = false;
+        if (loading_ || index < 0 || index >= queueState_.size() || !session_.valid()) return;
+        if (index == queueState_.currentIndex() && screen_ == Screen::Player && !restartCurrent) {
+            queueState_.closeOverlay();
             return;
         }
 
         const Screen originScreen = screen_;
         const bool replacingPlayer = screen_ == Screen::Player && !activePlaybackItem_.id.empty();
         if (replacingPlayer) releaseActivePlayback(true);
-        const int previousQueueIndex = playbackQueueIndex_;
-        queueOverlayActive_ = false;
+        const int previousQueueIndex = queueState_.currentIndex();
+        queueState_.closeOverlay();
         loading_ = true;
         nextTransitionLoading_ = replacingPlayer;
         stillWatchingPrompt_ = false;
         error_.clear();
         const JellyfinSession session = session_;
-        JellyfinItem queued = playbackQueue_[static_cast<size_t>(index)];
+        JellyfinItem queued = *queueState_.itemAt(index);
         if (restartCurrent) queued.positionTicks = 0;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
@@ -3307,10 +3278,8 @@ private:
             loading_ = false;
             nextTransitionLoading_ = false;
             if (screen_ != originScreen
-                || playbackQueueIndex_ != previousQueueIndex
-                || index < 0
-                || index >= static_cast<int>(playbackQueue_.size())
-                || playbackQueue_[static_cast<size_t>(index)].id != queued.id) {
+                || queueState_.currentIndex() != previousQueueIndex
+                || !queueState_.itemMatches(index, queued.id)) {
                 return;
             }
             if (!target.ok) {
@@ -3318,8 +3287,8 @@ private:
                 error_ = "QUEUE: " + target.error;
                 return;
             }
-            playbackQueueIndex_ = index;
-            playbackQueue_[static_cast<size_t>(index)] = queued;
+            queueState_.setCurrentIndex(index);
+            queueState_.setItemAt(index, queued);
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(queued);
         });
@@ -3327,51 +3296,48 @@ private:
 
     void handleQueueOverlayKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            queueOverlayActive_ = false;
+            queueState_.closeOverlay();
             return;
         }
-        const int size = static_cast<int>(playbackQueue_.size());
+        const int size = queueState_.size();
         if (size <= 0) {
-            queueOverlayActive_ = false;
+            queueState_.closeOverlay();
             return;
         }
-        const int minimumSelection = std::clamp(playbackQueueIndex_, 0, size - 1);
         if (key == AKEYCODE_DPAD_UP) {
-            queueSelection_ = std::max(minimumSelection, queueSelection_ - 1);
+            queueState_.moveSelection(-1);
             return;
         }
         if (key == AKEYCODE_DPAD_DOWN) {
-            queueSelection_ = std::min(size - 1, queueSelection_ + 1);
+            queueState_.moveSelection(1);
             return;
         }
         if (key == AKEYCODE_DPAD_LEFT) {
-            queueActionSelection_ = std::max(0, queueActionSelection_ - 1);
+            queueState_.moveAction(-1);
             return;
         }
         if (key == AKEYCODE_DPAD_RIGHT) {
-            queueActionSelection_ = std::min(6, queueActionSelection_ + 1);
+            queueState_.moveAction(1);
             return;
         }
         if (key != AKEYCODE_DPAD_CENTER && key != AKEYCODE_ENTER) return;
 
-        if (queueActionSelection_ == 0) {
-            if (queueCanPlayNow(queueSelection_, playbackQueueIndex_, size)) playQueuedIndexAsync(queueSelection_);
-        } else if (queueActionSelection_ == 1) {
-            if (queueCanPlayNext(queueSelection_, playbackQueueIndex_, size)) {
-                moveQueuedItem(queueSelection_, playbackQueueIndex_ + 1);
-            }
-        } else if (queueActionSelection_ == 2) {
-            if (queueCanMoveUp(queueSelection_, playbackQueueIndex_, size)) moveQueuedItem(queueSelection_, queueSelection_ - 1);
-        } else if (queueActionSelection_ == 3) {
-            if (queueCanMoveDown(queueSelection_, playbackQueueIndex_, size)) moveQueuedItem(queueSelection_, queueSelection_ + 1);
-        } else if (queueActionSelection_ == 4 && queueCanRemove(queueSelection_, playbackQueueIndex_, size)) {
-            playbackQueue_.erase(playbackQueue_.begin() + queueSelection_);
-            queueSelection_ = std::min(queueSelection_, static_cast<int>(playbackQueue_.size()) - 1);
-            syncNextPlaybackFromQueue();
-        } else if (queueActionSelection_ == 5) {
+        const int selection = queueState_.selection();
+        const int current = queueState_.currentIndex();
+        if (queueState_.actionSelection() == 0) {
+            if (queueCanPlayNow(selection, current, size)) playQueuedIndexAsync(selection);
+        } else if (queueState_.actionSelection() == 1) {
+            if (queueCanPlayNext(selection, current, size)) moveQueuedItem(selection, current + 1);
+        } else if (queueState_.actionSelection() == 2) {
+            if (queueCanMoveUp(selection, current, size)) moveQueuedItem(selection, selection - 1);
+        } else if (queueState_.actionSelection() == 3) {
+            if (queueCanMoveDown(selection, current, size)) moveQueuedItem(selection, selection + 1);
+        } else if (queueState_.actionSelection() == 4) {
+            if (queueState_.removeSelected()) syncNextPlaybackFromQueue();
+        } else if (queueState_.actionSelection() == 5) {
             shuffleRemainingQueue();
-        } else if (queueActionSelection_ == 6) {
-            queueRepeatMode_ = nextQueueRepeatMode(queueRepeatMode_);
+        } else if (queueState_.actionSelection() == 6) {
+            queueState_.cycleRepeatMode();
             syncNextPlaybackFromQueue();
         }
     }
@@ -3479,13 +3445,8 @@ private:
                 error_ = "PLAY ALL: " + target.error;
                 return;
             }
-            playbackQueue_ = std::move(episodes.value);
-            playbackQueue_[0] = first;
-            playbackQueueIndex_ = 0;
-            queueRepeatMode_ = QueueRepeatMode::Off;
-            queueSelection_ = queueDefaultSelection(0, static_cast<int>(playbackQueue_.size()));
-            queueActionSelection_ = 0;
-            queueOverlayActive_ = false;
+            queueState_.replace(std::move(episodes.value), 0);
+            queueState_.setItemAt(0, first);
             restoreHomeVisibilityForPlayback(series);
             restoreHomeVisibilityForPlayback(first);
             pendingPlayback_ = std::move(target.value);
@@ -3496,27 +3457,17 @@ private:
     void beginPlayback() {
         if (loading_ || detail_.id.empty()) return;
         const bool continuingPlaybackChain = stillWatchingPrompt_;
-        const bool continuingQueuedPrompt = continuingPlaybackChain && !playbackQueue_.empty();
+        const bool continuingQueuedPrompt = continuingPlaybackChain && !queueState_.empty();
         int queuedPlaybackIndex = -1;
         if (!continuingPlaybackChain) {
             playbackAudioLanguagePreference_.reset();
             playbackSubtitleLanguagePreference_.reset();
         }
         if (continuingQueuedPrompt) {
-            const auto queued = std::find_if(playbackQueue_.begin(), playbackQueue_.end(), [&](const JellyfinItem& item) {
-                return item.id == detail_.id;
-            });
-            if (queued != playbackQueue_.end()) {
-                queuedPlaybackIndex = static_cast<int>(std::distance(playbackQueue_.begin(), queued));
-            } else {
-                playbackQueue_.clear();
-                playbackQueueIndex_ = -1;
-                queueRepeatMode_ = QueueRepeatMode::Off;
-            }
+            queuedPlaybackIndex = queueState_.findItemIndex(detail_.id);
+            if (queuedPlaybackIndex < 0) queueState_.reset();
         } else {
-            playbackQueue_.clear();
-            playbackQueueIndex_ = -1;
-            queueRepeatMode_ = QueueRepeatMode::Off;
+            queueState_.reset();
         }
         autoplayChainCount_ = 0;
         stillWatchingPrompt_ = false;
@@ -3567,11 +3518,9 @@ private:
                 error_ = target.error;
                 return;
             }
-            if (queuedPlaybackIndex >= 0
-                && queuedPlaybackIndex < static_cast<int>(playbackQueue_.size())
-                && playbackQueue_[static_cast<size_t>(queuedPlaybackIndex)].id == playable.id) {
-                playbackQueueIndex_ = queuedPlaybackIndex;
-                playbackQueue_[static_cast<size_t>(queuedPlaybackIndex)] = playable;
+            if (queuedPlaybackIndex >= 0 && queueState_.itemMatches(queuedPlaybackIndex, playable.id)) {
+                queueState_.setCurrentIndex(queuedPlaybackIndex);
+                queueState_.setItemAt(queuedPlaybackIndex, playable);
             }
             restoreHomeVisibilityForPlayback(selected);
             restoreHomeVisibilityForPlayback(playable);
@@ -3599,7 +3548,7 @@ private:
     }
 
     void requestNextEpisodeAsync() {
-        if (playbackQueueIndex_ >= 0 && playbackQueueIndex_ < static_cast<int>(playbackQueue_.size())) {
+        if (queueState_.currentIndex() >= 0 && queueState_.currentIndex() < queueState_.size()) {
             nextEpisodeRequested_ = true;
             syncNextPlaybackFromQueue();
             return;
@@ -3669,14 +3618,7 @@ private:
     }
 
     void queueAutoplayNext(JellyfinItem nextItem) {
-        const bool nextQueueItemMatches = playbackQueueIndex_ >= 0
-            && playbackQueueIndex_ + 1 < static_cast<int>(playbackQueue_.size())
-            && playbackQueue_[static_cast<size_t>(playbackQueueIndex_ + 1)].id == nextItem.id;
-        const int queuedNextIndex = queueAutoplayAdvanceIndex(
-            playbackQueueIndex_,
-            static_cast<int>(playbackQueue_.size()),
-            nextQueueItemMatches
-        );
+        const int queuedNextIndex = queueState_.autoplayAdvanceIndex(nextItem);
         releaseActivePlayback(true);
         ++autoplayChainCount_;
         loading_ = true;
@@ -3715,11 +3657,10 @@ private:
                 return;
             }
             if (queuedNextIndex >= 0
-                && playbackQueueIndex_ + 1 == queuedNextIndex
-                && queuedNextIndex < static_cast<int>(playbackQueue_.size())
-                && playbackQueue_[static_cast<size_t>(queuedNextIndex)].id == nextItem.id) {
-                playbackQueueIndex_ = queuedNextIndex;
-                playbackQueue_[static_cast<size_t>(queuedNextIndex)] = nextItem;
+                && queueState_.currentIndex() + 1 == queuedNextIndex
+                && queueState_.itemMatches(queuedNextIndex, nextItem.id)) {
+                queueState_.setCurrentIndex(queuedNextIndex);
+                queueState_.setItemAt(queuedNextIndex, nextItem);
             }
             pendingPlayback_ = std::move(target.value);
             pendingPlaybackItem_ = std::move(nextItem);
@@ -3794,7 +3735,7 @@ private:
             nextTransitionLoading_ = false;
         }
         resetNavigation(Screen::Home);
-        queueOverlayActive_ = false;
+        queueState_.closeOverlay();
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
         error_.clear();
@@ -4189,14 +4130,9 @@ private:
                 requestNextEpisodeAsync();
             }
             if (cachedPlaybackDurationMs_ > 1000 && cachedPlaybackPositionMs_ >= cachedPlaybackDurationMs_ - 1000) {
-                if (playbackQueueIndex_ >= 0 && queueRepeatMode_ != QueueRepeatMode::Off) {
-                    const int next = queueNextIndex(
-                        playbackQueueIndex_,
-                        static_cast<int>(playbackQueue_.size()),
-                        queueRepeatMode_,
-                        false
-                    );
-                    if (next >= 0) playQueuedIndexAsync(next, next == playbackQueueIndex_);
+                if (queueState_.currentIndex() >= 0 && queueState_.repeatMode() != QueueRepeatMode::Off) {
+                    const int next = queueState_.nextIndex(false);
+                    if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex());
                     else stopPlayback();
                 } else if (nextPlaybackItem_) {
                     JellyfinItem next = *nextPlaybackItem_;
@@ -4281,7 +4217,7 @@ private:
         } else {
             renderScreen(screen_);
         }
-        if (queueOverlayActive_) renderQueueOverlay();
+        if (queueState_.overlayActive()) renderQueueOverlay();
         renderStatus();
         renderer_.endFrame();
     }
@@ -5616,7 +5552,7 @@ private:
                 x += widths[i] + 28.0f;
             }
         } else {
-            const std::string queueHint = playbackQueue_.empty() ? "" : "   |   DOWN QUEUE";
+            const std::string queueHint = queueState_.empty() ? "" : "   |   DOWN QUEUE";
             renderer_.text(
                 330.0f,
                 946.0f,
@@ -5629,10 +5565,11 @@ private:
     }
 
     void renderQueueOverlay() {
-        if (playbackQueue_.empty()) return;
-        const int size = static_cast<int>(playbackQueue_.size());
-        const int current = std::clamp(playbackQueueIndex_, 0, size - 1);
-        queueSelection_ = std::clamp(queueSelection_, current, size - 1);
+        if (queueState_.empty()) return;
+        const int size = queueState_.size();
+        const int current = std::clamp(queueState_.currentIndex(), 0, size - 1);
+        queueState_.setSelection(queueState_.selection());
+        const int selection = queueState_.selection();
 
         renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.28f});
         renderer_.roundedRect(790.0f, 28.0f, 1090.0f, 1020.0f, 34.0f, Color{0.012f, 0.015f, 0.022f, 0.96f});
@@ -5641,14 +5578,14 @@ private:
         renderer_.textCentered(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, std::to_string(size - current) + " REMAINING", kMuted);
 
         constexpr int visibleRows = 5;
-        const int first = std::clamp(queueSelection_ - 2, current, std::max(current, size - visibleRows));
+        const int first = std::clamp(selection - 2, current, std::max(current, size - visibleRows));
         for (int slot = 0; slot < visibleRows; ++slot) {
             const int index = first + slot;
             if (index >= size) break;
             const float y = 145.0f + static_cast<float>(slot) * 108.0f;
-            const bool selected = index == queueSelection_;
+            const bool selected = index == selection;
             const bool isCurrent = index == current;
-            const auto& item = playbackQueue_[static_cast<size_t>(index)];
+            const auto& item = queueState_.items()[static_cast<size_t>(index)];
             const auto bounds = focusedBounds(830.0f, y, 990.0f, 90.0f, selected, 1.018f);
             renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 20.0f, selected ? kPanelElevated : Color{0.05f, 0.055f, 0.070f, 0.78f});
             drawHomeArtwork(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f);
@@ -5670,15 +5607,15 @@ private:
             "MOVE DOWN",
             "REMOVE",
             "SHUFFLE",
-            std::string("REPEAT ") + queueRepeatModeName(queueRepeatMode_),
+            std::string("REPEAT ") + queueRepeatModeName(queueState_.repeatMode()),
         };
         auto enabled = [&](int action) {
-            if (action == 0) return queueCanPlayNow(queueSelection_, playbackQueueIndex_, size);
-            if (action == 1) return queueCanPlayNext(queueSelection_, playbackQueueIndex_, size);
-            if (action == 2) return queueCanMoveUp(queueSelection_, playbackQueueIndex_, size);
-            if (action == 3) return queueCanMoveDown(queueSelection_, playbackQueueIndex_, size);
-            if (action == 4) return queueCanRemove(queueSelection_, playbackQueueIndex_, size);
-            if (action == 5) return queueCanShuffle(playbackQueueIndex_, size);
+            if (action == 0) return queueCanPlayNow(selection, current, size);
+            if (action == 1) return queueCanPlayNext(selection, current, size);
+            if (action == 2) return queueCanMoveUp(selection, current, size);
+            if (action == 3) return queueCanMoveDown(selection, current, size);
+            if (action == 4) return queueCanRemove(selection, current, size);
+            if (action == 5) return queueCanShuffle(current, size);
             return true;
         };
         for (size_t i = 0; i < actions.size(); ++i) {
@@ -5687,7 +5624,7 @@ private:
             const float width = firstActionRow ? 230.0f : 310.0f;
             const float x = 835.0f + static_cast<float>(column) * (width + 16.0f);
             const float y = firstActionRow ? 715.0f : 805.0f;
-            const bool focused = queueActionSelection_ == static_cast<int>(i);
+            const bool focused = queueState_.actionSelection() == static_cast<int>(i);
             const bool available = enabled(static_cast<int>(i));
             std::array<float, 4> actionBounds{x, y, width, 68.0f};
             if (available) actionBounds = drawFocusedSurface(x, y, width, 68.0f, focused, i < 2, i == 4);
@@ -6299,12 +6236,7 @@ private:
     JellyfinItem detail_;
     DetailsScreenState detailsState_;
 
-    std::vector<JellyfinItem> playbackQueue_;
-    int playbackQueueIndex_ = -1;
-    int queueSelection_ = 0;
-    int queueActionSelection_ = 0;
-    QueueRepeatMode queueRepeatMode_ = QueueRepeatMode::Off;
-    bool queueOverlayActive_ = false;
+    PlaybackQueueState queueState_;
 
     std::optional<PendingExternalLaunch> pendingExternalLaunch_;
     std::optional<PendingExternalLaunch> activeExternalPlayback_;

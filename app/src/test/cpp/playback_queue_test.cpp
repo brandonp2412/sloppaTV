@@ -1,6 +1,7 @@
 #include "playback_queue.hpp"
 
 #include <cassert>
+#include <random>
 
 int main() {
     assert(sameEpisodeSlot(1, 1, 1, 1));
@@ -54,5 +55,55 @@ int main() {
     assert(queueNextIndex(1, 3, QueueRepeatMode::One, true) == 2);
     assert(queueNextIndex(2, 3, QueueRepeatMode::One, true) == -1);
     assert(queueNextIndex(2, 3, QueueRepeatMode::All, true) == 0);
+
+    PlaybackQueueState state;
+    std::vector<JellyfinItem> items(4);
+    items[0].id = "a";
+    items[1].id = "b";
+    items[2].id = "c";
+    items[3].id = "d";
+    state.replace(std::move(items), 0);
+    assert(state.size() == 4);
+    assert(state.currentIndex() == 0);
+    assert(state.selection() == 1);
+    assert(state.itemMatches(2, "c"));
+    assert(state.findItemIndex("d") == 3);
+    assert(state.openOverlay());
+    state.moveSelection(2);
+    assert(state.selection() == 3);
+    state.moveAction(4);
+    assert(state.actionSelection() == 4);
+    assert(state.moveItem(3, 1));
+    assert(state.selection() == 1);
+    assert(state.itemMatches(1, "d"));
+    state.moveSelection(1);
+    assert(state.selection() == 2);
+    assert(state.removeSelected());
+    assert(state.size() == 3);
+    assert(state.selection() == 2);
+    state.cycleRepeatMode();
+    assert(state.repeatMode() == QueueRepeatMode::One);
+    assert(state.nextIndex(false) == 0);
+    state.cycleRepeatMode();
+    assert(state.repeatMode() == QueueRepeatMode::All);
+    assert(state.setCurrentIndex(2));
+    assert(state.nextIndex(false) == 0);
+
+    JellyfinItem expectedNext;
+    expectedNext.id = state.items().front().id;
+    assert(state.autoplayAdvanceIndex(expectedNext) == -1);
+    assert(state.setCurrentIndex(0));
+    expectedNext.id = state.items()[1].id;
+    assert(state.autoplayAdvanceIndex(expectedNext) == 1);
+
+    std::mt19937 generator(1234);
+    assert(state.shuffleRemaining(generator));
+    assert(state.currentIndex() == 0);
+    assert(state.selection() == 1);
+    state.closeOverlay();
+    assert(!state.overlayActive());
+    state.reset();
+    assert(state.empty());
+    assert(state.currentIndex() == -1);
     return 0;
 }
