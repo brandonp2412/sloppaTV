@@ -22,6 +22,7 @@ add_library(sloppatv SHARED
     image_decoder.cpp
     media_player.cpp
     media_session.cpp
+    session_store.cpp
     task_runner.cpp
     video_surface.cpp
 )

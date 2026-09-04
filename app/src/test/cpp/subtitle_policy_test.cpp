@@ -27,6 +27,17 @@ int main() {
     assert(parseSubtitleTimestamp("00:60.000") == -1);
     assert(parseSubtitleTimestamp("not-a-timestamp") == -1);
 
+    const auto cues = parseSubRipCues(
+        "1\n00:00:01,000 --> 00:00:02,500\nHello\nworld\n\n"
+        "2\n00:00:03.000 --> 00:00:04.000\nAgain\n"
+    );
+    assert(cues.size() == 2);
+    assert(cues[0].startMs == 1000);
+    assert(cues[0].endMs == 2500);
+    assert(cues[0].text == "Hello world");
+    assert(cues[1].startMs == 3000);
+    assert(cues[1].text == "Again");
+
     assert(sanitizeSubtitleText("<i>Hello</i>") == "Hello");
     assert(sanitizeSubtitleText("&lt;b&gt;Hello&lt;/b&gt;") == "Hello");
     assert(sanitizeSubtitleText("A<br>B") == "A B");

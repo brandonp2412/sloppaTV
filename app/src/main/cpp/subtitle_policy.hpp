@@ -5,6 +5,7 @@
 #include <cctype>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -153,6 +154,48 @@ inline int parseSubtitleTimestamp(std::string_view input) {
     const int64_t total = (((static_cast<int64_t>(hours) * 60) + minutes) * 60 + seconds) * 1000 + milliseconds;
     if (total > std::numeric_limits<int>::max()) return -1;
     return static_cast<int>(total);
+}
+
+struct SubtitleCue {
+    int startMs = 0;
+    int endMs = 0;
+    std::string text;
+};
+
+inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
+    std::vector<SubtitleCue> cues;
+    std::istringstream stream(input);
+    std::string line;
+    while (std::getline(stream, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
+        if (line.find("-->") == std::string::npos) {
+            if (!std::getline(stream, line)) break;
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+        }
+        const size_t arrow = line.find("-->");
+        if (arrow == std::string::npos) continue;
+        std::string left = line.substr(0, arrow);
+        std::string right = line.substr(arrow + 3);
+        auto trim = [](std::string& value) {
+            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
+            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.pop_back();
+        };
+        trim(left);
+        trim(right);
+        const int start = parseSubtitleTimestamp(left);
+        const int end = parseSubtitleTimestamp(right);
+        if (start < 0 || end <= start) continue;
+        std::string text;
+        while (std::getline(stream, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.empty()) break;
+            if (!text.empty()) text += ' ';
+            text += line;
+        }
+        if (!text.empty()) cues.push_back({start, end, std::move(text)});
+    }
+    return cues;
 }
 
 struct SubtitlePreferenceCandidate {

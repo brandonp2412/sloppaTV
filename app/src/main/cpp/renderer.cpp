@@ -1,4 +1,5 @@
 #include "renderer.hpp"
+#include "jni_env.hpp"
 #include "unicode_text.hpp"
 
 #include <android/bitmap.h>
@@ -15,20 +16,7 @@
 namespace {
 constexpr const char* kTag = "sloppaTV/render";
 
-class ScopedEnv {
-public:
-    explicit ScopedEnv(JavaVM* vm) : vm_(vm) {
-        if (!vm_) return;
-        const jint result = vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6);
-        if (result == JNI_EDETACHED && vm_->AttachCurrentThread(&env_, nullptr) == JNI_OK) attached_ = true;
-    }
-    ~ScopedEnv() { if (attached_ && vm_) vm_->DetachCurrentThread(); }
-    JNIEnv* get() const { return env_; }
-private:
-    JavaVM* vm_ = nullptr;
-    JNIEnv* env_ = nullptr;
-    bool attached_ = false;
-};
+using ScopedEnv = ScopedJniEnv;
 
 constexpr const char* kVertexShader = R"(#version 300 es
 layout(location = 0) in vec2 aPosition;

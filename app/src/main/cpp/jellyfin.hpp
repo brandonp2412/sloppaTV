@@ -47,16 +47,6 @@ struct JellyfinSubtitleStream {
     bool isExternal = false;
 };
 
-struct PlaybackOverrides {
-    int maxAvcLevel = 0;
-    int maxHevcLevel = 0;
-    HdrOverrideMode hdrMode = HdrOverrideMode::Auto;
-    // Runtime recovery flag only: never persisted as a user preference. When a
-    // platform DirectPlay prepare fails, re-negotiate PlaybackInfo with all
-    // direct/video-copy paths disabled so Jellyfin must offer a transcode.
-    bool forceTranscode = false;
-};
-
 struct JellyfinPerson {
     std::string id;
     std::string name;
@@ -185,10 +175,7 @@ struct PlaybackTarget {
     PlaybackMethod playMethod = PlaybackMethod::DirectPlay;
     int audioStreamIndex = -1;
     int subtitleStreamIndex = kSubtitleOffIndex;
-    bool subtitleEmbedded = false;
     std::string subtitleUrl;
-    std::string subtitleCodec;
-    std::string subtitleLanguage;
     int64_t startTicks = 0;
 };
 
@@ -224,7 +211,6 @@ public:
     ApiValueResult<JellyfinSession> completeQuickConnect(const QuickConnectRequest& request, const std::string& deviceId) const;
 
     ApiValueResult<JellyfinServerInfo> getServerInfo(const JellyfinSession& session) const;
-    ApiValueResult<JellyfinHomeData> loadHome(const JellyfinSession& session) const;
     ApiValueResult<JellyfinHomeData> loadHomeCore(const JellyfinSession& session) const;
     ApiValueResult<JellyfinHomeData> loadHomeSecondary(
         const JellyfinSession& session,

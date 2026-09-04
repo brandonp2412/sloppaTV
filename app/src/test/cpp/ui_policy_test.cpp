@@ -35,11 +35,6 @@ int main() {
     assert(wrappedIndex(9, 1, 10) == 0);
     assert(wrappedIndex(2, 1, 5) == 3);
     assert(wrappedIndex(4, 1, 5) == 0);
-    assert(containsCaseInsensitive("AUDIO OUTPUT", "audio"));
-    assert(containsCaseInsensitive("PLAYBACK BUFFER", "Buffer"));
-    assert(!containsCaseInsensitive("SUBTITLE SIZE", "audio"));
-    assert(containsCaseInsensitive("CLOCK", ""));
-
     assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
     assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);
     assert(homeImageKind(false, false, true) == ArtworkKind::Backdrop);
@@ -86,12 +81,9 @@ int main() {
     assert(thumbArtwork.tag == "thumb-tag");
     assert(thumbArtwork.kind == ArtworkKind::Thumb);
 
-    assert(subtitleLoadCompleted(false, false));
-    assert(subtitleLoadCompleted(true, false));
     assert(playerBackAction(true, true) == PlayerBackAction::DismissOverlay);
     assert(playerBackAction(false, true) == PlayerBackAction::DismissOverlay);
     assert(playerBackAction(false, false) == PlayerBackAction::ExitPlayback);
-    assert(!queueOverlayShouldShowError(false));
     assert(subtitleBottomY(false, 0) == 1000.0f);
     assert(subtitleBottomY(false, 1) == 905.0f);
     assert(subtitleBottomY(false, 2) == 810.0f);

@@ -1,5 +1,6 @@
 #include "jellyfin.hpp"
 #include "audio_policy.hpp"
+#include "jni_env.hpp"
 #include "media_player_policy.hpp"
 #include "ui_policy.hpp"
 
@@ -17,24 +18,6 @@ constexpr const char* kTag = "sloppaTV/api";
 constexpr const char* kClientName = "sloppaTV";
 constexpr const char* kClientVersion = "0.1.0";
 constexpr const char* kDeviceName = "Android TV";
-
-class ScopedJniEnv {
-public:
-    explicit ScopedJniEnv(JavaVM* vm) : vm_(vm) {
-        if (!vm_) return;
-        const jint result = vm_->GetEnv(reinterpret_cast<void**>(&env_), JNI_VERSION_1_6);
-        if (result == JNI_EDETACHED && vm_->AttachCurrentThread(&env_, nullptr) == JNI_OK) attached_ = true;
-    }
-    ~ScopedJniEnv() {
-        if (attached_ && vm_) vm_->DetachCurrentThread();
-    }
-    JNIEnv* get() const { return env_; }
-
-private:
-    JavaVM* vm_ = nullptr;
-    JNIEnv* env_ = nullptr;
-    bool attached_ = false;
-};
 
 std::string apiError(const HttpResponse& response) {
     if (!response.error.empty()) return response.error;
@@ -718,29 +701,6 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
     return result;
 }
 
-ApiValueResult<JellyfinHomeData> JellyfinClient::loadHome(const JellyfinSession& session) const {
-    auto core = loadHomeCore(session);
-    if (!core.ok) return core;
-
-    auto secondary = loadHomeSecondary(session, core.value.views);
-    if (!secondary.ok) {
-        if (!core.value.warning.empty()) core.value.warning += " | ";
-        core.value.warning += "Secondary Home rows unavailable";
-        return core;
-    }
-
-    core.value.rows.insert(
-        core.value.rows.end(),
-        std::make_move_iterator(secondary.value.rows.begin()),
-        std::make_move_iterator(secondary.value.rows.end())
-    );
-    if (!secondary.value.warning.empty()) {
-        if (!core.value.warning.empty()) core.value.warning += " | ";
-        core.value.warning += secondary.value.warning;
-    }
-    return core;
-}
-
 ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::loadViews(const JellyfinSession& session) const {
     if (!session.valid()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
@@ -1348,8 +1308,8 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         {{"Format", "webvtt"}, {"Method", "External"}},
         {{"Format", "srt"}, {"Method", "External"}},
         {{"Format", "subrip"}, {"Method", "External"}},
-        // Media3 + libass consumes exact ASS/SSA streams externally while preserving
-        // direct video playback; Encode remains the server fallback for unsupported cases.
+        // The native client requests text/styled subtitle delivery independently of video
+        // playback; Encode remains the server fallback for unsupported subtitle formats.
         {{"Format", "ass"}, {"Method", "External"}},
         {{"Format", "ass"}, {"Method", "Encode"}},
         {{"Format", "ssa"}, {"Method", "External"}},
@@ -1470,21 +1430,11 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
                 }
             );
             if (stream != source["MediaStreams"].end()) {
-                target.subtitleCodec = stream->value("Codec", std::string{});
-                target.subtitleLanguage = stream->value("Language", std::string{});
+                const std::string subtitleCodec = stream->value("Codec", std::string{});
                 const std::string delivery = stream->value("DeliveryMethod", std::string{});
-                const auto itemSubtitle = std::find_if(
-                    item.subtitles.begin(),
-                    item.subtitles.end(),
-                    [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == target.subtitleStreamIndex; }
-                );
-                const bool isExternal = stream->contains("IsExternal")
-                    ? stream->value("IsExternal", false)
-                    : (itemSubtitle != item.subtitles.end() && itemSubtitle->isExternal);
-                target.subtitleEmbedded = !isExternal;
                 std::string deliveryUrl = stream->value("DeliveryUrl", std::string{});
                 if (delivery == "External" && !deliveryUrl.empty()
-                    && subtitleStrategy(target.subtitleCodec) != SubtitleStrategy::ServerTranscode) {
+                    && subtitleStrategy(subtitleCodec) != SubtitleStrategy::ServerTranscode) {
                     if (deliveryUrl.rfind("http://", 0) != 0 && deliveryUrl.rfind("https://", 0) != 0) {
                         if (deliveryUrl.front() != '/') deliveryUrl.insert(deliveryUrl.begin(), '/');
                         deliveryUrl = session.server + deliveryUrl;
@@ -1532,13 +1482,12 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         __android_log_print(
             ANDROID_LOG_INFO,
             kTag,
-            "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d embeddedSubtitle=%d",
+            "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d",
             playbackMethodName(target.playMethod),
             target.audioStreamIndex,
             target.subtitleStreamIndex,
             subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
-            !target.subtitleUrl.empty(),
-            target.subtitleEmbedded
+            !target.subtitleUrl.empty()
         );
         result.value = std::move(target);
         result.ok = true;

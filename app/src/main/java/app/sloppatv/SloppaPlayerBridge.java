@@ -11,32 +11,15 @@ import android.view.Surface;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
-import androidx.media3.common.MimeTypes;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
 import androidx.media3.common.TrackSelectionOverride;
 import androidx.media3.common.Tracks;
 import androidx.media3.common.VideoSize;
-import androidx.media3.common.text.CueGroup;
-import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
-import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
-import androidx.media3.extractor.DefaultExtractorsFactory;
-import androidx.media3.extractor.ExtractorsFactory;
-import androidx.media3.ui.SubtitleView;
-
-import java.util.Collections;
-
-import io.github.peerless2012.ass.media.AssHandler;
-import io.github.peerless2012.ass.media.AssHandlerConfig;
-import io.github.peerless2012.ass.media.factory.AssRenderersFactory;
-import io.github.peerless2012.ass.media.kt.AssPlayerKt;
-import io.github.peerless2012.ass.media.parser.AssSubtitleParserFactory;
-import io.github.peerless2012.ass.media.type.AssRenderType;
-import io.github.peerless2012.ass.media.widget.AssSubtitleView;
 
 /**
  * Minimal Media3 bridge. The C++ application owns policy/state; this class exists only
@@ -52,18 +35,12 @@ public final class SloppaPlayerBridge {
     public static final int STATE_PAUSED = 3;
     public static final int STATE_ERROR = 4;
 
-    private final SloppaNativeActivity activity;
     private final Context context;
     private final HandlerThread playerThread;
     private final Handler handler;
 
     private volatile ExoPlayer player;
-    private volatile AssSubtitleView assSubtitleView;
-    private volatile AssHandler assHandler;
-    private volatile SubtitleView textSubtitleView;
     private volatile boolean embeddedAudioSelectionApplied;
-    private volatile boolean embeddedSubtitleSelectionApplied;
-    private volatile boolean loggedTextSubtitleCue;
     private volatile int state = STATE_IDLE;
     private volatile String error = "";
     private volatile long positionMs;
@@ -74,7 +51,6 @@ public final class SloppaPlayerBridge {
     private volatile boolean released;
 
     public SloppaPlayerBridge(SloppaNativeActivity activity) {
-        this.activity = activity;
         this.context = activity.getApplicationContext();
         playerThread = new HandlerThread("sloppaTV-exoplayer");
         playerThread.start();
@@ -100,11 +76,7 @@ public final class SloppaPlayerBridge {
         int maxBufferMs,
         int bufferForPlaybackMs,
         int bufferForPlaybackAfterRebufferMs,
-        int embeddedAudioOrdinal,
-        int embeddedSubtitleOrdinal,
-        String subtitleUrl,
-        String subtitleCodec,
-        String subtitleLanguage
+        int embeddedAudioOrdinal
     ) {
         if (released || url == null || url.isEmpty() || surface == null) {
             state = STATE_ERROR;
@@ -121,11 +93,7 @@ public final class SloppaPlayerBridge {
             maxBufferMs,
             bufferForPlaybackMs,
             bufferForPlaybackAfterRebufferMs,
-            embeddedAudioOrdinal,
-            embeddedSubtitleOrdinal,
-            subtitleUrl,
-            subtitleCodec,
-            subtitleLanguage
+            embeddedAudioOrdinal
         ));
     }
 
@@ -137,11 +105,7 @@ public final class SloppaPlayerBridge {
         int maxBufferMs,
         int bufferForPlaybackMs,
         int bufferForPlaybackAfterRebufferMs,
-        int embeddedAudioOrdinal,
-        int embeddedSubtitleOrdinal,
-        String subtitleUrl,
-        String subtitleCodec,
-        String subtitleLanguage
+        int embeddedAudioOrdinal
     ) {
         if (released) return;
         releasePlayerOnly();
@@ -170,37 +134,10 @@ public final class SloppaPlayerBridge {
                 .setEnableDecoderFallback(true)
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
 
-            boolean embeddedSubtitle = embeddedSubtitleOrdinal >= 0;
-            boolean useLibass = (embeddedSubtitle || (subtitleUrl != null && !subtitleUrl.isEmpty()))
-                && ("ass".equalsIgnoreCase(subtitleCodec) || "ssa".equalsIgnoreCase(subtitleCodec));
-            boolean useEmbeddedText = embeddedSubtitle && isTextSubtitleCodec(subtitleCodec);
             embeddedAudioSelectionApplied = false;
-            embeddedSubtitleSelectionApplied = false;
-            loggedTextSubtitleCue = false;
             ExoPlayer.Builder playerBuilder = new ExoPlayer.Builder(context)
-                .setLoadControl(loadControl);
-            AssHandler localAssHandler = null;
-            if (useLibass) {
-                // Canvas is intentionally preferred over the libass OpenGL overlay: some
-                // Android TV GLES stacks reject the extension's framebuffer operations.
-                localAssHandler = new AssHandler(AssRenderType.OVERLAY_CANVAS, new AssHandlerConfig());
-                AssSubtitleParserFactory parserFactory = new AssSubtitleParserFactory(localAssHandler);
-                ExtractorsFactory extractorsFactory = AssPlayerKt.withAssMkvSupport(
-                    new DefaultExtractorsFactory(),
-                    parserFactory,
-                    localAssHandler
-                );
-                DefaultMediaSourceFactory mediaSourceFactory = new DefaultMediaSourceFactory(
-                    new DefaultDataSource.Factory(context),
-                    extractorsFactory
-                );
-                mediaSourceFactory.setSubtitleParserFactory(parserFactory);
-                playerBuilder
-                    .setMediaSourceFactory(mediaSourceFactory)
-                    .setRenderersFactory(new AssRenderersFactory(localAssHandler, defaultRenderersFactory));
-            } else {
-                playerBuilder.setRenderersFactory(defaultRenderersFactory);
-            }
+                .setLoadControl(loadControl)
+                .setRenderersFactory(defaultRenderersFactory);
             ExoPlayer created = playerBuilder.build();
             if (isBenchmarkBuild()) {
                 created.setVolume(0.0f);
@@ -274,29 +211,6 @@ public final class SloppaPlayerBridge {
                             "audio"
                         );
                     }
-                    if (embeddedSubtitle && !embeddedSubtitleSelectionApplied) {
-                        embeddedSubtitleSelectionApplied = applyEmbeddedTrackSelection(
-                            created,
-                            tracks,
-                            C.TRACK_TYPE_TEXT,
-                            embeddedSubtitleOrdinal,
-                            "subtitle"
-                        );
-                    }
-                }
-
-                @Override
-                public void onCues(CueGroup cueGroup) {
-                    if (player != created) return;
-                    SubtitleView subtitleView = textSubtitleView;
-                    if (subtitleView == null) return;
-                    if (!cueGroup.cues.isEmpty() && !loggedTextSubtitleCue) {
-                        loggedTextSubtitleCue = true;
-                        Log.i(TAG, "Media3 received embedded text subtitle cue count=" + cueGroup.cues.size());
-                    }
-                    activity.runOnUiThread(() -> {
-                        if (textSubtitleView == subtitleView) subtitleView.setCues(cueGroup.cues);
-                    });
                 }
 
                 @Override
@@ -323,53 +237,7 @@ public final class SloppaPlayerBridge {
             });
             player = created;
             created.setVideoSurface(surface);
-            if (embeddedSubtitle) {
-                // Prevent Media3's default subtitle choice from flashing before the exact
-                // Jellyfin-selected embedded stream is overridden in onTracksChanged().
-                created.setTrackSelectionParameters(
-                    created.getTrackSelectionParameters().buildUpon()
-                        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-                        .build()
-                );
-            }
-
-            MediaItem.Builder mediaItem = new MediaItem.Builder().setUri(url);
-            if (useEmbeddedText) {
-                SubtitleView subtitleView = new SubtitleView(activity);
-                textSubtitleView = subtitleView;
-                activity.attachSubtitleOverlay(subtitleView);
-            }
-            if (useLibass) {
-                if (subtitleUrl != null && !subtitleUrl.isEmpty()) {
-                    MediaItem.SubtitleConfiguration subtitle = new MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitleUrl))
-                        .setId("sloppatv-ass-external")
-                        .setMimeType(MimeTypes.TEXT_SSA)
-                        .setLanguage(subtitleLanguage == null || subtitleLanguage.isEmpty() ? null : subtitleLanguage)
-                        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
-                        .build();
-                    mediaItem.setSubtitleConfigurations(Collections.singletonList(subtitle));
-                }
-                localAssHandler.init(created);
-                AssHandler subtitleHandler = localAssHandler;
-                AssSubtitleView subtitleView = new AssSubtitleView(activity, subtitleHandler);
-                subtitleView.addOnLayoutChangeListener((view, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom) -> {
-                    int width = right - left;
-                    int height = bottom - top;
-                    if (width <= 0 || height <= 0) return;
-                    subtitleHandler.onSurfaceSizeChanged(width, height);
-                    Log.i(TAG, "ASS subtitle overlay size=" + width + "x" + height);
-                });
-                assHandler = subtitleHandler;
-                assSubtitleView = subtitleView;
-                activity.attachSubtitleOverlay(subtitleView);
-                subtitleView.post(() -> {
-                    int width = subtitleView.getWidth();
-                    int height = subtitleView.getHeight();
-                    if (width <= 0 || height <= 0) return;
-                    subtitleHandler.onSurfaceSizeChanged(width, height);
-                });
-            }
-            created.setMediaItem(mediaItem.build(), startPositionMs);
+            created.setMediaItem(new MediaItem.Builder().setUri(url).build(), startPositionMs);
             Log.i(TAG, "Media3 initial position requested=" + startPositionMs);
             created.prepare();
             created.play();
@@ -426,13 +294,6 @@ public final class SloppaPlayerBridge {
         return false;
     }
 
-    private static boolean isTextSubtitleCodec(String codec) {
-        if (codec == null) return false;
-        return "srt".equalsIgnoreCase(codec)
-            || "subrip".equalsIgnoreCase(codec)
-            || "vtt".equalsIgnoreCase(codec)
-            || "webvtt".equalsIgnoreCase(codec);
-    }
 
     private static String playbackStateName(int state) {
         if (state == Player.STATE_IDLE) return "IDLE";
@@ -542,14 +403,6 @@ public final class SloppaPlayerBridge {
     }
 
     private void releasePlayerOnly() {
-        AssSubtitleView subtitleView = assSubtitleView;
-        assSubtitleView = null;
-        assHandler = null;
-        if (subtitleView != null) activity.detachSubtitleOverlay(subtitleView);
-        SubtitleView localTextSubtitleView = textSubtitleView;
-        textSubtitleView = null;
-        if (localTextSubtitleView != null) activity.detachSubtitleOverlay(localTextSubtitleView);
-
         ExoPlayer current = player;
         player = null;
         if (current != null) {
