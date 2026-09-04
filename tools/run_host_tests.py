@@ -25,6 +25,7 @@ CPP_TESTS = [
     "home_screen_test.cpp",
     "media_player_policy_test.cpp",
     "playback_profile_test.cpp",
+    "playback_transition_test.cpp",
     "player_screen_test.cpp",
     "player_tracks_test.cpp",
     "ui_policy_test.cpp",

@@ -399,6 +399,16 @@ required for TV hardware, Android TV integration, and final performance work.
   fatal/native-signal/ANR logs. The matching 10/3/3 checkpoint measured 234.5 ms median cold launch, 40,529 KB PSS, 0.0% idle
   CPU and 16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, within the established run-to-run range.
   `main.cpp` is now 6,229 lines versus 7,194 before the architecture pass.
+- 2026-09-05: Playback handoff/restart state now lives in `PlaybackTransitionState` rather than scattered pending-target,
+  restart-pause, stream-restart, audio-index, transition-loading and transcode-fallback fields in `SloppaApp`. The state owns
+  one coherent staged transition plus loading/fallback flags and pause-after-restart behavior; host tests cover staging/taking,
+  restart metadata, loading/fallback state and reset. The full host suite and optimized Release build pass. Physical streamer
+  acceptance resumed Brooklyn Nine-Nine `48 Hours` at the preserved 3:51 position, kept playback paused while enabling the
+  English SUBRIP track through a real stream restart, parsed all 593 cues, rendered the cue at 3:51, then disabled subtitles
+  again and exited without changing saved progress. No fatal/native-signal/ANR finding was observed. The matching 10/3/3
+  checkpoint measured 246.0 ms median cold launch, 39,975 KB PSS, 0.0% idle CPU and 16.67/16.74 ms navigation median/p95
+  with 0.8% intervals over 20 ms, within the established run-to-run range. `main.cpp` is now 6,205 lines versus 7,194 before
+  the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
