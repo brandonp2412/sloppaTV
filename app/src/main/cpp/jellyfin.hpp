@@ -6,7 +6,6 @@
 #include "media_player_policy.hpp"
 
 #include <jni.h>
-#include <nlohmann/json.hpp>
 
 #include <cstdint>
 #include <mutex>
@@ -194,7 +193,6 @@ private:
     std::string authorization(const JellyfinSession* session, const std::string& deviceId) const;
     std::map<std::string, std::string> headers(const JellyfinSession* session, const std::string& deviceId) const;
     std::string urlEncode(const std::string& value) const;
-    JellyfinItem parseItem(const nlohmann::json& value) const;
     ApiValueResult<JellyfinSession> parseAuthenticationResult(
         const HttpResponse& response,
         const std::string& server,
