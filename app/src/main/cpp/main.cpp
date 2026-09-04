@@ -27,6 +27,7 @@
 #include "navigation_stack.hpp"
 #include "playback_continuation.hpp"
 #include "playback_queue.hpp"
+#include "playback_session.hpp"
 #include "playback_telemetry.hpp"
 #include "playback_transition.hpp"
 #include "player_screen.hpp"
@@ -1127,7 +1128,7 @@ private:
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             const SettingChangeEffect effects = adjustSetting(settings_, selection, direction);
             if (effects == SettingChangeEffect::None) return;
-            if (selection == 4) videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
+            if (selection == 4) playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
             if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
             if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {
                 lastInteraction_ = std::chrono::steady_clock::now();
@@ -1930,11 +1931,7 @@ private:
 
     std::optional<JellyfinMediaSegment> activeSkippableSegment() const {
         const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
-        for (const auto& segment : activeMediaSegments_) {
-            if (segment.endTicks - segment.startTicks < 30000000) continue; // under 3 seconds
-            if (positionTicks >= segment.startTicks && positionTicks < segment.endTicks - 5000000) return segment;
-        }
-        return std::nullopt;
+        return playbackSessionState_.activeSkippableSegment(positionTicks);
     }
 
     std::string mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
@@ -2141,10 +2138,8 @@ private:
         externalPlaybackState_.reset();
         activeTarget_ = {};
         activePlaybackItem_ = {};
-        activeMediaSegments_.clear();
-        mediaSegmentsRequested_ = false;
+        playbackSessionState_.reset();
         telemetryState_.reset();
-        playbackFallbackAttempted_ = false;
         playerScreenState_.resetSession();
         trackState_.resetSession();
         clearTrickplayPreview();
@@ -3206,8 +3201,7 @@ private:
     }
 
     void requestMediaSegmentsAsync() {
-        if (mediaSegmentsRequested_ || !session_.valid() || activePlaybackItem_.id.empty()) return;
-        mediaSegmentsRequested_ = true;
+        if (!session_.valid() || activePlaybackItem_.id.empty() || !playbackSessionState_.beginMediaSegmentsRequest()) return;
         const JellyfinSession session = session_;
         const std::string itemId = activePlaybackItem_.id;
         tasks_.submit([this, session, itemId] {
@@ -3218,8 +3212,9 @@ private:
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s", result.error.c_str());
                 return;
             }
-            activeMediaSegments_ = std::move(result.value);
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", activeMediaSegments_.size());
+            const size_t segmentCount = result.value.size();
+            playbackSessionState_.setMediaSegments(std::move(result.value));
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
         });
     }
 
@@ -3275,8 +3270,7 @@ private:
         telemetryState_.resetReadIntervals();
         continuationState_.clearNextEpisode();
         trackState_.resetPlayback();
-        mediaSegmentsRequested_ = false;
-        activeMediaSegments_.clear();
+        playbackSessionState_.resetMediaSegments();
         if (shouldReport) {
             tasks_.submit([this, session, item, target, ticks] {
                 logPlaybackReportFailure("stop", item.id, api_.reportPlaybackStopped(session, item, target, ticks));
@@ -3420,7 +3414,7 @@ private:
     }
 
     bool retryPlaybackWithTranscodeFallback() {
-        if (playbackFallbackAttempted_ || activeTarget_.transcoding || !session_.valid() || activePlaybackItem_.id.empty()) {
+        if (playbackSessionState_.fallbackAttempted() || activeTarget_.transcoding || !session_.valid() || activePlaybackItem_.id.empty()) {
             return false;
         }
 
@@ -3434,7 +3428,7 @@ private:
         player_.stop();
         videoSurface_.release();
         telemetryState_.clearPlaybackStartReported();
-        playbackFallbackAttempted_ = true;
+        playbackSessionState_.markFallbackAttempted();
         playerScreenState_.setPositionMs(playbackPositionMsFromTicks(resumeTicks));
         playerScreenState_.setDurationMs(playbackPositionMsFromTicks(item.runtimeTicks));
         telemetryState_.resetReadIntervals();
@@ -3572,13 +3566,13 @@ private:
         if (!item.videoCodec.empty()) playbackSummary << " / " << item.videoCodec;
         if (item.videoWidth > 0 && item.videoHeight > 0) playbackSummary << " / " << item.videoWidth << 'X' << item.videoHeight;
         lastPlaybackSummary_ = playbackSummary.str();
-        playbackFallbackAttempted_ = false;
+        playbackSessionState_.resetFallbackAttempted();
         telemetryState_.beginPlayback(std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(
             playbackPositionMsFromTicks(target.startTicks),
             playbackPositionMsFromTicks(item.runtimeTicks)
         );
-        videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
+        playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
         if (!streamRestart) {
             continuationState_.clearNextEpisode();
             syncNextPlaybackFromQueue();
@@ -3613,10 +3607,7 @@ private:
                 }
             }
         }
-        if (!streamRestart) {
-            mediaSegmentsRequested_ = false;
-            activeMediaSegments_.clear();
-        }
+        if (!streamRestart) playbackSessionState_.resetMediaSegments();
         transitionState_.setLoading(false);
         if (!streamRestart) {
             if (screen_ == Screen::Player) replaceScreen(Screen::Player);
@@ -3758,7 +3749,7 @@ private:
             status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
             playerScreenState_.positionMs()
         );
-        if (!mediaSegmentsRequested_) requestMediaSegmentsAsync();
+        if (!playbackSessionState_.mediaSegmentsRequested()) requestMediaSegmentsAsync();
         if (telemetryState_.markPlaybackStartReported()) {
             const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
             const auto session = session_;
@@ -4855,10 +4846,10 @@ private:
             float videoH = Renderer::logicalHeight();
             const int sourceWidth = player_.videoWidth();
             const int sourceHeight = player_.videoHeight();
-            if (sourceWidth > 0 && sourceHeight > 0 && videoZoomMode_ != VideoZoomMode::Stretch) {
+            if (sourceWidth > 0 && sourceHeight > 0 && playbackSessionState_.zoomMode() != VideoZoomMode::Stretch) {
                 const float widthScale = Renderer::logicalWidth() / static_cast<float>(sourceWidth);
                 const float heightScale = Renderer::logicalHeight() / static_cast<float>(sourceHeight);
-                const float scale = videoZoomMode_ == VideoZoomMode::Fit
+                const float scale = playbackSessionState_.zoomMode() == VideoZoomMode::Fit
                     ? std::min(widthScale, heightScale)
                     : std::max(widthScale, heightScale);
                 videoW = static_cast<float>(sourceWidth) * scale;
@@ -5562,7 +5553,7 @@ private:
             eraseArtworkEntry(profileArtwork_, profileArtworkKey(session_));
             sessionRegistry_.remember(session_, deviceId_);
         }
-        videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
+        playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
         accountState_.setAuthenticatedAccount(session_.server, session_.username);
     }
 
@@ -5651,11 +5642,8 @@ private:
     PlaybackTarget activeTarget_;
     JellyfinItem activePlaybackItem_;
     PlaybackContinuationState continuationState_;
-    std::vector<JellyfinMediaSegment> activeMediaSegments_;
-    bool mediaSegmentsRequested_ = false;
-    bool playbackFallbackAttempted_ = false;
+    PlaybackSessionState playbackSessionState_;
     PlaybackTelemetryState telemetryState_;
-    VideoZoomMode videoZoomMode_ = VideoZoomMode::Fit;
     PlayerScreenState playerScreenState_;
     PlayerTrackState trackState_;
     TrickplayPreviewState trickplayState_;
