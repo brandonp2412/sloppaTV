@@ -252,6 +252,13 @@ char keyCodeToChar(int32_t keyCode, int32_t metaState) {
     }
 }
 
+struct PendingTickWork {
+    std::optional<ExternalPlayerResult> externalResult;
+    std::optional<ExternalPlaybackLaunch> completedExternalPlayback;
+    std::optional<ExternalPlaybackLaunch> externalLaunch;
+    std::optional<PendingPlaybackTransition> playbackTransition;
+};
+
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
 std::mutex gActiveAppMutex;
@@ -3630,199 +3637,201 @@ private:
         return true;
     }
 
-    void tick() {
-        const auto mediaSessionCommand = mediaSession_.takeCommand();
-        if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
-
-        std::optional<LaunchRequest> runtimeLaunchRequest;
+    void applyPendingRuntimeLaunchRequest() {
+        std::optional<LaunchRequest> request;
         {
             std::scoped_lock lock(stateMutex_);
             if (pendingRuntimeLaunchRequest_) {
-                runtimeLaunchRequest = std::move(pendingRuntimeLaunchRequest_);
+                request = std::move(pendingRuntimeLaunchRequest_);
                 pendingRuntimeLaunchRequest_.reset();
             }
         }
-        if (runtimeLaunchRequest) applyRuntimeLaunchRequest(*runtimeLaunchRequest);
+        if (request) applyRuntimeLaunchRequest(*request);
+    }
 
-        std::optional<PendingPlaybackTransition> playbackTransition;
-        std::optional<PlaybackTarget> target;
-        JellyfinItem item;
-        bool streamRestart = false;
-        std::optional<ExternalPlaybackLaunch> externalLaunch;
-        std::optional<ExternalPlaybackLaunch> completedExternalPlayback;
-        const auto externalResult = externalPlayer_.takeResult();
-        {
-            std::scoped_lock lock(stateMutex_);
-            if (externalResult && externalPlaybackState_.hasActive()) {
-                completedExternalPlayback = externalPlaybackState_.takeActive();
-            }
-            if (externalPlaybackState_.hasPending()) {
-                externalLaunch = externalPlaybackState_.takePending();
-            }
-            if (transitionState_.hasPending() && app_->window) {
-                playbackTransition = transitionState_.take();
-                if (playbackTransition) {
-                    auto& transition = *playbackTransition;
-                    target = transition.target;
-                    item = transition.item;
-                    streamRestart = transition.streamRestart;
-                    transitionState_.setPauseAfterRestart(streamRestart && transition.restartPaused);
-                    activePlaybackItem_ = item;
-                    activeTarget_ = *target;
-                    std::ostringstream playbackSummary;
-                    playbackSummary << playbackMethodName(target->playMethod);
-                    if (!item.videoCodec.empty()) playbackSummary << " / " << item.videoCodec;
-                    if (item.videoWidth > 0 && item.videoHeight > 0) playbackSummary << " / " << item.videoWidth << 'X' << item.videoHeight;
-                    lastPlaybackSummary_ = playbackSummary.str();
-                    playbackStartReported_ = false;
-                    playbackFallbackAttempted_ = false;
-                    lastProgressReport_ = std::chrono::steady_clock::now();
-                    lastPlaybackTelemetryRead_ = {};
-                    lastPlaybackDurationProbe_ = {};
-                    playerScreenState_.beginPlayback(
-                        playbackPositionMsFromTicks(target->startTicks),
-                        playbackPositionMsFromTicks(item.runtimeTicks)
+    PendingTickWork collectPendingTickWork() {
+        PendingTickWork work;
+        work.externalResult = externalPlayer_.takeResult();
+        std::scoped_lock lock(stateMutex_);
+        if (work.externalResult && externalPlaybackState_.hasActive()) {
+            work.completedExternalPlayback = externalPlaybackState_.takeActive();
+        }
+        if (externalPlaybackState_.hasPending()) {
+            work.externalLaunch = externalPlaybackState_.takePending();
+        }
+        if (!transitionState_.hasPending() || !app_->window) return work;
+
+        work.playbackTransition = transitionState_.take();
+        if (!work.playbackTransition) return work;
+        auto& transition = *work.playbackTransition;
+        auto& target = transition.target;
+        auto& item = transition.item;
+        const bool streamRestart = transition.streamRestart;
+        transitionState_.setPauseAfterRestart(streamRestart && transition.restartPaused);
+        activePlaybackItem_ = item;
+        activeTarget_ = target;
+        std::ostringstream playbackSummary;
+        playbackSummary << playbackMethodName(target.playMethod);
+        if (!item.videoCodec.empty()) playbackSummary << " / " << item.videoCodec;
+        if (item.videoWidth > 0 && item.videoHeight > 0) playbackSummary << " / " << item.videoWidth << 'X' << item.videoHeight;
+        lastPlaybackSummary_ = playbackSummary.str();
+        playbackStartReported_ = false;
+        playbackFallbackAttempted_ = false;
+        lastProgressReport_ = std::chrono::steady_clock::now();
+        lastPlaybackTelemetryRead_ = {};
+        lastPlaybackDurationProbe_ = {};
+        playerScreenState_.beginPlayback(
+            playbackPositionMsFromTicks(target.startTicks),
+            playbackPositionMsFromTicks(item.runtimeTicks)
+        );
+        videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
+        if (!streamRestart) {
+            continuationState_.clearNextEpisode();
+            syncNextPlaybackFromQueue();
+        }
+        trackState_.resetPlayback();
+        int selectedAudioServerIndex = transition.audioStreamIndex >= 0
+            ? transition.audioStreamIndex
+            : target.audioStreamIndex;
+        if (selectedAudioServerIndex < 0 && !item.audios.empty()) {
+            const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
+                return audio.isDefault;
+            });
+            selectedAudioServerIndex = preferred == item.audios.end() ? item.audios.front().index : preferred->index;
+        }
+        trackState_.setSelectedAudioServerIndex(selectedAudioServerIndex);
+        trackState_.setSelectedSubtitleServerIndex(target.subtitleStreamIndex);
+        if (trackState_.selectedSubtitleServerIndex() >= 0) {
+            const auto selectedSubtitle = std::find_if(
+                item.subtitles.begin(),
+                item.subtitles.end(),
+                [&](const JellyfinSubtitleStream& subtitle) {
+                    return subtitle.index == trackState_.selectedSubtitleServerIndex();
+                }
+            );
+            if (selectedSubtitle != item.subtitles.end()) {
+                const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
+                if (useNativeSubtitleRenderer(strategy, true)) {
+                    loadSubtitleAsync(
+                        *selectedSubtitle,
+                        strategy == SubtitleStrategy::ClientText ? target.subtitleUrl : std::string{}
                     );
-                    videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
-                    if (!streamRestart) {
-                        continuationState_.clearNextEpisode();
-                        syncNextPlaybackFromQueue();
-                    }
-                    trackState_.resetPlayback();
-                    int selectedAudioServerIndex = transition.audioStreamIndex >= 0
-                        ? transition.audioStreamIndex
-                        : target->audioStreamIndex;
-                    if (selectedAudioServerIndex < 0 && !item.audios.empty()) {
-                        const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
-                            return audio.isDefault;
-                        });
-                        selectedAudioServerIndex = preferred == item.audios.end() ? item.audios.front().index : preferred->index;
-                    }
-                    trackState_.setSelectedAudioServerIndex(selectedAudioServerIndex);
-                    trackState_.setSelectedSubtitleServerIndex(target->subtitleStreamIndex);
-                    if (trackState_.selectedSubtitleServerIndex() >= 0) {
-                        const auto selectedSubtitle = std::find_if(
-                            item.subtitles.begin(),
-                            item.subtitles.end(),
-                            [&](const JellyfinSubtitleStream& subtitle) {
-                                return subtitle.index == trackState_.selectedSubtitleServerIndex();
-                            }
-                        );
-                        if (selectedSubtitle != item.subtitles.end()) {
-                            const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
-                            if (useNativeSubtitleRenderer(strategy, true)) {
-                                loadSubtitleAsync(
-                                    *selectedSubtitle,
-                                    strategy == SubtitleStrategy::ClientText ? target->subtitleUrl : std::string{}
-                                );
-                            }
-                        }
-                    }
-                    if (!streamRestart) {
-                        mediaSegmentsRequested_ = false;
-                        activeMediaSegments_.clear();
-                    }
-                    transitionState_.setLoading(false);
-                    if (!streamRestart) {
-                        if (screen_ == Screen::Player) replaceScreen(Screen::Player);
-                        else pushScreen(Screen::Player);
-                    } else {
-                        replaceScreen(Screen::Player);
-                    }
                 }
             }
         }
-
-
-        if (externalResult && completedExternalPlayback) {
-            if (!externalResult->success) {
-                std::scoped_lock lock(stateMutex_);
-                error_ = "EXTERNAL PLAYER REPORTED PLAYBACK FAILURE";
-            } else {
-                std::optional<int64_t> positionTicks;
-                if (externalResult->positionMs >= 0) {
-                    positionTicks = static_cast<int64_t>(externalResult->positionMs) * 10000;
-                } else if (externalResult->completionKnown && externalResult->completed
-                    && completedExternalPlayback->item.runtimeTicks > 0) {
-                    positionTicks = completedExternalPlayback->item.runtimeTicks;
-                }
-                if (positionTicks) {
-                    const int64_t boundedTicks = completedExternalPlayback->item.runtimeTicks > 0
-                        ? std::clamp<int64_t>(*positionTicks, 0, completedExternalPlayback->item.runtimeTicks)
-                        : std::max<int64_t>(0, *positionTicks);
-                    positionTicks = boundedTicks;
-                    std::scoped_lock lock(stateMutex_);
-                    if (detail_.id == completedExternalPlayback->item.id) detail_.positionTicks = boundedTicks;
-                }
-                const JellyfinSession reportSession = session_;
-                const JellyfinItem reportItem = completedExternalPlayback->item;
-                tasks_.submit([this, reportSession, reportItem, positionTicks] {
-                    const auto reported = api_.reportExternalPlaybackStopped(reportSession, reportItem, positionTicks);
-                    if (!reported.ok) {
-                        __android_log_print(ANDROID_LOG_WARN, kTag, "External playback stop report failed: %s", reported.error.c_str());
-                    }
-                });
-                std::scoped_lock lock(stateMutex_);
-                error_.clear();
-            }
+        if (!streamRestart) {
+            mediaSegmentsRequested_ = false;
+            activeMediaSegments_.clear();
         }
+        transitionState_.setLoading(false);
+        if (!streamRestart) {
+            if (screen_ == Screen::Player) replaceScreen(Screen::Player);
+            else pushScreen(Screen::Player);
+        } else {
+            replaceScreen(Screen::Player);
+        }
+        return work;
+    }
 
-        if (externalLaunch) {
-            std::string launchError;
-            const std::string title = externalLaunch->item.seriesName.empty()
-                ? externalLaunch->item.name
-                : externalLaunch->item.seriesName + " - " + externalLaunch->item.name;
-            const int positionMs = playbackPositionMsFromTicks(externalLaunch->item.positionTicks);
-            if (!externalPlayer_.launch(
-                    externalLaunch->player,
-                    externalLaunch->url,
-                    title,
-                    positionMs,
-                    externalLaunch->subtitleUrl,
-                    launchError
-                )) {
-                std::scoped_lock lock(stateMutex_);
-                error_ = launchError.empty() ? "EXTERNAL PLAYER COULD NOT BE LAUNCHED" : launchError;
-            } else {
-                std::scoped_lock lock(stateMutex_);
-                error_.clear();
-                lastPlaybackSummary_ = "EXTERNAL / " + externalLaunch->player.label;
-                externalPlaybackState_.beginActive(std::move(*externalLaunch));
-            }
+    void finishExternalPlayback(const PendingTickWork& work) {
+        if (!work.externalResult || !work.completedExternalPlayback) return;
+        const auto& result = *work.externalResult;
+        const auto& completed = *work.completedExternalPlayback;
+        if (!result.success) {
+            std::scoped_lock lock(stateMutex_);
+            error_ = "EXTERNAL PLAYER REPORTED PLAYBACK FAILURE";
             return;
         }
 
-        if (target) {
-            if (streamRestart) {
-                player_.stop();
-                videoSurface_.release();
-            }
-            std::string surfaceError;
-            if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
-                std::scoped_lock lock(stateMutex_);
-                error_ = surfaceError.empty() ? "VIDEO SURFACE IS NOT AVAILABLE" : surfaceError;
-                popScreen(Screen::Details);
-                activeTarget_ = {};
-                activePlaybackItem_ = {};
-                return;
-            }
-            if (settings_.refreshRateSwitching && item.videoFrameRate > 0.0f) {
-                displayMode_.matchVideo(app_->window, item.videoFrameRate);
-            }
-            mediaSession_.updateMetadata(
-                item.name,
-                episodeLabel(item),
-                playbackPositionMsFromTicks(item.runtimeTicks)
-            );
-            mediaSession_.updateState(
-                MediaSessionState::Buffering,
-                playbackPositionMsFromTicks(target->startTicks)
-            );
-            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-            startResolvedPlaybackTarget(*target);
-            return;
+        std::optional<int64_t> positionTicks;
+        if (result.positionMs >= 0) {
+            positionTicks = static_cast<int64_t>(result.positionMs) * 10000;
+        } else if (result.completionKnown && result.completed && completed.item.runtimeTicks > 0) {
+            positionTicks = completed.item.runtimeTicks;
         }
+        if (positionTicks) {
+            const int64_t boundedTicks = completed.item.runtimeTicks > 0
+                ? std::clamp<int64_t>(*positionTicks, 0, completed.item.runtimeTicks)
+                : std::max<int64_t>(0, *positionTicks);
+            positionTicks = boundedTicks;
+            std::scoped_lock lock(stateMutex_);
+            if (detail_.id == completed.item.id) detail_.positionTicks = boundedTicks;
+        }
+        const JellyfinSession reportSession = session_;
+        const JellyfinItem reportItem = completed.item;
+        tasks_.submit([this, reportSession, reportItem, positionTicks] {
+            const auto reported = api_.reportExternalPlaybackStopped(reportSession, reportItem, positionTicks);
+            if (!reported.ok) {
+                __android_log_print(ANDROID_LOG_WARN, kTag, "External playback stop report failed: %s", reported.error.c_str());
+            }
+        });
+        std::scoped_lock lock(stateMutex_);
+        error_.clear();
+    }
 
+    bool launchPendingExternalPlayback(PendingTickWork& work) {
+        if (!work.externalLaunch) return false;
+        auto launch = std::move(*work.externalLaunch);
+        std::string launchError;
+        const std::string title = launch.item.seriesName.empty()
+            ? launch.item.name
+            : launch.item.seriesName + " - " + launch.item.name;
+        const int positionMs = playbackPositionMsFromTicks(launch.item.positionTicks);
+        if (!externalPlayer_.launch(
+                launch.player,
+                launch.url,
+                title,
+                positionMs,
+                launch.subtitleUrl,
+                launchError
+            )) {
+            std::scoped_lock lock(stateMutex_);
+            error_ = launchError.empty() ? "EXTERNAL PLAYER COULD NOT BE LAUNCHED" : launchError;
+        } else {
+            std::scoped_lock lock(stateMutex_);
+            error_.clear();
+            lastPlaybackSummary_ = "EXTERNAL / " + launch.player.label;
+            externalPlaybackState_.beginActive(std::move(launch));
+        }
+        return true;
+    }
+
+    bool startPendingPlaybackTransition(const PendingTickWork& work) {
+        if (!work.playbackTransition) return false;
+        const auto& transition = *work.playbackTransition;
+        const auto& target = transition.target;
+        const auto& item = transition.item;
+        if (transition.streamRestart) {
+            player_.stop();
+            videoSurface_.release();
+        }
+        std::string surfaceError;
+        if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
+            std::scoped_lock lock(stateMutex_);
+            error_ = surfaceError.empty() ? "VIDEO SURFACE IS NOT AVAILABLE" : surfaceError;
+            popScreen(Screen::Details);
+            activeTarget_ = {};
+            activePlaybackItem_ = {};
+            return true;
+        }
+        if (settings_.refreshRateSwitching && item.videoFrameRate > 0.0f) {
+            displayMode_.matchVideo(app_->window, item.videoFrameRate);
+        }
+        mediaSession_.updateMetadata(
+            item.name,
+            episodeLabel(item),
+            playbackPositionMsFromTicks(item.runtimeTicks)
+        );
+        mediaSession_.updateState(
+            MediaSessionState::Buffering,
+            playbackPositionMsFromTicks(target.startTicks)
+        );
+        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
+        startResolvedPlaybackTarget(target);
+        return true;
+    }
+
+    void tickActivePlayer() {
         if (screen_ != Screen::Player) return;
         PlayerStatus status = player_.status();
         if (status == PlayerStatus::Preparing) {
@@ -3848,55 +3857,68 @@ private:
             stopPlayback();
             return;
         }
-        if (status == PlayerStatus::Playing || status == PlayerStatus::Paused) {
-            refreshPlaybackTelemetry();
-            mediaSession_.updateState(
-                status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
-                playerScreenState_.positionMs()
-            );
-            if (!mediaSegmentsRequested_) requestMediaSegmentsAsync();
-            if (!playbackStartReported_) {
-                playbackStartReported_ = true;
-                const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
-                const auto session = session_;
-                const auto itemCopy = activePlaybackItem_;
-                const auto targetCopy = activeTarget_;
-                tasks_.submit([this, session, itemCopy, targetCopy, ticks] {
-                    logPlaybackReportFailure(
-                        "start",
-                        itemCopy.id,
-                        api_.reportPlaybackStart(session, itemCopy, targetCopy, ticks)
-                    );
-                });
-            }
-            const auto now = std::chrono::steady_clock::now();
-            if (now - lastProgressReport_ >= 10s) {
-                lastProgressReport_ = now;
-                reportProgressAsync(false);
-            }
-            if (!continuationState_.nextEpisodeRequested() && activePlaybackItem_.type == "Episode"
-                && playerScreenState_.positionMs() >= 30000) {
-                requestNextEpisodeAsync();
-            }
-            if (playerScreenState_.durationMs() > 1000
-                && playerScreenState_.positionMs() >= playerScreenState_.durationMs() - 1000) {
-                if (queueState_.currentIndex() >= 0 && queueState_.repeatMode() != QueueRepeatMode::Off) {
-                    const int next = queueState_.nextIndex(false);
-                    if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex());
-                    else stopPlayback();
-                } else if (continuationState_.nextItem()) {
-                    JellyfinItem next = *continuationState_.nextItem();
-                    if (shouldAutoplayNextEpisode(settings_.autoplayNext, continuationState_.autoplayChainCount(), settings_.stillWatchingAfter)) {
-                        queueAutoplayNext(std::move(next));
-                    } else {
-                        showStillWatching(std::move(next));
-                    }
-                } else {
-                    stopPlayback();
-                    continuationState_.resetAutoplayChain();
-                }
-            }
+        if (status != PlayerStatus::Playing && status != PlayerStatus::Paused) return;
+
+        refreshPlaybackTelemetry();
+        mediaSession_.updateState(
+            status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
+            playerScreenState_.positionMs()
+        );
+        if (!mediaSegmentsRequested_) requestMediaSegmentsAsync();
+        if (!playbackStartReported_) {
+            playbackStartReported_ = true;
+            const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
+            const auto session = session_;
+            const auto itemCopy = activePlaybackItem_;
+            const auto targetCopy = activeTarget_;
+            tasks_.submit([this, session, itemCopy, targetCopy, ticks] {
+                logPlaybackReportFailure(
+                    "start",
+                    itemCopy.id,
+                    api_.reportPlaybackStart(session, itemCopy, targetCopy, ticks)
+                );
+            });
         }
+        const auto now = std::chrono::steady_clock::now();
+        if (now - lastProgressReport_ >= 10s) {
+            lastProgressReport_ = now;
+            reportProgressAsync(false);
+        }
+        if (!continuationState_.nextEpisodeRequested() && activePlaybackItem_.type == "Episode"
+            && playerScreenState_.positionMs() >= 30000) {
+            requestNextEpisodeAsync();
+        }
+        if (playerScreenState_.durationMs() <= 1000
+            || playerScreenState_.positionMs() < playerScreenState_.durationMs() - 1000) {
+            return;
+        }
+        if (queueState_.currentIndex() >= 0 && queueState_.repeatMode() != QueueRepeatMode::Off) {
+            const int next = queueState_.nextIndex(false);
+            if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex());
+            else stopPlayback();
+        } else if (continuationState_.nextItem()) {
+            JellyfinItem next = *continuationState_.nextItem();
+            if (shouldAutoplayNextEpisode(settings_.autoplayNext, continuationState_.autoplayChainCount(), settings_.stillWatchingAfter)) {
+                queueAutoplayNext(std::move(next));
+            } else {
+                showStillWatching(std::move(next));
+            }
+        } else {
+            stopPlayback();
+            continuationState_.resetAutoplayChain();
+        }
+    }
+
+    void tick() {
+        const auto mediaSessionCommand = mediaSession_.takeCommand();
+        if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
+        applyPendingRuntimeLaunchRequest();
+
+        auto work = collectPendingTickWork();
+        finishExternalPlayback(work);
+        if (launchPendingExternalPlayback(work)) return;
+        if (startPendingPlaybackTransition(work)) return;
+        tickActivePlayer();
     }
 
     void reportProgressAsync(bool immediate) {
