@@ -338,6 +338,15 @@ required for TV hardware, Android TV integration, and final performance work.
   matching 10/3/3 checkpoint measured 242.0 ms median cold launch, 39,833 KB PSS, 0.0% idle CPU and 16.67/16.73 ms
   navigation median/p95 with 0.8% intervals over 20 ms, within the established run-to-run range. Media volume was restored
   to 15/15 and the streamer returned to sleep.
+- 2026-09-05: `DetailsScreenState` now also owns the subordinate Person -> titles and Series -> Seasons -> Episodes state,
+  including selections, cached user-data updates/removal, and nested restoration. This removes nine more feature-specific
+  fields from `SloppaApp`; `main.cpp` is 6,440 lines versus 7,194 before the architecture pass. Host tests cover person,
+  season and episode selection plus cache mutation/removal, and the full host suite and optimized Release build pass.
+  Physical streamer acceptance verified Cast -> Andy Samberg -> titles, Brooklyn Nine-Nine -> Seasons -> Season 2 ->
+  Episodes, Back restoring Season 2 focus, and Back restoring the Series Details screen with its Episodes action focus.
+  No fatal/native-signal/ANR finding was observed. The matching 10/3/3 checkpoint measured 241.0 ms median cold launch,
+  40,471 KB PSS, 0.0% idle CPU and 16.67/16.72 ms navigation median/p95 with 0.8% intervals over 20 ms, remaining within
+  the established run-to-run range. Media volume was restored to 15/15 and the streamer returned to sleep.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
