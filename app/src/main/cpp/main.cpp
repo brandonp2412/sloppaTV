@@ -22,6 +22,7 @@
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
 #include "playback_queue.hpp"
+#include "player_screen.hpp"
 #include "player_tracks.hpp"
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
@@ -604,7 +605,7 @@ private:
                         if (shouldResumePlayback) player_.play();
                         mediaSession_.updateState(
                             shouldResumePlayback ? MediaSessionState::Playing : MediaSessionState::Paused,
-                            cachedPlaybackPositionMs_
+                            playerScreenState_.positionMs()
                         );
                         __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved Media3 and GLES context");
                     } else {
@@ -617,15 +618,15 @@ private:
                         player_.startAsync(
                             activeTarget_.url,
                             videoSurface_.surface(),
-                            cachedPlaybackPositionMs_,
+                            playerScreenState_.positionMs(),
                             settings_.playbackBufferPreset,
                             playerAudioOrdinal(activeTarget_, activePlaybackItem_)
                         );
                         pauseAfterRestart_ = !shouldResumePlayback;
-                        mediaSession_.updateState(MediaSessionState::Buffering, cachedPlaybackPositionMs_);
+                        mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
                         __android_log_print(ANDROID_LOG_WARN, kTag, "GLES context was not reusable during window restore; recreated playback surface");
                     }
-                    playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
+                    playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
                     windowRestorePending_ = false;
                     windowRestoreResumePlaying_ = false;
                 }
@@ -642,7 +643,7 @@ private:
                     }
                     reportProgressAsync(true);
                     displayMode_.restore();
-                    mediaSession_.updateState(MediaSessionState::Paused, cachedPlaybackPositionMs_);
+                    mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
                 }
                 if (!renderer_.detachWindow()) renderer_.shutdown();
                 break;
@@ -651,7 +652,7 @@ private:
                 screensaverActive_ = false;
                 if (screen_ == Screen::Player && !windowRestorePending_ && windowRestoreResumePlaying_) {
                     player_.play();
-                    mediaSession_.updateState(MediaSessionState::Playing, cachedPlaybackPositionMs_);
+                    mediaSession_.updateState(MediaSessionState::Playing, playerScreenState_.positionMs());
                     windowRestoreResumePlaying_ = false;
                     __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
                 }
@@ -1583,28 +1584,14 @@ private:
     void refreshPlaybackTelemetry(bool force = false) {
         const auto now = std::chrono::steady_clock::now();
         if (!force && now - lastPlaybackTelemetryRead_ < 250ms) return;
-        const int observedPositionMs = player_.positionMs();
-        if (pendingSeekTargetMs_ >= 0) {
-            const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                now - lastSeekIssued_
-            ).count();
-            if (shouldAcceptPostSeekTelemetry(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs)) {
-                cachedPlaybackPositionMs_ = observedPositionMs;
-                pendingSeekTargetMs_ = -1;
-                lastSeekIssued_ = {};
-            } else {
-                cachedPlaybackPositionMs_ = pendingSeekTargetMs_;
-            }
-        } else {
-            cachedPlaybackPositionMs_ = observedPositionMs;
-        }
+        playerScreenState_.applyObservedPosition(player_.positionMs(), now);
         if (activePlaybackItem_.runtimeTicks > 0) {
-            cachedPlaybackDurationMs_ = playbackPositionMsFromTicks(activePlaybackItem_.runtimeTicks);
-        } else if (force || cachedPlaybackDurationMs_ <= 0) {
+            playerScreenState_.setDurationMs(playbackPositionMsFromTicks(activePlaybackItem_.runtimeTicks));
+        } else if (force || playerScreenState_.durationMs() <= 0) {
             if (force || lastPlaybackDurationProbe_ == std::chrono::steady_clock::time_point{}
                 || now - lastPlaybackDurationProbe_ >= 2s) {
                 const int duration = player_.durationMs();
-                if (duration > 0) cachedPlaybackDurationMs_ = duration;
+                if (duration > 0) playerScreenState_.setDurationMs(duration);
                 lastPlaybackDurationProbe_ = now;
             }
         }
@@ -1709,11 +1696,11 @@ private:
             && player_.selectEmbeddedAudioOrdinal(static_cast<int>(next))) {
             trackState_.setSelectedAudioServerIndex(tracks[next].index);
             activeTarget_.audioStreamIndex = tracks[next].index;
-            playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
+            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
             return;
         }
-        restartPlaybackAt(cachedPlaybackPositionMs_, tracks[next].index, trackState_.selectedSubtitleServerIndex());
+        restartPlaybackAt(playerScreenState_.positionMs(), tracks[next].index, trackState_.selectedSubtitleServerIndex());
     }
 
     int subtitleIndexForPlaybackItem(
@@ -1855,7 +1842,7 @@ private:
                     cues.size()
                 );
                 trackState_.applySubtitle(subtitle.index, subtitle.language, std::move(cues));
-                playerOverlayUntil_ = std::chrono::steady_clock::now() + 4s;
+                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             }
             if (activePlaybackItem_.id == item.id && trackState_.selectedSubtitleServerIndex() == subtitle.index) {
                 trackState_.endSubtitleWork();
@@ -1890,7 +1877,7 @@ private:
             }
         }
         rememberPlaybackSubtitlePreference(nextIndex);
-        restartPlaybackAt(cachedPlaybackPositionMs_, trackState_.selectedAudioServerIndex(), nextIndex);
+        restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(), nextIndex);
     }
 
     void restartPlaybackAt(int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
@@ -1913,8 +1900,8 @@ private:
         // sessions (and, on some servers, PlaybackInfo HTTP 500 responses).
         trackState_.beginSubtitleWork();
         nextTransitionLoading_ = true;
-        playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
-        cachedPlaybackPositionMs_ = targetPositionMs;
+        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
+        playerScreenState_.setPositionMs(targetPositionMs);
         playbackStartReported_ = false;
         player_.stop();
         videoSurface_.release();
@@ -2063,8 +2050,8 @@ private:
             180.0f,
             270.0f
         );
-        const double progress = cachedPlaybackDurationMs_ > 0
-            ? std::clamp(static_cast<double>(trickplayPreviewPositionMs_) / cachedPlaybackDurationMs_, 0.0, 1.0)
+        const double progress = playerScreenState_.durationMs() > 0
+            ? std::clamp(static_cast<double>(trickplayPreviewPositionMs_) / playerScreenState_.durationMs(), 0.0, 1.0)
             : 0.5;
         const float centerX = 155.0f + static_cast<float>(1610.0 * progress);
         const float x = std::clamp(centerX - previewWidth * 0.5f, 80.0f, Renderer::logicalWidth() - 80.0f - previewWidth);
@@ -2087,14 +2074,11 @@ private:
     void seekPlaybackTo(int positionMs) {
         const int targetMs = std::max(0, positionMs);
         player_.seekTo(targetMs);
-        cachedPlaybackPositionMs_ = targetMs;
-        pendingSeekTargetMs_ = targetMs;
-        lastSeekIssued_ = std::chrono::steady_clock::now();
-        playerOverlayUntil_ = lastSeekIssued_ + 3s;
+        playerScreenState_.beginSeek(targetMs, std::chrono::steady_clock::now());
     }
 
     const SubtitleCue* activeSubtitleCue() const {
-        return trackState_.activeSubtitleCue(cachedPlaybackPositionMs_);
+        return trackState_.activeSubtitleCue(playerScreenState_.positionMs());
     }
 
     void cyclePlaybackSpeed() {
@@ -2116,7 +2100,7 @@ private:
 
     int currentChapterIndex() const {
         if (activePlaybackItem_.chapters.empty()) return -1;
-        const int64_t positionTicks = static_cast<int64_t>(cachedPlaybackPositionMs_) * 10000;
+        const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
         int current = 0;
         for (size_t i = 1; i < activePlaybackItem_.chapters.size(); ++i) {
             if (activePlaybackItem_.chapters[i].startTicks > positionTicks) break;
@@ -2141,7 +2125,7 @@ private:
     }
 
     std::optional<JellyfinMediaSegment> activeSkippableSegment() const {
-        const int64_t positionTicks = static_cast<int64_t>(cachedPlaybackPositionMs_) * 10000;
+        const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
         for (const auto& segment : activeMediaSegments_) {
             if (segment.endTicks - segment.startTicks < 30000000) continue; // under 3 seconds
             if (positionTicks >= segment.startTicks && positionTicks < segment.endTicks - 5000000) return segment;
@@ -2168,7 +2152,7 @@ private:
     }
 
     void activatePlayerControl() {
-        switch (playerControlSelection_) {
+        switch (playerScreenState_.controlSelection()) {
             case 0:
                 player_.togglePause();
                 reportProgressAsync(true);
@@ -2181,24 +2165,19 @@ private:
 
     void handlePlayerKey(int32_t key) {
         const auto now = std::chrono::steady_clock::now();
-        const bool timedOverlayVisible = now < playerOverlayUntil_;
         if (key == AKEYCODE_BACK) {
-            if (playerBackAction(playerControlsActive_, timedOverlayVisible) == PlayerBackAction::DismissOverlay) {
-                playerControlsActive_ = false;
-                playerOverlayUntil_ = now;
-            } else {
-                stopPlayback();
-            }
+            if (playerScreenState_.shouldDismissOnBack(now)) playerScreenState_.dismissOverlay(now);
+            else stopPlayback();
             return;
         }
-        playerOverlayUntil_ = now + (playerControlsActive_ ? 10s : 5s);
-        if (playerControlsActive_) {
+        playerScreenState_.showOverlayFor(now, playerScreenState_.controlsActive() ? 10s : 5s);
+        if (playerScreenState_.controlsActive()) {
             if (key == AKEYCODE_DPAD_DOWN) {
-                playerControlsActive_ = false;
+                playerScreenState_.hideControls();
             } else if (key == AKEYCODE_DPAD_LEFT) {
-                playerControlSelection_ = std::max(0, playerControlSelection_ - 1);
+                playerScreenState_.moveControl(-1);
             } else if (key == AKEYCODE_DPAD_RIGHT) {
-                playerControlSelection_ = std::min(static_cast<int>(playerControlCount()) - 1, playerControlSelection_ + 1);
+                playerScreenState_.moveControl(1);
             } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
                 activatePlayerControl();
             }
@@ -2210,21 +2189,19 @@ private:
             const int next = queueState_.nextIndex(true);
             if (next >= 0) playQueuedIndexAsync(next);
         } else if (key == AKEYCODE_DPAD_UP) {
-            playerControlsActive_ = true;
-            playerControlSelection_ = 0;
-            playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
+            playerScreenState_.showControls(now);
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && skipActiveMediaSegment()) {
             // A visible media-segment action owns OK, matching TV skip-button behavior.
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER || key == AKEYCODE_MEDIA_PLAY_PAUSE) {
             player_.togglePause();
             reportProgressAsync(true);
         } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_MEDIA_REWIND) {
-            const int targetMs = std::max(0, cachedPlaybackPositionMs_ - settings_.seekBackSeconds * 1000);
+            const int targetMs = std::max(0, playerScreenState_.positionMs() - settings_.seekBackSeconds * 1000);
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
         } else if (key == AKEYCODE_DPAD_RIGHT || key == AKEYCODE_MEDIA_FAST_FORWARD) {
-            const int targetMs = cachedPlaybackPositionMs_ + settings_.seekForwardSeconds * 1000;
+            const int targetMs = playerScreenState_.positionMs() + settings_.seekForwardSeconds * 1000;
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
@@ -2246,8 +2223,8 @@ private:
                 stopPlayback();
                 break;
             case MediaSessionCommandType::SeekTo: {
-                const int64_t maxPosition = cachedPlaybackDurationMs_ > 0
-                    ? cachedPlaybackDurationMs_
+                const int64_t maxPosition = playerScreenState_.durationMs() > 0
+                    ? playerScreenState_.durationMs()
                     : static_cast<int64_t>(std::numeric_limits<int>::max());
                 const int positionMs = static_cast<int>(std::clamp<int64_t>(command.positionMs, 0, maxPosition));
                 requestTrickplayPreview(positionMs);
@@ -2383,17 +2360,11 @@ private:
         playbackStartReported_ = false;
         playbackFallbackAttempted_ = false;
         playbackFallbackResolving_ = false;
-        playerControlsActive_ = false;
-        playerControlSelection_ = 0;
+        playerScreenState_.resetSession();
         trackState_.resetSession();
         clearTrickplayPreview();
-        cachedPlaybackPositionMs_ = 0;
-        cachedPlaybackDurationMs_ = 0;
-        pendingSeekTargetMs_ = -1;
-        lastSeekIssued_ = {};
         lastPlaybackTelemetryRead_ = {};
         lastPlaybackDurationProbe_ = {};
-        playerOverlayUntil_ = {};
         lastPlaybackSummary_.clear();
 
         if (hadAuthenticatedSession) {
@@ -3173,7 +3144,7 @@ private:
             return;
         }
         error_.clear();
-        playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
+        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
     }
 
     void moveQueuedItem(int from, int to) {
@@ -3520,7 +3491,7 @@ private:
         if (player_.status() == PlayerStatus::Playing || player_.status() == PlayerStatus::Paused) {
             refreshPlaybackTelemetry(true);
         }
-        const int64_t ticks = playbackTicksFromPositionMs(cachedPlaybackPositionMs_);
+        const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
         const auto session = session_;
         const auto item = activePlaybackItem_;
         const auto target = activeTarget_;
@@ -3538,10 +3509,7 @@ private:
         playbackFallbackResolving_ = false;
         activeTarget_ = {};
         activePlaybackItem_ = {};
-        cachedPlaybackPositionMs_ = 0;
-        cachedPlaybackDurationMs_ = 0;
-        pendingSeekTargetMs_ = -1;
-        lastSeekIssued_ = {};
+        playerScreenState_.resetPosition();
         lastPlaybackTelemetryRead_ = {};
         lastPlaybackDurationProbe_ = {};
         nextEpisodeRequested_ = false;
@@ -3564,7 +3532,7 @@ private:
         nextTransitionLoading_ = true;
         detail_ = nextItem;
         stillWatchingPrompt_ = false;
-        playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
+        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         const JellyfinSession session = session_;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
@@ -3649,7 +3617,7 @@ private:
             "Subtitle-selected transcode failed; retrying item without subtitles (stream %d)",
             trackState_.selectedSubtitleServerIndex()
         );
-        restartPlaybackAt(cachedPlaybackPositionMs_, trackState_.selectedAudioServerIndex(), kSubtitleOffIndex);
+        restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(), kSubtitleOffIndex);
         return true;
     }
 
@@ -3700,7 +3668,7 @@ private:
         const PlaybackTarget failedTarget = activeTarget_;
         JellyfinItem item = activePlaybackItem_;
         const JellyfinSession session = session_;
-        const int64_t resumeTicks = playbackTicksFromPositionMs(cachedPlaybackPositionMs_);
+        const int64_t resumeTicks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
         const bool shouldReportPrevious = playbackStartReported_ && !failedTarget.url.empty();
         item.positionTicks = resumeTicks;
 
@@ -3708,8 +3676,8 @@ private:
         videoSurface_.release();
         playbackStartReported_ = false;
         playbackFallbackAttempted_ = true;
-        cachedPlaybackPositionMs_ = playbackPositionMsFromTicks(resumeTicks);
-        cachedPlaybackDurationMs_ = playbackPositionMsFromTicks(item.runtimeTicks);
+        playerScreenState_.setPositionMs(playbackPositionMsFromTicks(resumeTicks));
+        playerScreenState_.setDurationMs(playbackPositionMsFromTicks(item.runtimeTicks));
         lastPlaybackTelemetryRead_ = {};
         lastPlaybackDurationProbe_ = {};
 
@@ -3737,7 +3705,7 @@ private:
                 return false;
             }
             __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; using offered Jellyfin transcode fallback");
-            playerOverlayUntil_ = std::chrono::steady_clock::now() + 5s;
+            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
             startResolvedPlaybackTarget(activeTarget_);
             return true;
         }
@@ -3754,7 +3722,7 @@ private:
         const uint64_t generation = requestEpochs_.playback.begin();
         loading_ = true;
         playbackFallbackResolving_ = true;
-        playerOverlayUntil_ = std::chrono::steady_clock::now() + 10s;
+        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed without fallback URL; forcing Jellyfin transcode negotiation");
 
         const bool submitted = tasks_.submit([
@@ -3862,13 +3830,11 @@ private:
                 lastProgressReport_ = std::chrono::steady_clock::now();
                 lastPlaybackTelemetryRead_ = {};
                 lastPlaybackDurationProbe_ = {};
-                cachedPlaybackPositionMs_ = playbackPositionMsFromTicks(target->startTicks);
-                cachedPlaybackDurationMs_ = playbackPositionMsFromTicks(item.runtimeTicks);
-                pendingSeekTargetMs_ = -1;
-                lastSeekIssued_ = {};
+                playerScreenState_.beginPlayback(
+                    playbackPositionMsFromTicks(target->startTicks),
+                    playbackPositionMsFromTicks(item.runtimeTicks)
+                );
                 videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
-                playerControlsActive_ = false;
-                playerControlSelection_ = 0;
                 if (!streamRestart) {
                     nextEpisodeRequested_ = false;
                     nextPlaybackItem_.reset();
@@ -4004,7 +3970,7 @@ private:
                 MediaSessionState::Buffering,
                 playbackPositionMsFromTicks(target->startTicks)
             );
-            playerOverlayUntil_ = std::chrono::steady_clock::now() + 5s;
+            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
             startResolvedPlaybackTarget(*target);
             return;
         }
@@ -4012,7 +3978,7 @@ private:
         if (screen_ != Screen::Player) return;
         PlayerStatus status = player_.status();
         if (status == PlayerStatus::Preparing) {
-            mediaSession_.updateState(MediaSessionState::Buffering, cachedPlaybackPositionMs_);
+            mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
         }
         if (status == PlayerStatus::Playing && pauseAfterRestart_) {
             player_.togglePause();
@@ -4038,12 +4004,12 @@ private:
             refreshPlaybackTelemetry();
             mediaSession_.updateState(
                 status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
-                cachedPlaybackPositionMs_
+                playerScreenState_.positionMs()
             );
             if (!mediaSegmentsRequested_) requestMediaSegmentsAsync();
             if (!playbackStartReported_) {
                 playbackStartReported_ = true;
-                const int64_t ticks = playbackTicksFromPositionMs(cachedPlaybackPositionMs_);
+                const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
                 const auto session = session_;
                 const auto itemCopy = activePlaybackItem_;
                 const auto targetCopy = activeTarget_;
@@ -4061,10 +4027,11 @@ private:
                 reportProgressAsync(false);
             }
             if (!nextEpisodeRequested_ && activePlaybackItem_.type == "Episode"
-                && cachedPlaybackPositionMs_ >= 30000) {
+                && playerScreenState_.positionMs() >= 30000) {
                 requestNextEpisodeAsync();
             }
-            if (cachedPlaybackDurationMs_ > 1000 && cachedPlaybackPositionMs_ >= cachedPlaybackDurationMs_ - 1000) {
+            if (playerScreenState_.durationMs() > 1000
+                && playerScreenState_.positionMs() >= playerScreenState_.durationMs() - 1000) {
                 if (queueState_.currentIndex() >= 0 && queueState_.repeatMode() != QueueRepeatMode::Off) {
                     const int next = queueState_.nextIndex(false);
                     if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex());
@@ -4087,7 +4054,7 @@ private:
     void reportProgressAsync(bool immediate) {
         if (screen_ != Screen::Player || !activeTarget_.url.size() || !session_.valid() || !playbackStartReported_) return;
         if (!immediate && player_.status() == PlayerStatus::Preparing) return;
-        const int64_t ticks = playbackTicksFromPositionMs(cachedPlaybackPositionMs_);
+        const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
         const bool paused = player_.status() == PlayerStatus::Paused;
         const auto session = session_;
         const auto item = activePlaybackItem_;
@@ -5368,8 +5335,8 @@ private:
         }
 
         const auto now = std::chrono::steady_clock::now();
-        const int remainingMs = cachedPlaybackDurationMs_ > 0
-            ? std::max(0, cachedPlaybackDurationMs_ - cachedPlaybackPositionMs_)
+        const int remainingMs = playerScreenState_.durationMs() > 0
+            ? std::max(0, playerScreenState_.durationMs() - playerScreenState_.positionMs())
             : 0;
         const bool showNextUp = nextPlaybackItem_.has_value() && remainingMs > 0 && remainingMs <= 30000;
         const auto skipSegment = activeSkippableSegment();
@@ -5378,7 +5345,7 @@ private:
             || nextTransitionLoading_
             || playbackFallbackResolving_
             || showNextUp
-            || now < playerOverlayUntil_;
+            || playerScreenState_.overlayVisible(now);
         if (const SubtitleCue* cue = activeSubtitleCue()) {
             const std::string subtitle = wrapText(cue->text, 46, 3);
             const float textScale = subtitleTextScale(settings_.subtitleSize);
@@ -5447,8 +5414,8 @@ private:
             : playerEpisodeNumber + (activePlaybackItem_.name.empty() ? "" : "  |  " + activePlaybackItem_.name);
         if (!secondary.empty() && secondary != heading) renderer_.text(80.0f, 116.0f, 2.6f, secondary, kMuted, 1500.0f);
 
-        const int position = cachedPlaybackPositionMs_;
-        const int duration = cachedPlaybackDurationMs_;
+        const int position = playerScreenState_.positionMs();
+        const int duration = playerScreenState_.durationMs();
         const std::string state = playbackFallbackResolving_ ? "RETRYING TRANSCODE" :
             (nextTransitionLoading_ ? "LOADING NEXT EPISODE" :
             (status == PlayerStatus::Paused ? "PAUSED" : (status == PlayerStatus::Preparing ? "LOADING" : "PLAYING")));
@@ -5466,7 +5433,7 @@ private:
         }
         drawTrickplayPreview();
 
-        if (playerControlsActive_) {
+        if (playerScreenState_.controlsActive()) {
             const std::array<std::string, 3> controls{
                 status == PlayerStatus::Paused ? "PLAY" : "PAUSE",
                 "AUDIO  " + playerTrackLabel(2),
@@ -5475,7 +5442,7 @@ private:
             const std::array<float, 3> widths{190.0f, 310.0f, 350.0f};
             float x = 535.0f;
             for (size_t i = 0; i < controls.size(); ++i) {
-                const bool selected = static_cast<int>(i) == playerControlSelection_;
+                const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
                 if (i == 0) {
                     const auto bounds = focusedBounds(x, 925.0f, widths[i], 66.0f, selected, 1.06f);
                     renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 28.0f,
@@ -6188,8 +6155,7 @@ private:
     bool playbackFallbackAttempted_ = false;
     bool playbackFallbackResolving_ = false;
     VideoZoomMode videoZoomMode_ = VideoZoomMode::Fit;
-    bool playerControlsActive_ = false;
-    int playerControlSelection_ = 0;
+    PlayerScreenState playerScreenState_;
     PlayerTrackState trackState_;
     TrickplayPreviewEntry trickplayPreview_;
     int trickplayPreviewPositionMs_ = -1;
@@ -6197,11 +6163,6 @@ private:
     std::chrono::steady_clock::time_point lastProgressReport_{};
     std::chrono::steady_clock::time_point lastPlaybackTelemetryRead_{};
     std::chrono::steady_clock::time_point lastPlaybackDurationProbe_{};
-    int cachedPlaybackPositionMs_ = 0;
-    int cachedPlaybackDurationMs_ = 0;
-    int pendingSeekTargetMs_ = -1;
-    std::chrono::steady_clock::time_point lastSeekIssued_{};
-    std::chrono::steady_clock::time_point playerOverlayUntil_{};
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;

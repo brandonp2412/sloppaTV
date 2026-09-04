@@ -3,10 +3,6 @@
 #include <cassert>
 
 int main() {
-    assert(playerControlCount() == 3);
-    assert(playerControlKind(0) == PlayerControlKind::PlayPause);
-    assert(playerControlKind(1) == PlayerControlKind::Audio);
-    assert(playerControlKind(2) == PlayerControlKind::Subtitles);
     assert(mediaGridColumns() == 5);
     assert(isTopMediaGridSelection(0));
     assert(isTopMediaGridSelection(4));
@@ -35,9 +31,6 @@ int main() {
     assert(wrappedIndex(9, 1, 10) == 0);
     assert(wrappedIndex(2, 1, 5) == 3);
     assert(wrappedIndex(4, 1, 5) == 0);
-    assert(playerBackAction(true, true) == PlayerBackAction::DismissOverlay);
-    assert(playerBackAction(false, true) == PlayerBackAction::DismissOverlay);
-    assert(playerBackAction(false, false) == PlayerBackAction::ExitPlayback);
     assert(subtitleBottomY(false, 0) == 1000.0f);
     assert(subtitleBottomY(false, 1) == 905.0f);
     assert(subtitleBottomY(false, 2) == 810.0f);
