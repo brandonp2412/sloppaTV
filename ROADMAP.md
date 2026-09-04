@@ -424,6 +424,14 @@ required for TV hardware, Android TV integration, and final performance work.
   the authenticated Home screen with clean fatal/native-signal/ANR logs. The matching 10/3/3 checkpoint measured 248.0 ms median
   cold launch, 39,931 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over 20 ms, within the
   established run-to-run range.
+- 2026-09-05: Saved Jellyfin account/session ownership now lives in `SessionRegistry` instead of a raw `SloppaApp` vector plus
+  conversion, identity, remember and removal helpers. The registry owns stored/runtime conversion, identity matching, MRU
+  ordering, the 16-session cap, import/export and safe indexed access. Host tests cover update-in-place, MRU ordering,
+  persistence round-trips, device-id rebinding and removal. The full host suite and optimized Release build pass. Physical
+  streamer acceptance opened the two saved profiles, switched from `lounge` to `jellyfin`, then restored `lounge` through the
+  saved-user UI without clearing app data; clean fatal/native-signal/ANR logs were observed. The matching 10/3/3 checkpoint
+  measured 229.0 ms median cold launch, 39,985 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8%
+  intervals over 20 ms. `main.cpp` is now 6,076 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.

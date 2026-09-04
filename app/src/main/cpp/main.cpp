@@ -30,6 +30,7 @@
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
+#include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
 #include "ui_policy.hpp"
@@ -248,25 +249,6 @@ char keyCodeToChar(int32_t keyCode, int32_t metaState) {
         case AKEYCODE_AT: return '@';
         default: return 0;
     }
-}
-
-StoredSession storedSessionFromRuntime(const JellyfinSession& session) {
-    return {
-        .server = session.server,
-        .username = session.username,
-        .userId = session.userId,
-        .token = session.token,
-    };
-}
-
-JellyfinSession runtimeSessionFromStored(const StoredSession& session, const std::string& deviceId) {
-    return {
-        .server = session.server,
-        .username = session.username,
-        .userId = session.userId,
-        .token = session.token,
-        .deviceId = deviceId,
-    };
 }
 
 class SloppaApp;
@@ -828,7 +810,7 @@ private:
         } else if (key == AKEYCODE_DPAD_DOWN) {
             accountState_.moveLoginVertical(1);
         } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
-            accountState_.moveLoginAction(key == AKEYCODE_DPAD_LEFT ? -1 : 1, !savedSessions_.empty());
+            accountState_.moveLoginAction(key == AKEYCODE_DPAD_LEFT ? -1 : 1, !sessionRegistry_.empty());
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const int focus = accountState_.loginFocus();
             if (focus < AccountScreenState::kLoginAction) {
@@ -860,7 +842,7 @@ private:
             popScreen(Screen::Login);
             return;
         }
-        const int addIndex = static_cast<int>(savedSessions_.size());
+        const int addIndex = static_cast<int>(sessionRegistry_.size());
         if (key == AKEYCODE_DPAD_UP) {
             accountState_.moveProfile(-1, addIndex);
         } else if (key == AKEYCODE_DPAD_DOWN) {
@@ -2284,12 +2266,12 @@ private:
     }
 
     void openProfiles() {
-        if (savedSessions_.empty()) {
+        if (sessionRegistry_.empty()) {
             startAddAccount();
             return;
         }
         pushScreen(Screen::Profiles);
-        accountState_.beginProfiles(static_cast<int>(savedSessions_.size()));
+        accountState_.beginProfiles(static_cast<int>(sessionRegistry_.size()));
         error_.clear();
     }
 
@@ -2302,9 +2284,10 @@ private:
     }
 
     void switchSavedSession(size_t index) {
-        if (index >= savedSessions_.size()) return;
+        const JellyfinSession* saved = sessionRegistry_.at(index);
+        if (!saved) return;
         clearCurrentSessionUi();
-        session_ = savedSessions_[index];
+        session_ = *saved;
         session_.deviceId = deviceId_;
         accountState_.setAuthenticatedAccount(session_.server, session_.username);
         resetNavigation(Screen::Home);
@@ -2315,18 +2298,19 @@ private:
     }
 
     void forgetSavedSession(size_t index) {
-        if (index >= savedSessions_.size()) return;
-        const JellyfinSession removed = savedSessions_[index];
-        const bool removedCurrent = sameSessionIdentity(session_, removed);
+        const JellyfinSession* saved = sessionRegistry_.at(index);
+        if (!saved) return;
+        const JellyfinSession removed = *saved;
+        const bool removedCurrent = SessionRegistry::sameIdentity(session_, removed);
         eraseArtworkEntry(profileArtwork_, profileArtworkKey(removed));
-        savedSessions_.erase(savedSessions_.begin() + static_cast<std::ptrdiff_t>(index));
+        sessionRegistry_.eraseAt(index);
         if (removedCurrent) {
             clearCurrentSessionUi();
             resetNavigation(Screen::Profiles);
         }
-        accountState_.beginProfiles(static_cast<int>(savedSessions_.size()));
+        accountState_.beginProfiles(static_cast<int>(sessionRegistry_.size()));
         saveSession(session_);
-        if (savedSessions_.empty()) startAddAccount();
+        if (sessionRegistry_.empty()) startAddAccount();
     }
 
     void openLibraries() {
@@ -2843,7 +2827,8 @@ private:
                 homeLoading_ = false;
                 if (core.error.find("HTTP 401") != std::string::npos) {
                     const JellyfinSession expired = session_;
-                    removeSavedSessionIdentity(expired);
+                    eraseArtworkEntry(profileArtwork_, profileArtworkKey(expired));
+                    sessionRegistry_.removeIdentity(expired);
                     requestEpochs_.invalidateAll();
                     loading_ = false;
                     mutationLoading_ = false;
@@ -4665,11 +4650,11 @@ private:
         const auto discoverBounds = drawFocusedSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
         renderer_.textCentered(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f, "DISCOVER", kText);
 
-        if (!savedSessions_.empty()) {
+        if (!sessionRegistry_.empty()) {
             const bool savedFocused = accountState_.loginFocus() == AccountScreenState::kSavedUsersAction && !accountState_.keyboardActive();
             const auto savedBounds = drawFocusedSurface(650.0f, 785.0f, 620.0f, 58.0f, savedFocused);
             renderer_.textCentered(savedBounds[0], savedBounds[1], savedBounds[2], savedBounds[3], 1.65f,
-                "SAVED USERS (" + std::to_string(savedSessions_.size()) + ")", savedFocused ? kText : kMuted);
+                "SAVED USERS (" + std::to_string(sessionRegistry_.size()) + ")", savedFocused ? kText : kMuted);
         }
         if (!accountState_.keyboardActive()) {
             const std::string hint = !accountState_.discoveryStatus().empty()
@@ -4683,7 +4668,7 @@ private:
     void renderProfiles() {
         renderHeader("USERS & SERVERS");
         renderer_.text(105.0f, 180.0f, 2.15f, "CHOOSE WHO IS WATCHING", kMuted, 640.0f);
-        const int totalRows = static_cast<int>(savedSessions_.size()) + 1;
+        const int totalRows = static_cast<int>(sessionRegistry_.size()) + 1;
         constexpr int visibleRows = 5;
         const int maxFirst = std::max(0, totalRows - visibleRows);
         const int first = std::clamp(accountState_.profileSelection() - visibleRows + 1, 0, maxFirst);
@@ -4692,7 +4677,7 @@ private:
             if (index >= totalRows) break;
             const float y = 245.0f + static_cast<float>(slot) * 138.0f;
             const bool focused = index == accountState_.profileSelection();
-            if (index == static_cast<int>(savedSessions_.size())) {
+            if (index == static_cast<int>(sessionRegistry_.size())) {
                 const auto bounds = drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false);
                 renderer_.textCentered(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", kFocus);
                 renderer_.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f,
@@ -4700,7 +4685,9 @@ private:
                 continue;
             }
             drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false, focused && accountState_.profileAction() == 1);
-            const auto& saved = savedSessions_[static_cast<size_t>(index)];
+            const auto* savedSession = sessionRegistry_.at(static_cast<size_t>(index));
+            if (!savedSession) continue;
+            const auto& saved = *savedSession;
             if (!drawProfileArtwork(saved, 280.0f, y + 12.0f, 84.0f)) {
                 renderer_.roundedRect(280.0f, y + 12.0f, 84.0f, 84.0f, 24.0f, kPanelAlt);
                 std::string initial = saved.username.empty() ? "?" : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
@@ -5877,34 +5864,6 @@ private:
         }
     }
 
-    static bool sameSessionIdentity(const JellyfinSession& left, const JellyfinSession& right) {
-        return !left.server.empty() && left.server == right.server && !left.userId.empty() && left.userId == right.userId;
-    }
-
-    void rememberSession(const JellyfinSession& session) {
-        if (!session.valid()) return;
-        eraseArtworkEntry(profileArtwork_, profileArtworkKey(session));
-        const auto existing = std::find_if(savedSessions_.begin(), savedSessions_.end(), [&](const JellyfinSession& saved) {
-            return sameSessionIdentity(saved, session);
-        });
-        JellyfinSession saved = session;
-        saved.deviceId = deviceId_;
-        if (existing == savedSessions_.end()) savedSessions_.insert(savedSessions_.begin(), std::move(saved));
-        else {
-            *existing = std::move(saved);
-            std::rotate(savedSessions_.begin(), existing, std::next(existing));
-        }
-        constexpr size_t kMaxSavedSessions = 16;
-        if (savedSessions_.size() > kMaxSavedSessions) savedSessions_.resize(kMaxSavedSessions);
-    }
-
-    void removeSavedSessionIdentity(const JellyfinSession& session) {
-        eraseArtworkEntry(profileArtwork_, profileArtworkKey(session));
-        std::erase_if(savedSessions_, [&](const JellyfinSession& saved) {
-            return sameSessionIdentity(saved, session);
-        });
-    }
-
     void loadSession() {
         std::string warning;
         StoredSessionState stored = loadSessionState(dataPath_, generateDeviceId(), warning);
@@ -5912,26 +5871,27 @@ private:
             __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to read session: %s", warning.c_str());
         }
         deviceId_ = std::move(stored.deviceId);
-        session_ = runtimeSessionFromStored(stored.currentSession, deviceId_);
-        savedSessions_.clear();
-        savedSessions_.reserve(stored.savedSessions.size());
-        for (const auto& saved : stored.savedSessions) {
-            savedSessions_.push_back(runtimeSessionFromStored(saved, deviceId_));
-        }
+        session_ = SessionRegistry::fromStored(stored.currentSession, deviceId_);
+        sessionRegistry_.importStored(stored.savedSessions, deviceId_);
         hiddenHomeItems_ = std::move(stored.hiddenHomeItems);
         settings_ = std::move(stored.settings);
-        if (session_.valid()) rememberSession(session_);
+        if (session_.valid()) {
+            eraseArtworkEntry(profileArtwork_, profileArtworkKey(session_));
+            sessionRegistry_.remember(session_, deviceId_);
+        }
         videoZoomMode_ = static_cast<VideoZoomMode>(settings_.zoomMode);
         accountState_.setAuthenticatedAccount(session_.server, session_.username);
     }
 
     void saveSession(const JellyfinSession& session) {
-        if (session.valid()) rememberSession(session);
+        if (session.valid()) {
+            eraseArtworkEntry(profileArtwork_, profileArtworkKey(session));
+            sessionRegistry_.remember(session, deviceId_);
+        }
         StoredSessionState stored;
         stored.deviceId = deviceId_;
-        stored.currentSession = storedSessionFromRuntime(session);
-        stored.savedSessions.reserve(savedSessions_.size());
-        for (const auto& saved : savedSessions_) stored.savedSessions.push_back(storedSessionFromRuntime(saved));
+        stored.currentSession = SessionRegistry::toStored(session);
+        stored.savedSessions = sessionRegistry_.exportStored();
         stored.hiddenHomeItems = hiddenHomeItems_;
         stored.settings = settings_;
         std::string warning;
@@ -5973,7 +5933,7 @@ private:
     std::string pendingDeepLinkItemId_;
     std::string pendingSearchQuery_;
     std::optional<LaunchRequest> pendingRuntimeLaunchRequest_;
-    std::vector<JellyfinSession> savedSessions_;
+    SessionRegistry sessionRegistry_;
     AccountScreenState accountState_;
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
