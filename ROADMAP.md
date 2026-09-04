@@ -301,7 +301,7 @@ required for TV hardware, Android TV integration, and final performance work.
   10/3/3 performance checkpoint measured 242.5 ms median cold launch, 39,968 KB PSS, 0.0% idle CPU and 16.67/16.72 ms
   navigation median/p95 with 0.8% intervals over 20 ms, effectively unchanged from the immediately preceding
   240.0 ms, 39,725 KB, 0.0%, 16.67/16.71 ms and 0.8% checkpoint.
-  `main.cpp` is now 6,495 lines, down from 7,194 before the architecture pass despite adding explicit request ownership.
+  `main.cpp` is now 6,456 lines, down from 7,194 before the architecture pass despite adding explicit request ownership.
 - 2026-09-04: Jellyfin playback negotiation now delegates device/video/audio/subtitle capability planning, direct-request
   flags, and server-route classification to the host-testable `playback_profile.hpp` instead of embedding those decisions
   inside the HTTP method. Tests cover codec level/profile/resolution/HDR rejection, audio-route limits, client-vs-server
@@ -328,6 +328,16 @@ required for TV hardware, Android TV integration, and final performance work.
   10/3/3 checkpoint measured 237.0 ms median cold launch, 39,399 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation
   median/p95 with 0.8% intervals over 20 ms, unchanged or slightly improved from the preceding Browse checkpoint. Media
   volume was restored to 15/15 and the streamer returned to sleep.
+- 2026-09-04: Details-screen action focus, More Like This focus/selection, item-menu navigation/delete confirmation, and
+  cast-grid focus now live together in `DetailsScreenState` instead of eight independent `SloppaApp` fields. Action and
+  item-menu label derivation moved with that state so user-data changes and focus rules stay beside the UI behavior they
+  affect. Host tests cover action/menu bounds, similar-item selection, delete-confirmation defaults, and cast-grid movement;
+  the full host suite and optimized Release build pass. Physical streamer acceptance on Brooklyn Nine-Nine `48 Hours`
+  verified Details action navigation, opening and moving through Cast, returning with action focus preserved, and opening
+  and navigating the More item menu without mutating Jellyfin state. No fatal/native-signal/ANR finding was observed. The
+  matching 10/3/3 checkpoint measured 242.0 ms median cold launch, 39,833 KB PSS, 0.0% idle CPU and 16.67/16.73 ms
+  navigation median/p95 with 0.8% intervals over 20 ms, within the established run-to-run range. Media volume was restored
+  to 15/15 and the streamer returned to sleep.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
