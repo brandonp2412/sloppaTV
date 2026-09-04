@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 99 / 139 verified (71.2%); 40 partial; none unbuilt.
+Status at 2026-09-04: 100 / 139 verified (71.9%); 39 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -60,7 +60,7 @@ required for TV hardware, Android TV integration, and final performance work.
 - [x] HDR fixture/HDR-preserving server-stream path and generated Trickplay tile rendering are verified on the Google TV Streamer.
 - [x] External-player discovery, selection, silent playback handoff, and return are verified on the Google TV Streamer.
 - [~] Voice search needs a real microphone/recognizer invocation.
-- [~] DreamService needs normal-idle render/dismissal acceptance.
+- [x] DreamService normal-idle launch, native render, and DPAD dismissal are physically verified.
 - [x] Launcher banner/icon reinstalled and visually verified with the matching key.
 
 ### Settings, resilience, and release
@@ -153,10 +153,16 @@ required for TV hardware, Android TV integration, and final performance work.
 - 2026-09-04: production-signed caracal branding is visually accepted on the Google TV launcher: the
   installed `sloppaTV` tile renders the caracal artwork, app name, and Jellyfin-for-TV subtitle after
   an in-place update with the matching production key.
+- 2026-09-04: DreamService normal-idle acceptance passed on the physical Google TV Streamer. With
+  `app.sloppatv/.SloppaDreamService` temporarily selected and the idle timeout reduced to five seconds,
+  Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
+  input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
+  signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
 - 2026-09-04: repeated clean production-key builds have identical ZIP entries, metadata, timestamps,
-  and payload hashes; whole-APK SHA-256 differs only in the Android APK Signing Block. CI still creates
-  a fresh one-day signing identity on every run, so stable CI artifact signing remains unresolved and
-  the combined release-engineering item stays partial.
+  and payload hashes; whole-APK SHA-256 differs only in the Android APK Signing Block. CI now accepts
+  a stable production keystore and credentials from Actions secrets, with an ephemeral identity fallback
+  for runs where secrets are unavailable. The repository secrets are not yet populated, so stable CI
+  artifact signing remains unresolved and the combined release-engineering item stays partial.
 - 2026-09-04: the production-signed 20/5/5 physical-TV performance suite measured sloppaTV versus the
   installed `org.jellyfin.androidtv` development build (`0.0.0-dev.1`) on the same Google TV Streamer.
   sloppaTV cold-launch median was 242.5 ms versus 404.0 ms, settled PSS 40,192 KB versus 152,328 KB,
