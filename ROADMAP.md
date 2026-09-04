@@ -447,6 +447,13 @@ required for TV hardware, Android TV integration, and final performance work.
   Jellyfin VIEW intent to Brooklyn Nine-Nine `48 Hours` with the authenticated session intact and clean fatal/native-signal/ANR
   logs. The matching 10/3/3 checkpoint measured 236.5 ms median cold launch, 39,532 KB PSS, 0.0% idle CPU and 16.67/16.72 ms
   navigation median/p95 with 0.8% intervals over 20 ms. `main.cpp` is now 6,056 lines versus 7,194 before the architecture pass.
+- 2026-09-05: Next-episode/autoplay ownership now lives in `PlaybackContinuationState` instead of four independent `SloppaApp`
+  fields. It owns the prefetched next item, next-episode request latch, autoplay-chain count and Still Watching prompt state, with
+  dedicated host coverage for request gating, next-item lifecycle, chain counting and reset. The full host suite and optimized
+  Release build pass. Physical streamer acceptance resumed Brooklyn Nine-Nine `48 Hours` at the preserved 3:51 position and loaded
+  its real media-segment response while paused, with no fatal/native-signal/ANR finding. The matching 10/3/3 checkpoint measured
+  243.0 ms median cold launch, 41,036 KB PSS, 0.0% idle CPU and 16.67/16.73 ms navigation median/p95 with 0.8% intervals over
+  20 ms, within the established run-to-run range. `main.cpp` is now 6,050 lines versus 7,194 before the architecture pass.
 - 2026-09-03: Waydroid regression reproduced missing selected ASS subtitles on Hell's
   Paradise S1E1, then verified the transcoded ASS-to-native-SRT fallback end to end with
   an on-screen English dialogue cue, `SUBTITLES ENG`, preserved app data, and a clean fatal-log audit.
