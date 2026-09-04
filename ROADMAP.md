@@ -20,7 +20,7 @@ administration.
 Release requires every in-scope item to be `[x]`; blockers remain work until
 resolved or deliberately removed from scope.
 
-Status at 2026-09-04: 105 / 139 verified (75.5%); 34 partial; none unbuilt.
+Status at 2026-09-04: 106 / 139 verified (76.3%); 33 partial; none unbuilt.
 
 Waydroid may validate full hardware-independent flows. Google TV Streamer is
 required for TV hardware, Android TV integration, and final performance work.
@@ -47,7 +47,7 @@ required for TV hardware, Android TV integration, and final performance work.
 
 ### Accounts, navigation, and browsing
 
-- [~] Quick Connect TV UI; LAN discovery; profile, user, and server switching.
+- [~] LAN discovery plus profile, user, and server switching remain; Quick Connect TV UI is physically verified.
 - [x] Navigation regression, server-version edge cases, and Movies/Shows/Mixed/folder browsing are physically verified.
 - [x] Seasons, nested folders, populated favorites, direct item-options keys.
 - [x] Delete and refresh permissions plus server-side mutation completion.
@@ -158,6 +158,12 @@ required for TV hardware, Android TV integration, and final performance work.
   Android launched the real non-preview dream, the native GLES clock rendered at 1920x1080, and DPAD
   input dismissed it. Logs recorded clean renderer start/stop with no sloppaTV fatal exception, native
   signal, or ANR. Google Backdrop and the original 10-minute idle timeout were restored afterward.
+- 2026-09-04: Quick Connect TV UI is physically accepted on the production Google TV build. From
+  USERS & SERVERS, ADD ANOTHER ACCOUNT retained the current server, QUICK CONNECT rendered code
+  `265624` with the authorization instructions/waiting state, and the normal Jellyfin Quick Connect
+  authorize endpoint approved it as the existing `jellyfin` user. The app observed authorization on
+  its five-second poll, completed `AuthenticateWithQuickConnect`, returned to a populated Home in
+  159 ms, and retained exactly one deduplicated saved `jellyfin` profile. The app-scoped log audit was clean.
 - 2026-09-04: physical navigation-stack regression is complete on the production Google TV build.
   External `ACTION_VIEW` opened Firefly `Trash` Details and Back restored Home; external `ACTION_SEARCH`
   for `1917` rendered Search and Back restored Home; Home Movies opened the real Movies grid, `1917`
