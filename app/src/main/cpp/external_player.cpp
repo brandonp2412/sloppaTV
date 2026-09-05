@@ -394,7 +394,7 @@ bool NativeExternalPlayer::launch(
         case ExternalPlayerKind::Mpv:
             putStringExtra(env, intent, "title", title);
             putIntExtra(env, intent, "position", safePosition);
-            putByteExtra(env, intent, "decode_mode", 2);
+            putByteExtra(env, intent, "decode_mode", externalMpvDecodeModeForPackage(app.packageName));
             putStringExtra(env, intent, "skip_segments", skipSegmentsJson);
             putUriArrayExtra(env, intent, "subs", subtitleUrl);
             putUriArrayExtra(env, intent, "subs.enable", subtitleUrl);

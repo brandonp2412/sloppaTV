@@ -11,6 +11,10 @@ int main() {
     assert(externalPlayerKindForPackage("net.gtvbox.videoplayer") == ExternalPlayerKind::Vimu);
     assert(externalPlayerKindForPackage("com.example.player") == ExternalPlayerKind::Generic);
 
+    assert(externalMpvDecodeModeForPackage("app.gyrolet.mpvrx") == 1);
+    assert(externalMpvDecodeModeForPackage("app.mpvnova.player") == 2);
+    assert(externalMpvDecodeModeForPackage("is.xyz.mpv") == 2);
+
     const auto vlcOk = externalPlayerOutcomeForResult(ExternalPlayerKind::Vlc, -1, true);
     assert(vlcOk.success);
     assert(!vlcOk.completionKnown);
