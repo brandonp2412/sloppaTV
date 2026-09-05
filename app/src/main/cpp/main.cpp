@@ -112,6 +112,28 @@ bool isTransientHomeLoadError(std::string_view error) {
         || error.find("HTTP 5") != std::string_view::npos;
 }
 
+std::string externalSkipSegmentsJson(const std::vector<JellyfinMediaSegment>& segments) {
+    std::ostringstream json;
+    json << '[';
+    bool first = true;
+    for (const auto& segment : segments) {
+        if (segment.endTicks - segment.startTicks < 30000000) continue;
+        std::string type;
+        if (segment.type == "Intro") type = "intro";
+        else if (segment.type == "Outro") type = "outro";
+        else if (segment.type == "Recap") type = "recap";
+        else continue;
+        if (!first) json << ',';
+        first = false;
+        json << "{\"type\":\"" << type
+             << "\",\"start\":" << (static_cast<double>(segment.startTicks) / 10000000.0)
+             << ",\"end\":" << (static_cast<double>(segment.endTicks) / 10000000.0)
+             << '}';
+    }
+    json << ']';
+    return json.str();
+}
+
 std::string wrapText(const std::string& input, size_t maxColumns, size_t maxLines) {
     if (input.empty()) return "NO DESCRIPTION";
     std::istringstream words(input);
@@ -1380,6 +1402,14 @@ private:
             auto detailed = api_.getItem(session, playable.id);
             if (detailed.ok) playable = std::move(detailed.value);
 
+            std::string skipSegmentsJson;
+            auto segments = api_.getMediaSegments(session, playable.id);
+            if (segments.ok) {
+                skipSegmentsJson = externalSkipSegmentsJson(segments.value);
+            } else {
+                __android_log_print(ANDROID_LOG_WARN, kTag, "External playback media segments unavailable: %s", segments.error.c_str());
+            }
+
             const std::string videoUrl = api_.staticVideoUrl(session, playable);
             std::string subtitleUrl;
             auto subtitle = std::find_if(playable.subtitles.begin(), playable.subtitles.end(), [](const JellyfinSubtitleStream& candidate) {
@@ -1409,6 +1439,7 @@ private:
                 .player = std::move(player),
                 .url = videoUrl,
                 .subtitleUrl = std::move(subtitleUrl),
+                .skipSegmentsJson = std::move(skipSegmentsJson),
             });
         })) {
             loading_ = false;
@@ -3714,6 +3745,7 @@ private:
                 title,
                 positionMs,
                 launch.subtitleUrl,
+                launch.skipSegmentsJson,
                 launchError
             )) {
             std::scoped_lock lock(stateMutex_);

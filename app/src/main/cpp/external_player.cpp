@@ -334,6 +334,7 @@ bool NativeExternalPlayer::launch(
     const std::string& title,
     int positionMs,
     const std::string& subtitleUrl,
+    const std::string& skipSegmentsJson,
     std::string& error
 ) {
     if (!activity_ || app.componentName.empty() || app.packageName.empty() || url.empty()) {
@@ -394,6 +395,7 @@ bool NativeExternalPlayer::launch(
             putStringExtra(env, intent, "title", title);
             putIntExtra(env, intent, "position", safePosition);
             putByteExtra(env, intent, "decode_mode", 2);
+            putStringExtra(env, intent, "skip_segments", skipSegmentsJson);
             putUriArrayExtra(env, intent, "subs", subtitleUrl);
             putUriArrayExtra(env, intent, "subs.enable", subtitleUrl);
             break;
