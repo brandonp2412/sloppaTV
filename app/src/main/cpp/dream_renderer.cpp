@@ -86,7 +86,7 @@ void stopDreamThread() {
         gStopRequested = false;
     }
 }
-}  // namespace
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobject surface) {

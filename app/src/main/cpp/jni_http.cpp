@@ -92,7 +92,7 @@ std::string readStream(JNIEnv* env, jobject stream, std::string& error) {
     env->DeleteLocalRef(inputClass);
     return result;
 }
-}  // namespace
+}
 
 std::string JniHttpClient::getCacheKey(
     const std::string& url,

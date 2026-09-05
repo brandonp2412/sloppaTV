@@ -113,7 +113,7 @@ void queryDisplayHdr(JNIEnv* env, jobject activity, DeviceCodecSupport& result) 
     if (windowManager) env->DeleteLocalRef(windowManager);
     if (activityClass) env->DeleteLocalRef(activityClass);
 }
-}  // namespace
+}
 
 std::vector<std::string> DeviceCodecSupport::jellyfinVideoCodecs() const {
     std::vector<std::string> codecs;

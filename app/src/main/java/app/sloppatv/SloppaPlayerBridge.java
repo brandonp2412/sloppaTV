@@ -21,10 +21,6 @@ import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 
-/**
- * Minimal Media3 bridge. The C++ application owns policy/state; this class exists only
- * because ExoPlayer and its buffer/audio output primitives are Java Android APIs.
- */
 @SuppressWarnings("UnsafeOptInUsageError")
 public final class SloppaPlayerBridge {
     private static final String TAG = "sloppaTV/player";

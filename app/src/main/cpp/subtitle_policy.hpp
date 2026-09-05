@@ -217,9 +217,6 @@ inline bool isLikelySignsOnlySubtitle(std::string label) {
     return label.find("sign") != std::string::npos && label.find("song") != std::string::npos;
 }
 
-// nullopt: no explicit viewer choice yet, begin with subtitles off.
-// empty string: user explicitly disabled subtitles for this playback chain.
-// non-empty: user selected a language; carry it forward when the next item exposes it.
 inline int subtitleIndexForQueuePreference(
     const std::vector<SubtitlePreferenceCandidate>& subtitles,
     const std::optional<std::string>& languagePreference

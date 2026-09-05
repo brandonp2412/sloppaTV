@@ -17,7 +17,7 @@ bool clearException(JNIEnv* env, const char* where, std::string& error) {
     error = std::string("Video surface failed at ") + where;
     return true;
 }
-}  // namespace
+}
 
 VideoSurface::~VideoSurface() {
     release();
