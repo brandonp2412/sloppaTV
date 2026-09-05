@@ -2,6 +2,7 @@
 
 #include "media_player_policy.hpp"
 #include "screensaver_policy.hpp"
+#include "subtitle_policy.hpp"
 
 #include <algorithm>
 #include <array>
@@ -16,6 +17,30 @@ enum class VideoZoomMode {
     Stretch = 2,
 };
 
+struct SubtitleLanguageOption {
+    const char* code;
+    const char* label;
+};
+
+inline constexpr std::array<SubtitleLanguageOption, 16> kSubtitleLanguageOptions{{
+    {"eng", "ENGLISH"},
+    {"mri", "MAORI"},
+    {"jpn", "JAPANESE"},
+    {"spa", "SPANISH"},
+    {"fra", "FRENCH"},
+    {"deu", "GERMAN"},
+    {"ita", "ITALIAN"},
+    {"por", "PORTUGUESE"},
+    {"kor", "KOREAN"},
+    {"zho", "CHINESE"},
+    {"ara", "ARABIC"},
+    {"nld", "DUTCH"},
+    {"rus", "RUSSIAN"},
+    {"hin", "HINDI"},
+    {"swe", "SWEDISH"},
+    {"nor", "NORWEGIAN"},
+}};
+
 struct AppSettings {
     int maxBitrateMbps = 120;
     int playbackBufferPreset = 0;
@@ -27,10 +52,15 @@ struct AppSettings {
     bool refreshRateSwitching = false;
     bool showWatchedIndicators = true;
     bool showClock = true;
+    bool clock24Hour = false;
     int backdropMode = 1;
     int subtitleSize = 1;
-    bool subtitleBackground = true;
+    bool subtitleBackground = false;
     int subtitlePosition = 0;
+    std::vector<std::string> subtitleLanguages;
+    bool autoSubtitles = false;
+    std::string autoSubtitleLanguage = "eng";
+    std::string autoSubtitleSourceLanguage = "any";
     int maxAudioChannels = 8;
     int avcLevelOverride = 0;
     int hevcLevelOverride = 0;
@@ -41,7 +71,12 @@ struct AppSettings {
     std::string externalPlayerComponent;
 };
 
-constexpr int kAdvancedSettingsToggle = 24;
+constexpr int kSubtitleLanguagesSetting = 24;
+constexpr int kTimeFormatSetting = 25;
+constexpr int kAutoSubtitlesSetting = 26;
+constexpr int kAutoSubtitleLanguageSetting = 27;
+constexpr int kAutoSubtitleSourceSetting = 28;
+constexpr int kAdvancedSettingsToggle = 29;
 
 inline PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
     return {
@@ -73,6 +108,10 @@ inline std::string subtitlePositionName(int position) {
 inline std::string uiTextSizeName(int size) {
     static constexpr std::array<const char*, 3> names{"NORMAL", "LARGE", "EXTRA LARGE"};
     return names[static_cast<size_t>(std::clamp(size, 0, 2))];
+}
+
+inline std::string clockFormatName(bool clock24Hour) {
+    return clock24Hour ? "24 HOUR" : "12 HOUR (AM/PM)";
 }
 
 inline std::string screensaverName(int minutes) {
@@ -129,8 +168,35 @@ inline float subtitleTextScale(int size) {
     return scales[static_cast<size_t>(std::clamp(size, 0, 2))];
 }
 
-inline const std::array<std::string, 25>& settingsLabels() {
-    static const std::array<std::string, 25> labels{
+inline std::string subtitleLanguageLabel(std::string code) {
+    code = normalizeSubtitleLanguage(std::move(code));
+    const auto match = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(), [&](const auto& option) {
+        return code == option.code;
+    });
+    return match == kSubtitleLanguageOptions.end() ? code : match->label;
+}
+
+inline std::string autoSubtitleSourceName(const AppSettings& settings) {
+    if (settings.autoSubtitleSourceLanguage.empty() || settings.autoSubtitleSourceLanguage == "any") return "ANY AUDIO";
+    if (settings.autoSubtitleSourceLanguage == "different") {
+        return "AUDIO NOT " + subtitleLanguageLabel(settings.autoSubtitleLanguage);
+    }
+    return subtitleLanguageLabel(settings.autoSubtitleSourceLanguage) + " AUDIO";
+}
+
+inline std::string subtitleLanguageSummary(const AppSettings& settings) {
+    if (settings.subtitleLanguages.empty()) return "ALL LANGUAGES";
+    if (settings.subtitleLanguages.size() == 1) {
+        const auto match = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(), [&](const auto& option) {
+            return settings.subtitleLanguages.front() == option.code;
+        });
+        return match == kSubtitleLanguageOptions.end() ? settings.subtitleLanguages.front() : match->label;
+    }
+    return std::to_string(settings.subtitleLanguages.size()) + " SELECTED";
+}
+
+inline const std::array<std::string, 30>& settingsLabels() {
+    static const std::array<std::string, 30> labels{
         "MAX STREAMING BITRATE",
         "PLAYBACK BUFFER",
         "SKIP BACK",
@@ -155,6 +221,11 @@ inline const std::array<std::string, 25>& settingsLabels() {
         "EXTERNAL PLAYER",
         "DIAGNOSTICS",
         "SWITCH USER",
+        "SUBTITLE LANGUAGES",
+        "TIME FORMAT",
+        "AUTO SUBTITLES",
+        "AUTO SUBTITLE LANGUAGE",
+        "AUTO SUBTITLE SOURCE AUDIO",
         "ADVANCED SETTINGS",
     };
     return labels;
@@ -173,8 +244,10 @@ inline bool settingLabelContains(std::string_view text, std::string_view query) 
 }
 
 inline std::vector<int> matchingSettings(const std::string& query, bool advanced) {
-    static constexpr std::array<int, 15> commonOrder{
-        18, 10, 11, 13, 12, 5, 6, 2, 3, 8, 9, 14, 20, 23, kAdvancedSettingsToggle,
+    static constexpr std::array<int, 20> commonOrder{
+        18, 10, 11, 13, 12, kSubtitleLanguagesSetting,
+        kAutoSubtitlesSetting, kAutoSubtitleLanguageSetting, kAutoSubtitleSourceSetting,
+        5, 6, 2, 3, 8, 9, kTimeFormatSetting, 14, 20, 23, kAdvancedSettingsToggle,
     };
     static constexpr std::array<int, 12> advancedOrder{
         0, 1, 4, 7, 17, 19, 15, 16, 21, 22, 23, kAdvancedSettingsToggle,

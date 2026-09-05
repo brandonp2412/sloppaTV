@@ -18,6 +18,7 @@ int main() {
     // server-streamed playback; the old MediaPlayer/NuPlayer restart policy is gone.
     assert(initialPlayerSeekMs(12'340'000) == 1234);
     assert(subtitleStrategy("srt") == SubtitleStrategy::ClientText);
+    assert(subtitleStrategy("mov_text") == SubtitleStrategy::ClientText);
     assert(subtitleStrategy("ass") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("ssa") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("pgssub") == SubtitleStrategy::ServerTranscode);
@@ -83,8 +84,11 @@ int main() {
     assert(shouldAcceptPostSeekTelemetry(20'800, 20'000, 50));
     assert(!shouldAcceptPostSeekTelemetry(10'000, 20'000, 100));
     assert(!shouldAcceptPostSeekTelemetry(10'000, 20'000, 749));
-    assert(shouldAcceptPostSeekTelemetry(10'000, 20'000, 750));
-    assert(shouldAcceptPostSeekTelemetry(30'000, 20'000, 900));
+    assert(!shouldAcceptPostSeekTelemetry(10'000, 20'000, 4'999));
+    assert(shouldAcceptPostSeekTelemetry(10'000, 20'000, 5'000));
+    assert(!postSeekPositionFailed(10'000, 20'000, 1'499));
+    assert(postSeekPositionFailed(10'000, 20'000, 1'500));
+    assert(!postSeekPositionFailed(20'800, 20'000, 1'500));
 
     assert(static_cast<int>(StartupStep::StartPlayback) < static_cast<int>(StartupStep::ReadTrackMetadata));
     return 0;

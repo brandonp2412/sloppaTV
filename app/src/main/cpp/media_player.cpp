@@ -172,7 +172,7 @@ void NativeMediaPlayer::stop() {
     clearException(env, "player release");
     if (playerClass) env->DeleteLocalRef(playerClass);
     env->DeleteGlobalRef(playerToRelease);
-    __android_log_print(ANDROID_LOG_INFO, kTag, "Media3 player detached for asynchronous release");
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Media3 player released before replacement");
 }
 
 void NativeMediaPlayer::invokeTransportCommand(const char* methodName, const char* operation) {
@@ -200,6 +200,7 @@ void NativeMediaPlayer::pause() {
 void NativeMediaPlayer::play() {
     invokeTransportCommand("play", "play");
 }
+
 
 void NativeMediaPlayer::seekBy(int deltaMs) {
     ScopedEnv scoped(vm_);
@@ -318,6 +319,20 @@ int NativeMediaPlayer::durationMs() const {
     clearException(env, "duration read");
     if (playerClass) env->DeleteLocalRef(playerClass);
     return boundedInt(value);
+}
+
+bool NativeMediaPlayer::seekable() const {
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (!env) return false;
+    std::scoped_lock lock(mutex_);
+    if (!player_) return false;
+    jclass playerClass = objectClass(env, player_);
+    jmethodID method = playerClass ? env->GetMethodID(playerClass, "isSeekable", "()Z") : nullptr;
+    const jboolean value = method ? env->CallBooleanMethod(player_, method) : JNI_FALSE;
+    clearException(env, "seekability read");
+    if (playerClass) env->DeleteLocalRef(playerClass);
+    return value == JNI_TRUE;
 }
 
 int NativeMediaPlayer::videoWidth() const {

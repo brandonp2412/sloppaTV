@@ -5,6 +5,12 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
+import org.json.JSONObject;
+
+import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+
 public final class SloppaDreamService extends DreamService implements SurfaceHolder.Callback {
     static {
         System.loadLibrary("sloppatv");
@@ -35,7 +41,7 @@ public final class SloppaDreamService extends DreamService implements SurfaceHol
 
     @Override
     public void surfaceCreated(SurfaceHolder holder) {
-        nativeStartDream(holder.getSurface());
+        nativeStartDream(holder.getSurface(), uses24HourClock());
     }
 
     @Override
@@ -47,6 +53,18 @@ public final class SloppaDreamService extends DreamService implements SurfaceHol
         nativeStopDream();
     }
 
-    private static native void nativeStartDream(Surface surface);
+    private boolean uses24HourClock() {
+        try {
+            File session = new File(getFilesDir(), "session.json");
+            if (!session.isFile()) return false;
+            String raw = new String(Files.readAllBytes(session.toPath()), StandardCharsets.UTF_8);
+            JSONObject settings = new JSONObject(raw).optJSONObject("settings");
+            return settings != null && settings.optBoolean("clock24Hour", false);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static native void nativeStartDream(Surface surface, boolean clock24Hour);
     private static native void nativeStopDream();
 }

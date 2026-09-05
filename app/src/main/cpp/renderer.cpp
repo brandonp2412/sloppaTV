@@ -45,8 +45,10 @@ void main() {
 constexpr const char* kTextureVertexShader = R"(#version 300 es
 layout(location = 0) in vec2 aPosition;
 layout(location = 1) in vec2 aTexCoord;
+layout(location = 2) in vec2 aLocalCoord;
 uniform vec2 uResolution;
 out vec2 vTexCoord;
+out vec2 vLocalCoord;
 void main() {
     vec2 p = vec2(
         (aPosition.x / uResolution.x) * 2.0 - 1.0,
@@ -54,19 +56,30 @@ void main() {
     );
     gl_Position = vec4(p, 0.0, 1.0);
     vTexCoord = aTexCoord;
+    vLocalCoord = aLocalCoord;
 }
 )";
 
 constexpr const char* kTextureFragmentShader = R"(#version 300 es
 precision mediump float;
 in vec2 vTexCoord;
+in vec2 vLocalCoord;
 uniform sampler2D uTexture;
 uniform float uAlpha;
 uniform vec4 uTint;
+uniform vec2 uRectSize;
+uniform float uRadius;
 out vec4 outColor;
 void main() {
     vec4 sampled = texture(uTexture, vTexCoord);
-    outColor = vec4(sampled.rgb * uTint.rgb, sampled.a * uTint.a * uAlpha);
+    float mask = 1.0;
+    if (uRadius > 0.0) {
+        vec2 halfSize = uRectSize * 0.5;
+        vec2 q = abs(vLocalCoord - halfSize) - (halfSize - vec2(uRadius));
+        float distanceToEdge = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - uRadius;
+        mask = 1.0 - smoothstep(-1.0, 1.0, distanceToEdge);
+    }
+    outColor = vec4(sampled.rgb * uTint.rgb, sampled.a * uTint.a * uAlpha * mask);
 }
 )";
 
@@ -243,6 +256,8 @@ bool Renderer::init(ANativeWindow* window) {
     textureResolutionLocation_ = glGetUniformLocation(textureProgram_, "uResolution");
     textureAlphaLocation_ = glGetUniformLocation(textureProgram_, "uAlpha");
     textureTintLocation_ = glGetUniformLocation(textureProgram_, "uTint");
+    textureRectSizeLocation_ = glGetUniformLocation(textureProgram_, "uRectSize");
+    textureRadiusLocation_ = glGetUniformLocation(textureProgram_, "uRadius");
     glGenVertexArrays(1, &textureVao_);
     glGenBuffers(1, &textureVbo_);
     glBindVertexArray(textureVao_);
@@ -251,6 +266,8 @@ bool Renderer::init(ANativeWindow* window) {
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex), reinterpret_cast<void*>(offsetof(TextureVertex, u)));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex), reinterpret_cast<void*>(offsetof(TextureVertex, localX)));
+    glEnableVertexAttribArray(2);
     glBindVertexArray(0);
 
     glDisable(GL_DEPTH_TEST);
@@ -312,6 +329,7 @@ void Renderer::shutdown() {
             if (vao_) glDeleteVertexArrays(1, &vao_);
             if (program_) glDeleteProgram(program_);
             if (fontTexture_) glDeleteTextures(1, &fontTexture_);
+            if (fontOutlineTexture_) glDeleteTextures(1, &fontOutlineTexture_);
             if (textureVbo_) glDeleteBuffers(1, &textureVbo_);
             if (textureVao_) glDeleteVertexArrays(1, &textureVao_);
             if (textureProgram_) glDeleteProgram(textureProgram_);
@@ -338,6 +356,8 @@ void Renderer::shutdown() {
     textureResolutionLocation_ = -1;
     textureAlphaLocation_ = -1;
     textureTintLocation_ = -1;
+    textureRectSizeLocation_ = -1;
+    textureRadiusLocation_ = -1;
     externalProgram_ = 0;
     externalVao_ = 0;
     externalVbo_ = 0;
@@ -346,6 +366,7 @@ void Renderer::shutdown() {
     externalTransformLocation_ = -1;
     externalProgramFailed_ = false;
     fontTexture_ = 0;
+    fontOutlineTexture_ = 0;
     fontAtlasAttempted_ = false;
     fontAdvances_.fill(0.0f);
     fontAdvancesReady_ = false;
@@ -400,6 +421,13 @@ void Renderer::rect(float x, float y, float w, float h, Color c) {
     vertices_.insert(vertices_.end(), {v0, v1, v2, v0, v2, v3});
 }
 
+void Renderer::triangle(float x1, float y1, float x2, float y2, float x3, float y3, Color c) {
+    const Vertex v0{uiOffsetX_ + x1 * uiScale_, uiOffsetY_ + y1 * uiScale_, c.r, c.g, c.b, c.a};
+    const Vertex v1{uiOffsetX_ + x2 * uiScale_, uiOffsetY_ + y2 * uiScale_, c.r, c.g, c.b, c.a};
+    const Vertex v2{uiOffsetX_ + x3 * uiScale_, uiOffsetY_ + y3 * uiScale_, c.r, c.g, c.b, c.a};
+    vertices_.insert(vertices_.end(), {v0, v1, v2});
+}
+
 void Renderer::roundedRect(float x, float y, float w, float h, float radius, Color c) {
     if (w <= 0.0f || h <= 0.0f) return;
     x = uiOffsetX_ + x * uiScale_;
@@ -416,7 +444,7 @@ void Renderer::roundedRect(float x, float y, float w, float h, float radius, Col
         return;
     }
 
-    constexpr int segmentsPerCorner = 6;
+    constexpr int segmentsPerCorner = 12;
     constexpr int pointsPerCorner = segmentsPerCorner + 1;
     constexpr int pointCount = pointsPerCorner * 4;
     constexpr float pi = 3.14159265358979323846f;
@@ -490,7 +518,7 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
         return;
     }
 
-    constexpr int segmentsPerCorner = 6;
+    constexpr int segmentsPerCorner = 12;
     constexpr int pointsPerCorner = segmentsPerCorner + 1;
     constexpr int pointCount = pointsPerCorner * 4;
     constexpr float pi = 3.14159265358979323846f;
@@ -620,6 +648,22 @@ void Renderer::imageRegion(
     imageRegionTint(texture, x, y, w, h, u0, v0, u1, v1, Color{1.0f, 1.0f, 1.0f, 1.0f}, alpha);
 }
 
+void Renderer::roundedImageRegion(
+    GLuint texture,
+    float x,
+    float y,
+    float w,
+    float h,
+    float radius,
+    float u0,
+    float v0,
+    float u1,
+    float v1,
+    float alpha
+) {
+    imageRegionTint(texture, x, y, w, h, u0, v0, u1, v1, Color{1.0f, 1.0f, 1.0f, 1.0f}, alpha, radius);
+}
+
 void Renderer::imageRegionTint(
     GLuint texture,
     float x,
@@ -631,7 +675,8 @@ void Renderer::imageRegionTint(
     float u1,
     float v1,
     Color tint,
-    float alpha
+    float alpha,
+    float radius
 ) {
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f) return;
     flush();
@@ -640,17 +685,19 @@ void Renderer::imageRegionTint(
     w *= uiScale_;
     h *= uiScale_;
     const TextureVertex vertices[] = {
-        {x, y, u0, v0},
-        {x + w, y, u1, v0},
-        {x + w, y + h, u1, v1},
-        {x, y, u0, v0},
-        {x + w, y + h, u1, v1},
-        {x, y + h, u0, v1},
+        {x, y, u0, v0, 0.0f, 0.0f},
+        {x + w, y, u1, v0, w, 0.0f},
+        {x + w, y + h, u1, v1, w, h},
+        {x, y, u0, v0, 0.0f, 0.0f},
+        {x + w, y + h, u1, v1, w, h},
+        {x, y + h, u0, v1, 0.0f, h},
     };
     glUseProgram(textureProgram_);
     glUniform2f(textureResolutionLocation_, logicalWidth(), logicalHeight());
     glUniform1f(textureAlphaLocation_, std::clamp(alpha, 0.0f, 1.0f));
     glUniform4f(textureTintLocation_, tint.r, tint.g, tint.b, tint.a);
+    glUniform2f(textureRectSizeLocation_, w, h);
+    glUniform1f(textureRadiusLocation_, std::clamp(radius * uiScale_, 0.0f, std::min(w, h) * 0.5f));
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
     glBindVertexArray(textureVao_);
@@ -720,12 +767,12 @@ bool Renderer::externalImage(
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f || !ensureExternalProgram()) return false;
     flush();
     const TextureVertex vertices[] = {
-        {x, y, 0.0f, 0.0f},
-        {x + w, y, 1.0f, 0.0f},
-        {x + w, y + h, 1.0f, 1.0f},
-        {x, y, 0.0f, 0.0f},
-        {x + w, y + h, 1.0f, 1.0f},
-        {x, y + h, 0.0f, 1.0f},
+        {x, y, 0.0f, 0.0f, 0.0f, 0.0f},
+        {x + w, y, 1.0f, 0.0f, 0.0f, 0.0f},
+        {x + w, y + h, 1.0f, 1.0f, 0.0f, 0.0f},
+        {x, y, 0.0f, 0.0f, 0.0f, 0.0f},
+        {x + w, y + h, 1.0f, 1.0f, 0.0f, 0.0f},
+        {x, y + h, 0.0f, 1.0f, 0.0f, 0.0f},
     };
     glUseProgram(externalProgram_);
     glUniform2f(externalResolutionLocation_, logicalWidth(), logicalHeight());
@@ -753,6 +800,9 @@ bool Renderer::loadFontAtlas() {
     jmethodID createAtlas = activityClass
         ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;")
         : nullptr;
+    jmethodID createOutlineAtlas = activityClass
+        ? env->GetMethodID(activityClass, "createFontOutlineAtlas", "()Landroid/graphics/Bitmap;")
+        : nullptr;
     jmethodID createAdvances = activityClass
         ? env->GetMethodID(activityClass, "createFontAdvances", "()[F")
         : nullptr;
@@ -760,6 +810,11 @@ bool Renderer::loadFontAtlas() {
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
         bitmap = nullptr;
+    }
+    jobject outlineBitmap = createOutlineAtlas ? env->CallObjectMethod(activity_, createOutlineAtlas) : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        outlineBitmap = nullptr;
     }
     jfloatArray advances = createAdvances
         ? static_cast<jfloatArray>(env->CallObjectMethod(activity_, createAdvances))
@@ -774,19 +829,17 @@ bool Renderer::loadFontAtlas() {
         else env->ExceptionClear();
     }
     if (advances) env->DeleteLocalRef(advances);
-    if (!bitmap) {
-        if (activityClass) env->DeleteLocalRef(activityClass);
-        __android_log_print(ANDROID_LOG_WARN, kTag, "System font atlas unavailable; using pixel fallback");
-        return false;
-    }
-    AndroidBitmapInfo info{};
-    void* pixels = nullptr;
-    bool ok = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS
-        && info.width > 0 && info.height > 0
-        && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
-        && AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
-        && pixels;
-    if (ok) {
+
+    auto uploadAtlas = [&](jobject source) -> GLuint {
+        if (!source) return 0;
+        AndroidBitmapInfo info{};
+        void* pixels = nullptr;
+        const bool locked = AndroidBitmap_getInfo(env, source, &info) == ANDROID_BITMAP_RESULT_SUCCESS
+            && info.width > 0 && info.height > 0
+            && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
+            && AndroidBitmap_lockPixels(env, source, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
+            && pixels;
+        if (!locked) return 0;
         std::vector<uint8_t> packed(static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * 4);
         for (uint32_t row = 0; row < info.height; ++row) {
             std::memcpy(
@@ -795,8 +848,6 @@ bool Renderer::loadFontAtlas() {
                 static_cast<size_t>(info.width) * 4
             );
         }
-        // Android Canvas bitmaps are premultiplied. The GLES texture path uses
-        // straight-alpha blending, so restore white RGB while preserving coverage.
         for (size_t pixel = 0; pixel + 3 < packed.size(); pixel += 4) {
             if (packed[pixel + 3] != 0) {
                 packed[pixel] = 255;
@@ -804,20 +855,28 @@ bool Renderer::loadFontAtlas() {
                 packed[pixel + 2] = 255;
             }
         }
-        fontTexture_ = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), packed.data());
-        AndroidBitmap_unlockPixels(env, bitmap);
-    }
-    env->DeleteLocalRef(bitmap);
+        const GLuint texture = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), packed.data());
+        AndroidBitmap_unlockPixels(env, source);
+        return texture;
+    };
+
+    fontTexture_ = uploadAtlas(bitmap);
+    fontOutlineTexture_ = uploadAtlas(outlineBitmap);
+    if (bitmap) env->DeleteLocalRef(bitmap);
+    if (outlineBitmap) env->DeleteLocalRef(outlineBitmap);
     if (activityClass) env->DeleteLocalRef(activityClass);
-    if (fontTexture_) {
-        __android_log_print(
-            ANDROID_LOG_INFO,
-            kTag,
-            "Loaded proportional antialiased Android system font atlas (metrics=%d)",
-            fontAdvancesReady_
-        );
+    if (!fontTexture_) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "System font atlas unavailable; using pixel fallback");
+        return false;
     }
-    return fontTexture_ != 0;
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kTag,
+        "Loaded proportional antialiased Android system font atlas (metrics=%d outline=%d)",
+        fontAdvancesReady_,
+        fontOutlineTexture_ != 0
+    );
+    return true;
 }
 
 float Renderer::textWidth(float scale, const std::string& value) const {
@@ -866,17 +925,25 @@ void Renderer::textVerticallyCentered(
     text(x, textY, scale, value, color, maxWidth);
 }
 
-void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {
+void Renderer::textWithAtlas(
+    GLuint atlasTexture,
+    float x,
+    float y,
+    float scale,
+    const std::string& value,
+    Color color,
+    float maxWidth
+) {
     const std::string display = displayText(value);
     scale *= textScale_;
     const float originX = x;
-    const float lineHeight = (fontTexture_ ? 11.0f : 9.0f) * scale;
+    const float lineHeight = (atlasTexture ? 11.0f : 9.0f) * scale;
     auto advanceFor = [&](unsigned char byte) {
-        if (fontTexture_ && fontAdvancesReady_ && byte >= 32 && byte <= 126) {
+        if (atlasTexture && fontAdvancesReady_ && byte >= 32 && byte <= 126) {
             constexpr float atlasCellToUi = 10.0f / 64.0f;
             return std::max(1.0f, fontAdvances_[static_cast<size_t>(byte - 32)] * atlasCellToUi) * scale;
         }
-        return (fontTexture_ ? 5.6f : 6.0f) * scale;
+        return (atlasTexture ? 5.6f : 6.0f) * scale;
     };
 
     for (char raw : display) {
@@ -894,7 +961,7 @@ void Renderer::text(float x, float y, float scale, const std::string& value, Col
             y += lineHeight;
         }
 
-        if (fontTexture_ && rawByte >= 32 && rawByte <= 126) {
+        if (atlasTexture && rawByte >= 32 && rawByte <= 126) {
             const int index = static_cast<int>(rawByte) - 32;
             const int column = index % 16;
             const int row = index / 16;
@@ -904,7 +971,7 @@ void Renderer::text(float x, float y, float scale, const std::string& value, Col
             constexpr float atlasCellHeightUi = 10.0f;
             if (rawByte != ' ') {
                 imageRegionTint(
-                    fontTexture_,
+                    atlasTexture,
                     x,
                     y - 0.45f * scale,
                     atlasCellWidthUi * scale,
@@ -930,6 +997,24 @@ void Renderer::text(float x, float y, float scale, const std::string& value, Col
         }
         x += advance;
     }
+}
+
+void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {
+    textWithAtlas(fontTexture_, x, y, scale, value, color, maxWidth);
+}
+
+void Renderer::outlinedText(
+    float x,
+    float y,
+    float scale,
+    const std::string& value,
+    Color fill,
+    Color outline,
+    float maxWidth
+) {
+    if (fontOutlineTexture_) textWithAtlas(fontOutlineTexture_, x, y, scale, value, outline, maxWidth);
+    else textWithAtlas(fontTexture_, x + 2.0f, y + 2.0f, scale, value, outline, maxWidth);
+    textWithAtlas(fontTexture_, x, y, scale, value, fill, maxWidth);
 }
 
 std::array<uint8_t, 7> Renderer::glyph(char c) const {

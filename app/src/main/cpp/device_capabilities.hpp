@@ -15,6 +15,7 @@ struct DeviceCodecSupport {
     bool av1 = false;
     bool av1Main10 = false;
     bool mpeg2 = false;
+    bool mpeg4 = false;
     bool vc1 = false;
 
     int maxH264Width = 0;
@@ -31,6 +32,8 @@ struct DeviceCodecSupport {
 
     bool aac = false;
     bool mp3 = false;
+    bool mp2 = false;
+    bool pcm = false;
     bool ac3 = false;
     bool eac3 = false;
     bool dts = false;

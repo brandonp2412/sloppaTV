@@ -23,6 +23,12 @@ int main() {
     state.hiddenHomeItems.insert("user-1:item-1");
     state.settings.maxBitrateMbps = 80;
     state.settings.subtitleSize = 2;
+    state.settings.subtitleBackground = false;
+    state.settings.subtitleLanguages = {"eng", "jpn"};
+    state.settings.autoSubtitles = true;
+    state.settings.autoSubtitleLanguage = "eng";
+    state.settings.autoSubtitleSourceLanguage = "different";
+    state.settings.clock24Hour = true;
     state.settings.safeAreaPercent = 4;
     state.settings.externalPlayerComponent = "org.example/.Player";
 
@@ -40,6 +46,14 @@ int main() {
     assert(loaded.hiddenHomeItems.contains("user-1:item-1"));
     assert(loaded.settings.maxBitrateMbps == 80);
     assert(loaded.settings.subtitleSize == 2);
+    assert(!loaded.settings.subtitleBackground);
+    assert(loaded.settings.subtitleLanguages.size() == 2);
+    assert(loaded.settings.subtitleLanguages[0] == "eng");
+    assert(loaded.settings.subtitleLanguages[1] == "jpn");
+    assert(loaded.settings.autoSubtitles);
+    assert(loaded.settings.autoSubtitleLanguage == "eng");
+    assert(loaded.settings.autoSubtitleSourceLanguage == "different");
+    assert(loaded.settings.clock24Hour);
     assert(loaded.settings.safeAreaPercent == 4);
     assert(loaded.settings.externalPlayerComponent == "org.example/.Player");
 

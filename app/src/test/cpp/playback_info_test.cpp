@@ -15,8 +15,8 @@ int main() {
     item.positionTicks = 12345;
 
     PlaybackProfilePlan plan;
-    plan.videoCodecs = {"hevc", "h264"};
-    plan.audioCodecs = {"aac", "eac3"};
+    plan.videoCodecs = {"hevc", "h264", "mpeg4"};
+    plan.audioCodecs = {"aac", "eac3", "mp2", "pcm_s16le"};
     plan.transcodeAudioCodecs = {"aac"};
     plan.maxAudioChannels = 6;
     plan.allowAudioStreamCopy = true;
@@ -32,7 +32,8 @@ int main() {
     assert(body["EnableDirectPlay"].get<bool>());
     assert(body["AllowAudioStreamCopy"].get<bool>());
     assert(body["DeviceProfile"]["MaxStreamingBitrate"] == 50000000);
-    assert(body["DeviceProfile"]["DirectPlayProfiles"][0]["VideoCodec"] == "hevc,h264");
+    assert(body["DeviceProfile"]["DirectPlayProfiles"][0]["VideoCodec"] == "hevc,h264,mpeg4");
+    assert(body["DeviceProfile"]["DirectPlayProfiles"][0]["AudioCodec"] == "aac,eac3,mp2,pcm_s16le");
 
     PlaybackOverrides forceTranscode;
     forceTranscode.forceTranscode = true;
@@ -43,6 +44,22 @@ int main() {
     assert(forced["MediaSourceId"] == "source");
     assert(forced["AudioStreamIndex"].is_null());
     assert(!forced.contains("SubtitleStreamIndex"));
+
+    PlaybackOverrides forceServerStream;
+    forceServerStream.forceServerStream = true;
+    const auto streamed = json::parse(buildPlaybackInfoRequestBody(
+        session,
+        item,
+        plan,
+        forceServerStream,
+        50000000,
+        6,
+        2,
+        5
+    ));
+    assert(!streamed["EnableDirectPlay"].get<bool>());
+    assert(streamed["EnableDirectStream"].get<bool>());
+    assert(streamed["AllowVideoStreamCopy"].get<bool>());
 
     const std::string response = R"({
         "PlaySessionId":"play-session",

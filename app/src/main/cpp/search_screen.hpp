@@ -3,6 +3,7 @@
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <string>
 #include <utility>
@@ -17,6 +18,7 @@ public:
         query_.clear();
         results_.clear();
         selection_ = 0;
+        firstVisible_ = {0, 0};
         keyboard_ = true;
         loading_ = false;
         debouncePending_ = false;
@@ -31,21 +33,46 @@ public:
     [[nodiscard]] bool loading() const { return loading_; }
     [[nodiscard]] bool debouncePending() const { return debouncePending_; }
     [[nodiscard]] Clock::time_point debounceDeadline() const { return debounceDeadline_; }
+    [[nodiscard]] int topLevelCount() const {
+        const auto firstEpisode = std::find_if(results_.begin(), results_.end(), [](const JellyfinItem& item) {
+            return item.type == "Episode";
+        });
+        return static_cast<int>(std::distance(results_.begin(), firstEpisode));
+    }
+    [[nodiscard]] int rowStart(int row) const { return row <= 0 ? 0 : topLevelCount(); }
+    [[nodiscard]] int rowItemCount(int row) const {
+        const int top = topLevelCount();
+        return row <= 0 ? top : static_cast<int>(results_.size()) - top;
+    }
+    [[nodiscard]] int selectedRow() const {
+        if (results_.empty()) return 0;
+        return results_[static_cast<size_t>(selection_)].type == "Episode" ? 1 : 0;
+    }
+    [[nodiscard]] bool selectionOnFirstResultRow() const {
+        return selectedRow() == 0 || topLevelCount() == 0;
+    }
+    [[nodiscard]] int firstVisibleInRow(int row, int columns) const {
+        if (row < 0 || row > 1 || columns <= 0) return 0;
+        return std::clamp(firstVisible_[static_cast<size_t>(row)], 0, std::max(0, rowItemCount(row) - columns));
+    }
 
     void setQuery(std::string query) {
         query_ = std::move(query);
         selection_ = 0;
+        firstVisible_ = {0, 0};
     }
 
     void append(char value) {
         query_.push_back(value);
         selection_ = 0;
+        firstVisible_ = {0, 0};
     }
 
     [[nodiscard]] bool backspace() {
         if (query_.empty()) return false;
         query_.pop_back();
         selection_ = 0;
+        firstVisible_ = {0, 0};
         return true;
     }
 
@@ -63,6 +90,7 @@ public:
             debouncePending_ = false;
             loading_ = false;
             results_.clear();
+            firstVisible_ = {0, 0};
             return false;
         }
         debouncePending_ = true;
@@ -85,6 +113,7 @@ public:
         if (query_.empty()) {
             loading_ = false;
             results_.clear();
+            firstVisible_ = {0, 0};
             return false;
         }
         loading_ = true;
@@ -94,8 +123,12 @@ public:
     [[nodiscard]] bool finishSearch(const std::string& query, std::vector<JellyfinItem> results) {
         if (query_ != query) return false;
         loading_ = false;
+        std::stable_partition(results.begin(), results.end(), [](const JellyfinItem& item) {
+            return item.type != "Episode";
+        });
         results_ = std::move(results);
         selection_ = 0;
+        firstVisible_ = {0, 0};
         return true;
     }
 
@@ -108,23 +141,44 @@ public:
     void clearResults() {
         results_.clear();
         selection_ = 0;
+        firstVisible_ = {0, 0};
     }
 
     void moveSelection(int dx, int dy, int columns) {
         if (results_.empty() || columns <= 0) return;
-        const int rows = static_cast<int>((results_.size() + static_cast<size_t>(columns) - 1) / static_cast<size_t>(columns));
-        int row = selection_ / columns;
-        int col = selection_ % columns;
-        row = std::clamp(row + dy, 0, rows - 1);
-        col = std::clamp(col + dx, 0, columns - 1);
-        const int next = row * columns + col;
-        if (next >= 0 && next < static_cast<int>(results_.size())) selection_ = next;
+        int row = selectedRow();
+        const int start = rowStart(row);
+        const int count = rowItemCount(row);
+        int local = selection_ - start;
+
+        if (dx != 0 && count > 0) {
+            local = std::clamp(local + dx, 0, count - 1);
+            selection_ = start + local;
+        }
+
+        if (dy != 0) {
+            const int targetRow = std::clamp(row + (dy > 0 ? 1 : -1), 0, 1);
+            const int targetCount = rowItemCount(targetRow);
+            if (targetRow != row && targetCount > 0) {
+                row = targetRow;
+                selection_ = rowStart(row) + std::min(local, targetCount - 1);
+            }
+        }
+
+        row = selectedRow();
+        const int selectedLocal = selection_ - rowStart(row);
+        const int maxFirst = std::max(0, rowItemCount(row) - columns);
+        int first = std::clamp(firstVisible_[static_cast<size_t>(row)], 0, maxFirst);
+        if (selectedLocal < first) first = selectedLocal;
+        else if (selectedLocal >= first + columns) first = selectedLocal - columns + 1;
+        firstVisible_[static_cast<size_t>(row)] = std::clamp(first, 0, maxFirst);
     }
 
 private:
     std::string query_;
     std::vector<JellyfinItem> results_;
     int selection_ = 0;
+    std::array<int, 2> firstVisible_{0, 0};
     bool keyboard_ = true;
     bool loading_ = false;
     bool debouncePending_ = false;

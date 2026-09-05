@@ -43,6 +43,10 @@ target_compile_definitions(sloppatv PRIVATE
     SLOPPATV_VERSION_NAME="${SLOPPATV_VERSION_NAME}"
 )
 
+if(SLOPPATV_BENCHMARK)
+    target_compile_definitions(sloppatv PRIVATE SLOPPATV_BENCHMARK=1)
+endif()
+
 target_link_libraries(sloppatv PRIVATE
     android
     log

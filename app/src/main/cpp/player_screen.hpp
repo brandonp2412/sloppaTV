@@ -26,6 +26,7 @@ public:
         positionMs_ = 0;
         durationMs_ = 0;
         pendingSeekTargetMs_ = -1;
+        lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
     }
 
@@ -35,6 +36,7 @@ public:
         positionMs_ = std::max(0, positionMs);
         durationMs_ = std::max(0, durationMs);
         pendingSeekTargetMs_ = -1;
+        lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
     }
 
@@ -82,6 +84,7 @@ public:
         const int target = std::max(0, targetMs);
         positionMs_ = target;
         pendingSeekTargetMs_ = target;
+        lastSeekTargetMs_ = target;
         lastSeekIssued_ = now;
         showOverlayFor(now, std::chrono::seconds(3));
     }
@@ -95,16 +98,35 @@ public:
         const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - lastSeekIssued_
         ).count();
-        if (shouldAcceptPostSeekTelemetry(observed, pendingSeekTargetMs_, elapsedSinceSeekMs)) {
+        if (postSeekPositionMatchesTarget(observed, pendingSeekTargetMs_)) {
+            positionMs_ = observed;
+            if (elapsedSinceSeekMs >= 500) pendingSeekTargetMs_ = -1;
+        } else if (shouldAcceptPostSeekTelemetry(observed, pendingSeekTargetMs_, elapsedSinceSeekMs)) {
             positionMs_ = observed;
             pendingSeekTargetMs_ = -1;
-            lastSeekIssued_ = {};
         } else {
             positionMs_ = pendingSeekTargetMs_;
         }
     }
 
     [[nodiscard]] int pendingSeekTargetMs() const { return pendingSeekTargetMs_; }
+    [[nodiscard]] int recentSeekTargetMs() const { return lastSeekTargetMs_; }
+    [[nodiscard]] bool pendingSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
+        if (pendingSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
+        const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - lastSeekIssued_
+        ).count();
+        return postSeekPositionFailed(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs);
+    }
+    [[nodiscard]] bool recentSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
+        if (lastSeekTargetMs_ <= 0 || lastSeekIssued_ == TimePoint{}) return false;
+        const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - lastSeekIssued_
+        ).count();
+        return elapsedSinceSeekMs >= 500
+            && elapsedSinceSeekMs <= 3000
+            && !postSeekPositionMatchesTarget(observedPositionMs, lastSeekTargetMs_, 3000);
+    }
 
     void beginWindowRestore(bool resumePlayback) {
         windowRestorePending_ = true;
@@ -130,6 +152,7 @@ private:
     int positionMs_ = 0;
     int durationMs_ = 0;
     int pendingSeekTargetMs_ = -1;
+    int lastSeekTargetMs_ = -1;
     TimePoint lastSeekIssued_{};
     bool windowRestorePending_ = false;
     bool resumeOnFocus_ = false;

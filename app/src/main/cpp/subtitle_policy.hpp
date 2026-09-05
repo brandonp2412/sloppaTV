@@ -195,6 +195,10 @@ inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
         }
         if (!text.empty()) cues.push_back({start, end, std::move(text)});
     }
+    std::stable_sort(cues.begin(), cues.end(), [](const SubtitleCue& left, const SubtitleCue& right) {
+        if (left.startMs != right.startMs) return left.startMs < right.startMs;
+        return left.endMs < right.endMs;
+    });
     return cues;
 }
 
@@ -207,7 +211,29 @@ inline std::string normalizeSubtitleLanguage(std::string language) {
     std::transform(language.begin(), language.end(), language.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
     });
+    if (language == "en" || language == "english") return "eng";
+    if (language == "mi" || language == "mao" || language == "maori" || language == "māori") return "mri";
+    if (language == "ja" || language == "japanese") return "jpn";
+    if (language == "es" || language == "spanish") return "spa";
+    if (language == "fr" || language == "fre" || language == "french") return "fra";
+    if (language == "de" || language == "ger" || language == "german") return "deu";
+    if (language == "it" || language == "italian") return "ita";
+    if (language == "pt" || language == "portuguese") return "por";
+    if (language == "ko" || language == "korean") return "kor";
+    if (language == "zh" || language == "chi" || language == "chinese") return "zho";
+    if (language == "ar" || language == "arabic") return "ara";
+    if (language == "nl" || language == "dut" || language == "dutch") return "nld";
+    if (language == "ru" || language == "russian") return "rus";
+    if (language == "hi" || language == "hindi") return "hin";
+    if (language == "sv" || language == "swedish") return "swe";
+    if (language == "no" || language == "norwegian") return "nor";
     return language;
+}
+
+inline bool subtitleLanguageAllowed(const std::string& language, const std::vector<std::string>& allowedLanguages) {
+    if (allowedLanguages.empty()) return true;
+    const std::string normalized = normalizeSubtitleLanguage(language);
+    return std::find(allowedLanguages.begin(), allowedLanguages.end(), normalized) != allowedLanguages.end();
 }
 
 inline bool isLikelySignsOnlySubtitle(std::string label) {

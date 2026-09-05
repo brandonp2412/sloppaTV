@@ -38,6 +38,15 @@ int main() {
     assert(cues[1].startMs == 3000);
     assert(cues[1].text == "Again");
 
+    const auto unsortedCues = parseSubRipCues(
+        "1\n00:00:05,000 --> 00:00:06,000\nLater\n\n"
+        "2\n00:00:01,000 --> 00:00:02,000\nEarlier\n"
+    );
+    assert(unsortedCues.size() == 2);
+    assert(unsortedCues[0].startMs == 1000);
+    assert(unsortedCues[0].text == "Earlier");
+    assert(unsortedCues[1].startMs == 5000);
+
     assert(sanitizeSubtitleText("<i>Hello</i>") == "Hello");
     assert(sanitizeSubtitleText("&lt;b&gt;Hello&lt;/b&gt;") == "Hello");
     assert(sanitizeSubtitleText("A<br>B") == "A B");
@@ -58,6 +67,13 @@ int main() {
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"ENG"}) == 2);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"jpn"}) == 4);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"fra"}) == kSubtitleOffIndex);
+    assert(normalizeSubtitleLanguage("EN") == "eng");
+    assert(normalizeSubtitleLanguage("fre") == "fra");
+    assert(normalizeSubtitleLanguage("chi") == "zho");
+    assert(subtitleLanguageAllowed("ENG", {"eng", "jpn"}));
+    assert(subtitleLanguageAllowed("ja", {"eng", "jpn"}));
+    assert(!subtitleLanguageAllowed("fra", {"eng", "jpn"}));
+    assert(subtitleLanguageAllowed("fra", {}));
     assert(isLikelySignsOnlySubtitle("English [Signs/Songs]"));
     assert(isLikelySignsOnlySubtitle("Signs & Songs"));
     assert(!isLikelySignsOnlySubtitle("English"));

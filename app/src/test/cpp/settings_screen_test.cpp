@@ -48,11 +48,37 @@ int main() {
     assert(hasSettingEffect(effect, SettingChangeEffect::CycleExternalPlayer));
     assert(hasSettingEffect(effect, SettingChangeEffect::Save));
 
+    assert(!settings.clock24Hour);
+    effect = adjustSetting(settings, kTimeFormatSetting, 1);
+    assert(settings.clock24Hour);
+    assert(hasSettingEffect(effect, SettingChangeEffect::Save));
+
+    effect = adjustSetting(settings, kAutoSubtitlesSetting, 1);
+    assert(settings.autoSubtitles);
+    assert(hasSettingEffect(effect, SettingChangeEffect::Save));
+    effect = adjustSetting(settings, kAutoSubtitleLanguageSetting, 1);
+    assert(settings.autoSubtitleLanguage == "mri");
+    effect = adjustSetting(settings, kAutoSubtitleSourceSetting, 1);
+    assert(settings.autoSubtitleSourceLanguage == "different");
+
     const auto values = settingsValues(settings, 6, "MPV", "viewer", false);
     assert(values[0] == "80 MBIT/S");
     assert(values[14] == "DIRECT / 6CH ROUTE");
     assert(values[21] == "MPV");
     assert(values[23] == "viewer");
-    assert(values[24] == "SHOW TECHNICAL");
+    assert(values[24] == "ALL LANGUAGES");
+    assert(values[25] == "24 HOUR");
+    assert(values[26] == "ON");
+    assert(values[27] == "MAORI");
+    assert(values[28] == "AUDIO NOT MAORI");
+    assert(values[29] == "SHOW TECHNICAL");
+
+    screen.openSubtitleLanguagePicker();
+    assert(screen.subtitleLanguagePicker());
+    assert(screen.subtitleLanguageSelection() == 0);
+    screen.moveSubtitleLanguage(1);
+    assert(screen.subtitleLanguageSelection() == 1);
+    screen.closeSubtitleLanguagePicker();
+    assert(!screen.subtitleLanguagePicker());
     return 0;
 }

@@ -21,7 +21,7 @@ std::condition_variable gCv;
 std::thread gThread;
 bool gStopRequested = false;
 
-void renderDreamFrame(Renderer& renderer, int positionIndex) {
+void renderDreamFrame(Renderer& renderer, int positionIndex, bool clock24Hour) {
     static constexpr std::array<std::array<float, 2>, 6> positions{{
         {150.0f, 165.0f},
         {1110.0f, 165.0f},
@@ -35,20 +35,22 @@ void renderDreamFrame(Renderer& renderer, int positionIndex) {
     std::time_t now = std::time(nullptr);
     std::tm local{};
     localtime_r(&now, &local);
-    char clock[16]{};
-    std::strftime(clock, sizeof(clock), "%H:%M", &local);
+    char clock[24]{};
+    std::strftime(clock, sizeof(clock), clock24Hour ? "%H:%M" : "%I:%M %p", &local);
+    std::string clockText(clock);
+    if (!clock24Hour && !clockText.empty() && clockText.front() == '0') clockText.erase(clockText.begin());
 
     renderer.beginFrame();
     renderer.setUiTransform(0.0f, 1.0f);
     renderer.rect(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f, Color{0.012f, 0.014f, 0.020f, 0.96f});
     renderer.outline(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f, 3.0f, Color{0.56f, 0.38f, 0.98f, 0.65f});
     renderer.text(position[0], position[1], 3.2f, "SLOPPATV", kText, 520.0f);
-    renderer.text(position[0], position[1] + 78.0f, 5.8f, clock, kText, 520.0f);
+    renderer.text(position[0], position[1] + 78.0f, 5.8f, clockText, kText, 520.0f);
     renderer.text(position[0], position[1] + 170.0f, 1.35f, "JELLYFIN TV", kMuted, 520.0f);
     renderer.endFrame();
 }
 
-void dreamLoop(ANativeWindow* window) {
+void dreamLoop(ANativeWindow* window, bool clock24Hour) {
     Renderer renderer;
     if (!renderer.init(window)) {
         __android_log_print(ANDROID_LOG_ERROR, kTag, "Unable to initialize dream renderer");
@@ -59,7 +61,7 @@ void dreamLoop(ANativeWindow* window) {
     __android_log_print(ANDROID_LOG_INFO, kTag, "System dream renderer started");
     int positionIndex = 0;
     while (true) {
-        renderDreamFrame(renderer, positionIndex++);
+        renderDreamFrame(renderer, positionIndex++, clock24Hour);
         std::unique_lock lock(gMutex);
         if (gCv.wait_for(lock, std::chrono::seconds(30), [] { return gStopRequested; })) break;
     }
@@ -89,7 +91,7 @@ void stopDreamThread() {
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobject surface) {
+Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobject surface, jboolean clock24Hour) {
     if (!env || !surface) return;
     stopDreamThread();
     ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
@@ -100,7 +102,7 @@ Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobje
     {
         std::scoped_lock lock(gMutex);
         gStopRequested = false;
-        gThread = std::thread(dreamLoop, window);
+        gThread = std::thread(dreamLoop, window, clock24Hour == JNI_TRUE);
     }
 }
 
