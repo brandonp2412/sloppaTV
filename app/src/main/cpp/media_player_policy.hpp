@@ -69,6 +69,14 @@ constexpr bool shouldAutoplayNextEpisode(bool autoplayEnabled, int completedAuto
     return completedAutoplays < threshold;
 }
 
+constexpr int playbackPrepareTimeoutMs(bool transcoding) {
+    return transcoding ? 30'000 : 15'000;
+}
+
+constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs) {
+    return elapsedMs >= playbackPrepareTimeoutMs(transcoding);
+}
+
 inline std::string transcodingReasonsFromUrl(std::string_view url) {
     constexpr std::string_view marker = "TranscodeReasons=";
     const size_t begin = url.find(marker);
