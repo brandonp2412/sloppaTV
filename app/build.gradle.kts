@@ -75,6 +75,11 @@ android {
             isDebuggable = false
             signingConfig = signingConfigs.getByName("release")
             matchingFallbacks += listOf("release")
+            externalNativeBuild {
+                cmake {
+                    arguments += "-DSLOPPATV_BENCHMARK=ON"
+                }
+            }
         }
     }
 

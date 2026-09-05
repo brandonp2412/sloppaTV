@@ -16,5 +16,7 @@ int main() {
     assert(displayText("A\xC2\xA0" "B") == "A B");
     assert(displayText("x\xE2\x89\xA4y") == "x<=y");
     assert(displayText("\xE2\x99\xAA") == "~");
+    assert(displayText("\xE3\x81\x82") == "?");
+    assert(displayText("\xE3\x81\x82", '\0').empty());
     return 0;
 }

@@ -188,7 +188,7 @@ public final class SloppaNativeActivity extends NativeActivity {
         return paint;
     }
 
-    public Bitmap createFontAtlas() {
+    private Bitmap createFontAtlas(Paint.Style style, float strokeWidth) {
         final int columns = 16;
         final int rows = 6;
         final int cellWidth = 64;
@@ -198,6 +198,9 @@ public final class SloppaNativeActivity extends NativeActivity {
         Canvas canvas = new Canvas(bitmap);
         canvas.drawColor(Color.TRANSPARENT);
         Paint paint = createUiFontPaint();
+        paint.setStyle(style);
+        paint.setStrokeWidth(strokeWidth);
+        paint.setStrokeJoin(Paint.Join.ROUND);
         Paint.FontMetrics metrics = paint.getFontMetrics();
         for (int index = 0; index < 95; ++index) {
             int column = index % columns;
@@ -208,6 +211,14 @@ public final class SloppaNativeActivity extends NativeActivity {
             canvas.drawText(String.valueOf((char) (32 + index)), left, baseline, paint);
         }
         return bitmap;
+    }
+
+    public Bitmap createFontAtlas() {
+        return createFontAtlas(Paint.Style.FILL, 0.0f);
+    }
+
+    public Bitmap createFontOutlineAtlas() {
+        return createFontAtlas(Paint.Style.STROKE, 5.0f);
     }
 
     public float[] createFontAdvances() {

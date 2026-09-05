@@ -10,6 +10,8 @@
 struct AudioCodecCapabilities {
     bool aac = false;
     bool mp3 = false;
+    bool mp2 = false;
+    bool pcm = false;
     bool ac3 = false;
     bool eac3 = false;
     bool dts = false;
@@ -95,6 +97,8 @@ inline std::vector<std::string> advertisedAudioCodecs(
     std::vector<std::string> codecs;
     if (capabilities.aac) codecs.emplace_back("aac");
     if (capabilities.mp3) codecs.emplace_back("mp3");
+    if (capabilities.mp2) codecs.emplace_back("mp2");
+    if (capabilities.pcm) codecs.emplace_back("pcm_s16le");
 
     // Jellyfin can transcode/downmix when surround formats are not advertised.
     if (maxAudioChannels <= 2) return codecs;

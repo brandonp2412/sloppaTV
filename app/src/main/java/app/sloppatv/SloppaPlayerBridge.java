@@ -5,6 +5,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 
@@ -20,6 +21,9 @@ import androidx.media3.datasource.HttpDataSource;
 import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+
+import java.util.concurrent.CountDownLatch;
 
 @SuppressWarnings("UnsafeOptInUsageError")
 public final class SloppaPlayerBridge {
@@ -36,11 +40,13 @@ public final class SloppaPlayerBridge {
     private final Handler handler;
 
     private volatile ExoPlayer player;
+    private volatile SloppaExtractorsFactory extractorsFactory;
     private volatile boolean embeddedAudioSelectionApplied;
     private volatile int state = STATE_IDLE;
     private volatile String error = "";
     private volatile long positionMs;
     private volatile long durationMs;
+    private volatile boolean seekable;
     private volatile int videoWidth;
     private volatile int videoHeight;
     private volatile boolean released;
@@ -80,6 +86,7 @@ public final class SloppaPlayerBridge {
         }
         state = STATE_PREPARING;
         error = "";
+        seekable = false;
         handler.post(() -> createPlayer(
             url,
             surface,
@@ -130,10 +137,16 @@ public final class SloppaPlayerBridge {
                 .setExtensionRendererMode(DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON);
 
             embeddedAudioSelectionApplied = false;
+            SloppaExtractorsFactory currentExtractorsFactory = new SloppaExtractorsFactory();
+            extractorsFactory = currentExtractorsFactory;
             ExoPlayer.Builder playerBuilder = new ExoPlayer.Builder(context)
                 .setLoadControl(loadControl)
-                .setRenderersFactory(defaultRenderersFactory);
+                .setRenderersFactory(defaultRenderersFactory)
+                .setMediaSourceFactory(new DefaultMediaSourceFactory(context, currentExtractorsFactory));
             ExoPlayer created = playerBuilder.build();
+            final boolean bootstrapMatroskaResume = startPositionMs > 0 && isProgressiveMatroskaUrl(url);
+            final boolean[] bootstrapSeekIssued = {false};
+            final boolean[] bootstrapComplete = {!bootstrapMatroskaResume};
             if (isBenchmarkBuild()) {
                 created.setVolume(0.0f);
                 Log.i(TAG, "Benchmark build audio forced to volume=0.0");
@@ -156,9 +169,24 @@ public final class SloppaPlayerBridge {
                         + " positionMs=" + created.getCurrentPosition()
                         + " bufferedMs=" + created.getBufferedPosition());
                     if (playbackState == Player.STATE_READY) {
+                        if (bootstrapMatroskaResume && !bootstrapSeekIssued[0]) {
+                            bootstrapSeekIssued[0] = true;
+                            state = STATE_PREPARING;
+                            Log.i(TAG, "Media3 Matroska resume bootstrap ready; seeking targetMs=" + startPositionMs);
+                            created.seekTo(startPositionMs);
+                            return;
+                        }
+                        if (bootstrapMatroskaResume && !bootstrapComplete[0]) {
+                            bootstrapComplete[0] = true;
+                            Log.i(TAG, "Media3 Matroska resume bootstrap complete positionMs="
+                                + created.getCurrentPosition() + " targetMs=" + startPositionMs);
+                            created.play();
+                        }
                         state = created.getPlayWhenReady() ? STATE_PLAYING : STATE_PAUSED;
                     } else if (playbackState == Player.STATE_BUFFERING) {
-                        state = created.getPlayWhenReady() ? STATE_PREPARING : STATE_PAUSED;
+                        state = bootstrapMatroskaResume && !bootstrapComplete[0]
+                            ? STATE_PREPARING
+                            : (created.getPlayWhenReady() ? STATE_PREPARING : STATE_PAUSED);
                     } else if (playbackState == Player.STATE_ENDED) {
                         positionMs = Math.max(positionMs, durationMs);
                         state = STATE_PAUSED;
@@ -172,6 +200,10 @@ public final class SloppaPlayerBridge {
                     Log.i(TAG, "Media3 playWhenReady=" + playWhenReady
                         + " positionMs=" + created.getCurrentPosition()
                         + " bufferedMs=" + created.getBufferedPosition());
+                    if (bootstrapMatroskaResume && !bootstrapComplete[0]) {
+                        state = STATE_PREPARING;
+                        return;
+                    }
                     int playbackState = created.getPlaybackState();
                     if (playbackState == Player.STATE_READY) {
                         state = playWhenReady ? STATE_PLAYING : STATE_PAUSED;
@@ -232,8 +264,10 @@ public final class SloppaPlayerBridge {
             });
             player = created;
             created.setVideoSurface(surface);
-            created.setMediaItem(new MediaItem.Builder().setUri(url).build(), startPositionMs);
-            Log.i(TAG, "Media3 initial position requested=" + startPositionMs);
+            long initialPositionMs = bootstrapMatroskaResume ? 0L : startPositionMs;
+            created.setMediaItem(new MediaItem.Builder().setUri(url).build(), initialPositionMs);
+            Log.i(TAG, "Media3 initial position requested=" + startPositionMs
+                + " bootstrapPositionMs=" + initialPositionMs);
             created.prepare();
             created.play();
             scheduleTelemetry(created);
@@ -290,6 +324,12 @@ public final class SloppaPlayerBridge {
     }
 
 
+    private static boolean isProgressiveMatroskaUrl(String url) {
+        if (url == null) return false;
+        String lower = url.toLowerCase();
+        return (lower.contains(".mkv") || lower.contains(".matroska")) && !lower.contains(".m3u8");
+    }
+
     private static String playbackStateName(int state) {
         if (state == Player.STATE_IDLE) return "IDLE";
         if (state == Player.STATE_BUFFERING) return "BUFFERING";
@@ -303,6 +343,7 @@ public final class SloppaPlayerBridge {
         positionMs = Math.max(0L, expectedPlayer.getCurrentPosition());
         long duration = expectedPlayer.getDuration();
         durationMs = duration == C.TIME_UNSET ? 0L : Math.max(0L, duration);
+        seekable = expectedPlayer.isCurrentMediaItemSeekable();
         VideoSize size = expectedPlayer.getVideoSize();
         videoWidth = size.width;
         videoHeight = size.height;
@@ -336,14 +377,41 @@ public final class SloppaPlayerBridge {
         });
     }
 
+
+    private void scheduleEstimatedSeekRefinement(
+        ExoPlayer expectedPlayer,
+        SloppaExtractorsFactory factory,
+        long targetMs,
+        int attempt
+    ) {
+        if (targetMs <= 0 || attempt >= 4) return;
+        handler.postDelayed(() -> {
+            if (player != expectedPlayer || expectedPlayer.getPlaybackState() == Player.STATE_IDLE) return;
+            if (expectedPlayer.getPlaybackState() != Player.STATE_READY) {
+                scheduleEstimatedSeekRefinement(expectedPlayer, factory, targetMs, attempt + 1);
+                return;
+            }
+            long observedMs = expectedPlayer.getCurrentPosition();
+            if (Math.abs(observedMs - targetMs) <= 1500L) return;
+            if (!expectedPlayer.isCurrentMediaItemSeekable()) return;
+            if (!factory.refineEstimatedSeek(targetMs * 1000L, observedMs * 1000L)) return;
+            Log.i(TAG, "Refining estimated Matroska seek targetMs=" + targetMs
+                + " observedMs=" + observedMs + " attempt=" + (attempt + 1));
+            expectedPlayer.seekTo(targetMs);
+            scheduleEstimatedSeekRefinement(expectedPlayer, factory, targetMs, attempt + 1);
+        }, attempt == 0 ? 250L : 500L);
+    }
+
     public void seekTo(long targetMs) {
         final long bounded = Math.max(0L, targetMs);
         positionMs = bounded;
         handler.post(() -> {
             ExoPlayer current = player;
             if (current == null) return;
+            SloppaExtractorsFactory factory = extractorsFactory;
             current.seekTo(bounded);
             updateTelemetry(current);
+            if (factory != null) scheduleEstimatedSeekRefinement(current, factory, bounded, 0);
         });
     }
 
@@ -371,6 +439,7 @@ public final class SloppaPlayerBridge {
     public String getError() { return error; }
     public long getPositionMs() { return positionMs; }
     public long getDurationMs() { return durationMs; }
+    public boolean isSeekable() { return seekable; }
     public int getVideoWidth() { return videoWidth; }
     public int getVideoHeight() { return videoHeight; }
 
@@ -378,18 +447,35 @@ public final class SloppaPlayerBridge {
         if (released) return;
         released = true;
         state = STATE_IDLE;
-        handler.post(() -> {
-            releasePlayerOnly();
-            // ExoPlayer release may enqueue analytics cleanup on this same looper.
-            // Queue shutdown after those callbacks instead of marking the HandlerThread
-            // dead while Media3 is still finishing release work.
-            handler.post(playerThread::quitSafely);
-        });
+        seekable = false;
+
+        CountDownLatch releasedLatch = new CountDownLatch(1);
+        Runnable releaseTask = () -> {
+            try {
+                releasePlayerOnly();
+            } finally {
+                releasedLatch.countDown();
+                handler.post(playerThread::quitSafely);
+            }
+        };
+        if (Looper.myLooper() == playerThread.getLooper()) {
+            releaseTask.run();
+            return;
+        }
+
+        handler.post(releaseTask);
+        try {
+            releasedLatch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            Log.w(TAG, "Interrupted while waiting for Media3 decoder release");
+        }
     }
 
     private void releasePlayerOnly() {
         ExoPlayer current = player;
         player = null;
+        extractorsFactory = null;
         if (current != null) {
             try {
                 current.clearVideoSurface();

@@ -39,6 +39,7 @@ public:
     [[nodiscard]] std::string error() const;
     [[nodiscard]] int positionMs() const;
     [[nodiscard]] int durationMs() const;
+    [[nodiscard]] bool seekable() const;
     [[nodiscard]] int videoWidth() const;
     [[nodiscard]] int videoHeight() const;
 

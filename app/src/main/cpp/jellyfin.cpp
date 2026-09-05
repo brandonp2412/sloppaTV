@@ -1087,9 +1087,13 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
-        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d forceTranscode=%d)",
+        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d forceTranscode=%d forceServerStream=%d)",
         item.videoCodec.c_str(), item.videoProfile.c_str(), item.videoLevel, item.videoRangeType.c_str(),
-        overrides.maxAvcLevel, overrides.maxHevcLevel, static_cast<int>(overrides.hdrMode), overrides.forceTranscode
+        overrides.maxAvcLevel,
+        overrides.maxHevcLevel,
+        static_cast<int>(overrides.hdrMode),
+        overrides.forceTranscode,
+        overrides.forceServerStream
     );
     for (const auto& rejection : plan.videoRejections) {
         __android_log_print(
@@ -1213,6 +1217,15 @@ ApiResult JellyfinClient::reportPlaybackStart(
     const PlaybackTarget& target,
     int64_t positionTicks
 ) const {
+#ifdef SLOPPATV_BENCHMARK
+    (void)session;
+    (void)item;
+    (void)target;
+    (void)positionTicks;
+    ApiResult result;
+    result.ok = true;
+    return result;
+#else
     ApiResult result;
     json body = {
         {"ItemId", item.id},
@@ -1231,6 +1244,7 @@ ApiResult JellyfinClient::reportPlaybackStart(
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
+#endif
 }
 
 ApiResult JellyfinClient::reportPlaybackProgress(
@@ -1240,6 +1254,16 @@ ApiResult JellyfinClient::reportPlaybackProgress(
     int64_t positionTicks,
     bool paused
 ) const {
+#ifdef SLOPPATV_BENCHMARK
+    (void)session;
+    (void)item;
+    (void)target;
+    (void)positionTicks;
+    (void)paused;
+    ApiResult result;
+    result.ok = true;
+    return result;
+#else
     ApiResult result;
     json body = {
         {"ItemId", item.id},
@@ -1258,6 +1282,7 @@ ApiResult JellyfinClient::reportPlaybackProgress(
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
+#endif
 }
 
 ApiResult JellyfinClient::reportPlaybackStopped(
@@ -1266,6 +1291,15 @@ ApiResult JellyfinClient::reportPlaybackStopped(
     const PlaybackTarget& target,
     int64_t positionTicks
 ) const {
+#ifdef SLOPPATV_BENCHMARK
+    (void)session;
+    (void)item;
+    (void)target;
+    (void)positionTicks;
+    ApiResult result;
+    result.ok = true;
+    return result;
+#else
     ApiResult result;
     json body = {
         {"ItemId", item.id},
@@ -1278,6 +1312,7 @@ ApiResult JellyfinClient::reportPlaybackStopped(
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
+#endif
 }
 
 ApiResult JellyfinClient::reportExternalPlaybackStopped(

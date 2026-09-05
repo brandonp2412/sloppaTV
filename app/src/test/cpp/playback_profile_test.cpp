@@ -124,6 +124,14 @@ int main() {
     assert(!flags.allowVideoStreamCopy);
     assert(flags.allowAudioStreamCopy);
 
+    PlaybackOverrides forceServerStream;
+    forceServerStream.forceServerStream = true;
+    flags = playbackRequestFlags(plan, forceServerStream);
+    assert(!flags.enableDirectPlay);
+    assert(flags.enableDirectStream);
+    assert(flags.allowVideoStreamCopy);
+    assert(flags.allowAudioStreamCopy);
+
     PlaybackServerOfferInput offer{
         .supportsDirectPlay = true,
         .supportsDirectStream = true,
@@ -131,6 +139,7 @@ int main() {
         .transcodingUrl = "/Videos/item/master.m3u8?TranscodeReasons=ContainerNotSupported",
     };
     assert(choosePlaybackServerRoute(offer, {}) == PlaybackServerRoute::DirectPlay);
+    assert(choosePlaybackServerRoute(offer, forceServerStream) == PlaybackServerRoute::DirectStream);
     offer.supportsDirectPlay = false;
     offer.supportsDirectStream = false;
     assert(choosePlaybackServerRoute(offer, {}) == PlaybackServerRoute::DirectStream);

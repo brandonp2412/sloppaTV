@@ -35,12 +35,22 @@ public:
     void setUiTransform(float safeAreaFraction, float textScale);
 
     void rect(float x, float y, float w, float h, Color color);
+    void triangle(float x1, float y1, float x2, float y2, float x3, float y3, Color color);
     void roundedRect(float x, float y, float w, float h, float radius, Color color);
     void roundedOutline(float x, float y, float w, float h, float radius, float thickness, Color color);
     void verticalGradient(float x, float y, float w, float h, Color top, Color bottom);
     void horizontalGradient(float x, float y, float w, float h, Color left, Color right);
     void outline(float x, float y, float w, float h, float thickness, Color color);
     void text(float x, float y, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
+    void outlinedText(
+        float x,
+        float y,
+        float scale,
+        const std::string& value,
+        Color fill,
+        Color outline,
+        float maxWidth = 0.0f
+    );
     void textCentered(float x, float y, float w, float h, float scale, const std::string& value, Color color);
     void textVerticallyCentered(float x, float y, float h, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
     float textWidth(float scale, const std::string& value) const;
@@ -53,6 +63,19 @@ public:
         float y,
         float w,
         float h,
+        float u0,
+        float v0,
+        float u1,
+        float v1,
+        float alpha = 1.0f
+    );
+    void roundedImageRegion(
+        GLuint texture,
+        float x,
+        float y,
+        float w,
+        float h,
+        float radius,
         float u0,
         float v0,
         float u1,
@@ -88,6 +111,8 @@ private:
         float y;
         float u;
         float v;
+        float localX;
+        float localY;
     };
 
     void flush();
@@ -104,9 +129,19 @@ private:
         float u1,
         float v1,
         Color tint,
-        float alpha
+        float alpha,
+        float radius = 0.0f
     );
     GLuint compileShader(GLenum type, const char* source);
+    void textWithAtlas(
+        GLuint atlasTexture,
+        float x,
+        float y,
+        float scale,
+        const std::string& value,
+        Color color,
+        float maxWidth
+    );
     std::array<uint8_t, 7> glyph(char c) const;
 
     EGLDisplay display_ = EGL_NO_DISPLAY;
@@ -126,6 +161,8 @@ private:
     GLint textureResolutionLocation_ = -1;
     GLint textureAlphaLocation_ = -1;
     GLint textureTintLocation_ = -1;
+    GLint textureRectSizeLocation_ = -1;
+    GLint textureRadiusLocation_ = -1;
     GLuint externalProgram_ = 0;
     GLuint externalVao_ = 0;
     GLuint externalVbo_ = 0;
@@ -134,6 +171,7 @@ private:
     GLint externalTransformLocation_ = -1;
     bool externalProgramFailed_ = false;
     GLuint fontTexture_ = 0;
+    GLuint fontOutlineTexture_ = 0;
     bool fontAtlasAttempted_ = false;
     std::array<float, 95> fontAdvances_{};
     bool fontAdvancesReady_ = false;

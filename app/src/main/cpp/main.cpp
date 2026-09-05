@@ -39,6 +39,7 @@
 #include "session_store.hpp"
 #include "settings_screen.hpp"
 #include "ui_policy.hpp"
+#include "unicode_text.hpp"
 #include "renderer.hpp"
 #include "task_runner.hpp"
 #include "trickplay_policy.hpp"
@@ -134,29 +135,33 @@ std::string externalSkipSegmentsJson(const std::vector<JellyfinMediaSegment>& se
     return json.str();
 }
 
-std::string wrapText(const std::string& input, size_t maxColumns, size_t maxLines) {
-    if (input.empty()) return "NO DESCRIPTION";
-    std::istringstream words(input);
-    std::string word;
-    std::string line;
-    std::string output;
-    size_t lines = 1;
-    while (words >> word) {
-        if (line.size() + word.size() + (line.empty() ? 0 : 1) > maxColumns) {
-            if (!output.empty()) output += '\n';
-            output += line;
-            line.clear();
-            if (++lines > maxLines) {
-                output += "...";
-                return output;
+std::string normalizeSubtitleDisplayText(const std::string& input) {
+    const std::string displaySafe = displayText(input, '\0');
+    auto attachesToPrevious = [](std::string_view token) {
+        if (token.empty()) return false;
+        return std::all_of(token.begin(), token.end(), [](unsigned char c) {
+            switch (c) {
+                case '!': case '?': case '.': case ',': case ';': case ':':
+                case '%': case ')': case ']': case '}':
+                    return true;
+                default:
+                    return false;
             }
-        }
-        if (!line.empty()) line += ' ';
-        line += word;
+        });
+    };
+
+    std::istringstream words(displaySafe);
+    std::vector<std::string> tokens;
+    std::string word;
+    while (words >> word) {
+        if (!tokens.empty() && attachesToPrevious(word)) tokens.back() += word;
+        else tokens.push_back(std::move(word));
     }
-    if (!line.empty() && lines <= maxLines) {
-        if (!output.empty()) output += '\n';
-        output += line;
+
+    std::string output;
+    for (const auto& token : tokens) {
+        if (!output.empty()) output += ' ';
+        output += token;
     }
     return output;
 }
@@ -176,6 +181,16 @@ std::string episodeLabel(const JellyfinItem& item) {
         result += number;
     }
     return result;
+}
+
+std::string formatLocalClock(std::time_t instant, bool clock24Hour) {
+    std::tm local{};
+    localtime_r(&instant, &local);
+    std::ostringstream out;
+    out << std::put_time(&local, clock24Hour ? "%H:%M" : "%I:%M %p");
+    std::string value = out.str();
+    if (!clock24Hour && !value.empty() && value.front() == '0') value.erase(value.begin());
+    return value;
 }
 
 std::string formatPlaybackTime(int milliseconds) {
@@ -920,6 +935,19 @@ private:
         });
     }
 
+    int homeVisibleItemCount(const JellyfinHomeRow& row) const {
+        return row.title == "My Media" ? 4 : 5;
+    }
+
+    void beginHomeRowSlide(int fromFirst, int toFirst) {
+        if (fromFirst == toFirst) return;
+        const auto now = std::chrono::steady_clock::now();
+        homeSlideFromFirst_ = fromFirst;
+        homeSlideToFirst_ = toFirst;
+        homeSlideStarted_ = now;
+        renderBurstUntil_ = std::max(renderBurstUntil_, now + 240ms);
+    }
+
     void handleHomeKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
             ANativeActivity_finish(app_->activity);
@@ -947,6 +975,7 @@ private:
         }
 
         const int rowIndex = homeState_.row();
+        const int previousFirstVisibleRow = homeState_.firstVisibleRow();
         auto& section = home_.rows[static_cast<size_t>(rowIndex)];
         auto& items = section.items;
         if (key == AKEYCODE_DPAD_LEFT && !items.empty()) {
@@ -968,8 +997,14 @@ private:
             return;
         }
         homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+        beginHomeRowSlide(previousFirstVisibleRow, homeState_.firstVisibleRow());
         if (homeState_.row() >= 0 && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
             const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+            homeState_.updateItemViewport(
+                homeState_.row(),
+                static_cast<int>(row.items.size()),
+                homeVisibleItemCount(row)
+            );
             prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
         }
     }
@@ -1033,6 +1068,7 @@ private:
         auto& items = browseState_.items();
         moveGridSelection(key, items, selection);
         browseState_.setSelection(selection);
+        prefetchBrowseArtworkAhead();
         if (browseState_.hasMore() && !loading_
             && browseState_.selection() >= static_cast<int>(items.size()) - 12) {
             loadMoreBrowseAsync();
@@ -1069,7 +1105,7 @@ private:
 
         const auto& results = searchState_.results();
         if (key == AKEYCODE_SEARCH
-            || (key == AKEYCODE_DPAD_UP && (results.empty() || isTopMediaGridSelection(searchState_.selection())))
+            || (key == AKEYCODE_DPAD_UP && (results.empty() || searchState_.selectionOnFirstResultRow()))
             || ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && results.empty())) {
             searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin", kTextInputSearch));
             if (searchState_.keyboard()) keyboardRow_ = keyboardCol_ = 0;
@@ -1139,7 +1175,33 @@ private:
             : externalPlayers_[static_cast<size_t>(index - 1)].componentName;
     }
 
+    void toggleSubtitleLanguageSetting() {
+        const int selection = settingsScreen_.subtitleLanguageSelection();
+        if (selection <= 0) {
+            settings_.subtitleLanguages.clear();
+            saveSession(session_);
+            return;
+        }
+        const std::string code = kSubtitleLanguageOptions[static_cast<size_t>(selection - 1)].code;
+        auto current = std::find(settings_.subtitleLanguages.begin(), settings_.subtitleLanguages.end(), code);
+        if (settings_.subtitleLanguages.empty()) {
+            settings_.subtitleLanguages.push_back(code);
+        } else if (current == settings_.subtitleLanguages.end()) {
+            settings_.subtitleLanguages.push_back(code);
+        } else {
+            settings_.subtitleLanguages.erase(current);
+        }
+        saveSession(session_);
+    }
+
     void handleSettingsKey(int32_t key) {
+        if (settingsScreen_.subtitleLanguagePicker()) {
+            if (key == AKEYCODE_BACK) settingsScreen_.closeSubtitleLanguagePicker();
+            else if (key == AKEYCODE_DPAD_UP) settingsScreen_.moveSubtitleLanguage(-1);
+            else if (key == AKEYCODE_DPAD_DOWN) settingsScreen_.moveSubtitleLanguage(1);
+            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) toggleSubtitleLanguageSetting();
+            return;
+        }
         if (key == AKEYCODE_BACK) {
             hideSystemTextInput();
             popScreen(Screen::Home);
@@ -1189,6 +1251,8 @@ private:
                 openDiagnostics();
             } else if (selection == 23) {
                 openProfiles();
+            } else if (selection == kSubtitleLanguagesSetting) {
+                settingsScreen_.openSubtitleLanguagePicker();
             } else if (selection == kAdvancedSettingsToggle) {
                 settingsScreen_.toggleAdvanced();
             }
@@ -1358,12 +1422,18 @@ private:
                 popScreen(Screen::Details);
                 openQueueOverlay();
             } else if (action == "FAVORITE" || action == "UNFAVORITE") {
+                popScreen(Screen::Details);
                 toggleFavoriteAsync();
             } else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") {
+                popScreen(Screen::Details);
                 togglePlayedAsync();
             } else if (action == "HIDE FROM HOME" || action == "SHOW ON HOME") {
+                popScreen(Screen::Details);
                 toggleHiddenFromHome();
-            } else if (action == "REFRESH METADATA") refreshCurrentItemMetadataAsync();
+            } else if (action == "REFRESH METADATA") {
+                popScreen(Screen::Details);
+                refreshCurrentItemMetadataAsync();
+            }
             else if (action == "DELETE MEDIA") {
                 detailsState_.setDeleteConfirmation(true);
             } else {
@@ -1614,6 +1684,13 @@ private:
             ? 0
             : (static_cast<size_t>(std::distance(tracks.begin(), selected)) + 1) % tracks.size();
         rememberPlaybackAudioPreference(tracks[next].index);
+        const int autoSubtitleIndex = settings_.autoSubtitles
+            ? autoSubtitleIndexForPlaybackItem(activePlaybackItem_, tracks[next].index)
+            : trackState_.selectedSubtitleServerIndex();
+        if (autoSubtitleIndex != trackState_.selectedSubtitleServerIndex()) {
+            restartPlaybackAt(playerScreenState_.positionMs(), tracks[next].index, autoSubtitleIndex);
+            return;
+        }
         if (activeTarget_.playMethod == PlaybackMethod::DirectPlay
             && player_.selectEmbeddedAudioOrdinal(static_cast<int>(next))) {
             trackState_.setSelectedAudioServerIndex(tracks[next].index);
@@ -1625,16 +1702,76 @@ private:
         restartPlaybackAt(playerScreenState_.positionMs(), tracks[next].index, trackState_.selectedSubtitleServerIndex());
     }
 
+    bool subtitleAllowed(const JellyfinSubtitleStream& subtitle) const {
+        return subtitleLanguageAllowed(subtitle.language, settings_.subtitleLanguages);
+    }
+
+    std::string playbackAudioLanguage(const JellyfinItem& item, int audioStreamIndex) const {
+        auto selected = item.audios.end();
+        if (audioStreamIndex >= 0) {
+            selected = std::find_if(item.audios.begin(), item.audios.end(), [&](const JellyfinAudioStream& audio) {
+                return audio.index == audioStreamIndex;
+            });
+        }
+        if (selected == item.audios.end()) {
+            selected = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
+                return audio.isDefault;
+            });
+        }
+        if (selected == item.audios.end() && !item.audios.empty()) selected = item.audios.begin();
+        return selected == item.audios.end() ? std::string{} : normalizeSubtitleLanguage(selected->language);
+    }
+
+    int autoSubtitleIndexForPlaybackItem(const JellyfinItem& item, int audioStreamIndex) const {
+        if (!settings_.autoSubtitles || item.subtitles.empty()) return kSubtitleOffIndex;
+        const std::string targetLanguage = normalizeSubtitleLanguage(settings_.autoSubtitleLanguage);
+        if (targetLanguage.empty()) return kSubtitleOffIndex;
+
+        const std::string audioLanguage = playbackAudioLanguage(item, audioStreamIndex);
+        const std::string source = settings_.autoSubtitleSourceLanguage.empty()
+            ? "any"
+            : settings_.autoSubtitleSourceLanguage;
+        bool sourceMatches = source == "any";
+        if (source == "different") sourceMatches = !audioLanguage.empty() && audioLanguage != targetLanguage;
+        else if (source != "any") sourceMatches = audioLanguage == normalizeSubtitleLanguage(source);
+        if (!sourceMatches) return kSubtitleOffIndex;
+
+        const auto matchesTarget = [&](const JellyfinSubtitleStream& subtitle) {
+            return subtitle.index >= 0
+                && normalizeSubtitleLanguage(subtitle.language) == targetLanguage
+                && !isLikelySignsOnlySubtitle(subtitle.title);
+        };
+        auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+            return matchesTarget(subtitle) && subtitle.isDefault;
+        });
+        if (selected == item.subtitles.end()) {
+            selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+                return matchesTarget(subtitle) && !subtitle.forced;
+            });
+        }
+        if (selected == item.subtitles.end()) selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), matchesTarget);
+        return selected == item.subtitles.end() ? kSubtitleOffIndex : selected->index;
+    }
+
     int subtitleIndexForPlaybackItem(
         const JellyfinItem& item,
+        int audioStreamIndex,
         const std::optional<std::string>& languagePreference
     ) const {
+#ifdef SLOPPATV_BENCHMARK
+        (void)item;
+        (void)audioStreamIndex;
+        (void)languagePreference;
+        return kSubtitleOffIndex;
+#else
+        if (settings_.autoSubtitles) return autoSubtitleIndexForPlaybackItem(item, audioStreamIndex);
         std::vector<SubtitlePreferenceCandidate> candidates;
         candidates.reserve(item.subtitles.size());
         for (const auto& subtitle : item.subtitles) {
-            candidates.push_back({subtitle.index, subtitle.language});
+            if (subtitleAllowed(subtitle)) candidates.push_back({subtitle.index, subtitle.language});
         }
         return subtitleIndexForQueuePreference(candidates, languagePreference);
+#endif
     }
 
     void rememberPlaybackSubtitlePreference(int streamIndex) {
@@ -1661,21 +1798,27 @@ private:
         auto preferred = std::find_if(
             activePlaybackItem_.subtitles.begin(),
             activePlaybackItem_.subtitles.end(),
-            [](const JellyfinSubtitleStream& subtitle) {
-                return subtitle.isDefault && !isLikelySignsOnlySubtitle(subtitle.title);
+            [&](const JellyfinSubtitleStream& subtitle) {
+                return subtitleAllowed(subtitle) && subtitle.isDefault && !isLikelySignsOnlySubtitle(subtitle.title);
             }
         );
         if (preferred == activePlaybackItem_.subtitles.end()) {
             preferred = std::find_if(
                 activePlaybackItem_.subtitles.begin(),
                 activePlaybackItem_.subtitles.end(),
-                [](const JellyfinSubtitleStream& subtitle) {
-                    return !subtitle.forced && !isLikelySignsOnlySubtitle(subtitle.title);
+                [&](const JellyfinSubtitleStream& subtitle) {
+                    return subtitleAllowed(subtitle) && !subtitle.forced && !isLikelySignsOnlySubtitle(subtitle.title);
                 }
             );
         }
-        if (preferred == activePlaybackItem_.subtitles.end()) preferred = activePlaybackItem_.subtitles.begin();
-        return static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), preferred));
+        if (preferred == activePlaybackItem_.subtitles.end()) {
+            preferred = std::find_if(activePlaybackItem_.subtitles.begin(), activePlaybackItem_.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+                return subtitleAllowed(subtitle);
+            });
+        }
+        return preferred == activePlaybackItem_.subtitles.end()
+            ? -1
+            : static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), preferred));
     }
 
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
@@ -1698,9 +1841,11 @@ private:
                 }
             }
             const auto fetchSubtitle = [&] {
-                return deliveryUrl.empty()
-                    ? api_.downloadSubtitleSrt(session, item, subtitle.index)
-                    : api_.downloadSubtitleUrl(session, deliveryUrl);
+                auto response = api_.downloadSubtitleSrt(session, item, subtitle.index);
+                if ((!response.ok || response.value.empty()) && !deliveryUrl.empty()) {
+                    response = api_.downloadSubtitleUrl(session, deliveryUrl);
+                }
+                return response;
             };
             std::string subtitleFailure;
             if (clean.empty()) {
@@ -1784,19 +1929,23 @@ private:
             if (activePlaybackItem_.subtitles.empty()) error_ = "NO SUBTITLE TRACKS";
             return;
         }
+        std::vector<const JellyfinSubtitleStream*> allowed;
+        for (const auto& subtitle : activePlaybackItem_.subtitles) {
+            if (subtitleAllowed(subtitle)) allowed.push_back(&subtitle);
+        }
+        if (allowed.empty()) {
+            error_ = "NO ALLOWED SUBTITLE TRACKS";
+            return;
+        }
         int nextIndex = -1;
         if (trackState_.selectedSubtitleServerIndex() < 0) {
             const int preferred = preferredSubtitlePosition();
             if (preferred >= 0) nextIndex = activePlaybackItem_.subtitles[static_cast<size_t>(preferred)].index;
         } else {
-            const auto selected = std::find_if(
-                activePlaybackItem_.subtitles.begin(),
-                activePlaybackItem_.subtitles.end(),
-                [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == trackState_.selectedSubtitleServerIndex(); }
-            );
-            if (selected != activePlaybackItem_.subtitles.end() && std::next(selected) != activePlaybackItem_.subtitles.end()) {
-                nextIndex = std::next(selected)->index;
-            }
+            const auto selected = std::find_if(allowed.begin(), allowed.end(), [&](const JellyfinSubtitleStream* subtitle) {
+                return subtitle->index == trackState_.selectedSubtitleServerIndex();
+            });
+            if (selected != allowed.end() && std::next(selected) != allowed.end()) nextIndex = (*std::next(selected))->index;
         }
         rememberPlaybackSubtitlePreference(nextIndex);
         restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(), nextIndex);
@@ -2027,6 +2176,10 @@ private:
             else stopPlayback();
             return;
         }
+        if (key == AKEYCODE_DPAD_UP && !playerScreenState_.controlsActive()) {
+            playerScreenState_.showControls(now);
+            return;
+        }
         playerScreenState_.showOverlayFor(now, playerScreenState_.controlsActive() ? 10s : 5s);
         if (playerScreenState_.controlsActive()) {
             if (key == AKEYCODE_DPAD_DOWN) {
@@ -2045,8 +2198,6 @@ private:
         } else if (key == AKEYCODE_MEDIA_NEXT && queueState_.currentIndex() >= 0) {
             const int next = queueState_.nextIndex(true);
             if (next >= 0) playQueuedIndexAsync(next);
-        } else if (key == AKEYCODE_DPAD_UP) {
-            playerScreenState_.showControls(now);
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && skipActiveMediaSegment()) {
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER || key == AKEYCODE_MEDIA_PLAY_PAUSE) {
             player_.togglePause();
@@ -2351,6 +2502,7 @@ private:
             }
             if (append) browseState_.appendPage(std::move(result.value), startIndex, kBrowsePageSize);
             else browseState_.replacePage(std::move(result.value), kBrowsePageSize);
+            prefetchBrowseArtworkAhead();
             error_.clear();
         });
     }
@@ -2437,7 +2589,7 @@ private:
         filterHiddenHomeItems(home_);
         clampHomeSelections();
         saveSession(session_);
-        showNotice(hiding ? "HIDDEN FROM HOME" : "HOME VISIBILITY RESTORED");
+        showNotice(hiding ? "HIDDEN FROM HOME" : "HOME VISIBILITY RESTORED", 2s);
     }
 
     void restoreHomeVisibilityForPlayback(const JellyfinItem& item) {
@@ -2463,13 +2615,13 @@ private:
         detailsState_.updateCachedUserData(updated);
 
         for (auto& row : home_.rows) {
-            if (row.title == "FAVORITES") {
+            if (row.title == "Favorites") {
                 const auto existing = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& item) {
                     return item.id == updated.id;
                 });
                 if (updated.favorite && existing == row.items.end() && !isHiddenFromHome(updated)) row.items.push_back(updated);
                 else if (!updated.favorite && existing != row.items.end()) row.items.erase(existing);
-            } else if (row.title == "CONTINUE WATCHING" && updated.played) {
+            } else if (row.title == "Continue Watching" && updated.played) {
                 std::erase_if(row.items, [&](const JellyfinItem& item) { return item.id == updated.id; });
             }
         }
@@ -2494,12 +2646,13 @@ private:
                 updateCachedUserData(updated);
             }
             mutationLoading_ = false;
-            if ((screen_ != Screen::Details && screen_ != Screen::ItemMenu) || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            detail_.favorite = desired;
+            if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) {
+                detail_.favorite = desired;
+            }
         });
     }
 
@@ -2583,12 +2736,10 @@ private:
             std::scoped_lock lock(stateMutex_);
             if (!requestEpochs_.session.active(sessionEpoch)) return;
             mutationLoading_ = false;
-            if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = result.error;
                 return;
             }
-            popScreen(Screen::Details);
             showNotice("METADATA REFRESH REQUESTED");
         });
     }
@@ -3013,7 +3164,7 @@ private:
             auto detailed = api_.getItem(session, queued.id);
             if (detailed.ok) queued = std::move(detailed.value);
             const int audioStreamIndex = audioIndexForPlaybackItem(queued, audioPreference);
-            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(queued, subtitlePreference);
+            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(queued, audioStreamIndex, subtitlePreference);
             auto target = api_.resolvePlayback(
                 session,
                 queued,
@@ -3248,7 +3399,7 @@ private:
             }
 
             const int audioStreamIndex = audioIndexForPlaybackItem(playable, audioPreference);
-            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(playable, subtitlePreference);
+            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(playable, audioStreamIndex, subtitlePreference);
             auto target = api_.resolvePlayback(
                 session,
                 playable,
@@ -3375,7 +3526,7 @@ private:
             auto detailed = api_.getItem(session, nextItem.id);
             if (detailed.ok) nextItem = std::move(detailed.value);
             const int audioStreamIndex = audioIndexForPlaybackItem(nextItem, audioPreference);
-            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(nextItem, subtitlePreference);
+            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(nextItem, audioStreamIndex, subtitlePreference);
             auto target = api_.resolvePlayback(
                 session,
                 nextItem,
@@ -3425,14 +3576,17 @@ private:
     }
 
     void startResolvedPlaybackTarget(const PlaybackTarget& target) {
-        playbackPreparingSince_ = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        const int startPositionMs = initialPlayerSeekMs(target.startTicks);
+        playbackPreparingSince_ = now;
         player_.startAsync(
             target.url,
             videoSurface_.surface(),
-            initialPlayerSeekMs(target.startTicks),
+            startPositionMs,
             settings_.playbackBufferPreset,
             playerAudioOrdinal(target, activePlaybackItem_)
         );
+        if (startPositionMs > 0) playerScreenState_.beginSeek(startPositionMs, now);
     }
 
     bool retryPlaybackWithoutSubtitle() {
@@ -3491,8 +3645,16 @@ private:
         }
     }
 
-    bool retryPlaybackWithTranscodeFallback() {
-        if (playbackSessionState_.fallbackAttempted() || activeTarget_.transcoding || !session_.valid() || activePlaybackItem_.id.empty()) {
+    bool retryPlaybackWithTranscodeFallback(bool preferServerStream = false) {
+#ifdef SLOPPATV_BENCHMARK
+        (void)preferServerStream;
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Benchmark build refusing Jellyfin server playback fallback");
+        return false;
+#else
+        if (playbackSessionState_.fallbackAttempted()
+            || activeTarget_.playMethod == PlaybackMethod::Transcode
+            || !session_.valid()
+            || activePlaybackItem_.id.empty()) {
             return false;
         }
 
@@ -3524,10 +3686,14 @@ private:
                     );
                 });
             }
+            const bool directStreamFallback = preferServerStream
+                && transcodingUrlRepresentsDirectStream(activeTarget_.fallbackTranscodeUrl);
             activeTarget_.url = std::move(activeTarget_.fallbackTranscodeUrl);
             activeTarget_.fallbackTranscodeUrl.clear();
             activeTarget_.transcoding = true;
-            activeTarget_.playMethod = PlaybackMethod::Transcode;
+            activeTarget_.playMethod = directStreamFallback
+                ? PlaybackMethod::DirectStream
+                : PlaybackMethod::Transcode;
             activeTarget_.startTicks = resumeTicks;
 
             std::string surfaceError;
@@ -3535,7 +3701,12 @@ private:
                 error_ = surfaceError.empty() ? "VIDEO FALLBACK SURFACE IS NOT AVAILABLE" : surfaceError;
                 return false;
             }
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; using offered Jellyfin transcode fallback");
+            __android_log_print(
+                ANDROID_LOG_WARN,
+                kTag,
+                "Direct play failed; using offered Jellyfin %s fallback",
+                directStreamFallback ? "direct-stream" : "transcode"
+            );
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
             startResolvedPlaybackTarget(activeTarget_);
             return true;
@@ -3545,7 +3716,8 @@ private:
         // SupportsTranscoding=true. Re-negotiate asynchronously with direct paths disabled
         // instead of abandoning playback after a Media3 decoder/source prepare failure.
         PlaybackOverrides fallbackOverrides = playbackOverridesFor(settings_);
-        fallbackOverrides.forceTranscode = true;
+        if (preferServerStream) fallbackOverrides.forceServerStream = true;
+        else fallbackOverrides.forceTranscode = true;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const int audioStreamIndex = trackState_.selectedAudioServerIndex();
@@ -3554,7 +3726,12 @@ private:
         loading_ = true;
         transitionState_.setFallbackResolving(true);
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
-        __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed without fallback URL; forcing Jellyfin transcode negotiation");
+        __android_log_print(
+            ANDROID_LOG_WARN,
+            kTag,
+            "Direct play failed without fallback URL; forcing Jellyfin %s negotiation",
+            preferServerStream ? "server-stream" : "transcode"
+        );
 
         const bool submitted = tasks_.submit([
             this,
@@ -3605,6 +3782,7 @@ private:
             return false;
         }
         return true;
+#endif
     }
 
     void applyPendingRuntimeLaunchRequest() {
@@ -3815,7 +3993,7 @@ private:
                     static_cast<long long>(preparingMs),
                     activeTarget_.transcoding ? "transcode" : "direct"
                 );
-                if (!activeTarget_.transcoding && retryPlaybackWithTranscodeFallback()) {
+                if (activeTarget_.playMethod != PlaybackMethod::Transcode && retryPlaybackWithTranscodeFallback()) {
                     error_.clear();
                     return;
                 }
@@ -3847,6 +4025,39 @@ private:
             return;
         }
         if (status != PlayerStatus::Playing && status != PlayerStatus::Paused) return;
+
+        if (activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
+            const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
+            const int recoveryTargetMs = pendingSeekTargetMs > 0
+                ? pendingSeekTargetMs
+                : playerScreenState_.recentSeekTargetMs();
+            if (recoveryTargetMs > 0) {
+                const auto now = std::chrono::steady_clock::now();
+                const int observedPositionMs = player_.positionMs();
+                const bool mediaSeekable = player_.seekable();
+                const bool failedSeek = !mediaSeekable
+                    && !postSeekPositionMatchesTarget(observedPositionMs, recoveryTargetMs)
+                    && ((pendingSeekTargetMs > 0)
+                        || playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
+                        || playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now));
+                if (failedSeek) {
+                    std::scoped_lock lock(stateMutex_);
+                    playerScreenState_.setPositionMs(recoveryTargetMs);
+                    __android_log_print(
+                        ANDROID_LOG_WARN,
+                        kTag,
+                        "Direct-play seek failed target=%d observed=%d seekable=%d; using Jellyfin stream fallback",
+                        recoveryTargetMs,
+                        observedPositionMs,
+                        mediaSeekable
+                    );
+                    if (retryPlaybackWithTranscodeFallback(true)) {
+                        error_.clear();
+                        return;
+                    }
+                }
+            }
+        }
 
         refreshPlaybackTelemetry();
         mediaSession_.updateState(
@@ -4123,7 +4334,7 @@ private:
             v0 = (1.0f - visible) * 0.5f;
             v1 = v0 + visible;
         }
-        renderer_.imageRegion(entry.texture, x, y, width, height, u0, v0, u1, v1, alpha);
+        renderer_.roundedImageRegion(entry.texture, x, y, width, height, 16.0f, u0, v0, u1, v1, alpha);
     }
 
     bool drawHomeArtwork(const JellyfinItem& item, float x, float y, float width, float height) {
@@ -4166,6 +4377,22 @@ private:
         const int begin = std::max(0, selection - 2);
         const int end = std::min(static_cast<int>(items.size()), selection + 7);
         for (int index = begin; index < end; ++index) requestHomeArtwork(items[static_cast<size_t>(index)]);
+    }
+
+    void prefetchBrowseArtworkAhead() {
+        const auto& items = browseState_.items();
+        if (items.empty() || browseState_.syntheticPage()) return;
+        constexpr int columns = mediaGridColumns();
+        constexpr int visibleRows = 2;
+        constexpr int warmRowsAhead = 3;
+        const int selectedRow = std::max(0, browseState_.selection() / columns);
+        const int firstVisibleRow = std::max(0, selectedRow - 1);
+        const int begin = firstVisibleRow * columns;
+        const int end = std::min(
+            static_cast<int>(items.size()),
+            (firstVisibleRow + visibleRows + warmRowsAhead) * columns
+        );
+        for (int index = begin; index < end; ++index) requestArtwork(items[static_cast<size_t>(index)]);
     }
 
     void requestProfileArtwork(const JellyfinSession& saved) {
@@ -4229,7 +4456,7 @@ private:
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
-            auto bytes = api_.downloadPrimaryImage(session, itemCopy, 720, 1080);
+            auto bytes = api_.downloadPrimaryImage(session, itemCopy, 384, 576);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
                 artwork_.markFailed(key);
@@ -4410,7 +4637,8 @@ private:
             std::chrono::steady_clock::now() - lastInteraction_
         ).count();
         float animatedScale = scale;
-        if (elapsedMs >= 0 && elapsedMs < 150) {
+        const bool homeSelectionPress = screen_ == Screen::Home && homeState_.centerPending();
+        if (!homeSelectionPress && elapsedMs >= 0 && elapsedMs < 150) {
             const float t = std::clamp(static_cast<float>(elapsedMs) / 150.0f, 0.0f, 1.0f);
             const float remaining = 1.0f - t;
             const float eased = 1.0f - remaining * remaining * remaining;
@@ -4427,7 +4655,7 @@ private:
     }
 
     std::array<float, 4> drawFocusedSurface(float x, float y, float width, float height, bool focused, bool primary = false, bool destructive = false) {
-        const auto bounds = focusedBounds(x, y, width, height, focused, 1.045f);
+        const std::array<float, 4> bounds{x, y, width, height};
         const Color accent = destructive ? kError : kFocus;
         if (focused) {
             renderer_.roundedRect(bounds[0] - 12.0f, bounds[1] - 12.0f, bounds[2] + 24.0f, bounds[3] + 24.0f, 28.0f,
@@ -4446,12 +4674,8 @@ private:
         renderer_.text(72, 46, 3.9f, "SLOPPATV", kText);
         renderer_.text(75, 103, 2.25f, title, kMuted);
         if (settings_.showClock) {
-            const std::time_t now = std::time(nullptr);
-            std::tm local{};
-            localtime_r(&now, &local);
-            std::ostringstream clock;
-            clock << std::put_time(&local, "%H:%M");
-            renderer_.text(1680, 52, 2.05f, clock.str(), kMuted, 170);
+            renderer_.text(1650.0f, 52.0f, 2.05f,
+                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
         }
     }
 
@@ -4680,12 +4904,9 @@ private:
             profileBounds[2] + 6.0f, profileBounds[3] + 6.0f, 34.0f, 3.0f, kFocus);
 
         if (settings_.showClock) {
-            const std::time_t now = std::time(nullptr);
-            std::tm local{};
-            localtime_r(&now, &local);
-            std::ostringstream clock;
-            clock << std::put_time(&local, "%H:%M");
-            renderer_.text(1712.0f, 53.0f, 2.10f, clock.str(), Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 140.0f);
+            renderer_.text(1650.0f, 53.0f, 2.10f,
+                formatLocalClock(std::time(nullptr), settings_.clock24Hour),
+                Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 200.0f);
         }
 
         if (home_.rows.empty()) {
@@ -4699,19 +4920,34 @@ private:
             static_cast<int>(home_.rows.size()),
             2
         );
-        renderHomeRow(
-            home_.rows[static_cast<size_t>(firstVisibleRow)].title,
-            home_.rows[static_cast<size_t>(firstVisibleRow)].items,
-            firstVisibleRow,
-            150.0f
-        );
-        if (firstVisibleRow + 1 < static_cast<int>(home_.rows.size())) {
-            const int secondRow = firstVisibleRow + 1;
+        int renderFirstRow = firstVisibleRow;
+        float slideOffset = 0.0f;
+        int renderRowCount = 2;
+        const auto now = std::chrono::steady_clock::now();
+        constexpr auto slideDuration = 220ms;
+        if (homeSlideStarted_ != std::chrono::steady_clock::time_point{}
+            && homeSlideToFirst_ == firstVisibleRow
+            && now < homeSlideStarted_ + slideDuration) {
+            const float elapsed = static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(now - homeSlideStarted_).count());
+            const float progress = std::clamp(elapsed / 220.0f, 0.0f, 1.0f);
+            const float eased = progress * progress * (3.0f - 2.0f * progress);
+            renderRowCount = 3;
+            if (homeSlideToFirst_ > homeSlideFromFirst_) {
+                renderFirstRow = homeSlideFromFirst_;
+                slideOffset = -400.0f * eased;
+            } else {
+                renderFirstRow = homeSlideToFirst_;
+                slideOffset = -400.0f * (1.0f - eased);
+            }
+        }
+        for (int visible = 0; visible < renderRowCount; ++visible) {
+            const int row = renderFirstRow + visible;
+            if (row < 0 || row >= static_cast<int>(home_.rows.size())) continue;
             renderHomeRow(
-                home_.rows[static_cast<size_t>(secondRow)].title,
-                home_.rows[static_cast<size_t>(secondRow)].items,
-                secondRow,
-                550.0f
+                home_.rows[static_cast<size_t>(row)].title,
+                home_.rows[static_cast<size_t>(row)].items,
+                row,
+                150.0f + static_cast<float>(visible) * 400.0f + slideOffset
             );
         }
     }
@@ -4727,9 +4963,10 @@ private:
             constexpr float gap = 28.0f;
             const float imageY = top + 68.0f;
             float x = 72.0f;
-            for (int index = 0; index < static_cast<int>(items.size()); ++index) {
-                if (x + cardW > 1885.0f && index > 0) break;
-            const bool focused = homeState_.row() == row && index == selected;
+            const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 4);
+            for (int index = start; index < static_cast<int>(items.size()); ++index) {
+                if (x + cardW > 1885.0f && index > start) break;
+                const bool focused = homeState_.row() == row && index == selected;
                 const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, 1.07f);
                 if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, 24.0f,
                     Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
@@ -4748,7 +4985,7 @@ private:
         }
 
         renderer_.text(72.0f, top, 3.05f, title, homeState_.row() == row ? kText : kSecondaryText, 900.0f);
-        const int start = std::max(0, selected - 1);
+        const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 5);
         constexpr float cardH = 202.0f;
         constexpr float cardW = 350.0f;
         constexpr float gap = 24.0f;
@@ -4769,14 +5006,14 @@ private:
             if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, 22.0f,
                 Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
             const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3]);
-            if (!hasArtwork) renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 12.0f, Color{0.055f, 0.06f, 0.075f, 0.94f});
+            if (!hasArtwork) renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, Color{0.055f, 0.06f, 0.075f, 0.94f});
             if (item.positionTicks > 0 && item.runtimeTicks > 0) {
                 const double progress = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, Color{0.05f, 0.05f, 0.06f, 0.72f});
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
                     static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, kFocus);
             }
-            if (focused) renderer_.roundedOutline(bounds[0] - 2.0f, bounds[1] - 2.0f, bounds[2] + 4.0f, bounds[3] + 4.0f, 15.0f, 2.5f, kFocus);
+            if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
             std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
             primary = singleLine(primary, 2.45f, cardW - 18.0f);
@@ -4947,38 +5184,39 @@ private:
             return;
         }
 
-        renderer_.text(72.0f, 270.0f, 1.75f, "RESULTS", kSecondaryText, 300.0f);
         constexpr int columns = mediaGridColumns();
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
-        auto rowHasPortrait = [&](int row) {
-            const int begin = row * columns;
-            const int end = std::min(begin + columns, static_cast<int>(results.size()));
+        const int topLevelCount = searchState_.rowItemCount(0);
+        const int episodeCount = searchState_.rowItemCount(1);
+
+        auto renderResultRow = [&](int semanticRow, const std::string& label, float labelY, float cardY) {
+            const int count = searchState_.rowItemCount(semanticRow);
+            if (count <= 0) return;
+            renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
+            const int localStart = searchState_.firstVisibleInRow(semanticRow, columns);
+            const int begin = searchState_.rowStart(semanticRow) + localStart;
+            const int end = std::min(begin + columns, searchState_.rowStart(semanticRow) + count);
             for (int index = begin; index < end; ++index) {
-                const auto& item = results[static_cast<size_t>(index)];
-                const bool seriesCoverForEpisode = item.type == "Episode"
-                    && !item.seriesId.empty()
-                    && !item.seriesPrimaryImageTag.empty();
-                if (!usesLandscapeMediaCard(item.type) || seriesCoverForEpisode) return true;
-            }
-            return false;
-        };
-        const int selectedRow = searchState_.selection() / columns;
-        const int firstRow = selectedRow > 0 && rowHasPortrait(selectedRow) ? selectedRow : std::max(0, selectedRow - 1);
-        float y = 315.0f;
-        for (int visibleRow = 0, absoluteRow = firstRow; visibleRow < 2; ++visibleRow, ++absoluteRow) {
-            const int begin = absoluteRow * columns;
-            if (begin >= static_cast<int>(results.size())) break;
-            const bool portraitRow = rowHasPortrait(absoluteRow);
-            const float rowHeight = searchMediaRowHeight(portraitRow);
-            if (visibleRow > 0 && y + rowHeight > 1060.0f) break;
-            const int end = std::min(begin + columns, static_cast<int>(results.size()));
-            for (int index = begin; index < end; ++index) {
-                const int col = index % columns;
+                const int col = index - begin;
                 const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-                renderMediaArtworkCard(results[static_cast<size_t>(index)], x, y, slotWidth, index == searchState_.selection(), true, true);
+                renderMediaArtworkCard(
+                    results[static_cast<size_t>(index)],
+                    x,
+                    cardY,
+                    slotWidth,
+                    index == searchState_.selection(),
+                    true,
+                    false
+                );
             }
-            y += rowHeight;
+        };
+
+        if (topLevelCount > 0) {
+            renderResultRow(0, "MOVIES & SHOWS", 258.0f, 300.0f);
+        }
+        if (episodeCount > 0) {
+            renderResultRow(1, "EPISODES", topLevelCount > 0 ? 738.0f : 258.0f, topLevelCount > 0 ? 780.0f : 300.0f);
         }
     }
 
@@ -5027,8 +5265,10 @@ private:
             || showNextUp
             || playerScreenState_.overlayVisible(now);
         if (const SubtitleCue* cue = activeSubtitleCue()) {
-            const std::string subtitle = wrapText(cue->text, 46, 3);
             const float textScale = subtitleTextScale(settings_.subtitleSize);
+            const std::string subtitle = fitTextLines(
+                normalizeSubtitleDisplayText(cue->text), textScale, 1520.0f, 3
+            );
             const float lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize);
             std::istringstream stream(subtitle);
             std::vector<std::string> lines;
@@ -5054,8 +5294,15 @@ private:
                 const float width = renderer_.textWidth(textScale, lines[i]);
                 const float textX = (Renderer::logicalWidth() - width) * 0.5f;
                 const float textY = boxY + verticalPadding + static_cast<float>(i) * lineHeight;
-                renderer_.text(textX + 2.0f, textY + 2.0f, textScale, lines[i], Color{0.0f, 0.0f, 0.0f, 0.74f}, widest);
-                renderer_.text(textX, textY, textScale, lines[i], kText, widest);
+                renderer_.outlinedText(
+                    textX,
+                    textY,
+                    textScale,
+                    lines[i],
+                    kText,
+                    Color{0.0f, 0.0f, 0.0f, 0.92f},
+                    widest
+                );
             }
         }
         if (skipSegment) {
@@ -5097,10 +5344,21 @@ private:
 
         const int position = playerScreenState_.positionMs();
         const int duration = playerScreenState_.durationMs();
+        if (settings_.showClock) {
+            const std::time_t wallNow = std::time(nullptr);
+            renderer_.text(1640.0f, 46.0f, 2.05f,
+                formatLocalClock(wallNow, settings_.clock24Hour), kMuted, 210.0f);
+            if (remainingMs > 0 && status == PlayerStatus::Playing) {
+                const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
+                const std::string finishLabel = "ENDS " + formatLocalClock(finishAt, settings_.clock24Hour);
+                const float finishWidth = renderer_.textWidth(1.75f, finishLabel);
+                renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, finishLabel, kSecondaryText, 590.0f);
+            }
+        }
         const std::string state = transitionState_.fallbackResolving() ? "RETRYING TRANSCODE" :
             (transitionState_.loading() ? "LOADING NEXT EPISODE" :
-            (status == PlayerStatus::Paused ? "PAUSED" : (status == PlayerStatus::Preparing ? "LOADING" : "PLAYING")));
-        renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
+            (status == PlayerStatus::Preparing ? "LOADING" : ""));
+        if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
 
         constexpr float progressX = 150.0f;
         constexpr float progressWidth = 1620.0f;
@@ -5110,28 +5368,58 @@ private:
         renderer_.roundedRect(progressX, 878.0f, progressWidth, 7.0f, 3.5f, Color{0.30f, 0.31f, 0.35f, 0.78f});
         if (duration > 0) {
             const double progress = std::clamp(static_cast<double>(position) / static_cast<double>(duration), 0.0, 1.0);
-            renderer_.roundedRect(progressX, 878.0f, static_cast<float>(progressWidth * progress), 7.0f, 3.5f, kFocus);
+            const float progressPixels = static_cast<float>(progressWidth * progress);
+            renderer_.roundedRect(progressX, 878.0f, progressPixels, 7.0f, 3.5f, kFocus);
+            renderer_.roundedRect(progressX + progressPixels - 9.0f, 872.5f, 18.0f, 18.0f, 9.0f, kText);
         }
         drawTrickplayPreview();
 
         if (playerScreenState_.controlsActive()) {
             const std::array<std::string, 3> controls{
-                status == PlayerStatus::Paused ? "PLAY" : "PAUSE",
+                "",
                 "AUDIO  " + playerTrackLabel(2),
                 "SUBTITLES  " + playerTrackLabel(4),
             };
-            const std::array<float, 3> widths{190.0f, 310.0f, 350.0f};
-            float x = 535.0f;
+            const std::array<float, 3> widths{104.0f, 310.0f, 350.0f};
+            float x = 578.0f;
             for (size_t i = 0; i < controls.size(); ++i) {
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
+                const auto bounds = focusedBounds(x, 925.0f, widths[i], 66.0f, selected, 1.06f);
+                renderer_.roundedRect(
+                    bounds[0], bounds[1], bounds[2], bounds[3], 24.0f,
+                    selected ? Color{0.50f, 0.27f, 0.91f, 0.98f} : Color{0.015f, 0.020f, 0.030f, 0.88f}
+                );
+                if (selected) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 24.0f);
+
+                const float iconX = bounds[0] + 24.0f;
+                const float iconCenterY = bounds[1] + bounds[3] * 0.5f;
                 if (i == 0) {
-                    const auto bounds = focusedBounds(x, 925.0f, widths[i], 66.0f, selected, 1.06f);
-                    renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 28.0f,
-                        selected ? Color{0.50f, 0.27f, 0.91f, 0.98f} : Color{0.36f, 0.20f, 0.68f, 0.90f});
-                    renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 2.05f, controls[i], kText);
+                    const float iconCenterX = bounds[0] + bounds[2] * 0.5f;
+                    if (status == PlayerStatus::Paused) {
+                        const float playLeft = iconCenterX - 22.0f / 3.0f;
+                        renderer_.triangle(playLeft, iconCenterY - 13.0f, playLeft, iconCenterY + 13.0f, playLeft + 22.0f, iconCenterY, kText);
+                    } else {
+                        const float pauseLeft = iconCenterX - 10.0f;
+                        renderer_.roundedRect(pauseLeft, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
+                        renderer_.roundedRect(pauseLeft + 13.0f, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
+                    }
+                } else if (i == 1) {
+                    renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
+                    renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
                 } else {
-                    renderer_.text(x + 14.0f, 943.0f, 1.95f, controls[i], selected ? kText : kSecondaryText, widths[i] - 28.0f);
-                    if (selected) renderer_.roundedRect(x + 14.0f, 988.0f, 62.0f, 3.0f, 1.5f, kFocus);
+                    renderer_.roundedOutline(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 5.0f, 2.0f, kText);
+                    renderer_.textCentered(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 0.72f, "CC", kText);
+                }
+                if (i != 0) {
+                    renderer_.textVerticallyCentered(
+                        bounds[0] + 60.0f,
+                        bounds[1],
+                        bounds[3],
+                        1.72f,
+                        controls[i],
+                        selected ? kText : kSecondaryText,
+                        bounds[2] - 76.0f
+                    );
                 }
                 x += widths[i] + 28.0f;
             }
@@ -5211,7 +5499,7 @@ private:
             const bool focused = queueState_.actionSelection() == static_cast<int>(i);
             const bool available = enabled(static_cast<int>(i));
             std::array<float, 4> actionBounds{x, y, width, 68.0f};
-            if (available) actionBounds = drawFocusedSurface(x, y, width, 68.0f, focused, i < 2, i == 4);
+            if (available) actionBounds = drawFocusedSurface(x, y, width, 68.0f, focused, focused, i == 4);
             else renderer_.roundedRect(x, y, width, 68.0f, 18.0f, Color{0.06f, 0.065f, 0.075f, 0.72f});
             renderer_.textCentered(actionBounds[0], actionBounds[1], actionBounds[2], actionBounds[3], 1.45f, actions[i],
                 available ? kText : kTertiary);
@@ -5237,11 +5525,7 @@ private:
         }};
         const auto& position = positions[static_cast<size_t>(screensaverPositionSlot(elapsedSeconds))];
 
-        std::time_t now = std::time(nullptr);
-        std::tm local{};
-        localtime_r(&now, &local);
-        char clock[16]{};
-        std::strftime(clock, sizeof(clock), "%H:%M", &local);
+        const std::string clock = formatLocalClock(std::time(nullptr), settings_.clock24Hour);
 
         renderer_.text(position[0], position[1], 4.2f, "SLOPPATV", Color{0.82f, 0.78f, 1.0f, 0.92f}, 600.0f);
         renderer_.text(position[0], position[1] + 88.0f, 9.0f, clock, kText, 650.0f);
@@ -5291,7 +5575,7 @@ private:
             const int i = matches[static_cast<size_t>(matchPosition)];
             const float y = 270.0f + static_cast<float>(slot) * 112.0f;
             const bool focused = !settingsScreen_.searchFocused() && i == settingsScreen_.selection();
-            const bool actionRow = i == 22 || i == 23 || i == kAdvancedSettingsToggle;
+            const bool actionRow = i == 22 || i == 23 || i == kSubtitleLanguagesSetting || i == kAdvancedSettingsToggle;
             if (focused) {
                 renderer_.roundedRect(110.0f, y - 8.0f, 1700.0f, 88.0f, 22.0f, Color{0.07f, 0.065f, 0.09f, 0.72f});
                 renderer_.roundedRect(110.0f, y + 77.0f, 64.0f, 3.0f, 1.5f, kFocus);
@@ -5309,7 +5593,37 @@ private:
                 values[static_cast<size_t>(i)], actionRow ? (focused ? kFocus : kText) : (focused ? kFocus : kMuted), 570.0f);
         }
         renderer_.text(470.0f, 985.0f, 1.52f,
-            "LEFT / RIGHT CHANGE   |   UP TO SEARCH   |   CHANGES SAVE IMMEDIATELY", kTertiary, 1120.0f);
+            "LEFT / RIGHT CHANGE   |   OK OPENS OPTIONS   |   UP TO SEARCH", kTertiary, 1120.0f);
+
+        if (settingsScreen_.subtitleLanguagePicker()) {
+            renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.58f});
+            renderer_.roundedRect(430.0f, 92.0f, 1060.0f, 896.0f, 30.0f, Color{0.018f, 0.025f, 0.040f, 0.98f});
+            renderer_.text(490.0f, 132.0f, 3.15f, "SUBTITLE LANGUAGES", kText, 820.0f);
+            renderer_.text(490.0f, 192.0f, 1.50f, "ONLY SELECTED LANGUAGES WILL APPEAR DURING PLAYBACK", kMuted, 920.0f);
+            constexpr int visibleLanguageRows = 8;
+            constexpr int languageCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
+            const int firstLanguage = std::clamp(settingsScreen_.subtitleLanguageFirstVisible(), 0, std::max(0, languageCount - visibleLanguageRows));
+            for (int slot = 0; slot < visibleLanguageRows; ++slot) {
+                const int languageIndex = firstLanguage + slot;
+                if (languageIndex >= languageCount) break;
+                const float y = 258.0f + static_cast<float>(slot) * 82.0f;
+                const bool focused = languageIndex == settingsScreen_.subtitleLanguageSelection();
+                const bool selected = languageIndex == 0
+                    ? settings_.subtitleLanguages.empty()
+                    : std::find(
+                        settings_.subtitleLanguages.begin(),
+                        settings_.subtitleLanguages.end(),
+                        kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code
+                    ) != settings_.subtitleLanguages.end();
+                if (focused) renderer_.roundedRect(478.0f, y - 8.0f, 964.0f, 68.0f, 18.0f, kPanelElevated);
+                const std::string label = languageIndex == 0
+                    ? "ALL LANGUAGES"
+                    : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
+                renderer_.textVerticallyCentered(510.0f, y - 8.0f, 68.0f, 2.05f, label, focused ? kText : kSecondaryText, 620.0f);
+                renderer_.textVerticallyCentered(1290.0f, y - 8.0f, 68.0f, 1.75f, selected ? "ON" : "OFF", selected ? kFocus : kMuted, 110.0f);
+            }
+            renderer_.text(600.0f, 930.0f, 1.48f, "OK TO TOGGLE   |   BACK TO SETTINGS", kTertiary, 720.0f);
+        }
     }
 
     void renderDiagnostics() {
@@ -5409,8 +5723,7 @@ private:
             const float y = firstActionY + static_cast<float>(i) * rowStep;
             const bool focused = detailsState_.itemMenuSelection() == static_cast<int>(i);
             const bool destructive = actions[i] == "DELETE MEDIA";
-            const bool primary = actions[i] == "PLAY ALL" || actions[i] == "PLAY EXTERNAL" || actions[i] == "VIEW QUEUE";
-            const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, primary && focused, destructive);
+            const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, focused && !destructive, destructive);
             renderer_.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, actions[i],
                 destructive && !focused ? kMuted : kText, bounds[2] - 48.0f);
         }
@@ -5549,12 +5862,8 @@ private:
         }
 
         if (settings_.showClock) {
-            const std::time_t now = std::time(nullptr);
-            std::tm local{};
-            localtime_r(&now, &local);
-            std::ostringstream clock;
-            clock << std::put_time(&local, "%H:%M");
-            renderer_.text(1710.0f, 50.0f, 2.10f, clock.str(), kMuted, 140.0f);
+            renderer_.text(1650.0f, 50.0f, 2.10f,
+                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
         }
 
         if (continuationState_.stillWatchingPrompt()) {
@@ -5618,19 +5927,14 @@ private:
         constexpr float actionY = 615.0f;
         float actionX = contentX;
         for (size_t i = 0; i < actions.size(); ++i) {
-            const bool primary = i == 0;
             const bool focused = !detailsState_.similarFocused() && detailsState_.actionSelection() == static_cast<int>(i);
-            const float width = primary ? 250.0f : std::max(145.0f, renderer_.textWidth(1.80f, actions[i]) + 46.0f);
-            if (primary) {
-                const auto bounds = focusedBounds(actionX, actionY, width, 64.0f, focused, 1.05f);
-                renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 26.0f,
-                    focused ? Color{0.50f, 0.27f, 0.91f, 0.98f} : Color{0.42f, 0.23f, 0.78f, 0.94f});
-                renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 2.05f, actions[i], kText);
-                if (focused) renderer_.roundedOutline(bounds[0] - 3.0f, bounds[1] - 3.0f, bounds[2] + 6.0f, bounds[3] + 6.0f, 29.0f, 2.5f, Color{0.82f, 0.68f, 1.0f, 0.95f});
-            } else {
-                renderer_.text(actionX + 12.0f, actionY + 17.0f, 1.80f, actions[i], focused ? kText : kSecondaryText, width - 24.0f);
-                if (focused) renderer_.roundedRect(actionX + 12.0f, actionY + 58.0f, std::min(58.0f, width - 24.0f), 3.0f, 1.5f, kFocus);
+            const float width = std::max(145.0f, renderer_.textWidth(1.80f, actions[i]) + 46.0f);
+            const std::array<float, 4> bounds{actionX, actionY, width, 64.0f};
+            if (focused) {
+                renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 26.0f, Color{0.50f, 0.27f, 0.91f, 0.98f});
+                renderer_.roundedOutline(bounds[0] - 3.0f, bounds[1] - 3.0f, bounds[2] + 6.0f, bounds[3] + 6.0f, 29.0f, 2.5f, Color{0.82f, 0.68f, 1.0f, 0.95f});
             }
+            renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.80f, actions[i], focused ? kText : kSecondaryText);
             actionX += width + 18.0f;
         }
 
@@ -5775,6 +6079,9 @@ private:
     std::string notice_;
     std::chrono::steady_clock::time_point noticeUntil_{};
     bool noticePersistent_ = false;
+    int homeSlideFromFirst_ = 0;
+    int homeSlideToFirst_ = 0;
+    std::chrono::steady_clock::time_point homeSlideStarted_{};
 
     JellyfinSession session_;
     std::string pendingDeepLinkItemId_;
@@ -5785,7 +6092,7 @@ private:
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
-    ArtworkCache artwork_{12};
+    ArtworkCache artwork_{30};
     ArtworkCache profileArtwork_;
     ArtworkCache homeArtwork_{48};
     HomeImageDiskCache homeDiskCache_;
@@ -5842,6 +6149,7 @@ Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onNewLaunchIntent(actionValue, dataValue, queryValue);
 }
+
 
 extern "C" JNIEXPORT void JNICALL
 Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(

@@ -82,6 +82,7 @@ class HomeScreenState {
 public:
     void reset() {
         selections_.clear();
+        firstVisibleItems_.clear();
         row_ = 0;
         firstVisibleRow_ = 0;
         navIndex_ = 1;
@@ -112,14 +113,26 @@ public:
         firstVisibleRow_ = homeFirstVisibleRow(firstVisibleRow_, row_, totalRows, visibleRows);
     }
 
-    void setSelections(std::vector<int> selections) { selections_ = std::move(selections); }
-    void clearSelections() { selections_.clear(); }
-    void appendSelection(int selection) { selections_.push_back(selection); }
+    void setSelections(std::vector<int> selections) {
+        selections_ = std::move(selections);
+        firstVisibleItems_.assign(selections_.size(), 0);
+    }
+    void clearSelections() {
+        selections_.clear();
+        firstVisibleItems_.clear();
+    }
+    void appendSelection(int selection) {
+        selections_.push_back(selection);
+        firstVisibleItems_.push_back(0);
+    }
 
     void clampSelections(const std::vector<int>& itemCounts) {
         const size_t count = std::min(selections_.size(), itemCounts.size());
+        if (firstVisibleItems_.size() < selections_.size()) firstVisibleItems_.resize(selections_.size(), 0);
         for (size_t row = 0; row < count; ++row) {
             selections_[row] = itemCounts[row] <= 0 ? 0 : std::clamp(selections_[row], 0, itemCounts[row] - 1);
+            const int maxFirst = std::max(0, itemCounts[row] - 1);
+            firstVisibleItems_[row] = std::clamp(firstVisibleItems_[row], 0, maxFirst);
         }
     }
 
@@ -182,6 +195,21 @@ public:
         setSelection(row, selection(row, itemCount) + direction, itemCount);
     }
 
+    void updateItemViewport(int row, int itemCount, int visibleItems) {
+        if (row < 0 || row >= static_cast<int>(firstVisibleItems_.size()) || itemCount <= 0 || visibleItems <= 0) return;
+        const int maxFirst = std::max(0, itemCount - visibleItems);
+        int first = std::clamp(firstVisibleItems_[static_cast<size_t>(row)], 0, maxFirst);
+        const int selected = selection(row, itemCount);
+        if (selected < first) first = selected;
+        else if (selected >= first + visibleItems) first = selected - visibleItems + 1;
+        firstVisibleItems_[static_cast<size_t>(row)] = std::clamp(first, 0, maxFirst);
+    }
+
+    [[nodiscard]] int firstVisibleItem(int row, int itemCount, int visibleItems) const {
+        if (row < 0 || row >= static_cast<int>(firstVisibleItems_.size()) || itemCount <= 0 || visibleItems <= 0) return 0;
+        return std::clamp(firstVisibleItems_[static_cast<size_t>(row)], 0, std::max(0, itemCount - visibleItems));
+    }
+
     [[nodiscard]] int row() const { return row_; }
     [[nodiscard]] int firstVisibleRow() const { return firstVisibleRow_; }
     [[nodiscard]] int navIndex() const { return navIndex_; }
@@ -211,6 +239,7 @@ private:
     }
 
     std::vector<int> selections_;
+    std::vector<int> firstVisibleItems_;
     int row_ = 0;
     int firstVisibleRow_ = 0;
     int navIndex_ = 1;

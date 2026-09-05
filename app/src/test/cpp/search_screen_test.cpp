@@ -26,18 +26,37 @@ int main() {
 
     std::vector<JellyfinItem> results(7);
     for (int i = 0; i < 7; ++i) results[static_cast<size_t>(i)].id = std::to_string(i);
+    results[0].type = "Movie";
+    results[1].type = "Episode";
+    results[2].type = "Series";
+    results[3].type = "Episode";
+    results[4].type = "Movie";
+    results[5].type = "Episode";
+    results[6].type = "Series";
     assert(state.finishSearch("bro", std::move(results)));
     assert(!state.loading());
     assert(state.results().size() == 7);
+    assert(state.topLevelCount() == 4);
+    assert(state.rowItemCount(0) == 4);
+    assert(state.rowItemCount(1) == 3);
+    assert(state.results()[0].id == "0");
+    assert(state.results()[1].id == "2");
+    assert(state.results()[4].id == "1");
 
     state.moveSelection(1, 0, 5);
     assert(state.selection() == 1);
     state.moveSelection(0, 1, 5);
+    assert(state.selection() == 5);
+    assert(state.selectedRow() == 1);
+    state.moveSelection(1, 0, 5);
     assert(state.selection() == 6);
     state.moveSelection(1, 0, 5);
     assert(state.selection() == 6);
     state.moveSelection(-1, 0, 5);
     assert(state.selection() == 5);
+    state.moveSelection(0, -1, 5);
+    assert(state.selection() == 1);
+    assert(state.selectionOnFirstResultRow());
 
     state.setQuery("brook");
     state.setLoading(true);

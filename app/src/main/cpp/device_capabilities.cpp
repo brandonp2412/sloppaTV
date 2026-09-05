@@ -66,6 +66,39 @@ bool supportsVideoFormat(JNIEnv* env, jobject codecList, const char* mime, jint 
     return supported;
 }
 
+bool supportsAudioFormat(JNIEnv* env, jobject codecList, const char* mime, int sampleRate = 48000, int channels = 2) {
+    if (!env || !codecList || !mime) return false;
+    jclass formatClass = env->FindClass("android/media/MediaFormat");
+    jclass listClass = env->FindClass("android/media/MediaCodecList");
+    if (!formatClass || !listClass) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (formatClass) env->DeleteLocalRef(formatClass);
+        if (listClass) env->DeleteLocalRef(listClass);
+        return false;
+    }
+    jmethodID createAudioFormat = env->GetStaticMethodID(
+        formatClass, "createAudioFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;"
+    );
+    jmethodID findDecoder = env->GetMethodID(listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
+    if (!createAudioFormat || !findDecoder || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        env->DeleteLocalRef(formatClass);
+        env->DeleteLocalRef(listClass);
+        return false;
+    }
+    jstring jMime = env->NewStringUTF(mime);
+    jobject format = env->CallStaticObjectMethod(formatClass, createAudioFormat, jMime, sampleRate, channels);
+    env->DeleteLocalRef(jMime);
+    auto decoder = format ? static_cast<jstring>(env->CallObjectMethod(codecList, findDecoder, format)) : nullptr;
+    const bool supported = decoder && !env->ExceptionCheck();
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (decoder) env->DeleteLocalRef(decoder);
+    if (format) env->DeleteLocalRef(format);
+    env->DeleteLocalRef(formatClass);
+    env->DeleteLocalRef(listClass);
+    return supported;
+}
+
 void queryDisplayHdr(JNIEnv* env, jobject activity, DeviceCodecSupport& result) {
     if (!env || !activity) return;
     jclass activityClass = env->GetObjectClass(activity);
@@ -123,6 +156,7 @@ std::vector<std::string> DeviceCodecSupport::jellyfinVideoCodecs() const {
     if (vp9) codecs.emplace_back("vp9");
     if (av1) codecs.emplace_back("av1");
     if (mpeg2) codecs.emplace_back("mpeg2video");
+    if (mpeg4) codecs.emplace_back("mpeg4");
     if (vc1) codecs.emplace_back("vc1");
     return codecs;
 }
@@ -132,6 +166,8 @@ std::vector<std::string> DeviceCodecSupport::jellyfinAudioCodecs(int maxAudioCha
         AudioCodecCapabilities{
             .aac = aac,
             .mp3 = mp3,
+            .mp2 = mp2,
+            .pcm = pcm,
             .ac3 = ac3,
             .eac3 = eac3,
             .dts = dts,
@@ -154,6 +190,8 @@ std::vector<std::string> DeviceCodecSupport::jellyfinTranscodingAudioCodecs(int 
         AudioCodecCapabilities{
             .aac = aac,
             .mp3 = mp3,
+            .mp2 = mp2,
+            .pcm = pcm,
             .ac3 = ac3,
             .eac3 = eac3,
             .dts = dts,
@@ -267,8 +305,6 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
         maxResolution("video/av01", result.maxAv1Width, result.maxAv1Height);
     }
     if (profileLevelClass) env->DeleteLocalRef(profileLevelClass);
-    if (list) env->DeleteLocalRef(list);
-    env->DeleteLocalRef(listClass);
 
     result.h264 = has(decoderTypes, "video/avc");
     result.hevc = has(decoderTypes, "video/hevc");
@@ -276,10 +312,13 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     result.vp9 = has(decoderTypes, "video/x-vnd.on2.vp9");
     result.av1 = has(decoderTypes, "video/av01");
     result.mpeg2 = has(decoderTypes, "video/mpeg2");
+    result.mpeg4 = has(decoderTypes, "video/mp4v-es");
     result.vc1 = has(decoderTypes, "video/wvc1") || has(decoderTypes, "video/vc1");
 
     result.aac = has(decoderTypes, "audio/mp4a-latm");
     result.mp3 = has(decoderTypes, "audio/mpeg");
+    result.mp2 = has(decoderTypes, "audio/mpeg-l2") || supportsAudioFormat(env, list, "audio/mpeg-L2");
+    result.pcm = has(decoderTypes, "audio/raw");
     result.ac3 = has(decoderTypes, "audio/ac3");
     result.eac3 = has(decoderTypes, "audio/eac3") || has(decoderTypes, "audio/eac3-joc");
     result.dts = has(decoderTypes, "audio/vnd.dts") || has(decoderTypes, "audio/vnd.dts.hd");
@@ -287,6 +326,9 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     result.flac = has(decoderTypes, "audio/flac");
     result.opus = has(decoderTypes, "audio/opus");
     result.vorbis = has(decoderTypes, "audio/vorbis");
+
+    if (list) env->DeleteLocalRef(list);
+    env->DeleteLocalRef(listClass);
 
     queryDisplayHdr(env, activity, result);
 
@@ -330,8 +372,9 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
-        "Detected %zu video/%zu audio; H264 High10=%d HEVC Main10=%d AV1 Main10=%d; max H264=%dx%d HEVC=%dx%d AV1=%dx%d; HDR10=%d HDR10+=%d DV=%d HLG=%d; audioOut=%dch direct(ac3=%d eac3=%d dts=%d dtshd=%d truehd=%d)",
+        "Detected %zu video/%zu audio; MPEG4=%d MP2=%d PCM=%d; H264 High10=%d HEVC Main10=%d AV1 Main10=%d; max H264=%dx%d HEVC=%dx%d AV1=%dx%d; HDR10=%d HDR10+=%d DV=%d HLG=%d; audioOut=%dch direct(ac3=%d eac3=%d dts=%d dtshd=%d truehd=%d)",
         videos.size(), audios.size(),
+        result.mpeg4, result.mp2, result.pcm,
         result.h264High10, result.hevcMain10, result.av1Main10,
         result.maxH264Width, result.maxH264Height,
         result.maxHevcWidth, result.maxHevcHeight,

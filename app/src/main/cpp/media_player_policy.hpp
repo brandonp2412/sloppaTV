@@ -33,6 +33,7 @@ struct PlaybackOverrides {
     int maxHevcLevel = 0;
     HdrOverrideMode hdrMode = HdrOverrideMode::Auto;
     bool forceTranscode = false;
+    bool forceServerStream = false;
 };
 
 struct PlaybackBufferDurations {
@@ -136,17 +137,38 @@ inline std::string serverStreamVideoCodecList(const std::vector<std::string>& di
     return result.empty() ? "h264" : result;
 }
 
+constexpr bool postSeekPositionMatchesTarget(
+    int observedPositionMs,
+    int targetPositionMs,
+    int toleranceMs = 1500
+) {
+    if (targetPositionMs < 0) return true;
+    const int64_t difference = static_cast<int64_t>(observedPositionMs) - targetPositionMs;
+    const int64_t absoluteDifference = difference < 0 ? -difference : difference;
+    return absoluteDifference <= std::max(0, toleranceMs);
+}
+
 constexpr bool shouldAcceptPostSeekTelemetry(
     int observedPositionMs,
     int targetPositionMs,
     int64_t elapsedSinceSeekMs,
     int toleranceMs = 1500,
-    int holdMs = 750
+    int holdMs = 5000
 ) {
-    if (targetPositionMs < 0) return true;
-    const int64_t difference = static_cast<int64_t>(observedPositionMs) - targetPositionMs;
-    const int64_t absoluteDifference = difference < 0 ? -difference : difference;
-    return absoluteDifference <= std::max(0, toleranceMs) || elapsedSinceSeekMs >= std::max(0, holdMs);
+    return postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs, toleranceMs)
+        || elapsedSinceSeekMs >= std::max(0, holdMs);
+}
+
+constexpr bool postSeekPositionFailed(
+    int observedPositionMs,
+    int targetPositionMs,
+    int64_t elapsedSinceSeekMs,
+    int toleranceMs = 1500,
+    int failureMs = 1500
+) {
+    return targetPositionMs >= 0
+        && elapsedSinceSeekMs >= std::max(0, failureMs)
+        && !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs, toleranceMs);
 }
 
 constexpr int clampSeekPositionMs(int64_t positionMs) {
@@ -168,7 +190,7 @@ constexpr int initialPlayerSeekMs(int64_t desiredStartTicks) {
 }
 
 constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
-    if (codec == "srt" || codec == "subrip" || codec == "vtt" || codec == "webvtt") {
+    if (codec == "srt" || codec == "subrip" || codec == "vtt" || codec == "webvtt" || codec == "mov_text") {
         return SubtitleStrategy::ClientText;
     }
     if (codec == "ass" || codec == "ssa") return SubtitleStrategy::ClientStyled;

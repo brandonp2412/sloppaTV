@@ -57,6 +57,24 @@ int main() {
     assert(state.selection(1, 4) == 1);
     state.moveSelection(1, 1, 4);
     assert(state.selection(1, 4) == 2);
+
+    state.setSelections({0});
+    for (int i = 0; i < 4; ++i) {
+        state.moveSelection(0, 1, 8);
+        state.updateItemViewport(0, 8, 5);
+    }
+    assert(state.selection(0, 8) == 4);
+    assert(state.firstVisibleItem(0, 8, 5) == 0);
+    state.moveSelection(0, 1, 8);
+    state.updateItemViewport(0, 8, 5);
+    assert(state.selection(0, 8) == 5);
+    assert(state.firstVisibleItem(0, 8, 5) == 1);
+    state.moveSelection(0, -1, 8);
+    state.updateItemViewport(0, 8, 5);
+    assert(state.selection(0, 8) == 4);
+    assert(state.firstVisibleItem(0, 8, 5) == 1);
+
+    state.setSelections({0, 1, 2});
     state.setRow(2);
     state.updateViewport(5);
     assert(state.firstVisibleRow() == 1);

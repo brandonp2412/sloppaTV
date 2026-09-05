@@ -32,6 +32,9 @@ public:
         searchQuery_.clear();
         searchFocused_ = false;
         firstVisible_ = 0;
+        subtitleLanguagePicker_ = false;
+        subtitleLanguageSelection_ = 0;
+        subtitleLanguageFirstVisible_ = 0;
         selectFirstMatch();
     }
 
@@ -88,6 +91,28 @@ public:
     [[nodiscard]] const std::string& searchQuery() const { return searchQuery_; }
     [[nodiscard]] bool searchFocused() const { return searchFocused_; }
     [[nodiscard]] bool advanced() const { return advanced_; }
+    [[nodiscard]] bool subtitleLanguagePicker() const { return subtitleLanguagePicker_; }
+    [[nodiscard]] int subtitleLanguageSelection() const { return subtitleLanguageSelection_; }
+    [[nodiscard]] int subtitleLanguageFirstVisible() const { return subtitleLanguageFirstVisible_; }
+
+    void openSubtitleLanguagePicker() {
+        subtitleLanguagePicker_ = true;
+        subtitleLanguageSelection_ = 0;
+        subtitleLanguageFirstVisible_ = 0;
+    }
+
+    void closeSubtitleLanguagePicker() { subtitleLanguagePicker_ = false; }
+
+    void moveSubtitleLanguage(int direction) {
+        constexpr int itemCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
+        subtitleLanguageSelection_ = std::clamp(subtitleLanguageSelection_ + (direction >= 0 ? 1 : -1), 0, itemCount - 1);
+        constexpr int visibleRows = 8;
+        if (subtitleLanguageSelection_ < subtitleLanguageFirstVisible_) subtitleLanguageFirstVisible_ = subtitleLanguageSelection_;
+        if (subtitleLanguageSelection_ >= subtitleLanguageFirstVisible_ + visibleRows) {
+            subtitleLanguageFirstVisible_ = subtitleLanguageSelection_ - visibleRows + 1;
+        }
+        subtitleLanguageFirstVisible_ = std::clamp(subtitleLanguageFirstVisible_, 0, std::max(0, itemCount - visibleRows));
+    }
 
 private:
     int selectedPosition(const std::vector<int>& current) const {
@@ -112,6 +137,9 @@ private:
     std::string searchQuery_;
     bool searchFocused_ = false;
     bool advanced_ = false;
+    bool subtitleLanguagePicker_ = false;
+    int subtitleLanguageSelection_ = 0;
+    int subtitleLanguageFirstVisible_ = 0;
 };
 
 template <size_t N>
@@ -124,6 +152,17 @@ inline void stepSettingChoice(int& value, const std::array<int, N>& choices, int
 
 inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, int direction) {
     direction = direction >= 0 ? 1 : -1;
+    const auto stepLanguage = [&](std::string& language) {
+        const std::string normalized = normalizeSubtitleLanguage(language);
+        auto current = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(), [&](const auto& option) {
+            return normalized == option.code;
+        });
+        int index = current == kSubtitleLanguageOptions.end()
+            ? 0
+            : static_cast<int>(std::distance(kSubtitleLanguageOptions.begin(), current));
+        index = std::clamp(index + direction, 0, static_cast<int>(kSubtitleLanguageOptions.size()) - 1);
+        language = kSubtitleLanguageOptions[static_cast<size_t>(index)].code;
+    };
     switch (selection) {
         case 0: {
             static constexpr std::array<int, 6> choices{20, 40, 80, 120, 160, 200};
@@ -205,12 +244,33 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
         }
         case 21:
             return SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer;
+        case kTimeFormatSetting:
+            settings.clock24Hour = !settings.clock24Hour;
+            return SettingChangeEffect::Save;
+        case kAutoSubtitlesSetting:
+            settings.autoSubtitles = !settings.autoSubtitles;
+            return SettingChangeEffect::Save;
+        case kAutoSubtitleLanguageSetting:
+            stepLanguage(settings.autoSubtitleLanguage);
+            return SettingChangeEffect::Save;
+        case kAutoSubtitleSourceSetting: {
+            std::vector<std::string> choices{"any", "different"};
+            for (const auto& option : kSubtitleLanguageOptions) choices.emplace_back(option.code);
+            const std::string normalized = settings.autoSubtitleSourceLanguage == "any" || settings.autoSubtitleSourceLanguage == "different"
+                ? settings.autoSubtitleSourceLanguage
+                : normalizeSubtitleLanguage(settings.autoSubtitleSourceLanguage);
+            auto current = std::find(choices.begin(), choices.end(), normalized);
+            int index = current == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), current));
+            index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
+            settings.autoSubtitleSourceLanguage = choices[static_cast<size_t>(index)];
+            return SettingChangeEffect::Save;
+        }
         default:
             return SettingChangeEffect::None;
     }
 }
 
-inline std::array<std::string, 25> settingsValues(
+inline std::array<std::string, 30> settingsValues(
     const AppSettings& settings,
     int maxAudioOutputChannels,
     std::string externalPlayer,
@@ -244,6 +304,11 @@ inline std::array<std::string, 25> settingsValues(
         std::move(externalPlayer),
         "DEVICE / SERVER / PLAYBACK",
         username.empty() ? "CURRENT USER" : std::move(username),
+        subtitleLanguageSummary(settings),
+        clockFormatName(settings.clock24Hour),
+        settings.autoSubtitles ? "ON" : "OFF",
+        subtitleLanguageLabel(settings.autoSubtitleLanguage),
+        autoSubtitleSourceName(settings),
         advanced ? "SHOW COMMON" : "SHOW TECHNICAL",
     };
 }

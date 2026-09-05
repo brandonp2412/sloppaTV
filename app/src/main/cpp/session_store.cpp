@@ -1,4 +1,5 @@
 #include "session_store.hpp"
+#include "subtitle_policy.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -41,14 +42,36 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.refreshRateSwitching = saved.value("refreshRateSwitching", settings.refreshRateSwitching);
     settings.showWatchedIndicators = saved.value("showWatchedIndicators", settings.showWatchedIndicators);
     settings.showClock = saved.value("showClock", settings.showClock);
+    settings.clock24Hour = saved.value("clock24Hour", settings.clock24Hour);
     if (saved.contains("backdropMode")) {
         settings.backdropMode = std::clamp(saved.value("backdropMode", settings.backdropMode), 0, 2);
     } else {
         settings.backdropMode = saved.value("showBackdrops", true) ? 1 : 0;
     }
-    settings.subtitleSize = std::clamp(saved.value("subtitleSize", settings.subtitleSize), 0, 2);
-    settings.subtitleBackground = saved.value("subtitleBackground", settings.subtitleBackground);
+    const int subtitleStyleDefaultsVersion = saved.value("subtitleStyleDefaultsVersion", 0);
+    settings.subtitleSize = subtitleStyleDefaultsVersion < 1
+        ? 1
+        : std::clamp(saved.value("subtitleSize", settings.subtitleSize), 0, 2);
+    settings.subtitleBackground = subtitleStyleDefaultsVersion < 1
+        ? false
+        : saved.value("subtitleBackground", settings.subtitleBackground);
     settings.subtitlePosition = std::clamp(saved.value("subtitlePosition", settings.subtitlePosition), 0, 2);
+    settings.autoSubtitles = saved.value("autoSubtitles", settings.autoSubtitles);
+    settings.autoSubtitleLanguage = normalizeSubtitleLanguage(saved.value("autoSubtitleLanguage", settings.autoSubtitleLanguage));
+    settings.autoSubtitleSourceLanguage = saved.value("autoSubtitleSourceLanguage", settings.autoSubtitleSourceLanguage);
+    if (settings.autoSubtitleSourceLanguage != "any" && settings.autoSubtitleSourceLanguage != "different") {
+        settings.autoSubtitleSourceLanguage = normalizeSubtitleLanguage(settings.autoSubtitleSourceLanguage);
+    }
+    settings.subtitleLanguages.clear();
+    if (saved.contains("subtitleLanguages") && saved["subtitleLanguages"].is_array()) {
+        for (const auto& language : saved["subtitleLanguages"]) {
+            if (!language.is_string()) continue;
+            const std::string normalized = normalizeSubtitleLanguage(language.get<std::string>());
+            if (!normalized.empty() && std::find(settings.subtitleLanguages.begin(), settings.subtitleLanguages.end(), normalized) == settings.subtitleLanguages.end()) {
+                settings.subtitleLanguages.push_back(normalized);
+            }
+        }
+    }
     const int savedMaxAudioChannels = saved.value("maxAudioChannels", settings.maxAudioChannels);
     settings.maxAudioChannels = savedMaxAudioChannels <= 2 ? 2 : 8;
     settings.avcLevelOverride = saved.value("avcLevelOverride", settings.avcLevelOverride);
@@ -73,10 +96,16 @@ json writeSettings(const AppSettings& settings) {
         {"refreshRateSwitching", settings.refreshRateSwitching},
         {"showWatchedIndicators", settings.showWatchedIndicators},
         {"showClock", settings.showClock},
+        {"clock24Hour", settings.clock24Hour},
         {"backdropMode", settings.backdropMode},
+        {"subtitleStyleDefaultsVersion", 1},
         {"subtitleSize", settings.subtitleSize},
         {"subtitleBackground", settings.subtitleBackground},
         {"subtitlePosition", settings.subtitlePosition},
+        {"subtitleLanguages", settings.subtitleLanguages},
+        {"autoSubtitles", settings.autoSubtitles},
+        {"autoSubtitleLanguage", settings.autoSubtitleLanguage},
+        {"autoSubtitleSourceLanguage", settings.autoSubtitleSourceLanguage},
         {"maxAudioChannels", settings.maxAudioChannels},
         {"avcLevelOverride", settings.avcLevelOverride},
         {"hevcLevelOverride", settings.hevcLevelOverride},

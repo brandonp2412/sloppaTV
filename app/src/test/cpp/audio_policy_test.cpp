@@ -20,6 +20,8 @@ int main() {
     AudioCodecCapabilities codecs{
         .aac = true,
         .mp3 = true,
+        .mp2 = true,
+        .pcm = true,
         .ac3 = true,
         .eac3 = true,
         .dts = true,
@@ -32,6 +34,8 @@ int main() {
     const auto stereo = advertisedAudioCodecs(codecs, 2);
     assert(hasCodec(stereo, "aac"));
     assert(hasCodec(stereo, "mp3"));
+    assert(hasCodec(stereo, "mp2"));
+    assert(hasCodec(stereo, "pcm_s16le"));
     assert(!hasCodec(stereo, "ac3"));
     assert(!hasCodec(stereo, "eac3"));
     assert(!hasCodec(stereo, "dts"));
@@ -54,7 +58,10 @@ int main() {
     assert(hasCodec(surround, "truehd"));
     assert(hasCodec(surround, "flac"));
     assert(hasCodec(surround, "opus"));
+    assert(hasCodec(surround, "mp2"));
+    assert(hasCodec(surround, "pcm_s16le"));
     assert(audioStreamCopyAllowed(surround, "ac3", 6, 8));
+    assert(audioStreamCopyAllowed(surround, "pcm_s16le", 6, 8));
     assert(!audioStreamCopyAllowed(surround, "ac3", 8, 6));
     const auto surroundTranscode = transcodingAudioCodecs(codecs, 8);
     assert(hasCodec(surroundTranscode, "aac"));

@@ -167,11 +167,11 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(
 }
 
 inline PlaybackRequestFlags playbackRequestFlags(const PlaybackProfilePlan& plan, PlaybackOverrides overrides) {
-    const bool directAllowed = !overrides.forceTranscode && plan.directVideoSupported && !plan.serverSubtitle;
+    const bool streamCopyAllowed = !overrides.forceTranscode && plan.directVideoSupported && !plan.serverSubtitle;
     return {
-        .enableDirectPlay = directAllowed,
-        .enableDirectStream = directAllowed,
-        .allowVideoStreamCopy = directAllowed,
+        .enableDirectPlay = streamCopyAllowed && !overrides.forceServerStream,
+        .enableDirectStream = streamCopyAllowed,
+        .allowVideoStreamCopy = streamCopyAllowed,
         .allowAudioStreamCopy = plan.allowAudioStreamCopy,
     };
 }
@@ -180,7 +180,9 @@ inline PlaybackServerRoute choosePlaybackServerRoute(
     const PlaybackServerOfferInput& offer,
     PlaybackOverrides overrides
 ) {
-    if (!overrides.forceTranscode && offer.supportsDirectPlay) return PlaybackServerRoute::DirectPlay;
+    if (!overrides.forceTranscode && !overrides.forceServerStream && offer.supportsDirectPlay) {
+        return PlaybackServerRoute::DirectPlay;
+    }
     if (offer.transcodingUrl.empty()) return PlaybackServerRoute::Unavailable;
     if (overrides.forceTranscode) {
         return offer.supportsTranscoding ? PlaybackServerRoute::Transcode : PlaybackServerRoute::Unavailable;

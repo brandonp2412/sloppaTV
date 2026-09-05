@@ -40,10 +40,22 @@ int main() {
     assert(state.pendingSeekTargetMs() == 30'000);
     state.applyObservedPosition(30'500, now + 400ms);
     assert(state.positionMs() == 30'500);
+    assert(state.pendingSeekTargetMs() == 30'000);
+    state.applyObservedPosition(30'800, now + 600ms);
+    assert(state.positionMs() == 30'800);
     assert(state.pendingSeekTargetMs() == -1);
+    assert(state.recentSeekTargetMs() == 30'000);
+    assert(!state.recentSeekAppearsFailed(31'000, now + 700ms));
+    assert(state.recentSeekAppearsFailed(0, now + 700ms));
 
     state.beginSeek(40'000, now);
     state.applyObservedPosition(15'000, now + 800ms);
+    assert(state.positionMs() == 40'000);
+    assert(state.pendingSeekTargetMs() == 40'000);
+    assert(state.recentSeekAppearsFailed(15'000, now + 800ms));
+    assert(!state.pendingSeekAppearsFailed(15'000, now + 1499ms));
+    assert(state.pendingSeekAppearsFailed(15'000, now + 1500ms));
+    state.applyObservedPosition(15'000, now + 5s);
     assert(state.positionMs() == 15'000);
     assert(state.pendingSeekTargetMs() == -1);
 
@@ -66,6 +78,7 @@ int main() {
     assert(state.positionMs() == 0);
     assert(state.durationMs() == 0);
     assert(state.pendingSeekTargetMs() == -1);
+    assert(state.recentSeekTargetMs() == -1);
     assert(!state.windowRestorePending());
     assert(!state.resumeOnFocusRequested());
 

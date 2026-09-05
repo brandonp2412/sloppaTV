@@ -35,6 +35,7 @@ std::string buildPlaybackInfoRequestBody(
         {{"Format", "webvtt"}, {"Method", "External"}},
         {{"Format", "srt"}, {"Method", "External"}},
         {{"Format", "subrip"}, {"Method", "External"}},
+        {{"Format", "mov_text"}, {"Method", "External"}},
         {{"Format", "ass"}, {"Method", "External"}},
         {{"Format", "ass"}, {"Method", "Encode"}},
         {{"Format", "ssa"}, {"Method", "External"}},

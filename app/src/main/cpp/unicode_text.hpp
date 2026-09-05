@@ -5,13 +5,14 @@
 #include <string_view>
 
 inline uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
+    constexpr uint32_t replacement = 0xFFFDu;
     const auto first = static_cast<unsigned char>(text[index++]);
     if (first < 0x80) return first;
     auto continuation = [&](int count, uint32_t value) -> uint32_t {
         for (int offset = 0; offset < count; ++offset) {
-            if (index >= text.size()) return '?';
+            if (index >= text.size()) return replacement;
             const auto byte = static_cast<unsigned char>(text[index]);
-            if ((byte & 0xC0u) != 0x80u) return '?';
+            if ((byte & 0xC0u) != 0x80u) return replacement;
             ++index;
             value = (value << 6u) | (byte & 0x3Fu);
         }
@@ -20,10 +21,10 @@ inline uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
     if ((first & 0xE0u) == 0xC0u) return continuation(1, first & 0x1Fu);
     if ((first & 0xF0u) == 0xE0u) return continuation(2, first & 0x0Fu);
     if ((first & 0xF8u) == 0xF0u) return continuation(3, first & 0x07u);
-    return '?';
+    return replacement;
 }
 
-inline void appendDisplayCodePoint(std::string& output, uint32_t codePoint) {
+inline void appendDisplayCodePoint(std::string& output, uint32_t codePoint, char unsupported = '?') {
     if (codePoint < 0x80u) {
         output.push_back(static_cast<char>(codePoint));
         return;
@@ -87,14 +88,16 @@ inline void appendDisplayCodePoint(std::string& output, uint32_t codePoint) {
         case 0x2264: output += "<="; return;
         case 0x2265: output += ">="; return;
         case 0x266A: case 0x266B: output.push_back('~'); return;
-        default: output.push_back('?'); return;
+        default:
+            if (unsupported != '\0') output.push_back(unsupported);
+            return;
     }
 }
 
-inline std::string displayText(std::string_view text) {
+inline std::string displayText(std::string_view text, char unsupported = '?') {
     std::string output;
     output.reserve(text.size());
     size_t index = 0;
-    while (index < text.size()) appendDisplayCodePoint(output, nextUtf8CodePoint(text, index));
+    while (index < text.size()) appendDisplayCodePoint(output, nextUtf8CodePoint(text, index), unsupported);
     return output;
 }
