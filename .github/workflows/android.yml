@@ -160,3 +160,41 @@ jobs:
           path: artifacts/ci-screenshots
           if-no-files-found: warn
           retention-days: 14
+
+  publish-screenshots:
+    name: Attach Android TV screenshots to the release source
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: screenshots
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out the tested source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: true
+
+      - name: Download generated screenshots
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sloppaTV-screenshots
+          path: artifacts/ci-screenshots
+
+      - name: Update Play Store listing assets
+        run: python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots
+
+      - name: Commit updated screenshot assets
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- fastlane/metadata/android/en-US/images/tvScreenshots; then
+            echo "Android TV screenshots are already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add fastlane/metadata/android/en-US/images/tvScreenshots
+          git commit -m "Update Android TV screenshots [skip ci]"
+          git push origin "HEAD:main"

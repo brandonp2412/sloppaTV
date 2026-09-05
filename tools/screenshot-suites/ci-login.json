@@ -2,6 +2,16 @@
   "name": "ci-login",
   "steps": [
     {"action": "restart", "wait_seconds": 3},
-    {"action": "capture", "name": "01-login"}
+    {"action": "capture", "name": "01-login"},
+    {"action": "key", "key": "DPAD_DOWN", "wait_seconds": 1},
+    {"action": "capture", "name": "02-login-username"},
+    {"action": "key", "key": "DPAD_DOWN", "wait_seconds": 1},
+    {"action": "capture", "name": "03-login-password"},
+    {"action": "key", "key": "DPAD_DOWN", "wait_seconds": 1},
+    {"action": "capture", "name": "04-login-actions"},
+    {"action": "key", "key": "DPAD_RIGHT", "wait_seconds": 1},
+    {"action": "capture", "name": "05-login-quick-connect"},
+    {"action": "key", "key": "DPAD_RIGHT", "wait_seconds": 1},
+    {"action": "capture", "name": "06-login-discover"}
   ]
 }

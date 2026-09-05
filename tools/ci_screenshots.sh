@@ -41,7 +41,15 @@ timeout --foreground -k 15 180 python3 "$SCRIPT_DIR/waydroid_e2e.py" \
     --target android-tv-emulator \
     screenshots --suite "$SCREENSHOT_SUITE"
 
-test -s "$SCREENSHOT_DIR/01-login.png"
+for screenshot in \
+    01-login \
+    02-login-username \
+    03-login-password \
+    04-login-actions \
+    05-login-quick-connect \
+    06-login-discover; do
+    test -s "$SCREENSHOT_DIR/$screenshot.png"
+done
 test -s "$SCREENSHOT_DIR/screenshots.json"
 trap - EXIT
 echo "Screenshot suite completed: $SCREENSHOT_DIR"

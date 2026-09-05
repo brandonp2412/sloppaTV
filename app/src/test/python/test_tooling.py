@@ -133,6 +133,28 @@ class PlaybackReportToolingTest(unittest.TestCase):
 
 
 class WaydroidToolingTest(unittest.TestCase):
+    def test_ci_screenshot_suite_captures_six_store_listing_states(self) -> None:
+        suite = json.loads((ROOT / "tools" / "screenshot-suites" / "ci-login.json").read_text(encoding="utf-8"))
+        captures = [step["name"] for step in suite["steps"] if step["action"] == "capture"]
+        self.assertEqual(
+            captures,
+            [
+                "01-login",
+                "02-login-username",
+                "03-login-password",
+                "04-login-actions",
+                "05-login-quick-connect",
+                "06-login-discover",
+            ],
+        )
+
+    def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
+        self.assertIn("publish-screenshots:", workflow)
+        self.assertIn("needs: screenshots", workflow)
+        self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
+        self.assertIn("git commit -m \"Update Android TV screenshots [skip ci]\"", workflow)
+
     def test_target_model_guard_requires_explicit_physical_target(self) -> None:
         self.assertTrue(waydroid_e2e.model_matches_target("WayDroid x86_64", "waydroid"))
         self.assertFalse(waydroid_e2e.model_matches_target("Google TV Streamer", "waydroid"))
