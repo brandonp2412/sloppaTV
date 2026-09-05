@@ -25,6 +25,7 @@ public:
         const std::string& title,
         int positionMs,
         const std::string& subtitleUrl,
+        const std::string& skipSegmentsJson,
         std::string& error
     );
     [[nodiscard]] std::optional<ExternalPlayerResult> takeResult();

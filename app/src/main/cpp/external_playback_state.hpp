@@ -12,6 +12,7 @@ struct ExternalPlaybackLaunch {
     ExternalPlayerApp player;
     std::string url;
     std::string subtitleUrl;
+    std::string skipSegmentsJson;
 };
 
 class ExternalPlaybackState {
