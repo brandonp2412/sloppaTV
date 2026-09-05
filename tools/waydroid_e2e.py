@@ -60,8 +60,23 @@ def model_matches_target(model: str, target: str) -> bool:
         return model.strip() == "Google TV Streamer"
     if target == "android-tv-emulator":
         normalized = model.strip().lower()
-        return normalized.startswith("sdk_") or "aosp tv" in normalized
+        return normalized.startswith("sdk_") or "android tv" in normalized or "aosp tv" in normalized
     return False
+
+
+def characteristics_match_target(characteristics: str, target: str) -> bool:
+    values = {value.strip().lower() for value in characteristics.split(",") if value.strip()}
+    if target == "android-tv-emulator":
+        return "tv" in values
+    return True
+
+
+def foreground_is_package(activity_dump: str, package: str) -> bool:
+    return any(
+        package in line
+        for line in activity_dump.splitlines()
+        if "ResumedActivity" in line or "topResumedActivity" in line
+    )
 
 
 def power_state_is_awake(output: str) -> bool:
@@ -85,6 +100,11 @@ def verify_target(target: str) -> None:
     model = adb("shell", "getprop", "ro.product.model", capture=True).strip()
     if not model_matches_target(model, target):
         raise SystemExit(f"Refusing device {SERIAL}: model is {model!r}, expected target {target!r}")
+    characteristics = adb("shell", "getprop", "ro.build.characteristics", capture=True).strip()
+    if not characteristics_match_target(characteristics, target):
+        raise SystemExit(
+            f"Refusing device {SERIAL}: characteristics are {characteristics!r}, expected target {target!r}"
+        )
     size = adb("shell", "wm", "size", capture=True)
     if "1920x1080" not in size:
         raise SystemExit(f"Target is not configured for a 1920x1080 UI surface: {size}")
@@ -125,6 +145,10 @@ def require_playback_session() -> None:
 
 
 def capture(name: str) -> Path:
+    require_running()
+    activity_dump = adb("shell", "dumpsys", "activity", "activities", capture=True, timeout=60.0)
+    if not foreground_is_package(activity_dump, PACKAGE):
+        raise RuntimeError(f"{PACKAGE} is not the foreground activity; refusing to capture {name}")
     remote = f"/sdcard/{name}.png"
     local = ARTIFACTS / f"{name}.png"
     adb("shell", "screencap", "-p", remote)
@@ -199,6 +223,9 @@ def screenshot_suite(path: Path) -> Path:
             time.sleep(wait_seconds)
     if not screenshots:
         raise RuntimeError("screenshot suite produced no screenshots")
+    hashes = [str(screenshot["sha256"]) for screenshot in screenshots]
+    if len(set(hashes)) != len(hashes):
+        raise RuntimeError("screenshot suite produced duplicate images; refusing to publish a repeated screen")
     manifest = {
         "suite": suite["name"],
         "captured_at": datetime.now(timezone.utc).isoformat(),

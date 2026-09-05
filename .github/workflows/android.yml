@@ -141,8 +141,8 @@ jobs:
       - name: Generate screenshots
         uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
-          api-level: 35
-          target: google_apis
+          api-level: 36
+          target: android-tv
           arch: x86_64
           profile: tv_1080p
           emulator-port: 5554

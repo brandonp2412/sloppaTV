@@ -23,6 +23,7 @@ fi
 
 diagnostics() {
     local status=$?
+    adb -s "$ANDROID_SERIAL" reverse --remove tcp:80 2>/dev/null || true
     if [[ -n "${fixture_pid:-}" ]]; then kill "$fixture_pid" 2>/dev/null || true; fi
     if (( status != 0 )); then
         adb -s "$ANDROID_SERIAL" logcat -d -t 300 >&2 || true
@@ -36,9 +37,24 @@ mkdir -p "$SCREENSHOT_DIR"
 find "$SCREENSHOT_DIR" -maxdepth 1 -type f -delete
 python3 "$SCRIPT_DIR/screenshot_fixture_server.py" >"$SCREENSHOT_DIR/fixture-server.log" 2>&1 &
 fixture_pid=$!
+fixture_ready=0
+for _ in {1..50}; do
+    if curl --fail --silent --show-error http://127.0.0.1:18096/System/Info/Public >/dev/null 2>&1; then
+        fixture_ready=1
+        break
+    fi
+    sleep 0.1
+done
+if (( fixture_ready == 0 )); then
+    echo "Screenshot fixture server did not become ready" >&2
+    exit 1
+fi
 
 adb -s "$ANDROID_SERIAL" install -r "$SLOPPATV_APK"
 adb -s "$ANDROID_SERIAL" shell wm size 1920x1080
+# Route the emulator's loopback HTTP port to the host fixture. This avoids
+# depending on emulator-specific host aliases and keeps URL entry deterministic.
+adb -s "$ANDROID_SERIAL" reverse tcp:80 tcp:18096
 timeout --foreground -k 15 180 python3 "$SCRIPT_DIR/waydroid_e2e.py" \
     --serial "$ANDROID_SERIAL" \
     --target android-tv-emulator \
@@ -56,6 +72,9 @@ for screenshot in \
     test -s "$SCREENSHOT_DIR/$screenshot.png"
 done
 test -s "$SCREENSHOT_DIR/screenshots.json"
+grep -Fq 'POST /Users/AuthenticateByName' "$SCREENSHOT_DIR/fixture-server.log"
+grep -Fq 'GET /Users/fixture-user/Views' "$SCREENSHOT_DIR/fixture-server.log"
 trap - EXIT
+adb -s "$ANDROID_SERIAL" reverse --remove tcp:80 2>/dev/null || true
 kill "$fixture_pid" 2>/dev/null || true
 echo "Screenshot suite completed: $SCREENSHOT_DIR"
