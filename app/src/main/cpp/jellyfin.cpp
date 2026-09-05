@@ -70,7 +70,7 @@ void retainScopedVideoItems(std::vector<JellyfinItem>& items) {
         return !isScopedVideoItem(item);
     }), items.end());
 }
-}  // namespace
+}
 
 JellyfinClient::JellyfinClient(JavaVM* vm, jobject activity) : http_(vm), vm_(vm) {
     if (!vm_ || !activity) return;
@@ -431,9 +431,6 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         result.value.rows.push_back({"My Media", result.value.views});
     }
 
-    // Home cards only need Jellyfin's base item/user/image metadata. Overview and
-    // MediaSources are fetched on demand by Details/playback; requesting them here
-    // multiplies Home payload size for no visible benefit.
     const std::string common =
         "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
         "&EnableTotalRecordCount=false";

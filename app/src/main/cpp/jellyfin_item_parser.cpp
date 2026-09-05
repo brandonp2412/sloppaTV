@@ -165,7 +165,6 @@ std::vector<JellyfinItem> parseJellyfinItems(const json& values) {
             JellyfinItem item = parseJellyfinItem(value);
             if (!item.id.empty()) items.push_back(std::move(item));
         } catch (const json::exception&) {
-            // A malformed library entry should not discard the rest of a valid page.
         }
     }
     return items;

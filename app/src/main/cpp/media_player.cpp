@@ -33,7 +33,7 @@ jclass objectClass(JNIEnv* env, jobject object) {
 int boundedInt(jlong value) {
     return static_cast<int>(std::clamp<jlong>(value, 0, std::numeric_limits<int>::max()));
 }
-}  // namespace
+}
 
 NativeMediaPlayer::NativeMediaPlayer(JavaVM* vm, jobject activity) : vm_(vm) {
     if (!vm_ || !activity) return;

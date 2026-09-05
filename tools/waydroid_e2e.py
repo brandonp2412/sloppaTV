@@ -210,9 +210,6 @@ def screenshot_suite(path: Path) -> Path:
 
 
 def roi_diff(a: Path, b: Path) -> float:
-    # Pillow is only required when image evidence is actually captured. Keeping
-    # this import local lets host-policy CI test the non-image harness helpers
-    # without adding an unrelated Python dependency to the Android build job.
     from PIL import Image, ImageChops, ImageStat
 
     ia = Image.open(a).convert("RGB").crop((0, 120, 1920, 780))

@@ -57,7 +57,7 @@ int32_t applyFrameRate(ANativeWindow* window, float frameRate, bool allowNonSeam
     }
     return -1;
 }
-}  // namespace
+}
 
 DisplayModeController::~DisplayModeController() {
     restore();

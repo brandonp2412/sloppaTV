@@ -2014,7 +2014,6 @@ private:
         } else if (key == AKEYCODE_DPAD_UP) {
             playerScreenState_.showControls(now);
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && skipActiveMediaSegment()) {
-            // A visible media-segment action owns OK, matching TV skip-button behavior.
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER || key == AKEYCODE_MEDIA_PLAY_PAUSE) {
             player_.togglePause();
             reportProgressAsync(true);
@@ -2143,10 +2142,6 @@ private:
 
     void clearCurrentSessionUi() {
         const bool hadAuthenticatedSession = session_.valid();
-        // A saved-user/server change is a hard ownership boundary. Cancel old async
-        // work first, then stop/report any active player while the old session token is
-        // still available. No queue, track preference, pending playback or browsed item
-        // from one Jellyfin user should survive into another account.
         api_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle || !activePlaybackItem_.id.empty()) {
@@ -5792,7 +5787,7 @@ private:
     bool screensaverActive_ = false;
     std::string lastPlaybackSummary_;
 };
-}  // namespace
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(

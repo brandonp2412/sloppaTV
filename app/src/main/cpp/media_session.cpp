@@ -30,7 +30,7 @@ int playbackStateValue(MediaSessionState state) {
     }
     return 1;
 }
-}  // namespace
+}
 
 NativeMediaSession::NativeMediaSession(JavaVM* vm, jobject activity) : vm_(vm) {
     if (!vm_ || !activity) return;

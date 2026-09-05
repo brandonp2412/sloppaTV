@@ -5,7 +5,6 @@ import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
-/** Android DreamService lifecycle only; rendering remains in the native GLES layer. */
 public final class SloppaDreamService extends DreamService implements SurfaceHolder.Callback {
     static {
         System.loadLibrary("sloppatv");
@@ -41,7 +40,6 @@ public final class SloppaDreamService extends DreamService implements SurfaceHol
 
     @Override
     public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
-        // The native renderer queries the current EGL surface dimensions.
     }
 
     @Override

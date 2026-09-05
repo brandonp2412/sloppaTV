@@ -9,7 +9,7 @@ namespace {
 bool hasCodec(const std::vector<std::string>& codecs, const std::string& codec) {
     return std::find(codecs.begin(), codecs.end(), codec) != codecs.end();
 }
-}  // namespace
+}
 
 int main() {
     assert(effectiveAudioChannels(2, 8) == 2);

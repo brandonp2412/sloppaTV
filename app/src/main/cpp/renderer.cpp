@@ -100,7 +100,7 @@ void main() {
     outColor = vec4(sampled.rgb, sampled.a * uAlpha);
 }
 )";
-}  // namespace
+}
 
 Renderer::Renderer(JavaVM* vm, jobject activity) : vm_(vm) {
     ScopedEnv scoped(vm_);

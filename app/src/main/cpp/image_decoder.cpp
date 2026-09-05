@@ -28,7 +28,7 @@ void recycleBitmap(JNIEnv* env, jobject bitmap) {
     if (env->ExceptionCheck()) env->ExceptionClear();
     if (bitmapClass) env->DeleteLocalRef(bitmapClass);
 }
-}  // namespace
+}
 
 DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::string& error) const {
     DecodedImage result;

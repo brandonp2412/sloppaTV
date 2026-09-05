@@ -16,13 +16,9 @@ constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
 }
 constexpr float searchMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 430.0f : 300.0f; }
 constexpr float detailActionTextScale(std::size_t labelLength) {
-    // Details can expose six actions at once. Long labels must remain single-line
-    // even under the Extra Large global TV text preset.
     return labelLength > 10 ? 1.6f : 1.8f;
 }
 constexpr float uiTextScale(int option) {
-    // The baseline is intentionally TV-sized; larger presets are accessibility choices,
-    // not a way to compensate for a desktop-density default.
     return option <= 0 ? 1.9f : (option == 1 ? 2.15f : 2.4f);
 }
 constexpr float uiSafeAreaFraction(int percent) {

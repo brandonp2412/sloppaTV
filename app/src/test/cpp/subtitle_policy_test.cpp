@@ -52,8 +52,6 @@ int main() {
         {7, "ENG"},
     };
 
-    // Playback begins without subtitles. This prevents release-group adverts and
-    // forced/default tracks from appearing until the viewer explicitly enables one.
     assert(subtitleIndexForQueuePreference(subtitles, std::nullopt) == kSubtitleOffIndex);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{""}) == kSubtitleOffIndex);
     assert(subtitleIndexForQueuePreference(subtitles, std::optional<std::string>{"eng"}) == 2);

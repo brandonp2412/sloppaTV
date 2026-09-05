@@ -87,7 +87,7 @@ json writeSettings(const AppSettings& settings) {
         {"externalPlayerComponent", settings.externalPlayerComponent},
     };
 }
-}  // namespace
+}
 
 std::string generateDeviceId() {
     std::random_device rd;

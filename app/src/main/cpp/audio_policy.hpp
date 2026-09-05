@@ -50,10 +50,6 @@ inline std::string normalizeAudioLanguage(std::string language) {
     return language;
 }
 
-// Audio language overrides are intentionally scoped to one queue/autoplay chain.
-// nullopt means let Jellyfin apply the user's server-side audio preference. If a
-// manually selected language is unavailable on the next episode, fall back to the
-// server default rather than leaking a different fallback choice into later media.
 inline int audioIndexForQueuePreference(
     const std::vector<AudioPreferenceCandidate>& audios,
     const std::optional<std::string>& languagePreference
@@ -100,8 +96,7 @@ inline std::vector<std::string> advertisedAudioCodecs(
     if (capabilities.aac) codecs.emplace_back("aac");
     if (capabilities.mp3) codecs.emplace_back("mp3");
 
-    // Stereo mode intentionally omits surround/lossless formats. Jellyfin can then
-    // transcode/downmix to a codec that the client has advertised as stereo-safe.
+    // Jellyfin can transcode/downmix when surround formats are not advertised.
     if (maxAudioChannels <= 2) return codecs;
 
     if (capabilities.ac3 || capabilities.directAc3) codecs.emplace_back("ac3");

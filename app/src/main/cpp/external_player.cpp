@@ -153,7 +153,7 @@ void putBoolExtra(JNIEnv* env, jobject intent, const char* key, bool value) {
     if (intentClass) env->DeleteLocalRef(intentClass);
     clearException(env, "boolean intent extra");
 }
-}  // namespace
+}
 
 NativeExternalPlayer::NativeExternalPlayer(JavaVM* vm, jobject activity) : vm_(vm) {
     if (!vm_ || !activity) return;

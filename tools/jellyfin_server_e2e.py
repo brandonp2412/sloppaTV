@@ -237,7 +237,6 @@ def verify_direct_stream_negotiation(client: Jellyfin, items: list[dict[str, Any
         "Name": "sloppaTV DirectStream E2E",
         "MaxStaticBitrate": 120_000_000,
         "MaxStreamingBitrate": 120_000_000,
-        # Intentionally exclude MKV so Jellyfin must expose the remux/server-stream path.
         "DirectPlayProfiles": [
             {
                 "Container": "mp4,m4v,mov",

@@ -29,10 +29,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Minimal Android platform bridge for APIs NativeActivity does not expose to native callbacks.
- * All application, navigation, rendering and playback behavior remains in C++.
- */
 public final class SloppaNativeActivity extends NativeActivity {
     static {
         // NativeActivity dlopens the library for android_main, but Java native
@@ -101,10 +97,6 @@ public final class SloppaNativeActivity extends NativeActivity {
         }
     }
 
-    /**
-     * Uses the TV's configured IME (normally Gboard on Android TV) instead of
-     * forcing users through the native fallback keyboard.
-     */
     public boolean showTextInput(String initialText, String hint, int mode, boolean password) {
         InputMethodManager inputManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
         if (inputManager == null) return false;
@@ -196,7 +188,6 @@ public final class SloppaNativeActivity extends NativeActivity {
         return paint;
     }
 
-    /** Returns a high-resolution antialiased ASCII atlas using Android's proportional system sans font. */
     public Bitmap createFontAtlas() {
         final int columns = 16;
         final int rows = 6;
@@ -219,7 +210,6 @@ public final class SloppaNativeActivity extends NativeActivity {
         return bitmap;
     }
 
-    /** Per-glyph advances for the atlas above, in source bitmap pixels. */
     public float[] createFontAdvances() {
         Paint paint = createUiFontPaint();
         float[] advances = new float[95];
