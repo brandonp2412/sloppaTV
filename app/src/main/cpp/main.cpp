@@ -353,6 +353,18 @@ public:
                     const int searchTimeoutMs = static_cast<int>(std::max<int64_t>(0, searchDelayMs));
                     timeoutMs = timeoutMs < 0 ? searchTimeoutMs : std::min(timeoutMs, searchTimeoutMs);
                 }
+                auto tightenTimeoutUntil = [&](std::chrono::steady_clock::time_point deadline) {
+                    if (deadline == std::chrono::steady_clock::time_point{}) return;
+                    if (pollNow >= deadline) {
+                        timeoutMs = 0;
+                        return;
+                    }
+                    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - pollNow).count();
+                    const int statusTimeoutMs = static_cast<int>(std::max<int64_t>(1, remaining));
+                    timeoutMs = timeoutMs < 0 ? statusTimeoutMs : std::min(timeoutMs, statusTimeoutMs);
+                };
+                if (!noticePersistent_ && !notice_.empty()) tightenTimeoutUntil(noticeUntil_);
+                if (!presentedError_.empty()) tightenTimeoutUntil(errorUntil_);
             }
 
             int events = 0;
@@ -2454,27 +2466,55 @@ private:
         const bool desired = !detail_.played;
         const JellyfinSession session = session_;
         const JellyfinItem item = detail_;
+        JellyfinHomeData previousHome = home_;
+        HomeSelectionSnapshot previousHomeSelection = homeState_.snapshot(home_.rows);
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, desired, sessionEpoch] {
+
+        JellyfinItem updated = item;
+        updated.played = desired;
+        if (desired) updated.positionTicks = 0;
+        updateCachedUserData(updated);
+        detail_.played = desired;
+        if (desired) detail_.positionTicks = 0;
+        if (desired) {
+            for (auto& row : home_.rows) {
+                if (row.title == "My Media") continue;
+                std::erase_if(row.items, [&](const JellyfinItem& homeItem) { return homeItem.id == item.id; });
+            }
+            clampHomeSelections();
+        }
+
+        tasks_.submit([
+            this,
+            session,
+            item,
+            desired,
+            sessionEpoch,
+            previousHome = std::move(previousHome),
+            previousHomeSelection = std::move(previousHomeSelection)
+        ]() mutable {
             auto result = api_.setPlayed(session, item, desired);
             std::scoped_lock lock(stateMutex_);
             if (!requestEpochs_.session.active(sessionEpoch)) return;
-            if (result.ok) {
-                JellyfinItem updated = item;
-                updated.played = desired;
-                if (desired) updated.positionTicks = 0;
-                updateCachedUserData(updated);
-            }
             mutationLoading_ = false;
-            if ((screen_ != Screen::Details && screen_ != Screen::ItemMenu) || detail_.id != item.id) return;
             if (!result.ok) {
+                JellyfinItem rolledBack = item;
+                updateCachedUserData(rolledBack);
+                home_ = std::move(previousHome);
+                HomeRestorePlan rollbackPlan = HomeScreenState::restorePlan(previousHomeSelection, home_.rows);
+                homeState_.setSelections(std::move(rollbackPlan.selections));
+                homeState_.setRow(rollbackPlan.focusedRow);
+                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+                if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) detail_ = item;
                 error_ = result.error;
                 return;
             }
-            detail_.played = desired;
-            if (desired) detail_.positionTicks = 0;
+            if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) {
+                detail_.played = desired;
+                if (desired) detail_.positionTicks = 0;
+            }
         });
     }
 
@@ -3228,6 +3268,7 @@ private:
             detail_.positionTicks = ticks;
         }
         player_.stop();
+        playbackPreparingSince_ = {};
         videoSurface_.release();
         displayMode_.restore();
         mediaSession_.clear();
@@ -3318,6 +3359,7 @@ private:
     }
 
     void startResolvedPlaybackTarget(const PlaybackTarget& target) {
+        playbackPreparingSince_ = std::chrono::steady_clock::now();
         player_.startAsync(
             target.url,
             videoSurface_.surface(),
@@ -3396,6 +3438,7 @@ private:
         item.positionTicks = resumeTicks;
 
         player_.stop();
+        playbackPreparingSince_ = {};
         videoSurface_.release();
         telemetryState_.clearPlaybackStartReported();
         playbackSessionState_.markFallbackAttempted();
@@ -3691,6 +3734,30 @@ private:
         PlayerStatus status = player_.status();
         if (status == PlayerStatus::Preparing) {
             mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
+            const auto now = std::chrono::steady_clock::now();
+            if (playbackPreparingSince_ == std::chrono::steady_clock::time_point{}) playbackPreparingSince_ = now;
+            const int64_t preparingMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - playbackPreparingSince_
+            ).count();
+            if (playbackPrepareTimedOut(activeTarget_.transcoding, preparingMs)) {
+                std::scoped_lock lock(stateMutex_);
+                __android_log_print(
+                    ANDROID_LOG_WARN,
+                    kTag,
+                    "Playback prepare timed out after %lld ms (%s)",
+                    static_cast<long long>(preparingMs),
+                    activeTarget_.transcoding ? "transcode" : "direct"
+                );
+                if (!activeTarget_.transcoding && retryPlaybackWithTranscodeFallback()) {
+                    error_.clear();
+                    return;
+                }
+                error_ = "PLAYBACK TOOK TOO LONG TO START";
+                stopPlayback();
+                return;
+            }
+        } else {
+            playbackPreparingSince_ = {};
         }
         if (status == PlayerStatus::Playing && transitionState_.pauseAfterRestart()) {
             player_.togglePause();
@@ -4259,8 +4326,18 @@ private:
 
     std::array<float, 4> focusedBounds(float x, float y, float width, float height, bool focused, float scale = 1.045f) const {
         if (!focused) return {x, y, width, height};
-        const float scaledWidth = width * scale;
-        const float scaledHeight = height * scale;
+        const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - lastInteraction_
+        ).count();
+        float animatedScale = scale;
+        if (elapsedMs >= 0 && elapsedMs < 150) {
+            const float t = std::clamp(static_cast<float>(elapsedMs) / 150.0f, 0.0f, 1.0f);
+            const float remaining = 1.0f - t;
+            const float eased = 1.0f - remaining * remaining * remaining;
+            animatedScale = 1.0f + (scale - 1.0f) * eased;
+        }
+        const float scaledWidth = width * animatedScale;
+        const float scaledHeight = height * animatedScale;
         return {
             x - (scaledWidth - width) * 0.5f,
             y - (scaledHeight - height) * 0.5f,
@@ -4554,7 +4631,7 @@ private:
                 home_.rows[static_cast<size_t>(secondRow)].title,
                 home_.rows[static_cast<size_t>(secondRow)].items,
                 secondRow,
-                520.0f
+                550.0f
             );
         }
     }
@@ -4568,7 +4645,7 @@ private:
             constexpr float cardW = 420.0f;
             constexpr float cardH = 225.0f;
             constexpr float gap = 28.0f;
-            const float imageY = top + 52.0f;
+            const float imageY = top + 68.0f;
             float x = 72.0f;
             for (int index = 0; index < static_cast<int>(items.size()); ++index) {
                 if (x + cardW > 1885.0f && index > 0) break;
@@ -4583,7 +4660,7 @@ private:
                         2.45f, items[static_cast<size_t>(index)].name, kText);
                 }
                 if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
-                renderer_.text(x + 4.0f, imageY + cardH + 12.0f, 2.05f,
+                renderer_.text(x + 4.0f, imageY + cardH + 24.0f, 2.05f,
                     items[static_cast<size_t>(index)].name, focused ? kText : kSecondaryText, cardW - 8.0f);
                 x += cardW + gap;
             }
@@ -4595,7 +4672,7 @@ private:
         constexpr float cardH = 202.0f;
         constexpr float cardW = 350.0f;
         constexpr float gap = 24.0f;
-        const float imageY = top + 70.0f;
+        const float imageY = top + 82.0f;
         float x = 54.0f;
 
         auto singleLine = [&](std::string value, float scale, float width) {
@@ -4623,7 +4700,7 @@ private:
 
             std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
             primary = singleLine(primary, 2.45f, cardW - 18.0f);
-            const float titleY = imageY + cardH + 10.0f;
+            const float titleY = imageY + cardH + 22.0f;
             renderer_.text(x + 2.0f, titleY, 2.45f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
             if (item.type == "Episode") {
                 std::string episode = episodeNumberLabel(item);
@@ -5510,21 +5587,43 @@ private:
     }
 
     void renderStatus() {
+        const auto now = std::chrono::steady_clock::now();
         if (loading_ || homeLoading_ || mutationLoading_) {
-            renderer_.rect(1490, 985, 350, 55, kPanelAlt);
-            renderer_.text(1545, 1004, 1.9f, "LOADING...", kText);
+            renderer_.roundedRect(1490, 985, 350, 55, 16.0f, kPanelAlt);
+            renderer_.textVerticallyCentered(1545.0f, 985.0f, 55.0f, 1.9f, "LOADING...", kText);
+        }
+        if (!noticePersistent_ && !notice_.empty() && now >= noticeUntil_) {
+            notice_.clear();
+            noticeUntil_ = {};
         }
         const bool noticeVisible = !notice_.empty()
-            && (noticePersistent_ || std::chrono::steady_clock::now() < noticeUntil_);
+            && (noticePersistent_ || now < noticeUntil_);
         if (noticeVisible) {
             const float noticeY = screen_ == Screen::Player ? 670.0f : 925.0f;
             renderer_.roundedRect(70, noticeY, 1760, 58, 18.0f, kPanelAlt);
             renderer_.roundedOutline(70, noticeY, 1760, 58, 18.0f, 2.0f, kFocus);
             renderer_.textVerticallyCentered(94.0f, noticeY, 58.0f, 1.6f, notice_, kText, 1710.0f);
         }
-        if (!error_.empty()) {
-            renderer_.roundedRect(70, 995, 1360, 55, 16.0f, kError);
-            renderer_.textVerticallyCentered(90.0f, 995.0f, 55.0f, 1.7f, error_, kText, 1320.0f);
+
+        if (error_.empty()) {
+            presentedError_.clear();
+            errorUntil_ = {};
+        } else if (error_ != presentedError_) {
+            presentedError_ = error_;
+            errorUntil_ = now + 6s;
+        }
+        if (!presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now >= errorUntil_) {
+            errorUntil_ = {};
+        }
+        if (!presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now < errorUntil_) {
+            const float errorY = screen_ == Screen::Player
+                ? (noticeVisible ? 598.0f : 670.0f)
+                : (noticeVisible ? 855.0f : 925.0f);
+            renderer_.roundedRect(70.0f, errorY, 1560.0f, 64.0f, 18.0f, kPanelElevated);
+            renderer_.roundedRect(70.0f, errorY, 7.0f, 64.0f, 3.5f, kError);
+            renderer_.roundedOutline(70.0f, errorY, 1560.0f, 64.0f, 18.0f, 2.0f,
+                Color{kError.r, kError.g, kError.b, 0.55f});
+            renderer_.textVerticallyCentered(98.0f, errorY, 64.0f, 1.55f, presentedError_, kText, 1495.0f);
         }
     }
 
@@ -5589,6 +5688,8 @@ private:
     SettingsScreenState settingsScreen_;
     std::vector<ExternalPlayerApp> externalPlayers_;
     std::string error_;
+    std::string presentedError_;
+    std::chrono::steady_clock::time_point errorUntil_{};
     std::string notice_;
     std::chrono::steady_clock::time_point noticeUntil_{};
     bool noticePersistent_ = false;
@@ -5639,6 +5740,7 @@ private:
     TrickplayPreviewState trickplayState_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point playbackPreparingSince_{};
     bool screensaverActive_ = false;
     std::string lastPlaybackSummary_;
 };

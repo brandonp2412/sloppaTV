@@ -57,6 +57,13 @@ int main() {
     assert(!shouldAutoplayNextEpisode(true, 0, 0));
     assert(!shouldAutoplayNextEpisode(true, 0, -2));
 
+    assert(playbackPrepareTimeoutMs(false) == 15'000);
+    assert(playbackPrepareTimeoutMs(true) == 30'000);
+    assert(!playbackPrepareTimedOut(false, 14'999));
+    assert(playbackPrepareTimedOut(false, 15'000));
+    assert(!playbackPrepareTimedOut(true, 29'999));
+    assert(playbackPrepareTimedOut(true, 30'000));
+
     assert(transcodingReasonsFromUrl("/master.m3u8?TranscodeReasons=ContainerNotSupported") == "ContainerNotSupported");
     assert(transcodingReasonsFromUrl("/master.m3u8?x=1&TranscodeReasons=ContainerNotSupported%2CAudioCodecNotSupported&y=2")
         == "ContainerNotSupported,AudioCodecNotSupported");
