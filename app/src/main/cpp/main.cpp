@@ -287,6 +287,7 @@ public:
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
         loadSession();
+        refreshExternalPlayers();
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: session loaded valid=%d", session_.valid() ? 1 : 0);
         if (session_.valid()) {
             resetNavigation(Screen::Home);
@@ -3169,6 +3170,10 @@ private:
 
     void beginPlayback() {
         if (loading_ || detail_.id.empty()) return;
+        if (selectedExternalPlayer()) {
+            launchExternalPlaybackAsync();
+            return;
+        }
         const bool continuingPlaybackChain = continuationState_.stillWatchingPrompt();
         const bool continuingQueuedPrompt = continuingPlaybackChain && !queueState_.empty();
         int queuedPlaybackIndex = -1;
