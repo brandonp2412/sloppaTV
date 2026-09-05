@@ -133,20 +133,23 @@ class PlaybackReportToolingTest(unittest.TestCase):
 
 
 class WaydroidToolingTest(unittest.TestCase):
-    def test_ci_screenshot_suite_captures_six_store_listing_states(self) -> None:
+    def test_ci_screenshot_suite_captures_eight_distinct_store_listing_screens(self) -> None:
         suite = json.loads((ROOT / "tools" / "screenshot-suites" / "ci-login.json").read_text(encoding="utf-8"))
         captures = [step["name"] for step in suite["steps"] if step["action"] == "capture"]
         self.assertEqual(
             captures,
             [
                 "01-login",
-                "02-login-username",
-                "03-login-password",
-                "04-login-actions",
-                "05-login-quick-connect",
-                "06-login-discover",
+                "02-home",
+                "03-search",
+                "04-search-results",
+                "05-browse",
+                "06-details",
+                "07-settings",
+                "08-settings-options",
             ],
         )
+        self.assertIn("text", {step["action"] for step in suite["steps"]})
 
     def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
@@ -154,6 +157,8 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("needs: screenshots", workflow)
         self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
         self.assertIn("git commit -m \"Update Android TV screenshots [skip ci]\"", workflow)
+        script = (ROOT / "tools" / "ci_screenshots.sh").read_text(encoding="utf-8")
+        self.assertIn("screenshot_fixture_server.py", script)
 
     def test_target_model_guard_requires_explicit_physical_target(self) -> None:
         self.assertTrue(waydroid_e2e.model_matches_target("WayDroid x86_64", "waydroid"))

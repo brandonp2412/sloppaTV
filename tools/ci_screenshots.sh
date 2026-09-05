@@ -23,6 +23,7 @@ fi
 
 diagnostics() {
     local status=$?
+    if [[ -n "${fixture_pid:-}" ]]; then kill "$fixture_pid" 2>/dev/null || true; fi
     if (( status != 0 )); then
         adb -s "$ANDROID_SERIAL" logcat -d -t 300 >&2 || true
         adb -s "$ANDROID_SERIAL" shell dumpsys activity top >&2 || true
@@ -33,6 +34,8 @@ trap diagnostics EXIT
 
 mkdir -p "$SCREENSHOT_DIR"
 find "$SCREENSHOT_DIR" -maxdepth 1 -type f -delete
+python3 "$SCRIPT_DIR/screenshot_fixture_server.py" >"$SCREENSHOT_DIR/fixture-server.log" 2>&1 &
+fixture_pid=$!
 
 adb -s "$ANDROID_SERIAL" install -r "$SLOPPATV_APK"
 adb -s "$ANDROID_SERIAL" shell wm size 1920x1080
@@ -43,13 +46,16 @@ timeout --foreground -k 15 180 python3 "$SCRIPT_DIR/waydroid_e2e.py" \
 
 for screenshot in \
     01-login \
-    02-login-username \
-    03-login-password \
-    04-login-actions \
-    05-login-quick-connect \
-    06-login-discover; do
+    02-home \
+    03-search \
+    04-search-results \
+    05-browse \
+    06-details \
+    07-settings \
+    08-settings-options; do
     test -s "$SCREENSHOT_DIR/$screenshot.png"
 done
 test -s "$SCREENSHOT_DIR/screenshots.json"
 trap - EXIT
+kill "$fixture_pid" 2>/dev/null || true
 echo "Screenshot suite completed: $SCREENSHOT_DIR"

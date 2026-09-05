@@ -157,7 +157,7 @@ def load_screenshot_suite(path: Path) -> dict:
     steps = suite.get("steps")
     if not isinstance(steps, list) or not steps:
         raise ValueError("screenshot suite must have at least one step")
-    allowed = {"launch", "restart", "key", "capture", "wait"}
+    allowed = {"launch", "restart", "key", "text", "capture", "wait"}
     for index, step in enumerate(steps):
         if not isinstance(step, dict) or step.get("action") not in allowed:
             raise ValueError(f"unsupported screenshot step {index}")
@@ -166,6 +166,8 @@ def load_screenshot_suite(path: Path) -> dict:
             raise ValueError(f"invalid wait_seconds in screenshot step {index}")
         if step["action"] == "key" and not re.fullmatch(r"[A-Z0-9_]+", str(step.get("key", ""))):
             raise ValueError(f"invalid key in screenshot step {index}")
+        if step["action"] == "text" and not re.fullmatch(r"[A-Za-z0-9.:/@_-]{1,128}", str(step.get("value", ""))):
+            raise ValueError(f"invalid text in screenshot step {index}")
         if step["action"] == "capture" and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(step.get("name", ""))):
             raise ValueError(f"invalid capture name in screenshot step {index}")
     return suite
@@ -182,6 +184,8 @@ def screenshot_suite(path: Path) -> Path:
             restart()
         elif action == "key":
             key(step["key"])
+        elif action == "text":
+            adb("shell", "input", "text", step["value"])
         elif action == "capture":
             screenshot = capture(step["name"])
             width, height = png_dimensions(screenshot)
