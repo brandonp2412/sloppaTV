@@ -1,0 +1,3 @@
+Initial Google Play release for Android TV and Google TV.
+
+Remote-first Jellyfin browsing, search and playback, with Direct Play, Direct Stream and server transcoding support, audio and subtitle selection, queues, autoplay, multiple saved users and servers, and TV-focused settings.
