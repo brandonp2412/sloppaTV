@@ -82,6 +82,33 @@ void putStringExtra(JNIEnv* env, jobject intent, const char* key, const std::str
     clearException(env, "string intent extra");
 }
 
+void putUriArrayExtra(JNIEnv* env, jobject intent, const char* key, const std::string& url) {
+    if (!env || !intent || !key || url.empty()) return;
+    jclass intentClass = env->GetObjectClass(intent);
+    jclass uriClass = env->FindClass("android/net/Uri");
+    jclass parcelableClass = env->FindClass("android/os/Parcelable");
+    jmethodID parse = uriClass
+        ? env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;")
+        : nullptr;
+    jmethodID putExtra = intentClass
+        ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;[Landroid/os/Parcelable;)Landroid/content/Intent;")
+        : nullptr;
+    jstring jUrl = env->NewStringUTF(url.c_str());
+    jobject uri = jUrl && parse ? env->CallStaticObjectMethod(uriClass, parse, jUrl) : nullptr;
+    jobjectArray values = parcelableClass ? env->NewObjectArray(1, parcelableClass, nullptr) : nullptr;
+    if (values && uri) env->SetObjectArrayElement(values, 0, uri);
+    jstring jKey = env->NewStringUTF(key);
+    if (putExtra && jKey && values && uri) env->CallObjectMethod(intent, putExtra, jKey, values);
+    if (jKey) env->DeleteLocalRef(jKey);
+    if (values) env->DeleteLocalRef(values);
+    if (uri) env->DeleteLocalRef(uri);
+    if (jUrl) env->DeleteLocalRef(jUrl);
+    if (parcelableClass) env->DeleteLocalRef(parcelableClass);
+    if (uriClass) env->DeleteLocalRef(uriClass);
+    if (intentClass) env->DeleteLocalRef(intentClass);
+    clearException(env, "URI array intent extra");
+}
+
 void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
     if (!env || !intent || !key) return;
     jclass intentClass = env->GetObjectClass(intent);
@@ -349,8 +376,10 @@ bool NativeExternalPlayer::launch(
             putBoolExtra(env, intent, "return_result", true);
             break;
         case ExternalPlayerKind::Mpv:
-            putStringExtra(env, intent, "media-title", title);
+            putStringExtra(env, intent, "title", title);
             putIntExtra(env, intent, "position", safePosition);
+            putUriArrayExtra(env, intent, "subs", subtitleUrl);
+            putUriArrayExtra(env, intent, "subs.enable", subtitleUrl);
             break;
         case ExternalPlayerKind::Vimu:
             putStringExtra(env, intent, "forcename", title);
