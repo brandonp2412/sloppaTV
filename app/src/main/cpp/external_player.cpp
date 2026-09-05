@@ -109,6 +109,21 @@ void putUriArrayExtra(JNIEnv* env, jobject intent, const char* key, const std::s
     clearException(env, "URI array intent extra");
 }
 
+void putByteExtra(JNIEnv* env, jobject intent, const char* key, int value) {
+    if (!env || !intent || !key) return;
+    jclass intentClass = env->GetObjectClass(intent);
+    jmethodID method = intentClass
+        ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;B)Landroid/content/Intent;")
+        : nullptr;
+    if (method) {
+        jstring jKey = env->NewStringUTF(key);
+        if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jbyte>(value));
+        if (jKey) env->DeleteLocalRef(jKey);
+    }
+    if (intentClass) env->DeleteLocalRef(intentClass);
+    clearException(env, "byte intent extra");
+}
+
 void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
     if (!env || !intent || !key) return;
     jclass intentClass = env->GetObjectClass(intent);
@@ -378,6 +393,7 @@ bool NativeExternalPlayer::launch(
         case ExternalPlayerKind::Mpv:
             putStringExtra(env, intent, "title", title);
             putIntExtra(env, intent, "position", safePosition);
+            putByteExtra(env, intent, "decode_mode", 2);
             putUriArrayExtra(env, intent, "subs", subtitleUrl);
             putUriArrayExtra(env, intent, "subs.enable", subtitleUrl);
             break;
