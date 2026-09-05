@@ -16,6 +16,10 @@ struct ExternalPlayerOutcome {
     bool completed = false;
 };
 
+constexpr int externalMpvDecodeModeForPackage(std::string_view packageName) {
+    return packageName == "app.gyrolet.mpvrx" ? 1 : 2;
+}
+
 constexpr ExternalPlayerKind externalPlayerKindForPackage(std::string_view packageName) {
     if (packageName == "org.videolan.vlc") return ExternalPlayerKind::Vlc;
     if (packageName == "com.mxtech.videoplayer.ad") return ExternalPlayerKind::MxPlayer;
