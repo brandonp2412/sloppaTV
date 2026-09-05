@@ -102,6 +102,16 @@ void logPlaybackReportFailure(const char* stage, const std::string& itemId, cons
     );
 }
 
+bool isTransientHomeLoadError(std::string_view error) {
+    return error.find("Server hostname could not be resolved") != std::string_view::npos
+        || error.find("Server connection timed out") != std::string_view::npos
+        || error.find("Unable to connect to server") != std::string_view::npos
+        || error.find("HTTP 408") != std::string_view::npos
+        || error.find("HTTP 425") != std::string_view::npos
+        || error.find("HTTP 429") != std::string_view::npos
+        || error.find("HTTP 5") != std::string_view::npos;
+}
+
 std::string wrapText(const std::string& input, size_t maxColumns, size_t maxLines) {
     if (input.empty()) return "NO DESCRIPTION";
     std::istringstream words(input);
@@ -365,6 +375,7 @@ public:
                 };
                 if (!noticePersistent_ && !notice_.empty()) tightenTimeoutUntil(noticeUntil_);
                 if (!presentedError_.empty()) tightenTimeoutUntil(errorUntil_);
+                tightenTimeoutUntil(homeRetryAt_);
             }
 
             int events = 0;
@@ -2178,6 +2189,8 @@ private:
         accountState_.clearSessionUi();
         loading_ = false;
         homeLoading_ = false;
+        homeRetryAt_ = {};
+        homeRetryAttempt_ = 0;
         mutationLoading_ = false;
         error_.clear();
         notice_.clear();
@@ -2736,6 +2749,7 @@ private:
             std::scoped_lock lock(stateMutex_);
             homeSnapshot = homeState_.snapshot(home_.rows);
             homeLoading_ = true;
+            homeRetryAt_ = {};
         }
 
         const uint64_t generation = requestEpochs_.home.begin();
@@ -2747,6 +2761,8 @@ private:
                 std::scoped_lock lock(stateMutex_);
                 homeLoading_ = false;
                 if (core.error.find("HTTP 401") != std::string::npos) {
+                    homeRetryAt_ = {};
+                    homeRetryAttempt_ = 0;
                     const JellyfinSession expired = session_;
                     eraseArtworkEntry(profileArtwork_, profileArtworkKey(expired));
                     sessionRegistry_.removeIdentity(expired);
@@ -2759,8 +2775,23 @@ private:
                     resetNavigation(Screen::Login);
                     error_ = "SESSION EXPIRED - LOG IN AGAIN";
                     saveSession(session_);
-                } else if (screen_ == Screen::Home) {
-                    error_ = core.error;
+                } else {
+                    if (isTransientHomeLoadError(core.error)) {
+                        const int delaySeconds = std::min(30, 1 << std::min(homeRetryAttempt_, 5));
+                        ++homeRetryAttempt_;
+                        homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(delaySeconds);
+                        __android_log_print(
+                            ANDROID_LOG_WARN,
+                            kTag,
+                            "Home load failed transiently; retrying in %d seconds: %s",
+                            delaySeconds,
+                            core.error.c_str()
+                        );
+                    } else {
+                        homeRetryAt_ = {};
+                        homeRetryAttempt_ = 0;
+                    }
+                    if (screen_ == Screen::Home) error_ = core.error;
                 }
                 return;
             }
@@ -2772,6 +2803,8 @@ private:
             {
                 std::scoped_lock lock(stateMutex_);
                 homeLoading_ = false;
+                homeRetryAt_ = {};
+                homeRetryAttempt_ = 0;
                 home_ = std::move(core.value);
                 homeState_.setSelections(std::move(coreRestore.selections));
                 homeState_.setRow(coreRestoredRow);
@@ -3834,6 +3867,19 @@ private:
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
         applyPendingRuntimeLaunchRequest();
+
+        bool retryHome = false;
+        {
+            std::scoped_lock lock(stateMutex_);
+            if (!homeLoading_
+                && homeRetryAt_ != std::chrono::steady_clock::time_point{}
+                && std::chrono::steady_clock::now() >= homeRetryAt_
+                && session_.valid()) {
+                homeRetryAt_ = {};
+                retryHome = true;
+            }
+        }
+        if (retryHome) loadHomeAsync();
 
         auto work = collectPendingTickWork();
         finishExternalPlayback(work);
@@ -5683,6 +5729,8 @@ private:
     NavigationStack<Screen> navigation_{Screen::Login};
     bool loading_ = false;
     bool homeLoading_ = false;
+    std::chrono::steady_clock::time_point homeRetryAt_{};
+    int homeRetryAttempt_ = 0;
     bool mutationLoading_ = false;
     AppSettings settings_;
     SettingsScreenState settingsScreen_;
