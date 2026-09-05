@@ -1403,11 +1403,13 @@ private:
             if (detailed.ok) playable = std::move(detailed.value);
 
             std::string skipSegmentsJson;
-            auto segments = api_.getMediaSegments(session, playable.id);
-            if (segments.ok) {
-                skipSegmentsJson = externalSkipSegmentsJson(segments.value);
-            } else {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "External playback media segments unavailable: %s", segments.error.c_str());
+            if (player.packageName == "app.mpvnova.player") {
+                auto segments = api_.getMediaSegments(session, playable.id);
+                if (segments.ok) {
+                    skipSegmentsJson = externalSkipSegmentsJson(segments.value);
+                } else {
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "External playback media segments unavailable: %s", segments.error.c_str());
+                }
             }
 
             const std::string videoUrl = api_.staticVideoUrl(session, playable);
