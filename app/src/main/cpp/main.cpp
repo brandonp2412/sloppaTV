@@ -1473,7 +1473,7 @@ private:
             if (detailed.ok) playable = std::move(detailed.value);
 
             std::string skipSegmentsJson;
-            if (player.packageName == "app.mpvnova.player") {
+            if (player.packageName == "app.mpvnova.player" || player.packageName == "app.gyrolet.mpvrx") {
                 auto segments = api_.getMediaSegments(session, playable.id);
                 if (segments.ok) {
                     skipSegmentsJson = externalSkipSegmentsJson(segments.value);
