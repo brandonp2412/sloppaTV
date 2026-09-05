@@ -6,6 +6,7 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Added
 
+- Fastlane Google Play deployment lanes, validated Android TV store metadata/graphics, and screenshot syncing into the `supply` metadata layout.
 - Android application ID and Java/JNI namespace renamed from `nz.presley.sloppatv` to `app.sloppatv`; the legacy package is preserved as a migration source rather than destructively removed.
 - Structured navigation stack replacing screen-specific return variables.
 - Native diagnostics screen for app version, ABI, Jellyfin server version, decoder/HDR capability and last playback path.

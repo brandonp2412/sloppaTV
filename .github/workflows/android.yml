@@ -96,10 +96,13 @@ jobs:
       - name: Run host policy tests
         run: ./tools/run_host_tests.py
 
-      - name: Build debug, benchmark and release APKs
-        run: ./gradlew --no-daemon test assembleDebug assembleBenchmark assembleRelease
+      - name: Validate Google Play metadata
+        run: python3 tools/sync_play_store_screenshots.py --validate-only
 
-      - name: Upload APKs
+      - name: Build debug, benchmark and release artifacts
+        run: ./gradlew --no-daemon test assembleDebug assembleBenchmark assembleRelease bundleRelease
+
+      - name: Upload Android build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sloppaTV-apks
@@ -107,6 +110,7 @@ jobs:
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/benchmark/*.apk
             app/build/outputs/apk/release/*.apk
+            app/build/outputs/bundle/release/*.aab
           if-no-files-found: error
 
   screenshots:
@@ -144,6 +148,9 @@ jobs:
           emulator-port: 5554
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           script: ANDROID_SERIAL=emulator-5554 SLOPPATV_APK="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)" ./tools/ci_screenshots.sh
+
+      - name: Verify Play Store screenshot packaging
+        run: python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots
 
       - name: Upload screenshots
         if: always()

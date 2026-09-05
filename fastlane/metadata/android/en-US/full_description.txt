@@ -1,0 +1,11 @@
+sloppaTV is an independent Android TV client for Jellyfin media servers. Connect to a Jellyfin server you control and watch your library with a remote-first TV interface.
+
+Browse home sections, movies, shows, collections, genres and people. Search your library, open detailed media information, resume where you left off, and manage watched or favourite status from the TV.
+
+Playback adapts to your server and device. sloppaTV supports Jellyfin Direct Play, Direct Stream and server transcoding, with audio and subtitle selection, queues, autoplay, seeking, playback controls, refresh-rate handling and HDR capability negotiation where supported by the device and media.
+
+You can save multiple Jellyfin users and servers, switch profiles, use Quick Connect, tune playback and subtitle settings, and use Android TV search and media controls.
+
+A Jellyfin server and account are required. Media availability, codec support and whether a file can play directly depend on your Jellyfin server, media and Android TV device.
+
+sloppaTV is an independent client and is not affiliated with or endorsed by the Jellyfin project.

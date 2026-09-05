@@ -15,3 +15,8 @@ artifacts/ci-*/
 **/__pycache__/
 *.pyc
 .env.local
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots.html
+fastlane/test_output/
+fastlane/*.json

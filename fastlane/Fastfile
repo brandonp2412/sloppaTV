@@ -1,0 +1,116 @@
+require "shellwords"
+
+def project_root
+  File.expand_path("..", __dir__)
+end
+
+def metadata_path
+  File.join(project_root, "fastlane", "metadata", "android")
+end
+
+def release_aab
+  File.join(project_root, "app", "build", "outputs", "bundle", "release", "app-release.aab")
+end
+
+def validate_metadata!
+  sh("python3 #{Shellwords.escape(File.join(project_root, 'tools', 'sync_play_store_screenshots.py'))} --validate-only")
+end
+
+def build_release_bundle!
+  sh("#{Shellwords.escape(File.join(project_root, 'gradlew'))} --no-daemon bundleRelease")
+  UI.user_error!("Release AAB was not produced at #{release_aab}") unless File.file?(release_aab)
+end
+
+def upload_store!(track:, include_bundle:)
+  options = {
+    package_name: "app.sloppatv",
+    metadata_path: metadata_path,
+    track: track,
+    release_status: ENV.fetch("PLAY_RELEASE_STATUS", "completed"),
+    skip_upload_apk: true,
+    skip_upload_aab: !include_bundle,
+    skip_upload_metadata: false,
+    skip_upload_images: false,
+    skip_upload_screenshots: false,
+    skip_upload_changelogs: !include_bundle
+  }
+  options[:aab] = release_aab if include_bundle
+  options[:json_key] = ENV["SUPPLY_JSON_KEY"] if ENV["SUPPLY_JSON_KEY"]
+  options[:json_key_data] = ENV["SUPPLY_JSON_KEY_DATA"] if ENV["SUPPLY_JSON_KEY_DATA"]
+  upload_to_play_store(**options)
+end
+
+def sync_screenshots!
+  source = ENV.fetch("SLOPPATV_SCREENSHOT_DIR", File.join(project_root, "artifacts", "ci-screenshots"))
+  sh(
+    "python3 #{Shellwords.escape(File.join(project_root, 'tools', 'sync_play_store_screenshots.py'))} " \
+    "--source #{Shellwords.escape(source)}"
+  )
+end
+
+def ensure_play_credentials!
+  return if ENV["SUPPLY_JSON_KEY"] || ENV["SUPPLY_JSON_KEY_DATA"]
+
+  UI.user_error!("Set SUPPLY_JSON_KEY to a service-account JSON file or SUPPLY_JSON_KEY_DATA to its JSON contents")
+end
+
+def configure_utf8!
+  ENV["LC_ALL"] ||= "C.UTF-8"
+  ENV["LANG"] ||= "C.UTF-8"
+end
+
+def ensure_production_confirmation!
+  return if ENV["PLAY_PRODUCTION"] == "1"
+
+  UI.user_error!("Production deploy blocked. Set PLAY_PRODUCTION=1 to confirm a production release")
+end
+
+def ensure_track!(track)
+  allowed = %w[internal alpha beta production]
+  UI.user_error!("Unsupported Play track: #{track}") unless allowed.include?(track)
+end
+
+default_platform(:android)
+
+platform :android do
+  before_all do
+    configure_utf8!
+  end
+
+  desc "Copy generated Android TV screenshots into Fastlane metadata"
+  lane :screenshots do
+    sync_screenshots!
+    validate_metadata!
+  end
+
+  desc "Validate local Google Play listing metadata and graphics"
+  lane :validate_metadata do
+    validate_metadata!
+  end
+
+  desc "Upload listing text, graphics and TV screenshots without a binary"
+  lane :metadata do
+    ensure_play_credentials!
+    validate_metadata!
+    track = ENV.fetch("PLAY_TRACK", "internal")
+    ensure_track!(track)
+    upload_store!(track: track, include_bundle: false)
+  end
+
+  desc "Build the signed AAB and deploy it to Google Play internal testing"
+  lane :internal do
+    ensure_play_credentials!
+    validate_metadata!
+    build_release_bundle!
+    upload_store!(track: "internal", include_bundle: true)
+  end
+
+  desc "Build the signed AAB and deploy it to Google Play production"
+  lane :production do
+    ensure_play_credentials!
+    ensure_production_confirmation!
+    validate_metadata!
+    build_release_bundle!
+    upload_store!(track: "production", include_bundle: true)
+  end
+end
