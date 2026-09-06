@@ -248,6 +248,18 @@ class WaydroidToolingTest(unittest.TestCase):
             "restart",
             [step["action"] for step in suite["steps"][search_capture_index + 1 : movie_capture_index]],
         )
+        person_capture_index = next(
+            index for index, step in enumerate(suite["steps"])
+            if step.get("action") == "capture" and step.get("name") == "08-person-titles"
+        )
+        menu_capture_index = next(
+            index for index, step in enumerate(suite["steps"])
+            if step.get("action") == "capture" and step.get("name") == "09-item-menu"
+        )
+        self.assertIn(
+            "restart",
+            [step["action"] for step in suite["steps"][person_capture_index + 1 : menu_capture_index]],
+        )
         actions = {step["action"] for step in suite["steps"]}
         self.assertIn("text", actions)
         self.assertIn("search", actions)
