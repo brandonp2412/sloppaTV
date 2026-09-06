@@ -94,7 +94,10 @@ def sync_screenshots(source: Path, destination: Path) -> None:
         if old.is_file() and old.suffix.lower() in IMAGE_SUFFIXES:
             old.unlink()
     for index, source_path in enumerate(files, start=1):
-        name = f"{index:02d}-{source_path.stem.removeprefix(str(index).zfill(2) + '-')}{source_path.suffix.lower()}"
+        stem = source_path.stem
+        if len(stem) > 3 and stem[:2].isdigit() and stem[2] == "-":
+            stem = stem[3:]
+        name = f"{index:02d}-{stem}{source_path.suffix.lower()}"
         shutil.copy2(source_path, destination / name)
 
 
