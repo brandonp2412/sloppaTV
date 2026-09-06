@@ -1588,12 +1588,35 @@ std::string JellyfinClient::subtitleSrtUrl(
         + "/Stream.srt?api_key=" + urlEncode(session.token);
 }
 
+std::string JellyfinClient::subtitleTextUrl(
+    const JellyfinSession& session,
+    const JellyfinItem& item,
+    int subtitleIndex,
+    const std::string& codec
+) const {
+    const std::string format = subtitleTextFormat(codec);
+    if (!session.valid() || item.id.empty() || item.mediaSourceId.empty() || subtitleIndex < 0 || format.empty()) return {};
+    return session.server + "/Videos/" + urlEncode(item.id)
+        + "/" + urlEncode(item.mediaSourceId)
+        + "/Subtitles/" + std::to_string(subtitleIndex)
+        + "/Stream." + format + "?api_key=" + urlEncode(session.token);
+}
+
 ApiValueResult<std::string> JellyfinClient::downloadSubtitleSrt(
     const JellyfinSession& session,
     const JellyfinItem& item,
     int subtitleIndex
 ) const {
     return downloadSubtitleUrl(session, subtitleSrtUrl(session, item, subtitleIndex));
+}
+
+ApiValueResult<std::string> JellyfinClient::downloadSubtitleText(
+    const JellyfinSession& session,
+    const JellyfinItem& item,
+    int subtitleIndex,
+    const std::string& codec
+) const {
+    return downloadSubtitleUrl(session, subtitleTextUrl(session, item, subtitleIndex, codec));
 }
 
 ApiValueResult<std::string> JellyfinClient::downloadSubtitleUrl(

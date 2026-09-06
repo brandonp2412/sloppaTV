@@ -1844,97 +1844,148 @@ private:
         const JellyfinItem item = activePlaybackItem_;
         const std::string dataPath = dataPath_;
         const uint64_t generation = requestEpochs_.playback.snapshot();
-        if (!tasks_.submit([this, session, item, subtitle, deliveryUrl, dataPath, generation] {
-            std::string clean;
-            std::filesystem::path cacheFile;
-            bool fromCache = false;
-            if (!dataPath.empty()) {
-                const std::filesystem::path directory = std::filesystem::path(dataPath) / "subtitles";
-                cacheFile = directory / (item.id + "-" + std::to_string(subtitle.index) + ".srt");
-                std::ifstream cached(cacheFile, std::ios::binary);
-                if (cached) {
-                    clean.assign(std::istreambuf_iterator<char>(cached), std::istreambuf_iterator<char>());
-                    fromCache = !clean.empty();
+        const int requestedSubtitleIndex = subtitle.index;
+
+        std::vector<JellyfinSubtitleStream> candidates;
+        candidates.push_back(subtitle);
+        const std::string requestedLanguage = normalizeSubtitleLanguage(subtitle.language);
+        const auto requested = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& candidate) {
+            return candidate.index == requestedSubtitleIndex;
+        });
+        if (requested != item.subtitles.end()) {
+            for (auto candidate = std::next(requested); candidate != item.subtitles.end(); ++candidate) {
+                if (!subtitleAllowed(*candidate)
+                    || !useNativeSubtitleRenderer(subtitleStrategy(candidate->codec), true)) {
+                    continue;
                 }
+                if (!requestedLanguage.empty()
+                    && normalizeSubtitleLanguage(candidate->language) != requestedLanguage) {
+                    continue;
+                }
+                candidates.push_back(*candidate);
             }
-            const auto fetchSubtitle = [&] {
-                auto response = api_.downloadSubtitleSrt(session, item, subtitle.index);
-                if ((!response.ok || response.value.empty()) && !deliveryUrl.empty()) {
-                    response = api_.downloadSubtitleUrl(session, deliveryUrl);
-                }
-                return response;
-            };
-            std::string subtitleFailure;
-            if (clean.empty()) {
-                auto response = fetchSubtitle();
-                if (response.ok && !response.value.empty()) {
-                    clean = sanitizeSubtitleText(std::move(response.value));
-                    if (!cacheFile.empty() && !clean.empty()) {
-                        std::error_code ec;
-                        std::filesystem::create_directories(cacheFile.parent_path(), ec);
-                        if (!ec) {
-                            std::ofstream output(cacheFile, std::ios::binary | std::ios::trunc);
-                            if (output) output.write(clean.data(), static_cast<std::streamsize>(clean.size()));
-                        }
+        }
+
+        if (!tasks_.submit([this, session, item, candidates = std::move(candidates), deliveryUrl, dataPath, generation, requestedSubtitleIndex] {
+            JellyfinSubtitleStream loadedSubtitle;
+            std::vector<SubtitleCue> loadedCues;
+
+            for (size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex) {
+                const JellyfinSubtitleStream& candidate = candidates[candidateIndex];
+                std::string subtitleBody;
+                std::filesystem::path cacheFile;
+                bool fromCache = false;
+                if (!dataPath.empty()) {
+                    const std::filesystem::path directory = std::filesystem::path(dataPath) / "subtitles";
+                    const std::string format = subtitleTextFormat(candidate.codec);
+                    cacheFile = directory / (item.id + "-" + std::to_string(candidate.index) + "." + (format.empty() ? "txt" : format));
+                    std::ifstream cached(cacheFile, std::ios::binary);
+                    if (cached) {
+                        subtitleBody.assign(std::istreambuf_iterator<char>(cached), std::istreambuf_iterator<char>());
+                        fromCache = !subtitleBody.empty();
                     }
-                } else {
-                    subtitleFailure = response.error.empty() ? "empty subtitle response" : response.error;
                 }
-            }
-            clean = sanitizeSubtitleText(std::move(clean));
-            std::vector<SubtitleCue> cues = parseSubRipCues(clean);
-            if (cues.empty() && fromCache) {
-                std::error_code ec;
-                std::filesystem::remove(cacheFile, ec);
-                auto response = fetchSubtitle();
-                if (response.ok) {
-                    clean = sanitizeSubtitleText(std::move(response.value));
-                    cues = parseSubRipCues(clean);
-                } else {
-                    subtitleFailure = response.error.empty() ? "subtitle cache refresh failed" : response.error;
+
+                const auto fetchSubtitle = [&] {
+                    auto response = api_.downloadSubtitleText(session, item, candidate.index, candidate.codec);
+                    if ((!response.ok || response.value.empty()) && candidateIndex == 0 && !deliveryUrl.empty()) {
+                        response = api_.downloadSubtitleUrl(session, deliveryUrl);
+                    }
+                    if ((!response.ok || response.value.empty())
+                        && candidate.codec != "ass" && candidate.codec != "ssa") {
+                        response = api_.downloadSubtitleSrt(session, item, candidate.index);
+                    }
+                    return response;
+                };
+
+                std::string subtitleFailure;
+                if (subtitleBody.empty()) {
+                    auto response = fetchSubtitle();
+                    if (response.ok && !response.value.empty()) {
+                        subtitleBody = std::move(response.value);
+                        if (!cacheFile.empty()) {
+                            std::error_code ec;
+                            std::filesystem::create_directories(cacheFile.parent_path(), ec);
+                            if (!ec) {
+                                std::ofstream output(cacheFile, std::ios::binary | std::ios::trunc);
+                                if (output) output.write(subtitleBody.data(), static_cast<std::streamsize>(subtitleBody.size()));
+                            }
+                        }
+                    } else {
+                        subtitleFailure = response.error.empty() ? "empty subtitle response" : response.error;
+                    }
                 }
-            }
-            const bool loaded = !cues.empty();
-            if (!loaded) {
-                if (subtitleFailure.empty()) subtitleFailure = clean.empty() ? "subtitle body was empty" : "subtitle contained no parseable SRT cues";
+
+                std::vector<SubtitleCue> cues = parseTextSubtitleCues(subtitleBody, candidate.codec);
+                if (cues.empty() && fromCache) {
+                    std::error_code ec;
+                    std::filesystem::remove(cacheFile, ec);
+                    auto response = fetchSubtitle();
+                    if (response.ok) {
+                        subtitleBody = std::move(response.value);
+                        cues = parseTextSubtitleCues(subtitleBody, candidate.codec);
+                    } else {
+                        subtitleFailure = response.error.empty() ? "subtitle cache refresh failed" : response.error;
+                    }
+                }
+
+                if (!cues.empty()) {
+                    loadedSubtitle = candidate;
+                    loadedCues = std::move(cues);
+                    if (candidate.index != requestedSubtitleIndex) {
+                        __android_log_print(
+                            ANDROID_LOG_INFO,
+                            kTag,
+                            "Subtitle stream %d unavailable; using fallback stream %d",
+                            requestedSubtitleIndex,
+                            candidate.index
+                        );
+                    }
+                    break;
+                }
+
+                if (subtitleFailure.empty()) {
+                    subtitleFailure = subtitleBody.empty() ? "subtitle body was empty" : "subtitle contained no parseable text cues";
+                }
                 __android_log_print(
                     ANDROID_LOG_WARN,
                     kTag,
                     "Subtitle load failed item=%s stream=%d codec=%s reason=%s",
                     item.id.c_str(),
-                    subtitle.index,
-                    subtitle.codec.c_str(),
+                    candidate.index,
+                    candidate.codec.c_str(),
                     subtitleFailure.c_str()
                 );
             }
+
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
-            if (shouldApplyLoadedSubtitle(
-                    activePlaybackItem_.id,
-                    item.id,
-                    trackState_.selectedSubtitleServerIndex(),
-                    subtitle.index,
-                    loaded
-                )) {
-                __android_log_print(
-                    ANDROID_LOG_INFO,
-                    kTag,
-                    "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
-                    item.id.c_str(),
-                    subtitle.index,
-                    subtitle.codec.c_str(),
-                    cues.size()
-                );
-                trackState_.applySubtitle(subtitle.index, subtitle.language, std::move(cues));
-                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+            if (activePlaybackItem_.id != item.id
+                || trackState_.selectedSubtitleServerIndex() != requestedSubtitleIndex) {
+                return;
             }
-            if (activePlaybackItem_.id == item.id && trackState_.selectedSubtitleServerIndex() == subtitle.index) {
-                trackState_.endSubtitleWork();
-                if (!loaded) {
-                    trackState_.failSelectedSubtitle();
-                    showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
-                }
+
+            trackState_.endSubtitleWork();
+            if (loadedCues.empty()) {
+                trackState_.failSelectedSubtitle();
+                showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
+                return;
             }
+
+            trackState_.setSelectedSubtitleServerIndex(loadedSubtitle.index);
+            activeTarget_.subtitleStreamIndex = loadedSubtitle.index;
+            __android_log_print(
+                ANDROID_LOG_INFO,
+                kTag,
+                "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
+                item.id.c_str(),
+                loadedSubtitle.index,
+                loadedSubtitle.codec.c_str(),
+                loadedCues.size()
+            );
+            trackState_.applySubtitle(loadedSubtitle.index, loadedSubtitle.language, std::move(loadedCues));
+            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+            reportProgressAsync(false);
         })) {
             trackState_.failSelectedSubtitle();
             showNotice("SUBTITLES COULD NOT BE STARTED");
@@ -1969,6 +2020,7 @@ private:
             if (nextIndex < 0) {
                 if (player_.disableSubtitles()) {
                     trackState_.setSelectedSubtitleServerIndex(kSubtitleOffIndex);
+                    trackState_.setSubtitleEnabled(false);
                     activeTarget_.subtitleStreamIndex = kSubtitleOffIndex;
                     playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
                     reportProgressAsync(false);
@@ -1978,14 +2030,36 @@ private:
                 const auto selected = std::find_if(activePlaybackItem_.subtitles.begin(), activePlaybackItem_.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
                     return subtitle.index == nextIndex;
                 });
-                if (selected != activePlaybackItem_.subtitles.end() && !selected->isExternal) {
-                    const int ordinal = static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), selected));
-                    if (player_.selectEmbeddedSubtitleStream(nextIndex, ordinal)) {
+                if (selected != activePlaybackItem_.subtitles.end()) {
+                    const SubtitleStrategy strategy = subtitleStrategy(selected->codec);
+                    __android_log_print(
+                        ANDROID_LOG_INFO,
+                        kTag,
+                        "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
+                        nextIndex,
+                        selected->codec.c_str(),
+                        selected->isExternal ? 1 : 0,
+                        static_cast<int>(strategy)
+                    );
+                    if (useNativeSubtitleRenderer(strategy, true)) {
+                        player_.disableSubtitles();
                         trackState_.setSelectedSubtitleServerIndex(nextIndex);
+                        trackState_.setSubtitleEnabled(false);
                         activeTarget_.subtitleStreamIndex = nextIndex;
+                        loadSubtitleAsync(*selected);
                         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
                         reportProgressAsync(false);
                         return;
+                    }
+                    if (!selected->isExternal) {
+                        const int ordinal = static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), selected));
+                        if (player_.selectEmbeddedSubtitleStream(nextIndex, ordinal)) {
+                            trackState_.setSelectedSubtitleServerIndex(nextIndex);
+                            activeTarget_.subtitleStreamIndex = nextIndex;
+                            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+                            reportProgressAsync(false);
+                            return;
+                        }
                     }
                 }
             }
@@ -3617,8 +3691,19 @@ private:
         return -1;
     }
 
+    int playerSubtitleStreamIndex(const PlaybackTarget& target, const JellyfinItem& item) const {
+        if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return kSubtitleOffIndex;
+        const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+            return subtitle.index == target.subtitleStreamIndex;
+        });
+        if (selected == item.subtitles.end()) return kSubtitleOffIndex;
+        return subtitleStrategy(selected->codec) == SubtitleStrategy::ClientEmbedded
+            ? target.subtitleStreamIndex
+            : kSubtitleOffIndex;
+    }
+
     int playerSubtitleOrdinal(const PlaybackTarget& target, const JellyfinItem& item) const {
-        if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return -1;
+        if (playerSubtitleStreamIndex(target, item) < 0) return -1;
         for (size_t index = 0; index < item.subtitles.size(); ++index) {
             if (item.subtitles[index].index == target.subtitleStreamIndex && !item.subtitles[index].isExternal) {
                 return static_cast<int>(index);
@@ -3628,7 +3713,7 @@ private:
     }
 
     std::string directExternalSubtitleUrl(const PlaybackTarget& target, const JellyfinItem& item) const {
-        if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0 || target.subtitleUrl.empty()) return {};
+        if (playerSubtitleStreamIndex(target, item) < 0 || target.subtitleUrl.empty()) return {};
         const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
             return subtitle.index == target.subtitleStreamIndex;
         });
@@ -3645,7 +3730,7 @@ private:
             startPositionMs,
             settings_.playbackBufferPreset,
             playerAudioOrdinal(target, activePlaybackItem_),
-            target.playMethod == PlaybackMethod::DirectPlay ? target.subtitleStreamIndex : kSubtitleOffIndex,
+            playerSubtitleStreamIndex(target, activePlaybackItem_),
             playerSubtitleOrdinal(target, activePlaybackItem_),
             directExternalSubtitleUrl(target, activePlaybackItem_)
         );
@@ -3909,7 +3994,7 @@ private:
         }
         trackState_.setSelectedAudioServerIndex(selectedAudioServerIndex);
         trackState_.setSelectedSubtitleServerIndex(target.subtitleStreamIndex);
-        if (trackState_.selectedSubtitleServerIndex() >= 0 && target.playMethod != PlaybackMethod::DirectPlay) {
+        if (trackState_.selectedSubtitleServerIndex() >= 0) {
             const auto selectedSubtitle = std::find_if(
                 item.subtitles.begin(),
                 item.subtitles.end(),

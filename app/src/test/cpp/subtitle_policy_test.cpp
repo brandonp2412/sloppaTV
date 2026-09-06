@@ -38,6 +38,38 @@ int main() {
     assert(cues[1].startMs == 3000);
     assert(cues[1].text == "Again");
 
+    assert(subtitleTextFormat("ass") == "ass");
+    assert(subtitleTextFormat("SSA") == "ssa");
+    assert(subtitleTextFormat("subrip") == "srt");
+    assert(subtitleTextFormat("webvtt") == "vtt");
+    assert(subtitleTextFormat("pgs").empty());
+
+    const auto assCues = parseTextSubtitleCues(
+        "\xEF\xBB\xBF[Script Info]\n"
+        "Title: test\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "Dialogue: 0,0:00:01.25,0:00:03.50,Default,,0,0,0,,{\\an8}<i>Hello</i>\\Nworld, with comma\n"
+        "Dialogue: 0,0:00:04.00,0:00:05.10,Default,,0,0,0,,Again\n",
+        "ass"
+    );
+    assert(assCues.size() == 2);
+    assert(assCues[0].startMs == 1250);
+    assert(assCues[0].endMs == 3500);
+    assert(assCues[0].text == "Hello world, with comma");
+    assert(assCues[1].startMs == 4000);
+    assert(assCues[1].text == "Again");
+
+    const auto ssaCues = parseTextSubtitleCues(
+        "[Events]\n"
+        "Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+        "Dialogue: Marked=0,0:00:02.00,0:00:03.00,Default,,0000,0000,0000,,SSA text\n",
+        "SSA"
+    );
+    assert(ssaCues.size() == 1);
+    assert(ssaCues[0].startMs == 2000);
+    assert(ssaCues[0].text == "SSA text");
+
     const auto unsortedCues = parseSubRipCues(
         "1\n00:00:05,000 --> 00:00:06,000\nLater\n\n"
         "2\n00:00:01,000 --> 00:00:02,000\nEarlier\n"
@@ -53,6 +85,8 @@ int main() {
     assert(sanitizeSubtitleText("I <3 TV") == "I <3 TV");
     assert(sanitizeSubtitleText("2 < 3") == "2 < 3");
     assert(sanitizeSubtitleText("{\\an8}Top") == "Top");
+    assert(sanitizeSubtitleText("Bottom{an}") == "Bottom");
+    assert(sanitizeSubtitleText("Bottom{an2}") == "Bottom");
     assert(sanitizeSubtitleText("<v Roger>Hello</v>") == "Hello");
 
     const std::vector<SubtitlePreferenceCandidate> subtitles{
