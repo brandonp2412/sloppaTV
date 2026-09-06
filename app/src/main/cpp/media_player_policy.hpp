@@ -190,14 +190,32 @@ constexpr int initialPlayerSeekMs(int64_t desiredStartTicks) {
     return playbackPositionMsFromTicks(desiredStartTicks);
 }
 
+constexpr bool subtitleCodecEquals(std::string_view left, std::string_view right) {
+    if (left.size() != right.size()) return false;
+    for (size_t index = 0; index < left.size(); ++index) {
+        unsigned char a = static_cast<unsigned char>(left[index]);
+        unsigned char b = static_cast<unsigned char>(right[index]);
+        if (a >= 'A' && a <= 'Z') a = static_cast<unsigned char>(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = static_cast<unsigned char>(b - 'A' + 'a');
+        if (a != b) return false;
+    }
+    return true;
+}
+
 constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
-    if (codec == "srt" || codec == "subrip" || codec == "vtt" || codec == "webvtt" || codec == "mov_text") {
+    if (subtitleCodecEquals(codec, "srt") || subtitleCodecEquals(codec, "subrip")
+        || subtitleCodecEquals(codec, "vtt") || subtitleCodecEquals(codec, "webvtt")
+        || subtitleCodecEquals(codec, "mov_text")) {
         return SubtitleStrategy::ClientText;
     }
-    if (codec == "ass" || codec == "ssa") return SubtitleStrategy::ClientStyled;
-    if (codec == "pgs" || codec == "pgssub" || codec == "hdmv_pgs_subtitle"
-        || codec == "dvdsub" || codec == "dvd_subtitle"
-        || codec == "dvbsub" || codec == "dvb_subtitle" || codec == "xsub") {
+    if (subtitleCodecEquals(codec, "ass") || subtitleCodecEquals(codec, "ssa")) {
+        return SubtitleStrategy::ClientStyled;
+    }
+    if (subtitleCodecEquals(codec, "pgs") || subtitleCodecEquals(codec, "pgssub")
+        || subtitleCodecEquals(codec, "hdmv_pgs_subtitle")
+        || subtitleCodecEquals(codec, "dvdsub") || subtitleCodecEquals(codec, "dvd_subtitle")
+        || subtitleCodecEquals(codec, "dvbsub") || subtitleCodecEquals(codec, "dvb_subtitle")
+        || subtitleCodecEquals(codec, "xsub")) {
         return SubtitleStrategy::ClientEmbedded;
     }
     return SubtitleStrategy::ServerTranscode;

@@ -161,7 +161,8 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(
 
     plan.allowAudioStreamCopy = audio.selected
         && audioStreamCopyAllowed(plan.audioCodecs, audio.codec, audio.channels, plan.maxAudioChannels);
-    plan.clientSubtitle = subtitle.selected && subtitleStrategy(subtitle.codec) != SubtitleStrategy::ServerTranscode;
+    const SubtitleStrategy subtitleMode = subtitleStrategy(subtitle.codec);
+    plan.clientSubtitle = subtitle.selected && useNativeSubtitleRenderer(subtitleMode, true);
     plan.serverSubtitle = subtitle.selected && !plan.clientSubtitle;
     return plan;
 }

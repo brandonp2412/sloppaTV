@@ -20,8 +20,10 @@ int main() {
     assert(subtitleStrategy("srt") == SubtitleStrategy::ClientText);
     assert(subtitleStrategy("mov_text") == SubtitleStrategy::ClientText);
     assert(subtitleStrategy("ass") == SubtitleStrategy::ClientStyled);
+    assert(subtitleStrategy("ASS") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("ssa") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("pgs") == SubtitleStrategy::ClientEmbedded);
+    assert(subtitleStrategy("PGSSUB") == SubtitleStrategy::ClientEmbedded);
     assert(subtitleStrategy("pgssub") == SubtitleStrategy::ClientEmbedded);
     assert(subtitleStrategy("dvdsub") == SubtitleStrategy::ClientEmbedded);
     assert(subtitleStrategy("dvbsub") == SubtitleStrategy::ClientEmbedded);

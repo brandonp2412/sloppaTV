@@ -2051,7 +2051,14 @@ private:
                         reportProgressAsync(false);
                         return;
                     }
-                    if (!selected->isExternal) {
+                    if (strategy == SubtitleStrategy::ClientEmbedded) {
+                        __android_log_print(
+                            ANDROID_LOG_INFO,
+                            kTag,
+                            "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
+                            nextIndex
+                        );
+                    } else if (!selected->isExternal) {
                         const int ordinal = static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), selected));
                         if (player_.selectEmbeddedSubtitleStream(nextIndex, ordinal)) {
                             trackState_.setSelectedSubtitleServerIndex(nextIndex);
