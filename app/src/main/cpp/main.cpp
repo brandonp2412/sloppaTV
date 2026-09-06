@@ -2966,24 +2966,24 @@ private:
                     resetNavigation(Screen::Login);
                     error_ = "SESSION EXPIRED - LOG IN AGAIN";
                     saveSession(session_);
-                } else {
-                    if (isTransientHomeLoadError(core.error)) {
-                        const int delaySeconds = std::min(30, 1 << std::min(homeRetryAttempt_, 5));
-                        ++homeRetryAttempt_;
-                        homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(delaySeconds);
-                        __android_log_print(
-                            ANDROID_LOG_WARN,
-                            kTag,
-                            "Home load failed transiently; retrying in %d seconds: %s",
-                            delaySeconds,
-                            core.error.c_str()
-                        );
-                    } else {
-                        homeRetryAt_ = {};
-                        homeRetryAttempt_ = 0;
-                    }
-                    if (screen_ == Screen::Home) error_ = core.error;
+                    return;
                 }
+                if (isTransientHomeLoadError(core.error)) {
+                    const int delaySeconds = std::min(30, 1 << std::min(homeRetryAttempt_, 5));
+                    ++homeRetryAttempt_;
+                    homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(delaySeconds);
+                    __android_log_print(
+                        ANDROID_LOG_WARN,
+                        kTag,
+                        "Home load failed transiently; retrying in %d seconds: %s",
+                        delaySeconds,
+                        core.error.c_str()
+                    );
+                } else {
+                    homeRetryAt_ = {};
+                    homeRetryAttempt_ = 0;
+                }
+                if (screen_ == Screen::Home) error_ = core.error;
                 return;
             }
 

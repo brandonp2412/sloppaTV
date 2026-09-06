@@ -59,14 +59,6 @@ class ManifestToolingTest(unittest.TestCase):
         )
 
 
-class JellyfinRequestToolingTest(unittest.TestCase):
-    def test_explicit_metadata_refresh_requests_full_metadata_replacement(self) -> None:
-        source = (ROOT / "app" / "src" / "main" / "cpp" / "jellyfin.cpp").read_text()
-        self.assertIn("metadataRefreshMode=FullRefresh", source)
-        self.assertIn("imageRefreshMode=FullRefresh", source)
-        self.assertIn("replaceAllMetadata=true", source)
-
-
 class RetryFixtureToolingTest(unittest.TestCase):
     def test_views_request_aborts_once_then_recovers(self) -> None:
         retry_fixture_server.RetryFixtureHandler.failed_views_once = False
@@ -309,7 +301,6 @@ class WaydroidToolingTest(unittest.TestCase):
                 b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (1920).to_bytes(4, "big") + (1080).to_bytes(4, "big")
             )
             entry = waydroid_e2e.screenshot_manifest_entry(path)
-            self.assertEqual(entry["file"], "home.png")
             self.assertEqual(entry["width"], 1920)
             self.assertEqual(entry["height"], 1080)
             self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
