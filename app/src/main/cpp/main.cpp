@@ -555,6 +555,10 @@ private:
                         );
                         __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved libmpv and GLES context");
                     } else {
+                        // libmpv must release MediaCodec before its Android Surface is destroyed.
+                        // Releasing VideoSurface first can make mediacodec_embed observe wid=0 while
+                        // the decoder is still active and abort inside vo_mediacodec_embed.
+                        player_.stop();
                         videoSurface_.release();
                         std::string surfaceError;
                         if (!videoSurface_.create(surfaceError)) {
@@ -4003,10 +4007,11 @@ private:
         const auto& transition = *work.playbackTransition;
         const auto& target = transition.target;
         const auto& item = transition.item;
-        if (transition.streamRestart) {
-            player_.stop();
-            videoSurface_.release();
-        }
+        // A playback transition always creates a fresh SurfaceTexture. Stop libmpv first:
+        // destroying the old Surface while MediaCodec is still bound to it can race
+        // mediacodec_embed and abort when its wid becomes invalid.
+        player_.stop();
+        videoSurface_.release();
         std::string surfaceError;
         if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
             std::scoped_lock lock(stateMutex_);

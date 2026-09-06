@@ -397,8 +397,10 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
 
 void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     if (symbols_ && mpv_) {
-        int64_t noSurface = 0;
-        symbols_->setOption(mpv_, "wid", kMpvFormatInt64, &noSurface);
+        // mediacodec_embed requires a valid Android Surface for the lifetime of its VO.
+        // Setting wid=0 before teardown can make the VO reconfigure against an invalid
+        // surface and abort. Destroy mpv first while surface_ is still retained, then
+        // release the Java Surface below.
         symbols_->terminateDestroy(mpv_);
         mpv_ = nullptr;
     }
