@@ -151,7 +151,7 @@ class WaydroidToolingTest(unittest.TestCase):
         )
         self.assertIn("text", {step["action"] for step in suite["steps"]})
         server_text = next(step["value"] for step in suite["steps"] if step.get("value", "").startswith("http://"))
-        self.assertEqual(server_text, "http://127.0.0.1")
+        self.assertEqual(server_text, "http://127.0.0.1:1024")
 
     def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
@@ -162,7 +162,7 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("target: android-tv", workflow)
         script = (ROOT / "tools" / "ci_screenshots.sh").read_text(encoding="utf-8")
         self.assertIn("screenshot_fixture_server.py", script)
-        self.assertIn('reverse tcp:80 tcp:18096', script)
+        self.assertIn('reverse tcp:1024 tcp:18096', script)
         self.assertIn("POST /Users/AuthenticateByName", script)
 
     def test_target_model_guard_requires_explicit_physical_target(self) -> None:

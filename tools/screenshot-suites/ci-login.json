@@ -4,7 +4,7 @@
     {"action": "restart", "wait_seconds": 3},
     {"action": "capture", "name": "01-login"},
     {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 1},
-    {"action": "text", "value": "http://127.0.0.1"},
+    {"action": "text", "value": "http://127.0.0.1:1024"},
     {"action": "key", "key": "ENTER", "wait_seconds": 1},
     {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 1},
     {"action": "text", "value": "viewer"},
