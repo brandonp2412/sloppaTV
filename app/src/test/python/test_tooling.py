@@ -236,6 +236,18 @@ class WaydroidToolingTest(unittest.TestCase):
             ],
         )
         self.assertEqual(sum(step.get("store") is True for step in capture_steps), 8)
+        search_capture_index = next(
+            index for index, step in enumerate(suite["steps"])
+            if step.get("action") == "capture" and step.get("name") == "04-search-catalog"
+        )
+        movie_capture_index = next(
+            index for index, step in enumerate(suite["steps"])
+            if step.get("action") == "capture" and step.get("name") == "05-movie-browse"
+        )
+        self.assertIn(
+            "restart",
+            [step["action"] for step in suite["steps"][search_capture_index + 1 : movie_capture_index]],
+        )
         actions = {step["action"] for step in suite["steps"]}
         self.assertIn("text", actions)
         self.assertIn("search", actions)

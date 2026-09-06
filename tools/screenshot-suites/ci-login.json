@@ -27,7 +27,7 @@
     {"action": "fixture_log", "contains": "SearchTerm=Caminandes", "timeout_seconds": 8},
     {"action": "wait", "wait_seconds": 1},
     {"action": "capture", "name": "04-search-catalog", "store": true},
-    {"action": "key", "key": "BACK", "wait_seconds": 1},
+    {"action": "restart", "wait_seconds": 3},
 
     {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 2},
     {"action": "capture", "name": "05-movie-browse", "store": true},
