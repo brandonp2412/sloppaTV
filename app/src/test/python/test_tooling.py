@@ -149,9 +149,17 @@ class WaydroidToolingTest(unittest.TestCase):
                 "08-settings-options",
             ],
         )
-        self.assertIn("text", {step["action"] for step in suite["steps"]})
-        server_text = next(step["value"] for step in suite["steps"] if step.get("value", "").startswith("http://"))
+        actions = {step["action"] for step in suite["steps"]}
+        self.assertIn("text", actions)
+        self.assertIn("fixture_log", actions)
+        text_steps = [step for step in suite["steps"] if step["action"] == "text"]
+        self.assertTrue(all(step.get("wait_seconds", 0) >= 1 for step in text_steps))
+        server_text = next(step["value"] for step in text_steps if step.get("value", "").startswith("http://"))
         self.assertEqual(server_text, "http://127.0.0.1:1024")
+        fixture_assertions = [step["contains"] for step in suite["steps"] if step["action"] == "fixture_log"]
+        self.assertIn("POST /Users/AuthenticateByName", fixture_assertions)
+        self.assertIn("GET /Users/fixture-user/Views", fixture_assertions)
+        self.assertIn("SearchTerm=Bunny", fixture_assertions)
 
     def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
@@ -276,6 +284,16 @@ class WaydroidToolingTest(unittest.TestCase):
             path.write_text(json.dumps(suite), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "capture name"):
                 waydroid_e2e.load_screenshot_suite(path)
+
+    def test_wait_for_fixture_log_detects_expected_request(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_dir = Path(directory)
+            (artifact_dir / "fixture-server.log").write_text(
+                '"POST /Users/AuthenticateByName HTTP/1.1" 200 -\n',
+                encoding="utf-8",
+            )
+            with patch.object(waydroid_e2e, "ARTIFACTS", artifact_dir):
+                waydroid_e2e.wait_for_fixture_log("POST /Users/AuthenticateByName", 0.1)
 
     def test_png_dimensions_reads_screenshot_header(self) -> None:
         png = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (1920).to_bytes(4, "big") + (1080).to_bytes(4, "big")

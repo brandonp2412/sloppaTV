@@ -171,7 +171,7 @@ def load_screenshot_suite(path: Path) -> dict:
     steps = suite.get("steps")
     if not isinstance(steps, list) or not steps:
         raise ValueError("screenshot suite must have at least one step")
-    allowed = {"launch", "restart", "key", "text", "capture", "wait"}
+    allowed = {"launch", "restart", "key", "text", "capture", "wait", "fixture_log"}
     for index, step in enumerate(steps):
         if not isinstance(step, dict) or step.get("action") not in allowed:
             raise ValueError(f"unsupported screenshot step {index}")
@@ -184,7 +184,24 @@ def load_screenshot_suite(path: Path) -> dict:
             raise ValueError(f"invalid text in screenshot step {index}")
         if step["action"] == "capture" and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(step.get("name", ""))):
             raise ValueError(f"invalid capture name in screenshot step {index}")
+        if step["action"] == "fixture_log":
+            needle = step.get("contains")
+            timeout_seconds = step.get("timeout_seconds", 8)
+            if not isinstance(needle, str) or not needle or len(needle) > 256:
+                raise ValueError(f"invalid fixture log assertion in screenshot step {index}")
+            if not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 30:
+                raise ValueError(f"invalid fixture log timeout in screenshot step {index}")
     return suite
+
+
+def wait_for_fixture_log(needle: str, timeout_seconds: float) -> None:
+    log_path = ARTIFACTS / "fixture-server.log"
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if log_path.is_file() and needle in log_path.read_text(encoding="utf-8", errors="replace"):
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"fixture server did not receive expected request within {timeout_seconds:g}s: {needle}")
 
 
 def screenshot_suite(path: Path) -> Path:
@@ -200,6 +217,8 @@ def screenshot_suite(path: Path) -> Path:
             key(step["key"])
         elif action == "text":
             adb("shell", "input", "text", step["value"])
+        elif action == "fixture_log":
+            wait_for_fixture_log(step["contains"], float(step.get("timeout_seconds", 8)))
         elif action == "capture":
             screenshot = capture(step["name"])
             width, height = png_dimensions(screenshot)
