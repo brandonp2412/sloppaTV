@@ -153,15 +153,18 @@ def png_dimensions(path: Path) -> tuple[int, int]:
     return struct.unpack(">II", header[16:24])
 
 
-def screenshot_manifest_entry(path: Path) -> dict[str, int | str]:
+def screenshot_manifest_entry(path: Path, store: bool | None = None) -> dict[str, int | str | bool]:
     width, height = png_dimensions(path)
-    return {
+    entry: dict[str, int | str | bool] = {
         "file": path.name,
         "width": width,
         "height": height,
         "bytes": path.stat().st_size,
         "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
     }
+    if store is not None:
+        entry["store"] = store
+    return entry
 
 
 def load_screenshot_suite(path: Path) -> dict:
@@ -171,7 +174,7 @@ def load_screenshot_suite(path: Path) -> dict:
     steps = suite.get("steps")
     if not isinstance(steps, list) or not steps:
         raise ValueError("screenshot suite must have at least one step")
-    allowed = {"launch", "restart", "key", "text", "capture", "wait", "fixture_log"}
+    allowed = {"launch", "restart", "key", "text", "search", "capture", "wait", "fixture_log"}
     for index, step in enumerate(steps):
         if not isinstance(step, dict) or step.get("action") not in allowed:
             raise ValueError(f"unsupported screenshot step {index}")
@@ -182,8 +185,15 @@ def load_screenshot_suite(path: Path) -> dict:
             raise ValueError(f"invalid key in screenshot step {index}")
         if step["action"] == "text" and not re.fullmatch(r"[A-Za-z0-9.:/@_-]{1,128}", str(step.get("value", ""))):
             raise ValueError(f"invalid text in screenshot step {index}")
-        if step["action"] == "capture" and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(step.get("name", ""))):
-            raise ValueError(f"invalid capture name in screenshot step {index}")
+        if step["action"] == "search":
+            query = step.get("query")
+            if not isinstance(query, str) or not query.strip() or len(query) > 128:
+                raise ValueError(f"invalid search query in screenshot step {index}")
+        if step["action"] == "capture":
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(step.get("name", ""))):
+                raise ValueError(f"invalid capture name in screenshot step {index}")
+            if "store" in step and not isinstance(step["store"], bool):
+                raise ValueError(f"invalid store flag in screenshot step {index}")
         if step["action"] == "fixture_log":
             needle = step.get("contains")
             timeout_seconds = step.get("timeout_seconds", 8)
@@ -206,7 +216,7 @@ def wait_for_fixture_log(needle: str, timeout_seconds: float) -> None:
 
 def screenshot_suite(path: Path) -> Path:
     suite = load_screenshot_suite(path)
-    screenshots: list[dict[str, int | str]] = []
+    screenshots: list[dict[str, int | str | bool]] = []
     for step in suite["steps"]:
         action = step["action"]
         if action == "launch":
@@ -217,6 +227,19 @@ def screenshot_suite(path: Path) -> Path:
             key(step["key"])
         elif action == "text":
             adb("shell", "input", "text", step["value"])
+        elif action == "search":
+            adb(
+                "shell",
+                "am",
+                "start",
+                "-a",
+                "android.intent.action.SEARCH",
+                "--es",
+                "query",
+                shlex.quote(step["query"]),
+                "-n",
+                COMPONENT,
+            )
         elif action == "fixture_log":
             wait_for_fixture_log(step["contains"], float(step.get("timeout_seconds", 8)))
         elif action == "capture":
@@ -224,7 +247,7 @@ def screenshot_suite(path: Path) -> Path:
             width, height = png_dimensions(screenshot)
             if (width, height) != (1920, 1080):
                 raise RuntimeError(f"unexpected screenshot dimensions {width}x{height}: {screenshot}")
-            screenshots.append(screenshot_manifest_entry(screenshot))
+            screenshots.append(screenshot_manifest_entry(screenshot, step.get("store")))
         wait_seconds = float(step.get("wait_seconds", 0))
         if action == "wait":
             wait_seconds = float(step.get("wait_seconds", 1))

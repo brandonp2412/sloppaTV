@@ -55,7 +55,7 @@ adb -s "$ANDROID_SERIAL" shell wm size 1920x1080
 # Route the emulator's loopback HTTP port to the host fixture. This avoids
 # depending on emulator-specific host aliases and keeps URL entry deterministic.
 adb -s "$ANDROID_SERIAL" reverse tcp:1024 tcp:18096
-timeout --foreground -k 15 180 python3 "$SCRIPT_DIR/waydroid_e2e.py" \
+timeout --foreground -k 15 240 python3 "$SCRIPT_DIR/waydroid_e2e.py" \
     --serial "$ANDROID_SERIAL" \
     --target android-tv-emulator \
     screenshots --suite "$SCREENSHOT_SUITE"
@@ -64,16 +64,30 @@ for screenshot in \
     01-login \
     02-home \
     03-search \
-    04-search-results \
-    05-browse \
-    06-details \
-    07-settings \
-    08-settings-options; do
+    04-search-catalog \
+    05-movie-browse \
+    06-movie-details \
+    07-cast \
+    08-person-titles \
+    09-item-menu \
+    10-player-cc-video \
+    11-player-controls \
+    12-series-browse \
+    13-series-details \
+    14-seasons \
+    15-episodes \
+    16-episode-details \
+    17-settings \
+    18-settings-options \
+    19-profiles; do
     test -s "$SCREENSHOT_DIR/$screenshot.png"
 done
 test -s "$SCREENSHOT_DIR/screenshots.json"
 grep -Fq 'POST /Users/AuthenticateByName' "$SCREENSHOT_DIR/fixture-server.log"
 grep -Fq 'GET /Users/fixture-user/Views' "$SCREENSHOT_DIR/fixture-server.log"
+grep -Fq 'POST /Items/movie-big-buck-bunny/PlaybackInfo' "$SCREENSHOT_DIR/fixture-server.log"
+grep -Fq 'GET /Shows/series-caminandes/Seasons' "$SCREENSHOT_DIR/fixture-server.log"
+grep -Fq 'GET /Shows/series-caminandes/Episodes' "$SCREENSHOT_DIR/fixture-server.log"
 trap - EXIT
 adb -s "$ANDROID_SERIAL" reverse --remove tcp:1024 2>/dev/null || true
 kill "$fixture_pid" 2>/dev/null || true

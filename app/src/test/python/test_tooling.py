@@ -31,6 +31,8 @@ benchmark_tv = load_tool("benchmark_tv")
 waydroid_e2e = load_tool("waydroid_e2e")
 playback_report_e2e = load_tool("playback_report_e2e")
 retry_fixture_server = load_tool("retry_fixture_server")
+screenshot_fixture_server = load_tool("screenshot_fixture_server")
+sync_play_store_screenshots = load_tool("sync_play_store_screenshots")
 
 
 class BenchmarkToolingTest(unittest.TestCase):
@@ -124,25 +126,98 @@ class PlaybackReportToolingTest(unittest.TestCase):
         self.assertEqual(value["play_method"], "DirectStream")
 
 
+class ScreenshotFixtureToolingTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.server = screenshot_fixture_server.ThreadingHTTPServer(
+            ("127.0.0.1", 0), screenshot_fixture_server.Handler
+        )
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+        cls.port = cls.server.server_address[1]
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join(timeout=2)
+
+    def request(self, method: str, path: str, headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], bytes]:
+        connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
+        connection.request(method, path, headers=headers or {})
+        response = connection.getresponse()
+        body = response.read()
+        result = response.status, {key.lower(): value for key, value in response.getheaders()}, body
+        connection.close()
+        return result
+
+    def test_catalog_has_movies_series_episodes_descriptions_and_artwork(self) -> None:
+        status, _, body = self.request("GET", "/Users/fixture-user/Views")
+        self.assertEqual(status, 200)
+        views = json.loads(body)["Items"]
+        self.assertEqual([view["CollectionType"] for view in views], ["movies", "tvshows"])
+
+        status, _, body = self.request("GET", "/Items?SearchTerm=Caminandes")
+        self.assertEqual(status, 200)
+        values = json.loads(body)["Items"]
+        self.assertIn("Series", {value["Type"] for value in values})
+        self.assertIn("Episode", {value["Type"] for value in values})
+        self.assertTrue(all(value.get("Overview") for value in values))
+        self.assertTrue(all(value.get("ImageTags", {}).get("Primary") for value in values))
+
+        status, headers, image = self.request("GET", "/Items/movie-big-buck-bunny/Images/Primary?maxWidth=384")
+        self.assertEqual(status, 200)
+        self.assertTrue(headers["content-type"].startswith("image/"))
+        self.assertGreater(len(image), 10_000)
+
+    def test_series_navigation_and_cc_playback_fixture_are_servable(self) -> None:
+        status, _, body = self.request("GET", "/Shows/series-caminandes/Seasons?UserId=fixture-user")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["Items"][0]["Name"], "Season 1")
+        status, _, body = self.request("GET", "/Shows/series-caminandes/Episodes?UserId=fixture-user&SeasonId=season-caminandes-1")
+        self.assertEqual(status, 200)
+        self.assertEqual([item["Name"] for item in json.loads(body)["Items"]], ["Llama Drama", "Gran Dillama", "Llamigos"])
+
+        status, headers, body = self.request("GET", "/Videos/movie-big-buck-bunny/stream.mp4", {"Range": "bytes=0-127"})
+        self.assertEqual(status, 206)
+        self.assertEqual(headers["content-type"], "video/mp4")
+        self.assertEqual(len(body), 128)
+        self.assertTrue(headers["content-range"].startswith("bytes 0-127/"))
+
+
 class WaydroidToolingTest(unittest.TestCase):
-    def test_ci_screenshot_suite_captures_eight_distinct_store_listing_screens(self) -> None:
+    def test_ci_screenshot_suite_visually_covers_rich_catalog_and_selects_eight_store_screens(self) -> None:
         suite = json.loads((ROOT / "tools" / "screenshot-suites" / "ci-login.json").read_text(encoding="utf-8"))
-        captures = [step["name"] for step in suite["steps"] if step["action"] == "capture"]
+        capture_steps = [step for step in suite["steps"] if step["action"] == "capture"]
+        captures = [step["name"] for step in capture_steps]
         self.assertEqual(
             captures,
             [
                 "01-login",
                 "02-home",
                 "03-search",
-                "04-search-results",
-                "05-browse",
-                "06-details",
-                "07-settings",
-                "08-settings-options",
+                "04-search-catalog",
+                "05-movie-browse",
+                "06-movie-details",
+                "07-cast",
+                "08-person-titles",
+                "09-item-menu",
+                "10-player-cc-video",
+                "11-player-controls",
+                "12-series-browse",
+                "13-series-details",
+                "14-seasons",
+                "15-episodes",
+                "16-episode-details",
+                "17-settings",
+                "18-settings-options",
+                "19-profiles",
             ],
         )
+        self.assertEqual(sum(step.get("store") is True for step in capture_steps), 8)
         actions = {step["action"] for step in suite["steps"]}
         self.assertIn("text", actions)
+        self.assertIn("search", actions)
         self.assertIn("fixture_log", actions)
         text_steps = [step for step in suite["steps"] if step["action"] == "text"]
         self.assertTrue(all(step.get("wait_seconds", 0) >= 1 for step in text_steps))
@@ -151,7 +226,10 @@ class WaydroidToolingTest(unittest.TestCase):
         fixture_assertions = [step["contains"] for step in suite["steps"] if step["action"] == "fixture_log"]
         self.assertIn("POST /Users/AuthenticateByName", fixture_assertions)
         self.assertIn("GET /Users/fixture-user/Views", fixture_assertions)
-        self.assertIn("SearchTerm=Bunny", fixture_assertions)
+        self.assertIn("SearchTerm=Caminandes", fixture_assertions)
+        self.assertIn("GET /Shows/series-caminandes/Seasons", fixture_assertions)
+        self.assertIn("GET /Shows/series-caminandes/Episodes", fixture_assertions)
+        self.assertIn("POST /Items/movie-big-buck-bunny/PlaybackInfo", fixture_assertions)
 
     def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
@@ -269,6 +347,13 @@ class WaydroidToolingTest(unittest.TestCase):
             path.write_text(json.dumps(suite), encoding="utf-8")
             self.assertEqual(waydroid_e2e.load_screenshot_suite(path), suite)
 
+    def test_load_screenshot_suite_accepts_deterministic_search_steps(self) -> None:
+        suite = {"name": "search", "steps": [{"action": "search", "query": "Caminandes"}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "suite.json"
+            path.write_text(json.dumps(suite), encoding="utf-8")
+            self.assertEqual(waydroid_e2e.load_screenshot_suite(path), suite)
+
     def test_load_screenshot_suite_rejects_unsafe_capture_names(self) -> None:
         suite = {"name": "bad", "steps": [{"action": "capture", "name": "../escape"}]}
         with tempfile.TemporaryDirectory() as directory:
@@ -300,10 +385,30 @@ class WaydroidToolingTest(unittest.TestCase):
             path.write_bytes(
                 b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (1920).to_bytes(4, "big") + (1080).to_bytes(4, "big")
             )
-            entry = waydroid_e2e.screenshot_manifest_entry(path)
+            entry = waydroid_e2e.screenshot_manifest_entry(path, True)
+            self.assertEqual(entry["file"], "home.png")
             self.assertEqual(entry["width"], 1920)
             self.assertEqual(entry["height"], 1080)
+            self.assertTrue(entry["store"])
             self.assertRegex(entry["sha256"], r"^[0-9a-f]{64}$")
+
+    def test_store_sync_uses_only_manifest_entries_marked_for_store(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            (source / "visual-only.png").write_bytes(b"visual")
+            (source / "store.png").write_bytes(b"store")
+            (source / "screenshots.json").write_text(
+                json.dumps(
+                    {
+                        "screenshots": [
+                            {"file": "visual-only.png", "store": False},
+                            {"file": "store.png", "store": True},
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(sync_play_store_screenshots.screenshot_files(source), [source / "store.png"])
 
     def test_ci_screenshot_script_requires_emulator_serial(self) -> None:
         environment = os.environ.copy()

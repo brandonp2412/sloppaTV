@@ -4696,7 +4696,7 @@ private:
             Color{0.10f, 0.05f, 0.18f, 0.42f},
             Color{0.01f, 0.04f, 0.07f, 0.12f});
         renderer_.text(676.0f, 76.0f, 6.6f, "SLOPPATV", kText, 700.0f);
-        renderer_.text(730.0f, 150.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
+        renderer_.text(730.0f, 190.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
 
         if (accountState_.quickConnectActive()) {
             renderer_.roundedRect(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, Color{0.035f, 0.040f, 0.055f, 0.92f});
@@ -4915,9 +4915,9 @@ private:
             profileBounds[2] + 6.0f, profileBounds[3] + 6.0f, 34.0f, 3.0f, kFocus);
 
         if (settings_.showClock) {
-            renderer_.text(1650.0f, 53.0f, 2.10f,
+            renderer_.text(1760.0f, 53.0f, 2.10f,
                 formatLocalClock(std::time(nullptr), settings_.clock24Hour),
-                Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 200.0f);
+                Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 145.0f);
         }
 
         if (home_.rows.empty()) {

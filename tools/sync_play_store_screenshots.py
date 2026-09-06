@@ -63,7 +63,10 @@ def screenshot_files(source: Path) -> list[Path]:
     manifest = source / "screenshots.json"
     if manifest.is_file():
         payload = json.loads(manifest.read_text(encoding="utf-8"))
-        names = [entry["file"] for entry in payload.get("screenshots", [])]
+        entries = payload.get("screenshots", [])
+        if any("store" in entry for entry in entries):
+            entries = [entry for entry in entries if entry.get("store") is True]
+        names = [entry["file"] for entry in entries]
         files = [source / name for name in names]
     else:
         files = sorted(path for path in source.iterdir() if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
