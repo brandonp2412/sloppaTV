@@ -61,7 +61,7 @@ def model_matches_target(model: str, target: str) -> bool:
     if target == "android-tv-emulator":
         normalized = model.strip().lower()
         return (
-            normalized.startswith("sdk_") and ("_atv_" in normalized or "_tv_" in normalized)
+            normalized.startswith("sdk_") and ("atv" in normalized or "_tv_" in normalized)
         ) or "android tv" in normalized or "aosp tv" in normalized
     return False
 

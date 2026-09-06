@@ -173,6 +173,7 @@ class WaydroidToolingTest(unittest.TestCase):
 
     def test_target_model_guard_accepts_only_tv_models_for_ci_emulator(self) -> None:
         self.assertTrue(waydroid_e2e.model_matches_target("sdk_google_atv_x86_64", "android-tv-emulator"))
+        self.assertTrue(waydroid_e2e.model_matches_target("sdk_google_atv64_x86_64", "android-tv-emulator"))
         self.assertTrue(waydroid_e2e.model_matches_target("AOSP TV on x86_64", "android-tv-emulator"))
         self.assertFalse(waydroid_e2e.model_matches_target("sdk_gphone64_x86_64", "android-tv-emulator"))
         self.assertFalse(waydroid_e2e.model_matches_target("Google TV Streamer", "android-tv-emulator"))
