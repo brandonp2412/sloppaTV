@@ -624,19 +624,23 @@ private:
         const auto inputNow = std::chrono::steady_clock::now();
         renderBurstUntil_ = inputNow + 150ms;
         std::scoped_lock lock(stateMutex_);
-        if (systemTextInputMode_ >= 0) return 0;
+        if (systemTextInputMode_ >= 0) {
+            // SEARCH opens the Android text input during key-down. Consume its release
+            // even after the editor takes focus or Android TV may launch system search.
+            if (action == AKEY_EVENT_ACTION_UP && key == AKEYCODE_SEARCH) return 1;
+            return 0;
+        }
 
         if (action == AKEY_EVENT_ACTION_UP) {
-            // NativeActivity may apply its own BACK handling if the release is left
-            // unconsumed, even when we already handled BACK on key-down. Consume both
-            // halves so in-app BACK navigation cannot also finish the activity.
-            if (key == AKEYCODE_BACK) return 1;
+            // NativeActivity may apply default handling to an unconsumed release even
+            // when sloppaTV consumed the matching key-down. Keep the full key gesture
+            // inside the app; center/enter releases still run their activation below.
             if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending()) {
                 const bool activate = homeState_.consumeCenterRelease(screen_ == Screen::Home);
                 if (activate) handleHomeKey(key);
                 return 1;
             }
-            return 0;
+            return 1;
         }
         if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
             && homeState_.centerPending() && homeState_.centerLongPressed()) {
