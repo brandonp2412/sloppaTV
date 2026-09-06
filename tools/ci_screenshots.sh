@@ -86,8 +86,8 @@ test -s "$SCREENSHOT_DIR/screenshots.json"
 grep -Fq 'POST /Users/AuthenticateByName' "$SCREENSHOT_DIR/fixture-server.log"
 grep -Fq 'GET /Users/fixture-user/Views' "$SCREENSHOT_DIR/fixture-server.log"
 grep -Fq 'POST /Items/movie-big-buck-bunny/PlaybackInfo' "$SCREENSHOT_DIR/fixture-server.log"
-grep -Fq 'GET /Shows/series-caminandes/Seasons' "$SCREENSHOT_DIR/fixture-server.log"
-grep -Fq 'GET /Shows/series-caminandes/Episodes' "$SCREENSHOT_DIR/fixture-server.log"
+grep -Fq 'GET /Shows/series-open-classics/Seasons' "$SCREENSHOT_DIR/fixture-server.log"
+grep -Fq 'GET /Shows/series-open-classics/Episodes' "$SCREENSHOT_DIR/fixture-server.log"
 trap - EXIT
 adb -s "$ANDROID_SERIAL" reverse --remove tcp:1024 2>/dev/null || true
 kill "$fixture_pid" 2>/dev/null || true

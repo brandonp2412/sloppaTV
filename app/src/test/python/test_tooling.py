@@ -157,6 +157,20 @@ class ScreenshotFixtureToolingTest(unittest.TestCase):
         views = json.loads(body)["Items"]
         self.assertEqual([view["CollectionType"] for view in views], ["movies", "tvshows"])
 
+        status, _, body = self.request("GET", "/Users/fixture-user/Items?ParentId=movies")
+        self.assertEqual(status, 200)
+        movies = json.loads(body)["Items"]
+        self.assertGreaterEqual(len(movies), 9)
+        self.assertIn("Elephants Dream", {item["Name"] for item in movies})
+        self.assertIn("Sprite Fright", {item["Name"] for item in movies})
+
+        status, _, body = self.request("GET", "/Users/fixture-user/Items?ParentId=shows")
+        self.assertEqual(status, 200)
+        series = json.loads(body)["Items"]
+        self.assertGreaterEqual(len(series), 5)
+        self.assertIn("Open Movie Classics", {item["Name"] for item in series})
+        self.assertIn("Blender Shorts", {item["Name"] for item in series})
+
         status, _, body = self.request("GET", "/Items?SearchTerm=Caminandes")
         self.assertEqual(status, 200)
         values = json.loads(body)["Items"]
@@ -177,6 +191,13 @@ class ScreenshotFixtureToolingTest(unittest.TestCase):
         status, _, body = self.request("GET", "/Shows/series-caminandes/Episodes?UserId=fixture-user&SeasonId=season-caminandes-1")
         self.assertEqual(status, 200)
         self.assertEqual([item["Name"] for item in json.loads(body)["Items"]], ["Llama Drama", "Gran Dillama", "Llamigos"])
+
+        status, _, body = self.request("GET", "/Shows/series-open-classics/Episodes?UserId=fixture-user")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            [item["Name"] for item in json.loads(body)["Items"]],
+            ["Big Buck Bunny", "Sintel", "Tears of Steel", "Elephants Dream", "Spring", "Coffee Run", "Sprite Fright", "Glass Half", "The Daily Dweebs"],
+        )
 
         status, headers, body = self.request("GET", "/Videos/movie-big-buck-bunny/stream.mp4", {"Range": "bytes=0-127"})
         self.assertEqual(status, 206)
@@ -227,8 +248,8 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("POST /Users/AuthenticateByName", fixture_assertions)
         self.assertIn("GET /Users/fixture-user/Views", fixture_assertions)
         self.assertIn("SearchTerm=Caminandes", fixture_assertions)
-        self.assertIn("GET /Shows/series-caminandes/Seasons", fixture_assertions)
-        self.assertIn("GET /Shows/series-caminandes/Episodes", fixture_assertions)
+        self.assertIn("GET /Shows/series-open-classics/Seasons", fixture_assertions)
+        self.assertIn("GET /Shows/series-open-classics/Episodes", fixture_assertions)
         self.assertIn("POST /Items/movie-big-buck-bunny/PlaybackInfo", fixture_assertions)
 
     def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:

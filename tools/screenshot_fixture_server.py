@@ -141,7 +141,79 @@ TEARS_OF_STEEL = movie(
     genres=["Science Fiction", "Action", "Drama"],
     official_rating="PG-13",
 )
-MOVIES = [BIG_BUCK_BUNNY, SINTEL, TEARS_OF_STEEL]
+ELEPHANTS_DREAM = movie(
+    "movie-elephants-dream",
+    "Elephants Dream",
+    year=2006,
+    runtime_seconds=658,
+    overview="Two travellers move through a vast mechanical world whose strange machines and shifting spaces blur the line between guidance, control and imagination.",
+    rating=7.6,
+    genres=["Animation", "Science Fiction", "Fantasy"],
+    official_rating="PG",
+)
+SPRING = movie(
+    "movie-spring",
+    "Spring",
+    year=2019,
+    runtime_seconds=464,
+    overview="A shepherd girl and her dog climb into the mountains to confront ancient spirits and restore the seasonal cycle in a quiet fantasy landscape.",
+    rating=8.5,
+    genres=["Animation", "Fantasy", "Family"],
+    official_rating="PG",
+    position_seconds=132,
+)
+COFFEE_RUN = movie(
+    "movie-coffee-run",
+    "Coffee Run",
+    year=2020,
+    runtime_seconds=185,
+    overview="A caffeine-fuelled sprint through memories of a relationship turns an ordinary coffee run into a fast-moving tour of joy, loss and recovery.",
+    rating=8.0,
+    genres=["Animation", "Comedy", "Drama"],
+    official_rating="PG",
+)
+SPRITE_FRIGHT = movie(
+    "movie-sprite-fright",
+    "Sprite Fright",
+    year=2021,
+    runtime_seconds=630,
+    overview="A group of noisy teenagers enters an isolated forest and discovers that its tiny mushroom inhabitants are considerably less harmless than they look.",
+    rating=8.4,
+    genres=["Animation", "Comedy", "Horror"],
+    official_rating="PG-13",
+    favorite=True,
+)
+GLASS_HALF = movie(
+    "movie-glass-half",
+    "Glass Half",
+    year=2015,
+    runtime_seconds=193,
+    overview="Two art critics with very different temperaments inspect a gallery and turn a simple conversation about taste into an escalating comic argument.",
+    rating=7.9,
+    genres=["Animation", "Comedy", "Short"],
+    official_rating="G",
+)
+DAILY_DWEEBS = movie(
+    "movie-daily-dweebs",
+    "The Daily Dweebs",
+    year=2017,
+    runtime_seconds=60,
+    overview="An enthusiastic dog barrels through an emotional rollercoaster of everyday mishaps in a compact character-animation showcase.",
+    rating=8.2,
+    genres=["Animation", "Comedy", "Family"],
+    official_rating="G",
+)
+MOVIES = [
+    BIG_BUCK_BUNNY,
+    SINTEL,
+    TEARS_OF_STEEL,
+    ELEPHANTS_DREAM,
+    SPRING,
+    COFFEE_RUN,
+    SPRITE_FRIGHT,
+    GLASS_HALF,
+    DAILY_DWEEBS,
+]
 
 CAMINANDES = {
     "Id": "series-caminandes",
@@ -231,6 +303,135 @@ EPISODES = [
     ),
 ]
 
+
+def anthology_series(item_id: str, name: str, overview: str, year: int, *, favorite: bool = False) -> dict[str, object]:
+    return {
+        "Id": item_id,
+        "Name": name,
+        "Type": "Series",
+        "Overview": overview,
+        "ProductionYear": year,
+        "OfficialRating": "PG",
+        "CommunityRating": 8.4,
+        "Genres": ["Animation", "Short", "Open Movie"],
+        "ImageTags": image_tags(item_id),
+        "BackdropImageTags": [f"{item_id}-backdrop"],
+        "UserData": user_data(favorite=favorite),
+    }
+
+
+def anthology_season(series: dict[str, object]) -> dict[str, object]:
+    item_id = f"season-{series['Id']}-1"
+    return {
+        "Id": item_id,
+        "Name": "Season 1",
+        "Type": "Season",
+        "SeriesId": series["Id"],
+        "SeriesName": series["Name"],
+        "IndexNumber": 1,
+        "ProductionYear": series["ProductionYear"],
+        "ImageTags": image_tags(item_id, thumb=False),
+        "BackdropImageTags": [f"{series['Id']}-backdrop"],
+        "UserData": user_data(),
+    }
+
+
+def anthology_episode(series: dict[str, object], season: dict[str, object], source: dict[str, object], index: int) -> dict[str, object]:
+    item_id = f"episode-{series['Id']}-{index}"
+    return {
+        "Id": item_id,
+        "Name": source["Name"],
+        "Type": "Episode",
+        "SeriesId": series["Id"],
+        "SeriesName": series["Name"],
+        "SeriesPrimaryImageTag": f"{series['Id']}-primary",
+        "SeasonName": season["Name"],
+        "IndexNumber": index,
+        "ParentIndexNumber": 1,
+        "Overview": source["Overview"],
+        "ProductionYear": source["ProductionYear"],
+        "OfficialRating": source["OfficialRating"],
+        "CommunityRating": source["CommunityRating"],
+        "Genres": source["Genres"],
+        "RunTimeTicks": source["RunTimeTicks"],
+        "Container": "mp4",
+        "ImageTags": image_tags(item_id),
+        "ParentBackdropImageTags": [f"{series['Id']}-backdrop"],
+        "ParentBackdropItemId": series["Id"],
+        "UserData": user_data(played=index == 1, position_seconds=48 if index == 2 else 0),
+        "MediaSources": [media_source(item_id)],
+    }
+
+
+OPEN_CLASSICS = anthology_series(
+    "series-open-classics",
+    "Open Movie Classics",
+    "A collection of landmark Blender Foundation open movies, from surreal mechanical worlds to giant rabbits and fantasy quests.",
+    2006,
+    favorite=True,
+)
+OPEN_WORLDS = anthology_series(
+    "series-open-worlds",
+    "Open Worlds",
+    "Creative Commons shorts built around distinctive worlds: science fiction cities, mountain spirits and deeply unfriendly forests.",
+    2012,
+)
+BLENDER_SHORTS = anthology_series(
+    "series-blender-shorts",
+    "Blender Shorts",
+    "Short, self-contained Blender Studio stories focused on expressive characters, visual comedy and compact animation experiments.",
+    2015,
+)
+MODERN_OPEN_MOVIES = anthology_series(
+    "series-modern-open-movies",
+    "Modern Open Movies",
+    "A newer selection of openly licensed Blender films spanning stylized horror, warm character comedy and cinematic fantasy.",
+    2019,
+)
+
+OPEN_CLASSICS_SEASON = anthology_season(OPEN_CLASSICS)
+OPEN_WORLDS_SEASON = anthology_season(OPEN_WORLDS)
+BLENDER_SHORTS_SEASON = anthology_season(BLENDER_SHORTS)
+MODERN_OPEN_MOVIES_SEASON = anthology_season(MODERN_OPEN_MOVIES)
+
+OPEN_CLASSICS_EPISODES = [
+    anthology_episode(OPEN_CLASSICS, OPEN_CLASSICS_SEASON, source, index)
+    for index, source in enumerate(MOVIES, start=1)
+]
+OPEN_WORLDS_EPISODES = [
+    anthology_episode(OPEN_WORLDS, OPEN_WORLDS_SEASON, TEARS_OF_STEEL, 1),
+    anthology_episode(OPEN_WORLDS, OPEN_WORLDS_SEASON, SPRING, 2),
+    anthology_episode(OPEN_WORLDS, OPEN_WORLDS_SEASON, SPRITE_FRIGHT, 3),
+]
+BLENDER_SHORTS_EPISODES = [
+    anthology_episode(BLENDER_SHORTS, BLENDER_SHORTS_SEASON, GLASS_HALF, 1),
+    anthology_episode(BLENDER_SHORTS, BLENDER_SHORTS_SEASON, COFFEE_RUN, 2),
+    anthology_episode(BLENDER_SHORTS, BLENDER_SHORTS_SEASON, DAILY_DWEEBS, 3),
+]
+MODERN_OPEN_MOVIES_EPISODES = [
+    anthology_episode(MODERN_OPEN_MOVIES, MODERN_OPEN_MOVIES_SEASON, SPRING, 1),
+    anthology_episode(MODERN_OPEN_MOVIES, MODERN_OPEN_MOVIES_SEASON, COFFEE_RUN, 2),
+    anthology_episode(MODERN_OPEN_MOVIES, MODERN_OPEN_MOVIES_SEASON, SPRITE_FRIGHT, 3),
+]
+
+SERIES = [OPEN_CLASSICS, CAMINANDES, OPEN_WORLDS, BLENDER_SHORTS, MODERN_OPEN_MOVIES]
+SEASONS = [SEASON_ONE, OPEN_CLASSICS_SEASON, OPEN_WORLDS_SEASON, BLENDER_SHORTS_SEASON, MODERN_OPEN_MOVIES_SEASON]
+ALL_EPISODES = [*EPISODES, *OPEN_CLASSICS_EPISODES, *OPEN_WORLDS_EPISODES, *BLENDER_SHORTS_EPISODES, *MODERN_OPEN_MOVIES_EPISODES]
+SEASONS_BY_SERIES = {
+    CAMINANDES["Id"]: [SEASON_ONE],
+    OPEN_CLASSICS["Id"]: [OPEN_CLASSICS_SEASON],
+    OPEN_WORLDS["Id"]: [OPEN_WORLDS_SEASON],
+    BLENDER_SHORTS["Id"]: [BLENDER_SHORTS_SEASON],
+    MODERN_OPEN_MOVIES["Id"]: [MODERN_OPEN_MOVIES_SEASON],
+}
+EPISODES_BY_SERIES = {
+    CAMINANDES["Id"]: EPISODES,
+    OPEN_CLASSICS["Id"]: OPEN_CLASSICS_EPISODES,
+    OPEN_WORLDS["Id"]: OPEN_WORLDS_EPISODES,
+    BLENDER_SHORTS["Id"]: BLENDER_SHORTS_EPISODES,
+    MODERN_OPEN_MOVIES["Id"]: MODERN_OPEN_MOVIES_EPISODES,
+}
+
 VIEWS = [
     {
         "Id": "movies",
@@ -248,7 +449,7 @@ VIEWS = [
     },
 ]
 
-ALL_ITEMS = {str(value["Id"]): value for value in [*MOVIES, CAMINANDES, SEASON_ONE, *EPISODES, *VIEWS]}
+ALL_ITEMS = {str(value["Id"]): value for value in [*MOVIES, *SERIES, *SEASONS, *ALL_EPISODES, *VIEWS]}
 
 PRIMARY_ART = {
     "movies": "movies-library.jpg",
@@ -256,11 +457,37 @@ PRIMARY_ART = {
     BIG_BUCK_BUNNY["Id"]: "big-buck-bunny-poster.jpg",
     SINTEL["Id"]: "sintel-poster.jpg",
     TEARS_OF_STEEL["Id"]: "tears-of-steel-poster.png",
+    ELEPHANTS_DREAM["Id"]: "elephants-dream-poster.jpg",
+    SPRING["Id"]: "spring-poster.jpg",
+    COFFEE_RUN["Id"]: "coffee-run-poster.png",
+    SPRITE_FRIGHT["Id"]: "sprite-fright-poster.jpg",
+    GLASS_HALF["Id"]: "glass-half-poster.jpg",
+    DAILY_DWEEBS["Id"]: "daily-dweebs-poster.png",
     CAMINANDES["Id"]: "caminandes-poster.jpg",
     SEASON_ONE["Id"]: "caminandes-season-1.jpg",
     EPISODES[0]["Id"]: "caminandes-llama-drama.jpg",
     EPISODES[1]["Id"]: "caminandes-gran-dillama.jpg",
     EPISODES[2]["Id"]: "caminandes-llamigos.jpg",
+    OPEN_CLASSICS["Id"]: "elephants-dream-poster.jpg",
+    OPEN_WORLDS["Id"]: "spring-poster.jpg",
+    BLENDER_SHORTS["Id"]: "daily-dweebs-poster.png",
+    MODERN_OPEN_MOVIES["Id"]: "sprite-fright-poster.jpg",
+    OPEN_CLASSICS_SEASON["Id"]: "elephants-dream-poster.jpg",
+    OPEN_WORLDS_SEASON["Id"]: "spring-poster.jpg",
+    BLENDER_SHORTS_SEASON["Id"]: "daily-dweebs-poster.png",
+    MODERN_OPEN_MOVIES_SEASON["Id"]: "sprite-fright-poster.jpg",
+    OPEN_CLASSICS_EPISODES[0]["Id"]: "elephants-dream-poster.jpg",
+    OPEN_CLASSICS_EPISODES[1]["Id"]: "big-buck-bunny-poster.jpg",
+    OPEN_CLASSICS_EPISODES[2]["Id"]: "sintel-poster.jpg",
+    OPEN_WORLDS_EPISODES[0]["Id"]: "tears-of-steel-poster.png",
+    OPEN_WORLDS_EPISODES[1]["Id"]: "spring-poster.jpg",
+    OPEN_WORLDS_EPISODES[2]["Id"]: "sprite-fright-poster.jpg",
+    BLENDER_SHORTS_EPISODES[0]["Id"]: "glass-half-poster.jpg",
+    BLENDER_SHORTS_EPISODES[1]["Id"]: "coffee-run-poster.png",
+    BLENDER_SHORTS_EPISODES[2]["Id"]: "daily-dweebs-poster.png",
+    MODERN_OPEN_MOVIES_EPISODES[0]["Id"]: "spring-poster.jpg",
+    MODERN_OPEN_MOVIES_EPISODES[1]["Id"]: "coffee-run-poster.png",
+    MODERN_OPEN_MOVIES_EPISODES[2]["Id"]: "sprite-fright-poster.jpg",
     "person-ari": "fixture-user.jpg",
     "person-mina": "fixture-user.jpg",
     "person-jon": "fixture-user.jpg",
@@ -272,18 +499,57 @@ THUMB_ART = {
     BIG_BUCK_BUNNY["Id"]: "big-buck-bunny-backdrop.png",
     SINTEL["Id"]: "sintel-backdrop.png",
     TEARS_OF_STEEL["Id"]: "tears-of-steel-backdrop.jpg",
+    ELEPHANTS_DREAM["Id"]: "elephants-dream-backdrop.jpg",
+    SPRING["Id"]: "spring-backdrop.jpg",
+    COFFEE_RUN["Id"]: "coffee-run-backdrop.png",
+    SPRITE_FRIGHT["Id"]: "sprite-fright-backdrop.jpg",
+    GLASS_HALF["Id"]: "glass-half-backdrop.png",
+    DAILY_DWEEBS["Id"]: "daily-dweebs-backdrop.jpg",
     CAMINANDES["Id"]: "caminandes-backdrop.png",
     EPISODES[0]["Id"]: "caminandes-llama-drama.jpg",
     EPISODES[1]["Id"]: "caminandes-gran-dillama.jpg",
     EPISODES[2]["Id"]: "caminandes-llamigos.jpg",
+    OPEN_CLASSICS["Id"]: "elephants-dream-backdrop.jpg",
+    OPEN_WORLDS["Id"]: "spring-backdrop.jpg",
+    BLENDER_SHORTS["Id"]: "glass-half-backdrop.png",
+    MODERN_OPEN_MOVIES["Id"]: "sprite-fright-backdrop.jpg",
+    OPEN_CLASSICS_EPISODES[0]["Id"]: "elephants-dream-backdrop.jpg",
+    OPEN_CLASSICS_EPISODES[1]["Id"]: "big-buck-bunny-backdrop.png",
+    OPEN_CLASSICS_EPISODES[2]["Id"]: "sintel-backdrop.png",
+    OPEN_WORLDS_EPISODES[0]["Id"]: "tears-of-steel-backdrop.jpg",
+    OPEN_WORLDS_EPISODES[1]["Id"]: "spring-backdrop.jpg",
+    OPEN_WORLDS_EPISODES[2]["Id"]: "sprite-fright-backdrop.jpg",
+    BLENDER_SHORTS_EPISODES[0]["Id"]: "glass-half-backdrop.png",
+    BLENDER_SHORTS_EPISODES[1]["Id"]: "coffee-run-backdrop.png",
+    BLENDER_SHORTS_EPISODES[2]["Id"]: "daily-dweebs-backdrop.jpg",
+    MODERN_OPEN_MOVIES_EPISODES[0]["Id"]: "spring-backdrop.jpg",
+    MODERN_OPEN_MOVIES_EPISODES[1]["Id"]: "coffee-run-backdrop.png",
+    MODERN_OPEN_MOVIES_EPISODES[2]["Id"]: "sprite-fright-backdrop.jpg",
 }
 BACKDROP_ART = {
     BIG_BUCK_BUNNY["Id"]: "big-buck-bunny-backdrop.png",
     SINTEL["Id"]: "sintel-backdrop.png",
     TEARS_OF_STEEL["Id"]: "tears-of-steel-backdrop.jpg",
+    ELEPHANTS_DREAM["Id"]: "elephants-dream-backdrop.jpg",
+    SPRING["Id"]: "spring-backdrop.jpg",
+    COFFEE_RUN["Id"]: "coffee-run-backdrop.png",
+    SPRITE_FRIGHT["Id"]: "sprite-fright-backdrop.jpg",
+    GLASS_HALF["Id"]: "glass-half-backdrop.png",
+    DAILY_DWEEBS["Id"]: "daily-dweebs-backdrop.jpg",
     CAMINANDES["Id"]: "caminandes-backdrop.png",
     SEASON_ONE["Id"]: "caminandes-backdrop.png",
+    OPEN_CLASSICS["Id"]: "elephants-dream-backdrop.jpg",
+    OPEN_WORLDS["Id"]: "spring-backdrop.jpg",
+    BLENDER_SHORTS["Id"]: "glass-half-backdrop.png",
+    MODERN_OPEN_MOVIES["Id"]: "sprite-fright-backdrop.jpg",
+    OPEN_CLASSICS_SEASON["Id"]: "elephants-dream-backdrop.jpg",
+    OPEN_WORLDS_SEASON["Id"]: "spring-backdrop.jpg",
+    BLENDER_SHORTS_SEASON["Id"]: "glass-half-backdrop.png",
+    MODERN_OPEN_MOVIES_SEASON["Id"]: "sprite-fright-backdrop.jpg",
 }
+for episode_item, source_movie in zip(OPEN_CLASSICS_EPISODES, MOVIES, strict=True):
+    PRIMARY_ART[episode_item["Id"]] = PRIMARY_ART[source_movie["Id"]]
+    THUMB_ART[episode_item["Id"]] = THUMB_ART[source_movie["Id"]]
 VIDEO_FILE = MEDIA_ROOT / "big-buck-bunny-clip.mp4"
 
 
@@ -302,7 +568,7 @@ def query_value(query: dict[str, list[str]], name: str) -> str:
 
 def matching_search_items(term: str) -> list[dict[str, object]]:
     needle = term.casefold().strip()
-    values = [*MOVIES, CAMINANDES, *EPISODES]
+    values = [*MOVIES, *SERIES, *ALL_EPISODES]
     if not needle:
         return values
     return [
@@ -462,40 +728,48 @@ class Handler(BaseHTTPRequestHandler):
         if path.endswith("/Items/Resume"):
             bunny_resume = deepcopy(BIG_BUCK_BUNNY)
             bunny_resume["UserData"]["PlaybackPositionTicks"] = ticks(238)
-            self.send_json(list_payload([bunny_resume, EPISODES[1]]))
+            spring_resume = deepcopy(SPRING)
+            spring_resume["UserData"]["PlaybackPositionTicks"] = ticks(132)
+            coffee_resume = deepcopy(COFFEE_RUN)
+            coffee_resume["UserData"]["PlaybackPositionTicks"] = ticks(54)
+            sprite_resume = deepcopy(SPRITE_FRIGHT)
+            sprite_resume["UserData"]["PlaybackPositionTicks"] = ticks(276)
+            self.send_json(list_payload([bunny_resume, EPISODES[1], spring_resume, coffee_resume, sprite_resume, BLENDER_SHORTS_EPISODES[1]]))
             return
 
         if path == "/Shows/NextUp":
             series_id = query_value(query, "SeriesId")
-            next_items = [EPISODES[1]] if series_id == CAMINANDES["Id"] else [EPISODES[1], EPISODES[2]]
+            if series_id:
+                series_episodes = EPISODES_BY_SERIES.get(series_id, [])
+                next_items = series_episodes[1:2] or series_episodes[:1]
+            else:
+                next_items = [episodes[1] if len(episodes) > 1 else episodes[0] for episodes in EPISODES_BY_SERIES.values() if episodes]
             self.send_json(list_payload(next_items))
             return
 
         seasons = re.fullmatch(r"/Shows/([^/]+)/Seasons", path)
         if seasons:
-            values = [SEASON_ONE] if seasons.group(1) == CAMINANDES["Id"] else []
-            self.send_json(list_payload(values))
+            self.send_json(list_payload(SEASONS_BY_SERIES.get(seasons.group(1), [])))
             return
 
         episodes = re.fullmatch(r"/Shows/([^/]+)/Episodes", path)
         if episodes:
-            values = EPISODES if episodes.group(1) == CAMINANDES["Id"] else []
-            self.send_json(list_payload(values))
+            self.send_json(list_payload(EPISODES_BY_SERIES.get(episodes.group(1), [])))
             return
 
         if path.endswith("/Items/Latest"):
             parent_id = query_value(query, "ParentId")
-            values = MOVIES if parent_id == "movies" else [CAMINANDES] if parent_id == "shows" else [*MOVIES, CAMINANDES]
+            values = MOVIES if parent_id == "movies" else SERIES if parent_id == "shows" else [*MOVIES, *SERIES]
             self.send_json(deepcopy(values))
             return
 
         similar = re.fullmatch(r"/Items/([^/]+)/Similar", path)
         if similar:
             item_id = similar.group(1)
-            if item_id == CAMINANDES["Id"] or item_id.startswith("episode-"):
-                values = MOVIES
+            if item_id in {series["Id"] for series in SERIES} or item_id.startswith("episode-"):
+                values = MOVIES[:6]
             else:
-                values = [value for value in [SINTEL, TEARS_OF_STEEL, CAMINANDES, BIG_BUCK_BUNNY] if value["Id"] != item_id]
+                values = [value for value in [SINTEL, TEARS_OF_STEEL, CAMINANDES, ELEPHANTS_DREAM, SPRING, SPRITE_FRIGHT, BIG_BUCK_BUNNY] if value["Id"] != item_id]
             self.send_json(list_payload(values))
             return
 
@@ -520,15 +794,15 @@ class Handler(BaseHTTPRequestHandler):
                 if parent_id == "movies":
                     values = MOVIES
                 elif parent_id == "shows":
-                    values = [CAMINANDES]
+                    values = SERIES
                 elif person_id:
-                    values = [BIG_BUCK_BUNNY, CAMINANDES, EPISODES[1]]
+                    values = [BIG_BUCK_BUNNY, CAMINANDES, EPISODES[1], SPRING, OPEN_WORLDS, OPEN_WORLDS_EPISODES[1]]
                 elif filters == "IsFavorite":
-                    values = [BIG_BUCK_BUNNY, CAMINANDES]
+                    values = [BIG_BUCK_BUNNY, CAMINANDES, SPRITE_FRIGHT, OPEN_CLASSICS]
                 elif include_types == "Movie,Series":
-                    values = [BIG_BUCK_BUNNY, CAMINANDES, SINTEL, TEARS_OF_STEEL]
+                    values = [BIG_BUCK_BUNNY, CAMINANDES, SINTEL, OPEN_CLASSICS, TEARS_OF_STEEL, OPEN_WORLDS, SPRING, BLENDER_SHORTS]
                 else:
-                    values = [*MOVIES, CAMINANDES, *EPISODES]
+                    values = [*MOVIES, *SERIES, *ALL_EPISODES]
             self.send_json(list_payload(values))
             return
 
