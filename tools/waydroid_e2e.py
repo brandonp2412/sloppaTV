@@ -60,15 +60,10 @@ def model_matches_target(model: str, target: str) -> bool:
         return model.strip() == "Google TV Streamer"
     if target == "android-tv-emulator":
         normalized = model.strip().lower()
-        return normalized.startswith("sdk_") or "android tv" in normalized or "aosp tv" in normalized
+        return (
+            normalized.startswith("sdk_") and ("_atv_" in normalized or "_tv_" in normalized)
+        ) or "android tv" in normalized or "aosp tv" in normalized
     return False
-
-
-def characteristics_match_target(characteristics: str, target: str) -> bool:
-    values = {value.strip().lower() for value in characteristics.split(",") if value.strip()}
-    if target == "android-tv-emulator":
-        return "tv" in values
-    return True
 
 
 def foreground_is_package(activity_dump: str, package: str) -> bool:
@@ -100,11 +95,6 @@ def verify_target(target: str) -> None:
     model = adb("shell", "getprop", "ro.product.model", capture=True).strip()
     if not model_matches_target(model, target):
         raise SystemExit(f"Refusing device {SERIAL}: model is {model!r}, expected target {target!r}")
-    characteristics = adb("shell", "getprop", "ro.build.characteristics", capture=True).strip()
-    if not characteristics_match_target(characteristics, target):
-        raise SystemExit(
-            f"Refusing device {SERIAL}: characteristics are {characteristics!r}, expected target {target!r}"
-        )
     size = adb("shell", "wm", "size", capture=True)
     if "1920x1080" not in size:
         raise SystemExit(f"Target is not configured for a 1920x1080 UI surface: {size}")

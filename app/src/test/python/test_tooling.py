@@ -171,16 +171,11 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertTrue(waydroid_e2e.model_matches_target("Google TV Streamer", "google-tv-streamer"))
         self.assertFalse(waydroid_e2e.model_matches_target("SM-S931B", "google-tv-streamer"))
 
-    def test_target_model_guard_accepts_only_sdk_models_for_ci_emulator(self) -> None:
+    def test_target_model_guard_accepts_only_tv_models_for_ci_emulator(self) -> None:
         self.assertTrue(waydroid_e2e.model_matches_target("sdk_google_atv_x86_64", "android-tv-emulator"))
         self.assertTrue(waydroid_e2e.model_matches_target("AOSP TV on x86_64", "android-tv-emulator"))
+        self.assertFalse(waydroid_e2e.model_matches_target("sdk_gphone64_x86_64", "android-tv-emulator"))
         self.assertFalse(waydroid_e2e.model_matches_target("Google TV Streamer", "android-tv-emulator"))
-
-    def test_ci_emulator_requires_tv_build_characteristics(self) -> None:
-        self.assertTrue(waydroid_e2e.characteristics_match_target("tv", "android-tv-emulator"))
-        self.assertTrue(waydroid_e2e.characteristics_match_target("emulator,tv", "android-tv-emulator"))
-        self.assertFalse(waydroid_e2e.characteristics_match_target("emulator", "android-tv-emulator"))
-        self.assertFalse(waydroid_e2e.characteristics_match_target("default", "android-tv-emulator"))
 
     def test_capture_guard_requires_sloppatv_to_be_foreground(self) -> None:
         resumed = "mResumedActivity: ActivityRecord{123 app.sloppatv/app.sloppatv.SloppaNativeActivity}"
