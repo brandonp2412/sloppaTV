@@ -1484,16 +1484,23 @@ private:
 
             const std::string videoUrl = api_.staticVideoUrl(session, playable);
             std::string subtitleUrl;
-            auto subtitle = std::find_if(playable.subtitles.begin(), playable.subtitles.end(), [](const JellyfinSubtitleStream& candidate) {
-                return candidate.isExternal && candidate.isDefault;
-            });
-            if (subtitle == playable.subtitles.end()) {
-                subtitle = std::find_if(playable.subtitles.begin(), playable.subtitles.end(), [](const JellyfinSubtitleStream& candidate) {
-                    return candidate.isExternal;
-                });
-            }
-            if (subtitle != playable.subtitles.end()) {
-                subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
+            const int subtitleIndex = subtitleIndexForPlaybackItem(
+                playable,
+                -1,
+                trackState_.subtitleLanguagePreference()
+            );
+            if (subtitleIndex >= 0) {
+                const auto subtitle = std::find_if(
+                    playable.subtitles.begin(),
+                    playable.subtitles.end(),
+                    [&](const JellyfinSubtitleStream& candidate) { return candidate.index == subtitleIndex; }
+                );
+                if (subtitle != playable.subtitles.end()) {
+                    // External players cannot reliably address Jellyfin's embedded stream index.
+                    // Hand them Jellyfin's SRT delivery URL for the selected stream instead; mpvRx
+                    // can then load and select it through the standard subs.enable intent extra.
+                    subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
+                }
             }
 
             if (!requestEpochs_.playback.active(generation)) return;
