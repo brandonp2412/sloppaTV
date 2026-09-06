@@ -60,8 +60,18 @@ def model_matches_target(model: str, target: str) -> bool:
         return model.strip() == "Google TV Streamer"
     if target == "android-tv-emulator":
         normalized = model.strip().lower()
-        return normalized.startswith("sdk_") or "aosp tv" in normalized
+        return (
+            normalized.startswith("sdk_") and ("atv" in normalized or "_tv_" in normalized)
+        ) or "android tv" in normalized or "aosp tv" in normalized
     return False
+
+
+def foreground_is_package(activity_dump: str, package: str) -> bool:
+    return any(
+        package in line
+        for line in activity_dump.splitlines()
+        if "ResumedActivity" in line or "topResumedActivity" in line
+    )
 
 
 def power_state_is_awake(output: str) -> bool:
@@ -125,6 +135,10 @@ def require_playback_session() -> None:
 
 
 def capture(name: str) -> Path:
+    require_running()
+    activity_dump = adb("shell", "dumpsys", "activity", "activities", capture=True, timeout=60.0)
+    if not foreground_is_package(activity_dump, PACKAGE):
+        raise RuntimeError(f"{PACKAGE} is not the foreground activity; refusing to capture {name}")
     remote = f"/sdcard/{name}.png"
     local = ARTIFACTS / f"{name}.png"
     adb("shell", "screencap", "-p", remote)
@@ -157,7 +171,7 @@ def load_screenshot_suite(path: Path) -> dict:
     steps = suite.get("steps")
     if not isinstance(steps, list) or not steps:
         raise ValueError("screenshot suite must have at least one step")
-    allowed = {"launch", "restart", "key", "text", "capture", "wait"}
+    allowed = {"launch", "restart", "key", "text", "capture", "wait", "fixture_log"}
     for index, step in enumerate(steps):
         if not isinstance(step, dict) or step.get("action") not in allowed:
             raise ValueError(f"unsupported screenshot step {index}")
@@ -170,7 +184,24 @@ def load_screenshot_suite(path: Path) -> dict:
             raise ValueError(f"invalid text in screenshot step {index}")
         if step["action"] == "capture" and not re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", str(step.get("name", ""))):
             raise ValueError(f"invalid capture name in screenshot step {index}")
+        if step["action"] == "fixture_log":
+            needle = step.get("contains")
+            timeout_seconds = step.get("timeout_seconds", 8)
+            if not isinstance(needle, str) or not needle or len(needle) > 256:
+                raise ValueError(f"invalid fixture log assertion in screenshot step {index}")
+            if not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 30:
+                raise ValueError(f"invalid fixture log timeout in screenshot step {index}")
     return suite
+
+
+def wait_for_fixture_log(needle: str, timeout_seconds: float) -> None:
+    log_path = ARTIFACTS / "fixture-server.log"
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        if log_path.is_file() and needle in log_path.read_text(encoding="utf-8", errors="replace"):
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"fixture server did not receive expected request within {timeout_seconds:g}s: {needle}")
 
 
 def screenshot_suite(path: Path) -> Path:
@@ -186,6 +217,8 @@ def screenshot_suite(path: Path) -> Path:
             key(step["key"])
         elif action == "text":
             adb("shell", "input", "text", step["value"])
+        elif action == "fixture_log":
+            wait_for_fixture_log(step["contains"], float(step.get("timeout_seconds", 8)))
         elif action == "capture":
             screenshot = capture(step["name"])
             width, height = png_dimensions(screenshot)
@@ -199,6 +232,9 @@ def screenshot_suite(path: Path) -> Path:
             time.sleep(wait_seconds)
     if not screenshots:
         raise RuntimeError("screenshot suite produced no screenshots")
+    hashes = [str(screenshot["sha256"]) for screenshot in screenshots]
+    if len(set(hashes)) != len(hashes):
+        raise RuntimeError("screenshot suite produced duplicate images; refusing to publish a repeated screen")
     manifest = {
         "suite": suite["name"],
         "captured_at": datetime.now(timezone.utc).isoformat(),

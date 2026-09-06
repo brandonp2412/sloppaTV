@@ -149,7 +149,17 @@ class WaydroidToolingTest(unittest.TestCase):
                 "08-settings-options",
             ],
         )
-        self.assertIn("text", {step["action"] for step in suite["steps"]})
+        actions = {step["action"] for step in suite["steps"]}
+        self.assertIn("text", actions)
+        self.assertIn("fixture_log", actions)
+        text_steps = [step for step in suite["steps"] if step["action"] == "text"]
+        self.assertTrue(all(step.get("wait_seconds", 0) >= 1 for step in text_steps))
+        server_text = next(step["value"] for step in text_steps if step.get("value", "").startswith("http://"))
+        self.assertEqual(server_text, "http://127.0.0.1:1024")
+        fixture_assertions = [step["contains"] for step in suite["steps"] if step["action"] == "fixture_log"]
+        self.assertIn("POST /Users/AuthenticateByName", fixture_assertions)
+        self.assertIn("GET /Users/fixture-user/Views", fixture_assertions)
+        self.assertIn("SearchTerm=Bunny", fixture_assertions)
 
     def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
@@ -157,8 +167,11 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("needs: screenshots", workflow)
         self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
         self.assertIn("git commit -m \"Update Android TV screenshots [skip ci]\"", workflow)
+        self.assertIn("target: android-tv", workflow)
         script = (ROOT / "tools" / "ci_screenshots.sh").read_text(encoding="utf-8")
         self.assertIn("screenshot_fixture_server.py", script)
+        self.assertIn('reverse tcp:1024 tcp:18096', script)
+        self.assertIn("POST /Users/AuthenticateByName", script)
 
     def test_target_model_guard_requires_explicit_physical_target(self) -> None:
         self.assertTrue(waydroid_e2e.model_matches_target("WayDroid x86_64", "waydroid"))
@@ -166,10 +179,20 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertTrue(waydroid_e2e.model_matches_target("Google TV Streamer", "google-tv-streamer"))
         self.assertFalse(waydroid_e2e.model_matches_target("SM-S931B", "google-tv-streamer"))
 
-    def test_target_model_guard_accepts_only_sdk_models_for_ci_emulator(self) -> None:
+    def test_target_model_guard_accepts_only_tv_models_for_ci_emulator(self) -> None:
         self.assertTrue(waydroid_e2e.model_matches_target("sdk_google_atv_x86_64", "android-tv-emulator"))
+        self.assertTrue(waydroid_e2e.model_matches_target("sdk_google_atv64_x86_64", "android-tv-emulator"))
         self.assertTrue(waydroid_e2e.model_matches_target("AOSP TV on x86_64", "android-tv-emulator"))
+        self.assertFalse(waydroid_e2e.model_matches_target("sdk_gphone64_x86_64", "android-tv-emulator"))
         self.assertFalse(waydroid_e2e.model_matches_target("Google TV Streamer", "android-tv-emulator"))
+
+    def test_capture_guard_requires_sloppatv_to_be_foreground(self) -> None:
+        resumed = "mResumedActivity: ActivityRecord{123 app.sloppatv/app.sloppatv.SloppaNativeActivity}"
+        launcher = "mResumedActivity: ActivityRecord{123 com.google.android.tvlauncher/.MainActivity}"
+        stopped = "ActivityRecord{123 app.sloppatv/app.sloppatv.SloppaNativeActivity}"
+        self.assertTrue(waydroid_e2e.foreground_is_package(resumed, waydroid_e2e.DEFAULT_PACKAGE))
+        self.assertFalse(waydroid_e2e.foreground_is_package(launcher, waydroid_e2e.DEFAULT_PACKAGE))
+        self.assertFalse(waydroid_e2e.foreground_is_package(stopped, waydroid_e2e.DEFAULT_PACKAGE))
 
     def test_power_state_parser_requires_awake(self) -> None:
         self.assertTrue(waydroid_e2e.power_state_is_awake("mWakefulness=Awake\nmWakefulnessChanging=false"))
@@ -261,6 +284,16 @@ class WaydroidToolingTest(unittest.TestCase):
             path.write_text(json.dumps(suite), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "capture name"):
                 waydroid_e2e.load_screenshot_suite(path)
+
+    def test_wait_for_fixture_log_detects_expected_request(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            artifact_dir = Path(directory)
+            (artifact_dir / "fixture-server.log").write_text(
+                '"POST /Users/AuthenticateByName HTTP/1.1" 200 -\n',
+                encoding="utf-8",
+            )
+            with patch.object(waydroid_e2e, "ARTIFACTS", artifact_dir):
+                waydroid_e2e.wait_for_fixture_log("POST /Users/AuthenticateByName", 0.1)
 
     def test_png_dimensions_reads_screenshot_header(self) -> None:
         png = b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + (1920).to_bytes(4, "big") + (1080).to_bytes(4, "big")

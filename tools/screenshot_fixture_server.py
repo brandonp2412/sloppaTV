@@ -48,7 +48,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         path = self.path.split("?", 1)[0]
         if path == "/System/Info/Public":
-            self.send_json({"ServerName": "sloppaTV Demo Library", "Version": "10.10.0", "ProductName": "Jellyfin", "OperatingSystem": "Linux"})
+            self.send_json({
+                "Id": "fixture-server",
+                "ServerName": "sloppaTV Demo Library",
+                "Version": "10.10.0",
+                "ProductName": "Jellyfin",
+                "OperatingSystem": "Linux",
+            })
         elif path.endswith("/Views"):
             self.send_json({"Items": VIEWS, "TotalRecordCount": len(VIEWS)})
         elif path.endswith("/Items/Resume") or path == "/Shows/NextUp":

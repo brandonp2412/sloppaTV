@@ -627,6 +627,10 @@ private:
         if (systemTextInputMode_ >= 0) return 0;
 
         if (action == AKEY_EVENT_ACTION_UP) {
+            // NativeActivity may apply its own BACK handling if the release is left
+            // unconsumed, even when we already handled BACK on key-down. Consume both
+            // halves so in-app BACK navigation cannot also finish the activity.
+            if (key == AKEYCODE_BACK) return 1;
             if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending()) {
                 const bool activate = homeState_.consumeCenterRelease(screen_ == Screen::Home);
                 if (activate) handleHomeKey(key);
