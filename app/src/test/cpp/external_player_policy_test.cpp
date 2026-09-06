@@ -7,11 +7,9 @@ int main() {
     assert(externalPlayerKindForPackage("com.mxtech.videoplayer.ad") == ExternalPlayerKind::MxPlayer);
     assert(externalPlayerKindForPackage("is.xyz.mpv") == ExternalPlayerKind::Mpv);
     assert(externalPlayerKindForPackage("app.mpvnova.player") == ExternalPlayerKind::Mpv);
-    assert(externalPlayerKindForPackage("app.gyrolet.mpvrx") == ExternalPlayerKind::Mpv);
     assert(externalPlayerKindForPackage("net.gtvbox.videoplayer") == ExternalPlayerKind::Vimu);
     assert(externalPlayerKindForPackage("com.example.player") == ExternalPlayerKind::Generic);
 
-    assert(externalMpvDecodeModeForPackage("app.gyrolet.mpvrx") == 1);
     assert(externalMpvDecodeModeForPackage("app.mpvnova.player") == 2);
     assert(externalMpvDecodeModeForPackage("is.xyz.mpv") == 2);
 

@@ -19,6 +19,7 @@ enum class StartupStep {
 enum class SubtitleStrategy {
     ClientText,
     ClientStyled,
+    ClientEmbedded,
     ServerTranscode,
 };
 
@@ -184,8 +185,8 @@ constexpr int playbackPositionMsFromTicks(int64_t ticks) {
 }
 
 constexpr int initialPlayerSeekMs(int64_t desiredStartTicks) {
-    // Media3 accepts a logical initial position before prepare, for both direct and
-    // server-streamed targets. No stream re-resolution is needed for ordinary resume.
+    // libmpv accepts the logical initial position as a loadfile start option for both
+    // direct and server-streamed targets. No stream re-resolution is needed for ordinary resume.
     return playbackPositionMsFromTicks(desiredStartTicks);
 }
 
@@ -194,6 +195,11 @@ constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
         return SubtitleStrategy::ClientText;
     }
     if (codec == "ass" || codec == "ssa") return SubtitleStrategy::ClientStyled;
+    if (codec == "pgs" || codec == "pgssub" || codec == "hdmv_pgs_subtitle"
+        || codec == "dvdsub" || codec == "dvd_subtitle"
+        || codec == "dvbsub" || codec == "dvb_subtitle" || codec == "xsub") {
+        return SubtitleStrategy::ClientEmbedded;
+    }
     return SubtitleStrategy::ServerTranscode;
 }
 

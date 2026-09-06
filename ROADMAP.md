@@ -24,7 +24,7 @@ Release requires every in-scope item to be `[x]`, unless an item is deliberately
 
 ## Playback and platform
 
-- [x] Media3 playback in GLES with resume, native video surface and MediaSession integration.
+- [x] Embedded libmpv playback in GLES with resume, native video surface, MediaCodec hardware decode and MediaSession integration.
 - [x] DirectPlay, DirectStream and Transcode reporting/classification.
 - [x] Embedded audio/text switching plus native SRT/VTT/ASS/SSA subtitle rendering.
 - [x] Quality negotiation, queueing, autoplay, Still Watching and Play All.

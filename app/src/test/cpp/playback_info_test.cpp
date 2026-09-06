@@ -34,6 +34,19 @@ int main() {
     assert(body["DeviceProfile"]["MaxStreamingBitrate"] == 50000000);
     assert(body["DeviceProfile"]["DirectPlayProfiles"][0]["VideoCodec"] == "hevc,h264,mpeg4");
     assert(body["DeviceProfile"]["DirectPlayProfiles"][0]["AudioCodec"] == "aac,eac3,mp2,pcm_s16le");
+    bool hasPgsEmbed = false;
+    bool hasPgsEncode = false;
+    bool hasAssEmbed = false;
+    for (const auto& subtitleProfile : body["DeviceProfile"]["SubtitleProfiles"]) {
+        const std::string format = subtitleProfile.value("Format", std::string{});
+        const std::string method = subtitleProfile.value("Method", std::string{});
+        if ((format == "pgs" || format == "pgssub") && method == "Embed") hasPgsEmbed = true;
+        if ((format == "pgs" || format == "pgssub") && method == "Encode") hasPgsEncode = true;
+        if (format == "ass" && method == "Embed") hasAssEmbed = true;
+    }
+    assert(hasPgsEmbed);
+    assert(!hasPgsEncode);
+    assert(hasAssEmbed);
 
     PlaybackOverrides forceTranscode;
     forceTranscode.forceTranscode = true;
@@ -101,7 +114,7 @@ int main() {
     assert(offer.ok);
     assert(offer.value.audioStreamIndex == 8);
     assert(offer.value.subtitleStreamIndex == 4);
-    assert(offer.value.subtitleDeliveryUrl.empty());
+    assert(offer.value.subtitleDeliveryUrl == "/subtitle");
 
     const auto noSources = parsePlaybackInfoOffer(R"({"MediaSources":[]})", -1, kSubtitleServerDefaultIndex);
     assert(!noSources.ok);

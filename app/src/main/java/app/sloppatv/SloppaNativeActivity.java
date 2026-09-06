@@ -62,10 +62,6 @@ public final class SloppaNativeActivity extends NativeActivity {
         nativeOnNewIntent(action, data, query);
     }
 
-    public SloppaPlayerBridge createPlayerBridge() {
-        return new SloppaPlayerBridge(this);
-    }
-
     public MediaSession createMediaSessionBridge() {
         if (Looper.myLooper() == Looper.getMainLooper()) return createMediaSessionOnMainThread();
         AtomicReference<MediaSession> result = new AtomicReference<>();

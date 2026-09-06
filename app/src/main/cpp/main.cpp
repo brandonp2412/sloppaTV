@@ -302,7 +302,7 @@ public:
         : app_(app),
           renderer_(app->activity->vm, app->activity->clazz),
           api_(app->activity->vm, app->activity->clazz),
-          player_(app->activity->vm, app->activity->clazz),
+          player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
           externalPlayer_(app->activity->vm, app->activity->clazz),
           imageDecoder_(app->activity->vm),
@@ -553,7 +553,7 @@ private:
                             shouldResumePlayback ? MediaSessionState::Playing : MediaSessionState::Paused,
                             playerScreenState_.positionMs()
                         );
-                        __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved Media3 and GLES context");
+                        __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved libmpv and GLES context");
                     } else {
                         videoSurface_.release();
                         std::string surfaceError;
@@ -566,7 +566,10 @@ private:
                             videoSurface_.surface(),
                             playerScreenState_.positionMs(),
                             settings_.playbackBufferPreset,
-                            playerAudioOrdinal(activeTarget_, activePlaybackItem_)
+                            playerAudioOrdinal(activeTarget_, activePlaybackItem_),
+                            activeTarget_.playMethod == PlaybackMethod::DirectPlay ? activeTarget_.subtitleStreamIndex : kSubtitleOffIndex,
+                            playerSubtitleOrdinal(activeTarget_, activePlaybackItem_),
+                            directExternalSubtitleUrl(activeTarget_, activePlaybackItem_)
                         );
                         transitionState_.setPauseAfterRestart(!shouldResumePlayback);
                         mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
@@ -1477,7 +1480,7 @@ private:
             if (detailed.ok) playable = std::move(detailed.value);
 
             std::string skipSegmentsJson;
-            if (player.packageName == "app.mpvnova.player" || player.packageName == "app.gyrolet.mpvrx") {
+            if (player.packageName == "app.mpvnova.player") {
                 auto segments = api_.getMediaSegments(session, playable.id);
                 if (segments.ok) {
                     skipSegmentsJson = externalSkipSegmentsJson(segments.value);
@@ -1501,8 +1504,7 @@ private:
                 );
                 if (subtitle != playable.subtitles.end()) {
                     // External players cannot reliably address Jellyfin's embedded stream index.
-                    // Hand them Jellyfin's SRT delivery URL for the selected stream instead; mpvRx
-                    // can then load and select it through the standard subs.enable intent extra.
+                    // Hand them Jellyfin's SRT delivery URL for the selected stream instead.
                     subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
                 }
             }
@@ -1959,6 +1961,31 @@ private:
             if (selected != allowed.end() && std::next(selected) != allowed.end()) nextIndex = (*std::next(selected))->index;
         }
         rememberPlaybackSubtitlePreference(nextIndex);
+        if (activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
+            if (nextIndex < 0) {
+                if (player_.disableSubtitles()) {
+                    trackState_.setSelectedSubtitleServerIndex(kSubtitleOffIndex);
+                    activeTarget_.subtitleStreamIndex = kSubtitleOffIndex;
+                    playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+                    reportProgressAsync(false);
+                    return;
+                }
+            } else {
+                const auto selected = std::find_if(activePlaybackItem_.subtitles.begin(), activePlaybackItem_.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+                    return subtitle.index == nextIndex;
+                });
+                if (selected != activePlaybackItem_.subtitles.end() && !selected->isExternal) {
+                    const int ordinal = static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), selected));
+                    if (player_.selectEmbeddedSubtitleStream(nextIndex, ordinal)) {
+                        trackState_.setSelectedSubtitleServerIndex(nextIndex);
+                        activeTarget_.subtitleStreamIndex = nextIndex;
+                        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+                        reportProgressAsync(false);
+                        return;
+                    }
+                }
+            }
+        }
         restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(), nextIndex);
     }
 
@@ -3586,6 +3613,24 @@ private:
         return -1;
     }
 
+    int playerSubtitleOrdinal(const PlaybackTarget& target, const JellyfinItem& item) const {
+        if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return -1;
+        for (size_t index = 0; index < item.subtitles.size(); ++index) {
+            if (item.subtitles[index].index == target.subtitleStreamIndex && !item.subtitles[index].isExternal) {
+                return static_cast<int>(index);
+            }
+        }
+        return -1;
+    }
+
+    std::string directExternalSubtitleUrl(const PlaybackTarget& target, const JellyfinItem& item) const {
+        if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0 || target.subtitleUrl.empty()) return {};
+        const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+            return subtitle.index == target.subtitleStreamIndex;
+        });
+        return selected != item.subtitles.end() && selected->isExternal ? target.subtitleUrl : std::string{};
+    }
+
     void startResolvedPlaybackTarget(const PlaybackTarget& target) {
         const auto now = std::chrono::steady_clock::now();
         const int startPositionMs = initialPlayerSeekMs(target.startTicks);
@@ -3595,7 +3640,10 @@ private:
             videoSurface_.surface(),
             startPositionMs,
             settings_.playbackBufferPreset,
-            playerAudioOrdinal(target, activePlaybackItem_)
+            playerAudioOrdinal(target, activePlaybackItem_),
+            target.playMethod == PlaybackMethod::DirectPlay ? target.subtitleStreamIndex : kSubtitleOffIndex,
+            playerSubtitleOrdinal(target, activePlaybackItem_),
+            directExternalSubtitleUrl(target, activePlaybackItem_)
         );
         if (startPositionMs > 0) playerScreenState_.beginSeek(startPositionMs, now);
     }
@@ -3725,7 +3773,7 @@ private:
 
         // Jellyfin commonly omits TranscodingUrl when it selected DirectPlay, even when
         // SupportsTranscoding=true. Re-negotiate asynchronously with direct paths disabled
-        // instead of abandoning playback after a Media3 decoder/source prepare failure.
+        // instead of abandoning playback after an embedded-player prepare failure.
         PlaybackOverrides fallbackOverrides = playbackOverridesFor(settings_);
         if (preferServerStream) fallbackOverrides.forceServerStream = true;
         else fallbackOverrides.forceTranscode = true;
@@ -3857,7 +3905,7 @@ private:
         }
         trackState_.setSelectedAudioServerIndex(selectedAudioServerIndex);
         trackState_.setSelectedSubtitleServerIndex(target.subtitleStreamIndex);
-        if (trackState_.selectedSubtitleServerIndex() >= 0) {
+        if (trackState_.selectedSubtitleServerIndex() >= 0 && target.playMethod != PlaybackMethod::DirectPlay) {
             const auto selectedSubtitle = std::find_if(
                 item.subtitles.begin(),
                 item.subtitles.end(),
@@ -5275,10 +5323,12 @@ private:
             || transitionState_.fallbackResolving()
             || showNextUp
             || playerScreenState_.overlayVisible(now);
-        if (const SubtitleCue* cue = activeSubtitleCue()) {
+        std::string subtitleText = player_.subtitleText();
+        if (const SubtitleCue* cue = activeSubtitleCue()) subtitleText = cue->text;
+        if (!subtitleText.empty()) {
             const float textScale = subtitleTextScale(settings_.subtitleSize);
             const std::string subtitle = fitTextLines(
-                normalizeSubtitleDisplayText(cue->text), textScale, 1520.0f, 3
+                normalizeSubtitleDisplayText(subtitleText), textScale, 1520.0f, 3
             );
             const float lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize);
             std::istringstream stream(subtitle);

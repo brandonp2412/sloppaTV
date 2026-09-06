@@ -14,14 +14,19 @@ int main() {
     assert(playbackPositionMsFromTicks(-1) == 0);
     assert(playbackPositionMsFromTicks(12'340'000) == 1234);
 
-    // Media3 accepts the logical resume position directly for both direct and
-    // server-streamed playback; the old MediaPlayer/NuPlayer restart policy is gone.
+    // Embedded mpv accepts the logical resume position directly for both direct
+    // and server-streamed playback; no URL re-resolution is needed for a seek.
     assert(initialPlayerSeekMs(12'340'000) == 1234);
     assert(subtitleStrategy("srt") == SubtitleStrategy::ClientText);
     assert(subtitleStrategy("mov_text") == SubtitleStrategy::ClientText);
     assert(subtitleStrategy("ass") == SubtitleStrategy::ClientStyled);
     assert(subtitleStrategy("ssa") == SubtitleStrategy::ClientStyled);
-    assert(subtitleStrategy("pgssub") == SubtitleStrategy::ServerTranscode);
+    assert(subtitleStrategy("pgs") == SubtitleStrategy::ClientEmbedded);
+    assert(subtitleStrategy("pgssub") == SubtitleStrategy::ClientEmbedded);
+    assert(subtitleStrategy("dvdsub") == SubtitleStrategy::ClientEmbedded);
+    assert(subtitleStrategy("dvbsub") == SubtitleStrategy::ClientEmbedded);
+    assert(subtitleStrategy("unknown-subtitle-codec") == SubtitleStrategy::ServerTranscode);
+    assert(!useNativeSubtitleRenderer(SubtitleStrategy::ClientEmbedded, true));
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientStyled, true));
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientText, true));
     assert(!useNativeSubtitleRenderer(SubtitleStrategy::ClientText, false));

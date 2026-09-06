@@ -49,6 +49,7 @@ endif()
 
 target_link_libraries(sloppatv PRIVATE
     android
+    dl
     log
     jnigraphics
     EGL

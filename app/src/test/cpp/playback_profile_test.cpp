@@ -103,9 +103,18 @@ int main() {
 
     const PlaybackSubtitleCapabilityInput imageSubtitle{.selected = true, .codec = "pgs"};
     plan = makePlaybackProfilePlan(device, {}, {}, imageSubtitle, 8, {});
+    assert(plan.clientSubtitle);
+    assert(!plan.serverSubtitle);
+    auto flags = playbackRequestFlags(plan, {});
+    assert(flags.enableDirectPlay);
+    assert(flags.enableDirectStream);
+    assert(flags.allowVideoStreamCopy);
+
+    const PlaybackSubtitleCapabilityInput unknownSubtitle{.selected = true, .codec = "madeup"};
+    plan = makePlaybackProfilePlan(device, {}, {}, unknownSubtitle, 8, {});
     assert(!plan.clientSubtitle);
     assert(plan.serverSubtitle);
-    auto flags = playbackRequestFlags(plan, {});
+    flags = playbackRequestFlags(plan, {});
     assert(!flags.enableDirectPlay);
     assert(!flags.enableDirectStream);
     assert(!flags.allowVideoStreamCopy);

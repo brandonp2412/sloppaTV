@@ -233,7 +233,14 @@ ApiValueResult<JellyfinSession> JellyfinClient::login(
 ) const {
     ApiValueResult<JellyfinSession> result;
     server = normalizeServer(std::move(server));
-    if (server.empty() || username.empty()) {
+    std::string normalizedUsername = username;
+    while (!normalizedUsername.empty() && std::isspace(static_cast<unsigned char>(normalizedUsername.front()))) {
+        normalizedUsername.erase(normalizedUsername.begin());
+    }
+    while (!normalizedUsername.empty() && std::isspace(static_cast<unsigned char>(normalizedUsername.back()))) {
+        normalizedUsername.pop_back();
+    }
+    if (server.empty() || normalizedUsername.empty()) {
         result.error = "Server and username are required";
         return result;
     }
@@ -246,7 +253,7 @@ ApiValueResult<JellyfinSession> JellyfinClient::login(
     server = discoveredServer;
 
     json body = {
-        {"Username", username},
+        {"Username", normalizedUsername},
         {"Pw", password},
     };
     const HttpResponse response = http_.request(
@@ -255,7 +262,7 @@ ApiValueResult<JellyfinSession> JellyfinClient::login(
         headers(nullptr, deviceId),
         body.dump()
     );
-    return parseAuthenticationResult(response, server, deviceId, username);
+    return parseAuthenticationResult(response, server, deviceId, normalizedUsername);
 }
 
 ApiValueResult<QuickConnectRequest> JellyfinClient::initiateQuickConnect(
