@@ -28,4 +28,4 @@ All Android variants use the single package `app.sloppatv` and the signing ident
 
 ## License
 
-MIT. See [LICENSE.md](LICENSE.md).
+GPL-3.0-or-later. See [LICENSE.md](LICENSE.md).
