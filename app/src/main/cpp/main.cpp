@@ -5101,9 +5101,14 @@ private:
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
         const float titleY = y + imageHeight + 28.0f;
-        renderer_.text(imageX + 2.0f, titleY, 2.05f, fitTextLines(item.name, 2.05f, imageWidth - 4.0f, 1), kText, imageWidth - 4.0f);
+        const int titleLines = landscape ? 1 : 2;
+        renderer_.text(imageX + 2.0f, titleY, 2.05f,
+            fitTextLines(item.name, 2.05f, imageWidth - 4.0f, titleLines), kText, imageWidth - 4.0f);
         const std::string secondary = episodeLabel(item);
-        if (!secondary.empty()) renderer_.text(imageX + 2.0f, titleY + 52.0f, 1.45f, secondary, kMuted, imageWidth - 4.0f);
+        if (!secondary.empty()) {
+            renderer_.text(imageX + 2.0f, titleY + (titleLines == 1 ? 52.0f : 94.0f), 1.45f,
+                secondary, kMuted, imageWidth - 4.0f);
+        }
     }
 
     void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
