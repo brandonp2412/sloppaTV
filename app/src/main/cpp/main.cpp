@@ -4683,7 +4683,7 @@ private:
 
     void renderHeader(const std::string& title) {
         renderer_.text(72, 46, 3.9f, "SLOPPATV", kText);
-        renderer_.text(75, 103, 2.25f, title, kMuted);
+        renderer_.text(75, 125, 2.25f, title, kMuted);
         if (settings_.showClock) {
             renderer_.text(1650.0f, 52.0f, 2.05f,
                 formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
@@ -4695,8 +4695,8 @@ private:
         renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f,
             Color{0.10f, 0.05f, 0.18f, 0.42f},
             Color{0.01f, 0.04f, 0.07f, 0.12f});
-        renderer_.text(676.0f, 76.0f, 6.6f, "SLOPPATV", kText, 700.0f);
-        renderer_.text(730.0f, 190.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
+        renderer_.text(676.0f, 60.0f, 6.2f, "SLOPPATV", kText, 700.0f);
+        renderer_.text(730.0f, 194.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
 
         if (accountState_.quickConnectActive()) {
             renderer_.roundedRect(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, Color{0.035f, 0.040f, 0.055f, 0.92f});
@@ -4972,7 +4972,7 @@ private:
             constexpr float cardW = 420.0f;
             constexpr float cardH = 225.0f;
             constexpr float gap = 28.0f;
-            const float imageY = top + 68.0f;
+            const float imageY = top + 82.0f;
             float x = 72.0f;
             const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 4);
             for (int index = start; index < static_cast<int>(items.size()); ++index) {
@@ -5037,7 +5037,7 @@ private:
                     episode += item.name;
                 }
                 if (!episode.empty()) {
-                    renderer_.text(x + 2.0f, titleY + 48.0f, 1.58f,
+                    renderer_.text(x + 2.0f, titleY + 56.0f, 1.58f,
                         singleLine(episode, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
                 }
             }
@@ -5100,10 +5100,10 @@ private:
         }
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
-        const float titleY = y + imageHeight + 18.0f;
+        const float titleY = y + imageHeight + 28.0f;
         renderer_.text(x + 2.0f, titleY, 2.05f, fitTextLines(item.name, 2.05f, slotWidth - 4.0f, 1), kText, slotWidth - 4.0f);
         const std::string secondary = episodeLabel(item);
-        if (!secondary.empty()) renderer_.text(x + 2.0f, titleY + 46.0f, 1.45f, secondary, kMuted, slotWidth - 4.0f);
+        if (!secondary.empty()) renderer_.text(x + 2.0f, titleY + 52.0f, 1.45f, secondary, kMuted, slotWidth - 4.0f);
     }
 
     void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
@@ -5224,10 +5224,10 @@ private:
         };
 
         if (topLevelCount > 0) {
-            renderResultRow(0, "MOVIES & SHOWS", 258.0f, 300.0f);
+            renderResultRow(0, "MOVIES & SHOWS", 258.0f, 314.0f);
         }
         if (episodeCount > 0) {
-            renderResultRow(1, "EPISODES", topLevelCount > 0 ? 738.0f : 258.0f, topLevelCount > 0 ? 780.0f : 300.0f);
+            renderResultRow(1, "EPISODES", topLevelCount > 0 ? 770.0f : 258.0f, topLevelCount > 0 ? 826.0f : 314.0f);
         }
     }
 
@@ -5932,7 +5932,7 @@ private:
             if (!state.empty()) state += "   |   ";
             state += "WATCHED";
         }
-        if (!state.empty()) renderer_.text(contentX, 582.0f, 1.70f, state, kFocus, 420.0f);
+        if (!state.empty()) renderer_.text(contentX, 558.0f, 1.70f, state, kFocus, 420.0f);
 
         const auto actions = detailActions();
         constexpr float actionY = 615.0f;
@@ -5976,7 +5976,7 @@ private:
                     renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 12.0f, kPanelAlt);
                 }
                 if (focused) renderer_.roundedOutline(bounds[0] - 2.0f, bounds[1] - 2.0f, bounds[2] + 4.0f, bounds[3] + 4.0f, 15.0f, 2.5f, kFocus);
-                renderer_.text(x + 2.0f, y + cardHeight + 12.0f, 2.10f, similar.name, focused ? kText : kSecondaryText, cardWidth - 10.0f);
+                renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f, similar.name, focused ? kText : kSecondaryText, cardWidth - 10.0f);
             }
         }
     }
