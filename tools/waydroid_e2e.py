@@ -134,6 +134,22 @@ def require_playback_session() -> None:
         raise RuntimeError("sloppaTV playback is not active; open a title before running this player acceptance command")
 
 
+def pull_with_reconnect(remote: str, local: Path, attempts: int = 4) -> None:
+    for attempt in range(1, attempts + 1):
+        try:
+            adb("pull", remote, str(local), timeout=60.0)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            if local.exists():
+                local.unlink()
+            if attempt == attempts:
+                raise
+            print(f"ADB pull interrupted for {remote}; waiting for device before retry {attempt + 1}/{attempts}")
+            adb("wait-for-device", timeout=45.0)
+            time.sleep(1.0)
+    raise RuntimeError(f"unable to pull {remote}")
+
+
 def capture(name: str) -> Path:
     require_running()
     activity_dump = adb("shell", "dumpsys", "activity", "activities", capture=True, timeout=60.0)
@@ -142,7 +158,7 @@ def capture(name: str) -> Path:
     remote = f"/sdcard/{name}.png"
     local = ARTIFACTS / f"{name}.png"
     adb("shell", "screencap", "-p", remote)
-    adb("pull", remote, str(local))
+    pull_with_reconnect(remote, local)
     return local
 
 

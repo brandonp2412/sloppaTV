@@ -313,6 +313,19 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertTrue(waydroid_e2e.power_state_is_awake("mWakefulness=Awake\nmWakefulnessChanging=false"))
         self.assertFalse(waydroid_e2e.power_state_is_awake("mWakefulness=Asleep\nmWakefulnessChanging=false"))
 
+    def test_screenshot_pull_reconnects_after_transient_adb_disconnect(self) -> None:
+        failure = subprocess.CalledProcessError(1, ["adb", "pull"])
+        with tempfile.TemporaryDirectory() as directory:
+            local = Path(directory) / "screen.png"
+            local.write_bytes(b"partial")
+            with patch.object(waydroid_e2e, "adb", side_effect=[failure, "", ""]) as adb, patch.object(
+                waydroid_e2e.time, "sleep"
+            ):
+                waydroid_e2e.pull_with_reconnect("/sdcard/screen.png", local)
+            self.assertFalse(local.exists())
+            self.assertEqual(adb.call_args_list[1].args, ("wait-for-device",))
+            self.assertEqual(adb.call_args_list[2].args[:2], ("pull", "/sdcard/screen.png"))
+
     def test_ensure_awake_wakes_sleeping_target(self) -> None:
         with patch.object(
             waydroid_e2e,
