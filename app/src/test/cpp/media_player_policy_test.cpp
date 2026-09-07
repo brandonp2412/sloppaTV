@@ -14,8 +14,6 @@ int main() {
     assert(playbackPositionMsFromTicks(-1) == 0);
     assert(playbackPositionMsFromTicks(12'340'000) == 1234);
 
-    // Embedded mpv accepts the logical resume position directly for both direct
-    // and server-streamed playback; no URL re-resolution is needed for a seek.
     assert(initialPlayerSeekMs(12'340'000) == 1234);
     assert(subtitleStrategy("srt") == SubtitleStrategy::ClientText);
     assert(subtitleStrategy("mov_text") == SubtitleStrategy::ClientText);
