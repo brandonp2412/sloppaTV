@@ -123,12 +123,12 @@ Renderer::Renderer(JavaVM* vm, jobject activity) : vm_(vm) {
 
 Renderer::~Renderer() {
     shutdown();
-    if (activity_) {
-        ScopedEnv scoped(vm_);
-        JNIEnv* env = scoped.get();
-        if (env) env->DeleteGlobalRef(activity_);
-        activity_ = nullptr;
-    }
+    if (!activity_) return;
+
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (env) env->DeleteGlobalRef(activity_);
+    activity_ = nullptr;
 }
 
 GLuint Renderer::compileShader(GLenum type, const char* source) {
