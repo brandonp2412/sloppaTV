@@ -946,6 +946,82 @@ void Renderer::textWithAtlas(
         return (atlasTexture ? 5.6f : 6.0f) * scale;
     };
 
+    if (atlasTexture) {
+        constexpr float atlasColumns = 16.0f;
+        constexpr float atlasRows = 6.0f;
+        constexpr float atlasCellWidthUi = 10.0f;
+        constexpr float atlasCellHeightUi = 10.0f;
+        std::vector<TextureVertex> glyphVertices;
+        glyphVertices.reserve(display.size() * 6);
+
+        for (char raw : display) {
+            if (raw == '\r') continue;
+            if (raw == '\n') {
+                x = originX;
+                y += lineHeight;
+                continue;
+            }
+
+            const unsigned char rawByte = static_cast<unsigned char>(raw);
+            const float advance = advanceFor(rawByte);
+            if (maxWidth > 0.0f && x + advance > originX + maxWidth) {
+                x = originX;
+                y += lineHeight;
+            }
+
+            if (rawByte >= 32 && rawByte <= 126 && rawByte != ' ') {
+                const int index = static_cast<int>(rawByte) - 32;
+                const int column = index % 16;
+                const int row = index / 16;
+                const float px = uiOffsetX_ + x * uiScale_;
+                const float py = uiOffsetY_ + (y - 0.45f * scale) * uiScale_;
+                const float pw = atlasCellWidthUi * scale * uiScale_;
+                const float ph = atlasCellHeightUi * scale * uiScale_;
+                const float u0 = static_cast<float>(column) / atlasColumns;
+                const float v0 = static_cast<float>(row) / atlasRows;
+                const float u1 = static_cast<float>(column + 1) / atlasColumns;
+                const float v1 = static_cast<float>(row + 1) / atlasRows;
+                glyphVertices.insert(glyphVertices.end(), {
+                    {px, py, u0, v0, 0.0f, 0.0f},
+                    {px + pw, py, u1, v0, pw, 0.0f},
+                    {px + pw, py + ph, u1, v1, pw, ph},
+                    {px, py, u0, v0, 0.0f, 0.0f},
+                    {px + pw, py + ph, u1, v1, pw, ph},
+                    {px, py + ph, u0, v1, 0.0f, ph},
+                });
+            }
+            x += advance;
+        }
+
+        if (!glyphVertices.empty()) {
+            flush();
+            glUseProgram(textureProgram_);
+            glUniform2f(textureResolutionLocation_, logicalWidth(), logicalHeight());
+            glUniform1f(textureAlphaLocation_, 1.0f);
+            glUniform4f(textureTintLocation_, color.r, color.g, color.b, color.a);
+            glUniform2f(
+                textureRectSizeLocation_,
+                atlasCellWidthUi * scale * uiScale_,
+                atlasCellHeightUi * scale * uiScale_
+            );
+            glUniform1f(textureRadiusLocation_, 0.0f);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, atlasTexture);
+            glBindVertexArray(textureVao_);
+            glBindBuffer(GL_ARRAY_BUFFER, textureVbo_);
+            glBufferData(
+                GL_ARRAY_BUFFER,
+                static_cast<GLsizeiptr>(glyphVertices.size() * sizeof(TextureVertex)),
+                glyphVertices.data(),
+                GL_STREAM_DRAW
+            );
+            glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(glyphVertices.size()));
+            glBindVertexArray(0);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+        return;
+    }
+
     for (char raw : display) {
         if (raw == '\r') continue;
         if (raw == '\n') {
@@ -960,38 +1036,12 @@ void Renderer::textWithAtlas(
             x = originX;
             y += lineHeight;
         }
-
-        if (atlasTexture && rawByte >= 32 && rawByte <= 126) {
-            const int index = static_cast<int>(rawByte) - 32;
-            const int column = index % 16;
-            const int row = index / 16;
-            constexpr float atlasColumns = 16.0f;
-            constexpr float atlasRows = 6.0f;
-            constexpr float atlasCellWidthUi = 10.0f;
-            constexpr float atlasCellHeightUi = 10.0f;
-            if (rawByte != ' ') {
-                imageRegionTint(
-                    atlasTexture,
-                    x,
-                    y - 0.45f * scale,
-                    atlasCellWidthUi * scale,
-                    atlasCellHeightUi * scale,
-                    static_cast<float>(column) / atlasColumns,
-                    static_cast<float>(row) / atlasRows,
-                    static_cast<float>(column + 1) / atlasColumns,
-                    static_cast<float>(row + 1) / atlasRows,
-                    color,
-                    1.0f
-                );
-            }
-        } else {
-            const char c = static_cast<char>(std::toupper(rawByte));
-            const auto rows = glyph(c);
-            for (int row = 0; row < 7; ++row) {
-                for (int col = 0; col < 5; ++col) {
-                    if ((rows[static_cast<size_t>(row)] & (1u << (4 - col))) != 0) {
-                        rect(x + static_cast<float>(col) * scale, y + static_cast<float>(row) * scale, scale, scale, color);
-                    }
+        const char c = static_cast<char>(std::toupper(rawByte));
+        const auto rows = glyph(c);
+        for (int row = 0; row < 7; ++row) {
+            for (int col = 0; col < 5; ++col) {
+                if ((rows[static_cast<size_t>(row)] & (1u << (4 - col))) != 0) {
+                    rect(x + static_cast<float>(col) * scale, y + static_cast<float>(row) * scale, scale, scale, color);
                 }
             }
         }

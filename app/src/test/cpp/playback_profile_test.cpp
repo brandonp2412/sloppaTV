@@ -110,6 +110,15 @@ int main() {
     assert(!flags.enableDirectStream);
     assert(!flags.allowVideoStreamCopy);
 
+    const PlaybackSubtitleCapabilityInput unknownSubtitle{.selected = true, .codec = "madeup"};
+    plan = makePlaybackProfilePlan(device, {}, {}, unknownSubtitle, 8, {});
+    assert(!plan.clientSubtitle);
+    assert(plan.serverSubtitle);
+    flags = playbackRequestFlags(plan, {});
+    assert(!flags.enableDirectPlay);
+    assert(!flags.enableDirectStream);
+    assert(!flags.allowVideoStreamCopy);
+
     plan = makePlaybackProfilePlan(device, hevcHdr, surround, {}, 8, {});
     flags = playbackRequestFlags(plan, {});
     assert(flags.enableDirectPlay);

@@ -71,11 +71,22 @@ inline std::string sanitizeSubtitleText(std::string text) {
     std::string clean;
     clean.reserve(text.size());
     for (size_t index = 0; index < text.size();) {
-        if (text[index] == '{' && index + 1 < text.size() && text[index + 1] == '\\') {
-            const size_t end = text.find('}', index + 2);
+        if (text[index] == '{') {
+            const size_t end = text.find('}', index + 1);
             if (end != std::string::npos) {
-                index = end + 1;
-                continue;
+                std::string body = text.substr(index + 1, end - index - 1);
+                std::string normalized = body;
+                std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) {
+                    return static_cast<char>(std::tolower(c));
+                });
+                const bool assOverride = !body.empty() && body.front() == '\\';
+                const bool malformedAlignment = normalized == "an"
+                    || (normalized.size() == 3 && normalized.rfind("an", 0) == 0
+                        && normalized[2] >= '1' && normalized[2] <= '9');
+                if (assOverride || malformedAlignment) {
+                    index = end + 1;
+                    continue;
+                }
             }
         }
         if (text[index] == '<') {
@@ -162,6 +173,18 @@ struct SubtitleCue {
     std::string text;
 };
 
+inline std::string subtitleTextFormat(std::string codec) {
+    std::transform(codec.begin(), codec.end(), codec.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (codec == "subrip") return "srt";
+    if (codec == "webvtt") return "vtt";
+    if (codec == "ass" || codec == "ssa" || codec == "srt" || codec == "vtt" || codec == "mov_text") {
+        return codec;
+    }
+    return {};
+}
+
 inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
     std::vector<SubtitleCue> cues;
     std::istringstream stream(input);
@@ -200,6 +223,110 @@ inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
         return left.endMs < right.endMs;
     });
     return cues;
+}
+
+inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
+    std::vector<SubtitleCue> cues;
+    std::istringstream stream(input);
+    std::string line;
+    bool inEvents = false;
+    int startColumn = -1;
+    int endColumn = -1;
+    int textColumn = -1;
+    int fieldCount = 0;
+
+    auto trim = [](std::string value) {
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.pop_back();
+        return value;
+    };
+    auto split = [&](std::string_view value, int maxFields = -1) {
+        std::vector<std::string> fields;
+        size_t start = 0;
+        while (start <= value.size()) {
+            if (maxFields > 0 && static_cast<int>(fields.size()) == maxFields - 1) {
+                fields.push_back(trim(std::string(value.substr(start))));
+                break;
+            }
+            const size_t comma = value.find(',', start);
+            if (comma == std::string_view::npos) {
+                fields.push_back(trim(std::string(value.substr(start))));
+                break;
+            }
+            fields.push_back(trim(std::string(value.substr(start, comma - start))));
+            start = comma + 1;
+        }
+        return fields;
+    };
+
+    while (std::getline(stream, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        std::string trimmed = trim(line);
+        if (trimmed.empty() || trimmed.front() == ';') continue;
+        if (trimmed.front() == '[' && trimmed.back() == ']') {
+            std::string section = trimmed;
+            std::transform(section.begin(), section.end(), section.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            inEvents = section == "[events]";
+            continue;
+        }
+        if (!inEvents) continue;
+        if (trimmed.rfind("Format:", 0) == 0 || trimmed.rfind("format:", 0) == 0) {
+            const auto fields = split(std::string_view(trimmed).substr(trimmed.find(':') + 1));
+            fieldCount = static_cast<int>(fields.size());
+            startColumn = endColumn = textColumn = -1;
+            for (int i = 0; i < fieldCount; ++i) {
+                std::string name = fields[static_cast<size_t>(i)];
+                std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+                    return static_cast<char>(std::tolower(c));
+                });
+                if (name == "start") startColumn = i;
+                else if (name == "end") endColumn = i;
+                else if (name == "text") textColumn = i;
+            }
+            continue;
+        }
+        const size_t colon = trimmed.find(':');
+        if (colon == std::string::npos) continue;
+        std::string kind = trim(trimmed.substr(0, colon));
+        std::transform(kind.begin(), kind.end(), kind.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        if (kind != "dialogue") continue;
+        if (fieldCount <= 0 || startColumn < 0 || endColumn < 0 || textColumn < 0) {
+            fieldCount = 10;
+            startColumn = 1;
+            endColumn = 2;
+            textColumn = 9;
+        }
+        const auto fields = split(std::string_view(trimmed).substr(colon + 1), fieldCount);
+        if (static_cast<int>(fields.size()) <= std::max({startColumn, endColumn, textColumn})) continue;
+        const int startMs = parseSubtitleTimestamp(fields[static_cast<size_t>(startColumn)]);
+        const int endMs = parseSubtitleTimestamp(fields[static_cast<size_t>(endColumn)]);
+        if (startMs < 0 || endMs <= startMs) continue;
+        std::string text = fields[static_cast<size_t>(textColumn)];
+        size_t pos = 0;
+        while ((pos = text.find("\\N", pos)) != std::string::npos) text.replace(pos, 2, " ");
+        pos = 0;
+        while ((pos = text.find("\\n", pos)) != std::string::npos) text.replace(pos, 2, " ");
+        text = sanitizeSubtitleText(std::move(text));
+        if (!text.empty()) cues.push_back({startMs, endMs, std::move(text)});
+    }
+
+    std::stable_sort(cues.begin(), cues.end(), [](const SubtitleCue& left, const SubtitleCue& right) {
+        if (left.startMs != right.startMs) return left.startMs < right.startMs;
+        return left.endMs < right.endMs;
+    });
+    return cues;
+}
+
+inline std::vector<SubtitleCue> parseTextSubtitleCues(const std::string& input, std::string codec) {
+    std::transform(codec.begin(), codec.end(), codec.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    if (codec == "ass" || codec == "ssa") return parseAssCues(input);
+    return parseSubRipCues(sanitizeSubtitleText(input));
 }
 
 struct SubtitlePreferenceCandidate {

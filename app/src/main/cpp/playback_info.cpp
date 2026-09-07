@@ -30,17 +30,32 @@ std::string buildPlaybackInfoRequestBody(
     int audioStreamIndex,
     int subtitleStreamIndex
 ) {
+    // Embedded libmpv renders these formats itself. Advertise embedded support so
+    // Jellyfin does not burn PGS/ASS/etc. into the video and force a transcode.
+    // Text formats may still be delivered externally when Jellyfin prefers that.
     json subtitleProfiles = json::array({
         {{"Format", "vtt"}, {"Method", "External"}},
+        {{"Format", "vtt"}, {"Method", "Embed"}},
         {{"Format", "webvtt"}, {"Method", "External"}},
+        {{"Format", "webvtt"}, {"Method", "Embed"}},
         {{"Format", "srt"}, {"Method", "External"}},
+        {{"Format", "srt"}, {"Method", "Embed"}},
         {{"Format", "subrip"}, {"Method", "External"}},
+        {{"Format", "subrip"}, {"Method", "Embed"}},
         {{"Format", "mov_text"}, {"Method", "External"}},
+        {{"Format", "mov_text"}, {"Method", "Embed"}},
         {{"Format", "ass"}, {"Method", "External"}},
-        {{"Format", "ass"}, {"Method", "Encode"}},
+        {{"Format", "ass"}, {"Method", "Embed"}},
         {{"Format", "ssa"}, {"Method", "External"}},
-        {{"Format", "ssa"}, {"Method", "Encode"}},
-        {{"Format", "pgs"}, {"Method", "Encode"}},
+        {{"Format", "ssa"}, {"Method", "Embed"}},
+        {{"Format", "pgs"}, {"Method", "Embed"}},
+        {{"Format", "pgssub"}, {"Method", "Embed"}},
+        {{"Format", "hdmv_pgs_subtitle"}, {"Method", "Embed"}},
+        {{"Format", "dvdsub"}, {"Method", "Embed"}},
+        {{"Format", "dvd_subtitle"}, {"Method", "Embed"}},
+        {{"Format", "dvbsub"}, {"Method", "Embed"}},
+        {{"Format", "dvb_subtitle"}, {"Method", "Embed"}},
+        {{"Format", "xsub"}, {"Method", "Embed"}},
     });
 
     const std::string videoCodecList = joinCodecs(plan.videoCodecs);

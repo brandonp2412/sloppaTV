@@ -302,6 +302,40 @@
       }
     ]
   },
+  "embedded_mpv_acceptance": {
+    "captured_at": "2026-09-06T04:52:02Z",
+    "item_id": "0f7eb629d7226090734bab5c9a3dbff1",
+    "item": "Planet Earth III S1E2 - Ocean",
+    "server": "https://jellyfin.presley.nz",
+    "client_playback_method": "DirectPlay",
+    "client_decoder": "c2.mtk.avc.decoder",
+    "client_video_codec": "H.264 / AVC",
+    "client_audio_codec": "AC-3",
+    "client_fps": 25.0,
+    "server_sample_seconds": 30,
+    "server_ffmpeg_process_samples": 0,
+    "server_jellyfin_cpu_pct": {
+      "mean": 1.27,
+      "median": 1.0,
+      "max": 4.0
+    },
+    "server_system_cpu_pct": {
+      "mean": 3.68,
+      "median": 3.09,
+      "max": 12.87
+    },
+    "server_load1": {
+      "mean": 0.95,
+      "median": 0.95,
+      "max": 1.03
+    },
+    "transcoding_observed": false,
+    "playback_transition_retest": {
+      "same_process_media_codec_teardown_and_restart": true,
+      "sigabrt_observed": false
+    },
+    "resume_position_restored_ticks": 8770000000
+  },
   "comparison": {
     "startup_median_lower_pct": 40.0,
     "startup_mean_lower_pct": 39.8,

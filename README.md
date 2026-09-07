@@ -12,7 +12,7 @@ Current status: **27/30 acceptance areas verified (90%)**. All in-scope areas ar
 
 Home/browse/search/details, multiple users and servers, Quick Connect, watched/favorites, DirectPlay/DirectStream/transcoding, audio/subtitle switching, native SRT/VTT/ASS subtitle rendering, queues/autoplay, HDR and refresh-rate negotiation, external-player handoff, Android TV intents, screensaver, settings, and persistent sessions.
 
-The app/UI policy and rendering are C++20 using Android `NativeActivity` and GLES3. Media3 and Android-only services use small Java/JNI bridges.
+The app/UI policy, rendering, and embedded libmpv playback are C++20 using Android `NativeActivity` and GLES3. Android-only services use small Java/JNI bridges.
 
 ## Build
 
@@ -28,4 +28,4 @@ All Android variants use the single package `app.sloppatv` and the signing ident
 
 ## License
 
-MIT. See [LICENSE.md](LICENSE.md).
+GPL-3.0-or-later. See [LICENSE.md](LICENSE.md).

@@ -170,10 +170,22 @@ public:
         const JellyfinItem& item,
         int subtitleIndex
     ) const;
+    [[nodiscard]] std::string subtitleTextUrl(
+        const JellyfinSession& session,
+        const JellyfinItem& item,
+        int subtitleIndex,
+        const std::string& codec
+    ) const;
     ApiValueResult<std::string> downloadSubtitleSrt(
         const JellyfinSession& session,
         const JellyfinItem& item,
         int subtitleIndex
+    ) const;
+    ApiValueResult<std::string> downloadSubtitleText(
+        const JellyfinSession& session,
+        const JellyfinItem& item,
+        int subtitleIndex,
+        const std::string& codec
     ) const;
     ApiValueResult<std::string> downloadSubtitleUrl(
         const JellyfinSession& session,
