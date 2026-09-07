@@ -143,20 +143,25 @@ def idle_cpu(serial: str, app: App) -> float:
     return 0.0
 
 
-def active_layer(serial: str, app: App) -> str:
-    layers = adb(serial, "shell", "dumpsys", "SurfaceFlinger", "--list").splitlines()
-    candidates = [
+def select_active_layer(layers: list[str], app: App) -> str:
+    package_layers = [
         line
         for line in layers
         if app.package + "/" in line
-        and app.layer_contains in line
         and "ActivityRecord" not in line
         and "InputSink" not in line
     ]
+    preferred = [line for line in package_layers if app.layer_contains in line]
+    candidates = preferred or package_layers
     if not candidates:
         raise RuntimeError(f"No SurfaceFlinger layer found for {app.name}")
     buffer_layers = [line for line in candidates if line.startswith("TID:")]
     return (buffer_layers or candidates)[-1]
+
+
+def active_layer(serial: str, app: App) -> str:
+    layers = adb(serial, "shell", "dumpsys", "SurfaceFlinger", "--list").splitlines()
+    return select_active_layer(layers, app)
 
 
 def histogram_values(line: str) -> list[float]:

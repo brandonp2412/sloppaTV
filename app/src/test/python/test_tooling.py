@@ -43,6 +43,17 @@ class BenchmarkToolingTest(unittest.TestCase):
     def test_percentile_uses_upper_bucket(self) -> None:
         self.assertEqual(benchmark_tv.percentile([10.0, 20.0, 30.0, 40.0], 0.95), 40.0)
 
+    def test_surface_layer_falls_back_to_package_when_activity_name_changes(self) -> None:
+        app = benchmark_tv.App("Jellyfin", "org.jellyfin.androidtv", "activity", "MainActivity")
+        layers = [
+            "ActivityRecord{abc org.jellyfin.androidtv/.ui.startup.StartupActivity#1",
+            "org.jellyfin.androidtv/org.jellyfin.androidtv.ui.startup.StartupActivity#2",
+        ]
+        self.assertEqual(
+            benchmark_tv.select_active_layer(layers, app),
+            "org.jellyfin.androidtv/org.jellyfin.androidtv.ui.startup.StartupActivity#2",
+        )
+
 
 class ManifestToolingTest(unittest.TestCase):
     def test_external_video_players_are_visible_to_package_manager(self) -> None:
