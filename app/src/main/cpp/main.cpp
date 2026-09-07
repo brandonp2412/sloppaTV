@@ -4674,7 +4674,7 @@ private:
         }
         const Color surface = destructive && focused
             ? Color{kError.r, kError.g, kError.b, 0.90f}
-            : (primary ? (focused ? Color{0.49f, 0.28f, 0.88f, 0.98f} : kFocusSoft) : (focused ? kPanelElevated : kPanelAlt));
+            : (primary ? (focused ? kFocus : kFocusSoft) : (focused ? kPanelElevated : kPanelAlt));
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 18.0f, surface);
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], accent, 18.0f);
         return bounds;
@@ -5101,9 +5101,9 @@ private:
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
         const float titleY = y + imageHeight + 28.0f;
-        renderer_.text(x + 2.0f, titleY, 2.05f, fitTextLines(item.name, 2.05f, slotWidth - 4.0f, 1), kText, slotWidth - 4.0f);
+        renderer_.text(imageX + 2.0f, titleY, 2.05f, fitTextLines(item.name, 2.05f, imageWidth - 4.0f, 1), kText, imageWidth - 4.0f);
         const std::string secondary = episodeLabel(item);
-        if (!secondary.empty()) renderer_.text(x + 2.0f, titleY + 52.0f, 1.45f, secondary, kMuted, slotWidth - 4.0f);
+        if (!secondary.empty()) renderer_.text(imageX + 2.0f, titleY + 52.0f, 1.45f, secondary, kMuted, imageWidth - 4.0f);
     }
 
     void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
@@ -5147,8 +5147,11 @@ private:
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
         const bool syntheticPage = browseState_.syntheticPage();
-        const float rowStep = syntheticPage ? 190.0f : 430.0f;
-        const int visibleRows = syntheticPage ? 4 : 2;
+        const bool hasPortraitCards = std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) {
+            return !usesLandscapeMediaCard(item.type);
+        });
+        const float rowStep = syntheticPage ? 190.0f : (hasPortraitCards ? 430.0f : 300.0f);
+        const int visibleRows = syntheticPage ? 4 : (hasPortraitCards ? 1 : 2);
         const int selectedRow = browseState_.selection() / columns;
         const int firstRow = std::max(0, selectedRow - 1);
         for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
@@ -5227,7 +5230,7 @@ private:
             renderResultRow(0, "MOVIES & SHOWS", 258.0f, 314.0f);
         }
         if (episodeCount > 0) {
-            renderResultRow(1, "EPISODES", topLevelCount > 0 ? 770.0f : 258.0f, topLevelCount > 0 ? 826.0f : 314.0f);
+            renderResultRow(1, "EPISODES", topLevelCount > 0 ? 726.0f : 258.0f, topLevelCount > 0 ? 780.0f : 314.0f);
         }
     }
 
@@ -5585,7 +5588,9 @@ private:
             if (matchPosition >= static_cast<int>(matches.size())) break;
             const int i = matches[static_cast<size_t>(matchPosition)];
             const float y = 270.0f + static_cast<float>(slot) * 112.0f;
-            const bool focused = !settingsScreen_.searchFocused() && i == settingsScreen_.selection();
+            const bool focused = !settingsScreen_.subtitleLanguagePicker()
+                && !settingsScreen_.searchFocused()
+                && i == settingsScreen_.selection();
             const bool actionRow = i == 22 || i == 23 || i == kSubtitleLanguagesSetting || i == kAdvancedSettingsToggle;
             if (focused) {
                 renderer_.roundedRect(110.0f, y - 8.0f, 1700.0f, 88.0f, 22.0f, Color{0.07f, 0.065f, 0.09f, 0.72f});
@@ -5626,7 +5631,10 @@ private:
                         settings_.subtitleLanguages.end(),
                         kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code
                     ) != settings_.subtitleLanguages.end();
-                if (focused) renderer_.roundedRect(478.0f, y - 8.0f, 964.0f, 68.0f, 18.0f, kPanelElevated);
+                if (focused) {
+                    renderer_.roundedRect(478.0f, y - 8.0f, 964.0f, 68.0f, 18.0f, kPanelElevated);
+                    drawFocusHalo(478.0f, y - 8.0f, 964.0f, 68.0f, kFocus, 18.0f);
+                }
                 const std::string label = languageIndex == 0
                     ? "ALL LANGUAGES"
                     : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
@@ -5935,10 +5943,11 @@ private:
         if (!state.empty()) renderer_.text(contentX, 558.0f, 1.70f, state, kFocus, 420.0f);
 
         const auto actions = detailActions();
+        const bool overlayOpen = screen_ == Screen::ItemMenu;
         constexpr float actionY = 615.0f;
         float actionX = contentX;
         for (size_t i = 0; i < actions.size(); ++i) {
-            const bool focused = !detailsState_.similarFocused() && detailsState_.actionSelection() == static_cast<int>(i);
+            const bool focused = !overlayOpen && !detailsState_.similarFocused() && detailsState_.actionSelection() == static_cast<int>(i);
             const float width = std::max(145.0f, renderer_.textWidth(1.80f, actions[i]) + 46.0f);
             const std::array<float, 4> bounds{actionX, actionY, width, 64.0f};
             if (focused) {
@@ -5970,7 +5979,7 @@ private:
                 const auto& similar = similarItems[static_cast<size_t>(index)];
                 const float x = 72.0f + static_cast<float>(slot) * (cardWidth + cardGap);
                 const float y = 800.0f;
-                const bool focused = detailsState_.similarFocused() && index == detailsState_.similarSelection();
+                const bool focused = !overlayOpen && detailsState_.similarFocused() && index == detailsState_.similarSelection();
                 const auto bounds = focusedBounds(x, y, cardWidth, cardHeight, focused, 1.075f);
                 if (!drawHomeArtwork(similar, bounds[0], bounds[1], bounds[2], bounds[3])) {
                     renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 12.0f, kPanelAlt);
