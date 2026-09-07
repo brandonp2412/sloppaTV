@@ -4361,22 +4361,50 @@ private:
     }
 
     std::string profileArtworkKey(const JellyfinSession& saved) const {
-        return saved.server + ":user:" + saved.userId;
+        std::string key;
+        key.reserve(saved.server.size() + saved.userId.size() + 6);
+        key.append(saved.server).append(":user:").append(saved.userId);
+        return key;
     }
 
     std::string artworkKey(const JellyfinItem& item) const {
-        return session_.server + ":user:" + session_.userId + ":" + item.id + ":primary:" + item.imageTag;
+        std::string key;
+        key.reserve(session_.server.size() + session_.userId.size() + item.id.size() + item.imageTag.size() + 16);
+        key.append(session_.server)
+            .append(":user:")
+            .append(session_.userId)
+            .push_back(':');
+        key.append(item.id).append(":primary:").append(item.imageTag);
+        return key;
     }
 
     std::string backdropKey(const JellyfinItem& item) const {
-        const std::string artworkItemId = item.backdropItemId.empty() ? item.id : item.backdropItemId;
-        return session_.server + ":user:" + session_.userId + ":" + artworkItemId
-            + ":backdrop:" + item.backdropTag + ":mode:" + std::to_string(settings_.backdropMode);
+        const std::string& artworkItemId = item.backdropItemId.empty() ? item.id : item.backdropItemId;
+        const std::string mode = std::to_string(settings_.backdropMode);
+        std::string key;
+        key.reserve(session_.server.size() + session_.userId.size() + artworkItemId.size() + item.backdropTag.size() + mode.size() + 24);
+        key.append(session_.server)
+            .append(":user:")
+            .append(session_.userId)
+            .push_back(':');
+        key.append(artworkItemId)
+            .append(":backdrop:")
+            .append(item.backdropTag)
+            .append(":mode:")
+            .append(mode);
+        return key;
     }
 
     std::string logoKey(const JellyfinItem& item) const {
-        const std::string artworkItemId = item.logoItemId.empty() ? item.id : item.logoItemId;
-        return session_.server + ":user:" + session_.userId + ":" + artworkItemId + ":logo:" + item.logoTag;
+        const std::string& artworkItemId = item.logoItemId.empty() ? item.id : item.logoItemId;
+        std::string key;
+        key.reserve(session_.server.size() + session_.userId.size() + artworkItemId.size() + item.logoTag.size() + 13);
+        key.append(session_.server)
+            .append(":user:")
+            .append(session_.userId)
+            .push_back(':');
+        key.append(artworkItemId).append(":logo:").append(item.logoTag);
+        return key;
     }
 
     std::string homeArtworkKey(const JellyfinItem& item) const {
@@ -4390,8 +4418,19 @@ private:
             item.backdropTag,
             item.backdropItemId
         );
-        return session_.server + ":user:" + session_.userId + ":" + artwork.itemId
-            + ":home:v5-480x270:" + std::to_string(static_cast<int>(artwork.kind)) + ":" + artwork.tag;
+        const std::string kind = std::to_string(static_cast<int>(artwork.kind));
+        std::string key;
+        key.reserve(session_.server.size() + session_.userId.size() + artwork.itemId.size() + artwork.tag.size() + kind.size() + 31);
+        key.append(session_.server)
+            .append(":user:")
+            .append(session_.userId)
+            .push_back(':');
+        key.append(artwork.itemId)
+            .append(":home:v5-480x270:")
+            .append(kind)
+            .push_back(':');
+        key.append(artwork.tag);
+        return key;
     }
 
     void releaseArtworkTexture(ArtworkEntry& entry) {
