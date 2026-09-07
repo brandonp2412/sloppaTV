@@ -880,7 +880,12 @@ bool Renderer::loadFontAtlas() {
 }
 
 float Renderer::textWidth(float scale, const std::string& value) const {
-    const std::string display = displayText(value);
+    std::string transformed;
+    std::string_view display = value;
+    if (std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte >= 0x80; })) {
+        transformed = displayText(value);
+        display = transformed;
+    }
     scale *= textScale_;
     auto advanceFor = [&](unsigned char byte) {
         if (fontTexture_ && fontAdvancesReady_ && byte >= 32 && byte <= 126) {
@@ -934,7 +939,12 @@ void Renderer::textWithAtlas(
     Color color,
     float maxWidth
 ) {
-    const std::string display = displayText(value);
+    std::string transformed;
+    std::string_view display = value;
+    if (std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte >= 0x80; })) {
+        transformed = displayText(value);
+        display = transformed;
+    }
     scale *= textScale_;
     const float originX = x;
     const float lineHeight = (atlasTexture ? 11.0f : 9.0f) * scale;
@@ -951,8 +961,8 @@ void Renderer::textWithAtlas(
         constexpr float atlasRows = 6.0f;
         constexpr float atlasCellWidthUi = 10.0f;
         constexpr float atlasCellHeightUi = 10.0f;
-        std::vector<TextureVertex> glyphVertices;
-        glyphVertices.reserve(display.size() * 6);
+        textVertices_.clear();
+        textVertices_.reserve(display.size() * 6);
 
         for (char raw : display) {
             if (raw == '\r') continue;
@@ -981,7 +991,7 @@ void Renderer::textWithAtlas(
                 const float v0 = static_cast<float>(row) / atlasRows;
                 const float u1 = static_cast<float>(column + 1) / atlasColumns;
                 const float v1 = static_cast<float>(row + 1) / atlasRows;
-                glyphVertices.insert(glyphVertices.end(), {
+                textVertices_.insert(textVertices_.end(), {
                     {px, py, u0, v0, 0.0f, 0.0f},
                     {px + pw, py, u1, v0, pw, 0.0f},
                     {px + pw, py + ph, u1, v1, pw, ph},
@@ -993,7 +1003,7 @@ void Renderer::textWithAtlas(
             x += advance;
         }
 
-        if (!glyphVertices.empty()) {
+        if (!textVertices_.empty()) {
             flush();
             glUseProgram(textureProgram_);
             glUniform2f(textureResolutionLocation_, logicalWidth(), logicalHeight());
@@ -1011,11 +1021,11 @@ void Renderer::textWithAtlas(
             glBindBuffer(GL_ARRAY_BUFFER, textureVbo_);
             glBufferData(
                 GL_ARRAY_BUFFER,
-                static_cast<GLsizeiptr>(glyphVertices.size() * sizeof(TextureVertex)),
-                glyphVertices.data(),
+                static_cast<GLsizeiptr>(textVertices_.size() * sizeof(TextureVertex)),
+                textVertices_.data(),
                 GL_STREAM_DRAW
             );
-            glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(glyphVertices.size()));
+            glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(textVertices_.size()));
             glBindVertexArray(0);
             glBindTexture(GL_TEXTURE_2D, 0);
         }

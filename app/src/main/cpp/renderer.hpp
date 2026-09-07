@@ -183,4 +183,5 @@ private:
     float uiScale_ = 1.0f;
     float textScale_ = 1.0f;
     std::vector<Vertex> vertices_;
+    std::vector<TextureVertex> textVertices_;
 };
