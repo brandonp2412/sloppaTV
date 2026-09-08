@@ -5610,14 +5610,15 @@ private:
             if (selected) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 20.0f);
         }
 
-        const std::array<std::string, 7> actions{
+        const std::string repeatAction = std::string("REPEAT ") + queueRepeatModeName(queueState_.repeatMode());
+        const std::array<std::string_view, 7> actions{
             "PLAY NOW",
             "PLAY NEXT",
             "MOVE UP",
             "MOVE DOWN",
             "REMOVE",
             "SHUFFLE",
-            std::string("REPEAT ") + queueRepeatModeName(queueState_.repeatMode()),
+            repeatAction,
         };
         auto enabled = [&](int action) {
             if (action == 0) return queueCanPlayNow(selection, current, size);
@@ -5833,7 +5834,7 @@ private:
                 980.0f
             );
 
-            const std::array<std::string, 2> actions{"DELETE PERMANENTLY", "CANCEL"};
+            static constexpr std::array<std::string_view, 2> actions{"DELETE PERMANENTLY", "CANCEL"};
             for (int i = 0; i < 2; ++i) {
                 const float x = i == 0 ? 470.0f : 995.0f;
                 const bool focused = detailsState_.deleteConfirmationSelection() == i;
@@ -5899,15 +5900,6 @@ private:
         }
     }
 
-    JellyfinItem personArtworkItem(const JellyfinPerson& person) const {
-        JellyfinItem item;
-        item.id = person.id;
-        item.name = person.name;
-        item.type = "Person";
-        item.imageTag = person.imageTag;
-        return item;
-    }
-
     void renderCast() {
         const std::string heading = detail_.name.empty() ? "CAST" : detail_.name + " - CAST";
         renderHeader(heading);
@@ -5933,8 +5925,7 @@ private:
             const auto bounds = focusedBounds(imageX, y, imageWidth, imageHeight, focused);
             renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, focused ? kPanelElevated : kPanelAlt);
             const auto& person = detail_.people[static_cast<size_t>(index)];
-            const JellyfinItem artworkItem = personArtworkItem(person);
-            drawArtwork(artworkItem, bounds[0], bounds[1], bounds[2], bounds[3]);
+            drawArtwork(person.id, person.imageTag, bounds[0], bounds[1], bounds[2], bounds[3]);
             if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3]);
             renderer_.text(x + 4.0f, y + imageHeight + 18.0f, 2.25f, person.name, kText, slotWidth - 8.0f);
             if (!person.role.empty()) renderer_.text(x + 4.0f, y + imageHeight + 64.0f, 1.55f, person.role, kMuted, slotWidth - 8.0f);

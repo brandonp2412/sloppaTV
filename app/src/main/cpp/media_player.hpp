@@ -50,13 +50,7 @@ public:
     [[nodiscard]] bool seekable() const;
     [[nodiscard]] int videoWidth() const;
     [[nodiscard]] int videoHeight() const;
-    [[nodiscard]] std::string hardwareDecoder() const;
-    [[nodiscard]] std::string videoCodec() const;
-    [[nodiscard]] std::string audioCodec() const;
-    [[nodiscard]] std::string subtitleText() const;
     void subtitleText(std::string& output) const;
-    [[nodiscard]] double containerFps() const;
-    [[nodiscard]] int64_t droppedFrames() const;
 
 private:
     bool loadLibrariesLocked(std::string& error);

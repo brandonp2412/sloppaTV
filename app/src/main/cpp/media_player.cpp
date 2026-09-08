@@ -836,39 +836,7 @@ int NativeMediaPlayer::videoHeight() const {
     return cachedVideoHeight_;
 }
 
-std::string NativeMediaPlayer::hardwareDecoder() const {
-    std::scoped_lock lock(mutex_);
-    return getStringPropertyLocked("hwdec-current");
-}
-
-std::string NativeMediaPlayer::videoCodec() const {
-    std::scoped_lock lock(mutex_);
-    return getStringPropertyLocked("video-codec");
-}
-
-std::string NativeMediaPlayer::audioCodec() const {
-    std::scoped_lock lock(mutex_);
-    return getStringPropertyLocked("audio-codec");
-}
-
-std::string NativeMediaPlayer::subtitleText() const {
-    std::scoped_lock lock(mutex_);
-    return cachedSubtitleText_;
-}
-
 void NativeMediaPlayer::subtitleText(std::string& output) const {
     std::scoped_lock lock(mutex_);
     output = cachedSubtitleText_;
-}
-
-double NativeMediaPlayer::containerFps() const {
-    std::scoped_lock lock(mutex_);
-    double value = 0.0;
-    return getDoublePropertyLocked("container-fps", value) ? value : 0.0;
-}
-
-int64_t NativeMediaPlayer::droppedFrames() const {
-    std::scoped_lock lock(mutex_);
-    int64_t value = 0;
-    return getIntPropertyLocked("decoder-frame-drop-count", value) ? value : 0;
 }
