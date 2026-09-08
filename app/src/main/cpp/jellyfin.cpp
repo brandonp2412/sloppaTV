@@ -1516,11 +1516,11 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
         __android_log_print(
             ANDROID_LOG_WARN,
             kTag,
-            "Home image HTTP %d artworkItem=%s kind=%d tag=%s sourceItem=%s",
+            "Home image HTTP %d artworkItem=%.*s kind=%d tag=%.*s sourceItem=%s",
             response.status,
-            artwork.itemId.c_str(),
-            static_cast<int>(kind),
-            artwork.tag.c_str(),
+            static_cast<int>(artwork.itemId.size()), artwork.itemId.data(),
+            static_cast<int>(artwork.kind),
+            static_cast<int>(artwork.tag.size()), artwork.tag.data(),
             item.id.c_str()
         );
         result.error = apiError(response);

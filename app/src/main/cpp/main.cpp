@@ -1245,7 +1245,7 @@ private:
         } else if (key == AKEYCODE_DPAD_DOWN && !detailsState_.similar().empty()) {
             detailsState_.setSimilarFocused(true);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const std::string& action = actions[static_cast<size_t>(detailsState_.actionSelection())];
+            const std::string_view action = actions[static_cast<size_t>(detailsState_.actionSelection())];
             if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING") beginPlayback();
             else if (action == "EPISODES") openSeasons();
             else if (action == "FAVORITE" || action == "UNFAVORITE") toggleFavoriteAsync();
