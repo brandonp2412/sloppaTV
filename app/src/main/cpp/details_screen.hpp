@@ -127,18 +127,7 @@ public:
     void resetCastSelection() { castSelection_ = 0; }
     [[nodiscard]] int castSelection() const { return castSelection_; }
     void moveCastSelection(const std::vector<JellyfinPerson>& people, int dx, int dy, int columns) {
-        const int count = static_cast<int>(people.size());
-        if (count <= 0 || columns <= 0) {
-            castSelection_ = 0;
-            return;
-        }
-        const int rows = (count + columns - 1) / columns;
-        int row = castSelection_ / columns;
-        int col = castSelection_ % columns;
-        row = std::clamp(row + dy, 0, rows - 1);
-        col = std::clamp(col + dx, 0, columns - 1);
-        const int next = row * columns + col;
-        if (next >= 0 && next < count) castSelection_ = next;
+        moveGridSelection(castSelection_, static_cast<int>(people.size()), dx, dy, columns);
     }
     [[nodiscard]] const JellyfinPerson* selectedCastPerson(const std::vector<JellyfinPerson>& people) const {
         if (people.empty() || castSelection_ < 0 || castSelection_ >= static_cast<int>(people.size())) return nullptr;

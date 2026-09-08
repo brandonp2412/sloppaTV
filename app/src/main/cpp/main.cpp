@@ -2257,7 +2257,7 @@ private:
         return trackState_.activeSubtitleCue(playerScreenState_.positionMs());
     }
 
-    std::optional<JellyfinMediaSegment> activeSkippableSegment() const {
+    const JellyfinMediaSegment* activeSkippableSegment() const {
         const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
         return playbackSessionState_.activeSkippableSegment(positionTicks);
     }

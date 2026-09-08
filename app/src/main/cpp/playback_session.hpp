@@ -3,18 +3,12 @@
 #include "app_settings.hpp"
 #include "jellyfin_types.hpp"
 
-#include <optional>
 #include <utility>
 #include <vector>
 
 class PlaybackSessionState {
 public:
-    void reset() {
-        mediaSegments_.clear();
-        mediaSegmentsRequested_ = false;
-        fallbackAttempted_ = false;
-        zoomMode_ = VideoZoomMode::Fit;
-    }
+    void reset() { begin(VideoZoomMode::Fit); }
 
     void begin(VideoZoomMode zoomMode) {
         mediaSegments_.clear();
@@ -38,12 +32,12 @@ public:
     }
     [[nodiscard]] const std::vector<JellyfinMediaSegment>& mediaSegments() const { return mediaSegments_; }
 
-    [[nodiscard]] std::optional<JellyfinMediaSegment> activeSkippableSegment(int64_t positionTicks) const {
+    [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int64_t positionTicks) const {
         for (const auto& segment : mediaSegments_) {
             if (segment.endTicks - segment.startTicks < 30000000) continue;
-            if (positionTicks >= segment.startTicks && positionTicks < segment.endTicks - 5000000) return segment;
+            if (positionTicks >= segment.startTicks && positionTicks < segment.endTicks - 5000000) return &segment;
         }
-        return std::nullopt;
+        return nullptr;
     }
 
     [[nodiscard]] bool fallbackAttempted() const { return fallbackAttempted_; }
