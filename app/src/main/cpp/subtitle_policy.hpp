@@ -46,12 +46,14 @@ inline std::string sanitizeSubtitleText(std::string text) {
             position += to.size();
         }
     };
-    replaceAll(text, "&nbsp;", " ");
-    replaceAll(text, "&amp;", "&");
-    replaceAll(text, "&lt;", "<");
-    replaceAll(text, "&gt;", ">");
-    replaceAll(text, "&quot;", "\"");
-    replaceAll(text, "&#39;", "'");
+    if (text.find('&') != std::string::npos) {
+        replaceAll(text, "&nbsp;", " ");
+        replaceAll(text, "&amp;", "&");
+        replaceAll(text, "&lt;", "<");
+        replaceAll(text, "&gt;", ">");
+        replaceAll(text, "&quot;", "\"");
+        replaceAll(text, "&#39;", "'");
+    }
 
     auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
         return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
