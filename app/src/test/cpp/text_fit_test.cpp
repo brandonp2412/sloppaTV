@@ -14,5 +14,8 @@ int main() {
     assert(fitTextLinesMeasured("one two three", 60.0f, 2, measure) == "one two\nthree");
     assert(fitTextLinesMeasured("one two three four", 60.0f, 1, measure) == "one t...");
     assert(fitTextLinesMeasured("", 60.0f, 2, measure).empty());
+    assert(fitSingleLineMeasured("short", 100.0f, measure) == "short");
+    assert(fitSingleLineMeasured("abcdefghij", 56.0f, measure) == "abcd...");
+    assert(fitSingleLineMeasured("abc", 10.0f, measure) == "abc...");
     return 0;
 }

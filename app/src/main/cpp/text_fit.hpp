@@ -7,6 +7,40 @@
 #include <utility>
 
 template <typename Measure>
+std::string ellipsizeTextMeasured(
+    std::string_view value,
+    float maxWidth,
+    size_t minimumPrefix,
+    Measure&& measure
+) {
+    minimumPrefix = std::min(minimumPrefix, value.size());
+    size_t low = minimumPrefix;
+    size_t high = value.size();
+    std::string candidate;
+    candidate.reserve(value.size() + 3);
+    const auto fits = [&](size_t length) {
+        candidate.assign(value.substr(0, length));
+        candidate.append("...");
+        return measure(candidate) <= maxWidth;
+    };
+    if (!fits(low)) return candidate;
+    while (low < high) {
+        const size_t middle = low + (high - low + 1) / 2;
+        if (fits(middle)) low = middle;
+        else high = middle - 1;
+    }
+    candidate.assign(value.substr(0, low));
+    candidate.append("...");
+    return candidate;
+}
+
+template <typename Measure>
+std::string fitSingleLineMeasured(std::string_view value, float maxWidth, Measure&& measure) {
+    if (measure(value) <= maxWidth) return std::string(value);
+    return ellipsizeTextMeasured(value, maxWidth, std::min<size_t>(4, value.size()), std::forward<Measure>(measure));
+}
+
+template <typename Measure>
 std::string fitTextLinesMeasured(
     std::string_view value,
     float maxWidth,

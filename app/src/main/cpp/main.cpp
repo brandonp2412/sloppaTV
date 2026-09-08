@@ -5141,10 +5141,10 @@ private:
         const float imageY = top + 82.0f;
         float x = 54.0f;
 
-        auto singleLine = [&](std::string value, float scale, float width) {
-            if (renderer_.textWidth(scale, value) <= width) return value;
-            while (value.size() > 4 && renderer_.textWidth(scale, value + "...") > width) value.pop_back();
-            return value + "...";
+        auto singleLine = [&](std::string_view value, float scale, float width) {
+            return fitSingleLineMeasured(value, width, [&](std::string_view text) {
+                return renderer_.textWidth(scale, text);
+            });
         };
 
         for (int index = start; index < static_cast<int>(items.size()); ++index) {
@@ -5165,7 +5165,7 @@ private:
             if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
             std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
-            primary = singleLine(std::move(primary), 2.45f, cardW - 18.0f);
+            primary = singleLine(primary, 2.45f, cardW - 18.0f);
             const float titleY = imageY + cardH + 22.0f;
             renderer_.text(x + 2.0f, titleY, 2.45f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
             if (item.type == "Episode") {
@@ -5176,7 +5176,7 @@ private:
                 }
                 if (!episode.empty()) {
                     renderer_.text(x + 2.0f, titleY + 56.0f, 1.58f,
-                        singleLine(std::move(episode), 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
+                        singleLine(episode, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
                 }
             }
             x += cardW + gap;
