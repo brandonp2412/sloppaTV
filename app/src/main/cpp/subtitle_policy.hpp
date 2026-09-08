@@ -13,6 +13,10 @@
 constexpr int kSubtitleServerDefaultIndex = -2;
 constexpr int kSubtitleOffIndex = -1;
 
+constexpr char subtitleAsciiLower(unsigned char value) {
+    return static_cast<char>(value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value);
+}
+
 constexpr int resolvedSubtitleIndex(int requestedIndex, int serverDefaultIndex) {
     return requestedIndex == kSubtitleServerDefaultIndex ? serverDefaultIndex : requestedIndex;
 }
@@ -52,7 +56,7 @@ inline std::string sanitizeSubtitleText(std::string text) {
 
     auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
         return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
-            return std::tolower(a) == std::tolower(b);
+            return subtitleAsciiLower(a) == subtitleAsciiLower(b);
         });
     };
     auto isMarkupTag = [&](std::string_view body) {
@@ -84,8 +88,8 @@ inline std::string sanitizeSubtitleText(std::string text) {
                 const std::string_view body(text.data() + index + 1, end - index - 1);
                 const bool assOverride = !body.empty() && body.front() == '\\';
                 const bool startsWithAn = body.size() >= 2
-                    && std::tolower(static_cast<unsigned char>(body[0])) == 'a'
-                    && std::tolower(static_cast<unsigned char>(body[1])) == 'n';
+                    && subtitleAsciiLower(static_cast<unsigned char>(body[0])) == 'a'
+                    && subtitleAsciiLower(static_cast<unsigned char>(body[1])) == 'n';
                 const bool malformedAlignment = startsWithAn
                     && (body.size() == 2 || (body.size() == 3 && body[2] >= '1' && body[2] <= '9'));
                 if (assOverride || malformedAlignment) {
@@ -104,8 +108,8 @@ inline std::string sanitizeSubtitleText(std::string text) {
                     if (!normalized.empty() && normalized.front() == '/') normalized.remove_prefix(1);
                     while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
                     if (normalized.size() >= 2
-                        && std::tolower(static_cast<unsigned char>(normalized[0])) == 'b'
-                        && std::tolower(static_cast<unsigned char>(normalized[1])) == 'r') {
+                        && subtitleAsciiLower(static_cast<unsigned char>(normalized[0])) == 'b'
+                        && subtitleAsciiLower(static_cast<unsigned char>(normalized[1])) == 'r') {
                         if (!clean.empty() && clean.back() != ' ') clean.push_back(' ');
                     }
                     index = end + 1;
@@ -186,9 +190,7 @@ inline void sortSubtitleCues(std::vector<SubtitleCue>& cues) {
 }
 
 inline std::string subtitleTextFormat(std::string codec) {
-    std::transform(codec.begin(), codec.end(), codec.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(codec.begin(), codec.end(), codec.begin(), subtitleAsciiLower);
     if (codec == "subrip") return "srt";
     if (codec == "webvtt") return "vtt";
     if (codec == "ass" || codec == "ssa" || codec == "srt" || codec == "vtt" || codec == "mov_text") {
@@ -264,7 +266,7 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
     };
     auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
         return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
-            return std::tolower(a) == std::tolower(b);
+            return subtitleAsciiLower(a) == subtitleAsciiLower(b);
         });
     };
 
@@ -317,9 +319,7 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
 }
 
 inline std::vector<SubtitleCue> parseTextSubtitleCues(const std::string& input, std::string codec) {
-    std::transform(codec.begin(), codec.end(), codec.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(codec.begin(), codec.end(), codec.begin(), subtitleAsciiLower);
     if (codec == "ass" || codec == "ssa") return parseAssCues(input);
     return parseSubRipCues(input);
 }
@@ -330,9 +330,7 @@ struct SubtitlePreferenceCandidate {
 };
 
 inline std::string normalizeSubtitleLanguage(std::string language) {
-    std::transform(language.begin(), language.end(), language.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(language.begin(), language.end(), language.begin(), subtitleAsciiLower);
     if (language == "en" || language == "english") return "eng";
     if (language == "mi" || language == "mao" || language == "maori" || language == "māori") return "mri";
     if (language == "ja" || language == "japanese") return "jpn";
@@ -359,9 +357,7 @@ inline bool subtitleLanguageAllowed(const std::string& language, const std::vect
 }
 
 inline bool isLikelySignsOnlySubtitle(std::string label) {
-    std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(label.begin(), label.end(), label.begin(), subtitleAsciiLower);
     return label.find("sign") != std::string::npos && label.find("song") != std::string::npos;
 }
 
@@ -376,7 +372,7 @@ inline int subtitleIndexForQueuePreference(
         if (subtitle.index < 0) return false;
         if (subtitle.language.size() == 3 && preferred.size() == 3) {
             return std::equal(subtitle.language.begin(), subtitle.language.end(), preferred.begin(), [](unsigned char a, unsigned char b) {
-                return std::tolower(a) == std::tolower(b);
+                return subtitleAsciiLower(a) == subtitleAsciiLower(b);
             });
         }
         return normalizeSubtitleLanguage(subtitle.language) == preferred;

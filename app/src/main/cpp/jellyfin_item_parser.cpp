@@ -5,6 +5,11 @@
 using nlohmann::json;
 
 namespace {
+std::string stringValue(const json& value, const char* key) {
+    const auto match = value.find(key);
+    return match == value.end() ? std::string{} : match->get<std::string>();
+}
+
 std::string stringValueOrFallback(const json& value, const char* primary, const char* fallback) {
     if (const auto match = value.find(primary); match != value.end() && match->is_string()) {
         return match->get<std::string>();
@@ -15,17 +20,17 @@ std::string stringValueOrFallback(const json& value, const char* primary, const 
 
 JellyfinItem parseJellyfinItem(const json& value) {
     JellyfinItem item;
-    item.id = value.value("Id", std::string{});
-    item.name = value.value("Name", std::string{});
-    item.type = value.value("Type", std::string{});
-    item.collectionType = value.value("CollectionType", std::string{});
-    item.seriesId = value.value("SeriesId", std::string{});
-    item.seriesName = value.value("SeriesName", std::string{});
-    item.seriesPrimaryImageTag = value.value("SeriesPrimaryImageTag", std::string{});
-    item.seasonName = value.value("SeasonName", std::string{});
-    item.overview = value.value("Overview", std::string{});
-    item.container = value.value("Container", std::string{});
-    item.officialRating = value.value("OfficialRating", std::string{});
+    item.id = stringValue(value, "Id");
+    item.name = stringValue(value, "Name");
+    item.type = stringValue(value, "Type");
+    item.collectionType = stringValue(value, "CollectionType");
+    item.seriesId = stringValue(value, "SeriesId");
+    item.seriesName = stringValue(value, "SeriesName");
+    item.seriesPrimaryImageTag = stringValue(value, "SeriesPrimaryImageTag");
+    item.seasonName = stringValue(value, "SeasonName");
+    item.overview = stringValue(value, "Overview");
+    item.container = stringValue(value, "Container");
+    item.officialRating = stringValue(value, "OfficialRating");
     item.productionYear = value.value("ProductionYear", 0);
     if (const auto rating = value.find("CommunityRating"); rating != value.end() && rating->is_number()) {
         item.communityRating = rating->get<float>();
@@ -36,8 +41,8 @@ JellyfinItem parseJellyfinItem(const json& value) {
     item.canDelete = value.value("CanDelete", false);
 
     if (const auto providerIds = value.find("ProviderIds"); providerIds != value.end() && providerIds->is_object()) {
-        item.tmdbId = providerIds->value("Tmdb", std::string{});
-        item.tmdbCollectionId = providerIds->value("TmdbCollection", std::string{});
+        item.tmdbId = stringValue(*providerIds, "Tmdb");
+        item.tmdbCollectionId = stringValue(*providerIds, "TmdbCollection");
     }
     if (const auto genres = value.find("Genres"); genres != value.end() && genres->is_array()) {
         item.genres.reserve(genres->size());
@@ -49,12 +54,12 @@ JellyfinItem parseJellyfinItem(const json& value) {
         item.cast.reserve(std::min<size_t>(people->size(), 12));
         item.people.reserve(std::min<size_t>(people->size(), 12));
         for (const auto& person : *people) {
-            if (!person.is_object() || person.value("Type", std::string{}) != "Actor") continue;
+            if (!person.is_object() || stringValue(person, "Type") != "Actor") continue;
             JellyfinPerson parsed;
-            parsed.id = person.value("Id", std::string{});
-            parsed.name = person.value("Name", std::string{});
-            parsed.imageTag = person.value("PrimaryImageTag", std::string{});
-            parsed.role = person.value("Role", std::string{});
+            parsed.id = stringValue(person, "Id");
+            parsed.name = stringValue(person, "Name");
+            parsed.imageTag = stringValue(person, "PrimaryImageTag");
+            parsed.role = stringValue(person, "Role");
             if (parsed.name.empty()) continue;
             item.cast.push_back(parsed.name);
             item.people.push_back(std::move(parsed));
@@ -67,14 +72,14 @@ JellyfinItem parseJellyfinItem(const json& value) {
         item.played = userData->value("Played", false);
     }
     if (const auto imageTags = value.find("ImageTags"); imageTags != value.end() && imageTags->is_object()) {
-        item.imageTag = imageTags->value("Primary", std::string{});
-        item.thumbTag = imageTags->value("Thumb", std::string{});
-        item.logoTag = imageTags->value("Logo", std::string{});
+        item.imageTag = stringValue(*imageTags, "Primary");
+        item.thumbTag = stringValue(*imageTags, "Thumb");
+        item.logoTag = stringValue(*imageTags, "Logo");
         if (!item.logoTag.empty()) item.logoItemId = item.id;
     }
     if (item.logoTag.empty()) {
-        item.logoTag = value.value("ParentLogoImageTag", std::string{});
-        item.logoItemId = value.value("ParentLogoItemId", std::string{});
+        item.logoTag = stringValue(value, "ParentLogoImageTag");
+        item.logoItemId = stringValue(value, "ParentLogoItemId");
     }
     if (const auto backdrops = value.find("BackdropImageTags"); backdrops != value.end() && backdrops->is_array() && !backdrops->empty()) {
         item.backdropTag = backdrops->front().get<std::string>();
@@ -84,23 +89,23 @@ JellyfinItem parseJellyfinItem(const json& value) {
         const auto backdrops = value.find("ParentBackdropImageTags");
         if (backdrops != value.end() && backdrops->is_array() && !backdrops->empty()) {
             item.backdropTag = backdrops->front().get<std::string>();
-            item.backdropItemId = value.value("ParentBackdropItemId", std::string{});
+            item.backdropItemId = stringValue(value, "ParentBackdropItemId");
         }
     }
     if (const auto mediaSources = value.find("MediaSources"); mediaSources != value.end() && mediaSources->is_array() && !mediaSources->empty()) {
         const auto& source = mediaSources->front();
-        item.mediaSourceId = source.value("Id", std::string{});
-        if (item.container.empty()) item.container = source.value("Container", std::string{});
+        item.mediaSourceId = stringValue(source, "Id");
+        if (item.container.empty()) item.container = stringValue(source, "Container");
         if (const auto streams = source.find("MediaStreams"); streams != source.end() && streams->is_array()) {
             item.audios.reserve(streams->size());
             item.subtitles.reserve(streams->size());
             for (const auto& stream : *streams) {
                 if (!stream.is_object()) continue;
-                const std::string streamType = stream.value("Type", std::string{});
+                const std::string streamType = stringValue(stream, "Type");
                 if (streamType == "Video" && item.videoCodec.empty()) {
-                    item.videoCodec = stream.value("Codec", std::string{});
-                    item.videoProfile = stream.value("Profile", std::string{});
-                    item.videoRangeType = stream.value("VideoRangeType", std::string{});
+                    item.videoCodec = stringValue(stream, "Codec");
+                    item.videoProfile = stringValue(stream, "Profile");
+                    item.videoRangeType = stringValue(stream, "VideoRangeType");
                     item.videoWidth = stream.value("Width", 0);
                     item.videoHeight = stream.value("Height", 0);
                     item.videoBitDepth = stream.value("BitDepth", 0);
@@ -116,16 +121,16 @@ JellyfinItem parseJellyfinItem(const json& value) {
                     JellyfinAudioStream audio;
                     audio.index = stream.value("Index", -1);
                     audio.channels = stream.value("Channels", 0);
-                    audio.codec = stream.value("Codec", std::string{});
-                    audio.language = stream.value("Language", std::string{});
+                    audio.codec = stringValue(stream, "Codec");
+                    audio.language = stringValue(stream, "Language");
                     audio.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
                     audio.isDefault = stream.value("IsDefault", false);
                     if (audio.index >= 0) item.audios.push_back(std::move(audio));
                 } else if (streamType == "Subtitle") {
                     JellyfinSubtitleStream subtitle;
                     subtitle.index = stream.value("Index", -1);
-                    subtitle.codec = stream.value("Codec", std::string{});
-                    subtitle.language = stream.value("Language", std::string{});
+                    subtitle.codec = stringValue(stream, "Codec");
+                    subtitle.language = stringValue(stream, "Language");
                     subtitle.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
                     subtitle.forced = stream.value("IsForced", false);
                     subtitle.isDefault = stream.value("IsDefault", false);
