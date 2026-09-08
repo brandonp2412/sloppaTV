@@ -5441,20 +5441,11 @@ private:
                 const std::string subtitle = fitTextLines(
                     normalizeSubtitleDisplayText(subtitleTextScratch_), textScale, 1520.0f, 3
                 );
-                std::istringstream stream(subtitle);
-                std::string line;
-                while (std::getline(stream, line)) {
-                    if (line.empty()) continue;
+                splitSubtitleDisplayLines(subtitle, subtitleLines_);
+                for (const auto& line : subtitleLines_) {
                     const float width = renderer_.textWidth(textScale, line);
                     subtitleWidest_ = std::max(subtitleWidest_, width);
-                    subtitleLines_.push_back(line);
                     subtitleLineWidths_.push_back(width);
-                }
-                if (subtitleLines_.empty()) {
-                    subtitleLines_.push_back(subtitle);
-                    const float width = renderer_.textWidth(textScale, subtitle);
-                    subtitleLineWidths_.push_back(width);
-                    subtitleWidest_ = width;
                 }
             }
             const float lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize);

@@ -1,54 +1,58 @@
-#include <algorithm>
+#include "subtitle_display.hpp"
+
 #include <chrono>
+#include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
-struct Layout {
+static std::vector<std::string> baselineSplit(const std::string& subtitle) {
     std::vector<std::string> lines;
-    std::vector<float> widths;
-    float widest = 0.0f;
-};
-
-static Layout buildLayout(const std::string& subtitle) {
-    Layout layout;
     std::istringstream stream(subtitle);
     std::string line;
     while (std::getline(stream, line)) {
         if (line.empty()) continue;
-        const float width = static_cast<float>(line.size()) * 17.5f;
-        layout.widest = std::max(layout.widest, width);
-        layout.lines.push_back(line);
-        layout.widths.push_back(width);
+        lines.push_back(line);
     }
-    if (layout.lines.empty()) {
-        layout.lines.push_back(subtitle);
-        layout.widths.push_back(static_cast<float>(subtitle.size()) * 17.5f);
-        layout.widest = layout.widths.front();
+    if (lines.empty()) lines.push_back(subtitle);
+    return lines;
+}
+
+static std::vector<std::string> optimizedSplit(std::string_view subtitle) {
+    std::vector<std::string> lines;
+    splitSubtitleDisplayLines(subtitle, lines);
+    return lines;
+}
+
+template <typename Function>
+double measure(const std::string& subtitle, int iterations, Function&& function, size_t& checksum) {
+    const auto started = std::chrono::steady_clock::now();
+    for (int i = 0; i < iterations; ++i) {
+        const auto lines = function(subtitle);
+        for (const auto& line : lines) checksum += line.size();
     }
-    return layout;
+    return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
 }
 
 int main(int argc, char** argv) {
-    const int iterations = argc > 1 ? std::stoi(argv[1]) : 1000000;
-    const std::string subtitle = "I have crossed oceans of time\nto find you.";
-    size_t checksum = 0;
-    auto started = std::chrono::steady_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-        const Layout layout = buildLayout(subtitle);
-        checksum += layout.lines.size() + static_cast<size_t>(layout.widest);
-    }
-    const auto uncachedDone = std::chrono::steady_clock::now();
-    const Layout cached = buildLayout(subtitle);
-    for (int i = 0; i < iterations; ++i) {
-        checksum += cached.lines.size() + static_cast<size_t>(cached.widest);
-    }
-    const auto cachedDone = std::chrono::steady_clock::now();
-    const double uncachedMs = std::chrono::duration<double, std::milli>(uncachedDone - started).count();
-    const double cachedMs = std::chrono::duration<double, std::milli>(cachedDone - uncachedDone).count();
+    const int iterations = argc > 1 ? std::atoi(argv[1]) : 1000000;
+    const std::string subtitle = "I have crossed oceans of time\nto find you.\n\nReally !";
+    if (baselineSplit(subtitle) != optimizedSplit(subtitle)) return 2;
+
+    size_t baselineChecksum = 0;
+    size_t optimizedChecksum = 0;
+    const double baselineMs = measure(subtitle, iterations, baselineSplit, baselineChecksum);
+    const double optimizedMs = measure(subtitle, iterations, optimizedSplit, optimizedChecksum);
+    if (baselineChecksum != optimizedChecksum) return 3;
+
     std::cout << std::fixed << std::setprecision(3)
-              << "iterations=" << iterations << " uncached_ms=" << uncachedMs
-              << " cached_hit_ms=" << cachedMs << " checksum=" << checksum << "\n";
+              << "iterations=" << iterations
+              << " baseline_ms=" << baselineMs
+              << " optimized_ms=" << optimizedMs
+              << " speedup_pct=" << ((baselineMs - optimizedMs) * 100.0 / baselineMs)
+              << " checksum=" << optimizedChecksum << '\n';
+    return 0;
 }
