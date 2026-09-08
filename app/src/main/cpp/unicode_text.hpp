@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -95,6 +96,7 @@ inline void appendDisplayCodePoint(std::string& output, uint32_t codePoint, char
 }
 
 inline std::string displayText(std::string_view text, char unsupported = '?') {
+    if (std::all_of(text.begin(), text.end(), [](unsigned char byte) { return byte < 0x80; })) return std::string(text);
     std::string output;
     output.reserve(text.size());
     size_t index = 0;

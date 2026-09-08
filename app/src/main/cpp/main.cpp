@@ -50,7 +50,6 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <ctime>
@@ -1616,9 +1615,7 @@ private:
                 ? activePlaybackItem_.audios.front()
                 : *selected;
             std::string label = audio.language.empty() ? "AUDIO" : audio.language;
-            std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-                return static_cast<char>(std::toupper(c));
-            });
+            std::transform(label.begin(), label.end(), label.begin(), asciiUpper);
             if (activePlaybackItem_.audios.size() > 1) {
                 label += " " + std::to_string(std::distance(activePlaybackItem_.audios.begin(),
                     selected == activePlaybackItem_.audios.end() ? activePlaybackItem_.audios.begin() : selected) + 1)
@@ -1635,18 +1632,14 @@ private:
             );
             if (selected != activePlaybackItem_.subtitles.end()) {
                 std::string label = selected->language.empty() ? "ON" : selected->language;
-                std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-                    return static_cast<char>(std::toupper(c));
-                });
+                std::transform(label.begin(), label.end(), label.begin(), asciiUpper);
                 return label;
             }
         }
         if (type == 4 && !trackState_.subtitleCues().empty()) {
             if (!trackState_.subtitleEnabled()) return "OFF";
             std::string label = trackState_.subtitleLanguage().empty() ? "ON" : trackState_.subtitleLanguage();
-            std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-                return static_cast<char>(std::toupper(c));
-            });
+            std::transform(label.begin(), label.end(), label.begin(), asciiUpper);
             const auto subtitle = std::find_if(
                 activePlaybackItem_.subtitles.begin(),
                 activePlaybackItem_.subtitles.end(),
@@ -4956,7 +4949,7 @@ private:
             const auto& saved = *savedSession;
             if (!drawProfileArtwork(saved, 280.0f, y + 12.0f, 84.0f)) {
                 renderer_.roundedRect(280.0f, y + 12.0f, 84.0f, 84.0f, 24.0f, kPanelAlt);
-                std::string initial = saved.username.empty() ? "?" : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
+                std::string initial = saved.username.empty() ? "?" : std::string(1, static_cast<char>(asciiUpper(static_cast<unsigned char>(saved.username.front()))));
                 renderer_.textCentered(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, kText);
             }
             renderer_.text(395.0f, y + 20.0f, 2.45f, saved.username.empty() ? "USER" : saved.username, kText, 480.0f);
@@ -5090,7 +5083,7 @@ private:
         if (!drawProfileArtwork(session_, profileBounds[0], profileBounds[1], profileBounds[2])) {
             const std::string initial = session_.username.empty()
                 ? "U"
-                : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(session_.username.front()))));
+                : std::string(1, static_cast<char>(asciiUpper(static_cast<unsigned char>(session_.username.front()))));
             renderer_.textCentered(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], 2.35f, initial, kText);
         }
         if (profileFocused) renderer_.roundedOutline(profileBounds[0] - 3.0f, profileBounds[1] - 3.0f,
