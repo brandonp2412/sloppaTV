@@ -5558,15 +5558,38 @@ private:
 
         const int position = playerScreenState_.positionMs();
         const int duration = playerScreenState_.durationMs();
+        const int positionSecond = std::max(0, position / 1000);
+        if (positionSecond != playbackPositionTextSecond_) {
+            playbackPositionTextSecond_ = positionSecond;
+            playbackPositionText_ = formatPlaybackTime(position);
+        }
+        const int durationSecond = std::max(0, duration / 1000);
+        if (durationSecond != playbackDurationTextSecond_) {
+            playbackDurationTextSecond_ = durationSecond;
+            playbackDurationText_ = formatPlaybackTime(duration);
+        }
         if (settings_.showClock) {
             const std::time_t wallNow = std::time(nullptr);
-            renderer_.text(1640.0f, 46.0f, 2.05f,
-                formatLocalClock(wallNow, settings_.clock24Hour), kMuted, 210.0f);
+            if (playerClockCache24Hour_ != settings_.clock24Hour) {
+                playerClockCache24Hour_ = settings_.clock24Hour;
+                playerClockMinute_ = -1;
+                playerFinishMinute_ = -1;
+            }
+            const std::time_t wallMinute = wallNow / 60;
+            if (wallMinute != playerClockMinute_) {
+                playerClockMinute_ = wallMinute;
+                playerClockText_ = formatLocalClock(wallNow, settings_.clock24Hour);
+            }
+            renderer_.text(1640.0f, 46.0f, 2.05f, playerClockText_, kMuted, 210.0f);
             if (remainingMs > 0 && status == PlayerStatus::Playing) {
                 const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
-                const std::string finishLabel = "ENDS " + formatLocalClock(finishAt, settings_.clock24Hour);
-                const float finishWidth = renderer_.textWidth(1.75f, finishLabel);
-                renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, finishLabel, kSecondaryText, 590.0f);
+                const std::time_t finishMinute = finishAt / 60;
+                if (finishMinute != playerFinishMinute_) {
+                    playerFinishMinute_ = finishMinute;
+                    playerFinishText_ = "ENDS " + formatLocalClock(finishAt, settings_.clock24Hour);
+                }
+                const float finishWidth = renderer_.textWidth(1.75f, playerFinishText_);
+                renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, playerFinishText_, kSecondaryText, 590.0f);
             }
         }
         const std::string state = transitionState_.fallbackResolving() ? "RETRYING TRANSCODE" :
@@ -5576,9 +5599,8 @@ private:
 
         constexpr float progressX = 150.0f;
         constexpr float progressWidth = 1620.0f;
-        renderer_.text(progressX, 834.0f, 2.0f, formatPlaybackTime(position), kText, 180.0f);
-        const std::string durationText = formatPlaybackTime(duration);
-        renderer_.text(1610.0f, 834.0f, 2.0f, durationText, kText, 180.0f);
+        renderer_.text(progressX, 834.0f, 2.0f, playbackPositionText_, kText, 180.0f);
+        renderer_.text(1610.0f, 834.0f, 2.0f, playbackDurationText_, kText, 180.0f);
         renderer_.roundedRect(progressX, 878.0f, progressWidth, 7.0f, 3.5f, Color{0.30f, 0.31f, 0.35f, 0.78f});
         if (duration > 0) {
             const double progress = std::clamp(static_cast<double>(position) / static_cast<double>(duration), 0.0, 1.0);
@@ -6371,6 +6393,15 @@ private:
     std::vector<float> subtitleLineWidths_;
     float subtitleLayoutScale_ = -1.0f;
     float subtitleWidest_ = 0.0f;
+    int playbackPositionTextSecond_ = -1;
+    int playbackDurationTextSecond_ = -1;
+    std::string playbackPositionText_;
+    std::string playbackDurationText_;
+    std::time_t playerClockMinute_ = -1;
+    std::time_t playerFinishMinute_ = -1;
+    bool playerClockCache24Hour_ = false;
+    std::string playerClockText_;
+    std::string playerFinishText_;
 };
 }
 
