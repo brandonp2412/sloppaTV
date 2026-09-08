@@ -13,7 +13,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <sstream>
 
 using nlohmann::json;
 
@@ -156,14 +155,24 @@ std::string JellyfinClient::discoverServerBase(const std::string& value, const s
 }
 
 std::string JellyfinClient::authorization(const JellyfinSession* session, const std::string& deviceId) const {
-    std::ostringstream out;
-    out << "MediaBrowser "
-        << "Client=\"" << kClientName << "\","
-        << "Version=\"" << kClientVersion << "\","
-        << "DeviceId=\"" << deviceId << "\","
-        << "Device=\"" << kDeviceName << "\"";
-    if (session && !session->token.empty()) out << ",Token=\"" << session->token << "\"";
-    return out.str();
+    const size_t tokenSize = session ? session->token.size() : 0;
+    std::string result;
+    result.reserve(96 + deviceId.size() + tokenSize);
+    result += "MediaBrowser Client=\"";
+    result += kClientName;
+    result += "\",Version=\"";
+    result += kClientVersion;
+    result += "\",DeviceId=\"";
+    result += deviceId;
+    result += "\",Device=\"";
+    result += kDeviceName;
+    result += '"';
+    if (tokenSize > 0) {
+        result += ",Token=\"";
+        result += session->token;
+        result += '"';
+    }
+    return result;
 }
 
 std::map<std::string, std::string> JellyfinClient::headers(const JellyfinSession* session, const std::string& deviceId) const {
