@@ -38,6 +38,7 @@
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
+#include "subtitle_display.hpp"
 #include "ui_policy.hpp"
 #include "unicode_text.hpp"
 #include "renderer.hpp"
@@ -131,37 +132,6 @@ std::string externalSkipSegmentsJson(const std::vector<JellyfinMediaSegment>& se
     }
     json << ']';
     return json.str();
-}
-
-std::string normalizeSubtitleDisplayText(const std::string& input) {
-    const std::string displaySafe = displayText(input, '\0');
-    auto attachesToPrevious = [](std::string_view token) {
-        if (token.empty()) return false;
-        return std::all_of(token.begin(), token.end(), [](unsigned char c) {
-            switch (c) {
-                case '!': case '?': case '.': case ',': case ';': case ':':
-                case '%': case ')': case ']': case '}':
-                    return true;
-                default:
-                    return false;
-            }
-        });
-    };
-
-    std::istringstream words(displaySafe);
-    std::vector<std::string> tokens;
-    std::string word;
-    while (words >> word) {
-        if (!tokens.empty() && attachesToPrevious(word)) tokens.back() += word;
-        else tokens.push_back(std::move(word));
-    }
-
-    std::string output;
-    for (const auto& token : tokens) {
-        if (!output.empty()) output += ' ';
-        output += token;
-    }
-    return output;
 }
 
 std::string episodeNumberLabel(const JellyfinItem& item) {
