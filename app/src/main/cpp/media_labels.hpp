@@ -19,12 +19,13 @@ inline std::string episodeNumberLabel(const JellyfinItem& item) {
 }
 
 inline std::string episodeLabel(const JellyfinItem& item) {
-    std::string result = item.seriesName;
     const std::string number = episodeNumberLabel(item);
-    if (!number.empty()) {
-        if (!result.empty()) result += " - ";
-        result += number;
-    }
+    if (number.empty()) return item.seriesName;
+    std::string result;
+    result.reserve(item.seriesName.size() + (item.seriesName.empty() ? 0 : 3) + number.size());
+    result += item.seriesName;
+    if (!result.empty()) result += " - ";
+    result += number;
     return result;
 }
 
