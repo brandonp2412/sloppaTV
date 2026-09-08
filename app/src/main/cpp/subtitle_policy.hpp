@@ -5,7 +5,6 @@
 #include <cctype>
 #include <limits>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -199,30 +198,40 @@ inline std::string subtitleTextFormat(std::string codec) {
     return {};
 }
 
+inline bool nextSubtitleLine(std::string_view& input, std::string_view& line) {
+    if (input.empty()) return false;
+    const size_t newline = input.find('\n');
+    if (newline == std::string_view::npos) {
+        line = input;
+        input = {};
+    } else {
+        line = input.substr(0, newline);
+        input.remove_prefix(newline + 1);
+    }
+    if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+    return true;
+}
+
 inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
     std::vector<SubtitleCue> cues;
     cues.reserve(input.size() / 80);
-    std::istringstream stream(input);
-    std::string line;
-    while (std::getline(stream, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
+    std::string_view remaining(input);
+    std::string_view line;
+    while (nextSubtitleLine(remaining, line)) {
         if (line.empty()) continue;
-        if (line.find("-->") == std::string::npos) {
-            if (!std::getline(stream, line)) break;
-            if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.find("-->") == std::string_view::npos) {
+            if (!nextSubtitleLine(remaining, line)) break;
         }
         const size_t arrow = line.find("-->");
-        if (arrow == std::string::npos) continue;
-        const std::string_view timing(line);
-        const int start = parseSubtitleTimestamp(timing.substr(0, arrow));
-        const int end = parseSubtitleTimestamp(timing.substr(arrow + 3));
+        if (arrow == std::string_view::npos) continue;
+        const int start = parseSubtitleTimestamp(line.substr(0, arrow));
+        const int end = parseSubtitleTimestamp(line.substr(arrow + 3));
         if (start < 0 || end <= start) continue;
         std::string text;
-        while (std::getline(stream, line)) {
-            if (!line.empty() && line.back() == '\r') line.pop_back();
+        while (nextSubtitleLine(remaining, line)) {
             if (line.empty()) break;
             if (!text.empty()) text += ' ';
-            text += line;
+            text.append(line);
         }
         text = sanitizeSubtitleText(std::move(text));
         if (!text.empty()) cues.push_back({start, end, std::move(text)});
@@ -234,8 +243,8 @@ inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
 inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
     std::vector<SubtitleCue> cues;
     cues.reserve(input.size() / 100);
-    std::istringstream stream(input);
-    std::string line;
+    std::string_view remaining(input);
+    std::string_view line;
     bool inEvents = false;
     int startColumn = -1;
     int endColumn = -1;
@@ -272,8 +281,7 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
         });
     };
 
-    while (std::getline(stream, line)) {
-        if (!line.empty() && line.back() == '\r') line.pop_back();
+    while (nextSubtitleLine(remaining, line)) {
         const std::string_view trimmed = trim(line);
         if (trimmed.empty() || trimmed.front() == ';') continue;
         if (trimmed.front() == '[' && trimmed.back() == ']') {
