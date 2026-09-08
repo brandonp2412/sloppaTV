@@ -30,6 +30,7 @@ CPP_TESTS = [
     "home_image_disk_cache_test.cpp",
     "home_screen_test.cpp",
     "launch_intent_test.cpp",
+    "media_labels_test.cpp",
     "media_player_policy_test.cpp",
     "playback_continuation_test.cpp",
     "playback_profile_test.cpp",

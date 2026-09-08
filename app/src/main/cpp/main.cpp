@@ -22,6 +22,7 @@
 #include "jellyfin.hpp"
 #include "jni_env.hpp"
 #include "launch_intent.hpp"
+#include "media_labels.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
@@ -134,23 +135,6 @@ std::string externalSkipSegmentsJson(const std::vector<JellyfinMediaSegment>& se
     }
     json << ']';
     return json.str();
-}
-
-std::string episodeNumberLabel(const JellyfinItem& item) {
-    std::string result;
-    if (item.parentIndexNumber >= 0) result += "S" + std::to_string(item.parentIndexNumber);
-    if (item.indexNumber >= 0) result += "E" + std::to_string(item.indexNumber);
-    return result;
-}
-
-std::string episodeLabel(const JellyfinItem& item) {
-    std::string result = item.seriesName;
-    const std::string number = episodeNumberLabel(item);
-    if (!number.empty()) {
-        if (!result.empty()) result += " - ";
-        result += number;
-    }
-    return result;
 }
 
 std::string formatPlaybackTime(int milliseconds) {
@@ -2417,6 +2401,7 @@ private:
         externalPlaybackState_.reset();
         activeTarget_ = {};
         activePlaybackItem_ = {};
+        playbackLabels_.clear();
         playbackSessionState_.reset();
         telemetryState_.reset();
         playerScreenState_.resetSession();
@@ -3571,6 +3556,7 @@ private:
         transitionState_.setFallbackResolving(false);
         activeTarget_ = {};
         activePlaybackItem_ = {};
+        playbackLabels_.clear();
         playerScreenState_.resetPosition();
         telemetryState_.resetReadIntervals();
         continuationState_.clearNextEpisode();
@@ -3926,6 +3912,7 @@ private:
         const bool streamRestart = transition.streamRestart;
         transitionState_.setPauseAfterRestart(streamRestart && transition.restartPaused);
         activePlaybackItem_ = item;
+        playbackLabels_.update(activePlaybackItem_);
         activeTarget_ = target;
         std::ostringstream playbackSummary;
         playbackSummary << playbackMethodName(target.playMethod);
@@ -4065,6 +4052,7 @@ private:
             popScreen(Screen::Details);
             activeTarget_ = {};
             activePlaybackItem_ = {};
+            playbackLabels_.clear();
             return true;
         }
         if (settings_.refreshRateSwitching && item.videoFrameRate > 0.0f) {
@@ -5497,15 +5485,12 @@ private:
             if (!nextLabel.empty()) renderer_.text(textX, 315.0f, 1.5f, nextLabel, kMuted, 285.0f);
         }
 
-        const std::string heading = activePlaybackItem_.seriesName.empty()
-            ? activePlaybackItem_.name
-            : activePlaybackItem_.seriesName;
-        renderer_.text(76.0f, 34.0f, 4.8f, heading.empty() ? "PLAYBACK" : heading, kText, 1540.0f);
-        const std::string playerEpisodeNumber = episodeNumberLabel(activePlaybackItem_);
-        const std::string secondary = activePlaybackItem_.seriesName.empty()
-            ? episodeLabel(activePlaybackItem_)
-            : playerEpisodeNumber + (activePlaybackItem_.name.empty() ? "" : "  |  " + activePlaybackItem_.name);
-        if (!secondary.empty() && secondary != heading) renderer_.text(80.0f, 116.0f, 2.6f, secondary, kMuted, 1500.0f);
+        renderer_.text(76.0f, 34.0f, 4.8f,
+            playbackLabels_.heading.empty() ? std::string_view{"PLAYBACK"} : std::string_view{playbackLabels_.heading},
+            kText, 1540.0f);
+        if (!playbackLabels_.secondary.empty() && playbackLabels_.secondary != playbackLabels_.heading) {
+            renderer_.text(80.0f, 116.0f, 2.6f, playbackLabels_.secondary, kMuted, 1500.0f);
+        }
 
         const int position = playerScreenState_.positionMs();
         const int duration = playerScreenState_.durationMs();
@@ -6285,6 +6270,7 @@ private:
     PlaybackTransitionState transitionState_;
     PlaybackTarget activeTarget_;
     JellyfinItem activePlaybackItem_;
+    PlaybackLabels playbackLabels_;
     PlaybackContinuationState continuationState_;
     PlaybackSessionState playbackSessionState_;
     PlaybackTelemetryState telemetryState_;
