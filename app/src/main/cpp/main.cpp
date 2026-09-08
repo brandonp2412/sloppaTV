@@ -5430,7 +5430,12 @@ private:
             renderer_.roundedRect(1195.0f, 185.0f, 625.0f, 205.0f, 26.0f, Color{0.02f, 0.024f, 0.034f, 0.90f});
             const bool hasNextArtwork = drawHomeArtwork(nextItem, 1210.0f, 200.0f, 260.0f, 146.0f);
             const float textX = hasNextArtwork ? 1500.0f : 1230.0f;
-            renderer_.text(textX, 205.0f, 1.65f, "NEXT UP  |  " + std::to_string(std::max(0, remainingMs / 1000)) + "S", kFocus, 285.0f);
+            const int remainingSecond = std::max(0, remainingMs / 1000);
+            if (remainingSecond != nextUpRemainingSecond_) {
+                nextUpRemainingSecond_ = remainingSecond;
+                nextUpRemainingText_ = "NEXT UP  |  " + std::to_string(remainingSecond) + "S";
+            }
+            renderer_.text(textX, 205.0f, 1.65f, nextUpRemainingText_, kFocus, 285.0f);
             renderer_.text(textX, 250.0f, 2.15f, nextItem.name, kText, 285.0f);
             const std::string nextLabel = episodeLabel(nextItem);
             if (!nextLabel.empty()) renderer_.text(textX, 315.0f, 1.5f, nextLabel, kMuted, 285.0f);
@@ -5479,7 +5484,7 @@ private:
                 renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, playerFinishText_, kSecondaryText, 590.0f);
             }
         }
-        const std::string state = transitionState_.fallbackResolving() ? "RETRYING TRANSCODE" :
+        const std::string_view state = transitionState_.fallbackResolving() ? "RETRYING TRANSCODE" :
             (transitionState_.loading() ? "LOADING NEXT EPISODE" :
             (status == PlayerStatus::Preparing ? "LOADING" : ""));
         if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
@@ -5548,12 +5553,13 @@ private:
                 x += widths[i] + 28.0f;
             }
         } else {
-            const std::string queueHint = queueState_.empty() ? "" : "   |   DOWN QUEUE";
             renderer_.text(
                 330.0f,
                 946.0f,
                 1.75f,
-                "LEFT/RIGHT SEEK   |   OK PLAY/PAUSE   |   UP OPTIONS" + queueHint + "   |   BACK EXIT",
+                queueState_.empty()
+                    ? "LEFT/RIGHT SEEK   |   OK PLAY/PAUSE   |   UP OPTIONS   |   BACK EXIT"
+                    : "LEFT/RIGHT SEEK   |   OK PLAY/PAUSE   |   UP OPTIONS   |   DOWN QUEUE   |   BACK EXIT",
                 kMuted,
                 1280.0f
             );
@@ -6244,8 +6250,10 @@ private:
     float subtitleWidest_ = 0.0f;
     int playbackPositionTextSecond_ = -1;
     int playbackDurationTextSecond_ = -1;
+    int nextUpRemainingSecond_ = -1;
     std::string playbackPositionText_;
     std::string playbackDurationText_;
+    std::string nextUpRemainingText_;
     std::time_t playerClockMinute_ = -1;
     std::time_t playerFinishMinute_ = -1;
     bool playerClockCache24Hour_ = false;
