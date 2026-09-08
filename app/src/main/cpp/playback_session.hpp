@@ -12,6 +12,7 @@ public:
 
     void begin(VideoZoomMode zoomMode) {
         mediaSegments_.clear();
+        activeSegmentHint_ = 0;
         mediaSegmentsRequested_ = false;
         fallbackAttempted_ = false;
         zoomMode_ = zoomMode;
@@ -26,16 +27,27 @@ public:
     void resetMediaSegments() {
         mediaSegmentsRequested_ = false;
         mediaSegments_.clear();
+        activeSegmentHint_ = 0;
     }
     void setMediaSegments(std::vector<JellyfinMediaSegment> segments) {
         mediaSegments_ = std::move(segments);
+        activeSegmentHint_ = 0;
     }
     [[nodiscard]] const std::vector<JellyfinMediaSegment>& mediaSegments() const { return mediaSegments_; }
 
     [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int64_t positionTicks) const {
-        for (const auto& segment : mediaSegments_) {
-            if (segment.endTicks - segment.startTicks < 30000000) continue;
-            if (positionTicks >= segment.startTicks && positionTicks < segment.endTicks - 5000000) return &segment;
+        const auto isActive = [positionTicks](const JellyfinMediaSegment& segment) {
+            return segment.endTicks - segment.startTicks >= 30000000
+                && positionTicks >= segment.startTicks
+                && positionTicks < segment.endTicks - 5000000;
+        };
+        if (activeSegmentHint_ < mediaSegments_.size() && isActive(mediaSegments_[activeSegmentHint_])) {
+            return &mediaSegments_[activeSegmentHint_];
+        }
+        for (size_t index = 0; index < mediaSegments_.size(); ++index) {
+            if (!isActive(mediaSegments_[index])) continue;
+            activeSegmentHint_ = index;
+            return &mediaSegments_[index];
         }
         return nullptr;
     }
@@ -49,6 +61,7 @@ public:
 
 private:
     std::vector<JellyfinMediaSegment> mediaSegments_;
+    mutable size_t activeSegmentHint_ = 0;
     bool mediaSegmentsRequested_ = false;
     bool fallbackAttempted_ = false;
     VideoZoomMode zoomMode_ = VideoZoomMode::Fit;
