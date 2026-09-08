@@ -4273,9 +4273,8 @@ private:
 
     std::string backdropKey(const JellyfinItem& item) const {
         const std::string& artworkItemId = item.backdropItemId.empty() ? item.id : item.backdropItemId;
-        const std::string mode = std::to_string(settings_.backdropMode);
         std::string key;
-        key.reserve(session_.server.size() + session_.userId.size() + artworkItemId.size() + item.backdropTag.size() + mode.size() + 24);
+        key.reserve(session_.server.size() + session_.userId.size() + artworkItemId.size() + item.backdropTag.size() + 25);
         key.append(session_.server)
             .append(":user:")
             .append(session_.userId)
@@ -4284,7 +4283,7 @@ private:
             .append(":backdrop:")
             .append(item.backdropTag)
             .append(":mode:")
-            .append(mode);
+            .push_back(static_cast<char>('0' + settings_.backdropMode));
         return key;
     }
 
@@ -4311,17 +4310,16 @@ private:
             item.backdropTag,
             item.backdropItemId
         );
-        const std::string kind = std::to_string(static_cast<int>(artwork.kind));
         std::string key;
-        key.reserve(session_.server.size() + session_.userId.size() + artwork.itemId.size() + artwork.tag.size() + kind.size() + 31);
+        key.reserve(session_.server.size() + session_.userId.size() + artwork.itemId.size() + artwork.tag.size() + 32);
         key.append(session_.server)
             .append(":user:")
             .append(session_.userId)
             .push_back(':');
         key.append(artwork.itemId)
             .append(":home:v5-480x270:")
-            .append(kind)
-            .push_back(':');
+            .push_back(static_cast<char>('0' + static_cast<int>(artwork.kind)));
+        key.push_back(':');
         key.append(artwork.tag);
         return key;
     }
