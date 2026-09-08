@@ -6,8 +6,15 @@
 
 inline std::string episodeNumberLabel(const JellyfinItem& item) {
     std::string result;
-    if (item.parentIndexNumber >= 0) result += "S" + std::to_string(item.parentIndexNumber);
-    if (item.indexNumber >= 0) result += "E" + std::to_string(item.indexNumber);
+    result.reserve(16);
+    if (item.parentIndexNumber >= 0) {
+        result.push_back('S');
+        result += std::to_string(item.parentIndexNumber);
+    }
+    if (item.indexNumber >= 0) {
+        result.push_back('E');
+        result += std::to_string(item.indexNumber);
+    }
     return result;
 }
 
