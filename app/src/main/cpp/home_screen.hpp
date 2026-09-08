@@ -138,6 +138,7 @@ public:
 
     [[nodiscard]] HomeSelectionSnapshot snapshot(const std::vector<JellyfinHomeRow>& rows) const {
         HomeSelectionSnapshot result;
+        result.selectedItemByRow.reserve(std::min(rows.size(), selections_.size()));
         result.toolbarFocused = row_ < 0;
         if (!result.toolbarFocused && row_ < static_cast<int>(rows.size())) {
             result.focusedRowTitle = rows[static_cast<size_t>(row_)].title;
