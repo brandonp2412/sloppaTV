@@ -5,18 +5,57 @@
 
 #include <algorithm>
 #include <nlohmann/json.hpp>
-#include <sstream>
 
 using nlohmann::json;
 
 namespace {
 std::string joinCodecs(const std::vector<std::string>& codecs) {
-    std::ostringstream out;
+    size_t size = codecs.empty() ? 0 : codecs.size() - 1;
+    for (const auto& codec : codecs) size += codec.size();
+    std::string result;
+    result.reserve(size);
     for (size_t index = 0; index < codecs.size(); ++index) {
-        if (index) out << ',';
-        out << codecs[index];
+        if (index) result.push_back(',');
+        result += codecs[index];
     }
-    return out.str();
+    return result;
+}
+
+const json& deviceProfileTemplate() {
+    static const json profile = {
+        {"Name", "sloppaTV-Native"},
+        {"MaxStaticBitrate", 120000000},
+        {"MaxStreamingBitrate", 120000000},
+        {"MusicStreamingTranscodingBitrate", 192000},
+        {"DirectPlayProfiles", json::array({{{"Container", "mkv,matroska,mp4,m4v,mov,ts,mpegts,webm"}, {"Type", "Video"}, {"VideoCodec", ""}, {"AudioCodec", ""}}})},
+        {"TranscodingProfiles", json::array({{{"Container", "ts"}, {"Type", "Video"}, {"VideoCodec", ""}, {"AudioCodec", ""}, {"Protocol", "hls"}, {"Context", "Streaming"}, {"CopyTimestamps", false}, {"EnableSubtitlesInManifest", true}, {"MaxAudioChannels", "2"}}})},
+        {"CodecProfiles", json::array({{{"Type", "VideoAudio"}, {"Conditions", json::array({{{"Condition", "LessThanEqual"}, {"Property", "AudioChannels"}, {"Value", "2"}, {"IsRequired", false}}})}}})},
+        {"SubtitleProfiles", json::array({
+            {{"Format", "vtt"}, {"Method", "External"}},
+            {{"Format", "vtt"}, {"Method", "Embed"}},
+            {{"Format", "webvtt"}, {"Method", "External"}},
+            {{"Format", "webvtt"}, {"Method", "Embed"}},
+            {{"Format", "srt"}, {"Method", "External"}},
+            {{"Format", "srt"}, {"Method", "Embed"}},
+            {{"Format", "subrip"}, {"Method", "External"}},
+            {{"Format", "subrip"}, {"Method", "Embed"}},
+            {{"Format", "mov_text"}, {"Method", "External"}},
+            {{"Format", "mov_text"}, {"Method", "Embed"}},
+            {{"Format", "ass"}, {"Method", "External"}},
+            {{"Format", "ass"}, {"Method", "Embed"}},
+            {{"Format", "ssa"}, {"Method", "External"}},
+            {{"Format", "ssa"}, {"Method", "Embed"}},
+            {{"Format", "pgs"}, {"Method", "Embed"}},
+            {{"Format", "pgssub"}, {"Method", "Embed"}},
+            {{"Format", "hdmv_pgs_subtitle"}, {"Method", "Embed"}},
+            {{"Format", "dvdsub"}, {"Method", "Embed"}},
+            {{"Format", "dvd_subtitle"}, {"Method", "Embed"}},
+            {{"Format", "dvbsub"}, {"Method", "Embed"}},
+            {{"Format", "dvb_subtitle"}, {"Method", "Embed"}},
+            {{"Format", "xsub"}, {"Method", "Embed"}},
+        })},
+    };
+    return profile;
 }
 }
 
@@ -33,76 +72,19 @@ std::string buildPlaybackInfoRequestBody(
     // Embedded libmpv renders these formats itself. Advertise embedded support so
     // Jellyfin does not burn PGS/ASS/etc. into the video and force a transcode.
     // Text formats may still be delivered externally when Jellyfin prefers that.
-    json subtitleProfiles = json::array({
-        {{"Format", "vtt"}, {"Method", "External"}},
-        {{"Format", "vtt"}, {"Method", "Embed"}},
-        {{"Format", "webvtt"}, {"Method", "External"}},
-        {{"Format", "webvtt"}, {"Method", "Embed"}},
-        {{"Format", "srt"}, {"Method", "External"}},
-        {{"Format", "srt"}, {"Method", "Embed"}},
-        {{"Format", "subrip"}, {"Method", "External"}},
-        {{"Format", "subrip"}, {"Method", "Embed"}},
-        {{"Format", "mov_text"}, {"Method", "External"}},
-        {{"Format", "mov_text"}, {"Method", "Embed"}},
-        {{"Format", "ass"}, {"Method", "External"}},
-        {{"Format", "ass"}, {"Method", "Embed"}},
-        {{"Format", "ssa"}, {"Method", "External"}},
-        {{"Format", "ssa"}, {"Method", "Embed"}},
-        {{"Format", "pgs"}, {"Method", "Embed"}},
-        {{"Format", "pgssub"}, {"Method", "Embed"}},
-        {{"Format", "hdmv_pgs_subtitle"}, {"Method", "Embed"}},
-        {{"Format", "dvdsub"}, {"Method", "Embed"}},
-        {{"Format", "dvd_subtitle"}, {"Method", "Embed"}},
-        {{"Format", "dvbsub"}, {"Method", "Embed"}},
-        {{"Format", "dvb_subtitle"}, {"Method", "Embed"}},
-        {{"Format", "xsub"}, {"Method", "Embed"}},
-    });
-
     const std::string videoCodecList = joinCodecs(plan.videoCodecs);
     const std::string serverStreamVideoCodecs = serverStreamVideoCodecList(plan.videoCodecs);
     const std::string audioCodecList = joinCodecs(plan.audioCodecs);
     const std::string transcodeAudioCodecList = joinCodecs(plan.transcodeAudioCodecs);
-    json profile = {
-        {"Name", "sloppaTV-Native"},
-        {"MaxStaticBitrate", 120000000},
-        {"MaxStreamingBitrate", std::max(1000000, maxStreamingBitrate)},
-        {"MusicStreamingTranscodingBitrate", 192000},
-        {"DirectPlayProfiles", json::array({
-            {
-                {"Container", "mkv,matroska,mp4,m4v,mov,ts,mpegts,webm"},
-                {"Type", "Video"},
-                {"VideoCodec", videoCodecList},
-                {"AudioCodec", audioCodecList},
-            },
-        })},
-        {"TranscodingProfiles", json::array({
-            {
-                {"Container", "ts"},
-                {"Type", "Video"},
-                {"VideoCodec", serverStreamVideoCodecs},
-                {"AudioCodec", transcodeAudioCodecList},
-                {"Protocol", "hls"},
-                {"Context", "Streaming"},
-                {"CopyTimestamps", false},
-                {"EnableSubtitlesInManifest", true},
-                {"MaxAudioChannels", std::to_string(maxAudioChannels)},
-            },
-        })},
-        {"CodecProfiles", json::array({
-            {
-                {"Type", "VideoAudio"},
-                {"Conditions", json::array({
-                    {
-                        {"Condition", "LessThanEqual"},
-                        {"Property", "AudioChannels"},
-                        {"Value", std::to_string(maxAudioChannels)},
-                        {"IsRequired", false},
-                    },
-                })},
-            },
-        })},
-        {"SubtitleProfiles", std::move(subtitleProfiles)},
-    };
+    json profile = deviceProfileTemplate();
+    profile["MaxStreamingBitrate"] = std::max(1000000, maxStreamingBitrate);
+    profile["DirectPlayProfiles"][0]["VideoCodec"] = videoCodecList;
+    profile["DirectPlayProfiles"][0]["AudioCodec"] = audioCodecList;
+    profile["TranscodingProfiles"][0]["VideoCodec"] = serverStreamVideoCodecs;
+    profile["TranscodingProfiles"][0]["AudioCodec"] = transcodeAudioCodecList;
+    const std::string audioChannels = std::to_string(maxAudioChannels);
+    profile["TranscodingProfiles"][0]["MaxAudioChannels"] = audioChannels;
+    profile["CodecProfiles"][0]["Conditions"][0]["Value"] = audioChannels;
 
     const PlaybackRequestFlags requestFlags = playbackRequestFlags(plan, overrides);
     json body = {
