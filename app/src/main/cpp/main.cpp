@@ -57,7 +57,6 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
-#include <iomanip>
 #include <iterator>
 #include <mutex>
 #include <optional>
@@ -186,11 +185,10 @@ std::string episodeLabel(const JellyfinItem& item) {
 std::string formatLocalClock(std::time_t instant, bool clock24Hour) {
     std::tm local{};
     localtime_r(&instant, &local);
-    std::ostringstream out;
-    out << std::put_time(&local, clock24Hour ? "%H:%M" : "%I:%M %p");
-    std::string value = out.str();
-    if (!clock24Hour && !value.empty() && value.front() == '0') value.erase(value.begin());
-    return value;
+    char value[16];
+    const size_t length = std::strftime(value, sizeof(value), clock24Hour ? "%H:%M" : "%I:%M %p", &local);
+    const size_t start = !clock24Hour && length > 0 && value[0] == '0' ? 1 : 0;
+    return std::string(value + start, length - start);
 }
 
 std::string formatPlaybackTime(int milliseconds) {
@@ -198,11 +196,11 @@ std::string formatPlaybackTime(int milliseconds) {
     const int hours = totalSeconds / 3600;
     const int minutes = (totalSeconds / 60) % 60;
     const int seconds = totalSeconds % 60;
-    std::ostringstream out;
-    if (hours > 0) out << hours << ':' << std::setw(2) << std::setfill('0') << minutes;
-    else out << minutes;
-    out << ':' << std::setw(2) << std::setfill('0') << seconds;
-    return out.str();
+    char value[24];
+    const int length = hours > 0
+        ? std::snprintf(value, sizeof(value), "%d:%02d:%02d", hours, minutes, seconds)
+        : std::snprintf(value, sizeof(value), "%d:%02d", minutes, seconds);
+    return std::string(value, static_cast<size_t>(length));
 }
 
 std::string joinGenres(const std::vector<std::string>& genres, size_t limit = 5) {
@@ -5211,7 +5209,7 @@ private:
             if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
             std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
-            primary = singleLine(primary, 2.45f, cardW - 18.0f);
+            primary = singleLine(std::move(primary), 2.45f, cardW - 18.0f);
             const float titleY = imageY + cardH + 22.0f;
             renderer_.text(x + 2.0f, titleY, 2.45f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
             if (item.type == "Episode") {
@@ -5222,7 +5220,7 @@ private:
                 }
                 if (!episode.empty()) {
                     renderer_.text(x + 2.0f, titleY + 56.0f, 1.58f,
-                        singleLine(episode, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
+                        singleLine(std::move(episode), 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
                 }
             }
             x += cardW + gap;
@@ -5955,21 +5953,34 @@ private:
     std::string fitTextLines(const std::string& value, float scale, float maxWidth, int maxLines) const {
         if (value.empty() || maxWidth <= 0.0f || maxLines <= 0) return {};
         auto ellipsize = [&](std::string line) {
-            while (!line.empty() && renderer_.textWidth(scale, line + "...") > maxWidth) line.pop_back();
-            return line + "...";
+            line.append("...");
+            while (line.size() > 3 && renderer_.textWidth(scale, line) > maxWidth) {
+                line.erase(line.end() - 4);
+            }
+            return line;
         };
-        std::istringstream words(value);
-        std::string word;
+
         std::string current;
         std::string fitted;
+        current.reserve(std::min<size_t>(value.size(), 256));
+        fitted.reserve(value.size() + 4);
         int line = 1;
-        while (words >> word) {
-            const std::string candidate = current.empty() ? word : current + " " + word;
-            if (renderer_.textWidth(scale, candidate) <= maxWidth) {
-                current = candidate;
-                continue;
-            }
-            if (current.empty()) current = ellipsize(word);
+        size_t position = 0;
+        while (position < value.size()) {
+            while (position < value.size()
+                && std::isspace(static_cast<unsigned char>(value[position]))) ++position;
+            if (position >= value.size()) break;
+            const size_t start = position;
+            while (position < value.size()
+                && !std::isspace(static_cast<unsigned char>(value[position]))) ++position;
+            const std::string_view word(value.data() + start, position - start);
+            const size_t previousSize = current.size();
+            if (previousSize > 0) current.push_back(' ');
+            current.append(word);
+            if (renderer_.textWidth(scale, current) <= maxWidth) continue;
+
+            current.resize(previousSize);
+            if (current.empty()) current = ellipsize(std::string(word));
             if (line >= maxLines) {
                 if (!fitted.empty()) fitted += '\n';
                 fitted += ellipsize(current);
@@ -5977,7 +5988,7 @@ private:
             }
             if (!fitted.empty()) fitted += '\n';
             fitted += current;
-            current = word;
+            current.assign(word);
             ++line;
         }
         if (!current.empty()) {
@@ -6123,9 +6134,9 @@ private:
         if (!detail_.officialRating.empty()) appendMetadata(detail_.officialRating);
         if (detail_.runtimeTicks > 0) appendMetadata(formatPlaybackTime(static_cast<int>(detail_.runtimeTicks / 10000)));
         if (detail_.communityRating >= 0.0f) {
-            std::ostringstream rating;
-            rating << std::fixed << std::setprecision(1) << detail_.communityRating << "/10";
-            appendMetadata(rating.str());
+            char rating[16];
+            const int length = std::snprintf(rating, sizeof(rating), "%.1f/10", detail_.communityRating);
+            appendMetadata(std::string(rating, static_cast<size_t>(length)));
         }
         const std::string genres = joinGenres(detail_.genres);
         if (!genres.empty()) appendMetadata(genres);
