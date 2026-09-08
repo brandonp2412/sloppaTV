@@ -5372,8 +5372,8 @@ private:
             || transitionState_.fallbackResolving()
             || showNextUp
             || playerScreenState_.overlayVisible(now);
-        player_.subtitleText(subtitleTextScratch_);
         if (const SubtitleCue* cue = activeSubtitleCue()) subtitleTextScratch_ = cue->text;
+        else player_.subtitleText(subtitleTextScratch_);
         if (!subtitleTextScratch_.empty()) {
             const float textScale = subtitleTextScale(settings_.subtitleSize);
             if (subtitleTextScratch_ != subtitleLayoutSource_ || textScale != subtitleLayoutScale_) {
