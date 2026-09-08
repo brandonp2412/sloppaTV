@@ -54,6 +54,7 @@ public:
     [[nodiscard]] std::string videoCodec() const;
     [[nodiscard]] std::string audioCodec() const;
     [[nodiscard]] std::string subtitleText() const;
+    void subtitleText(std::string& output) const;
     [[nodiscard]] double containerFps() const;
     [[nodiscard]] int64_t droppedFrames() const;
 

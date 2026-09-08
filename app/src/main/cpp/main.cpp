@@ -5467,46 +5467,57 @@ private:
             || transitionState_.fallbackResolving()
             || showNextUp
             || playerScreenState_.overlayVisible(now);
-        std::string subtitleText = player_.subtitleText();
-        if (const SubtitleCue* cue = activeSubtitleCue()) subtitleText = cue->text;
-        if (!subtitleText.empty()) {
+        player_.subtitleText(subtitleTextScratch_);
+        if (const SubtitleCue* cue = activeSubtitleCue()) subtitleTextScratch_ = cue->text;
+        if (!subtitleTextScratch_.empty()) {
             const float textScale = subtitleTextScale(settings_.subtitleSize);
-            const std::string subtitle = fitTextLines(
-                normalizeSubtitleDisplayText(subtitleText), textScale, 1520.0f, 3
-            );
-            const float lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize);
-            std::istringstream stream(subtitle);
-            std::vector<std::string> lines;
-            std::string line;
-            float widest = 0.0f;
-            while (std::getline(stream, line)) {
-                if (line.empty()) continue;
-                widest = std::max(widest, renderer_.textWidth(textScale, line));
-                lines.push_back(line);
+            if (subtitleTextScratch_ != subtitleLayoutSource_ || textScale != subtitleLayoutScale_) {
+                subtitleLayoutSource_ = subtitleTextScratch_;
+                subtitleLayoutScale_ = textScale;
+                subtitleLines_.clear();
+                subtitleLineWidths_.clear();
+                subtitleWidest_ = 0.0f;
+                const std::string subtitle = fitTextLines(
+                    normalizeSubtitleDisplayText(subtitleTextScratch_), textScale, 1520.0f, 3
+                );
+                std::istringstream stream(subtitle);
+                std::string line;
+                while (std::getline(stream, line)) {
+                    if (line.empty()) continue;
+                    const float width = renderer_.textWidth(textScale, line);
+                    subtitleWidest_ = std::max(subtitleWidest_, width);
+                    subtitleLines_.push_back(line);
+                    subtitleLineWidths_.push_back(width);
+                }
+                if (subtitleLines_.empty()) {
+                    subtitleLines_.push_back(subtitle);
+                    const float width = renderer_.textWidth(textScale, subtitle);
+                    subtitleLineWidths_.push_back(width);
+                    subtitleWidest_ = width;
+                }
             }
-            if (lines.empty()) lines.push_back(subtitle);
+            const float lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize);
             const float horizontalPadding = 32.0f;
             const float verticalPadding = 20.0f;
-            const float boxWidth = std::clamp(widest + horizontalPadding * 2.0f, 320.0f, 1520.0f);
-            const float boxHeight = verticalPadding * 2.0f + lineHeight * static_cast<float>(lines.size());
+            const float boxWidth = std::clamp(subtitleWidest_ + horizontalPadding * 2.0f, 320.0f, 1520.0f);
+            const float boxHeight = verticalPadding * 2.0f + lineHeight * static_cast<float>(subtitleLines_.size());
             const float boxX = (Renderer::logicalWidth() - boxWidth) * 0.5f;
             const float bottomY = subtitleBottomY(showOverlay, settings_.subtitlePosition);
             const float boxY = bottomY - boxHeight;
             if (settings_.subtitleBackground) {
                 renderer_.roundedRect(boxX, boxY, boxWidth, boxHeight, 22.0f, Color{0.0f, 0.0f, 0.0f, 0.80f});
             }
-            for (size_t i = 0; i < lines.size(); ++i) {
-                const float width = renderer_.textWidth(textScale, lines[i]);
-                const float textX = (Renderer::logicalWidth() - width) * 0.5f;
+            for (size_t i = 0; i < subtitleLines_.size(); ++i) {
+                const float textX = (Renderer::logicalWidth() - subtitleLineWidths_[i]) * 0.5f;
                 const float textY = boxY + verticalPadding + static_cast<float>(i) * lineHeight;
                 renderer_.outlinedText(
                     textX,
                     textY,
                     textScale,
-                    lines[i],
+                    subtitleLines_[i],
                     kText,
                     Color{0.0f, 0.0f, 0.0f, 0.92f},
-                    widest
+                    subtitleWidest_
                 );
             }
         }
@@ -6343,6 +6354,12 @@ private:
     std::chrono::steady_clock::time_point playbackPreparingSince_{};
     bool screensaverActive_ = false;
     std::string lastPlaybackSummary_;
+    std::string subtitleTextScratch_;
+    std::string subtitleLayoutSource_;
+    std::vector<std::string> subtitleLines_;
+    std::vector<float> subtitleLineWidths_;
+    float subtitleLayoutScale_ = -1.0f;
+    float subtitleWidest_ = 0.0f;
 };
 }
 

@@ -856,6 +856,11 @@ std::string NativeMediaPlayer::subtitleText() const {
     return cachedSubtitleText_;
 }
 
+void NativeMediaPlayer::subtitleText(std::string& output) const {
+    std::scoped_lock lock(mutex_);
+    output = cachedSubtitleText_;
+}
+
 double NativeMediaPlayer::containerFps() const {
     std::scoped_lock lock(mutex_);
     double value = 0.0;
