@@ -4,7 +4,7 @@
 
 #include <algorithm>
 #include <string>
-#include <unordered_map>
+#include <utility>
 #include <vector>
 
 enum class ArtworkKind {
@@ -23,7 +23,7 @@ struct ArtworkReference {
 struct HomeSelectionSnapshot {
     bool toolbarFocused = false;
     std::string focusedRowTitle;
-    std::unordered_map<std::string, std::string> selectedItemByRow;
+    std::vector<std::pair<std::string, std::string>> selectedItemByRow;
 };
 
 struct HomeRestorePlan {
@@ -147,7 +147,7 @@ public:
             const auto& items = rows[row].items;
             if (items.empty()) continue;
             const int selected = selection(static_cast<int>(row), static_cast<int>(items.size()));
-            result.selectedItemByRow[rows[row].title] = items[static_cast<size_t>(selected)].id;
+            result.selectedItemByRow.emplace_back(rows[row].title, items[static_cast<size_t>(selected)].id);
         }
         return result;
     }
@@ -156,7 +156,10 @@ public:
         const HomeSelectionSnapshot& snapshot,
         const JellyfinHomeRow& row
     ) {
-        const auto saved = snapshot.selectedItemByRow.find(row.title);
+        const auto saved = std::find_if(
+            snapshot.selectedItemByRow.begin(), snapshot.selectedItemByRow.end(),
+            [&](const auto& candidate) { return candidate.first == row.title; }
+        );
         if (saved == snapshot.selectedItemByRow.end()) return 0;
         const auto item = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& candidate) {
             return candidate.id == saved->second;
