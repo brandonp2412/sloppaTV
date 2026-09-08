@@ -88,8 +88,7 @@ public:
         if (query_.empty()) {
             debouncePending_ = false;
             loading_ = false;
-            results_.clear();
-            firstVisible_ = {0, 0};
+            clearResults();
             return false;
         }
         debouncePending_ = true;
@@ -111,8 +110,7 @@ public:
         selection_ = 0;
         if (query_.empty()) {
             loading_ = false;
-            results_.clear();
-            firstVisible_ = {0, 0};
+            clearResults();
             return false;
         }
         loading_ = true;
