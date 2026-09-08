@@ -85,6 +85,7 @@ inline std::vector<std::string> transcodingAudioCodecs(
     int maxAudioChannels
 ) {
     std::vector<std::string> codecs;
+    codecs.reserve(4);
     if (capabilities.aac) codecs.emplace_back("aac");
     if (capabilities.mp3) codecs.emplace_back("mp3");
     if (maxAudioChannels > 2) {
@@ -100,6 +101,7 @@ inline std::vector<std::string> advertisedAudioCodecs(
     int maxAudioChannels
 ) {
     std::vector<std::string> codecs;
+    codecs.reserve(11);
     if (capabilities.aac) codecs.emplace_back("aac");
     if (capabilities.mp3) codecs.emplace_back("mp3");
     if (capabilities.mp2) codecs.emplace_back("mp2");

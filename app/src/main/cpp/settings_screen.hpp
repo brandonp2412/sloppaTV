@@ -259,15 +259,21 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
             stepLanguage(settings.autoSubtitleLanguage);
             return SettingChangeEffect::Save;
         case kAutoSubtitleSourceSetting: {
-            std::vector<std::string> choices{"any", "different"};
-            for (const auto& option : kSubtitleLanguageOptions) choices.emplace_back(option.code);
             const std::string normalized = settings.autoSubtitleSourceLanguage == "any" || settings.autoSubtitleSourceLanguage == "different"
                 ? settings.autoSubtitleSourceLanguage
                 : normalizeSubtitleLanguage(settings.autoSubtitleSourceLanguage);
-            auto current = std::find(choices.begin(), choices.end(), normalized);
-            int index = current == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), current));
-            index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
-            settings.autoSubtitleSourceLanguage = choices[static_cast<size_t>(index)];
+            int index = normalized == "different" ? 1 : 0;
+            if (normalized != "any" && normalized != "different") {
+                const auto current = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(), [&](const auto& option) {
+                    return normalized == option.code;
+                });
+                if (current != kSubtitleLanguageOptions.end()) {
+                    index = static_cast<int>(std::distance(kSubtitleLanguageOptions.begin(), current)) + 2;
+                }
+            }
+            index = std::clamp(index + direction, 0, static_cast<int>(kSubtitleLanguageOptions.size()) + 1);
+            settings.autoSubtitleSourceLanguage = index == 0 ? "any"
+                : (index == 1 ? "different" : kSubtitleLanguageOptions[static_cast<size_t>(index - 2)].code);
             return SettingChangeEffect::Save;
         }
         default:
