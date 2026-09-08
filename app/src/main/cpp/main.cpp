@@ -5722,9 +5722,9 @@ private:
             } else {
                 renderer_.rect(132.0f, y + 82.0f, 1650.0f, 1.0f, Color{0.25f, 0.27f, 0.32f, 0.14f});
             }
-            const std::string rowLabel = i == kAdvancedSettingsToggle && settingsScreen_.advanced()
-                ? "BASIC SETTINGS"
-                : labels[static_cast<size_t>(i)];
+            const std::string_view rowLabel = i == kAdvancedSettingsToggle && settingsScreen_.advanced()
+                ? std::string_view{"BASIC SETTINGS"}
+                : std::string_view{labels[static_cast<size_t>(i)]};
             renderer_.textVerticallyCentered(145.0f, y - 8.0f, 88.0f, 2.20f, rowLabel,
                 focused ? kText : kSecondaryText, 900.0f);
             const std::string value = settingValue(
@@ -5763,9 +5763,9 @@ private:
                     renderer_.roundedRect(478.0f, y - 8.0f, 964.0f, 68.0f, 18.0f, kPanelElevated);
                     drawFocusHalo(478.0f, y - 8.0f, 964.0f, 68.0f, kFocus, 18.0f);
                 }
-                const std::string label = languageIndex == 0
-                    ? "ALL LANGUAGES"
-                    : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
+                const std::string_view label = languageIndex == 0
+                    ? std::string_view{"ALL LANGUAGES"}
+                    : std::string_view{kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label};
                 renderer_.textVerticallyCentered(510.0f, y - 8.0f, 68.0f, 2.05f, label, focused ? kText : kSecondaryText, 620.0f);
                 renderer_.textVerticallyCentered(1290.0f, y - 8.0f, 68.0f, 1.75f, selected ? "ON" : "OFF", selected ? kFocus : kMuted, 110.0f);
             }
