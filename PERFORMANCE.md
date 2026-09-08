@@ -14,7 +14,7 @@ Target device: the same Android TV test target used for both sloppaTV and the in
 
 `tools/benchmark_tv.py` is the canonical benchmark harness. It records startup, settled memory, idle CPU, SurfaceFlinger navigation cadence and percentage deltas, and can emit JSON evidence. Pass `--final-suite` to enforce the final-gate 20 startup / 5 memory / 5 navigation sample counts; missing cold-launch samples fail explicitly instead of silently weakening the result.
 
-Host-side parser/cache microbenchmarks live in `tools/benchmark_subtitle_parser.cpp` and `tools/benchmark_home_image_cache.cpp`. Raw Nox optimization samples from 2026-09-08 are preserved in `docs/benchmarks/nox-optimization-2026-09-08.json`; these support isolated hot-path claims only and do not replace physical-TV validation.
+Host-side parser/cache/policy microbenchmarks live in `tools/benchmark_subtitle_parser.cpp`, `tools/benchmark_home_image_cache.cpp`, and `tools/benchmark_audio_preference.cpp`. Raw Nox optimization samples from 2026-09-08 are preserved in `docs/benchmarks/nox-optimization-2026-09-08.json`; these support isolated hot-path claims only and do not replace physical-TV validation.
 
 ## Release-candidate evidence — 2026-09-01
 

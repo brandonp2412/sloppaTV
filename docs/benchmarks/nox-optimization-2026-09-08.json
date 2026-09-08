@@ -36,6 +36,14 @@
       "write_baseline_median_ms": 25.471,
       "write_optimized_median_ms": 3.923,
       "write_percent_lower": 84.60
+    },
+    "audio_preference_100_candidates_200000_iterations_ms": {
+      "command": "build/benchmark_audio_preference 100 200000",
+      "baseline": [485.964, 483.726, 482.738, 512.099, 500.454],
+      "optimized": [17.580, 12.422, 12.569, 12.533, 15.450],
+      "baseline_median": 485.964,
+      "optimized_median": 12.569,
+      "median_percent_lower": 97.41
     }
   }
 }
