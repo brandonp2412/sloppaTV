@@ -852,7 +852,6 @@ std::string NativeMediaPlayer::audioCodec() const {
 }
 
 std::string NativeMediaPlayer::subtitleText() const {
-    (void)status();
     std::scoped_lock lock(mutex_);
     return cachedSubtitleText_;
 }

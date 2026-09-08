@@ -29,6 +29,16 @@ int main() {
     cache.erase("first-key");
     assert(!cache.read("first-key"));
 
+    for (int index = 0; index < 260; ++index) {
+        cache.write("bounded-" + std::to_string(index), "x");
+    }
+    size_t cachedFiles = 0;
+    for (const auto& entry : fs::directory_iterator(root / "home-image-cache")) {
+        if (entry.is_regular_file()) ++cachedFiles;
+    }
+    assert(cachedFiles <= 256);
+    assert(cache.read("bounded-259"));
+
     fs::remove_all(root, ec);
     return 0;
 }

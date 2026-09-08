@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CPP_DIR = ROOT / "app" / "src" / "main" / "cpp"
@@ -89,10 +91,17 @@ def run_cpp_test(test_name: str, extra_sources: list[str] | None = None, extra_f
 
 def main() -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    for test_name in CPP_TESTS:
-        run_cpp_test(test_name)
-    for test_name, extra_sources, extra_flags in LINKED_CPP_TESTS:
-        run_cpp_test(test_name, extra_sources, extra_flags)
+    jobs = [
+        (test_name, None, None) for test_name in CPP_TESTS
+    ] + [
+        (test_name, extra_sources, extra_flags)
+        for test_name, extra_sources, extra_flags in LINKED_CPP_TESTS
+    ]
+    worker_count = min(len(jobs), os.cpu_count() or 1)
+    with ThreadPoolExecutor(max_workers=worker_count) as executor:
+        futures = [executor.submit(run_cpp_test, *job) for job in jobs]
+        for future in futures:
+            future.result()
 
     run([sys.executable, "-m", "unittest", "discover", "-s", str(PY_TEST_DIR), "-p", "test_*.py"])
     return 0

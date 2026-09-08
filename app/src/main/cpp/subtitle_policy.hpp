@@ -34,6 +34,8 @@ constexpr bool shouldApplyLoadedSubtitle(
 }
 
 inline std::string sanitizeSubtitleText(std::string text) {
+    if (text.find_first_of("&<{") == std::string::npos) return text;
+
     auto replaceAll = [](std::string& value, std::string_view from, std::string_view to) {
         size_t position = 0;
         while ((position = value.find(from, position)) != std::string::npos) {
@@ -173,6 +175,13 @@ struct SubtitleCue {
     std::string text;
 };
 
+inline void sortSubtitleCues(std::vector<SubtitleCue>& cues) {
+    const auto ordered = [](const SubtitleCue& left, const SubtitleCue& right) {
+        return left.startMs < right.startMs || (left.startMs == right.startMs && left.endMs < right.endMs);
+    };
+    if (!std::is_sorted(cues.begin(), cues.end(), ordered)) std::stable_sort(cues.begin(), cues.end(), ordered);
+}
+
 inline std::string subtitleTextFormat(std::string codec) {
     std::transform(codec.begin(), codec.end(), codec.begin(), [](unsigned char c) {
         return static_cast<char>(std::tolower(c));
@@ -218,10 +227,7 @@ inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
         }
         if (!text.empty()) cues.push_back({start, end, std::move(text)});
     }
-    std::stable_sort(cues.begin(), cues.end(), [](const SubtitleCue& left, const SubtitleCue& right) {
-        if (left.startMs != right.startMs) return left.startMs < right.startMs;
-        return left.endMs < right.endMs;
-    });
+    sortSubtitleCues(cues);
     return cues;
 }
 
@@ -314,10 +320,7 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
         if (!text.empty()) cues.push_back({startMs, endMs, std::move(text)});
     }
 
-    std::stable_sort(cues.begin(), cues.end(), [](const SubtitleCue& left, const SubtitleCue& right) {
-        if (left.startMs != right.startMs) return left.startMs < right.startMs;
-        return left.endMs < right.endMs;
-    });
+    sortSubtitleCues(cues);
     return cues;
 }
 

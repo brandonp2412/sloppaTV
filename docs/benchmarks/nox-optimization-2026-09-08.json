@@ -1,0 +1,41 @@
+{
+  "date": "2026-09-08",
+  "host": "Nox",
+  "base_commit": "6aba864",
+  "benchmarks": {
+    "host_test_suite_seconds": {
+      "workload": "python3 tools/run_host_tests.py",
+      "baseline_sequential": [28.759],
+      "optimized_parallel": [8.768, 10.658, 12.884],
+      "optimized_median": 10.658,
+      "median_vs_baseline_percent_lower": 62.94
+    },
+    "subtitle_parser_2000_cues_30_iterations_ms": {
+      "command": "build/benchmark_subtitle_parser 2000 30",
+      "ordered_srt_ass_baseline_total": [55.886, 58.969, 54.360, 55.860, 54.369],
+      "ordered_srt_ass_optimized_total": [52.803, 51.836, 55.481, 51.855, 52.518],
+      "ordered_baseline_median": 55.860,
+      "ordered_optimized_median": 52.518,
+      "ordered_percent_lower": 5.98,
+      "plain_srt_before_fast_path": [18.722, 18.385, 18.349, 18.563, 18.416],
+      "plain_srt_after_fast_path": [17.016, 16.283, 16.331, 16.949, 16.151],
+      "plain_srt_before_median": 18.416,
+      "plain_srt_after_median": 16.331,
+      "plain_srt_percent_lower": 11.32
+    },
+    "home_image_disk_cache": {
+      "read_workload": "300 reads of one 256 KiB cached artwork payload",
+      "read_baseline_ms": [91.712, 96.954, 93.961, 103.209, 95.360],
+      "read_optimized_ms": [7.243, 7.369, 5.466, 4.198, 6.662],
+      "read_baseline_median_ms": 95.360,
+      "read_optimized_median_ms": 6.662,
+      "read_percent_lower": 93.01,
+      "write_workload": "200 unique 64 KiB artwork writes while below disk byte/file caps",
+      "write_baseline_ms": [25.561, 24.872, 28.688, 25.471, 24.860],
+      "write_optimized_ms": [4.099, 3.211, 3.877, 3.923, 4.473],
+      "write_baseline_median_ms": 25.471,
+      "write_optimized_median_ms": 3.923,
+      "write_percent_lower": 84.60
+    }
+  }
+}
