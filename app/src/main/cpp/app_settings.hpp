@@ -255,7 +255,7 @@ inline bool settingLabelContains(std::string_view text, std::string_view query) 
     return settingLabelContainsUpper(text, upperQuery);
 }
 
-inline std::vector<int> matchingSettings(const std::string& query, bool advanced) {
+inline void matchingSettingsInto(const std::string& query, bool advanced, std::vector<int>& matches) {
     static constexpr std::array<int, 20> commonOrder{
         18, 10, 11, 13, 12, kSubtitleLanguagesSetting,
         kAutoSubtitlesSetting, kAutoSubtitleLanguageSetting, kAutoSubtitleSourceSetting,
@@ -265,9 +265,10 @@ inline std::vector<int> matchingSettings(const std::string& query, bool advanced
         0, 1, 4, 7, 17, 19, 15, 16, 21, 22, 23, kAdvancedSettingsToggle,
     };
 
-    std::vector<int> matches;
+    matches.clear();
     const auto& labels = settingsLabels();
-    matches.reserve(advanced ? advancedOrder.size() : commonOrder.size());
+    const size_t requiredCapacity = advanced ? advancedOrder.size() : commonOrder.size();
+    if (matches.capacity() < requiredCapacity) matches.reserve(requiredCapacity);
     if (!query.empty()) {
         std::string upperQuery(query);
         std::transform(upperQuery.begin(), upperQuery.end(), upperQuery.begin(), asciiUpper);
@@ -281,10 +282,15 @@ inline std::vector<int> matchingSettings(const std::string& query, bool advanced
         };
         if (advanced) appendMatches(advancedOrder);
         else appendMatches(commonOrder);
-        return matches;
+        return;
     }
 
     if (advanced) matches.assign(advancedOrder.begin(), advancedOrder.end());
     else matches.assign(commonOrder.begin(), commonOrder.end());
+}
+
+inline std::vector<int> matchingSettings(const std::string& query, bool advanced) {
+    std::vector<int> matches;
+    matchingSettingsInto(query, advanced, matches);
     return matches;
 }

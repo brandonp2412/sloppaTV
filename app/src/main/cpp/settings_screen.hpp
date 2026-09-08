@@ -122,7 +122,7 @@ private:
     }
 
     void refreshMatches() {
-        matches_ = matchingSettings(searchQuery_, advanced_);
+        matchingSettingsInto(searchQuery_, advanced_, matches_);
     }
 
     void selectFirstMatch() {
