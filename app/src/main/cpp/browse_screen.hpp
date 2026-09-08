@@ -38,27 +38,13 @@ enum class BrowseBackAction {
 class BrowseScreenState {
 public:
     void resetForLibrary(const JellyfinItem& library) {
-        stack_.clear();
-        filterFocused_ = false;
-        filterSelection_ = 0;
-        mode_ = BrowseContentMode::All;
-        genre_.clear();
-        letter_.clear();
         activeContainer_ = library;
-        refreshHeading();
-        clearPage();
+        resetNavigation();
     }
 
     void clear() {
         activeContainer_ = {};
-        stack_.clear();
-        filterFocused_ = false;
-        filterSelection_ = 0;
-        mode_ = BrowseContentMode::All;
-        genre_.clear();
-        letter_.clear();
-        refreshHeading();
-        clearPage();
+        resetNavigation();
     }
 
     void openContainer(const JellyfinItem& container, bool pushCurrent) {
@@ -214,6 +200,17 @@ public:
     [[nodiscard]] int filterSelection() const { return filterSelection_; }
 
 private:
+    void resetNavigation() {
+        stack_.clear();
+        filterFocused_ = false;
+        filterSelection_ = 0;
+        mode_ = BrowseContentMode::All;
+        genre_.clear();
+        letter_.clear();
+        refreshHeading();
+        clearPage();
+    }
+
     void refreshHeading() {
         heading_ = activeContainer_.name.empty() ? "LIBRARY" : activeContainer_.name;
         if (mode_ == BrowseContentMode::Favorites) heading_ += " - FAVORITES";
