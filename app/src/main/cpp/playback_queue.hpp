@@ -128,6 +128,7 @@ public:
     }
 
     [[nodiscard]] int findItemIndex(const std::string& itemId) const {
+        if (itemMatches(currentIndex_, itemId)) return currentIndex_;
         const auto item = std::find_if(items_.begin(), items_.end(), [&](const JellyfinItem& candidate) {
             return candidate.id == itemId;
         });
