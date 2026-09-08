@@ -5125,14 +5125,14 @@ private:
             const float titleY = imageY + cardH + 22.0f;
             renderer_.text(x + 2.0f, titleY, 2.45f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
             if (item.type == "Episode") {
-                std::string episode = episodeNumberLabel(item);
+                episodeNumberLabelInto(episodeLabelScratch_, item);
                 if (!item.name.empty() && item.name != item.seriesName) {
-                    if (!episode.empty()) episode += "  |  ";
-                    episode += item.name;
+                    if (!episodeLabelScratch_.empty()) episodeLabelScratch_ += "  |  ";
+                    episodeLabelScratch_ += item.name;
                 }
-                if (!episode.empty()) {
+                if (!episodeLabelScratch_.empty()) {
                     renderer_.text(x + 2.0f, titleY + 56.0f, 1.58f,
-                        singleLine(episode, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
+                        singleLine(episodeLabelScratch_, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
                 }
             }
             x += cardW + gap;

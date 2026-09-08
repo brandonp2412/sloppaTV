@@ -9,8 +9,10 @@ int main() {
     episode.parentIndexNumber = 2;
     episode.indexNumber = 7;
     assert(episodeNumberLabel(episode) == "S2E7");
-    assert(episodeLabel(episode) == "The Series - S2E7");
     std::string scratch = "old value";
+    episodeNumberLabelInto(scratch, episode);
+    assert(scratch == "S2E7");
+    assert(episodeLabel(episode) == "The Series - S2E7");
     episodeLabelInto(scratch, episode);
     assert(scratch == "The Series - S2E7");
 
@@ -21,6 +23,8 @@ int main() {
 
     JellyfinItem movie;
     movie.name = "Movie";
+    episodeNumberLabelInto(scratch, movie);
+    assert(scratch.empty());
     episodeLabelInto(scratch, movie);
     assert(scratch.empty());
     labels.update(movie);
