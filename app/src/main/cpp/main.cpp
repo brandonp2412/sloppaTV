@@ -2990,7 +2990,7 @@ private:
             }
 
             filterHiddenHomeItems(core.value);
-            std::vector<JellyfinItem> views = core.value.views;
+            std::vector<JellyfinItem> views = std::move(core.value.views);
             HomeRestorePlan coreRestore = HomeScreenState::restorePlan(homeSnapshot, core.value.rows);
             const int coreRestoredRow = coreRestore.focusedRow;
             {
