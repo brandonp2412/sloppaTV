@@ -95,8 +95,7 @@ public:
         similarSelection_ = std::clamp(similarSelection_ + direction, 0, static_cast<int>(similar_.size()) - 1);
     }
     [[nodiscard]] const JellyfinItem* selectedSimilar() const {
-        if (similar_.empty() || similarSelection_ < 0 || similarSelection_ >= static_cast<int>(similar_.size())) return nullptr;
-        return &similar_[static_cast<size_t>(similarSelection_)];
+        return selectedItem(similar_, similarSelection_);
     }
 
     void beginItemMenu() {
@@ -144,8 +143,7 @@ public:
         moveGridSelection(castSelection_, static_cast<int>(people.size()), dx, dy, columns);
     }
     [[nodiscard]] const JellyfinPerson* selectedCastPerson(const std::vector<JellyfinPerson>& people) const {
-        if (people.empty() || castSelection_ < 0 || castSelection_ >= static_cast<int>(people.size())) return nullptr;
-        return &people[static_cast<size_t>(castSelection_)];
+        return selectedItem(people, castSelection_);
     }
 
     void beginPerson(JellyfinPerson person) {
@@ -257,7 +255,8 @@ private:
         if (next >= 0 && next < count) selection = next;
     }
 
-    static const JellyfinItem* selectedItem(const std::vector<JellyfinItem>& items, int selection) {
+    template <typename T>
+    static const T* selectedItem(const std::vector<T>& items, int selection) {
         if (items.empty() || selection < 0 || selection >= static_cast<int>(items.size())) return nullptr;
         return &items[static_cast<size_t>(selection)];
     }
