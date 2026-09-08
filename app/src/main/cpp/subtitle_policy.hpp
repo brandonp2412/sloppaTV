@@ -258,9 +258,12 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
         while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.remove_suffix(1);
         return value;
     };
+    std::vector<std::string_view> fields;
     auto split = [&](std::string_view value, int maxFields = -1) {
-        std::vector<std::string_view> fields;
-        if (maxFields > 0) fields.reserve(static_cast<size_t>(maxFields));
+        fields.clear();
+        if (maxFields > 0 && fields.capacity() < static_cast<size_t>(maxFields)) {
+            fields.reserve(static_cast<size_t>(maxFields));
+        }
         size_t start = 0;
         while (start <= value.size()) {
             if (maxFields > 0 && static_cast<int>(fields.size()) == maxFields - 1) {
@@ -275,7 +278,6 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
             fields.push_back(trim(value.substr(start, comma - start)));
             start = comma + 1;
         }
-        return fields;
     };
     auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
         return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
@@ -294,7 +296,7 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
         const size_t colon = trimmed.find(':');
         if (colon == std::string_view::npos) continue;
         if (equalsIgnoreCase(trimmed.substr(0, colon), "Format")) {
-            const auto fields = split(trimmed.substr(colon + 1));
+            split(trimmed.substr(colon + 1));
             fieldCount = static_cast<int>(fields.size());
             startColumn = endColumn = textColumn = -1;
             for (int i = 0; i < fieldCount; ++i) {
@@ -312,7 +314,7 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
             endColumn = 2;
             textColumn = 9;
         }
-        const auto fields = split(std::string_view(trimmed).substr(colon + 1), fieldCount);
+        split(trimmed.substr(colon + 1), fieldCount);
         if (static_cast<int>(fields.size()) <= std::max({startColumn, endColumn, textColumn})) continue;
         const int startMs = parseSubtitleTimestamp(fields[static_cast<size_t>(startColumn)]);
         const int endMs = parseSubtitleTimestamp(fields[static_cast<size_t>(endColumn)]);
