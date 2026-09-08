@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -15,8 +16,8 @@ enum class ArtworkKind {
 };
 
 struct ArtworkReference {
-    std::string itemId;
-    std::string tag;
+    std::string_view itemId;
+    std::string_view tag;
     ArtworkKind kind = ArtworkKind::None;
 };
 
@@ -63,7 +64,7 @@ inline ArtworkReference homeArtworkReference(
     const std::string& backdropTag,
     const std::string& backdropItemId
 ) {
-    const std::string backdropOwner = backdropItemId.empty() ? itemId : backdropItemId;
+    const std::string& backdropOwner = backdropItemId.empty() ? itemId : backdropItemId;
     const bool ownBackdrop = !backdropTag.empty() && backdropOwner == itemId;
     if (preferSeries && !thumbTag.empty()) return {itemId, thumbTag, ArtworkKind::Thumb};
     if (preferSeries && ownBackdrop) return {itemId, backdropTag, ArtworkKind::Backdrop};
