@@ -1492,21 +1492,24 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
         item.backdropTag,
         item.backdropItemId
     );
-    const ArtworkKind kind = artwork.kind;
-    if (kind == ArtworkKind::Primary) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Primary?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
-    } else if (kind == ArtworkKind::Thumb) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Thumb?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
-    } else if (kind == ArtworkKind::Backdrop) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
-    } else {
-        result.error = "Item has no artwork";
-        return result;
+    std::string_view imagePath;
+    switch (artwork.kind) {
+        case ArtworkKind::Primary: imagePath = "/Images/Primary?maxWidth="; break;
+        case ArtworkKind::Thumb: imagePath = "/Images/Thumb?maxWidth="; break;
+        case ArtworkKind::Backdrop: imagePath = "/Images/Backdrop/0?maxWidth="; break;
+        case ArtworkKind::None:
+            result.error = "Item has no artwork";
+            return result;
     }
-    url += "&api_key=" + urlEncode(session.token);
+    const std::string encodedTag = urlEncode(artwork.tag);
+    const std::string encodedToken = urlEncode(session.token);
+    const std::string widthText = std::to_string(width);
+    const std::string heightText = std::to_string(height);
+    url.reserve(session.server.size() + artwork.itemId.size() + imagePath.size() + encodedTag.size()
+        + encodedToken.size() + widthText.size() + heightText.size() + 43);
+    url.append(session.server).append("/Items/").append(artwork.itemId).append(imagePath).append(widthText)
+        .append("&maxHeight=").append(heightText).append("&quality=92&tag=").append(encodedTag)
+        .append("&api_key=").append(encodedToken);
 
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
