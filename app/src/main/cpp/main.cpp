@@ -1106,9 +1106,9 @@ private:
         return selected == externalPlayers_.cend() ? std::string_view{"INTERNAL"} : std::string_view{selected->label};
     }
 
-    std::optional<ExternalPlayerApp> selectedExternalPlayer() const {
+    const ExternalPlayerApp* selectedExternalPlayer() const {
         const auto selected = configuredExternalPlayer();
-        return selected == externalPlayers_.cend() ? std::nullopt : std::optional<ExternalPlayerApp>{*selected};
+        return selected == externalPlayers_.cend() ? nullptr : &*selected;
     }
 
     void cycleExternalPlayer(int direction) {
@@ -1328,7 +1328,7 @@ private:
     DetailActionList itemMenuActions() const {
         return detailsState_.itemMenuActions(
             detail_,
-            selectedExternalPlayer().has_value(),
+            selectedExternalPlayer() != nullptr,
             !queueState_.empty(),
             isHiddenFromHome(detail_)
         );
