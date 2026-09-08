@@ -879,7 +879,7 @@ bool Renderer::loadFontAtlas() {
     return true;
 }
 
-float Renderer::textWidth(float scale, const std::string& value) const {
+float Renderer::textWidth(float scale, std::string_view value) const {
     std::string transformed;
     std::string_view display = value;
     if (std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte >= 0x80; })) {
@@ -908,7 +908,7 @@ float Renderer::textWidth(float scale, const std::string& value) const {
     return std::max(longest, current);
 }
 
-void Renderer::textCentered(float x, float y, float w, float h, float scale, const std::string& value, Color color) {
+void Renderer::textCentered(float x, float y, float w, float h, float scale, std::string_view value, Color color) {
     const float width = textWidth(scale, value);
     const float textX = x + std::max(0.0f, (w - width) * 0.5f);
     textVerticallyCentered(textX, y, h, scale, value, color, std::max(0.0f, w));
@@ -919,7 +919,7 @@ void Renderer::textVerticallyCentered(
     float y,
     float h,
     float scale,
-    const std::string& value,
+    std::string_view value,
     Color color,
     float maxWidth
 ) {
@@ -935,7 +935,7 @@ void Renderer::textWithAtlas(
     float x,
     float y,
     float scale,
-    const std::string& value,
+    std::string_view value,
     Color color,
     float maxWidth
 ) {
@@ -1059,7 +1059,7 @@ void Renderer::textWithAtlas(
     }
 }
 
-void Renderer::text(float x, float y, float scale, const std::string& value, Color color, float maxWidth) {
+void Renderer::text(float x, float y, float scale, std::string_view value, Color color, float maxWidth) {
     textWithAtlas(fontTexture_, x, y, scale, value, color, maxWidth);
 }
 
@@ -1067,7 +1067,7 @@ void Renderer::outlinedText(
     float x,
     float y,
     float scale,
-    const std::string& value,
+    std::string_view value,
     Color fill,
     Color outline,
     float maxWidth

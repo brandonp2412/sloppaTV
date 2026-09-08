@@ -8,6 +8,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct Color {
@@ -41,19 +42,19 @@ public:
     void verticalGradient(float x, float y, float w, float h, Color top, Color bottom);
     void horizontalGradient(float x, float y, float w, float h, Color left, Color right);
     void outline(float x, float y, float w, float h, float thickness, Color color);
-    void text(float x, float y, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
+    void text(float x, float y, float scale, std::string_view value, Color color, float maxWidth = 0.0f);
     void outlinedText(
         float x,
         float y,
         float scale,
-        const std::string& value,
+        std::string_view value,
         Color fill,
         Color outline,
         float maxWidth = 0.0f
     );
-    void textCentered(float x, float y, float w, float h, float scale, const std::string& value, Color color);
-    void textVerticallyCentered(float x, float y, float h, float scale, const std::string& value, Color color, float maxWidth = 0.0f);
-    float textWidth(float scale, const std::string& value) const;
+    void textCentered(float x, float y, float w, float h, float scale, std::string_view value, Color color);
+    void textVerticallyCentered(float x, float y, float h, float scale, std::string_view value, Color color, float maxWidth = 0.0f);
+    float textWidth(float scale, std::string_view value) const;
     GLuint createTexture(int width, int height, const uint8_t* rgbaPixels);
     void deleteTexture(GLuint texture);
     void image(GLuint texture, float x, float y, float w, float h, float alpha = 1.0f);
@@ -138,7 +139,7 @@ private:
         float x,
         float y,
         float scale,
-        const std::string& value,
+        std::string_view value,
         Color color,
         float maxWidth
     );
