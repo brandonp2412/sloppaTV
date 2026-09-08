@@ -4260,14 +4260,14 @@ private:
         return key;
     }
 
-    std::string artworkKey(const JellyfinItem& item) const {
+    std::string artworkKey(std::string_view itemId, std::string_view imageTag) const {
         std::string key;
-        key.reserve(session_.server.size() + session_.userId.size() + item.id.size() + item.imageTag.size() + 16);
+        key.reserve(session_.server.size() + session_.userId.size() + itemId.size() + imageTag.size() + 16);
         key.append(session_.server)
             .append(":user:")
             .append(session_.userId)
             .push_back(':');
-        key.append(item.id).append(":primary:").append(item.imageTag);
+        key.append(itemId).append(":primary:").append(imageTag);
         return key;
     }
 
@@ -4536,15 +4536,19 @@ private:
         return true;
     }
 
-    void requestArtwork(const JellyfinItem& item) {
-        if (!session_.valid() || item.id.empty()) return;
-        const std::string key = artworkKey(item);
+    void requestArtwork(std::string_view itemId, std::string_view imageTag) {
+        if (!session_.valid() || itemId.empty()) return;
+        const std::string key = artworkKey(itemId, imageTag);
         if (!artwork_.beginLoad(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
 
         const JellyfinSession session = session_;
-        const JellyfinItem itemCopy = item;
-        tasks_.submit([this, session, itemCopy, key] {
-            auto bytes = api_.downloadPrimaryImage(session, itemCopy, 384, 576);
+        const std::string id(itemId);
+        const std::string tag(imageTag);
+        tasks_.submit([this, session, id, tag, key] {
+            JellyfinItem item;
+            item.id = id;
+            item.imageTag = tag;
+            auto bytes = api_.downloadPrimaryImage(session, item, 384, 576);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
                 artwork_.markFailed(key);
@@ -4562,24 +4566,36 @@ private:
         });
     }
 
-    bool drawArtwork(const JellyfinItem& item, float x, float y, float width, float height, float alpha = 1.0f) {
-        if (item.id.empty()) return false;
-        const std::string key = artworkKey(item);
+    void requestArtwork(const JellyfinItem& item) {
+        requestArtwork(item.id, item.imageTag);
+    }
+
+    bool drawArtwork(
+        std::string_view itemId,
+        std::string_view imageTag,
+        float x,
+        float y,
+        float width,
+        float height,
+        float alpha = 1.0f
+    ) {
+        if (itemId.empty()) return false;
+        const std::string key = artworkKey(itemId, imageTag);
         auto* cached = artwork_.find(key);
         if (!cached) {
-            requestArtwork(item);
+            requestArtwork(itemId, imageTag);
             return false;
         }
         auto& entry = *cached;
         if (entry.state == ArtworkState::Failed) {
-            requestArtwork(item);
+            requestArtwork(itemId, imageTag);
             return false;
         }
         if (entry.state != ArtworkState::Ready) return false;
         if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
             if (!entry.decoded.valid()) {
                 eraseArtworkEntry(artwork_, key);
-                requestArtwork(item);
+                requestArtwork(itemId, imageTag);
                 return false;
             }
             entry.sourceWidth = entry.decoded.width;
@@ -4591,6 +4607,10 @@ private:
         if (entry.texture == 0) return false;
         drawCoverTexture(entry, x, y, width, height, alpha);
         return true;
+    }
+
+    bool drawArtwork(const JellyfinItem& item, float x, float y, float width, float height, float alpha = 1.0f) {
+        return drawArtwork(item.id, item.imageTag, x, y, width, height, alpha);
     }
 
     void requestBackdrop(const JellyfinItem& item) {
@@ -5148,15 +5168,9 @@ private:
                 Color{kFocus.r, kFocus.g, kFocus.b, 0.09f});
         }
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, kPanelAlt);
-        const JellyfinItem* cover = &item;
-        JellyfinItem seriesCover;
-        if (seriesCoverForEpisode) {
-            seriesCover.id = item.seriesId;
-            seriesCover.imageTag = item.seriesPrimaryImageTag;
-            seriesCover.type = "Series";
-            cover = &seriesCover;
-        }
-        const bool hasArtwork = drawArtwork(*cover, bounds[0], bounds[1], bounds[2], bounds[3]);
+        const bool hasArtwork = seriesCoverForEpisode
+            ? drawArtwork(item.seriesId, item.seriesPrimaryImageTag, bounds[0], bounds[1], bounds[2], bounds[3])
+            : drawArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3]);
         if (!hasArtwork) {
             renderer_.roundedRect(bounds[0] + 1.0f, bounds[1] + 1.0f, bounds[2] - 2.0f, bounds[3] - 2.0f, 15.0f, kPanel);
             if (landscape) {
@@ -5172,7 +5186,7 @@ private:
                 static_cast<float>((bounds[2] - 20.0f) * fraction), 5.0f, 2.5f, kFocus);
         }
         if (showState && (item.favorite || (settings_.showWatchedIndicators && item.played))) {
-            const std::string label = item.favorite ? "FAVORITE" : "WATCHED";
+            const std::string_view label = item.favorite ? "FAVORITE" : "WATCHED";
             const float badgeWidth = item.favorite ? 132.0f : 118.0f;
             const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
             const float badgeY = bounds[1] + 12.0f;
