@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -68,9 +69,9 @@ constexpr QueueRepeatMode nextQueueRepeatMode(QueueRepeatMode mode) {
         : (mode == QueueRepeatMode::One ? QueueRepeatMode::All : QueueRepeatMode::Off);
 }
 
-constexpr const char* queueRepeatModeName(QueueRepeatMode mode) {
-    return mode == QueueRepeatMode::One ? "ONE"
-        : (mode == QueueRepeatMode::All ? "ALL" : "OFF");
+constexpr std::string_view queueRepeatActionLabel(QueueRepeatMode mode) {
+    return mode == QueueRepeatMode::One ? "REPEAT ONE"
+        : (mode == QueueRepeatMode::All ? "REPEAT ALL" : "REPEAT OFF");
 }
 
 constexpr int queueNextIndex(int currentIndex, int size, QueueRepeatMode repeatMode, bool manualAdvance) {
@@ -95,7 +96,6 @@ public:
     [[nodiscard]] bool empty() const { return items_.empty(); }
     [[nodiscard]] int size() const { return static_cast<int>(items_.size()); }
     [[nodiscard]] const std::vector<JellyfinItem>& items() const { return items_; }
-    [[nodiscard]] std::vector<JellyfinItem>& items() { return items_; }
 
     [[nodiscard]] int currentIndex() const { return currentIndex_; }
     bool setCurrentIndex(int index) {
@@ -166,10 +166,6 @@ public:
     void closeOverlay() { overlayActive_ = false; }
 
     [[nodiscard]] int selection() const { return selection_; }
-    void setSelection(int selection) {
-        selection_ = selection;
-        clampSelection();
-    }
     void moveSelection(int direction) {
         if (items_.empty()) {
             selection_ = 0;

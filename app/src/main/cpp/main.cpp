@@ -5579,14 +5579,21 @@ private:
         if (queueState_.empty()) return;
         const int size = queueState_.size();
         const int current = std::clamp(queueState_.currentIndex(), 0, size - 1);
-        queueState_.setSelection(queueState_.selection());
         const int selection = queueState_.selection();
 
         renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.28f});
         renderer_.roundedRect(790.0f, 28.0f, 1090.0f, 1020.0f, 34.0f, Color{0.012f, 0.015f, 0.022f, 0.96f});
         renderer_.text(842.0f, 72.0f, 3.35f, "PLAYBACK QUEUE", kText, 620.0f);
         renderer_.roundedRect(1555.0f, 70.0f, 255.0f, 46.0f, 18.0f, kPanelAlt);
-        renderer_.textCentered(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, std::to_string(size - current) + " REMAINING", kMuted);
+        std::array<char, 24> remainingBuffer{};
+        const auto remainingNumber = std::to_chars(remainingBuffer.data(), remainingBuffer.data() + remainingBuffer.size(), size - current);
+        constexpr std::string_view remainingSuffix = " REMAINING";
+        std::copy(remainingSuffix.begin(), remainingSuffix.end(), remainingNumber.ptr);
+        const std::string_view remainingText(
+            remainingBuffer.data(),
+            static_cast<size_t>(remainingNumber.ptr - remainingBuffer.data()) + remainingSuffix.size()
+        );
+        renderer_.textCentered(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, remainingText, kMuted);
 
         constexpr int visibleRows = 5;
         const int first = std::clamp(selection - 2, current, std::max(current, size - visibleRows));
@@ -5618,7 +5625,6 @@ private:
             if (selected) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 20.0f);
         }
 
-        const std::string repeatAction = std::string("REPEAT ") + queueRepeatModeName(queueState_.repeatMode());
         const std::array<std::string_view, 7> actions{
             "PLAY NOW",
             "PLAY NEXT",
@@ -5626,7 +5632,7 @@ private:
             "MOVE DOWN",
             "REMOVE",
             "SHUFFLE",
-            repeatAction,
+            queueRepeatActionLabel(queueState_.repeatMode()),
         };
         auto enabled = [&](int action) {
             if (action == 0) return queueCanPlayNow(selection, current, size);

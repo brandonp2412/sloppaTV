@@ -47,6 +47,9 @@ int main() {
     assert(nextQueueRepeatMode(QueueRepeatMode::Off) == QueueRepeatMode::One);
     assert(nextQueueRepeatMode(QueueRepeatMode::One) == QueueRepeatMode::All);
     assert(nextQueueRepeatMode(QueueRepeatMode::All) == QueueRepeatMode::Off);
+    assert(queueRepeatActionLabel(QueueRepeatMode::Off) == "REPEAT OFF");
+    assert(queueRepeatActionLabel(QueueRepeatMode::One) == "REPEAT ONE");
+    assert(queueRepeatActionLabel(QueueRepeatMode::All) == "REPEAT ALL");
 
     assert(queueNextIndex(0, 3, QueueRepeatMode::Off, false) == 1);
     assert(queueNextIndex(0, 3, QueueRepeatMode::One, false) == 0);
