@@ -65,13 +65,8 @@ public:
     }
 
     void failSelectedSubtitle() {
-        subtitleBusy_ = false;
+        resetPlayback();
         selectedSubtitleServerIndex_ = -1;
-        activeSubtitleServerIndex_ = -1;
-        activeSubtitleEnabled_ = false;
-        activeSubtitleCues_.clear();
-        subtitleCueHint_ = 0;
-        activeSubtitleLanguage_.clear();
     }
 
     [[nodiscard]] bool subtitleEnabled() const { return activeSubtitleEnabled_; }

@@ -26,8 +26,7 @@ public:
         tileIndex_ = -1;
         state_ = TrickplayPreviewLoadState::Idle;
         decoded_ = {};
-        texture_ = 0;
-        textureGeneration_ = 0;
+        clearTexture();
         positionMs_ = -1;
         visibleUntil_ = {};
     }
