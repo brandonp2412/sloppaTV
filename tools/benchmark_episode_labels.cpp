@@ -1,4 +1,4 @@
-#include "jellyfin_types.hpp"
+#include "media_labels.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -7,13 +7,6 @@
 #include <string>
 
 static std::string baseline(const JellyfinItem& item) {
-    std::string result;
-    if (item.parentIndexNumber >= 0) result += "S" + std::to_string(item.parentIndexNumber);
-    if (item.indexNumber >= 0) result += "E" + std::to_string(item.indexNumber);
-    return result;
-}
-
-static std::string optimized(const JellyfinItem& item) {
     std::string result;
     if (item.parentIndexNumber < 0 && item.indexNumber < 0) return result;
     result.reserve(16);
@@ -26,6 +19,10 @@ static std::string optimized(const JellyfinItem& item) {
         result += std::to_string(item.indexNumber);
     }
     return result;
+}
+
+static std::string optimized(const JellyfinItem& item) {
+    return episodeNumberLabel(item);
 }
 
 int main(int argc, char** argv) {

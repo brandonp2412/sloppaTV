@@ -4,29 +4,31 @@
 
 #include <string>
 
+inline void appendEpisodeNumber(std::string& result, const JellyfinItem& item) {
+    const auto appendNumber = [&](char prefix, int value) {
+        if (value < 0) return;
+        result.push_back(prefix);
+        result += std::to_string(value);
+    };
+    appendNumber('S', item.parentIndexNumber);
+    appendNumber('E', item.indexNumber);
+}
+
 inline std::string episodeNumberLabel(const JellyfinItem& item) {
+    if (item.parentIndexNumber < 0 && item.indexNumber < 0) return {};
     std::string result;
-    if (item.parentIndexNumber < 0 && item.indexNumber < 0) return result;
     result.reserve(16);
-    if (item.parentIndexNumber >= 0) {
-        result.push_back('S');
-        result += std::to_string(item.parentIndexNumber);
-    }
-    if (item.indexNumber >= 0) {
-        result.push_back('E');
-        result += std::to_string(item.indexNumber);
-    }
+    appendEpisodeNumber(result, item);
     return result;
 }
 
 inline std::string episodeLabel(const JellyfinItem& item) {
-    const std::string number = episodeNumberLabel(item);
-    if (number.empty()) return item.seriesName;
+    if (item.parentIndexNumber < 0 && item.indexNumber < 0) return item.seriesName;
     std::string result;
-    result.reserve(item.seriesName.size() + (item.seriesName.empty() ? 0 : 3) + number.size());
+    result.reserve(item.seriesName.size() + (item.seriesName.empty() ? 0 : 3) + 16);
     result += item.seriesName;
     if (!result.empty()) result += " - ";
-    result += number;
+    appendEpisodeNumber(result, item);
     return result;
 }
 

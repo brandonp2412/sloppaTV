@@ -7,17 +7,15 @@
 #include <string>
 
 static std::string baseline(const JellyfinItem& item) {
-    std::string result = item.seriesName;
-    const std::string number = episodeNumberLabel(item);
-    if (!number.empty()) {
-        if (!result.empty()) result += " - ";
-        result += number;
+    std::string number;
+    if (item.parentIndexNumber >= 0) {
+        number.push_back('S');
+        number += std::to_string(item.parentIndexNumber);
     }
-    return result;
-}
-
-static std::string optimized(const JellyfinItem& item) {
-    const std::string number = episodeNumberLabel(item);
+    if (item.indexNumber >= 0) {
+        number.push_back('E');
+        number += std::to_string(item.indexNumber);
+    }
     if (number.empty()) return item.seriesName;
     std::string result;
     result.reserve(item.seriesName.size() + (item.seriesName.empty() ? 0 : 3) + number.size());
@@ -25,6 +23,10 @@ static std::string optimized(const JellyfinItem& item) {
     if (!result.empty()) result += " - ";
     result += number;
     return result;
+}
+
+static std::string optimized(const JellyfinItem& item) {
+    return episodeLabel(item);
 }
 
 int main(int argc, char** argv) {
