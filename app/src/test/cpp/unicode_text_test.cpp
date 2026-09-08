@@ -4,6 +4,10 @@
 #include <string>
 
 int main() {
+    assert(!containsNonAscii("plain ASCII"));
+    assert(!containsNonAscii("12345678901234567890123456789012"));
+    assert(containsNonAscii("caf\xC3\xA9"));
+    assert(containsNonAscii("12345678\xC3\xA9"));
     assert(displayText("plain ASCII") == "plain ASCII");
     assert(displayText("caf\xC3\xA9") == "cafe");
     assert(displayText("cafe\xCC\x81") == "cafe");

@@ -882,7 +882,7 @@ bool Renderer::loadFontAtlas() {
 float Renderer::textWidth(float scale, std::string_view value) const {
     std::string transformed;
     std::string_view display = value;
-    if (std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte >= 0x80; })) {
+    if (containsNonAscii(value)) {
         transformed = displayText(value);
         display = transformed;
     }
@@ -941,7 +941,7 @@ void Renderer::textWithAtlas(
 ) {
     std::string transformed;
     std::string_view display = value;
-    if (std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte >= 0x80; })) {
+    if (containsNonAscii(value)) {
         transformed = displayText(value);
         display = transformed;
     }
