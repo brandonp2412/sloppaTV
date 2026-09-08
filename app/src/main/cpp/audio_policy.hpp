@@ -45,6 +45,13 @@ struct AudioPreferenceCandidate {
     std::string language;
 };
 
+inline std::string normalizeAudioLanguage(std::string language) {
+    std::transform(language.begin(), language.end(), language.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return language;
+}
+
 inline bool audioLanguageEquals(std::string_view left, std::string_view right) {
     return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
         return std::tolower(a) == std::tolower(b);
