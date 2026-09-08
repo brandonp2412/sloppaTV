@@ -33,6 +33,7 @@
 #include "playback_telemetry.hpp"
 #include "playback_transition.hpp"
 #include "player_screen.hpp"
+#include "player_track_labels.hpp"
 #include "player_tracks.hpp"
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
@@ -1549,56 +1550,6 @@ private:
             }
         }
         telemetryState_.markPlaybackRead(now);
-    }
-
-    std::string playerTrackLabel(int type) const {
-        if (type == 2 && !activePlaybackItem_.audios.empty()) {
-            const auto selected = std::find_if(
-                activePlaybackItem_.audios.begin(),
-                activePlaybackItem_.audios.end(),
-                [&](const JellyfinAudioStream& audio) { return audio.index == trackState_.selectedAudioServerIndex(); }
-            );
-            const auto& audio = selected == activePlaybackItem_.audios.end()
-                ? activePlaybackItem_.audios.front()
-                : *selected;
-            std::string label = audio.language.empty() ? "AUDIO" : audio.language;
-            std::transform(label.begin(), label.end(), label.begin(), asciiUpper);
-            if (activePlaybackItem_.audios.size() > 1) {
-                label += " " + std::to_string(std::distance(activePlaybackItem_.audios.begin(),
-                    selected == activePlaybackItem_.audios.end() ? activePlaybackItem_.audios.begin() : selected) + 1)
-                    + "/" + std::to_string(activePlaybackItem_.audios.size());
-            }
-            return label;
-        }
-        if (type == 4 && trackState_.subtitleBusy()) return "LOADING";
-        if (type == 4 && trackState_.selectedSubtitleServerIndex() >= 0) {
-            const auto selected = std::find_if(
-                activePlaybackItem_.subtitles.begin(),
-                activePlaybackItem_.subtitles.end(),
-                [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == trackState_.selectedSubtitleServerIndex(); }
-            );
-            if (selected != activePlaybackItem_.subtitles.end()) {
-                std::string label = selected->language.empty() ? "ON" : selected->language;
-                std::transform(label.begin(), label.end(), label.begin(), asciiUpper);
-                return label;
-            }
-        }
-        if (type == 4 && !trackState_.subtitleCues().empty()) {
-            if (!trackState_.subtitleEnabled()) return "OFF";
-            std::string label = trackState_.subtitleLanguage().empty() ? "ON" : trackState_.subtitleLanguage();
-            std::transform(label.begin(), label.end(), label.begin(), asciiUpper);
-            const auto subtitle = std::find_if(
-                activePlaybackItem_.subtitles.begin(),
-                activePlaybackItem_.subtitles.end(),
-                [&](const JellyfinSubtitleStream& candidate) { return candidate.index == trackState_.activeSubtitleServerIndex(); }
-            );
-            if (subtitle != activePlaybackItem_.subtitles.end() && activePlaybackItem_.subtitles.size() > 1) {
-                label += " " + std::to_string(std::distance(activePlaybackItem_.subtitles.begin(), subtitle) + 1)
-                    + "/" + std::to_string(activePlaybackItem_.subtitles.size());
-            }
-            return label;
-        }
-        return type == 2 ? "DEFAULT" : "OFF";
     }
 
     int audioIndexForPlaybackItem(
@@ -5547,10 +5498,11 @@ private:
         drawTrickplayPreview();
 
         if (playerScreenState_.controlsActive()) {
-            const std::array<std::string, 3> controls{
+            playerControlLabels_.update(activePlaybackItem_, trackState_);
+            const std::array<std::string_view, 3> controls{
                 "",
-                "AUDIO  " + playerTrackLabel(2),
-                "SUBTITLES  " + playerTrackLabel(4),
+                playerControlLabels_.audio,
+                playerControlLabels_.subtitle,
             };
             const std::array<float, 3> widths{104.0f, 310.0f, 350.0f};
             float x = 578.0f;
@@ -6276,6 +6228,7 @@ private:
     PlaybackTelemetryState telemetryState_;
     PlayerScreenState playerScreenState_;
     PlayerTrackState trackState_;
+    PlayerControlLabelCache playerControlLabels_;
     TrickplayPreviewState trickplayState_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
