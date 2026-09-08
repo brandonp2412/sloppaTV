@@ -78,6 +78,8 @@ public:
 private:
     static constexpr uintmax_t kMaxDiskBytes = 48ULL * 1024ULL * 1024ULL;
     static constexpr size_t kMaxDiskFiles = 256;
+    static constexpr uintmax_t kTrimTargetBytes = kMaxDiskBytes * 9 / 10;
+    static constexpr size_t kTrimTargetFiles = kMaxDiskFiles * 9 / 10;
     std::filesystem::path pathForKey(const std::string& key) const {
         if (dataPath_.empty()) return {};
         uint64_t hash = 1469598103934665603ULL;
@@ -156,7 +158,7 @@ private:
             return left.modified < right.modified;
         });
         size_t index = 0;
-        while (index < files.size() && (totalBytes_ > kMaxDiskBytes || fileCount_ > kMaxDiskFiles)) {
+        while (index < files.size() && (totalBytes_ > kTrimTargetBytes || fileCount_ > kTrimTargetFiles)) {
             if (fs::remove(files[index].path, ec)) {
                 totalBytes_ = files[index].size > totalBytes_ ? 0 : totalBytes_ - files[index].size;
                 if (fileCount_ > 0) --fileCount_;
