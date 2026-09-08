@@ -231,6 +231,12 @@ inline const std::array<std::string, 30>& settingsLabels() {
     return labels;
 }
 
+inline unsigned char asciiUpper(unsigned char value) {
+    return value >= 'a' && value <= 'z'
+        ? static_cast<unsigned char>(value - ('a' - 'A'))
+        : value;
+}
+
 inline bool settingLabelContains(std::string_view text, std::string_view query) {
     if (query.empty()) return true;
     if (query.size() > text.size()) return false;
@@ -238,7 +244,7 @@ inline bool settingLabelContains(std::string_view text, std::string_view query) 
         text.begin(), text.end(),
         query.begin(), query.end(),
         [](unsigned char left, unsigned char right) {
-            return std::toupper(left) == std::toupper(right);
+            return asciiUpper(left) == asciiUpper(right);
         }
     ) != text.end();
 }
