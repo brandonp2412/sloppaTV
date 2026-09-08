@@ -22,13 +22,18 @@ inline std::string episodeNumberLabel(const JellyfinItem& item) {
     return result;
 }
 
-inline std::string episodeLabel(const JellyfinItem& item) {
-    if (item.parentIndexNumber < 0 && item.indexNumber < 0) return item.seriesName;
-    std::string result;
+inline void episodeLabelInto(std::string& result, const JellyfinItem& item) {
+    result.clear();
     result.reserve(item.seriesName.size() + (item.seriesName.empty() ? 0 : 3) + 16);
     result += item.seriesName;
+    if (item.parentIndexNumber < 0 && item.indexNumber < 0) return;
     if (!result.empty()) result += " - ";
     appendEpisodeNumber(result, item);
+}
+
+inline std::string episodeLabel(const JellyfinItem& item) {
+    std::string result;
+    episodeLabelInto(result, item);
     return result;
 }
 

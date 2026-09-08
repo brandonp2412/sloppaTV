@@ -5194,10 +5194,10 @@ private:
         const int titleLines = landscape ? 1 : 2;
         renderer_.text(imageX + 2.0f, titleY, 2.05f,
             fitTextLines(item.name, 2.05f, imageWidth - 4.0f, titleLines), kText, imageWidth - 4.0f);
-        const std::string secondary = episodeLabel(item);
-        if (!secondary.empty()) {
+        episodeLabelInto(episodeLabelScratch_, item);
+        if (!episodeLabelScratch_.empty()) {
             renderer_.text(imageX + 2.0f, titleY + (titleLines == 1 ? 52.0f : 94.0f), 1.45f,
-                secondary, kMuted, imageWidth - 4.0f);
+                episodeLabelScratch_, kMuted, imageWidth - 4.0f);
         }
     }
 
@@ -5446,8 +5446,8 @@ private:
             }
             renderer_.text(textX, 205.0f, 1.65f, nextUpRemainingText_, kFocus, 285.0f);
             renderer_.text(textX, 250.0f, 2.15f, nextItem.name, kText, 285.0f);
-            const std::string nextLabel = episodeLabel(nextItem);
-            if (!nextLabel.empty()) renderer_.text(textX, 315.0f, 1.5f, nextLabel, kMuted, 285.0f);
+            episodeLabelInto(episodeLabelScratch_, nextItem);
+            if (!episodeLabelScratch_.empty()) renderer_.text(textX, 315.0f, 1.5f, episodeLabelScratch_, kMuted, 285.0f);
         }
 
         renderer_.text(76.0f, 34.0f, 4.8f,
@@ -5620,8 +5620,8 @@ private:
             renderer_.textCentered(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 1.20f, marker,
                 isCurrent ? kText : kMuted);
             renderer_.text(bounds[0] + 300.0f, bounds[1] + 18.0f, 1.95f, item.name, kText, 610.0f);
-            const std::string secondary = episodeLabel(item);
-            if (!secondary.empty()) renderer_.text(bounds[0] + 300.0f, bounds[1] + 54.0f, 1.35f, secondary, kMuted, 610.0f);
+            episodeLabelInto(episodeLabelScratch_, item);
+            if (!episodeLabelScratch_.empty()) renderer_.text(bounds[0] + 300.0f, bounds[1] + 54.0f, 1.35f, episodeLabelScratch_, kMuted, 610.0f);
             if (selected) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 20.0f);
         }
 
@@ -6255,6 +6255,7 @@ private:
     bool screensaverActive_ = false;
     std::string lastPlaybackSummary_;
     LocalClockTextCache clockTextCache_;
+    std::string episodeLabelScratch_;
     std::string subtitleTextScratch_;
     std::string subtitleLayoutSource_;
     std::vector<std::string> subtitleLines_;

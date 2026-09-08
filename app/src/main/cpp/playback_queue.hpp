@@ -145,7 +145,6 @@ public:
     }
 
     [[nodiscard]] QueueRepeatMode repeatMode() const { return repeatMode_; }
-    void setRepeatMode(QueueRepeatMode mode) { repeatMode_ = mode; }
     void cycleRepeatMode() { repeatMode_ = nextQueueRepeatMode(repeatMode_); }
 
     [[nodiscard]] int nextIndex(bool manualAdvance) const {
