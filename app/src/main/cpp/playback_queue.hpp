@@ -199,7 +199,6 @@ public:
     bool removeSelected() {
         if (!queueCanRemove(selection_, currentIndex_, size())) return false;
         items_.erase(items_.begin() + selection_);
-        selection_ = std::min(selection_, size() - 1);
         clampSelection();
         return true;
     }
