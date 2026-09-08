@@ -5164,8 +5164,10 @@ private:
             }
             if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
-            std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
-            primary = singleLine(primary, 2.45f, cardW - 18.0f);
+            const std::string_view primarySource = item.type == "Episode" && !item.seriesName.empty()
+                ? std::string_view(item.seriesName)
+                : std::string_view(item.name);
+            const std::string primary = singleLine(primarySource, 2.45f, cardW - 18.0f);
             const float titleY = imageY + cardH + 22.0f;
             renderer_.text(x + 2.0f, titleY, 2.45f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
             if (item.type == "Episode") {
@@ -5919,7 +5921,7 @@ private:
             "OK SELECT   |   BACK CLOSE", kTertiary, 390.0f);
     }
 
-    std::string fitTextLines(const std::string& value, float scale, float maxWidth, int maxLines) const {
+    std::string fitTextLines(std::string_view value, float scale, float maxWidth, int maxLines) const {
         return fitTextLinesMeasured(value, maxWidth, maxLines, [&](std::string_view text) {
             return renderer_.textWidth(scale, text);
         });
@@ -6033,11 +6035,13 @@ private:
         constexpr float contentX = 72.0f;
         constexpr float contentWidth = 820.0f;
         const bool episode = detail_.type == "Episode";
-        const std::string mainTitle = episode && !detail_.seriesName.empty() ? detail_.seriesName : detail_.name;
+        const std::string_view mainTitle = episode && !detail_.seriesName.empty()
+            ? std::string_view(detail_.seriesName)
+            : std::string_view(detail_.name);
         const bool hasLogo = drawLogo(detail_, contentX, 132.0f, 700.0f, 138.0f);
         if (!hasLogo) {
             renderer_.text(contentX, 142.0f, 6.0f,
-                fitTextLines(mainTitle.empty() ? "LOADING..." : mainTitle, 6.0f, contentWidth, 1), kText, contentWidth);
+                fitTextLines(mainTitle.empty() ? std::string_view{"LOADING..."} : mainTitle, 6.0f, contentWidth, 1), kText, contentWidth);
         }
 
         const std::string episodeNumber = episodeNumberLabel(detail_);
