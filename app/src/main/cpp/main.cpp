@@ -4772,7 +4772,7 @@ private:
     }
 
 
-    void renderHeader(const std::string& title) {
+    void renderHeader(std::string_view title) {
         renderer_.text(72, 46, 3.9f, "SLOPPATV", kText);
         renderer_.text(75, 125, 2.25f, title, kMuted);
         if (settings_.showClock) {
