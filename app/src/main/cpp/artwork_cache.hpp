@@ -104,17 +104,15 @@ public:
 private:
     template <typename Release>
     bool makeRoom(Release&& release) {
-        if (maxEntries_ == 0) return true;
-        while (entries_.size() >= maxEntries_) {
-            auto victim = entries_.end();
-            for (auto it = entries_.begin(); it != entries_.end(); ++it) {
-                if (it->second.state == ArtworkState::Loading) continue;
-                if (victim == entries_.end() || it->second.lastUse < victim->second.lastUse) victim = it;
-            }
-            if (victim == entries_.end()) return false;
-            release(victim->second);
-            entries_.erase(victim);
+        if (maxEntries_ == 0 || entries_.size() < maxEntries_) return true;
+        auto victim = entries_.end();
+        for (auto it = entries_.begin(); it != entries_.end(); ++it) {
+            if (it->second.state == ArtworkState::Loading) continue;
+            if (victim == entries_.end() || it->second.lastUse < victim->second.lastUse) victim = it;
         }
+        if (victim == entries_.end()) return false;
+        release(victim->second);
+        entries_.erase(victim);
         return true;
     }
 

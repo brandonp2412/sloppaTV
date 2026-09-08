@@ -38,7 +38,7 @@ constexpr bool queueCanPlayNext(int selectedIndex, int currentIndex, int size) {
 }
 
 constexpr bool queueCanMoveUp(int selectedIndex, int currentIndex, int size) {
-    return selectedIndex > currentIndex + 1 && selectedIndex < size;
+    return queueCanPlayNext(selectedIndex, currentIndex, size);
 }
 
 constexpr bool queueCanMoveDown(int selectedIndex, int currentIndex, int size) {

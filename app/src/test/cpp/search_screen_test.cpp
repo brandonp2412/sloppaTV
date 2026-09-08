@@ -43,6 +43,17 @@ int main() {
     assert(state.results()[1].id == "2");
     assert(state.results()[4].id == "1");
 
+    SearchScreenState resized;
+    resized.setQuery("cache");
+    std::vector<JellyfinItem> resizedResults(3);
+    resizedResults[0].type = "Movie";
+    resizedResults[1].type = "Series";
+    resizedResults[2].type = "Episode";
+    assert(resized.finishSearch("cache", std::move(resizedResults)));
+    assert(resized.topLevelCount() == 2);
+    resized.results().erase(resized.results().begin());
+    assert(resized.topLevelCount() == 1);
+
     state.moveSelection(1, 0, 5);
     assert(state.selection() == 1);
     state.moveSelection(0, 1, 5);

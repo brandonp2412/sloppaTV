@@ -44,6 +44,38 @@
       "baseline_median": 485.964,
       "optimized_median": 12.569,
       "median_percent_lower": 97.41
+    },
+    "subtitle_preference_100_candidates_200000_iterations_ms": {
+      "command": "build/benchmark_subtitle_preference 100 200000",
+      "baseline": [1614.534, 1601.799, 1616.005, 1575.867, 1605.356],
+      "optimized": [60.623, 64.932, 60.896, 61.839, 64.231],
+      "baseline_median": 1605.356,
+      "optimized_median": 61.839,
+      "median_percent_lower": 96.15
+    },
+    "jellyfin_item_parser_100000_iterations_ms": {
+      "command": "build/benchmark_item_parser 100000",
+      "baseline": [302.696, 308.695, 309.700, 304.009, 309.414],
+      "optimized": [265.379, 269.565, 268.153, 269.893, 274.901],
+      "baseline_median": 308.695,
+      "optimized_median": 269.565,
+      "median_percent_lower": 12.68
+    },
+    "search_row_bookkeeping_1000_results_200000_iterations_ms": {
+      "command": "build/benchmark_search_screen 1000 200000",
+      "baseline": [93.853, 91.832, 91.993, 92.314, 93.273],
+      "optimized": [0.376, 0.380, 0.163, 0.376, 0.376],
+      "baseline_median": 92.314,
+      "optimized_median": 0.376,
+      "median_percent_lower": 99.59
+    },
+    "details_actions_1000000_iterations_ms": {
+      "command": "build/benchmark_details_actions 1000000",
+      "baseline": [165.582, 166.790, 160.464, 165.791, 160.453],
+      "optimized": [93.704, 81.253, 84.001, 84.018, 86.554],
+      "baseline_median": 165.582,
+      "optimized_median": 84.018,
+      "median_percent_lower": 49.26
     }
   }
 }

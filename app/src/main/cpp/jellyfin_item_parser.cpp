@@ -4,6 +4,15 @@
 
 using nlohmann::json;
 
+namespace {
+std::string stringValueOrFallback(const json& value, const char* primary, const char* fallback) {
+    if (const auto match = value.find(primary); match != value.end() && match->is_string()) {
+        return match->get<std::string>();
+    }
+    return value.value(fallback, std::string{});
+}
+}
+
 JellyfinItem parseJellyfinItem(const json& value) {
     JellyfinItem item;
     item.id = value.value("Id", std::string{});
@@ -18,25 +27,28 @@ JellyfinItem parseJellyfinItem(const json& value) {
     item.container = value.value("Container", std::string{});
     item.officialRating = value.value("OfficialRating", std::string{});
     item.productionYear = value.value("ProductionYear", 0);
-    if (value.contains("CommunityRating") && value["CommunityRating"].is_number()) {
-        item.communityRating = value["CommunityRating"].get<float>();
+    if (const auto rating = value.find("CommunityRating"); rating != value.end() && rating->is_number()) {
+        item.communityRating = rating->get<float>();
     }
     item.indexNumber = value.value("IndexNumber", -1);
     item.parentIndexNumber = value.value("ParentIndexNumber", -1);
     item.runtimeTicks = value.value("RunTimeTicks", static_cast<int64_t>(0));
     item.canDelete = value.value("CanDelete", false);
 
-    if (value.contains("ProviderIds") && value["ProviderIds"].is_object()) {
-        item.tmdbId = value["ProviderIds"].value("Tmdb", std::string{});
-        item.tmdbCollectionId = value["ProviderIds"].value("TmdbCollection", std::string{});
+    if (const auto providerIds = value.find("ProviderIds"); providerIds != value.end() && providerIds->is_object()) {
+        item.tmdbId = providerIds->value("Tmdb", std::string{});
+        item.tmdbCollectionId = providerIds->value("TmdbCollection", std::string{});
     }
-    if (value.contains("Genres") && value["Genres"].is_array()) {
-        for (const auto& genre : value["Genres"]) {
+    if (const auto genres = value.find("Genres"); genres != value.end() && genres->is_array()) {
+        item.genres.reserve(genres->size());
+        for (const auto& genre : *genres) {
             if (genre.is_string()) item.genres.push_back(genre.get<std::string>());
         }
     }
-    if (value.contains("People") && value["People"].is_array()) {
-        for (const auto& person : value["People"]) {
+    if (const auto people = value.find("People"); people != value.end() && people->is_array()) {
+        item.cast.reserve(std::min<size_t>(people->size(), 12));
+        item.people.reserve(std::min<size_t>(people->size(), 12));
+        for (const auto& person : *people) {
             if (!person.is_object() || person.value("Type", std::string{}) != "Actor") continue;
             JellyfinPerson parsed;
             parsed.id = person.value("Id", std::string{});
@@ -49,36 +61,40 @@ JellyfinItem parseJellyfinItem(const json& value) {
             if (item.people.size() >= 12) break;
         }
     }
-    if (value.contains("UserData") && value["UserData"].is_object()) {
-        item.positionTicks = value["UserData"].value("PlaybackPositionTicks", static_cast<int64_t>(0));
-        item.favorite = value["UserData"].value("IsFavorite", false);
-        item.played = value["UserData"].value("Played", false);
+    if (const auto userData = value.find("UserData"); userData != value.end() && userData->is_object()) {
+        item.positionTicks = userData->value("PlaybackPositionTicks", static_cast<int64_t>(0));
+        item.favorite = userData->value("IsFavorite", false);
+        item.played = userData->value("Played", false);
     }
-    if (value.contains("ImageTags") && value["ImageTags"].is_object()) {
-        item.imageTag = value["ImageTags"].value("Primary", std::string{});
-        item.thumbTag = value["ImageTags"].value("Thumb", std::string{});
-        item.logoTag = value["ImageTags"].value("Logo", std::string{});
+    if (const auto imageTags = value.find("ImageTags"); imageTags != value.end() && imageTags->is_object()) {
+        item.imageTag = imageTags->value("Primary", std::string{});
+        item.thumbTag = imageTags->value("Thumb", std::string{});
+        item.logoTag = imageTags->value("Logo", std::string{});
         if (!item.logoTag.empty()) item.logoItemId = item.id;
     }
     if (item.logoTag.empty()) {
         item.logoTag = value.value("ParentLogoImageTag", std::string{});
         item.logoItemId = value.value("ParentLogoItemId", std::string{});
     }
-    if (value.contains("BackdropImageTags") && value["BackdropImageTags"].is_array() && !value["BackdropImageTags"].empty()) {
-        item.backdropTag = value["BackdropImageTags"][0].get<std::string>();
+    if (const auto backdrops = value.find("BackdropImageTags"); backdrops != value.end() && backdrops->is_array() && !backdrops->empty()) {
+        item.backdropTag = backdrops->front().get<std::string>();
         item.backdropItemId = item.id;
     }
-    if (item.backdropTag.empty() && value.contains("ParentBackdropImageTags")
-        && value["ParentBackdropImageTags"].is_array() && !value["ParentBackdropImageTags"].empty()) {
-        item.backdropTag = value["ParentBackdropImageTags"][0].get<std::string>();
-        item.backdropItemId = value.value("ParentBackdropItemId", std::string{});
+    if (item.backdropTag.empty()) {
+        const auto backdrops = value.find("ParentBackdropImageTags");
+        if (backdrops != value.end() && backdrops->is_array() && !backdrops->empty()) {
+            item.backdropTag = backdrops->front().get<std::string>();
+            item.backdropItemId = value.value("ParentBackdropItemId", std::string{});
+        }
     }
-    if (value.contains("MediaSources") && value["MediaSources"].is_array() && !value["MediaSources"].empty()) {
-        const auto& source = value["MediaSources"][0];
+    if (const auto mediaSources = value.find("MediaSources"); mediaSources != value.end() && mediaSources->is_array() && !mediaSources->empty()) {
+        const auto& source = mediaSources->front();
         item.mediaSourceId = source.value("Id", std::string{});
         if (item.container.empty()) item.container = source.value("Container", std::string{});
-        if (source.contains("MediaStreams") && source["MediaStreams"].is_array()) {
-            for (const auto& stream : source["MediaStreams"]) {
+        if (const auto streams = source.find("MediaStreams"); streams != source.end() && streams->is_array()) {
+            item.audios.reserve(streams->size());
+            item.subtitles.reserve(streams->size());
+            for (const auto& stream : *streams) {
                 if (!stream.is_object()) continue;
                 const std::string streamType = stream.value("Type", std::string{});
                 if (streamType == "Video" && item.videoCodec.empty()) {
@@ -88,13 +104,13 @@ JellyfinItem parseJellyfinItem(const json& value) {
                     item.videoWidth = stream.value("Width", 0);
                     item.videoHeight = stream.value("Height", 0);
                     item.videoBitDepth = stream.value("BitDepth", 0);
-                    if (stream.contains("Level") && stream["Level"].is_number_integer()) {
-                        item.videoLevel = stream["Level"].get<int>();
+                    if (const auto level = stream.find("Level"); level != stream.end() && level->is_number_integer()) {
+                        item.videoLevel = level->get<int>();
                     }
-                    if (stream.contains("RealFrameRate") && stream["RealFrameRate"].is_number()) {
-                        item.videoFrameRate = stream["RealFrameRate"].get<float>();
-                    } else if (stream.contains("AverageFrameRate") && stream["AverageFrameRate"].is_number()) {
-                        item.videoFrameRate = stream["AverageFrameRate"].get<float>();
+                    if (const auto frameRate = stream.find("RealFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
+                        item.videoFrameRate = frameRate->get<float>();
+                    } else if (const auto frameRate = stream.find("AverageFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
+                        item.videoFrameRate = frameRate->get<float>();
                     }
                 } else if (streamType == "Audio") {
                     JellyfinAudioStream audio;
@@ -102,7 +118,7 @@ JellyfinItem parseJellyfinItem(const json& value) {
                     audio.channels = stream.value("Channels", 0);
                     audio.codec = stream.value("Codec", std::string{});
                     audio.language = stream.value("Language", std::string{});
-                    audio.title = stream.value("DisplayTitle", stream.value("Title", std::string{}));
+                    audio.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
                     audio.isDefault = stream.value("IsDefault", false);
                     if (audio.index >= 0) item.audios.push_back(std::move(audio));
                 } else if (streamType == "Subtitle") {
@@ -110,7 +126,7 @@ JellyfinItem parseJellyfinItem(const json& value) {
                     subtitle.index = stream.value("Index", -1);
                     subtitle.codec = stream.value("Codec", std::string{});
                     subtitle.language = stream.value("Language", std::string{});
-                    subtitle.title = stream.value("DisplayTitle", stream.value("Title", std::string{}));
+                    subtitle.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
                     subtitle.forced = stream.value("IsForced", false);
                     subtitle.isDefault = stream.value("IsDefault", false);
                     subtitle.isExternal = stream.value("IsExternal", false);
@@ -119,8 +135,8 @@ JellyfinItem parseJellyfinItem(const json& value) {
             }
         }
     }
-    if (value.contains("Trickplay") && value["Trickplay"].is_object()) {
-        const auto& trickplay = value["Trickplay"];
+    if (const auto trickplayIt = value.find("Trickplay"); trickplayIt != value.end() && trickplayIt->is_object()) {
+        const auto& trickplay = *trickplayIt;
         const json* resolutions = nullptr;
         std::string trickplaySourceId = item.mediaSourceId;
         if (!trickplaySourceId.empty() && trickplay.contains(trickplaySourceId) && trickplay[trickplaySourceId].is_object()) {

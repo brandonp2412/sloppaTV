@@ -38,6 +38,7 @@ public:
 
     [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
         std::vector<std::string> result;
+        result.reserve(7);
         result.emplace_back(
             stillWatchingPrompt
                 ? "KEEP WATCHING"
@@ -95,6 +96,7 @@ public:
         bool hiddenFromHome
     ) const {
         std::vector<std::string> result;
+        result.reserve(9);
         if (item.type == "Series") result.emplace_back("PLAY ALL");
         if (hasExternalPlayer) result.emplace_back("PLAY EXTERNAL");
         if (hasQueue) result.emplace_back("VIEW QUEUE");

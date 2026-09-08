@@ -377,12 +377,17 @@ inline int subtitleIndexForQueuePreference(
     const std::vector<SubtitlePreferenceCandidate>& subtitles,
     const std::optional<std::string>& languagePreference
 ) {
-    if (!languagePreference.has_value()) return kSubtitleOffIndex;
-    if (languagePreference->empty()) return kSubtitleOffIndex;
+    if (!languagePreference.has_value() || languagePreference->empty()) return kSubtitleOffIndex;
 
     const std::string preferred = normalizeSubtitleLanguage(*languagePreference);
     const auto match = std::find_if(subtitles.begin(), subtitles.end(), [&](const SubtitlePreferenceCandidate& subtitle) {
-        return subtitle.index >= 0 && normalizeSubtitleLanguage(subtitle.language) == preferred;
+        if (subtitle.index < 0) return false;
+        if (subtitle.language.size() == 3 && preferred.size() == 3) {
+            return std::equal(subtitle.language.begin(), subtitle.language.end(), preferred.begin(), [](unsigned char a, unsigned char b) {
+                return std::tolower(a) == std::tolower(b);
+            });
+        }
+        return normalizeSubtitleLanguage(subtitle.language) == preferred;
     });
     return match == subtitles.end() ? kSubtitleOffIndex : match->index;
 }

@@ -34,10 +34,13 @@ public:
     [[nodiscard]] bool debouncePending() const { return debouncePending_; }
     [[nodiscard]] Clock::time_point debounceDeadline() const { return debounceDeadline_; }
     [[nodiscard]] int topLevelCount() const {
+        if (topLevelCountSize_ == results_.size()) return topLevelCount_;
         const auto firstEpisode = std::find_if(results_.begin(), results_.end(), [](const JellyfinItem& item) {
             return item.type == "Episode";
         });
-        return static_cast<int>(std::distance(results_.begin(), firstEpisode));
+        topLevelCount_ = static_cast<int>(std::distance(results_.begin(), firstEpisode));
+        topLevelCountSize_ = results_.size();
+        return topLevelCount_;
     }
     [[nodiscard]] int rowStart(int row) const { return row <= 0 ? 0 : topLevelCount(); }
     [[nodiscard]] int rowItemCount(int row) const {
@@ -123,10 +126,12 @@ public:
     [[nodiscard]] bool finishSearch(const std::string& query, std::vector<JellyfinItem> results) {
         if (query_ != query) return false;
         loading_ = false;
-        std::stable_partition(results.begin(), results.end(), [](const JellyfinItem& item) {
+        const auto firstEpisode = std::stable_partition(results.begin(), results.end(), [](const JellyfinItem& item) {
             return item.type != "Episode";
         });
+        topLevelCount_ = static_cast<int>(std::distance(results.begin(), firstEpisode));
         results_ = std::move(results);
+        topLevelCountSize_ = results_.size();
         selection_ = 0;
         firstVisible_ = {0, 0};
         return true;
@@ -140,6 +145,8 @@ public:
 
     void clearResults() {
         results_.clear();
+        topLevelCount_ = 0;
+        topLevelCountSize_ = 0;
         selection_ = 0;
         firstVisible_ = {0, 0};
     }
@@ -177,6 +184,8 @@ public:
 private:
     std::string query_;
     std::vector<JellyfinItem> results_;
+    mutable int topLevelCount_ = 0;
+    mutable size_t topLevelCountSize_ = 0;
     int selection_ = 0;
     std::array<int, 2> firstVisible_{0, 0};
     bool keyboard_ = true;
