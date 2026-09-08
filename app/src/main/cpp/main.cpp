@@ -1087,30 +1087,28 @@ private:
         return detailsState_.actions(detail_, continuationState_.stillWatchingPrompt());
     }
 
-    void refreshExternalPlayers() {
-        externalPlayers_ = externalPlayer_.availablePlayers();
-        if (settings_.externalPlayerComponent.empty()) return;
-        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+    auto configuredExternalPlayer() const {
+        if (settings_.externalPlayerComponent.empty()) return externalPlayers_.cend();
+        return std::find_if(externalPlayers_.cbegin(), externalPlayers_.cend(), [&](const ExternalPlayerApp& player) {
             return player.componentName == settings_.externalPlayerComponent;
         });
-        if (selected == externalPlayers_.end()) settings_.externalPlayerComponent.clear();
     }
 
-    std::string externalPlayerLabel() const {
-        if (settings_.externalPlayerComponent.empty()) return "INTERNAL";
-        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-            return player.componentName == settings_.externalPlayerComponent;
-        });
-        return selected == externalPlayers_.end() ? "INTERNAL" : selected->label;
+    void refreshExternalPlayers() {
+        externalPlayers_ = externalPlayer_.availablePlayers();
+        if (!settings_.externalPlayerComponent.empty() && configuredExternalPlayer() == externalPlayers_.cend()) {
+            settings_.externalPlayerComponent.clear();
+        }
+    }
+
+    std::string_view externalPlayerLabel() const {
+        const auto selected = configuredExternalPlayer();
+        return selected == externalPlayers_.cend() ? std::string_view{"INTERNAL"} : std::string_view{selected->label};
     }
 
     std::optional<ExternalPlayerApp> selectedExternalPlayer() const {
-        if (settings_.externalPlayerComponent.empty()) return std::nullopt;
-        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-            return player.componentName == settings_.externalPlayerComponent;
-        });
-        if (selected == externalPlayers_.end()) return std::nullopt;
-        return *selected;
+        const auto selected = configuredExternalPlayer();
+        return selected == externalPlayers_.cend() ? std::nullopt : std::optional<ExternalPlayerApp>{*selected};
     }
 
     void cycleExternalPlayer(int direction) {
@@ -1120,10 +1118,8 @@ private:
         }
         int index = 0;
         if (!settings_.externalPlayerComponent.empty()) {
-            const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-                return player.componentName == settings_.externalPlayerComponent;
-            });
-            if (selected != externalPlayers_.end()) index = static_cast<int>(std::distance(externalPlayers_.begin(), selected)) + 1;
+            const auto selected = configuredExternalPlayer();
+            if (selected != externalPlayers_.cend()) index = static_cast<int>(std::distance(externalPlayers_.cbegin(), selected)) + 1;
         }
         index = std::clamp(index + direction, 0, static_cast<int>(externalPlayers_.size()));
         settings_.externalPlayerComponent = index == 0
@@ -5677,7 +5673,7 @@ private:
     void renderSettings() {
         renderer_.text(72.0f, 58.0f, 4.0f, "SETTINGS", kText, 560.0f);
         const auto& labels = settingsLabels();
-        const std::string externalPlayer = externalPlayerLabel();
+        const std::string_view externalPlayer = externalPlayerLabel();
 
         renderer_.roundedRect(1070.0f, 52.0f, 760.0f, 58.0f, 20.0f, Color{0.035f, 0.04f, 0.052f, 0.88f});
         if (settingsScreen_.searchFocused()) renderer_.roundedOutline(1068.0f, 50.0f, 764.0f, 62.0f, 22.0f, 2.5f, kFocus);
