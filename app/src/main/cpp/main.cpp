@@ -5764,13 +5764,7 @@ private:
     void renderSettings() {
         renderer_.text(72.0f, 58.0f, 4.0f, "SETTINGS", kText, 560.0f);
         const auto& labels = settingsLabels();
-        const auto values = settingsValues(
-            settings_,
-            api_.deviceCodecSupport().maxAudioOutputChannels,
-            externalPlayerLabel(),
-            session_.username,
-            settingsScreen_.advanced()
-        );
+        const std::string externalPlayer = externalPlayerLabel();
 
         renderer_.roundedRect(1070.0f, 52.0f, 760.0f, 58.0f, 20.0f, Color{0.035f, 0.04f, 0.052f, 0.88f});
         if (settingsScreen_.searchFocused()) renderer_.roundedOutline(1068.0f, 50.0f, 764.0f, 62.0f, 22.0f, 2.5f, kFocus);
@@ -5818,10 +5812,14 @@ private:
                 : labels[static_cast<size_t>(i)];
             renderer_.textVerticallyCentered(145.0f, y - 8.0f, 88.0f, 2.20f, rowLabel,
                 focused ? kText : kSecondaryText, 900.0f);
+            const std::string value = settingValue(
+                settings_, i, api_.deviceCodecSupport().maxAudioOutputChannels,
+                externalPlayer, session_.username, settingsScreen_.advanced()
+            );
             const float valueScale = actionRow ? 1.70f : 1.95f;
-            const float valueWidth = renderer_.textWidth(valueScale, values[static_cast<size_t>(i)]);
+            const float valueWidth = renderer_.textWidth(valueScale, value);
             renderer_.textVerticallyCentered(std::max(1190.0f, 1760.0f - valueWidth), y - 8.0f, 88.0f, valueScale,
-                values[static_cast<size_t>(i)], actionRow ? (focused ? kFocus : kText) : (focused ? kFocus : kMuted), 570.0f);
+                value, actionRow ? (focused ? kFocus : kText) : (focused ? kFocus : kMuted), 570.0f);
         }
         renderer_.text(470.0f, 985.0f, 1.52f,
             "LEFT / RIGHT CHANGE   |   OK OPENS OPTIONS   |   UP TO SEARCH", kTertiary, 1120.0f);

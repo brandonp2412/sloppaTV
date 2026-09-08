@@ -281,45 +281,47 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
     }
 }
 
-inline std::array<std::string, 30> settingsValues(
+inline std::string settingValue(
     const AppSettings& settings,
+    int index,
     int maxAudioOutputChannels,
-    std::string externalPlayer,
-    std::string username,
+    std::string_view externalPlayer,
+    std::string_view username,
     bool advanced
 ) {
-    return {
-        std::to_string(settings.maxBitrateMbps) + " MBIT/S",
-        playbackBufferName(settings.playbackBufferPreset),
-        std::to_string(settings.seekBackSeconds) + " SECONDS",
-        std::to_string(settings.seekForwardSeconds) + " SECONDS",
-        videoZoomName(static_cast<VideoZoomMode>(settings.zoomMode)),
-        settings.autoplayNext ? "ON" : "OFF",
-        std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS",
-        settings.refreshRateSwitching ? "ON" : "OFF",
-        settings.showWatchedIndicators ? "ON" : "OFF",
-        settings.showClock ? "ON" : "OFF",
-        backdropModeName(settings.backdropMode),
-        subtitleSizeName(settings.subtitleSize),
-        settings.subtitleBackground ? "ON" : "OFF",
-        subtitlePositionName(settings.subtitlePosition),
-        settings.maxAudioChannels <= 2
+    switch (index) {
+        case 0: return std::to_string(settings.maxBitrateMbps) + " MBIT/S";
+        case 1: return playbackBufferName(settings.playbackBufferPreset);
+        case 2: return std::to_string(settings.seekBackSeconds) + " SECONDS";
+        case 3: return std::to_string(settings.seekForwardSeconds) + " SECONDS";
+        case 4: return videoZoomName(static_cast<VideoZoomMode>(settings.zoomMode));
+        case 5: return settings.autoplayNext ? "ON" : "OFF";
+        case 6: return std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS";
+        case 7: return settings.refreshRateSwitching ? "ON" : "OFF";
+        case 8: return settings.showWatchedIndicators ? "ON" : "OFF";
+        case 9: return settings.showClock ? "ON" : "OFF";
+        case 10: return backdropModeName(settings.backdropMode);
+        case 11: return subtitleSizeName(settings.subtitleSize);
+        case 12: return settings.subtitleBackground ? "ON" : "OFF";
+        case 13: return subtitlePositionName(settings.subtitlePosition);
+        case 14: return settings.maxAudioChannels <= 2
             ? "DOWNMIX TO STEREO"
-            : "DIRECT / " + std::to_string(std::max(2, maxAudioOutputChannels)) + "CH ROUTE",
-        avcLevelName(settings.avcLevelOverride),
-        hevcLevelName(settings.hevcLevelOverride),
-        hdrOverrideName(settings.hdrOverride),
-        uiTextSizeName(settings.uiTextSize),
-        settings.safeAreaPercent == 0 ? "OFF" : std::to_string(settings.safeAreaPercent) + "% PER EDGE",
-        screensaverName(settings.screensaverMinutes),
-        std::move(externalPlayer),
-        "DEVICE / SERVER / PLAYBACK",
-        username.empty() ? "CURRENT USER" : std::move(username),
-        subtitleLanguageSummary(settings),
-        clockFormatName(settings.clock24Hour),
-        settings.autoSubtitles ? "ON" : "OFF",
-        subtitleLanguageLabel(settings.autoSubtitleLanguage),
-        autoSubtitleSourceName(settings),
-        advanced ? "SHOW COMMON" : "SHOW TECHNICAL",
-    };
+            : "DIRECT / " + std::to_string(std::max(2, maxAudioOutputChannels)) + "CH ROUTE";
+        case 15: return avcLevelName(settings.avcLevelOverride);
+        case 16: return hevcLevelName(settings.hevcLevelOverride);
+        case 17: return hdrOverrideName(settings.hdrOverride);
+        case 18: return uiTextSizeName(settings.uiTextSize);
+        case 19: return settings.safeAreaPercent == 0 ? "OFF" : std::to_string(settings.safeAreaPercent) + "% PER EDGE";
+        case 20: return screensaverName(settings.screensaverMinutes);
+        case 21: return std::string(externalPlayer);
+        case 22: return "DEVICE / SERVER / PLAYBACK";
+        case 23: return username.empty() ? "CURRENT USER" : std::string(username);
+        case kSubtitleLanguagesSetting: return subtitleLanguageSummary(settings);
+        case kTimeFormatSetting: return clockFormatName(settings.clock24Hour);
+        case kAutoSubtitlesSetting: return settings.autoSubtitles ? "ON" : "OFF";
+        case kAutoSubtitleLanguageSetting: return subtitleLanguageLabel(settings.autoSubtitleLanguage);
+        case kAutoSubtitleSourceSetting: return autoSubtitleSourceName(settings);
+        case kAdvancedSettingsToggle: return advanced ? "SHOW COMMON" : "SHOW TECHNICAL";
+        default: return {};
+    }
 }

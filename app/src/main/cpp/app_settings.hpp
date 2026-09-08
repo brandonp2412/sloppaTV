@@ -237,16 +237,22 @@ inline unsigned char asciiUpper(unsigned char value) {
         : value;
 }
 
-inline bool settingLabelContains(std::string_view text, std::string_view query) {
-    if (query.empty()) return true;
-    if (query.size() > text.size()) return false;
+inline bool settingLabelContainsUpper(std::string_view text, std::string_view upperQuery) {
+    if (upperQuery.empty()) return true;
+    if (upperQuery.size() > text.size()) return false;
     return std::search(
         text.begin(), text.end(),
-        query.begin(), query.end(),
+        upperQuery.begin(), upperQuery.end(),
         [](unsigned char left, unsigned char right) {
-            return asciiUpper(left) == asciiUpper(right);
+            return asciiUpper(left) == right;
         }
     ) != text.end();
+}
+
+inline bool settingLabelContains(std::string_view text, std::string_view query) {
+    std::string upperQuery(query);
+    std::transform(upperQuery.begin(), upperQuery.end(), upperQuery.begin(), asciiUpper);
+    return settingLabelContainsUpper(text, upperQuery);
 }
 
 inline std::vector<int> matchingSettings(const std::string& query, bool advanced) {
@@ -263,12 +269,14 @@ inline std::vector<int> matchingSettings(const std::string& query, bool advanced
     const auto& labels = settingsLabels();
     matches.reserve(advanced ? advancedOrder.size() : commonOrder.size());
     if (!query.empty()) {
+        std::string upperQuery(query);
+        std::transform(upperQuery.begin(), upperQuery.end(), upperQuery.begin(), asciiUpper);
         const auto appendMatches = [&](const auto& candidates) {
             for (const int i : candidates) {
                 const std::string_view label = advanced && i == kAdvancedSettingsToggle
                     ? std::string_view{"BASIC SETTINGS"}
                     : std::string_view{labels[static_cast<size_t>(i)]};
-                if (settingLabelContains(label, query)) matches.push_back(i);
+                if (settingLabelContainsUpper(label, upperQuery)) matches.push_back(i);
             }
         };
         if (advanced) appendMatches(advancedOrder);
