@@ -19,6 +19,7 @@ CPP_TESTS = [
     "audio_policy_test.cpp",
     "artwork_cache_test.cpp",
     "browse_screen_test.cpp",
+    "clock_text_test.cpp",
     "deep_link_test.cpp",
     "details_screen_test.cpp",
     "external_playback_state_test.cpp",

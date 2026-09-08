@@ -9,6 +9,7 @@
 #include "artwork_cache.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
+#include "clock_text.hpp"
 #include "details_screen.hpp"
 #include "deep_link.hpp"
 #include "discovery.hpp"
@@ -149,15 +150,6 @@ std::string episodeLabel(const JellyfinItem& item) {
         result += number;
     }
     return result;
-}
-
-std::string formatLocalClock(std::time_t instant, bool clock24Hour) {
-    std::tm local{};
-    localtime_r(&instant, &local);
-    char value[16];
-    const size_t length = std::strftime(value, sizeof(value), clock24Hour ? "%H:%M" : "%I:%M %p", &local);
-    const size_t start = !clock24Hour && length > 0 && value[0] == '0' ? 1 : 0;
-    return std::string(value + start, length - start);
 }
 
 std::string formatPlaybackTime(int milliseconds) {
@@ -4831,7 +4823,7 @@ private:
         renderer_.text(75, 125, 2.25f, title, kMuted);
         if (settings_.showClock) {
             renderer_.text(1650.0f, 52.0f, 2.05f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
+                clockTextCache_.text(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
         }
     }
 
@@ -5061,7 +5053,7 @@ private:
 
         if (settings_.showClock) {
             renderer_.text(1760.0f, 53.0f, 2.10f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour),
+                clockTextCache_.text(std::time(nullptr), settings_.clock24Hour),
                 Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 145.0f);
         }
 
@@ -5715,7 +5707,7 @@ private:
         }};
         const auto& position = positions[static_cast<size_t>(screensaverPositionSlot(elapsedSeconds))];
 
-        const std::string clock = formatLocalClock(std::time(nullptr), settings_.clock24Hour);
+        const std::string& clock = clockTextCache_.text(std::time(nullptr), settings_.clock24Hour);
 
         renderer_.text(position[0], position[1], 4.2f, "SLOPPATV", Color{0.82f, 0.78f, 1.0f, 0.92f}, 600.0f);
         renderer_.text(position[0], position[1] + 88.0f, 9.0f, clock, kText, 650.0f);
@@ -6069,7 +6061,7 @@ private:
 
         if (settings_.showClock) {
             renderer_.text(1650.0f, 50.0f, 2.10f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
+                clockTextCache_.text(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
         }
 
         if (continuationState_.stillWatchingPrompt()) {
@@ -6339,6 +6331,7 @@ private:
     std::chrono::steady_clock::time_point playbackPreparingSince_{};
     bool screensaverActive_ = false;
     std::string lastPlaybackSummary_;
+    LocalClockTextCache clockTextCache_;
     std::string subtitleTextScratch_;
     std::string subtitleLayoutSource_;
     std::vector<std::string> subtitleLines_;
