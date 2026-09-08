@@ -15,16 +15,11 @@ public:
     [[nodiscard]] std::size_t depth() const { return entries_.size(); }
 
     void reset(Screen root) {
-        entries_.clear();
-        entries_.push_back(root);
+        entries_.assign(1, root);
     }
 
     void push(Screen screen) {
-        if (entries_.empty()) {
-            entries_.push_back(screen);
-            return;
-        }
-        if (entries_.back() != screen) entries_.push_back(screen);
+        if (entries_.empty() || entries_.back() != screen) entries_.push_back(screen);
     }
 
     void replace(Screen screen) {
