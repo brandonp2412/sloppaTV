@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <charconv>
-#include <cctype>
 #include <limits>
 #include <optional>
 #include <string>
@@ -65,13 +64,13 @@ inline std::string sanitizeSubtitleText(std::string text) {
         });
     };
     auto isMarkupTag = [&](std::string_view body) {
-        while (!body.empty() && std::isspace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
+        while (!body.empty() && subtitleAsciiSpace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
         if (!body.empty() && body.front() == '/') body.remove_prefix(1);
-        while (!body.empty() && std::isspace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
+        while (!body.empty() && subtitleAsciiSpace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
         size_t length = 0;
         while (length < body.size()) {
             const unsigned char c = static_cast<unsigned char>(body[length]);
-            if (!std::isalnum(c)) break;
+            if (!((c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))) break;
             ++length;
         }
         if (length == 0) return false;
@@ -109,9 +108,9 @@ inline std::string sanitizeSubtitleText(std::string text) {
                 const std::string_view body(text.data() + index + 1, end - index - 1);
                 if (isMarkupTag(body)) {
                     std::string_view normalized = body;
-                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
+                    while (!normalized.empty() && subtitleAsciiSpace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
                     if (!normalized.empty() && normalized.front() == '/') normalized.remove_prefix(1);
-                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
+                    while (!normalized.empty() && subtitleAsciiSpace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
                     if (normalized.size() >= 2
                         && subtitleAsciiLower(static_cast<unsigned char>(normalized[0])) == 'b'
                         && subtitleAsciiLower(static_cast<unsigned char>(normalized[1])) == 'r') {
