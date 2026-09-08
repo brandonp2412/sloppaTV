@@ -16,6 +16,10 @@ constexpr char subtitleAsciiLower(unsigned char value) {
     return static_cast<char>(value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value);
 }
 
+constexpr bool subtitleAsciiSpace(unsigned char value) {
+    return value == ' ' || value == '\t' || value == '\r' || value == '\n' || value == '\f' || value == '\v';
+}
+
 constexpr int resolvedSubtitleIndex(int requestedIndex, int serverDefaultIndex) {
     return requestedIndex == kSubtitleServerDefaultIndex ? serverDefaultIndex : requestedIndex;
 }
@@ -124,7 +128,7 @@ inline std::string sanitizeSubtitleText(std::string text) {
 }
 
 inline int parseSubtitleTimestamp(std::string_view input) {
-    while (!input.empty() && std::isspace(static_cast<unsigned char>(input.front()))) input.remove_prefix(1);
+    while (!input.empty() && subtitleAsciiSpace(static_cast<unsigned char>(input.front()))) input.remove_prefix(1);
     const size_t whitespace = input.find_first_of(" \t\r\n");
     if (whitespace != std::string_view::npos) input = input.substr(0, whitespace);
     if (input.empty()) return -1;
@@ -169,7 +173,8 @@ inline int parseSubtitleTimestamp(std::string_view input) {
     if (usedDigits == 1) milliseconds *= 100;
     else if (usedDigits == 2) milliseconds *= 10;
     for (size_t index = usedDigits; index < fractionDigits.size(); ++index) {
-        if (!std::isdigit(static_cast<unsigned char>(fractionDigits[index]))) return -1;
+        const unsigned char digit = static_cast<unsigned char>(fractionDigits[index]);
+        if (digit < '0' || digit > '9') return -1;
     }
 
     const int64_t total = (((static_cast<int64_t>(hours) * 60) + minutes) * 60 + seconds) * 1000 + milliseconds;
@@ -254,8 +259,8 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
     int fieldCount = 0;
 
     auto trim = [](std::string_view value) {
-        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.remove_prefix(1);
-        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.remove_suffix(1);
+        while (!value.empty() && subtitleAsciiSpace(static_cast<unsigned char>(value.front()))) value.remove_prefix(1);
+        while (!value.empty() && subtitleAsciiSpace(static_cast<unsigned char>(value.back()))) value.remove_suffix(1);
         return value;
     };
     std::vector<std::string_view> fields;
