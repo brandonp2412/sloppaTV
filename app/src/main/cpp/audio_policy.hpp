@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <cctype>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -32,11 +31,13 @@ constexpr int effectiveAudioChannels(int requestedChannels, int routeChannels) {
     return std::clamp(routeChannels, 2, requested);
 }
 
+constexpr char asciiLower(unsigned char value) {
+    return static_cast<char>(value >= 'A' && value <= 'Z' ? value + ('a' - 'A') : value);
+}
+
 inline std::string normalizedAudioCodec(std::string_view codec) {
     std::string value(codec);
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(value.begin(), value.end(), value.begin(), asciiLower);
     return value;
 }
 
@@ -46,15 +47,13 @@ struct AudioPreferenceCandidate {
 };
 
 inline std::string normalizeAudioLanguage(std::string language) {
-    std::transform(language.begin(), language.end(), language.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(language.begin(), language.end(), language.begin(), asciiLower);
     return language;
 }
 
 inline bool audioLanguageEquals(std::string_view left, std::string_view right) {
     return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
-        return std::tolower(a) == std::tolower(b);
+        return asciiLower(a) == asciiLower(b);
     });
 }
 
