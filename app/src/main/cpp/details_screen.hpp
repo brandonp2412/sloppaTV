@@ -3,9 +3,25 @@
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
+#include <array>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+class DetailActionList {
+public:
+    void add(std::string_view action) { actions_[size_++] = action; }
+    [[nodiscard]] size_t size() const { return size_; }
+    [[nodiscard]] bool empty() const { return size_ == 0; }
+    [[nodiscard]] std::string_view front() const { return actions_.front(); }
+    [[nodiscard]] std::string_view back() const { return actions_[size_ - 1]; }
+    [[nodiscard]] std::string_view operator[](size_t index) const { return actions_[index]; }
+
+private:
+    std::array<std::string_view, 9> actions_{};
+    size_t size_ = 0;
+};
 
 class DetailsScreenState {
 public:
@@ -36,20 +52,19 @@ public:
         similarFocused_ = false;
     }
 
-    [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
-        std::vector<std::string> result;
-        result.reserve(7);
-        result.emplace_back(
+    [[nodiscard]] DetailActionList actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
+        DetailActionList result;
+        result.add(
             stillWatchingPrompt
                 ? "KEEP WATCHING"
                 : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY"))
         );
-        if (item.type == "Series") result.emplace_back("EPISODES");
-        result.emplace_back(item.favorite ? "UNFAVORITE" : "FAVORITE");
-        result.emplace_back(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        if (!item.people.empty()) result.emplace_back("CAST");
-        result.emplace_back("MORE");
-        result.emplace_back("BACK");
+        if (item.type == "Series") result.add("EPISODES");
+        result.add(item.favorite ? "UNFAVORITE" : "FAVORITE");
+        result.add(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
+        if (!item.people.empty()) result.add("CAST");
+        result.add("MORE");
+        result.add("BACK");
         return result;
     }
 
@@ -89,23 +104,22 @@ public:
         deleteConfirmation_ = false;
         deleteConfirmationSelection_ = 1;
     }
-    [[nodiscard]] std::vector<std::string> itemMenuActions(
+    [[nodiscard]] DetailActionList itemMenuActions(
         const JellyfinItem& item,
         bool hasExternalPlayer,
         bool hasQueue,
         bool hiddenFromHome
     ) const {
-        std::vector<std::string> result;
-        result.reserve(9);
-        if (item.type == "Series") result.emplace_back("PLAY ALL");
-        if (hasExternalPlayer) result.emplace_back("PLAY EXTERNAL");
-        if (hasQueue) result.emplace_back("VIEW QUEUE");
-        result.emplace_back(item.favorite ? "UNFAVORITE" : "FAVORITE");
-        result.emplace_back(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        result.emplace_back(hiddenFromHome ? "SHOW ON HOME" : "HIDE FROM HOME");
-        result.emplace_back("REFRESH METADATA");
-        if (item.canDelete) result.emplace_back("DELETE MEDIA");
-        result.emplace_back("BACK");
+        DetailActionList result;
+        if (item.type == "Series") result.add("PLAY ALL");
+        if (hasExternalPlayer) result.add("PLAY EXTERNAL");
+        if (hasQueue) result.add("VIEW QUEUE");
+        result.add(item.favorite ? "UNFAVORITE" : "FAVORITE");
+        result.add(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
+        result.add(hiddenFromHome ? "SHOW ON HOME" : "HIDE FROM HOME");
+        result.add("REFRESH METADATA");
+        if (item.canDelete) result.add("DELETE MEDIA");
+        result.add("BACK");
         return result;
     }
     [[nodiscard]] int itemMenuSelection() const { return itemMenuSelection_; }

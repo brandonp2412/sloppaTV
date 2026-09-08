@@ -1138,7 +1138,7 @@ private:
         else if (key == AKEYCODE_DPAD_DOWN) searchState_.moveSelection(0, 1, columns);
     }
 
-    std::vector<std::string> detailActions() const {
+    DetailActionList detailActions() const {
         return detailsState_.actions(detail_, continuationState_.stillWatchingPrompt());
     }
 
@@ -1384,7 +1384,7 @@ private:
         else if (key == AKEYCODE_DPAD_DOWN) detailsState_.movePersonItem(0, 1, columns);
     }
 
-    std::vector<std::string> itemMenuActions() const {
+    DetailActionList itemMenuActions() const {
         return detailsState_.itemMenuActions(
             detail_,
             selectedExternalPlayer().has_value(),
@@ -1420,7 +1420,7 @@ private:
         if (key == AKEYCODE_DPAD_UP) detailsState_.moveItemMenu(-1, static_cast<int>(actions.size()));
         else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveItemMenu(1, static_cast<int>(actions.size()));
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const std::string& action = actions[static_cast<size_t>(detailsState_.itemMenuSelection())];
+            const std::string_view action = actions[static_cast<size_t>(detailsState_.itemMenuSelection())];
             if (action == "PLAY ALL") {
                 popScreen(Screen::Details);
                 if (screen_ != Screen::Details) pushScreen(Screen::Details);
@@ -2262,7 +2262,7 @@ private:
         return playbackSessionState_.activeSkippableSegment(positionTicks);
     }
 
-    std::string mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
+    std::string_view mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
         if (segment.type == "Intro") return "SKIP INTRO";
         if (segment.type == "Outro") return "SKIP CREDITS";
         if (segment.type == "Recap") return "SKIP RECAP";
@@ -5513,7 +5513,7 @@ private:
         if (skipSegment) {
             renderer_.roundedRect(1460.0f, 640.0f, 360.0f, 86.0f, 24.0f, Color{0.10f, 0.07f, 0.16f, 0.90f});
             drawFocusHalo(1460.0f, 640.0f, 360.0f, 86.0f, kFocus, 24.0f);
-            const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
+            const std::string_view skipLabel = mediaSegmentSkipLabel(*skipSegment);
             renderer_.textCentered(1460.0f, 644.0f, 360.0f, 38.0f, 2.25f, skipLabel, kText);
             renderer_.textCentered(1460.0f, 682.0f, 360.0f, 36.0f, 1.70f, "OK TO SKIP", kMuted);
         }
@@ -5755,7 +5755,7 @@ private:
             settingsScreen_.searchQuery().empty() ? kMuted : kText, 570.0f);
         renderer_.textCentered(1640.0f, 52.0f, 170.0f, 58.0f, 1.60f, "SEARCH", settingsScreen_.searchFocused() ? kFocus : kMuted);
 
-        const auto matches = settingsScreen_.matches();
+        const auto& matches = settingsScreen_.matches();
         if (matches.empty()) {
             renderer_.text(610.0f, 445.0f, 3.2f, "NO SETTINGS MATCH", kText, 700.0f);
             renderer_.text(570.0f, 510.0f, 1.75f, "PRESS OK OR SEARCH TO EDIT THE FILTER", kMuted, 820.0f);
