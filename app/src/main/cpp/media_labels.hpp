@@ -6,6 +6,7 @@
 
 inline std::string episodeNumberLabel(const JellyfinItem& item) {
     std::string result;
+    if (item.parentIndexNumber < 0 && item.indexNumber < 0) return result;
     result.reserve(16);
     if (item.parentIndexNumber >= 0) {
         result.push_back('S');
