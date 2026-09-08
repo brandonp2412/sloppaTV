@@ -2,12 +2,21 @@
 
 #include <nlohmann/json.hpp>
 
+#include <string_view>
+
 using nlohmann::json;
 
 namespace {
 std::string stringValue(const json& value, const char* key) {
     const auto match = value.find(key);
     return match == value.end() ? std::string{} : match->get<std::string>();
+}
+
+std::string_view stringView(const json& value, const char* key) {
+    const auto match = value.find(key);
+    return match != value.end() && match->is_string()
+        ? std::string_view(match->get_ref<const std::string&>())
+        : std::string_view{};
 }
 
 std::string stringValueOrFallback(const json& value, const char* primary, const char* fallback) {
@@ -54,7 +63,7 @@ JellyfinItem parseJellyfinItem(const json& value) {
         item.cast.reserve(std::min<size_t>(people->size(), 12));
         item.people.reserve(std::min<size_t>(people->size(), 12));
         for (const auto& person : *people) {
-            if (!person.is_object() || stringValue(person, "Type") != "Actor") continue;
+            if (!person.is_object() || stringView(person, "Type") != "Actor") continue;
             JellyfinPerson parsed;
             parsed.id = stringValue(person, "Id");
             parsed.name = stringValue(person, "Name");
@@ -101,7 +110,7 @@ JellyfinItem parseJellyfinItem(const json& value) {
             item.subtitles.reserve(streams->size());
             for (const auto& stream : *streams) {
                 if (!stream.is_object()) continue;
-                const std::string streamType = stringValue(stream, "Type");
+                const std::string_view streamType = stringView(stream, "Type");
                 if (streamType == "Video" && item.videoCodec.empty()) {
                     item.videoCodec = stringValue(stream, "Codec");
                     item.videoProfile = stringValue(stream, "Profile");
