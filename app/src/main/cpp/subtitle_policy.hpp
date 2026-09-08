@@ -201,6 +201,7 @@ inline std::string subtitleTextFormat(std::string codec) {
 
 inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
     std::vector<SubtitleCue> cues;
+    cues.reserve(input.size() / 80);
     std::istringstream stream(input);
     std::string line;
     while (std::getline(stream, line)) {
@@ -232,6 +233,7 @@ inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
 
 inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
     std::vector<SubtitleCue> cues;
+    cues.reserve(input.size() / 100);
     std::istringstream stream(input);
     std::string line;
     bool inEvents = false;
