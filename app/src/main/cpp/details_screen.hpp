@@ -26,13 +26,8 @@ private:
 class DetailsScreenState {
 public:
     void reset() {
-        actionSelection_ = 0;
-        similar_.clear();
-        similarSelection_ = 0;
-        similarFocused_ = false;
-        itemMenuSelection_ = 0;
-        deleteConfirmation_ = false;
-        deleteConfirmationSelection_ = 1;
+        beginDetails();
+        beginItemMenu();
         castSelection_ = 0;
         selectedPerson_ = {};
         personItems_.clear();
@@ -70,11 +65,7 @@ public:
 
     [[nodiscard]] int actionSelection() const { return actionSelection_; }
     void moveAction(int direction, int count) {
-        if (count <= 0) {
-            actionSelection_ = 0;
-            return;
-        }
-        actionSelection_ = std::clamp(actionSelection_ + direction, 0, count - 1);
+        moveLinearSelection(actionSelection_, direction, count);
     }
 
     [[nodiscard]] const std::vector<JellyfinItem>& similar() const { return similar_; }
@@ -123,11 +114,7 @@ public:
     }
     [[nodiscard]] int itemMenuSelection() const { return itemMenuSelection_; }
     void moveItemMenu(int direction, int count) {
-        if (count <= 0) {
-            itemMenuSelection_ = 0;
-            return;
-        }
-        itemMenuSelection_ = std::clamp(itemMenuSelection_ + direction, 0, count - 1);
+        moveLinearSelection(itemMenuSelection_, direction, count);
     }
     [[nodiscard]] bool deleteConfirmation() const { return deleteConfirmation_; }
     void setDeleteConfirmation(bool enabled) {
@@ -237,6 +224,10 @@ public:
     }
 
 private:
+    static void moveLinearSelection(int& selection, int direction, int count) {
+        selection = count <= 0 ? 0 : std::clamp(selection + direction, 0, count - 1);
+    }
+
     static void clampSelection(int& selection, size_t count) {
         selection = count == 0 ? 0 : std::clamp(selection, 0, static_cast<int>(count) - 1);
     }
