@@ -40,6 +40,7 @@
 #include "session_store.hpp"
 #include "settings_screen.hpp"
 #include "subtitle_display.hpp"
+#include "text_fit.hpp"
 #include "ui_policy.hpp"
 #include "unicode_text.hpp"
 #include "renderer.hpp"
@@ -5917,51 +5918,9 @@ private:
     }
 
     std::string fitTextLines(const std::string& value, float scale, float maxWidth, int maxLines) const {
-        if (value.empty() || maxWidth <= 0.0f || maxLines <= 0) return {};
-        auto ellipsize = [&](std::string line) {
-            line.append("...");
-            while (line.size() > 3 && renderer_.textWidth(scale, line) > maxWidth) {
-                line.erase(line.end() - 4);
-            }
-            return line;
-        };
-
-        std::string current;
-        std::string fitted;
-        current.reserve(std::min<size_t>(value.size(), 256));
-        fitted.reserve(value.size() + 4);
-        int line = 1;
-        size_t position = 0;
-        while (position < value.size()) {
-            while (position < value.size()
-                && std::isspace(static_cast<unsigned char>(value[position]))) ++position;
-            if (position >= value.size()) break;
-            const size_t start = position;
-            while (position < value.size()
-                && !std::isspace(static_cast<unsigned char>(value[position]))) ++position;
-            const std::string_view word(value.data() + start, position - start);
-            const size_t previousSize = current.size();
-            if (previousSize > 0) current.push_back(' ');
-            current.append(word);
-            if (renderer_.textWidth(scale, current) <= maxWidth) continue;
-
-            current.resize(previousSize);
-            if (current.empty()) current = ellipsize(std::string(word));
-            if (line >= maxLines) {
-                if (!fitted.empty()) fitted += '\n';
-                fitted += ellipsize(current);
-                return fitted;
-            }
-            if (!fitted.empty()) fitted += '\n';
-            fitted += current;
-            current.assign(word);
-            ++line;
-        }
-        if (!current.empty()) {
-            if (!fitted.empty()) fitted += '\n';
-            fitted += renderer_.textWidth(scale, current) <= maxWidth ? current : ellipsize(current);
-        }
-        return fitted;
+        return fitTextLinesMeasured(value, maxWidth, maxLines, [&](std::string_view text) {
+            return renderer_.textWidth(scale, text);
+        });
     }
 
     void renderMediaGrid(const std::string& title, const std::vector<JellyfinItem>& items, int selection) {

@@ -47,6 +47,7 @@ CPP_TESTS = [
     "settings_screen_test.cpp",
     "subtitle_display_test.cpp",
     "subtitle_policy_test.cpp",
+    "text_fit_test.cpp",
     "trickplay_policy_test.cpp",
     "trickplay_preview_test.cpp",
     "unicode_text_test.cpp",
