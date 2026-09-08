@@ -38,7 +38,7 @@ struct PlaybackLabels {
         heading = item.seriesName.empty() ? item.name : item.seriesName;
         const std::string number = episodeNumberLabel(item);
         secondary = item.seriesName.empty()
-            ? episodeLabel(item)
+            ? number
             : number + (item.name.empty() ? "" : "  |  " + item.name);
     }
 
