@@ -4971,7 +4971,7 @@ private:
         renderer_.text(hasBrandMark ? 160.0f : 72.0f, 42.0f, 3.35f, "sloppaTV", kText, 430.0f);
         renderer_.roundedRect(hasBrandMark ? 160.0f : 72.0f, 99.0f, 86.0f, 3.0f, 1.5f, kBrandGold);
 
-        const std::array<std::string, 3> navLabels{"HOME", "SEARCH", "SETTINGS"};
+        static constexpr std::array<std::string_view, 3> navLabels{"HOME", "SEARCH", "SETTINGS"};
         const std::array<int, 3> navIndices{1, 2, 3};
         const std::array<float, 3> navXs{1165.0f, 1315.0f, 1490.0f};
         const std::array<float, 3> navWidths{110.0f, 130.0f, 150.0f};
@@ -5298,7 +5298,7 @@ private:
         const int topLevelCount = searchState_.rowItemCount(0);
         const int episodeCount = searchState_.rowItemCount(1);
 
-        auto renderResultRow = [&](int semanticRow, const std::string& label, float labelY, float cardY) {
+        auto renderResultRow = [&](int semanticRow, std::string_view label, float labelY, float cardY) {
             const int count = searchState_.rowItemCount(semanticRow);
             if (count <= 0) return;
             renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
