@@ -54,6 +54,7 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -5599,7 +5600,14 @@ private:
             const auto bounds = focusedBounds(830.0f, y, 990.0f, 90.0f, selected, 1.018f);
             renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 20.0f, selected ? kPanelElevated : Color{0.05f, 0.055f, 0.070f, 0.78f});
             drawHomeArtwork(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f);
-            const std::string marker = isCurrent ? "CURRENT" : (index == current + 1 ? "NEXT" : std::to_string(index - current + 1));
+            std::array<char, 12> markerBuffer{};
+            std::string_view marker;
+            if (isCurrent) marker = "CURRENT";
+            else if (index == current + 1) marker = "NEXT";
+            else {
+                const auto converted = std::to_chars(markerBuffer.data(), markerBuffer.data() + markerBuffer.size(), index - current + 1);
+                marker = std::string_view(markerBuffer.data(), static_cast<size_t>(converted.ptr - markerBuffer.data()));
+            }
             const float markerWidth = isCurrent ? 122.0f : (index == current + 1 ? 88.0f : 58.0f);
             renderer_.roundedRect(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 16.0f, isCurrent ? kFocusSoft : kPanelAlt);
             renderer_.textCentered(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 1.20f, marker,
