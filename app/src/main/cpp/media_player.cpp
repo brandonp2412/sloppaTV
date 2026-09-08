@@ -587,16 +587,6 @@ void NativeMediaPlayer::play() {
     lastSnapshotPoll_ = {};
 }
 
-void NativeMediaPlayer::seekBy(int deltaMs) {
-    std::scoped_lock lock(mutex_);
-    if (!mpv_) return;
-    const double seconds = static_cast<double>(deltaMs) / 1000.0;
-    const std::string amount = std::to_string(seconds);
-    const char* args[] = {"seek", amount.c_str(), "relative+exact", nullptr};
-    commandLocked(args, "relative seek");
-    lastSnapshotPoll_ = {};
-}
-
 void NativeMediaPlayer::seekTo(int positionMs) {
     std::scoped_lock lock(mutex_);
     if (!mpv_) return;
@@ -680,13 +670,6 @@ bool NativeMediaPlayer::disableSubtitles() {
     return setStringPropertyLocked("sid", "no");
 }
 
-bool NativeMediaPlayer::addExternalSubtitle(const std::string& url, bool select) {
-    if (url.empty()) return false;
-    std::scoped_lock lock(mutex_);
-    if (!mpv_) return false;
-    const char* args[] = {"sub-add", url.c_str(), select ? "select" : "auto", nullptr};
-    return commandLocked(args, "external subtitle add");
-}
 
 void NativeMediaPlayer::applyPendingTracksLocked() const {
     if (!mpv_) return;

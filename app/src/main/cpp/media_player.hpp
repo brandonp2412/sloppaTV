@@ -36,12 +36,10 @@ public:
     void togglePause();
     void pause();
     void play();
-    void seekBy(int deltaMs);
     void seekTo(int positionMs);
     bool selectEmbeddedAudioOrdinal(int ordinal);
     bool selectEmbeddedSubtitleStream(int streamIndex, int ordinal = -1);
     bool disableSubtitles();
-    bool addExternalSubtitle(const std::string& url, bool select = true);
 
     [[nodiscard]] PlayerStatus status() const;
     [[nodiscard]] std::string error() const;
