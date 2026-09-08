@@ -5207,13 +5207,15 @@ private:
                 Color{kFocus.r, kFocus.g, kFocus.b, 0.09f});
         }
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, kPanelAlt);
-        JellyfinItem cover = item;
+        const JellyfinItem* cover = &item;
+        JellyfinItem seriesCover;
         if (seriesCoverForEpisode) {
-            cover.id = item.seriesId;
-            cover.imageTag = item.seriesPrimaryImageTag;
-            cover.type = "Series";
+            seriesCover.id = item.seriesId;
+            seriesCover.imageTag = item.seriesPrimaryImageTag;
+            seriesCover.type = "Series";
+            cover = &seriesCover;
         }
-        const bool hasArtwork = drawArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3]);
+        const bool hasArtwork = drawArtwork(*cover, bounds[0], bounds[1], bounds[2], bounds[3]);
         if (!hasArtwork) {
             renderer_.roundedRect(bounds[0] + 1.0f, bounds[1] + 1.0f, bounds[2] - 2.0f, bounds[3] - 2.0f, 15.0f, kPanel);
             if (landscape) {
