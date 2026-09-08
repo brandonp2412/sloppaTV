@@ -53,6 +53,7 @@ CPP_TESTS = [
     "trickplay_policy_test.cpp",
     "trickplay_preview_test.cpp",
     "unicode_text_test.cpp",
+    "url_encoding_test.cpp",
     "navigation_stack_test.cpp",
     "version_policy_test.cpp",
 ]

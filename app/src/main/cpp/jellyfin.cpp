@@ -1,4 +1,5 @@
 #include "jellyfin.hpp"
+#include "url_encoding.hpp"
 #include "audio_policy.hpp"
 #include "home_screen.hpp"
 #include "jellyfin_item_parser.hpp"
@@ -12,7 +13,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <iomanip>
 #include <sstream>
 
 using nlohmann::json;
@@ -175,19 +175,6 @@ std::map<std::string, std::string> JellyfinClient::headers(const JellyfinSession
     };
     if (session && !session->token.empty()) result["X-Emby-Token"] = session->token;
     return result;
-}
-
-std::string JellyfinClient::urlEncode(const std::string& value) const {
-    std::ostringstream escaped;
-    escaped << std::uppercase << std::hex;
-    for (const unsigned char c : value) {
-        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            escaped << static_cast<char>(c);
-        } else {
-            escaped << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
-        }
-    }
-    return escaped.str();
 }
 
 ApiValueResult<JellyfinSession> JellyfinClient::parseAuthenticationResult(
