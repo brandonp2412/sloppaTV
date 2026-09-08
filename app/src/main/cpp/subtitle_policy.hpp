@@ -241,65 +241,60 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
     int textColumn = -1;
     int fieldCount = 0;
 
-    auto trim = [](std::string value) {
-        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
-        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.pop_back();
+    auto trim = [](std::string_view value) {
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.remove_prefix(1);
+        while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.remove_suffix(1);
         return value;
     };
     auto split = [&](std::string_view value, int maxFields = -1) {
-        std::vector<std::string> fields;
+        std::vector<std::string_view> fields;
+        if (maxFields > 0) fields.reserve(static_cast<size_t>(maxFields));
         size_t start = 0;
         while (start <= value.size()) {
             if (maxFields > 0 && static_cast<int>(fields.size()) == maxFields - 1) {
-                fields.push_back(trim(std::string(value.substr(start))));
+                fields.push_back(trim(value.substr(start)));
                 break;
             }
             const size_t comma = value.find(',', start);
             if (comma == std::string_view::npos) {
-                fields.push_back(trim(std::string(value.substr(start))));
+                fields.push_back(trim(value.substr(start)));
                 break;
             }
-            fields.push_back(trim(std::string(value.substr(start, comma - start))));
+            fields.push_back(trim(value.substr(start, comma - start)));
             start = comma + 1;
         }
         return fields;
     };
+    auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
+        return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
+            return std::tolower(a) == std::tolower(b);
+        });
+    };
 
     while (std::getline(stream, line)) {
         if (!line.empty() && line.back() == '\r') line.pop_back();
-        std::string trimmed = trim(line);
+        const std::string_view trimmed = trim(line);
         if (trimmed.empty() || trimmed.front() == ';') continue;
         if (trimmed.front() == '[' && trimmed.back() == ']') {
-            std::string section = trimmed;
-            std::transform(section.begin(), section.end(), section.begin(), [](unsigned char c) {
-                return static_cast<char>(std::tolower(c));
-            });
-            inEvents = section == "[events]";
+            inEvents = equalsIgnoreCase(trimmed, "[events]");
             continue;
         }
         if (!inEvents) continue;
-        if (trimmed.rfind("Format:", 0) == 0 || trimmed.rfind("format:", 0) == 0) {
-            const auto fields = split(std::string_view(trimmed).substr(trimmed.find(':') + 1));
+        const size_t colon = trimmed.find(':');
+        if (colon == std::string_view::npos) continue;
+        if (equalsIgnoreCase(trimmed.substr(0, colon), "Format")) {
+            const auto fields = split(trimmed.substr(colon + 1));
             fieldCount = static_cast<int>(fields.size());
             startColumn = endColumn = textColumn = -1;
             for (int i = 0; i < fieldCount; ++i) {
-                std::string name = fields[static_cast<size_t>(i)];
-                std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
-                    return static_cast<char>(std::tolower(c));
-                });
-                if (name == "start") startColumn = i;
-                else if (name == "end") endColumn = i;
-                else if (name == "text") textColumn = i;
+                const std::string_view name = fields[static_cast<size_t>(i)];
+                if (equalsIgnoreCase(name, "start")) startColumn = i;
+                else if (equalsIgnoreCase(name, "end")) endColumn = i;
+                else if (equalsIgnoreCase(name, "text")) textColumn = i;
             }
             continue;
         }
-        const size_t colon = trimmed.find(':');
-        if (colon == std::string::npos) continue;
-        std::string kind = trim(trimmed.substr(0, colon));
-        std::transform(kind.begin(), kind.end(), kind.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        if (kind != "dialogue") continue;
+        if (!equalsIgnoreCase(trimmed.substr(0, colon), "dialogue")) continue;
         if (fieldCount <= 0 || startColumn < 0 || endColumn < 0 || textColumn < 0) {
             fieldCount = 10;
             startColumn = 1;
@@ -311,7 +306,7 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
         const int startMs = parseSubtitleTimestamp(fields[static_cast<size_t>(startColumn)]);
         const int endMs = parseSubtitleTimestamp(fields[static_cast<size_t>(endColumn)]);
         if (startMs < 0 || endMs <= startMs) continue;
-        std::string text = fields[static_cast<size_t>(textColumn)];
+        std::string text(fields[static_cast<size_t>(textColumn)]);
         size_t pos = 0;
         while ((pos = text.find("\\N", pos)) != std::string::npos) text.replace(pos, 2, " ");
         pos = 0;

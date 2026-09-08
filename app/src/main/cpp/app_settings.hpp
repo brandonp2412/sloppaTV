@@ -255,12 +255,13 @@ inline std::vector<int> matchingSettings(const std::string& query, bool advanced
 
     std::vector<int> matches;
     const auto& labels = settingsLabels();
+    matches.reserve(advanced ? advancedOrder.size() : commonOrder.size());
     if (!query.empty()) {
-        const auto appendMatches = [&](const auto& order) {
-            for (const int i : order) {
-                const std::string label = advanced && i == kAdvancedSettingsToggle
-                    ? "BASIC SETTINGS"
-                    : labels[static_cast<size_t>(i)];
+        const auto appendMatches = [&](const auto& candidates) {
+            for (const int i : candidates) {
+                const std::string_view label = advanced && i == kAdvancedSettingsToggle
+                    ? std::string_view{"BASIC SETTINGS"}
+                    : std::string_view{labels[static_cast<size_t>(i)]};
                 if (settingLabelContains(label, query)) matches.push_back(i);
             }
         };

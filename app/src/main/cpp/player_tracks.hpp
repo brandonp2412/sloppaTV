@@ -21,6 +21,7 @@ public:
     void resetPlayback() {
         subtitleBusy_ = false;
         activeSubtitleCues_.clear();
+        subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
         activeSubtitleServerIndex_ = -1;
         activeSubtitleEnabled_ = false;
@@ -57,6 +58,7 @@ public:
 
     void applySubtitle(int serverIndex, std::string language, std::vector<SubtitleCue> cues) {
         activeSubtitleCues_ = std::move(cues);
+        subtitleCueHint_ = 0;
         activeSubtitleLanguage_ = language.empty() ? "SUB" : std::move(language);
         activeSubtitleServerIndex_ = serverIndex;
         activeSubtitleEnabled_ = true;
@@ -68,6 +70,7 @@ public:
         activeSubtitleServerIndex_ = -1;
         activeSubtitleEnabled_ = false;
         activeSubtitleCues_.clear();
+        subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
     }
 
@@ -79,20 +82,36 @@ public:
 
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {
         if (!activeSubtitleEnabled_ || activeSubtitleCues_.empty()) return nullptr;
+        if (subtitleCueHint_ < activeSubtitleCues_.size()) {
+            const auto* cue = &activeSubtitleCues_[subtitleCueHint_];
+            if (positionMs >= cue->startMs) {
+                while (subtitleCueHint_ + 1 < activeSubtitleCues_.size()
+                    && activeSubtitleCues_[subtitleCueHint_ + 1].startMs <= positionMs) {
+                    ++subtitleCueHint_;
+                }
+                cue = &activeSubtitleCues_[subtitleCueHint_];
+                return positionMs < cue->endMs ? cue : nullptr;
+            }
+        }
         auto it = std::upper_bound(
             activeSubtitleCues_.begin(),
             activeSubtitleCues_.end(),
             positionMs,
             [](int value, const SubtitleCue& cue) { return value < cue.startMs; }
         );
-        if (it == activeSubtitleCues_.begin()) return nullptr;
+        if (it == activeSubtitleCues_.begin()) {
+            subtitleCueHint_ = 0;
+            return nullptr;
+        }
         --it;
-        return positionMs >= it->startMs && positionMs < it->endMs ? &*it : nullptr;
+        subtitleCueHint_ = static_cast<size_t>(std::distance(activeSubtitleCues_.begin(), it));
+        return positionMs < it->endMs ? &*it : nullptr;
     }
 
 private:
     bool subtitleBusy_ = false;
     std::vector<SubtitleCue> activeSubtitleCues_;
+    mutable size_t subtitleCueHint_ = 0;
     std::string activeSubtitleLanguage_;
     int activeSubtitleServerIndex_ = -1;
     int selectedAudioServerIndex_ = -1;
