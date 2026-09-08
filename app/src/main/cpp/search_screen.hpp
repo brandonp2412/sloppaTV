@@ -49,7 +49,7 @@ public:
     }
     [[nodiscard]] int selectedRow() const {
         if (results_.empty()) return 0;
-        return results_[static_cast<size_t>(selection_)].type == "Episode" ? 1 : 0;
+        return selection_ < topLevelCount() ? 0 : 1;
     }
     [[nodiscard]] bool selectionOnFirstResultRow() const {
         return selectedRow() == 0 || topLevelCount() == 0;
