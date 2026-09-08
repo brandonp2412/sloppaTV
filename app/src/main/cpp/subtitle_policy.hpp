@@ -50,7 +50,12 @@ inline std::string sanitizeSubtitleText(std::string text) {
     replaceAll(text, "&quot;", "\"");
     replaceAll(text, "&#39;", "'");
 
-    auto isMarkupTag = [](std::string_view body) {
+    auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
+        return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
+            return std::tolower(a) == std::tolower(b);
+        });
+    };
+    auto isMarkupTag = [&](std::string_view body) {
         while (!body.empty() && std::isspace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
         if (!body.empty() && body.front() == '/') body.remove_prefix(1);
         while (!body.empty() && std::isspace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
@@ -61,13 +66,13 @@ inline std::string sanitizeSubtitleText(std::string text) {
             ++length;
         }
         if (length == 0) return false;
-        std::string name(body.substr(0, length));
-        std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
-            return static_cast<char>(std::tolower(c));
-        });
-        return name == "i" || name == "b" || name == "u" || name == "s"
-            || name == "font" || name == "c" || name == "v" || name == "lang"
-            || name == "ruby" || name == "rt" || name == "br";
+        const std::string_view name = body.substr(0, length);
+        return equalsIgnoreCase(name, "i") || equalsIgnoreCase(name, "b")
+            || equalsIgnoreCase(name, "u") || equalsIgnoreCase(name, "s")
+            || equalsIgnoreCase(name, "font") || equalsIgnoreCase(name, "c")
+            || equalsIgnoreCase(name, "v") || equalsIgnoreCase(name, "lang")
+            || equalsIgnoreCase(name, "ruby") || equalsIgnoreCase(name, "rt")
+            || equalsIgnoreCase(name, "br");
     };
 
     std::string clean;
@@ -76,15 +81,13 @@ inline std::string sanitizeSubtitleText(std::string text) {
         if (text[index] == '{') {
             const size_t end = text.find('}', index + 1);
             if (end != std::string::npos) {
-                std::string body = text.substr(index + 1, end - index - 1);
-                std::string normalized = body;
-                std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char c) {
-                    return static_cast<char>(std::tolower(c));
-                });
+                const std::string_view body(text.data() + index + 1, end - index - 1);
                 const bool assOverride = !body.empty() && body.front() == '\\';
-                const bool malformedAlignment = normalized == "an"
-                    || (normalized.size() == 3 && normalized.rfind("an", 0) == 0
-                        && normalized[2] >= '1' && normalized[2] <= '9');
+                const bool startsWithAn = body.size() >= 2
+                    && std::tolower(static_cast<unsigned char>(body[0])) == 'a'
+                    && std::tolower(static_cast<unsigned char>(body[1])) == 'n';
+                const bool malformedAlignment = startsWithAn
+                    && (body.size() == 2 || (body.size() == 3 && body[2] >= '1' && body[2] <= '9'));
                 if (assOverride || malformedAlignment) {
                     index = end + 1;
                     continue;
@@ -207,16 +210,9 @@ inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
         }
         const size_t arrow = line.find("-->");
         if (arrow == std::string::npos) continue;
-        std::string left = line.substr(0, arrow);
-        std::string right = line.substr(arrow + 3);
-        auto trim = [](std::string& value) {
-            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.front()))) value.erase(value.begin());
-            while (!value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) value.pop_back();
-        };
-        trim(left);
-        trim(right);
-        const int start = parseSubtitleTimestamp(left);
-        const int end = parseSubtitleTimestamp(right);
+        const std::string_view timing(line);
+        const int start = parseSubtitleTimestamp(timing.substr(0, arrow));
+        const int end = parseSubtitleTimestamp(timing.substr(arrow + 3));
         if (start < 0 || end <= start) continue;
         std::string text;
         while (std::getline(stream, line)) {
@@ -225,6 +221,7 @@ inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
             if (!text.empty()) text += ' ';
             text += line;
         }
+        text = sanitizeSubtitleText(std::move(text));
         if (!text.empty()) cues.push_back({start, end, std::move(text)});
     }
     sortSubtitleCues(cues);
@@ -324,7 +321,7 @@ inline std::vector<SubtitleCue> parseTextSubtitleCues(const std::string& input, 
         return static_cast<char>(std::tolower(c));
     });
     if (codec == "ass" || codec == "ssa") return parseAssCues(input);
-    return parseSubRipCues(sanitizeSubtitleText(input));
+    return parseSubRipCues(input);
 }
 
 struct SubtitlePreferenceCandidate {

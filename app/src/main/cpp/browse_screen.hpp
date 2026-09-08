@@ -3,7 +3,9 @@
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
+#include <array>
 #include <iterator>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -104,10 +106,12 @@ public:
             || activeContainer_.collectionType == "tvshows" || activeContainer_.collectionType == "mixed");
     }
 
-    [[nodiscard]] std::vector<std::string> filterLabels() const {
-        std::vector<std::string> labels{"ALL", "FAVORITES", "GENRES", "A-Z"};
-        if (activeContainer_.collectionType == "movies") labels.emplace_back("COLLECTIONS");
-        return labels;
+    [[nodiscard]] std::span<const std::string> filterLabels() const {
+        static const std::array<std::string, 4> common{"ALL", "FAVORITES", "GENRES", "A-Z"};
+        static const std::array<std::string, 5> movies{"ALL", "FAVORITES", "GENRES", "A-Z", "COLLECTIONS"};
+        return activeContainer_.collectionType == "movies"
+            ? std::span<const std::string>(movies)
+            : std::span<const std::string>(common);
     }
 
     void moveFilter(int delta) {

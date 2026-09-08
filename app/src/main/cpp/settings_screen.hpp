@@ -35,6 +35,7 @@ public:
         subtitleLanguagePicker_ = false;
         subtitleLanguageSelection_ = 0;
         subtitleLanguageFirstVisible_ = 0;
+        refreshMatches();
         selectFirstMatch();
     }
 
@@ -42,6 +43,7 @@ public:
         searchQuery_ = std::move(text);
         searchFocused_ = true;
         firstVisible_ = 0;
+        refreshMatches();
         selectFirstMatch();
     }
 
@@ -49,7 +51,7 @@ public:
 
     void moveUp() {
         if (searchFocused_) return;
-        const auto current = matches();
+        const auto& current = matches();
         const int position = selectedPosition(current);
         if (position <= 0) {
             searchFocused_ = true;
@@ -60,7 +62,7 @@ public:
     }
 
     void moveDown() {
-        const auto current = matches();
+        const auto& current = matches();
         if (current.empty()) return;
         if (searchFocused_) {
             searchFocused_ = false;
@@ -79,12 +81,11 @@ public:
         searchQuery_.clear();
         searchFocused_ = false;
         firstVisible_ = 0;
+        refreshMatches();
         selectFirstMatch();
     }
 
-    [[nodiscard]] std::vector<int> matches() const {
-        return matchingSettings(searchQuery_, advanced_);
-    }
+    [[nodiscard]] const std::vector<int>& matches() const { return matches_; }
 
     [[nodiscard]] int selection() const { return selection_; }
     [[nodiscard]] int firstVisible() const { return firstVisible_; }
@@ -120,9 +121,12 @@ private:
         return selected == current.end() ? 0 : static_cast<int>(std::distance(current.begin(), selected));
     }
 
+    void refreshMatches() {
+        matches_ = matchingSettings(searchQuery_, advanced_);
+    }
+
     void selectFirstMatch() {
-        const auto current = matches();
-        selection_ = current.empty() ? 18 : current.front();
+        selection_ = matches_.empty() ? 18 : matches_.front();
     }
 
     void ensureVisible(int selectedPosition, int itemCount) {
@@ -135,6 +139,7 @@ private:
     int selection_ = 0;
     int firstVisible_ = 0;
     std::string searchQuery_;
+    std::vector<int> matches_;
     bool searchFocused_ = false;
     bool advanced_ = false;
     bool subtitleLanguagePicker_ = false;
