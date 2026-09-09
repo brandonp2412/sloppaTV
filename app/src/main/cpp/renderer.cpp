@@ -597,7 +597,10 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
     w *= uiScale_;
     h *= uiScale_;
     radius = std::clamp(radius * uiScale_, 0.0f, std::min(w, h) * 0.5f);
-    thickness = std::clamp(thickness * uiScale_, 0.5f, std::min(w, h) * 0.45f);
+    // One-pixel TV outlines alias badly around large pill radii. Preserve the
+    // hierarchy between idle and focused states, but ensure idle strokes have
+    // enough coverage for the antialias fringe to resolve cleanly.
+    thickness = std::clamp(std::max(thickness, 2.0f) * uiScale_, 0.5f, std::min(w, h) * 0.45f);
     const float innerW = std::max(0.0f, w - thickness * 2.0f);
     const float innerH = std::max(0.0f, h - thickness * 2.0f);
     if (innerW <= 0.0f || innerH <= 0.0f) {
@@ -609,12 +612,12 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
         return;
     }
 
-    constexpr int segmentsPerCorner = 32;
+    constexpr int segmentsPerCorner = 64;
     constexpr int pointsPerCorner = segmentsPerCorner + 1;
     constexpr int pointCount = pointsPerCorner * 4;
     constexpr float pi = 3.14159265358979323846f;
     // Thin pill outlines expose polygon facets much more than filled surfaces.
-    // Use enough arc segments that each edge is near pixel-sized at TV radii.
+    // Keep arc chords comfortably sub-pixel at the largest TV pill radii.
     // A 1-1.5 px idle outline used to spend most of its width fading in/out,
     // which made rounded pill corners look visibly soft on a 1080p TV. Keep
     // thick focus rings unchanged, but give thin strokes a substantially
