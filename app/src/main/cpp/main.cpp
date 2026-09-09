@@ -4900,15 +4900,33 @@ private:
         renderer_.text(730.0f, 194.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
 
         if (accountState_.quickConnectActive()) {
-            renderer_.roundedRect(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, kModalSurface);
-            renderer_.roundedOutline(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, 1.5f, kOutline);
-            renderer_.text(775.0f, 300.0f, 2.4f, "QUICK CONNECT", kMuted, 400.0f);
-            const float codeWidth = renderer_.textWidth(8.8f, accountState_.quickConnectCode());
-            renderer_.text(960.0f - codeWidth * 0.5f, 390.0f, 8.8f, accountState_.quickConnectCode(), kText, 760.0f);
-            renderer_.text(625.0f, 560.0f, 2.25f, "1  OPEN JELLYFIN ON ANOTHER DEVICE", kText, 700.0f);
-            renderer_.text(625.0f, 620.0f, 2.25f, "2  SETTINGS  >  QUICK CONNECT  >  ENTER CODE", kText, 700.0f);
-            renderer_.text(695.0f, 710.0f, 1.9f, loading_ ? "STARTING..." : "WAITING FOR AUTHORIZATION...", kFocus, 560.0f);
-            renderer_.text(790.0f, 775.0f, 1.55f, "BACK TO CANCEL", kMuted, 340.0f);
+            renderer_.roundedRect(465.0f, 230.0f, 990.0f, 610.0f, 34.0f, kModalSurface);
+            renderer_.roundedOutline(465.0f, 230.0f, 990.0f, 610.0f, 34.0f, 1.5f, kOutline);
+            renderer_.text(765.0f, 278.0f, 2.5f, "QUICK CONNECT", kSecondaryText, 420.0f);
+
+            renderer_.roundedRect(610.0f, 345.0f, 700.0f, 150.0f, 30.0f, kPanelElevated);
+            renderer_.roundedOutline(610.0f, 345.0f, 700.0f, 150.0f, 30.0f, 1.0f, kOutline);
+            const float codeWidth = renderer_.textWidth(7.6f, accountState_.quickConnectCode());
+            renderer_.text(960.0f - codeWidth * 0.5f, 377.0f, 7.6f, accountState_.quickConnectCode(), kText, 650.0f);
+
+            const std::array<std::string, 2> steps{
+                "OPEN JELLYFIN ON ANOTHER DEVICE",
+                "SETTINGS  >  QUICK CONNECT  >  ENTER CODE",
+            };
+            for (size_t i = 0; i < steps.size(); ++i) {
+                const float rowY = 535.0f + static_cast<float>(i) * 74.0f;
+                renderer_.roundedRect(585.0f, rowY, 750.0f, 58.0f, 20.0f, kPanelAlt);
+                renderer_.roundedRect(603.0f, rowY + 9.0f, 40.0f, 40.0f, 20.0f, kFocusSoft);
+                renderer_.textCentered(603.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f, std::to_string(i + 1), kText);
+                renderer_.textVerticallyCentered(670.0f, rowY, 58.0f, 1.80f, steps[i], kSecondaryText, 635.0f);
+            }
+
+            const std::string status = loading_ ? "STARTING..." : "WAITING FOR AUTHORIZATION...";
+            const float statusWidth = std::clamp(renderer_.textWidth(1.55f, status) + 54.0f, 260.0f, 560.0f);
+            const float statusX = 960.0f - statusWidth * 0.5f;
+            renderer_.roundedRect(statusX, 706.0f, statusWidth, 48.0f, 24.0f, kFocusSoft);
+            renderer_.textCentered(statusX, 706.0f, statusWidth, 48.0f, 1.55f, status, kText);
+            renderer_.text(790.0f, 790.0f, 1.55f, "BACK TO CANCEL", kMuted, 340.0f);
             return;
         }
 
@@ -5890,15 +5908,19 @@ private:
             {"LAST PLAYBACK", lastPlaybackSummary_.empty() ? "NOT YET PLAYED THIS SESSION" : lastPlaybackSummary_},
         };
         auto renderPanel = [&](float x, float y, float width, float height, const std::string& title, std::initializer_list<int> indices) {
-            renderer_.roundedRect(x, y, width, height, 26.0f, kPanel);
-            renderer_.roundedOutline(x, y, width, height, 26.0f, 1.0f, kOutline);
-            renderer_.text(x + 28.0f, y + 25.0f, 2.35f, title, kText, width - 56.0f);
-            float rowY = y + 82.0f;
+            renderer_.roundedRect(x, y, width, height, 28.0f, kPanelAlt);
+            renderer_.roundedOutline(x, y, width, height, 28.0f, 1.0f, kOutline);
+            const float titleWidth = drawChip(x + 26.0f, y + 22.0f, title, true, 1.45f, 42.0f, width - 52.0f);
+            (void)titleWidth;
+            float rowY = y + 86.0f;
+            size_t row = 0;
             for (const int index : indices) {
                 if (index < 0 || index >= static_cast<int>(rows.size())) continue;
-                renderer_.text(x + 28.0f, rowY, 1.4f, rows[static_cast<size_t>(index)].first, kTertiary, 260.0f);
-                renderer_.text(x + 300.0f, rowY - 2.0f, 1.7f, rows[static_cast<size_t>(index)].second, kText, width - 330.0f);
+                if (row > 0) renderer_.rect(x + 28.0f, rowY - 13.0f, width - 56.0f, 1.0f, kDivider);
+                renderer_.text(x + 28.0f, rowY, 1.45f, rows[static_cast<size_t>(index)].first, kTertiary, 260.0f);
+                renderer_.text(x + 300.0f, rowY - 2.0f, 1.75f, rows[static_cast<size_t>(index)].second, kText, width - 330.0f);
                 rowY += 58.0f;
+                ++row;
             }
         };
 
@@ -6203,8 +6225,9 @@ private:
     void renderStatus() {
         const auto now = std::chrono::steady_clock::now();
         if (loading_ || homeLoading_ || mutationLoading_) {
-            renderer_.roundedRect(1490, 985, 350, 55, 16.0f, kPanelAlt);
-            renderer_.textVerticallyCentered(1545.0f, 985.0f, 55.0f, 1.9f, "LOADING...", kText);
+            renderer_.roundedRect(1510.0f, 976.0f, 300.0f, 58.0f, 29.0f, kPanelElevated);
+            renderer_.roundedRect(1532.0f, 997.0f, 16.0f, 16.0f, 8.0f, kFocus);
+            renderer_.textVerticallyCentered(1570.0f, 976.0f, 58.0f, 1.75f, "LOADING...", kText, 210.0f);
         }
         if (!noticePersistent_ && !notice_.empty() && now >= noticeUntil_) {
             notice_.clear();
@@ -6213,10 +6236,12 @@ private:
         const bool noticeVisible = !notice_.empty()
             && (noticePersistent_ || now < noticeUntil_);
         if (noticeVisible) {
-            const float noticeY = screen_ == Screen::Player ? 670.0f : 925.0f;
-            renderer_.roundedRect(70, noticeY, 1760, 58, 18.0f, kPanelAlt);
-            renderer_.roundedOutline(70, noticeY, 1760, 58, 18.0f, 2.0f, kFocus);
-            renderer_.textVerticallyCentered(94.0f, noticeY, 58.0f, 1.6f, notice_, kText, 1710.0f);
+            const float noticeY = screen_ == Screen::Player ? 670.0f : 914.0f;
+            constexpr float noticeWidth = 1320.0f;
+            constexpr float noticeX = (1920.0f - noticeWidth) * 0.5f;
+            renderer_.roundedRect(noticeX, noticeY, noticeWidth, 68.0f, 22.0f, kPanelElevated);
+            renderer_.roundedRect(noticeX + 18.0f, noticeY + 18.0f, 7.0f, 32.0f, 3.5f, kFocus);
+            renderer_.textVerticallyCentered(noticeX + 46.0f, noticeY, 68.0f, 1.65f, notice_, kText, noticeWidth - 74.0f);
         }
 
         if (error_.empty()) {
@@ -6231,13 +6256,15 @@ private:
         }
         if (!presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now < errorUntil_) {
             const float errorY = screen_ == Screen::Player
-                ? (noticeVisible ? 598.0f : 670.0f)
-                : (noticeVisible ? 855.0f : 925.0f);
-            renderer_.roundedRect(70.0f, errorY, 1560.0f, 64.0f, 18.0f, kPanelElevated);
-            renderer_.roundedRect(70.0f, errorY, 7.0f, 64.0f, 3.5f, kError);
-            renderer_.roundedOutline(70.0f, errorY, 1560.0f, 64.0f, 18.0f, 2.0f,
+                ? (noticeVisible ? 588.0f : 670.0f)
+                : (noticeVisible ? 834.0f : 914.0f);
+            constexpr float errorWidth = 1320.0f;
+            constexpr float errorX = (1920.0f - errorWidth) * 0.5f;
+            renderer_.roundedRect(errorX, errorY, errorWidth, 68.0f, 22.0f, kPanelElevated);
+            renderer_.roundedRect(errorX + 18.0f, errorY + 18.0f, 7.0f, 32.0f, 3.5f, kError);
+            renderer_.roundedOutline(errorX, errorY, errorWidth, 68.0f, 22.0f, 1.5f,
                 Color{kError.r, kError.g, kError.b, 0.55f});
-            renderer_.textVerticallyCentered(98.0f, errorY, 64.0f, 1.55f, presentedError_, kText, 1495.0f);
+            renderer_.textVerticallyCentered(errorX + 46.0f, errorY, 68.0f, 1.55f, presentedError_, kText, errorWidth - 74.0f);
         }
     }
 
