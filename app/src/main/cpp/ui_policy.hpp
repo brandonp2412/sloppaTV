@@ -71,6 +71,13 @@ constexpr float materialListItemFocusScale() { return 1.04f; }
 constexpr float materialTabFocusScale() { return 1.05f; }
 constexpr float materialInputFocusScale() { return 1.04f; }
 
+constexpr float playbackProgressThumbCenterX(float trackX, float trackWidth, float progress, float thumbRadius) {
+    if (trackWidth <= 0.0f) return trackX;
+    const float radius = std::clamp(thumbRadius, 0.0f, trackWidth * 0.5f);
+    const float fraction = std::clamp(progress, 0.0f, 1.0f);
+    return std::clamp(trackX + trackWidth * fraction, trackX + radius, trackX + trackWidth - radius);
+}
+
 constexpr float subtitleBottomY(
     bool playbackOverlayVisible,
     bool playbackControlsActive,

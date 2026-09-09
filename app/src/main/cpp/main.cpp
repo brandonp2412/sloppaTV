@@ -6004,10 +6004,11 @@ private:
         drawRightAlignedSingleLine(progressX + progressWidth, 834.0f, 2.0f, durationText, kText, 220.0f);
         renderer_.roundedRect(progressX, 878.0f, progressWidth, 7.0f, 3.5f, kTrack);
         if (duration > 0) {
-            const double progress = std::clamp(static_cast<double>(position) / static_cast<double>(duration), 0.0, 1.0);
-            const float progressPixels = static_cast<float>(progressWidth * progress);
+            const float progress = std::clamp(static_cast<float>(position) / static_cast<float>(duration), 0.0f, 1.0f);
+            const float progressPixels = progressWidth * progress;
             renderer_.roundedRect(progressX, 878.0f, progressPixels, 7.0f, 3.5f, kFocus);
-            renderer_.roundedRect(progressX + progressPixels - 9.0f, 872.5f, 18.0f, 18.0f, 9.0f, kText);
+            const float thumbCenterX = playbackProgressThumbCenterX(progressX, progressWidth, progress, 9.0f);
+            renderer_.roundedRect(thumbCenterX - 9.0f, 872.5f, 18.0f, 18.0f, 9.0f, kText);
         }
         drawTrickplayPreview();
 

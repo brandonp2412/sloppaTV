@@ -87,6 +87,13 @@ int main() {
     assert(materialListItemFocusScale() == 1.04f);
     assert(materialTabFocusScale() == 1.05f);
     assert(materialInputFocusScale() == 1.04f);
+    assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 0.0f, 9.0f) == 159.0f);
+    assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 0.5f, 9.0f) == 960.0f);
+    assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 1.0f, 9.0f) == 1761.0f);
+    assert(playbackProgressThumbCenterX(150.0f, 1620.0f, -1.0f, 9.0f) == 159.0f);
+    assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 2.0f, 9.0f) == 1761.0f);
+    assert(playbackProgressThumbCenterX(150.0f, 0.0f, 0.5f, 9.0f) == 150.0f);
+    assert(playbackProgressThumbCenterX(100.0f, 10.0f, 0.0f, 9.0f) == 105.0f);
     assert(wrappedIndex(0, -1, 10) == 9);
     assert(wrappedIndex(9, 1, 10) == 0);
     assert(wrappedIndex(2, 1, 5) == 3);
