@@ -2,6 +2,7 @@
 #include <android/input.h>
 #include <android/log.h>
 #include <android/native_activity.h>
+#include <android/window.h>
 #include <android_native_app_glue.h>
 
 #include "account_screen.hpp"
@@ -281,23 +282,37 @@ public:
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: constructor complete");
     }
 
+    void syncSystemScreenAwake() const {
+        if (!app_ || !app_->activity) return;
+        const uint32_t flag = AWINDOW_FLAG_KEEP_SCREEN_ON;
+        if (screen_ == Screen::Player) {
+            ANativeActivity_setWindowFlags(app_->activity, flag, 0);
+        } else {
+            ANativeActivity_setWindowFlags(app_->activity, 0, flag);
+        }
+    }
+
     void resetNavigation(Screen screen) {
         navigation_.reset(screen);
         screen_ = screen;
+        syncSystemScreenAwake();
     }
 
     void pushScreen(Screen screen) {
         navigation_.push(screen);
         screen_ = navigation_.current();
+        syncSystemScreenAwake();
     }
 
     void replaceScreen(Screen screen) {
         navigation_.replace(screen);
         screen_ = navigation_.current();
+        syncSystemScreenAwake();
     }
 
     void popScreen(Screen fallback = Screen::Home) {
         screen_ = navigation_.popOr(fallback);
+        syncSystemScreenAwake();
     }
 
     ~SloppaApp() {
