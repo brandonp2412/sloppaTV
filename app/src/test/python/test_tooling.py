@@ -384,6 +384,23 @@ class WaydroidToolingTest(unittest.TestCase):
         ):
             waydroid_e2e.require_playback_session()
 
+    def test_playback_session_state_and_continuous_playback_guard(self) -> None:
+        waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
+        playing = (
+            f"sloppaTV {waydroid_e2e.DEFAULT_PACKAGE}/sloppaTV (userId=0)\n"
+            "  state=PlaybackState {state=PLAYING(3), position=1234, speed=1.0}"
+        )
+        paused = playing.replace("PLAYING(3)", "PAUSED(2)")
+        self.assertEqual(
+            waydroid_e2e.playback_session_state(playing, waydroid_e2e.DEFAULT_PACKAGE),
+            "PLAYING",
+        )
+        with patch.object(waydroid_e2e, "adb", return_value=playing):
+            waydroid_e2e.require_playback_session(playing=True)
+        with patch.object(waydroid_e2e, "adb", return_value=paused):
+            with self.assertRaisesRegex(RuntimeError, "not continuously playing"):
+                waydroid_e2e.require_playback_session(playing=True)
+
     def test_search_quotes_multi_word_query_for_adb_shell(self) -> None:
         with patch.object(waydroid_e2e, "adb") as adb, patch.object(waydroid_e2e, "capture"), patch.object(
             waydroid_e2e, "audit_logs"
