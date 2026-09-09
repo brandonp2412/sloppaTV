@@ -33,6 +33,11 @@ int main() {
     assert(!usesLandscapeMediaCard("Series"));
     assert(searchMediaRowHeight(true) == 430.0f);
     assert(searchMediaRowHeight(false) == 300.0f);
+    assert(mediaGridTitleLineLimit(0, 2, true) == 0);
+    assert(mediaGridTitleLineLimit(1, 0, true) == 0);
+    assert(mediaGridTitleLineLimit(1, 1, true) == 1);
+    assert(mediaGridTitleLineLimit(1, 2, true) == 1);
+    assert(mediaGridTitleLineLimit(1, 2, false) == 0);
     assert(detailActionTextScale(5) == 1.8f);
     assert(detailActionTextScale(10) == 1.8f);
     assert(detailActionTextScale(11) == 1.6f);
@@ -40,14 +45,48 @@ int main() {
     assert(uiTextScale(0) == 1.9f);
     assert(uiTextScale(1) == 2.15f);
     assert(uiTextScale(2) == 2.4f);
+    assert(homeRowImageOffset(0) == 82.0f);
+    assert(homeRowImageOffset(1) == 92.0f);
+    assert(homeRowImageOffset(2) == 102.0f);
+    assert(homeRowStep(0) == 420.0f);
+    assert(homeRowStep(1) == 440.0f);
+    assert(homeRowStep(2) == 460.0f);
+    assert(castRowStep(0) == 400.0f);
+    assert(castRowStep(1) == 415.0f);
+    assert(castRowStep(2) == 430.0f);
+    assert(settingsDescriptionY(0) == 220.0f);
+    assert(settingsDescriptionY(2) == 226.0f);
+    assert(settingsRowsTop(0) == 280.0f);
+    assert(settingsRowsTop(2) == 292.0f);
+    assert(settingsFooterY(0) == 956.0f);
+    assert(settingsFooterY(2) == 968.0f);
+    // Keep the second row's episode metadata on-screen at the largest text size.
+    assert(150.0f + homeRowStep(2) + homeRowImageOffset(2) + 202.0f + 22.0f
+        + 11.0f * 2.45f * uiTextScale(2) + 4.0f + 10.0f * 1.58f * uiTextScale(2) < 1080.0f);
+    // Large cast labels retain breathing room above the next focused artwork row.
+    constexpr float castTitleY = 195.0f + 285.0f + 24.0f;
+    constexpr float castRoleBottom = castTitleY + 11.0f * 1.8f * uiTextScale(2)
+        + 4.0f + 10.0f * 1.55f * uiTextScale(2);
+    constexpr float secondCastFocusHaloTop = 195.0f + castRowStep(2) - (285.0f * 0.05f * 0.5f) - 10.0f;
+    assert(castRoleBottom < secondCastFocusHaloTop);
+    // The second row's large role label still clears the compact footer at y=1032.
+    assert(castRoleBottom + castRowStep(2) < 1032.0f);
+    // Large settings copy clears the first focused row halo and the footer clears the last row halo.
+    constexpr float largeSettingsDescriptionBottom = settingsDescriptionY(2) + 10.0f * 1.40f * uiTextScale(2);
+    constexpr float firstSettingsHaloTop = settingsRowsTop(2) - 8.0f - (88.0f * 0.04f * 0.5f) - 10.0f;
+    constexpr float lastSettingsHaloBottom = settingsRowsTop(2) + 5.0f * 112.0f - 8.0f
+        + 88.0f + (88.0f * 0.04f * 0.5f) + 10.0f;
+    assert(largeSettingsDescriptionBottom < firstSettingsHaloTop);
+    assert(lastSettingsHaloBottom < settingsFooterY(2));
+    assert(settingsFooterY(2) + 58.0f < 1080.0f);
     assert(uiSafeAreaFraction(-1) == 0.0f);
     assert(uiSafeAreaFraction(4) == 0.04f);
     assert(uiSafeAreaFraction(99) == 0.06f);
-    assert(materialButtonFocusScale() == 1.10f);
+    assert(materialButtonFocusScale() == 1.05f);
     assert(materialCardFocusScale() == 1.05f);
-    assert(materialListItemFocusScale() == 1.025f);
+    assert(materialListItemFocusScale() == 1.04f);
     assert(materialTabFocusScale() == 1.05f);
-    assert(materialInputFocusScale() == 1.015f);
+    assert(materialInputFocusScale() == 1.04f);
     assert(wrappedIndex(0, -1, 10) == 9);
     assert(wrappedIndex(9, 1, 10) == 0);
     assert(wrappedIndex(2, 1, 5) == 3);

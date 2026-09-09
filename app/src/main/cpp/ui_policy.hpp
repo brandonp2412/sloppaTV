@@ -20,11 +20,35 @@ constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
     return itemType == "Episode" || itemType == "CollectionFolder" || itemType == "BoxSet" || itemType == "Folder";
 }
 constexpr float searchMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 430.0f : 300.0f; }
+constexpr int mediaGridTitleLineLimit(int visibleRow, int uiTextSize, bool hasPortraitCards) {
+    return hasPortraitCards && visibleRow > 0 && uiTextSize > 0 ? 1 : 0;
+}
 constexpr float detailActionTextScale(std::size_t labelLength) {
     return labelLength > 10 ? 1.6f : 1.8f;
 }
 constexpr float uiTextScale(int option) {
     return option <= 0 ? 1.9f : (option == 1 ? 2.15f : 2.4f);
+}
+constexpr float homeRowImageOffset(int uiTextSize) {
+    return uiTextSize <= 0 ? 82.0f : (uiTextSize == 1 ? 92.0f : 102.0f);
+}
+constexpr float homeRowStep(int uiTextSize) {
+    return uiTextSize <= 0 ? 420.0f : (uiTextSize == 1 ? 440.0f : 460.0f);
+}
+constexpr float castRowStep(int uiTextSize) {
+    return uiTextSize <= 0 ? 400.0f : (uiTextSize == 1 ? 415.0f : 430.0f);
+}
+constexpr int clampedUiTextSize(int uiTextSize) {
+    return std::clamp(uiTextSize, 0, 2);
+}
+constexpr float settingsDescriptionY(int uiTextSize) {
+    return 220.0f + 3.0f * static_cast<float>(clampedUiTextSize(uiTextSize));
+}
+constexpr float settingsRowsTop(int uiTextSize) {
+    return 280.0f + 6.0f * static_cast<float>(clampedUiTextSize(uiTextSize));
+}
+constexpr float settingsFooterY(int uiTextSize) {
+    return 956.0f + 6.0f * static_cast<float>(clampedUiTextSize(uiTextSize));
 }
 constexpr float uiSafeAreaFraction(int percent) {
     return static_cast<float>(percent < 0 ? 0 : (percent > 6 ? 6 : percent)) / 100.0f;
@@ -41,11 +65,11 @@ constexpr float keyboardKeyHeight(float top, int rowCount, float gap) {
     return std::clamp(available / static_cast<float>(rowCount), minKeyHeight, maxKeyHeight);
 }
 
-constexpr float materialButtonFocusScale() { return 1.10f; }
+constexpr float materialButtonFocusScale() { return 1.05f; }
 constexpr float materialCardFocusScale() { return 1.05f; }
-constexpr float materialListItemFocusScale() { return 1.025f; }
+constexpr float materialListItemFocusScale() { return 1.04f; }
 constexpr float materialTabFocusScale() { return 1.05f; }
-constexpr float materialInputFocusScale() { return 1.015f; }
+constexpr float materialInputFocusScale() { return 1.04f; }
 
 constexpr float subtitleBottomY(bool playbackOverlayVisible, bool playbackControlsActive, int position) {
     const int clamped = std::clamp(position, 0, 2);
