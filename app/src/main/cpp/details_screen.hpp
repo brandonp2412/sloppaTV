@@ -3,20 +3,31 @@
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
+#include <array>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+class DetailActionList {
+public:
+    void add(std::string_view action) { actions_[size_++] = action; }
+    [[nodiscard]] size_t size() const { return size_; }
+    [[nodiscard]] bool empty() const { return size_ == 0; }
+    [[nodiscard]] std::string_view front() const { return actions_.front(); }
+    [[nodiscard]] std::string_view back() const { return actions_[size_ - 1]; }
+    [[nodiscard]] std::string_view operator[](size_t index) const { return actions_[index]; }
+
+private:
+    std::array<std::string_view, 9> actions_{};
+    size_t size_ = 0;
+};
 
 class DetailsScreenState {
 public:
     void reset() {
-        actionSelection_ = 0;
-        similar_.clear();
-        similarSelection_ = 0;
-        similarFocused_ = false;
-        itemMenuSelection_ = 0;
-        deleteConfirmation_ = false;
-        deleteConfirmationSelection_ = 1;
+        beginDetails();
+        beginItemMenu();
         castSelection_ = 0;
         selectedPerson_ = {};
         personItems_.clear();
@@ -36,30 +47,25 @@ public:
         similarFocused_ = false;
     }
 
-    [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
-        std::vector<std::string> result;
-        result.reserve(7);
-        result.emplace_back(
+    [[nodiscard]] DetailActionList actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
+        DetailActionList result;
+        result.add(
             stillWatchingPrompt
                 ? "KEEP WATCHING"
                 : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY"))
         );
-        if (item.type == "Series") result.emplace_back("EPISODES");
-        result.emplace_back(item.favorite ? "UNFAVORITE" : "FAVORITE");
-        result.emplace_back(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        if (!item.people.empty()) result.emplace_back("CAST");
-        result.emplace_back("MORE");
-        result.emplace_back("BACK");
+        if (item.type == "Series") result.add("EPISODES");
+        result.add(item.favorite ? "UNFAVORITE" : "FAVORITE");
+        result.add(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
+        if (!item.people.empty()) result.add("CAST");
+        result.add("MORE");
+        result.add("BACK");
         return result;
     }
 
     [[nodiscard]] int actionSelection() const { return actionSelection_; }
     void moveAction(int direction, int count) {
-        if (count <= 0) {
-            actionSelection_ = 0;
-            return;
-        }
-        actionSelection_ = std::clamp(actionSelection_ + direction, 0, count - 1);
+        moveLinearSelection(actionSelection_, direction, count);
     }
 
     [[nodiscard]] const std::vector<JellyfinItem>& similar() const { return similar_; }
@@ -80,8 +86,7 @@ public:
         similarSelection_ = std::clamp(similarSelection_ + direction, 0, static_cast<int>(similar_.size()) - 1);
     }
     [[nodiscard]] const JellyfinItem* selectedSimilar() const {
-        if (similar_.empty() || similarSelection_ < 0 || similarSelection_ >= static_cast<int>(similar_.size())) return nullptr;
-        return &similar_[static_cast<size_t>(similarSelection_)];
+        return selectedItem(similar_, similarSelection_);
     }
 
     void beginItemMenu() {
@@ -89,32 +94,27 @@ public:
         deleteConfirmation_ = false;
         deleteConfirmationSelection_ = 1;
     }
-    [[nodiscard]] std::vector<std::string> itemMenuActions(
+    [[nodiscard]] DetailActionList itemMenuActions(
         const JellyfinItem& item,
         bool hasExternalPlayer,
         bool hasQueue,
         bool hiddenFromHome
     ) const {
-        std::vector<std::string> result;
-        result.reserve(9);
-        if (item.type == "Series") result.emplace_back("PLAY ALL");
-        if (hasExternalPlayer) result.emplace_back("PLAY EXTERNAL");
-        if (hasQueue) result.emplace_back("VIEW QUEUE");
-        result.emplace_back(item.favorite ? "UNFAVORITE" : "FAVORITE");
-        result.emplace_back(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        result.emplace_back(hiddenFromHome ? "SHOW ON HOME" : "HIDE FROM HOME");
-        result.emplace_back("REFRESH METADATA");
-        if (item.canDelete) result.emplace_back("DELETE MEDIA");
-        result.emplace_back("BACK");
+        DetailActionList result;
+        if (item.type == "Series") result.add("PLAY ALL");
+        if (hasExternalPlayer) result.add("PLAY EXTERNAL");
+        if (hasQueue) result.add("VIEW QUEUE");
+        result.add(item.favorite ? "UNFAVORITE" : "FAVORITE");
+        result.add(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
+        result.add(hiddenFromHome ? "SHOW ON HOME" : "HIDE FROM HOME");
+        result.add("REFRESH METADATA");
+        if (item.canDelete) result.add("DELETE MEDIA");
+        result.add("BACK");
         return result;
     }
     [[nodiscard]] int itemMenuSelection() const { return itemMenuSelection_; }
     void moveItemMenu(int direction, int count) {
-        if (count <= 0) {
-            itemMenuSelection_ = 0;
-            return;
-        }
-        itemMenuSelection_ = std::clamp(itemMenuSelection_ + direction, 0, count - 1);
+        moveLinearSelection(itemMenuSelection_, direction, count);
     }
     [[nodiscard]] bool deleteConfirmation() const { return deleteConfirmation_; }
     void setDeleteConfirmation(bool enabled) {
@@ -130,8 +130,7 @@ public:
         moveGridSelection(castSelection_, static_cast<int>(people.size()), dx, dy, columns);
     }
     [[nodiscard]] const JellyfinPerson* selectedCastPerson(const std::vector<JellyfinPerson>& people) const {
-        if (people.empty() || castSelection_ < 0 || castSelection_ >= static_cast<int>(people.size())) return nullptr;
-        return &people[static_cast<size_t>(castSelection_)];
+        return selectedItem(people, castSelection_);
     }
 
     void beginPerson(JellyfinPerson person) {
@@ -225,6 +224,10 @@ public:
     }
 
 private:
+    static void moveLinearSelection(int& selection, int direction, int count) {
+        selection = count <= 0 ? 0 : std::clamp(selection + direction, 0, count - 1);
+    }
+
     static void clampSelection(int& selection, size_t count) {
         selection = count == 0 ? 0 : std::clamp(selection, 0, static_cast<int>(count) - 1);
     }
@@ -243,7 +246,8 @@ private:
         if (next >= 0 && next < count) selection = next;
     }
 
-    static const JellyfinItem* selectedItem(const std::vector<JellyfinItem>& items, int selection) {
+    template <typename T>
+    static const T* selectedItem(const std::vector<T>& items, int selection) {
         if (items.empty() || selection < 0 || selection >= static_cast<int>(items.size())) return nullptr;
         return &items[static_cast<size_t>(selection)];
     }

@@ -4,7 +4,6 @@
 #include "media_player_policy.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <string>
 #include <utility>
 #include <vector>
@@ -89,9 +88,7 @@ struct PlaybackServerOfferInput {
 };
 
 inline std::string normalizedPlaybackValue(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(value.begin(), value.end(), value.begin(), asciiLower);
     return value;
 }
 

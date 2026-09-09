@@ -6,8 +6,9 @@
 inline std::string trimExternalText(std::string value) {
     const auto first = value.find_first_not_of(" \t\r\n");
     if (first == std::string::npos) return {};
-    const auto last = value.find_last_not_of(" \t\r\n");
-    return value.substr(first, last - first + 1);
+    value.erase(value.find_last_not_of(" \t\r\n") + 1);
+    value.erase(0, first);
+    return value;
 }
 
 inline std::string normalizeJellyfinItemId(std::string value) {

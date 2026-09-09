@@ -204,7 +204,6 @@ private:
     std::string discoverServerBase(const std::string& value, const std::string& deviceId) const;
     std::string authorization(const JellyfinSession* session, const std::string& deviceId) const;
     std::map<std::string, std::string> headers(const JellyfinSession* session, const std::string& deviceId) const;
-    std::string urlEncode(const std::string& value) const;
     ApiValueResult<JellyfinSession> parseAuthenticationResult(
         const HttpResponse& response,
         const std::string& server,

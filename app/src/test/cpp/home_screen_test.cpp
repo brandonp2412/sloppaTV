@@ -108,8 +108,9 @@ int main() {
     const auto snapshot = state.snapshot({continueWatching, nextUp});
     assert(!snapshot.toolbarFocused);
     assert(snapshot.focusedRowTitle == "Next Up");
-    assert(snapshot.selectedItemByRow.at("Continue Watching") == "c");
-    assert(snapshot.selectedItemByRow.at("Next Up") == "e");
+    assert(snapshot.selectedItemByRow.size() == 2);
+    assert(snapshot.selectedItemByRow[0] == std::pair(std::string("Continue Watching"), std::string("c")));
+    assert(snapshot.selectedItemByRow[1] == std::pair(std::string("Next Up"), std::string("e")));
 
     JellyfinHomeRow reorderedNext = nextUp;
     reorderedNext.items = {nextUp.items[1], nextUp.items[0]};

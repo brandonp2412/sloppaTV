@@ -36,12 +36,10 @@ public:
     void togglePause();
     void pause();
     void play();
-    void seekBy(int deltaMs);
     void seekTo(int positionMs);
     bool selectEmbeddedAudioOrdinal(int ordinal);
     bool selectEmbeddedSubtitleStream(int streamIndex, int ordinal = -1);
     bool disableSubtitles();
-    bool addExternalSubtitle(const std::string& url, bool select = true);
 
     [[nodiscard]] PlayerStatus status() const;
     [[nodiscard]] std::string error() const;
@@ -50,12 +48,7 @@ public:
     [[nodiscard]] bool seekable() const;
     [[nodiscard]] int videoWidth() const;
     [[nodiscard]] int videoHeight() const;
-    [[nodiscard]] std::string hardwareDecoder() const;
-    [[nodiscard]] std::string videoCodec() const;
-    [[nodiscard]] std::string audioCodec() const;
-    [[nodiscard]] std::string subtitleText() const;
-    [[nodiscard]] double containerFps() const;
-    [[nodiscard]] int64_t droppedFrames() const;
+    void subtitleText(std::string& output) const;
 
 private:
     bool loadLibrariesLocked(std::string& error);

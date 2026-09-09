@@ -38,25 +38,13 @@ enum class BrowseBackAction {
 class BrowseScreenState {
 public:
     void resetForLibrary(const JellyfinItem& library) {
-        stack_.clear();
-        filterFocused_ = false;
-        filterSelection_ = 0;
-        mode_ = BrowseContentMode::All;
-        genre_.clear();
-        letter_.clear();
         activeContainer_ = library;
-        clearPage();
+        resetNavigation();
     }
 
     void clear() {
         activeContainer_ = {};
-        stack_.clear();
-        filterFocused_ = false;
-        filterSelection_ = 0;
-        mode_ = BrowseContentMode::All;
-        genre_.clear();
-        letter_.clear();
-        clearPage();
+        resetNavigation();
     }
 
     void openContainer(const JellyfinItem& container, bool pushCurrent) {
@@ -70,6 +58,7 @@ public:
             });
         }
         activeContainer_ = container;
+        refreshHeading();
         clearPage();
     }
 
@@ -83,17 +72,20 @@ public:
             selection_ = previous.selection;
             nextIndex_ = previous.nextIndex;
             hasMore_ = previous.hasMore;
+            refreshHeading();
             return BrowseBackAction::RestoredSnapshot;
         }
         if (mode_ == BrowseContentMode::GenreItems) {
             mode_ = BrowseContentMode::Genres;
             genre_.clear();
+            refreshHeading();
             clearPage();
             return BrowseBackAction::Reload;
         }
         if (mode_ == BrowseContentMode::LetterItems) {
             mode_ = BrowseContentMode::Letters;
             letter_.clear();
+            refreshHeading();
             populateLetters();
             return BrowseBackAction::LocalPage;
         }
@@ -135,23 +127,27 @@ public:
             case 2: mode_ = BrowseContentMode::Genres; break;
             case 3:
                 mode_ = BrowseContentMode::Letters;
+                refreshHeading();
                 populateLetters();
                 return false;
             case 4: mode_ = BrowseContentMode::Collections; break;
             default: mode_ = BrowseContentMode::All; break;
         }
+        refreshHeading();
         return true;
     }
 
     void selectGenre(std::string genre) {
         genre_ = std::move(genre);
         mode_ = BrowseContentMode::GenreItems;
+        refreshHeading();
         clearPage();
     }
 
     void selectLetter(std::string letter) {
         letter_ = std::move(letter);
         mode_ = BrowseContentMode::LetterItems;
+        refreshHeading();
         clearPage();
     }
 
@@ -180,16 +176,7 @@ public:
         setSelection(selection_);
     }
 
-    [[nodiscard]] std::string heading() const {
-        std::string value = activeContainer_.name.empty() ? "LIBRARY" : activeContainer_.name;
-        if (mode_ == BrowseContentMode::Favorites) value += " - FAVORITES";
-        else if (mode_ == BrowseContentMode::Genres) value += " - GENRES";
-        else if (mode_ == BrowseContentMode::GenreItems && !genre_.empty()) value += " - " + genre_;
-        else if (mode_ == BrowseContentMode::Letters) value += " - A-Z";
-        else if (mode_ == BrowseContentMode::LetterItems && !letter_.empty()) value += " - " + letter_;
-        else if (mode_ == BrowseContentMode::Collections) value = "COLLECTIONS";
-        return value;
-    }
+    [[nodiscard]] const std::string& heading() const { return heading_; }
 
     [[nodiscard]] bool syntheticPage() const {
         return mode_ == BrowseContentMode::Genres || mode_ == BrowseContentMode::Letters;
@@ -213,6 +200,27 @@ public:
     [[nodiscard]] int filterSelection() const { return filterSelection_; }
 
 private:
+    void resetNavigation() {
+        stack_.clear();
+        filterFocused_ = false;
+        filterSelection_ = 0;
+        mode_ = BrowseContentMode::All;
+        genre_.clear();
+        letter_.clear();
+        refreshHeading();
+        clearPage();
+    }
+
+    void refreshHeading() {
+        heading_ = activeContainer_.name.empty() ? "LIBRARY" : activeContainer_.name;
+        if (mode_ == BrowseContentMode::Favorites) heading_ += " - FAVORITES";
+        else if (mode_ == BrowseContentMode::Genres) heading_ += " - GENRES";
+        else if (mode_ == BrowseContentMode::GenreItems && !genre_.empty()) heading_ += " - " + genre_;
+        else if (mode_ == BrowseContentMode::Letters) heading_ += " - A-Z";
+        else if (mode_ == BrowseContentMode::LetterItems && !letter_.empty()) heading_ += " - " + letter_;
+        else if (mode_ == BrowseContentMode::Collections) heading_ = "COLLECTIONS";
+    }
+
     void clearPage() {
         items_.clear();
         selection_ = 0;
@@ -246,4 +254,5 @@ private:
     int filterSelection_ = 0;
     std::string genre_;
     std::string letter_;
+    std::string heading_ = "LIBRARY";
 };

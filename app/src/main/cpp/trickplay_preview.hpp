@@ -26,8 +26,7 @@ public:
         tileIndex_ = -1;
         state_ = TrickplayPreviewLoadState::Idle;
         decoded_ = {};
-        texture_ = 0;
-        textureGeneration_ = 0;
+        clearTexture();
         positionMs_ = -1;
         visibleUntil_ = {};
     }
@@ -48,8 +47,7 @@ public:
         tileIndex_ = tileIndex;
         state_ = TrickplayPreviewLoadState::Loading;
         decoded_ = {};
-        texture_ = 0;
-        textureGeneration_ = 0;
+        clearTexture();
     }
 
     void applyDecoded(DecodedImage decoded) {
@@ -60,8 +58,7 @@ public:
     void markFailed() {
         state_ = TrickplayPreviewLoadState::Failed;
         decoded_ = {};
-        texture_ = 0;
-        textureGeneration_ = 0;
+        clearTexture();
     }
 
     [[nodiscard]] bool visible(TimePoint now, std::string_view itemId) const {

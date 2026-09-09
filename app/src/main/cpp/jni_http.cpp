@@ -8,7 +8,6 @@
 
 #include <array>
 #include <chrono>
-#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -98,10 +97,18 @@ std::string JniHttpClient::getCacheKey(
     const std::string& url,
     const std::map<std::string, std::string>& headers
 ) const {
-    std::ostringstream key;
-    key << url;
-    for (const auto& [name, value] : headers) key << '\n' << name << ':' << value;
-    return key.str();
+    size_t size = url.size();
+    for (const auto& [name, value] : headers) size += name.size() + value.size() + 2;
+    std::string key;
+    key.reserve(size);
+    key += url;
+    for (const auto& [name, value] : headers) {
+        key.push_back('\n');
+        key += name;
+        key.push_back(':');
+        key += value;
+    }
+    return key;
 }
 
 void JniHttpClient::invalidateGetCache() const {
@@ -138,11 +145,11 @@ HttpResponse JniHttpClient::request(
         requestGeneration = cacheGeneration_;
         if (cacheable) {
             const auto now = std::chrono::steady_clock::now();
-            std::erase_if(getCache_, [&](const auto& entry) {
-                return entry.second.expiresAt <= now;
-            });
             const auto cached = getCache_.find(key);
-            if (cached != getCache_.end()) return cached->second.response;
+            if (cached != getCache_.end()) {
+                if (cached->second.expiresAt > now) return cached->second.response;
+                getCache_.erase(cached);
+            }
         }
         const auto pending = inFlightGets_.find(key);
         if (pending != inFlightGets_.end()
@@ -167,18 +174,20 @@ HttpResponse JniHttpClient::request(
         std::scoped_lock lock(cacheMutex_);
         if (cacheable && response.ok() && requestGeneration == cacheGeneration_) {
             const auto now = std::chrono::steady_clock::now();
-            std::erase_if(getCache_, [&](const auto& entry) {
-                return entry.second.expiresAt <= now;
-            });
             if (getCache_.size() >= kMaxApiGetCacheEntries) {
-                const auto oldest = std::min_element(
-                    getCache_.begin(),
-                    getCache_.end(),
-                    [](const auto& left, const auto& right) {
-                        return left.second.expiresAt < right.second.expiresAt;
-                    }
-                );
-                if (oldest != getCache_.end()) getCache_.erase(oldest);
+                std::erase_if(getCache_, [&](const auto& entry) {
+                    return entry.second.expiresAt <= now;
+                });
+                if (getCache_.size() >= kMaxApiGetCacheEntries) {
+                    const auto oldest = std::min_element(
+                        getCache_.begin(),
+                        getCache_.end(),
+                        [](const auto& left, const auto& right) {
+                            return left.second.expiresAt < right.second.expiresAt;
+                        }
+                    );
+                    if (oldest != getCache_.end()) getCache_.erase(oldest);
+                }
             }
             getCache_[key] = CacheEntry{response, now + std::chrono::seconds(5)};
         }

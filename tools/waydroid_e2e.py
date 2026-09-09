@@ -128,10 +128,27 @@ def require_running() -> str:
     return pid
 
 
-def require_playback_session() -> None:
+def playback_session_state(output: str, package: str) -> str:
+    marker = f"{package}/sloppaTV"
+    lines = output.splitlines()
+    for index, line in enumerate(lines):
+        if marker not in line:
+            continue
+        for candidate in lines[index:index + 20]:
+            match = re.search(r"state=([A-Z_]+)\(", candidate)
+            if match:
+                return match.group(1)
+    return ""
+
+
+def require_playback_session(*, playing: bool = False) -> None:
     sessions = adb("shell", "dumpsys", "media_session", capture=True, timeout=60.0)
     if f"{PACKAGE}/sloppaTV" not in sessions:
         raise RuntimeError("sloppaTV playback is not active; open a title before running this player acceptance command")
+    if playing:
+        state = playback_session_state(sessions, PACKAGE)
+        if state != "PLAYING":
+            raise RuntimeError(f"sloppaTV playback is not continuously playing (state={state or 'unknown'})")
 
 
 def pull_with_reconnect(remote: str, local: Path, attempts: int = 4) -> None:
@@ -535,15 +552,21 @@ def soak_summary(samples: list[dict[str, int | float | str]]) -> dict[str, int |
     }
 
 
-def soak(seconds: int, sample_seconds: int) -> None:
+def soak(seconds: int, sample_seconds: int, require_playback: bool = False, output_name: str = "soak") -> None:
     if seconds < sample_seconds or sample_seconds < 1:
         raise SystemExit("soak duration must be >= sample interval >= 1 second")
+    if not re.fullmatch(r"[a-zA-Z0-9._-]+", output_name):
+        raise SystemExit("soak output name may contain only letters, digits, dot, underscore and dash")
     adb("logcat", "-c")
     require_running()
+    if require_playback:
+        require_playback_session(playing=True)
     started = time.monotonic()
     samples: list[dict[str, int | float | str]] = []
     while True:
         elapsed = time.monotonic() - started
+        if require_playback:
+            require_playback_session(playing=True)
         sample = memory_snapshot()
         sample["elapsed_seconds"] = round(elapsed, 1)
         samples.append(sample)
@@ -569,11 +592,11 @@ def soak(seconds: int, sample_seconds: int) -> None:
         f"({summary.get('pss_growth_pct', 0.0)}%) RSS growth={summary.get('rss_growth_kb', 0)}KB "
         f"({summary.get('rss_growth_pct', 0.0)}%)"
     )
-    path = ARTIFACTS / "soak.json"
+    path = ARTIFACTS / f"{output_name}.json"
     path.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {path}")
-    capture("soak-final")
-    audit_logs("soak")
+    capture(f"{output_name}-final")
+    audit_logs(output_name)
 
 
 def main() -> None:
@@ -612,6 +635,8 @@ def main() -> None:
     p_soak = sub.add_parser("soak")
     p_soak.add_argument("--seconds", type=int, default=1800)
     p_soak.add_argument("--sample-seconds", type=int, default=60)
+    p_soak.add_argument("--require-playback", action="store_true")
+    p_soak.add_argument("--output-name", default="soak")
 
     args = parser.parse_args()
     SERIAL = args.serial
@@ -651,7 +676,7 @@ def main() -> None:
     elif args.command == "audit-logs":
         audit_logs(args.name)
     elif args.command == "soak":
-        soak(args.seconds, args.sample_seconds)
+        soak(args.seconds, args.sample_seconds, args.require_playback, args.output_name)
 
 
 if __name__ == "__main__":

@@ -41,10 +41,7 @@ public:
     [[nodiscard]] bool hasPending() const { return pending_.has_value(); }
 
     std::optional<PendingPlaybackTransition> take() {
-        if (!pending_) return std::nullopt;
-        auto result = std::move(pending_);
-        pending_.reset();
-        return result;
+        return std::exchange(pending_, std::nullopt);
     }
 
     [[nodiscard]] bool loading() const { return loading_; }

@@ -17,8 +17,7 @@ public:
     void reset() {
         query_.clear();
         results_.clear();
-        selection_ = 0;
-        firstVisible_ = {0, 0};
+        resetSelectionViewport();
         keyboard_ = true;
         loading_ = false;
         debouncePending_ = false;
@@ -49,7 +48,7 @@ public:
     }
     [[nodiscard]] int selectedRow() const {
         if (results_.empty()) return 0;
-        return results_[static_cast<size_t>(selection_)].type == "Episode" ? 1 : 0;
+        return selection_ < topLevelCount() ? 0 : 1;
     }
     [[nodiscard]] bool selectionOnFirstResultRow() const {
         return selectedRow() == 0 || topLevelCount() == 0;
@@ -61,21 +60,18 @@ public:
 
     void setQuery(std::string query) {
         query_ = std::move(query);
-        selection_ = 0;
-        firstVisible_ = {0, 0};
+        resetSelectionViewport();
     }
 
     void append(char value) {
         query_.push_back(value);
-        selection_ = 0;
-        firstVisible_ = {0, 0};
+        resetSelectionViewport();
     }
 
     [[nodiscard]] bool backspace() {
         if (query_.empty()) return false;
         query_.pop_back();
-        selection_ = 0;
-        firstVisible_ = {0, 0};
+        resetSelectionViewport();
         return true;
     }
 
@@ -92,8 +88,7 @@ public:
         if (query_.empty()) {
             debouncePending_ = false;
             loading_ = false;
-            results_.clear();
-            firstVisible_ = {0, 0};
+            clearResults();
             return false;
         }
         debouncePending_ = true;
@@ -115,8 +110,7 @@ public:
         selection_ = 0;
         if (query_.empty()) {
             loading_ = false;
-            results_.clear();
-            firstVisible_ = {0, 0};
+            clearResults();
             return false;
         }
         loading_ = true;
@@ -132,8 +126,7 @@ public:
         topLevelCount_ = static_cast<int>(std::distance(results.begin(), firstEpisode));
         results_ = std::move(results);
         topLevelCountSize_ = results_.size();
-        selection_ = 0;
-        firstVisible_ = {0, 0};
+        resetSelectionViewport();
         return true;
     }
 
@@ -147,8 +140,7 @@ public:
         results_.clear();
         topLevelCount_ = 0;
         topLevelCountSize_ = 0;
-        selection_ = 0;
-        firstVisible_ = {0, 0};
+        resetSelectionViewport();
     }
 
     void moveSelection(int dx, int dy, int columns) {
@@ -182,6 +174,11 @@ public:
     }
 
 private:
+    void resetSelectionViewport() {
+        selection_ = 0;
+        firstVisible_ = {0, 0};
+    }
+
     std::string query_;
     std::vector<JellyfinItem> results_;
     mutable int topLevelCount_ = 0;

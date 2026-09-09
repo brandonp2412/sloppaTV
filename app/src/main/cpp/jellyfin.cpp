@@ -1,4 +1,5 @@
 #include "jellyfin.hpp"
+#include "url_encoding.hpp"
 #include "audio_policy.hpp"
 #include "home_screen.hpp"
 #include "jellyfin_item_parser.hpp"
@@ -157,14 +158,24 @@ std::string JellyfinClient::discoverServerBase(const std::string& value, const s
 }
 
 std::string JellyfinClient::authorization(const JellyfinSession* session, const std::string& deviceId) const {
-    std::ostringstream out;
-    out << "MediaBrowser "
-        << "Client=\"" << kClientName << "\","
-        << "Version=\"" << kClientVersion << "\","
-        << "DeviceId=\"" << deviceId << "\","
-        << "Device=\"" << kDeviceName << "\"";
-    if (session && !session->token.empty()) out << ",Token=\"" << session->token << "\"";
-    return out.str();
+    const size_t tokenSize = session ? session->token.size() : 0;
+    std::string result;
+    result.reserve(96 + deviceId.size() + tokenSize);
+    result += "MediaBrowser Client=\"";
+    result += kClientName;
+    result += "\",Version=\"";
+    result += kClientVersion;
+    result += "\",DeviceId=\"";
+    result += deviceId;
+    result += "\",Device=\"";
+    result += kDeviceName;
+    result += '"';
+    if (tokenSize > 0) {
+        result += ",Token=\"";
+        result += session->token;
+        result += '"';
+    }
+    return result;
 }
 
 std::map<std::string, std::string> JellyfinClient::headers(const JellyfinSession* session, const std::string& deviceId) const {
@@ -176,19 +187,6 @@ std::map<std::string, std::string> JellyfinClient::headers(const JellyfinSession
     };
     if (session && !session->token.empty()) result["X-Emby-Token"] = session->token;
     return result;
-}
-
-std::string JellyfinClient::urlEncode(const std::string& value) const {
-    std::ostringstream escaped;
-    escaped << std::uppercase << std::hex;
-    for (const unsigned char c : value) {
-        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            escaped << static_cast<char>(c);
-        } else {
-            escaped << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
-        }
-    }
-    return escaped.str();
 }
 
 ApiValueResult<JellyfinSession> JellyfinClient::parseAuthenticationResult(
@@ -1527,32 +1525,35 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
         item.backdropTag,
         item.backdropItemId
     );
-    const ArtworkKind kind = artwork.kind;
-    if (kind == ArtworkKind::Primary) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Primary?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
-    } else if (kind == ArtworkKind::Thumb) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Thumb?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
-    } else if (kind == ArtworkKind::Backdrop) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
-    } else {
-        result.error = "Item has no artwork";
-        return result;
+    std::string_view imagePath;
+    switch (artwork.kind) {
+        case ArtworkKind::Primary: imagePath = "/Images/Primary?maxWidth="; break;
+        case ArtworkKind::Thumb: imagePath = "/Images/Thumb?maxWidth="; break;
+        case ArtworkKind::Backdrop: imagePath = "/Images/Backdrop/0?maxWidth="; break;
+        case ArtworkKind::None:
+            result.error = "Item has no artwork";
+            return result;
     }
-    url += "&api_key=" + urlEncode(session.token);
+    const std::string encodedTag = urlEncode(artwork.tag);
+    const std::string encodedToken = urlEncode(session.token);
+    const std::string widthText = std::to_string(width);
+    const std::string heightText = std::to_string(height);
+    url.reserve(session.server.size() + artwork.itemId.size() + imagePath.size() + encodedTag.size()
+        + encodedToken.size() + widthText.size() + heightText.size() + 43);
+    url.append(session.server).append("/Items/").append(artwork.itemId).append(imagePath).append(widthText)
+        .append("&maxHeight=").append(heightText).append("&quality=92&tag=").append(encodedTag)
+        .append("&api_key=").append(encodedToken);
 
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
         __android_log_print(
             ANDROID_LOG_WARN,
             kTag,
-            "Home image HTTP %d artworkItem=%s kind=%d tag=%s sourceItem=%s",
+            "Home image HTTP %d artworkItem=%.*s kind=%d tag=%.*s sourceItem=%s",
             response.status,
-            artwork.itemId.c_str(),
-            static_cast<int>(kind),
-            artwork.tag.c_str(),
+            static_cast<int>(artwork.itemId.size()), artwork.itemId.data(),
+            static_cast<int>(artwork.kind),
+            static_cast<int>(artwork.tag.size()), artwork.tag.data(),
             item.id.c_str()
         );
         result.error = apiError(response);

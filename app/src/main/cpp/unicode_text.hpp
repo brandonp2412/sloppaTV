@@ -1,8 +1,24 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <string>
 #include <string_view>
+
+inline bool containsNonAscii(std::string_view text) {
+    constexpr uint64_t highBits = 0x8080808080808080ULL;
+    size_t index = 0;
+    for (; index + sizeof(uint64_t) <= text.size(); index += sizeof(uint64_t)) {
+        uint64_t word = 0;
+        std::memcpy(&word, text.data() + index, sizeof(word));
+        if ((word & highBits) != 0) return true;
+    }
+    for (; index < text.size(); ++index) {
+        if (static_cast<unsigned char>(text[index]) >= 0x80) return true;
+    }
+    return false;
+}
 
 inline uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
     constexpr uint32_t replacement = 0xFFFDu;
@@ -95,6 +111,7 @@ inline void appendDisplayCodePoint(std::string& output, uint32_t codePoint, char
 }
 
 inline std::string displayText(std::string_view text, char unsupported = '?') {
+    if (!containsNonAscii(text)) return std::string(text);
     std::string output;
     output.reserve(text.size());
     size_t index = 0;

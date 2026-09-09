@@ -61,17 +61,16 @@ int main() {
     effect = adjustSetting(settings, kAutoSubtitleSourceSetting, 1);
     assert(settings.autoSubtitleSourceLanguage == "different");
 
-    const auto values = settingsValues(settings, 6, "MPV", "viewer", false);
-    assert(values[0] == "80 MBIT/S");
-    assert(values[14] == "DIRECT / 6CH ROUTE");
-    assert(values[21] == "MPV");
-    assert(values[23] == "viewer");
-    assert(values[24] == "ALL LANGUAGES");
-    assert(values[25] == "24 HOUR");
-    assert(values[26] == "ON");
-    assert(values[27] == "MAORI");
-    assert(values[28] == "AUDIO NOT MAORI");
-    assert(values[29] == "SHOW TECHNICAL");
+    assert(settingValue(settings, 0, 6, "MPV", "viewer", false) == "80 MBIT/S");
+    assert(settingValue(settings, 14, 6, "MPV", "viewer", false) == "DIRECT / 6CH ROUTE");
+    assert(settingValue(settings, 21, 6, "MPV", "viewer", false) == "MPV");
+    assert(settingValue(settings, 23, 6, "MPV", "viewer", false) == "viewer");
+    assert(settingValue(settings, 24, 6, "MPV", "viewer", false) == "ALL LANGUAGES");
+    assert(settingValue(settings, 25, 6, "MPV", "viewer", false) == "24 HOUR");
+    assert(settingValue(settings, 26, 6, "MPV", "viewer", false) == "ON");
+    assert(settingValue(settings, 27, 6, "MPV", "viewer", false) == "MAORI");
+    assert(settingValue(settings, 28, 6, "MPV", "viewer", false) == "AUDIO NOT MAORI");
+    assert(settingValue(settings, 29, 6, "MPV", "viewer", false) == "SHOW TECHNICAL");
 
     screen.openSubtitleLanguagePicker();
     assert(screen.subtitleLanguagePicker());

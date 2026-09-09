@@ -587,16 +587,6 @@ void NativeMediaPlayer::play() {
     lastSnapshotPoll_ = {};
 }
 
-void NativeMediaPlayer::seekBy(int deltaMs) {
-    std::scoped_lock lock(mutex_);
-    if (!mpv_) return;
-    const double seconds = static_cast<double>(deltaMs) / 1000.0;
-    const std::string amount = std::to_string(seconds);
-    const char* args[] = {"seek", amount.c_str(), "relative+exact", nullptr};
-    commandLocked(args, "relative seek");
-    lastSnapshotPoll_ = {};
-}
-
 void NativeMediaPlayer::seekTo(int positionMs) {
     std::scoped_lock lock(mutex_);
     if (!mpv_) return;
@@ -680,13 +670,6 @@ bool NativeMediaPlayer::disableSubtitles() {
     return setStringPropertyLocked("sid", "no");
 }
 
-bool NativeMediaPlayer::addExternalSubtitle(const std::string& url, bool select) {
-    if (url.empty()) return false;
-    std::scoped_lock lock(mutex_);
-    if (!mpv_) return false;
-    const char* args[] = {"sub-add", url.c_str(), select ? "select" : "auto", nullptr};
-    return commandLocked(args, "external subtitle add");
-}
 
 void NativeMediaPlayer::applyPendingTracksLocked() const {
     if (!mpv_) return;
@@ -836,34 +819,7 @@ int NativeMediaPlayer::videoHeight() const {
     return cachedVideoHeight_;
 }
 
-std::string NativeMediaPlayer::hardwareDecoder() const {
+void NativeMediaPlayer::subtitleText(std::string& output) const {
     std::scoped_lock lock(mutex_);
-    return getStringPropertyLocked("hwdec-current");
-}
-
-std::string NativeMediaPlayer::videoCodec() const {
-    std::scoped_lock lock(mutex_);
-    return getStringPropertyLocked("video-codec");
-}
-
-std::string NativeMediaPlayer::audioCodec() const {
-    std::scoped_lock lock(mutex_);
-    return getStringPropertyLocked("audio-codec");
-}
-
-std::string NativeMediaPlayer::subtitleText() const {
-    std::scoped_lock lock(mutex_);
-    return cachedSubtitleText_;
-}
-
-double NativeMediaPlayer::containerFps() const {
-    std::scoped_lock lock(mutex_);
-    double value = 0.0;
-    return getDoublePropertyLocked("container-fps", value) ? value : 0.0;
-}
-
-int64_t NativeMediaPlayer::droppedFrames() const {
-    std::scoped_lock lock(mutex_);
-    int64_t value = 0;
-    return getIntPropertyLocked("decoder-frame-drop-count", value) ? value : 0;
+    output = cachedSubtitleText_;
 }
