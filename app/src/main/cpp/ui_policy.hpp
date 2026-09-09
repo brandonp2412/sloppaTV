@@ -25,6 +25,9 @@ constexpr float uiSafeAreaFraction(int percent) {
     return static_cast<float>(percent < 0 ? 0 : (percent > 6 ? 6 : percent)) / 100.0f;
 }
 
+constexpr float materialButtonFocusScale() { return 1.10f; }
+constexpr float materialTabFocusScale() { return 1.06f; }
+constexpr float materialInputFocusScale() { return 1.015f; }
 
 constexpr float subtitleBottomY(bool playbackOverlayVisible, int position) {
     const int clamped = std::clamp(position, 0, 2);

@@ -78,6 +78,15 @@ constexpr int kAutoSubtitleLanguageSetting = 27;
 constexpr int kAutoSubtitleSourceSetting = 28;
 constexpr int kAdvancedSettingsToggle = 29;
 
+constexpr bool isBooleanSetting(int setting) {
+    return setting == 5
+        || setting == 7
+        || setting == 8
+        || setting == 9
+        || setting == 12
+        || setting == kAutoSubtitlesSetting;
+}
+
 inline PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
     return {
         .maxAvcLevel = settings.avcLevelOverride,

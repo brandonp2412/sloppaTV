@@ -26,6 +26,14 @@ int main() {
     assert(subtitleTextScale(0) == 2.55f);
     assert(settingLabelContains("AUDIO OUTPUT", "audio"));
     assert(!settingLabelContains("SUBTITLE SIZE", "audio"));
+    assert(isBooleanSetting(5));
+    assert(isBooleanSetting(7));
+    assert(isBooleanSetting(8));
+    assert(isBooleanSetting(9));
+    assert(isBooleanSetting(12));
+    assert(isBooleanSetting(kAutoSubtitlesSetting));
+    assert(!isBooleanSetting(10));
+    assert(!isBooleanSetting(kTimeFormatSetting));
 
     const auto common = matchingSettings("", false);
     assert(!common.empty());

@@ -4854,15 +4854,91 @@ private:
         };
     }
 
-    std::array<float, 4> drawFocusedSurface(float x, float y, float width, float height, bool focused, bool primary = false, bool destructive = false) {
-        const auto bounds = focusedBounds(x, y, width, height, focused, 1.035f);
+    std::array<float, 4> drawFocusedSurface(
+        float x,
+        float y,
+        float width,
+        float height,
+        bool focused,
+        bool primary = false,
+        bool destructive = false,
+        float focusScale = 1.035f,
+        float radius = 20.0f,
+        bool outlinedWhenIdle = false
+    ) {
+        const auto bounds = focusedBounds(x, y, width, height, focused, focusScale);
         const Color accent = destructive ? kError : kFocus;
         const Color surface = destructive && focused
             ? Color{kError.r, kError.g, kError.b, 0.90f}
             : (primary ? (focused ? kFocus : kFocusSoft) : (focused ? kPanelElevated : kPanelAlt));
-        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 20.0f, surface);
-        if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], accent, 20.0f);
+        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], radius, surface);
+        if (!focused && outlinedWhenIdle) {
+            renderer_.roundedOutline(bounds[0], bounds[1], bounds[2], bounds[3], radius, 1.5f, kOutline);
+        }
+        if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], accent, radius);
         return bounds;
+    }
+
+    std::array<float, 4> drawButtonSurface(
+        float x,
+        float y,
+        float width,
+        float height,
+        bool focused,
+        bool primary = false,
+        bool destructive = false
+    ) {
+        return drawFocusedSurface(
+            x,
+            y,
+            width,
+            height,
+            focused,
+            primary,
+            destructive,
+            materialButtonFocusScale(),
+            std::min(28.0f, height * 0.5f),
+            true
+        );
+    }
+
+    std::array<float, 4> drawTabSurface(
+        float x,
+        float y,
+        float width,
+        float height,
+        bool focused,
+        bool selected
+    ) {
+        return drawFocusedSurface(x, y, width, height, focused, selected, false, materialTabFocusScale(), 20.0f, true);
+    }
+
+    std::array<float, 4> drawInputSurface(float x, float y, float width, float height, bool focused) {
+        const auto bounds = focusedBounds(x, y, width, height, focused, materialInputFocusScale());
+        constexpr float radius = 20.0f;
+        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], radius, focused ? kPanelElevated : kPanel);
+        renderer_.roundedOutline(
+            bounds[0],
+            bounds[1],
+            bounds[2],
+            bounds[3],
+            radius,
+            focused ? 3.0f : 1.5f,
+            focused ? kFocus : kOutline
+        );
+        return bounds;
+    }
+
+    void drawSwitch(float x, float y, bool on, bool focused) {
+        constexpr float width = 112.0f;
+        constexpr float height = 56.0f;
+        constexpr float thumbSize = 36.0f;
+        constexpr float inset = 10.0f;
+        const Color track = on ? kFocus : (focused ? kPanelElevated : kPanelAlt);
+        renderer_.roundedRect(x, y, width, height, height * 0.5f, track);
+        if (!on) renderer_.roundedOutline(x, y, width, height, height * 0.5f, focused ? 2.0f : 1.5f, focused ? kFocus : kOutline);
+        const float thumbX = on ? x + width - thumbSize - inset : x + inset;
+        renderer_.roundedRect(thumbX, y + inset, thumbSize, thumbSize, thumbSize * 0.5f, on ? kText : kSecondaryText);
     }
 
     float drawChip(
@@ -4937,7 +5013,7 @@ private:
             const float y = 320.0f + static_cast<float>(i) * 118.0f;
             renderer_.text(495.0f, y - 30.0f, 1.45f, labels[static_cast<size_t>(i)], kMuted);
             const bool focused = !accountState_.keyboardActive() && accountState_.loginFocus() == i;
-            const auto bounds = drawFocusedSurface(490.0f, y, 940.0f, 70.0f, focused);
+            const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused);
             std::string value = accountState_.field(i);
             if (i == 2 && !value.empty()) value.assign(value.size(), '*');
             if (value.empty()) value = i == 0 ? "HTTPS://YOUR-JELLYFIN-SERVER" : "";
@@ -4946,13 +5022,13 @@ private:
         }
 
         const bool loginFocused = accountState_.loginFocus() == AccountScreenState::kLoginAction && !accountState_.keyboardActive();
-        const auto loginBounds = drawFocusedSurface(490.0f, 690.0f, 330.0f, 72.0f, loginFocused, true);
+        const auto loginBounds = drawButtonSurface(490.0f, 690.0f, 330.0f, 72.0f, loginFocused, true);
         renderer_.textCentered(loginBounds[0], loginBounds[1], loginBounds[2], loginBounds[3], 2.15f, "LOG IN", kText);
         const bool quickFocused = accountState_.loginFocus() == AccountScreenState::kQuickConnectAction && !accountState_.keyboardActive();
-        const auto quickBounds = drawFocusedSurface(840.0f, 690.0f, 310.0f, 72.0f, quickFocused);
+        const auto quickBounds = drawButtonSurface(840.0f, 690.0f, 310.0f, 72.0f, quickFocused);
         renderer_.textCentered(quickBounds[0], quickBounds[1], quickBounds[2], quickBounds[3], 1.8f, "QUICK CONNECT", kText);
         const bool discoverFocused = accountState_.loginFocus() == AccountScreenState::kDiscoverAction && !accountState_.keyboardActive();
-        const auto discoverBounds = drawFocusedSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
+        const auto discoverBounds = drawButtonSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
         renderer_.textCentered(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f, "DISCOVER", kText);
 
         if (!sessionRegistry_.empty()) {
@@ -5002,9 +5078,9 @@ private:
             renderer_.text(395.0f, y + 65.0f, 1.55f, saved.server, kMuted, 650.0f);
             const bool useFocused = focused && accountState_.profileAction() == 0;
             const bool forgetFocused = focused && accountState_.profileAction() == 1;
-            const auto useBounds = drawFocusedSurface(1110.0f, y + 18.0f, 210.0f, 72.0f, useFocused, true);
+            const auto useBounds = drawButtonSurface(1110.0f, y + 18.0f, 210.0f, 72.0f, useFocused, true);
             renderer_.textCentered(useBounds[0], useBounds[1], useBounds[2], useBounds[3], 1.85f, "USE", kText);
-            const auto forgetBounds = drawFocusedSurface(1340.0f, y + 18.0f, 270.0f, 72.0f, forgetFocused, false, true);
+            const auto forgetBounds = drawButtonSurface(1340.0f, y + 18.0f, 270.0f, 72.0f, forgetFocused, false, true);
             renderer_.textCentered(forgetBounds[0], forgetBounds[1], forgetBounds[2], forgetBounds[3], 1.75f, "FORGET",
                 forgetFocused ? kText : kMuted);
         }
@@ -5023,7 +5099,7 @@ private:
             for (size_t col = 0; col < keys.size(); ++col) {
                 const float x = startX + static_cast<float>(col) * (keyW + gap);
                 const bool selected = static_cast<int>(row) == keyboardRow_ && static_cast<int>(col) == keyboardCol_;
-                const auto bounds = drawFocusedSurface(x, y, keyW, keyH, selected, selected);
+                const auto bounds = drawButtonSurface(x, y, keyW, keyH, selected, selected);
                 const auto& label = keys[col].label;
                 const float scale = label.size() > 4 ? 2.15f : 2.65f;
                 renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], scale, label, kText);
@@ -5111,7 +5187,7 @@ private:
             const float navX = navXs[i] - 14.0f;
             const float navWidth = navWidths[i] + 28.0f;
             if (focused) {
-                const auto bounds = drawFocusedSurface(navX, 40.0f, navWidth, 54.0f, true, active);
+                const auto bounds = drawTabSurface(navX, 40.0f, navWidth, 54.0f, true, active);
                 renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 2.0f, navLabels[i], kText);
             } else {
                 if (active) renderer_.roundedRect(navX, 40.0f, navWidth, 54.0f, 20.0f, kFocusSoft);
@@ -5315,8 +5391,11 @@ private:
             const float badgeWidth = item.favorite ? 132.0f : 118.0f;
             const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
             const float badgeY = bounds[1] + 12.0f;
-            renderer_.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, kModalSurface);
-            renderer_.textCentered(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, item.favorite ? kFocus : kSecondaryText);
+            const Color badgeSurface = item.favorite ? kFocusSoft : kPanelElevated;
+            renderer_.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, badgeSurface);
+            renderer_.roundedOutline(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, 1.0f,
+                item.favorite ? kFocus : kOutline);
+            renderer_.textCentered(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, kText);
         }
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
 
@@ -5351,12 +5430,12 @@ private:
                 const bool focused = browseState_.filterFocused() && static_cast<int>(index) == browseState_.filterSelection();
                 const bool active = static_cast<int>(index) == browseState_.filterSelection();
                 if (focused) {
-                    const auto bounds = drawFocusedSurface(x, 160.0f, width, 58.0f, true, active);
+                    const auto bounds = drawTabSurface(x, 190.0f, width, 58.0f, true, active);
                     renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f, labels[index], kText);
                 } else {
-                    renderer_.roundedRect(x, 160.0f, width, 58.0f, 20.0f, active ? kFocusSoft : kPanel);
-                    if (!active) renderer_.roundedOutline(x, 160.0f, width, 58.0f, 20.0f, 1.5f, kOutline);
-                    renderer_.textCentered(x, 160.0f, width, 58.0f, 1.65f, labels[index], active ? kText : kMuted);
+                    renderer_.roundedRect(x, 190.0f, width, 58.0f, 20.0f, active ? kFocusSoft : kPanel);
+                    if (!active) renderer_.roundedOutline(x, 190.0f, width, 58.0f, 20.0f, 1.5f, kOutline);
+                    renderer_.textCentered(x, 190.0f, width, 58.0f, 1.65f, labels[index], active ? kText : kMuted);
                 }
                 x += width + 10.0f;
             }
@@ -5385,7 +5464,7 @@ private:
             const int col = index % columns;
             if (row >= visibleRows) break;
             const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-            const float y = 250.0f + static_cast<float>(row) * rowStep;
+            const float y = 285.0f + static_cast<float>(row) * rowStep;
             const bool focused = !browseState_.filterFocused() && index == browseState_.selection();
             const auto& item = items[static_cast<size_t>(index)];
             if (syntheticPage) renderTextTile(item, x, y, slotWidth, 160.0f, focused);
@@ -5402,13 +5481,11 @@ private:
         renderer_.text(72.0f, 58.0f, 4.0f, "SEARCH", kText, 520.0f);
         constexpr float searchTop = 145.0f;
         constexpr float searchWidth = 1450.0f;
-        renderer_.roundedRect(72.0f, searchTop, searchWidth, 68.0f, 22.0f, kPanel);
-        if (!searchState_.keyboard() && results.empty()) {
-            renderer_.roundedOutline(70.0f, searchTop - 2.0f, searchWidth + 4.0f, 72.0f, 24.0f, 2.5f, kFocus);
-        }
-        renderer_.textVerticallyCentered(106.0f, searchTop, 68.0f, 2.15f,
+        const bool searchFieldFocused = !searchState_.keyboard() && results.empty();
+        const auto searchBounds = drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused);
+        renderer_.textVerticallyCentered(searchBounds[0] + 34.0f, searchBounds[1], searchBounds[3], 2.15f,
             query.empty() ? "Movies, shows and episodes" : query,
-            query.empty() ? kMuted : kText, searchWidth - 68.0f);
+            query.empty() ? kMuted : kText, searchBounds[2] - 68.0f);
         renderer_.text(1575.0f, searchTop + 22.0f, 1.45f,
             searchState_.keyboard() ? "FALLBACK KEYS" : "OK TO TYPE", searchState_.keyboard() ? kFocus : kSecondaryText, 250.0f);
 
@@ -5548,7 +5625,7 @@ private:
             }
         }
         if (skipSegment) {
-            const auto bounds = drawFocusedSurface(1460.0f, 640.0f, 360.0f, 86.0f, true, true);
+            const auto bounds = drawButtonSurface(1460.0f, 640.0f, 360.0f, 86.0f, true, true);
             const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
             renderer_.textCentered(bounds[0], bounds[1] + 4.0f, bounds[2], 38.0f, 2.25f, skipLabel, kText);
             renderer_.textCentered(bounds[0], bounds[1] + 42.0f, bounds[2], 36.0f, 1.70f, "OK TO SKIP", kSecondaryText);
@@ -5626,7 +5703,7 @@ private:
             float x = 578.0f;
             for (size_t i = 0; i < controls.size(); ++i) {
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
-                const auto bounds = drawFocusedSurface(x, 925.0f, widths[i], 66.0f, selected, i == 0);
+                const auto bounds = drawButtonSurface(x, 925.0f, widths[i], 66.0f, selected, i == 0);
 
                 const float iconX = bounds[0] + 24.0f;
                 const float iconCenterY = bounds[1] + bounds[3] * 0.5f;
@@ -5737,7 +5814,7 @@ private:
             const bool focused = queueState_.actionSelection() == static_cast<int>(i);
             const bool available = enabled(static_cast<int>(i));
             std::array<float, 4> actionBounds{x, y, width, 68.0f};
-            if (available) actionBounds = drawFocusedSurface(x, y, width, 68.0f, focused, focused, i == 4);
+            if (available) actionBounds = drawButtonSurface(x, y, width, 68.0f, focused, focused, i == 4);
             else renderer_.roundedRect(x, y, width, 68.0f, 18.0f, kPanel);
             renderer_.textCentered(actionBounds[0], actionBounds[1], actionBounds[2], actionBounds[3], 1.45f, actions[i],
                 available ? kText : kTertiary);
@@ -5781,11 +5858,10 @@ private:
             settingsScreen_.advanced()
         );
 
-        renderer_.roundedRect(1070.0f, 52.0f, 760.0f, 58.0f, 20.0f, kPanel);
-        if (settingsScreen_.searchFocused()) renderer_.roundedOutline(1068.0f, 50.0f, 764.0f, 62.0f, 22.0f, 2.5f, kFocus);
-        renderer_.textVerticallyCentered(1102.0f, 52.0f, 58.0f, 2.20f,
+        const auto settingsSearchBounds = drawInputSurface(1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused());
+        renderer_.textVerticallyCentered(settingsSearchBounds[0] + 32.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
             settingsScreen_.searchQuery().empty() ? "Search settings" : settingsScreen_.searchQuery(),
-            settingsScreen_.searchQuery().empty() ? kMuted : kText, 570.0f);
+            settingsScreen_.searchQuery().empty() ? kMuted : kText, settingsSearchBounds[2] - 190.0f);
         renderer_.textCentered(1640.0f, 52.0f, 170.0f, 58.0f, 1.60f, "SEARCH", settingsScreen_.searchFocused() ? kFocus : kMuted);
 
         const auto matches = settingsScreen_.matches();
@@ -5832,6 +5908,8 @@ private:
                 const float valueWidth = renderer_.textWidth(valueScale, value);
                 renderer_.textVerticallyCentered(std::max(1190.0f, 1760.0f - valueWidth), y - 8.0f, 88.0f, valueScale,
                     value, focused ? kFocus : kText, 570.0f);
+            } else if (isBooleanSetting(i)) {
+                drawSwitch(1653.0f, y + 8.0f, value == "ON", focused);
             } else {
                 const float chipWidth = std::clamp(renderer_.textWidth(1.65f, value) + 44.0f, 112.0f, 570.0f);
                 const float chipX = 1765.0f - chipWidth;
@@ -5951,7 +6029,7 @@ private:
             for (int i = 0; i < 2; ++i) {
                 const float x = i == 0 ? 470.0f : 995.0f;
                 const bool focused = detailsState_.deleteConfirmationSelection() == i;
-                const auto bounds = drawFocusedSurface(x, 610.0f, 450.0f, 92.0f, focused, false, i == 0);
+                const auto bounds = drawButtonSurface(x, 610.0f, 450.0f, 92.0f, focused, false, i == 0);
                 renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], i == 0 ? 1.75f : 2.0f,
                     actions[static_cast<size_t>(i)], focused || i == 1 ? kText : kMuted);
             }
@@ -6184,7 +6262,7 @@ private:
             const bool focused = !overlayOpen && !detailsState_.similarFocused() && detailsState_.actionSelection() == static_cast<int>(i);
             const float width = std::max(145.0f, renderer_.textWidth(1.80f, actions[i]) + 46.0f);
             const bool primaryAction = i == 0;
-            const auto bounds = drawFocusedSurface(actionX, actionY, width, 64.0f, focused, primaryAction);
+            const auto bounds = drawButtonSurface(actionX, actionY, width, 64.0f, focused, primaryAction);
             renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.80f, actions[i],
                 primaryAction || focused ? kText : kSecondaryText);
             actionX += width + 18.0f;
