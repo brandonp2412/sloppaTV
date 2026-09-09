@@ -609,10 +609,12 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
         return;
     }
 
-    constexpr int segmentsPerCorner = 12;
+    constexpr int segmentsPerCorner = 32;
     constexpr int pointsPerCorner = segmentsPerCorner + 1;
     constexpr int pointCount = pointsPerCorner * 4;
     constexpr float pi = 3.14159265358979323846f;
+    // Thin pill outlines expose polygon facets much more than filled surfaces.
+    // Use enough arc segments that each edge is near pixel-sized at TV radii.
     // A 1-1.5 px idle outline used to spend most of its width fading in/out,
     // which made rounded pill corners look visibly soft on a 1080p TV. Keep
     // thick focus rings unchanged, but give thin strokes a substantially
