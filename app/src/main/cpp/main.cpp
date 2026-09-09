@@ -2249,10 +2249,19 @@ private:
         const float v1 = std::clamp(((frame.cellY + 1) * info.height) / sourceHeight, 0.0f, 1.0f);
         if (u1 <= u0 || v1 <= v0) return false;
 
-        renderer_.rect(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, Color{0.0f, 0.0f, 0.0f, 0.90f});
-        renderer_.outline(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, 4.0f, kFocus);
-        renderer_.imageRegion(trickplayState_.texture(), x, y, previewWidth, previewHeight, u0, v0, u1, v1);
-        renderer_.text(x + 14.0f, y + previewHeight + 13.0f, 1.65f, formatPlaybackTime(trickplayState_.positionMs()), kText, previewWidth - 28.0f);
+        constexpr float previewRadius = material_tv::cornerSmall;
+        renderer_.roundedRect(
+            x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f,
+            previewRadius + 7.0f, Color{0.0f, 0.0f, 0.0f, 0.90f});
+        renderer_.roundedOutline(
+            x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f,
+            previewRadius + 7.0f, 4.0f, kFocus);
+        renderer_.roundedImageRegion(
+            trickplayState_.texture(), x, y, previewWidth, previewHeight, previewRadius,
+            u0, v0, u1, v1);
+        drawLeftAlignedSingleLineFit(
+            x + 14.0f, y + previewHeight + 7.0f, previewWidth - 28.0f, 44.0f, 1.65f,
+            formatPlaybackTime(trickplayState_.positionMs()), kText);
         return true;
     }
 
@@ -5163,7 +5172,9 @@ private:
 
         if (accountState_.quickConnectActive()) {
             drawModalSurface(465.0f, 230.0f, 990.0f, 610.0f);
-            renderer_.text(765.0f, 278.0f, 2.5f, "Quick Connect", kSecondaryText, 420.0f);
+            drawCenteredSingleLineFit(
+                610.0f, 266.0f, 700.0f, 62.0f, 2.5f,
+                "Quick Connect", kSecondaryText, 12.0f, 4.0f);
 
             renderer_.roundedRect(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, kPanelElevated);
             renderer_.roundedOutline(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, 1.0f, kOutline);
@@ -5200,8 +5211,10 @@ private:
         drawModalSurface(410.0f, 225.0f, 1100.0f, 615.0f);
         static constexpr std::array<const char*, 3> labels{"Server", "Username", "Password"};
         for (int i = 0; i < 3; ++i) {
-            const float y = 320.0f + static_cast<float>(i) * 118.0f;
-            renderer_.text(495.0f, y - 40.0f, 1.45f, labels[static_cast<size_t>(i)], kMuted);
+            const float y = 290.0f + static_cast<float>(i) * 128.0f;
+            drawLeftAlignedSingleLineFit(
+                495.0f, y - 45.0f, 420.0f, 32.0f, 1.35f,
+                labels[static_cast<size_t>(i)], kMuted);
             const bool focused = !accountState_.keyboardActive() && accountState_.loginFocus() == i;
             const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused);
             std::string value = accountState_.field(i);
@@ -5237,12 +5250,14 @@ private:
             renderer_.text(555.0f, 870.0f, 1.65f,
                 fitTextLines(hint, 1.65f, 810.0f, 1), accountState_.discoveryStatus().empty() ? kTertiary : kFocus, 810.0f);
         }
-        if (accountState_.keyboardActive()) renderKeyboard(610.0f);
+        if (accountState_.keyboardActive()) renderKeyboard(655.0f);
     }
 
     void renderProfiles() {
         renderHeader("Users & servers");
-        renderer_.text(105.0f, 180.0f, 2.15f, "Choose who is watching", kMuted, 640.0f);
+        drawLeftAlignedSingleLineFit(
+            105.0f, 176.0f, 640.0f, 50.0f, 2.15f,
+            "Choose who is watching", kMuted);
         const int totalRows = static_cast<int>(sessionRegistry_.size()) + 1;
         constexpr int visibleRows = 5;
         const int maxFirst = std::max(0, totalRows - visibleRows);
@@ -5271,10 +5286,12 @@ private:
                 drawCenteredSingleLineFit(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, kText, 8.0f, 8.0f);
             }
             const std::string profileName = saved.username.empty() ? "User" : saved.username;
-            renderer_.text(395.0f, y + 8.0f, 2.35f,
-                fitTextLines(profileName, 2.35f, 480.0f, 1), kText, 480.0f);
-            renderer_.text(395.0f, y + 68.0f, 1.35f,
-                fitTextLines(saved.server, 1.35f, 650.0f, 1), kMuted, 650.0f);
+            drawLeftAlignedSingleLineFit(
+                395.0f, y + 6.0f, 650.0f, 54.0f, 2.35f,
+                profileName, kText);
+            drawLeftAlignedSingleLineFit(
+                395.0f, y + 64.0f, 650.0f, 34.0f, 1.35f,
+                saved.server, kMuted);
             const bool useFocused = focused && accountState_.profileAction() == 0;
             const bool forgetFocused = focused && accountState_.profileAction() == 1;
             const auto useBounds = drawButtonSurface(1110.0f, y + 18.0f, 210.0f, 72.0f, useFocused, true);
@@ -5656,7 +5673,7 @@ private:
             for (size_t index = 0; index < labels.size(); ++index) {
                 const float width = labels[index] == "COLLECTIONS" ? 235.0f : 176.0f;
                 const bool focused = browseState_.filterFocused() && static_cast<int>(index) == browseState_.filterSelection();
-                const bool active = static_cast<int>(index) == browseState_.filterSelection();
+                const bool active = static_cast<int>(index) == browseState_.activeFilterSelection();
                 if (focused) {
                     const auto bounds = drawTabSurface(x, 190.0f, width, 58.0f, true, active);
                     drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f,
@@ -5708,7 +5725,7 @@ private:
         const auto& results = searchState_.results();
         const auto& query = searchState_.query();
         renderer_.text(80.0f, 44.0f, material_tv::type::headline, "Search", kText, 520.0f);
-        constexpr float searchTop = 145.0f;
+        constexpr float searchTop = 155.0f;
         constexpr float searchWidth = 1450.0f;
         const bool searchFieldFocused = !searchState_.keyboard() && results.empty();
         const auto searchBounds = drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused);
@@ -5826,6 +5843,14 @@ private:
             || transitionState_.fallbackResolving()
             || showNextUp
             || playerScreenState_.overlayVisible(now);
+        if (showOverlay) {
+            renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f,
+                Color{0.0f, 0.0f, 0.0f, 0.74f},
+                Color{0.0f, 0.0f, 0.0f, 0.0f});
+            renderer_.verticalGradient(0.0f, 650.0f, 1920.0f, 430.0f,
+                Color{0.0f, 0.0f, 0.0f, 0.0f},
+                Color{0.0f, 0.0f, 0.0f, 0.90f});
+        }
         std::string subtitleText = player_.subtitleText();
         if (const SubtitleCue* cue = activeSubtitleCue()) subtitleText = cue->text;
         if (!subtitleText.empty()) {
@@ -5854,7 +5879,8 @@ private:
             const float bottomY = subtitleBottomY(
                 showOverlay,
                 playerScreenState_.controlsActive(),
-                settings_.subtitlePosition
+                settings_.subtitlePosition,
+                skipSegment != nullptr
             );
             const float boxY = bottomY - boxHeight;
             if (settings_.subtitleBackground) {
@@ -5894,13 +5920,6 @@ private:
                 "Press OK to skip", kSecondaryText);
         }
         if (!showOverlay) return;
-
-        renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f,
-            Color{0.0f, 0.0f, 0.0f, 0.74f},
-            Color{0.0f, 0.0f, 0.0f, 0.0f});
-        renderer_.verticalGradient(0.0f, 650.0f, 1920.0f, 430.0f,
-            Color{0.0f, 0.0f, 0.0f, 0.0f},
-            Color{0.0f, 0.0f, 0.0f, 0.90f});
 
         if (showNextUp && continuationState_.nextItem()) {
             const auto& nextItem = *continuationState_.nextItem();
@@ -6050,7 +6069,9 @@ private:
 
         renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, kScrim);
         drawModalSurface(790.0f, 28.0f, 1090.0f, 1020.0f);
-        renderer_.text(842.0f, 72.0f, 3.35f, "Playback queue", kText, 620.0f);
+        drawLeftAlignedSingleLineFit(
+            842.0f, 60.0f, 620.0f, 74.0f, 3.35f,
+            "Playback queue", kText);
         renderer_.roundedRect(1555.0f, 70.0f, 255.0f, 46.0f, 18.0f, kPanelAlt);
         drawCenteredSingleLineFit(
             1555.0f, 70.0f, 255.0f, 46.0f, 1.35f,
@@ -6076,11 +6097,15 @@ private:
             drawCenteredSingleLineFit(
                 bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 1.20f,
                 marker, isCurrent ? kText : kMuted, 8.0f, 3.0f);
-            renderer_.text(bounds[0] + 300.0f, bounds[1] + 8.0f, 1.85f,
-                fitTextLines(item.name, 1.85f, 610.0f, 1), kText, 610.0f);
+            drawLeftAlignedSingleLineFit(
+                bounds[0] + 300.0f, bounds[1] + 5.0f, 610.0f, 46.0f, 1.85f,
+                item.name, kText);
             const std::string secondary = episodeLabel(item);
-            if (!secondary.empty()) renderer_.text(bounds[0] + 300.0f, bounds[1] + 56.0f, 1.25f,
-                fitTextLines(secondary, 1.25f, 610.0f, 1), kMuted, 610.0f);
+            if (!secondary.empty()) {
+                drawLeftAlignedSingleLineFit(
+                    bounds[0] + 300.0f, bounds[1] + 50.0f, 610.0f, 36.0f, 1.25f,
+                    secondary, kMuted);
+            }
         }
 
         const std::array<std::string, 7> actions{
@@ -6143,9 +6168,15 @@ private:
 
         const std::string clock = formatLocalClock(std::time(nullptr), settings_.clock24Hour);
 
-        renderer_.text(position[0], position[1], 4.2f, "sloppaTV", material_tv::primary, 600.0f);
-        renderer_.text(position[0], position[1] + 88.0f, 9.0f, clock, kText, 650.0f);
-        renderer_.textCentered(600.0f, 1008.0f, 720.0f, 48.0f, 1.45f, "Press any button to return", kTertiary);
+        drawLeftAlignedSingleLineFit(
+            position[0], position[1], 600.0f, 104.0f, 4.2f,
+            "sloppaTV", material_tv::primary);
+        drawLeftAlignedSingleLineFit(
+            position[0], position[1] + 112.0f, 700.0f, 205.0f, 9.0f,
+            clock, kText);
+        drawCenteredSingleLineFit(
+            600.0f, 1008.0f, 720.0f, 48.0f, 1.45f,
+            "Press any button to return", kTertiary, 12.0f, 4.0f);
     }
 
     void renderSettings() {
@@ -6323,9 +6354,9 @@ private:
                 drawLeftAlignedSingleLineFit(
                     x + 28.0f, rowY - 5.0f, 260.0f, 46.0f, 1.45f,
                     rows[static_cast<size_t>(index)].first, kTertiary);
-                renderer_.text(x + 300.0f, rowY - 2.0f, 1.75f,
-                    fitTextLines(rows[static_cast<size_t>(index)].second, 1.75f, width - 330.0f, 1),
-                    kText, width - 330.0f);
+                drawLeftAlignedSingleLineFit(
+                    x + 300.0f, rowY - 5.0f, width - 330.0f, 46.0f, 1.75f,
+                    rows[static_cast<size_t>(index)].second, kText);
                 rowY += 58.0f;
                 ++row;
             }
@@ -6454,13 +6485,14 @@ private:
         const bool hasPortraitCards = std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) {
             return !usesLandscapeMediaCard(item.type);
         });
+        const float rowStep = searchMediaRowHeight(hasPortraitCards);
         const int firstRow = mediaFirstVisibleRow(selection, 2);
         for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
             const int row = index / columns - firstRow;
             const int col = index % columns;
             if (row >= 2) break;
             const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-            const float y = 195.0f + static_cast<float>(row) * 430.0f;
+            const float y = 195.0f + static_cast<float>(row) * rowStep;
             renderMediaArtworkCard(
                 items[static_cast<size_t>(index)], x, y, slotWidth, index == selection,
                 true, false, hasPortraitCards,

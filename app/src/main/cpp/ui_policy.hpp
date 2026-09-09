@@ -71,9 +71,15 @@ constexpr float materialListItemFocusScale() { return 1.04f; }
 constexpr float materialTabFocusScale() { return 1.05f; }
 constexpr float materialInputFocusScale() { return 1.04f; }
 
-constexpr float subtitleBottomY(bool playbackOverlayVisible, bool playbackControlsActive, int position) {
+constexpr float subtitleBottomY(
+    bool playbackOverlayVisible,
+    bool playbackControlsActive,
+    int position,
+    bool skipButtonVisible = false
+) {
     const int clamped = std::clamp(position, 0, 2);
-    const float base = playbackControlsActive ? 670.0f : (playbackOverlayVisible ? 790.0f : 1000.0f);
+    float base = playbackControlsActive ? 670.0f : (playbackOverlayVisible ? 790.0f : 1000.0f);
+    if (skipButtonVisible) base = std::min(base, 610.0f);
     return base - static_cast<float>(clamped) * 95.0f;
 }
 

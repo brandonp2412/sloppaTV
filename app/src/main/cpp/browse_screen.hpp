@@ -211,6 +211,18 @@ public:
     [[nodiscard]] bool filterFocused() const { return filterFocused_; }
     void setFilterFocused(bool value) { filterFocused_ = value; }
     [[nodiscard]] int filterSelection() const { return filterSelection_; }
+    [[nodiscard]] int activeFilterSelection() const {
+        switch (mode_) {
+            case BrowseContentMode::Favorites: return 1;
+            case BrowseContentMode::Genres:
+            case BrowseContentMode::GenreItems: return 2;
+            case BrowseContentMode::Letters:
+            case BrowseContentMode::LetterItems: return 3;
+            case BrowseContentMode::Collections: return 4;
+            case BrowseContentMode::All: return 0;
+        }
+        return 0;
+    }
 
 private:
     void clearPage() {

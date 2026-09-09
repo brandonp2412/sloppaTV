@@ -25,11 +25,17 @@ int main() {
     assert(state.hasFilterBar());
     assert(state.filterLabels().size() == 5);
     assert(state.heading() == "Movies");
+    assert(state.activeFilterSelection() == 0);
 
-    state.moveFilter(2);
+    state.moveFilter(1);
+    assert(state.filterSelection() == 1);
+    assert(state.activeFilterSelection() == 0);
+    state.moveFilter(1);
     assert(state.filterSelection() == 2);
+    assert(state.activeFilterSelection() == 0);
     assert(state.applyFilter(state.filterSelection()));
     assert(state.mode() == BrowseContentMode::Genres);
+    assert(state.activeFilterSelection() == 2);
     assert(state.heading() == "Movies - GENRES");
 
     state.replacePage({item("g1", "Comedy", "Genre"), item("g2", "Drama", "Genre")}, 60);
@@ -37,6 +43,7 @@ int main() {
     assert(state.selection() == 1);
     state.selectGenre("Drama");
     assert(state.mode() == BrowseContentMode::GenreItems);
+    assert(state.activeFilterSelection() == 2);
     assert(state.heading() == "Movies - Drama");
     assert(state.items().empty());
     assert(state.back() == BrowseBackAction::Reload);
@@ -44,18 +51,24 @@ int main() {
 
     assert(!state.applyFilter(3));
     assert(state.mode() == BrowseContentMode::Letters);
+    assert(state.activeFilterSelection() == 3);
     assert(state.syntheticPage());
     assert(state.items().size() == 26);
     assert(state.items().front().name == "A");
     assert(state.items().back().name == "Z");
     state.selectLetter("M");
     assert(state.mode() == BrowseContentMode::LetterItems);
+    assert(state.activeFilterSelection() == 3);
     assert(state.heading() == "Movies - M");
     assert(state.back() == BrowseBackAction::LocalPage);
     assert(state.mode() == BrowseContentMode::Letters);
     assert(state.items().size() == 26);
 
+    assert(state.applyFilter(4));
+    assert(state.mode() == BrowseContentMode::Collections);
+    assert(state.activeFilterSelection() == 4);
     assert(state.applyFilter(0));
+    assert(state.activeFilterSelection() == 0);
     state.replacePage({item("m1", "One"), item("m2", "Two")}, 2);
     assert(state.hasMore());
     assert(state.nextIndex() == 2);

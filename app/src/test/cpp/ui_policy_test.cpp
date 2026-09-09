@@ -17,9 +17,9 @@ int main() {
         }
     }
     assert(mediaFirstVisibleRow(-1, 0) == 0);
-    // Login's five-row keyboard must shrink enough to keep focused keys on-screen.
-    assert(keyboardKeyHeight(610.0f, 5, 14.0f) < 82.0f);
-    assert(keyboardKeyHeight(610.0f, 5, 14.0f) >= 58.0f);
+    // Login's five-row keyboard must stay readable while clearing the password field.
+    assert(keyboardKeyHeight(655.0f, 5, 14.0f) < 82.0f);
+    assert(keyboardKeyHeight(655.0f, 5, 14.0f) >= 68.0f);
     assert(keyboardKeyHeight(270.0f, 5, 14.0f) == 82.0f);
     assert(keyboardKeyHeight(610.0f, 0, 14.0f) == 0.0f);
     // Two poster rows, including two title lines and metadata, fit the canvas.
@@ -98,5 +98,8 @@ int main() {
     assert(subtitleBottomY(true, false, 2) == 600.0f);
     assert(subtitleBottomY(true, true, 0) == 670.0f);
     assert(subtitleBottomY(false, true, 2) == 480.0f);
+    assert(subtitleBottomY(false, false, 0, true) == 610.0f);
+    assert(subtitleBottomY(true, true, 0, true) == 610.0f);
+    assert(subtitleBottomY(false, false, 2, true) == 420.0f);
     return 0;
 }
