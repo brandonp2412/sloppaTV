@@ -4882,7 +4882,8 @@ private:
         renderer_.text(730.0f, 194.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
 
         if (accountState_.quickConnectActive()) {
-            renderer_.roundedRect(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, Color{0.035f, 0.040f, 0.055f, 0.92f});
+            renderer_.roundedRect(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, kModalSurface);
+            renderer_.roundedOutline(465.0f, 250.0f, 990.0f, 560.0f, 34.0f, 1.5f, kOutline);
             renderer_.text(775.0f, 300.0f, 2.4f, "QUICK CONNECT", kMuted, 400.0f);
             const float codeWidth = renderer_.textWidth(8.8f, accountState_.quickConnectCode());
             renderer_.text(960.0f - codeWidth * 0.5f, 390.0f, 8.8f, accountState_.quickConnectCode(), kText, 760.0f);
@@ -4893,7 +4894,8 @@ private:
             return;
         }
 
-        renderer_.roundedRect(410.0f, 225.0f, 1100.0f, 615.0f, 34.0f, Color{0.028f, 0.033f, 0.046f, 0.90f});
+        renderer_.roundedRect(410.0f, 225.0f, 1100.0f, 615.0f, 34.0f, kModalSurface);
+        renderer_.roundedOutline(410.0f, 225.0f, 1100.0f, 615.0f, 34.0f, 1.5f, kOutline);
         static constexpr std::array<const char*, 3> labels{"SERVER", "USERNAME", "PASSWORD"};
         for (int i = 0; i < 3; ++i) {
             const float y = 320.0f + static_cast<float>(i) * 118.0f;
@@ -5511,11 +5513,10 @@ private:
             }
         }
         if (skipSegment) {
-            renderer_.roundedRect(1460.0f, 640.0f, 360.0f, 86.0f, 24.0f, Color{0.10f, 0.07f, 0.16f, 0.90f});
-            drawFocusHalo(1460.0f, 640.0f, 360.0f, 86.0f, kFocus, 24.0f);
+            const auto bounds = drawFocusedSurface(1460.0f, 640.0f, 360.0f, 86.0f, true, true);
             const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
-            renderer_.textCentered(1460.0f, 644.0f, 360.0f, 38.0f, 2.25f, skipLabel, kText);
-            renderer_.textCentered(1460.0f, 682.0f, 360.0f, 36.0f, 1.70f, "OK TO SKIP", kMuted);
+            renderer_.textCentered(bounds[0], bounds[1] + 4.0f, bounds[2], 38.0f, 2.25f, skipLabel, kText);
+            renderer_.textCentered(bounds[0], bounds[1] + 42.0f, bounds[2], 36.0f, 1.70f, "OK TO SKIP", kSecondaryText);
         }
         if (!showOverlay) return;
 
@@ -5528,7 +5529,8 @@ private:
 
         if (showNextUp && continuationState_.nextItem()) {
             const auto& nextItem = *continuationState_.nextItem();
-            renderer_.roundedRect(1195.0f, 185.0f, 625.0f, 205.0f, 26.0f, Color{0.02f, 0.024f, 0.034f, 0.90f});
+            renderer_.roundedRect(1195.0f, 185.0f, 625.0f, 205.0f, 26.0f, kModalSurface);
+            renderer_.roundedOutline(1195.0f, 185.0f, 625.0f, 205.0f, 26.0f, 1.5f, kOutline);
             const bool hasNextArtwork = drawHomeArtwork(nextItem, 1210.0f, 200.0f, 260.0f, 146.0f);
             const float textX = hasNextArtwork ? 1500.0f : 1230.0f;
             renderer_.text(textX, 205.0f, 1.65f, "NEXT UP  |  " + std::to_string(std::max(0, remainingMs / 1000)) + "S", kFocus, 285.0f);
@@ -5589,12 +5591,7 @@ private:
             float x = 578.0f;
             for (size_t i = 0; i < controls.size(); ++i) {
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
-                const auto bounds = focusedBounds(x, 925.0f, widths[i], 66.0f, selected, 1.06f);
-                renderer_.roundedRect(
-                    bounds[0], bounds[1], bounds[2], bounds[3], 24.0f,
-                    selected ? Color{0.50f, 0.27f, 0.91f, 0.98f} : Color{0.015f, 0.020f, 0.030f, 0.88f}
-                );
-                if (selected) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 24.0f);
+                const auto bounds = drawFocusedSurface(x, 925.0f, widths[i], 66.0f, selected, i == 0);
 
                 const float iconX = bounds[0] + 24.0f;
                 const float iconCenterY = bounds[1] + bounds[3] * 0.5f;
@@ -5648,8 +5645,9 @@ private:
         queueState_.setSelection(queueState_.selection());
         const int selection = queueState_.selection();
 
-        renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.28f});
-        renderer_.roundedRect(790.0f, 28.0f, 1090.0f, 1020.0f, 34.0f, Color{0.012f, 0.015f, 0.022f, 0.96f});
+        renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, kScrim);
+        renderer_.roundedRect(790.0f, 28.0f, 1090.0f, 1020.0f, 34.0f, kModalSurface);
+        renderer_.roundedOutline(790.0f, 28.0f, 1090.0f, 1020.0f, 34.0f, 1.5f, kOutline);
         renderer_.text(842.0f, 72.0f, 3.35f, "PLAYBACK QUEUE", kText, 620.0f);
         renderer_.roundedRect(1555.0f, 70.0f, 255.0f, 46.0f, 18.0f, kPanelAlt);
         renderer_.textCentered(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, std::to_string(size - current) + " REMAINING", kMuted);
@@ -5664,7 +5662,7 @@ private:
             const bool isCurrent = index == current;
             const auto& item = queueState_.items()[static_cast<size_t>(index)];
             const auto bounds = focusedBounds(830.0f, y, 990.0f, 90.0f, selected, 1.018f);
-            renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 20.0f, selected ? kPanelElevated : Color{0.05f, 0.055f, 0.070f, 0.78f});
+            renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 20.0f, selected ? kPanelElevated : kPanel);
             drawHomeArtwork(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f);
             const std::string marker = isCurrent ? "CURRENT" : (index == current + 1 ? "NEXT" : std::to_string(index - current + 1));
             const float markerWidth = isCurrent ? 122.0f : (index == current + 1 ? 88.0f : 58.0f);
@@ -5705,7 +5703,7 @@ private:
             const bool available = enabled(static_cast<int>(i));
             std::array<float, 4> actionBounds{x, y, width, 68.0f};
             if (available) actionBounds = drawFocusedSurface(x, y, width, 68.0f, focused, focused, i == 4);
-            else renderer_.roundedRect(x, y, width, 68.0f, 18.0f, Color{0.06f, 0.065f, 0.075f, 0.72f});
+            else renderer_.roundedRect(x, y, width, 68.0f, 18.0f, kPanel);
             renderer_.textCentered(actionBounds[0], actionBounds[1], actionBounds[2], actionBounds[3], 1.45f, actions[i],
                 available ? kText : kTertiary);
         }
@@ -5869,7 +5867,8 @@ private:
             {"LAST PLAYBACK", lastPlaybackSummary_.empty() ? "NOT YET PLAYED THIS SESSION" : lastPlaybackSummary_},
         };
         auto renderPanel = [&](float x, float y, float width, float height, const std::string& title, std::initializer_list<int> indices) {
-            renderer_.roundedRect(x, y, width, height, 26.0f, Color{0.035f, 0.041f, 0.055f, 0.90f});
+            renderer_.roundedRect(x, y, width, height, 26.0f, kPanel);
+            renderer_.roundedOutline(x, y, width, height, 26.0f, 1.0f, kOutline);
             renderer_.text(x + 28.0f, y + 25.0f, 2.35f, title, kText, width - 56.0f);
             float rowY = y + 82.0f;
             for (const int index : indices) {
