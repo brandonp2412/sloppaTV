@@ -501,6 +501,38 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("ANDROID_SERIAL must be set", result.stderr)
 
+    def test_ci_screenshot_script_rejects_non_emulator_by_default(self) -> None:
+        environment = os.environ.copy()
+        environment["ANDROID_SERIAL"] = "192.168.240.2:5555"
+        environment.pop("SLOPPATV_SCREENSHOT_TARGET", None)
+        result = subprocess.run(
+            [str(ROOT / "tools" / "ci_screenshots.sh")],
+            cwd=ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Refusing non-emulator ANDROID_SERIAL", result.stderr)
+
+    def test_ci_screenshot_script_allows_explicit_waydroid_target(self) -> None:
+        environment = os.environ.copy()
+        environment["ANDROID_SERIAL"] = "192.168.240.2:5555"
+        environment["SLOPPATV_SCREENSHOT_TARGET"] = "waydroid"
+        environment.pop("SLOPPATV_APK", None)
+        result = subprocess.run(
+            [str(ROOT / "tools" / "ci_screenshots.sh")],
+            cwd=ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Refusing non-emulator ANDROID_SERIAL", result.stderr)
+        self.assertIn("SLOPPATV_APK must point to a built APK", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
