@@ -1,4 +1,5 @@
 .gradle/
+.gradle-release/
 **/.cxx/
 **/build/
 build/

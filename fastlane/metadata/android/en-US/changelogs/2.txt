@@ -1,0 +1,1 @@
+Fix Android TV launcher icon and banner packaging for Google Play TV quality compliance.

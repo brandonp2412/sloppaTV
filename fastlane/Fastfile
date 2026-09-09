@@ -1,3 +1,5 @@
+require "open3"
+require "pathname"
 require "shellwords"
 
 def project_root
@@ -12,13 +14,59 @@ def release_aab
   File.join(project_root, "app", "build", "outputs", "bundle", "release", "app-release.aab")
 end
 
+def release_gradle_user_home
+  ENV.fetch("SLOPPATV_RELEASE_GRADLE_USER_HOME", File.join(project_root, ".gradle-release"))
+end
+
+def signing_properties
+  File.readlines(File.join(project_root, "key.properties"), chomp: true).each_with_object({}) do |line, properties|
+    stripped = line.strip
+    next if stripped.empty? || stripped.start_with?("#")
+
+    key, value = line.split("=", 2)
+    properties[key.strip] = value&.strip
+  end
+end
+
+def sha256_fingerprint(output)
+  match = output.match(/SHA256:\s*([0-9A-F:]+)/i)
+  UI.user_error!("Could not read SHA-256 signing certificate fingerprint") unless match
+  match[1].upcase
+end
+
+def verify_release_signer!
+  properties = signing_properties
+  store_file = properties.fetch("storeFile")
+  store_file = File.expand_path(store_file, project_root) unless Pathname.new(store_file).absolute?
+
+  expected_output, expected_error, expected_status = Open3.capture3(
+    "keytool", "-list", "-v",
+    "-keystore", store_file,
+    "-alias", properties.fetch("keyAlias"),
+    "-storepass", properties.fetch("storePassword")
+  )
+  UI.user_error!("Could not inspect configured release signing key: #{expected_error}") unless expected_status.success?
+
+  actual_output, actual_error, actual_status = Open3.capture3(
+    "keytool", "-printcert", "-jarfile", release_aab
+  )
+  UI.user_error!("Could not inspect release AAB signer: #{actual_error}") unless actual_status.success?
+
+  expected = sha256_fingerprint(expected_output)
+  actual = sha256_fingerprint(actual_output)
+  UI.user_error!("Release AAB signer mismatch: expected #{expected}, got #{actual}") unless actual == expected
+end
+
 def validate_metadata!
   sh("python3 #{Shellwords.escape(File.join(project_root, 'tools', 'sync_play_store_screenshots.py'))} --validate-only")
 end
 
 def build_release_bundle!
-  sh("#{Shellwords.escape(File.join(project_root, 'gradlew'))} --no-daemon bundleRelease")
+  gradle = Shellwords.escape(File.join(project_root, "gradlew"))
+  gradle_home = Shellwords.escape(release_gradle_user_home)
+  sh("GRADLE_USER_HOME=#{gradle_home} #{gradle} --no-daemon bundleRelease")
   UI.user_error!("Release AAB was not produced at #{release_aab}") unless File.file?(release_aab)
+  verify_release_signer!
 end
 
 def upload_store!(track:, include_bundle:)
