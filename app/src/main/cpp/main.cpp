@@ -5669,8 +5669,37 @@ private:
         if (skipSegment) {
             const auto bounds = drawButtonSurface(1460.0f, 640.0f, 360.0f, 86.0f, true, true);
             const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
-            renderer_.textCentered(bounds[0], bounds[1] + 4.0f, bounds[2], 38.0f, 2.25f, skipLabel, kText);
-            renderer_.textCentered(bounds[0], bounds[1] + 42.0f, bounds[2], 36.0f, 1.70f, "OK TO SKIP", kSecondaryText);
+            constexpr float horizontalPadding = 24.0f;
+            constexpr float labelHeight = 48.0f;
+            constexpr float helperHeight = 32.0f;
+            constexpr float lineGap = 2.0f;
+            const float contentX = bounds[0] + horizontalPadding;
+            const float contentWidth = std::max(1.0f, bounds[2] - horizontalPadding * 2.0f);
+            float labelScale = 2.05f;
+            const float labelWidth = renderer_.textWidth(labelScale, skipLabel);
+            if (labelWidth > contentWidth && labelWidth > 0.0f) {
+                labelScale = std::max(1.55f, labelScale * contentWidth / labelWidth);
+            }
+            const float stackHeight = labelHeight + lineGap + helperHeight;
+            const float stackY = bounds[1] + (bounds[3] - stackHeight) * 0.5f;
+            renderer_.textCentered(
+                contentX,
+                stackY,
+                contentWidth,
+                labelHeight,
+                labelScale,
+                fitTextLines(skipLabel, labelScale, contentWidth, 1),
+                kText
+            );
+            renderer_.textCentered(
+                contentX,
+                stackY + labelHeight + lineGap,
+                contentWidth,
+                helperHeight,
+                1.35f,
+                fitTextLines("Press OK to skip", 1.35f, contentWidth, 1),
+                kSecondaryText
+            );
         }
         if (!showOverlay) return;
 
@@ -5686,10 +5715,15 @@ private:
             drawModalSurface(1195.0f, 185.0f, 625.0f, 205.0f, material_tv::cornerMedium);
             const bool hasNextArtwork = drawHomeArtwork(nextItem, 1210.0f, 200.0f, 260.0f, 146.0f);
             const float textX = hasNextArtwork ? 1500.0f : 1230.0f;
-            renderer_.text(textX, 205.0f, 1.65f, "NEXT UP  |  " + std::to_string(std::max(0, remainingMs / 1000)) + "S", kFocus, 285.0f);
-            renderer_.text(textX, 250.0f, 2.15f, nextItem.name, kText, 285.0f);
+            const float textWidth = hasNextArtwork ? 285.0f : 560.0f;
+            const std::string nextHeading = "Up next  ·  " + std::to_string(std::max(0, remainingMs / 1000)) + "s";
+            renderer_.text(textX, 205.0f, 1.65f,
+                fitTextLines(nextHeading, 1.65f, textWidth, 1), kFocus, textWidth);
+            renderer_.text(textX, 250.0f, 2.15f,
+                fitTextLines(nextItem.name, 2.15f, textWidth, 1), kText, textWidth);
             const std::string nextLabel = episodeLabel(nextItem);
-            if (!nextLabel.empty()) renderer_.text(textX, 315.0f, 1.5f, nextLabel, kMuted, 285.0f);
+            if (!nextLabel.empty()) renderer_.text(textX, 315.0f, 1.5f,
+                fitTextLines(nextLabel, 1.5f, textWidth, 1), kMuted, textWidth);
         }
 
         const std::string heading = activePlaybackItem_.seriesName.empty()
