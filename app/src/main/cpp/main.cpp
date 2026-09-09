@@ -4907,7 +4907,15 @@ private:
         float radius = material_tv::cornerMedium,
         bool outlinedWhenIdle = false
     ) {
-        const auto bounds = focusedBounds(x, y, width, height, focused, focusScale);
+        auto bounds = focusedBounds(x, y, width, height, focused, focusScale);
+        // Idle outlined pills need stable pixel-aligned geometry. Focused surfaces
+        // deliberately keep their fractional animated bounds for smooth scaling.
+        if (!focused) {
+            bounds[0] = std::round(bounds[0]);
+            bounds[1] = std::round(bounds[1]);
+            bounds[2] = std::round(bounds[2]);
+            bounds[3] = std::round(bounds[3]);
+        }
         const float radiusScale = height > 0.0f ? bounds[3] / height : 1.0f;
         const float renderedRadius = radius * radiusScale;
         const Color accent = destructive ? kError : kFocus;
@@ -4950,6 +4958,10 @@ private:
     }
 
     void drawDisabledButtonSurface(float x, float y, float width, float height) {
+        x = std::round(x);
+        y = std::round(y);
+        width = std::round(width);
+        height = std::round(height);
         const float radius = std::min(material_tv::cornerLarge, height * 0.5f);
         renderer_.roundedRect(x, y, width, height, radius, kPanel);
         renderer_.roundedOutline(x, y, width, height, radius, 1.0f, kDivider);

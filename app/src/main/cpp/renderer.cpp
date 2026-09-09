@@ -613,7 +613,13 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
     constexpr int pointsPerCorner = segmentsPerCorner + 1;
     constexpr int pointCount = pointsPerCorner * 4;
     constexpr float pi = 3.14159265358979323846f;
-    const float feather = std::min({1.0f, thickness * 0.35f, std::max(0.25f, radius * 0.25f)});
+    // A 1-1.5 px idle outline used to spend most of its width fading in/out,
+    // which made rounded pill corners look visibly soft on a 1080p TV. Keep
+    // thick focus rings unchanged, but give thin strokes a substantially
+    // narrower antialias fringe and a solid center.
+    const float feather = thickness <= 2.0f
+        ? std::min({0.35f, thickness * 0.20f, std::max(0.15f, radius * 0.10f)})
+        : std::min({1.0f, thickness * 0.35f, std::max(0.25f, radius * 0.25f)});
 
     auto perimeter = [&](float inset, float alpha) {
         std::array<Vertex, pointCount> points{};
