@@ -36,6 +36,12 @@ The final optimized Release then completed the canonical `--final-suite` on the 
 
 Raw A/B samples are tracked in [`docs/benchmarks/home-startup-optimization-ab-2026-09-09.json`](docs/benchmarks/home-startup-optimization-ab-2026-09-09.json). The canonical final-suite samples are tracked in [`docs/benchmarks/google-tv-streamer-optimization-final-2026-09-09.json`](docs/benchmarks/google-tv-streamer-optimization-final-2026-09-09.json).
 
+### Renderer font-startup follow-up — 2026-09-09
+
+Commit `f957e6e` overlaps normal Android font-atlas preparation with EGL initialization, defers the subtitle-only outline atlas until outlined text is first required, and avoids an unnecessary intermediate atlas copy for tightly packed Android bitmaps. The exact Release APK for that commit was installed in place on the same physical Google TV Streamer with persisted app data and settings preserved.
+
+A clean sloppaTV-only physical-device validation, run after competing package installs had stopped, recorded **204.5 ms median / 206.7 ms mean** across 20 cold launches (range **187–253 ms**), **32,647 KB PSS / 131,601 KB RSS**, **4,164 KB Java heap / 8,824 KB native heap**, and **0.0% idle CPU** across all five samples. Five 80-event DPAD runs measured **16.67 ms median / 16.74 ms p95**, **0.8% >20 ms**, **0.8% >33.4 ms**, and **0 dropped frames**. The clean raw samples are tracked in [`docs/benchmarks/google-tv-streamer-renderer-font-prefetch-sloppa-only-2026-09-09.json`](docs/benchmarks/google-tv-streamer-renderer-font-prefetch-sloppa-only-2026-09-09.json).
+
 ## Release-candidate evidence — 2026-09-01
 
 The measurements below predate the build-type split and used the then-current Android `release` build type (`isDebuggable=false`, native C++ optimized) signed locally with the standard Android debug key solely for installation on the test TV. Equivalent installable performance/device testing now uses the non-debuggable `benchmark` build type; `release` remains unsigned unless production signing credentials are explicitly supplied.

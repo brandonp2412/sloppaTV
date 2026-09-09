@@ -1,0 +1,135 @@
+{
+    "captured_at": "2026-09-09T05:48:53.626170+00:00",
+    "commit": "f957e6e",
+    "device": "Google TV Streamer",
+    "startup": {
+        "samples_ms": [
+            253,
+            194,
+            188,
+            202,
+            210,
+            204,
+            223,
+            206,
+            196,
+            202,
+            215,
+            208,
+            211,
+            187,
+            205,
+            200,
+            194,
+            196,
+            230,
+            209
+        ],
+        "median_ms": 204.5,
+        "mean_ms": 206.7,
+        "min_ms": 187,
+        "max_ms": 253
+    },
+    "memory": {
+        "total_pss_kb": 32647.0,
+        "total_rss_kb": 131601.0,
+        "java_heap_kb": 4164.0,
+        "native_heap_kb": 8824.0
+    },
+    "memory_samples": [
+        {
+            "total_pss_kb": 32647,
+            "total_rss_kb": 131601,
+            "java_heap_kb": 4200,
+            "native_heap_kb": 8684
+        },
+        {
+            "total_pss_kb": 32095,
+            "total_rss_kb": 131045,
+            "java_heap_kb": 4140,
+            "native_heap_kb": 8236
+        },
+        {
+            "total_pss_kb": 33031,
+            "total_rss_kb": 131993,
+            "java_heap_kb": 4164,
+            "native_heap_kb": 9084
+        },
+        {
+            "total_pss_kb": 32617,
+            "total_rss_kb": 131570,
+            "java_heap_kb": 4204,
+            "native_heap_kb": 8824
+        },
+        {
+            "total_pss_kb": 32772,
+            "total_rss_kb": 131734,
+            "java_heap_kb": 4116,
+            "native_heap_kb": 9152
+        }
+    ],
+    "idle_cpu_samples_pct": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+    ],
+    "idle_cpu_median_pct": 0.0,
+    "navigation": {
+        "frames": 127.0,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 16.74,
+        "over_20ms_pct": 0.8,
+        "over_33_4ms_pct": 0.8,
+        "dropped_frames": 0.0,
+        "average_fps": 0.0
+    },
+    "navigation_samples": [
+        {
+            "frames": 127,
+            "median_interval_ms": 16.67,
+            "p95_interval_ms": 16.75,
+            "over_20ms_pct": 0.8,
+            "over_33_4ms_pct": 0.8,
+            "dropped_frames": 0,
+            "average_fps": 0.0
+        },
+        {
+            "frames": 127,
+            "median_interval_ms": 16.67,
+            "p95_interval_ms": 16.72,
+            "over_20ms_pct": 0.8,
+            "over_33_4ms_pct": 0.8,
+            "dropped_frames": 0,
+            "average_fps": 0.0
+        },
+        {
+            "frames": 127,
+            "median_interval_ms": 16.67,
+            "p95_interval_ms": 16.74,
+            "over_20ms_pct": 0.8,
+            "over_33_4ms_pct": 0.8,
+            "dropped_frames": 0,
+            "average_fps": 0.0
+        },
+        {
+            "frames": 127,
+            "median_interval_ms": 16.66,
+            "p95_interval_ms": 16.74,
+            "over_20ms_pct": 0.8,
+            "over_33_4ms_pct": 0.8,
+            "dropped_frames": 0,
+            "average_fps": 0.0
+        },
+        {
+            "frames": 127,
+            "median_interval_ms": 16.67,
+            "p95_interval_ms": 16.76,
+            "over_20ms_pct": 1.6,
+            "over_33_4ms_pct": 1.6,
+            "dropped_frames": 0,
+            "average_fps": 0.0
+        }
+    ]
+}
