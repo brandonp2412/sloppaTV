@@ -4982,6 +4982,23 @@ private:
             on ? material_tv::onPrimaryContainer : kSecondaryText);
     }
 
+    void drawRightAlignedSingleLine(
+        float right,
+        float y,
+        float scale,
+        std::string_view value,
+        Color color,
+        float maxWidth
+    ) {
+        float fittedScale = scale;
+        float width = renderer_.textWidth(fittedScale, value);
+        if (maxWidth > 0.0f && width > maxWidth && width > 0.0f) {
+            fittedScale *= maxWidth / width;
+            width = renderer_.textWidth(fittedScale, value);
+        }
+        renderer_.text(right - width, y, fittedScale, value, color);
+    }
+
     float drawChip(
         float x,
         float y,
@@ -5007,8 +5024,9 @@ private:
             material_tv::type::headline,
             fitTextLines(title, material_tv::type::headline, 1480.0f, 1), kText, 1480.0f);
         if (settings_.showClock) {
-            renderer_.text(1650.0f, 52.0f, 2.05f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
+            drawRightAlignedSingleLine(
+                1840.0f, 52.0f, 2.05f,
+                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
         }
     }
 
@@ -5280,9 +5298,10 @@ private:
         if (profileFocused) drawFocusHalo(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], kFocus, 31.0f);
 
         if (settings_.showClock) {
-            renderer_.text(1760.0f, 53.0f, 2.10f,
+            drawRightAlignedSingleLine(
+                1900.0f, 53.0f, 2.10f,
                 formatLocalClock(std::time(nullptr), settings_.clock24Hour),
-                Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 145.0f);
+                Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 150.0f);
         }
 
         if (home_.rows.empty()) {
@@ -5302,6 +5321,7 @@ private:
         int renderRowCount = 2;
         const auto now = std::chrono::steady_clock::now();
         constexpr auto slideDuration = 220ms;
+        constexpr float homeRowStep = 420.0f;
         if (homeSlideStarted_ != std::chrono::steady_clock::time_point{}
             && homeSlideToFirst_ == firstVisibleRow
             && now < homeSlideStarted_ + slideDuration) {
@@ -5311,10 +5331,10 @@ private:
             renderRowCount = 3;
             if (homeSlideToFirst_ > homeSlideFromFirst_) {
                 renderFirstRow = homeSlideFromFirst_;
-                slideOffset = -400.0f * eased;
+                slideOffset = -homeRowStep * eased;
             } else {
                 renderFirstRow = homeSlideToFirst_;
-                slideOffset = -400.0f * (1.0f - eased);
+                slideOffset = -homeRowStep * (1.0f - eased);
             }
         }
         for (int visible = 0; visible < renderRowCount; ++visible) {
@@ -5324,7 +5344,7 @@ private:
                 home_.rows[static_cast<size_t>(row)].title,
                 home_.rows[static_cast<size_t>(row)].items,
                 row,
-                150.0f + static_cast<float>(visible) * 400.0f + slideOffset
+                150.0f + static_cast<float>(visible) * homeRowStep + slideOffset
             );
         }
     }
@@ -5617,7 +5637,7 @@ private:
             renderResultRow(0, "Movies & shows", 258.0f, 314.0f);
         }
         if (episodeCount > 0) {
-            renderResultRow(1, "Episodes", topLevelCount > 0 ? 726.0f : 258.0f, topLevelCount > 0 ? 780.0f : 314.0f);
+            renderResultRow(1, "Episodes", topLevelCount > 0 ? 746.0f : 258.0f, topLevelCount > 0 ? 790.0f : 314.0f);
         }
     }
 
@@ -5792,7 +5812,8 @@ private:
         const int duration = playerScreenState_.durationMs();
         if (settings_.showClock) {
             const std::time_t wallNow = std::time(nullptr);
-            renderer_.text(1640.0f, 46.0f, 2.05f,
+            drawRightAlignedSingleLine(
+                1840.0f, 46.0f, 2.05f,
                 formatLocalClock(wallNow, settings_.clock24Hour), kMuted, 210.0f);
             if (remainingMs > 0 && status == PlayerStatus::Playing) {
                 const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
@@ -5808,9 +5829,9 @@ private:
 
         constexpr float progressX = 150.0f;
         constexpr float progressWidth = 1620.0f;
-        renderer_.text(progressX, 834.0f, 2.0f, formatPlaybackTime(position), kText, 180.0f);
+        renderer_.text(progressX, 834.0f, 2.0f, formatPlaybackTime(position), kText);
         const std::string durationText = formatPlaybackTime(duration);
-        renderer_.text(1610.0f, 834.0f, 2.0f, durationText, kText, 180.0f);
+        drawRightAlignedSingleLine(progressX + progressWidth, 834.0f, 2.0f, durationText, kText, 220.0f);
         renderer_.roundedRect(progressX, 878.0f, progressWidth, 7.0f, 3.5f, kTrack);
         if (duration > 0) {
             const double progress = std::clamp(static_cast<double>(position) / static_cast<double>(duration), 0.0, 1.0);
@@ -5832,7 +5853,6 @@ private:
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
                 const auto bounds = drawButtonSurface(x, 925.0f, widths[i], 66.0f, selected, i == 0);
 
-                const float iconX = bounds[0] + 24.0f;
                 const float iconCenterY = bounds[1] + bounds[3] * 0.5f;
                 if (i == 0) {
                     const float iconCenterX = bounds[0] + bounds[2] * 0.5f;
@@ -5844,22 +5864,30 @@ private:
                         renderer_.roundedRect(pauseLeft, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
                         renderer_.roundedRect(pauseLeft + 13.0f, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
                     }
-                } else if (i == 1) {
-                    renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
-                    renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
                 } else {
-                    renderer_.roundedOutline(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 5.0f, 2.0f, kText);
-                    renderer_.textCentered(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 0.72f, "CC", kText);
-                }
-                if (i != 0) {
+                    constexpr float labelScale = 1.72f;
+                    constexpr float iconLabelGap = 16.0f;
+                    const float iconWidth = i == 1 ? 20.0f : 26.0f;
+                    const std::string label = fitTextLines(
+                        controls[i], labelScale, std::max(1.0f, bounds[2] - iconWidth - iconLabelGap - 36.0f), 1);
+                    const float labelWidth = renderer_.textWidth(labelScale, label);
+                    const float groupWidth = iconWidth + iconLabelGap + labelWidth;
+                    const float iconX = bounds[0] + std::max(18.0f, (bounds[2] - groupWidth) * 0.5f);
+                    if (i == 1) {
+                        renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
+                        renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
+                    } else {
+                        renderer_.roundedOutline(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 5.0f, 2.0f, kText);
+                        renderer_.textCentered(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 0.72f, "CC", kText);
+                    }
                     renderer_.textVerticallyCentered(
-                        bounds[0] + 60.0f,
+                        iconX + iconWidth + iconLabelGap,
                         bounds[1],
                         bounds[3],
-                        1.72f,
-                        fitTextLines(controls[i], 1.72f, bounds[2] - 76.0f, 1),
+                        labelScale,
+                        label,
                         selected ? kText : kSecondaryText,
-                        bounds[2] - 76.0f
+                        labelWidth
                     );
                 }
                 x += widths[i] + 28.0f;
@@ -6035,20 +6063,25 @@ private:
                 fitTextLines(materialLabel(rowLabel), 2.20f, 900.0f, 1),
                 focused ? kText : kSecondaryText, 900.0f);
             const std::string& value = values[static_cast<size_t>(i)];
+            constexpr float valueRightInset = 45.0f;
+            const float valueRight = rowBounds[0] + rowBounds[2] - valueRightInset;
             if (actionRow) {
                 const float valueScale = 1.70f;
-                const float valueWidth = renderer_.textWidth(valueScale, value);
-                renderer_.textVerticallyCentered(std::max(1190.0f, rowBounds[0] + rowBounds[2] - 50.0f - valueWidth), rowBounds[1], rowBounds[3], valueScale,
-                    fitTextLines(materialLabel(value), valueScale, 570.0f, 1), focused ? kFocus : kText, 570.0f);
+                const std::string displayValue = fitTextLines(materialLabel(value), valueScale, 570.0f, 1);
+                const float valueWidth = renderer_.textWidth(valueScale, displayValue);
+                renderer_.textVerticallyCentered(std::max(1190.0f, valueRight - valueWidth), rowBounds[1], rowBounds[3], valueScale,
+                    displayValue, focused ? kFocus : kText, 570.0f);
             } else if (isBooleanSetting(i)) {
-                drawSwitch(1653.0f, y + 8.0f, value == "ON", focused);
+                constexpr float switchWidth = 112.0f;
+                drawSwitch(valueRight - switchWidth, y + 8.0f, value == "ON", focused);
             } else {
-                const float chipWidth = std::clamp(renderer_.textWidth(1.65f, value) + 44.0f, 112.0f, 570.0f);
-                const float chipX = 1765.0f - chipWidth;
+                const std::string displayValue(materialLabel(value));
+                const float chipWidth = std::clamp(renderer_.textWidth(1.65f, displayValue) + 44.0f, 112.0f, 570.0f);
+                const float chipX = valueRight - chipWidth;
                 renderer_.roundedRect(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, focused ? kFocusSoft : kPanelAlt);
                 if (!focused) renderer_.roundedOutline(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, 1.0f, kOutline);
                 renderer_.textCentered(chipX, y + 8.0f, chipWidth, 56.0f, 1.65f,
-                    fitTextLines(materialLabel(value), 1.65f, chipWidth - 24.0f, 1),
+                    fitTextLines(displayValue, 1.65f, chipWidth - 24.0f, 1),
                     focused ? kText : kSecondaryText);
             }
         }
@@ -6357,8 +6390,9 @@ private:
         }
 
         if (settings_.showClock) {
-            renderer_.text(1650.0f, 50.0f, 2.10f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
+            drawRightAlignedSingleLine(
+                1840.0f, 50.0f, 2.10f,
+                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
         }
 
         if (continuationState_.stillWatchingPrompt()) {

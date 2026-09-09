@@ -1008,9 +1008,42 @@ float Renderer::textWidth(float scale, std::string_view value) const {
 }
 
 void Renderer::textCentered(float x, float y, float w, float h, float scale, std::string_view value, Color color) {
-    const float width = textWidth(scale, value);
-    const float textX = x + std::max(0.0f, (w - width) * 0.5f);
-    textVerticallyCentered(textX, y, h, scale, value, color, std::max(0.0f, w));
+    const int lineCount = 1 + static_cast<int>(std::count(value.begin(), value.end(), '\n'));
+    if (lineCount <= 1) {
+        const float width = textWidth(scale, value);
+        const float textX = x + std::max(0.0f, (w - width) * 0.5f);
+        textVerticallyCentered(textX, y, h, scale, value, color, std::max(0.0f, w));
+        return;
+    }
+
+    const float effectiveScale = scale * textScale_;
+    const float visualHeight = (fontTexture_ ? 10.0f : 7.0f) * effectiveScale;
+    const float lineHeight = (fontTexture_ ? 11.0f : 9.0f) * effectiveScale;
+    const float blockHeight = visualHeight + lineHeight * static_cast<float>(lineCount - 1);
+    const float firstLineY = y + std::max(0.0f, (h - blockHeight) * 0.5f);
+
+    size_t lineStart = 0;
+    int lineIndex = 0;
+    while (lineStart <= value.size()) {
+        const size_t lineEnd = value.find('\n', lineStart);
+        const std::string_view line = lineEnd == std::string_view::npos
+            ? value.substr(lineStart)
+            : value.substr(lineStart, lineEnd - lineStart);
+        const float width = textWidth(scale, line);
+        const float textX = x + std::max(0.0f, (w - width) * 0.5f);
+        textVerticallyCentered(
+            textX,
+            firstLineY + static_cast<float>(lineIndex) * lineHeight,
+            visualHeight,
+            scale,
+            line,
+            color,
+            std::max(0.0f, w)
+        );
+        if (lineEnd == std::string_view::npos) break;
+        lineStart = lineEnd + 1;
+        ++lineIndex;
+    }
 }
 
 void Renderer::textVerticallyCentered(

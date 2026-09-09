@@ -18,8 +18,8 @@ class AndroidTvManifestTest(unittest.TestCase):
         assert cls.activity is not None
 
     def test_tv_banner_is_explicit_on_application_and_launcher_activity(self) -> None:
-        self.assertEqual(self.application.get(ANDROID + "banner"), "@drawable/banner")
-        self.assertEqual(self.activity.get(ANDROID + "banner"), "@drawable/banner")
+        self.assertEqual(self.application.get(ANDROID + "banner"), "@drawable/sloppatv_banner")
+        self.assertEqual(self.activity.get(ANDROID + "banner"), "@drawable/sloppatv_banner")
 
     def test_launcher_activity_exposes_leanback_category(self) -> None:
         categories = {
