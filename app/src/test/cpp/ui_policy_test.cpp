@@ -8,6 +8,22 @@ int main() {
     assert(isTopMediaGridSelection(4));
     assert(!isTopMediaGridSelection(5));
     assert(mediaCardWidth() == 320.0f);
+    // Focus must remain inside the rendered viewport for every grid density.
+    for (const int visibleRows : {1, 2, 4}) {
+        for (int selection = 0; selection < 150; ++selection) {
+            const int first = mediaFirstVisibleRow(selection, visibleRows);
+            const int row = selection / mediaGridColumns();
+            assert(first <= row && row < first + visibleRows);
+        }
+    }
+    assert(mediaFirstVisibleRow(-1, 0) == 0);
+    // Login's five-row keyboard must shrink enough to keep focused keys on-screen.
+    assert(keyboardKeyHeight(610.0f, 5, 14.0f) < 82.0f);
+    assert(keyboardKeyHeight(610.0f, 5, 14.0f) >= 58.0f);
+    assert(keyboardKeyHeight(270.0f, 5, 14.0f) == 82.0f);
+    assert(keyboardKeyHeight(610.0f, 0, 14.0f) == 0.0f);
+    // Two poster rows, including two title lines and metadata, fit the canvas.
+    assert(195.0f + 430.0f + mediaPosterHeight() + 24.0f + 72.0f + 36.0f <= 1080.0f);
     assert(mediaTitleScale() == 2.45f);
     assert(usesLandscapeMediaCard("Episode"));
     assert(usesLandscapeMediaCard("CollectionFolder"));
@@ -36,10 +52,12 @@ int main() {
     assert(wrappedIndex(9, 1, 10) == 0);
     assert(wrappedIndex(2, 1, 5) == 3);
     assert(wrappedIndex(4, 1, 5) == 0);
-    assert(subtitleBottomY(false, 0) == 1000.0f);
-    assert(subtitleBottomY(false, 1) == 905.0f);
-    assert(subtitleBottomY(false, 2) == 810.0f);
-    assert(subtitleBottomY(true, 0) == 790.0f);
-    assert(subtitleBottomY(true, 2) == 600.0f);
+    assert(subtitleBottomY(false, false, 0) == 1000.0f);
+    assert(subtitleBottomY(false, false, 1) == 905.0f);
+    assert(subtitleBottomY(false, false, 2) == 810.0f);
+    assert(subtitleBottomY(true, false, 0) == 790.0f);
+    assert(subtitleBottomY(true, false, 2) == 600.0f);
+    assert(subtitleBottomY(true, true, 0) == 670.0f);
+    assert(subtitleBottomY(false, true, 2) == 480.0f);
     return 0;
 }

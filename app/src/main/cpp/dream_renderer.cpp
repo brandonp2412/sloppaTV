@@ -1,4 +1,5 @@
 #include "renderer.hpp"
+#include "ui_theme.hpp"
 
 #include <android/log.h>
 #include <android/native_window_jni.h>
@@ -13,8 +14,8 @@
 
 namespace {
 constexpr const char* kTag = "sloppaTV/dream";
-constexpr Color kText{0.95f, 0.96f, 0.99f, 1.0f};
-constexpr Color kMuted{0.61f, 0.64f, 0.72f, 1.0f};
+constexpr Color kText = material_tv::onSurface;
+constexpr Color kMuted = material_tv::onSurfaceVariant;
 
 std::mutex gMutex;
 std::condition_variable gCv;
@@ -42,11 +43,11 @@ void renderDreamFrame(Renderer& renderer, int positionIndex, bool clock24Hour) {
 
     renderer.beginFrame();
     renderer.setUiTransform(0.0f, 1.0f);
-    renderer.rect(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f, Color{0.012f, 0.014f, 0.020f, 0.96f});
-    renderer.outline(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f, 3.0f, Color{0.56f, 0.38f, 0.98f, 0.65f});
-    renderer.text(position[0], position[1], 3.2f, "SLOPPATV", kText, 520.0f);
+    renderer.roundedRect(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f,
+        material_tv::cornerLarge, material_tv::surfaceContainer);
+    renderer.text(position[0], position[1], material_tv::type::title, "sloppaTV", material_tv::primary, 520.0f);
     renderer.text(position[0], position[1] + 78.0f, 5.8f, clockText, kText, 520.0f);
-    renderer.text(position[0], position[1] + 170.0f, 1.35f, "JELLYFIN TV", kMuted, 520.0f);
+    renderer.text(position[0], position[1] + 170.0f, material_tv::type::supporting, "Your Jellyfin library", kMuted, 520.0f);
     renderer.endFrame();
 }
 

@@ -42,7 +42,12 @@ def media_source(item_id: str) -> dict[str, object]:
         "Container": "mp4",
         "SupportsDirectPlay": True,
         "SupportsDirectStream": True,
-        "SupportsTranscoding": False,
+        # Waydroid's platform decoder can reject the deterministic fixture's
+        # direct-play path even though physical Android TV accepts it. Offer the
+        # same local clip as a transcode fallback so player UI screenshots still
+        # exercise the real playback screen instead of falling back to Details.
+        "SupportsTranscoding": True,
+        "TranscodingUrl": f"/Videos/{item_id}/stream.mp4",
         "DefaultAudioStreamIndex": -1,
         "DefaultSubtitleStreamIndex": -1,
         "MediaStreams": [

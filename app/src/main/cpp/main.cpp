@@ -39,6 +39,8 @@
 #include "session_store.hpp"
 #include "settings_screen.hpp"
 #include "ui_theme.hpp"
+#include "ui_components.hpp"
+#include "ui_labels.hpp"
 #include "ui_policy.hpp"
 #include "unicode_text.hpp"
 #include "renderer.hpp"
@@ -92,7 +94,6 @@ constexpr Color kFocusSoft = material_tv::primaryContainer;
 constexpr Color kOutline = material_tv::outline;
 constexpr Color kDivider = material_tv::outlineVariant;
 constexpr Color kTrack = material_tv::track;
-constexpr Color kModalSurface = material_tv::surfaceContainerHigh;
 constexpr Color kScrim = material_tv::scrim;
 constexpr Color kBrandGold = material_tv::tertiary;
 constexpr Color kError = material_tv::error;
@@ -173,6 +174,7 @@ std::string normalizeSubtitleDisplayText(const std::string& input) {
 }
 
 std::string episodeNumberLabel(const JellyfinItem& item) {
+    if (item.type != "Episode") return {};
     std::string result;
     if (item.parentIndexNumber >= 0) result += "S" + std::to_string(item.parentIndexNumber);
     if (item.indexNumber >= 0) result += "E" + std::to_string(item.indexNumber);
@@ -2269,12 +2271,12 @@ private:
     }
 
     std::string mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
-        if (segment.type == "Intro") return "SKIP INTRO";
-        if (segment.type == "Outro") return "SKIP CREDITS";
-        if (segment.type == "Recap") return "SKIP RECAP";
-        if (segment.type == "Preview") return "SKIP PREVIEW";
-        if (segment.type == "Commercial") return "SKIP COMMERCIAL";
-        return "SKIP";
+        if (segment.type == "Intro") return "Skip intro";
+        if (segment.type == "Outro") return "Skip credits";
+        if (segment.type == "Recap") return "Skip recap";
+        if (segment.type == "Preview") return "Skip preview";
+        if (segment.type == "Commercial") return "Skip commercial";
+        return "Skip";
     }
 
     bool skipActiveMediaSegment() {
@@ -4645,7 +4647,8 @@ private:
             if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
         }
         if (entry.texture == 0) return false;
-        renderer_.image(entry.texture, x, y, size, size);
+        renderer_.roundedImageRegion(entry.texture, x, y, size, size, size * 0.5f,
+            0.0f, 0.0f, 1.0f, 1.0f);
         return true;
     }
 
@@ -4826,13 +4829,7 @@ private:
     }
 
     void drawFocusHalo(float x, float y, float width, float height, Color accent = kFocus, float radius = 18.0f) {
-        // TV focus needs to remain legible over unpredictable poster artwork.
-        renderer_.roundedOutline(x - material_tv::focusHaloWidth, y - material_tv::focusHaloWidth,
-            width + material_tv::focusHaloWidth * 2.0f, height + material_tv::focusHaloWidth * 2.0f,
-            radius + material_tv::focusHaloWidth, material_tv::focusHaloWidth,
-            Color{accent.r, accent.g, accent.b, 0.18f});
-        renderer_.roundedOutline(x - 3.0f, y - 3.0f, width + 6.0f, height + 6.0f, radius + 3.0f,
-            material_tv::focusOutlineWidth, Color{accent.r, accent.g, accent.b, 1.0f});
+        material_tv::focusRing(renderer_, x, y, width, height, radius, accent);
     }
 
     std::array<float, 4> focusedBounds(
@@ -4897,8 +4894,7 @@ private:
         float height,
         float radius = material_tv::cornerLarge
     ) {
-        renderer_.roundedRect(x, y, width, height, radius, kModalSurface);
-        renderer_.roundedOutline(x, y, width, height, radius, 1.5f, kOutline);
+        material_tv::dialog(renderer_, x, y, width, height, radius);
     }
 
     std::array<float, 4> drawListItemSurface(
@@ -4995,34 +4991,52 @@ private:
         float height = 42.0f,
         float maxWidth = 360.0f
     ) {
-        const float width = std::clamp(renderer_.textWidth(scale, label) + 34.0f, 72.0f, maxWidth);
+        const std::string_view displayLabel = materialLabel(label);
+        const float width = std::clamp(renderer_.textWidth(scale, displayLabel) + 34.0f, 72.0f, maxWidth);
         renderer_.roundedRect(x, y, width, height, height * 0.5f, selected ? kFocusSoft : kPanelAlt);
         if (!selected) renderer_.roundedOutline(x, y, width, height, height * 0.5f, 1.0f, kOutline);
         renderer_.textCentered(x, y, width, height, scale,
-            fitTextLines(label, scale, std::max(1.0f, width - 28.0f), 1), selected ? kText : kSecondaryText);
+            fitTextLines(displayLabel, scale, std::max(1.0f, width - 28.0f), 1), selected ? kText : kSecondaryText);
         return width;
     }
 
     void renderHeader(const std::string& title) {
-        renderer_.text(72, 46, 3.9f, "SLOPPATV", kText);
-        renderer_.text(75, 125, 2.25f, title, kMuted);
+        renderer_.text(material_tv::layout::pageInset, 28.0f,
+            material_tv::type::supporting, "sloppaTV", kMuted);
+        renderer_.text(material_tv::layout::pageInset, 76.0f,
+            material_tv::type::headline,
+            fitTextLines(title, material_tv::type::headline, 1480.0f, 1), kText, 1480.0f);
         if (settings_.showClock) {
             renderer_.text(1650.0f, 52.0f, 2.05f,
                 formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 200.0f);
         }
     }
 
+    void renderEmptyState(const std::string& title, const std::string& message) {
+        constexpr float x = 440.0f;
+        constexpr float width = 1040.0f;
+        renderer_.roundedRect(x, 350.0f, width, 250.0f,
+            material_tv::cornerLarge, kPanelAlt);
+        renderer_.textCentered(x + 48.0f, 386.0f, width - 96.0f, 80.0f,
+            material_tv::type::title,
+            fitTextLines(title, material_tv::type::title, width - 96.0f, 1), kText);
+        renderer_.textCentered(x + 48.0f, 480.0f, width - 96.0f, 64.0f,
+            material_tv::type::label,
+            fitTextLines(message, material_tv::type::label, width - 96.0f, 1), kMuted);
+    }
+
     void renderLogin() {
         renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
         renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f,
-            Color{0.10f, 0.05f, 0.18f, 0.42f},
-            Color{0.01f, 0.04f, 0.07f, 0.12f});
-        renderer_.text(676.0f, 60.0f, 6.2f, "SLOPPATV", kText, 700.0f);
-        renderer_.text(730.0f, 194.0f, 2.05f, "Connect to your Jellyfin server", kMuted, 560.0f);
+            material_tv::surfaceContainerHigh, material_tv::background);
+        renderer_.textCentered(410.0f, 15.0f, 1100.0f, 145.0f,
+            material_tv::type::display, "sloppaTV", kText);
+        renderer_.textCentered(410.0f, 165.0f, 1100.0f, 50.0f,
+            material_tv::type::body, "Connect to your Jellyfin server", kMuted);
 
         if (accountState_.quickConnectActive()) {
             drawModalSurface(465.0f, 230.0f, 990.0f, 610.0f);
-            renderer_.text(765.0f, 278.0f, 2.5f, "QUICK CONNECT", kSecondaryText, 420.0f);
+            renderer_.text(765.0f, 278.0f, 2.5f, "Quick Connect", kSecondaryText, 420.0f);
 
             renderer_.roundedRect(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, kPanelElevated);
             renderer_.roundedOutline(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, 1.0f, kOutline);
@@ -5030,68 +5044,71 @@ private:
             renderer_.text(960.0f - codeWidth * 0.5f, 377.0f, 7.6f, accountState_.quickConnectCode(), kText, 650.0f);
 
             const std::array<std::string, 2> steps{
-                "OPEN JELLYFIN ON ANOTHER DEVICE",
-                "SETTINGS  >  QUICK CONNECT  >  ENTER CODE",
+                "Open Jellyfin on another device",
+                "Settings > Quick Connect > Enter code",
             };
             for (size_t i = 0; i < steps.size(); ++i) {
                 const float rowY = 535.0f + static_cast<float>(i) * 74.0f;
-                renderer_.roundedRect(585.0f, rowY, 750.0f, 58.0f, material_tv::cornerMedium, kPanelAlt);
-                renderer_.roundedRect(603.0f, rowY + 9.0f, 40.0f, 40.0f, 20.0f, kFocusSoft);
-                renderer_.textCentered(603.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f, std::to_string(i + 1), kText);
-                renderer_.textVerticallyCentered(670.0f, rowY, 58.0f, 1.80f, steps[i], kSecondaryText, 635.0f);
+                renderer_.roundedRect(510.0f, rowY, 900.0f, 58.0f, material_tv::cornerMedium, kPanelAlt);
+                renderer_.roundedRect(528.0f, rowY + 9.0f, 40.0f, 40.0f, 20.0f, kFocusSoft);
+                renderer_.textCentered(528.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f, std::to_string(i + 1), kText);
+                renderer_.textVerticallyCentered(595.0f, rowY, 58.0f, 1.45f,
+                    fitTextLines(steps[i], 1.45f, 790.0f, 1), kSecondaryText, 790.0f);
             }
 
-            const std::string status = loading_ ? "STARTING..." : "WAITING FOR AUTHORIZATION...";
+            const std::string status = loading_ ? "Starting…" : "Waiting for authorization…";
             const float statusWidth = std::clamp(renderer_.textWidth(1.55f, status) + 54.0f, 260.0f, 560.0f);
             const float statusX = 960.0f - statusWidth * 0.5f;
             renderer_.roundedRect(statusX, 706.0f, statusWidth, 48.0f, 24.0f, kFocusSoft);
             renderer_.textCentered(statusX, 706.0f, statusWidth, 48.0f, 1.55f, status, kText);
-            renderer_.text(790.0f, 790.0f, 1.55f, "BACK TO CANCEL", kMuted, 340.0f);
+            renderer_.text(790.0f, 790.0f, 1.55f, "Press Back to cancel", kMuted, 340.0f);
             return;
         }
 
         drawModalSurface(410.0f, 225.0f, 1100.0f, 615.0f);
-        static constexpr std::array<const char*, 3> labels{"SERVER", "USERNAME", "PASSWORD"};
+        static constexpr std::array<const char*, 3> labels{"Server", "Username", "Password"};
         for (int i = 0; i < 3; ++i) {
             const float y = 320.0f + static_cast<float>(i) * 118.0f;
-            renderer_.text(495.0f, y - 30.0f, 1.45f, labels[static_cast<size_t>(i)], kMuted);
+            renderer_.text(495.0f, y - 40.0f, 1.45f, labels[static_cast<size_t>(i)], kMuted);
             const bool focused = !accountState_.keyboardActive() && accountState_.loginFocus() == i;
             const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused);
             std::string value = accountState_.field(i);
             if (i == 2 && !value.empty()) value.assign(value.size(), '*');
-            if (value.empty()) value = i == 0 ? "HTTPS://YOUR-JELLYFIN-SERVER" : "";
-            renderer_.textVerticallyCentered(bounds[0] + 30.0f, bounds[1], bounds[3], 2.35f, value,
-                value.empty() ? kTertiary : kText, bounds[2] - 60.0f);
+            const bool placeholder = value.empty() && i == 0;
+            if (placeholder) value = "https://your-jellyfin-server";
+            renderer_.textVerticallyCentered(bounds[0] + 30.0f, bounds[1], bounds[3], 2.35f,
+                fitTextLines(value, 2.35f, bounds[2] - 60.0f, 1), placeholder ? kTertiary : kText, bounds[2] - 60.0f);
         }
 
         const bool loginFocused = accountState_.loginFocus() == AccountScreenState::kLoginAction && !accountState_.keyboardActive();
         const auto loginBounds = drawButtonSurface(490.0f, 690.0f, 330.0f, 72.0f, loginFocused, true);
-        renderer_.textCentered(loginBounds[0], loginBounds[1], loginBounds[2], loginBounds[3], 2.15f, "LOG IN", kText);
+        renderer_.textCentered(loginBounds[0], loginBounds[1], loginBounds[2], loginBounds[3], 2.15f, "Log in", kText);
         const bool quickFocused = accountState_.loginFocus() == AccountScreenState::kQuickConnectAction && !accountState_.keyboardActive();
         const auto quickBounds = drawButtonSurface(840.0f, 690.0f, 310.0f, 72.0f, quickFocused);
-        renderer_.textCentered(quickBounds[0], quickBounds[1], quickBounds[2], quickBounds[3], 1.8f, "QUICK CONNECT", kText);
+        renderer_.textCentered(quickBounds[0], quickBounds[1], quickBounds[2], quickBounds[3], 1.65f, "Quick Connect", kText);
         const bool discoverFocused = accountState_.loginFocus() == AccountScreenState::kDiscoverAction && !accountState_.keyboardActive();
         const auto discoverBounds = drawButtonSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
-        renderer_.textCentered(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f, "DISCOVER", kText);
+        renderer_.textCentered(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f, "Discover", kText);
 
         if (!sessionRegistry_.empty()) {
             const bool savedFocused = accountState_.loginFocus() == AccountScreenState::kSavedUsersAction && !accountState_.keyboardActive();
             const auto savedBounds = drawFocusedSurface(650.0f, 785.0f, 620.0f, 58.0f, savedFocused);
             renderer_.textCentered(savedBounds[0], savedBounds[1], savedBounds[2], savedBounds[3], 1.65f,
-                "SAVED USERS (" + std::to_string(sessionRegistry_.size()) + ")", savedFocused ? kText : kMuted);
+                "Saved users (" + std::to_string(sessionRegistry_.size()) + ")", savedFocused ? kText : kMuted);
         }
         if (!accountState_.keyboardActive()) {
             const std::string hint = !accountState_.discoveryStatus().empty()
                 ? accountState_.discoveryStatus()
-                : "DISCOVER SEARCHES YOUR LOCAL NETWORK";
-            renderer_.text(555.0f, 870.0f, 1.65f, hint, accountState_.discoveryStatus().empty() ? kTertiary : kFocus, 810.0f);
+                : "Discover searches your local network";
+            renderer_.text(555.0f, 870.0f, 1.65f,
+                fitTextLines(hint, 1.65f, 810.0f, 1), accountState_.discoveryStatus().empty() ? kTertiary : kFocus, 810.0f);
         }
         if (accountState_.keyboardActive()) renderKeyboard(610.0f);
     }
 
     void renderProfiles() {
-        renderHeader("USERS & SERVERS");
-        renderer_.text(105.0f, 180.0f, 2.15f, "CHOOSE WHO IS WATCHING", kMuted, 640.0f);
+        renderHeader("Users & servers");
+        renderer_.text(105.0f, 180.0f, 2.15f, "Choose who is watching", kMuted, 640.0f);
         const int totalRows = static_cast<int>(sessionRegistry_.size()) + 1;
         constexpr int visibleRows = 5;
         const int maxFirst = std::max(0, totalRows - visibleRows);
@@ -5105,10 +5122,12 @@ private:
                 const auto bounds = drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false);
                 renderer_.textCentered(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", kFocus);
                 renderer_.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f,
-                    "ADD ANOTHER ACCOUNT", kText, bounds[2] - 160.0f);
+                    "Add another account", kText, bounds[2] - 160.0f);
                 continue;
             }
-            drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false, focused && accountState_.profileAction() == 1);
+            // Focus belongs to the action, not simultaneously to its parent row.
+            renderer_.roundedRect(250.0f, y, 1420.0f, 108.0f,
+                material_tv::cornerMedium, focused ? kPanelElevated : kPanelAlt);
             const auto* savedSession = sessionRegistry_.at(static_cast<size_t>(index));
             if (!savedSession) continue;
             const auto& saved = *savedSession;
@@ -5117,24 +5136,31 @@ private:
                 std::string initial = saved.username.empty() ? "?" : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
                 renderer_.textCentered(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, kText);
             }
-            renderer_.text(395.0f, y + 20.0f, 2.45f, saved.username.empty() ? "USER" : saved.username, kText, 480.0f);
-            renderer_.text(395.0f, y + 65.0f, 1.55f, saved.server, kMuted, 650.0f);
+            const std::string profileName = saved.username.empty() ? "User" : saved.username;
+            renderer_.text(395.0f, y + 20.0f, 2.45f,
+                fitTextLines(profileName, 2.45f, 480.0f, 1), kText, 480.0f);
+            renderer_.text(395.0f, y + 65.0f, 1.55f,
+                fitTextLines(saved.server, 1.55f, 650.0f, 1), kMuted, 650.0f);
             const bool useFocused = focused && accountState_.profileAction() == 0;
             const bool forgetFocused = focused && accountState_.profileAction() == 1;
             const auto useBounds = drawButtonSurface(1110.0f, y + 18.0f, 210.0f, 72.0f, useFocused, true);
-            renderer_.textCentered(useBounds[0], useBounds[1], useBounds[2], useBounds[3], 1.85f, "USE", kText);
+            renderer_.textCentered(useBounds[0], useBounds[1], useBounds[2], useBounds[3], 1.85f, "Use", kText);
             const auto forgetBounds = drawButtonSurface(1340.0f, y + 18.0f, 270.0f, 72.0f, forgetFocused, false, true);
-            renderer_.textCentered(forgetBounds[0], forgetBounds[1], forgetBounds[2], forgetBounds[3], 1.75f, "FORGET",
+            renderer_.textCentered(forgetBounds[0], forgetBounds[1], forgetBounds[2], forgetBounds[3], 1.75f, "Forget",
                 forgetFocused ? kText : kMuted);
         }
-        renderer_.text(275.0f, 972.0f, 1.65f, "UP / DOWN CHOOSES ACCOUNT   |   LEFT / RIGHT CHOOSES ACTION", kTertiary, 1380.0f);
+        renderer_.textCentered(270.0f, 950.0f, 1380.0f, 58.0f, 1.72f,
+            "Up / Down chooses account   |   Left / Right chooses action", kMuted);
     }
 
     void renderKeyboard(float top) {
         const auto& rows = keyboardRows();
+        renderer_.roundedRect(110.0f, top - 24.0f, 1700.0f,
+            Renderer::logicalHeight() - top + 24.0f,
+            material_tv::cornerLarge, material_tv::surfaceContainerHigh);
         constexpr float startX = 150.0f;
-        constexpr float keyH = 82.0f;
         constexpr float gap = 14.0f;
+        const float keyH = keyboardKeyHeight(top, static_cast<int>(rows.size()), gap);
         for (size_t row = 0; row < rows.size(); ++row) {
             const float y = top + static_cast<float>(row) * (keyH + gap);
             const auto& keys = rows[row];
@@ -5145,7 +5171,7 @@ private:
                 const auto bounds = drawButtonSurface(x, y, keyW, keyH, selected, selected);
                 const auto& label = keys[col].label;
                 const float scale = label.size() > 4 ? 2.15f : 2.65f;
-                renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], scale, label, kText);
+                renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], scale, materialLabel(label), kText);
             }
         }
     }
@@ -5217,18 +5243,17 @@ private:
 
         const bool toolbarFocused = homeState_.row() < 0;
         const bool hasBrandMark = drawBrandMark(72.0f, 27.0f, 72.0f);
-        renderer_.text(hasBrandMark ? 160.0f : 72.0f, 42.0f, 3.35f, "sloppaTV", kText, 430.0f);
-        renderer_.roundedRect(hasBrandMark ? 160.0f : 72.0f, 99.0f, 86.0f, 3.0f, 1.5f, kBrandGold);
+        renderer_.text(hasBrandMark ? 160.0f : 72.0f, 42.0f, 3.0f, "sloppaTV", kText, 430.0f);
+        renderer_.roundedRect(hasBrandMark ? 160.0f : 72.0f, 120.0f, 86.0f, 3.0f, 1.5f, kBrandGold);
 
-        const std::array<std::string, 3> navLabels{"HOME", "SEARCH", "SETTINGS"};
+        const std::array<std::string, 3> navLabels{"Home", "Search", "Settings"};
         const std::array<int, 3> navIndices{1, 2, 3};
-        const std::array<float, 3> navXs{1165.0f, 1315.0f, 1490.0f};
-        const std::array<float, 3> navWidths{110.0f, 130.0f, 150.0f};
+        const std::array<float, 3> navMinWidths{138.0f, 158.0f, 178.0f};
+        float navX = 960.0f;
         for (size_t i = 0; i < navLabels.size(); ++i) {
             const bool focused = toolbarFocused && homeState_.navIndex() == navIndices[i];
             const bool active = navIndices[i] == 1;
-            const float navX = navXs[i] - 14.0f;
-            const float navWidth = navWidths[i] + 28.0f;
+            const float navWidth = std::max(navMinWidths[i], renderer_.textWidth(2.0f, navLabels[i]) + 44.0f);
             if (focused) {
                 const auto bounds = drawTabSurface(navX, 40.0f, navWidth, 54.0f, true, active);
                 renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 2.0f, navLabels[i], kText);
@@ -5236,6 +5261,7 @@ private:
                 if (active) renderer_.roundedRect(navX, 40.0f, navWidth, 54.0f, material_tv::cornerLarge, kFocusSoft);
                 renderer_.textCentered(navX, 40.0f, navWidth, 54.0f, 2.0f, navLabels[i], active ? kText : kMuted);
             }
+            navX += navWidth + 12.0f;
         }
 
         const float profileX = 1660.0f;
@@ -5260,7 +5286,8 @@ private:
         }
 
         if (home_.rows.empty()) {
-            renderer_.text(72.0f, 220.0f, 2.3f, homeLoading_ ? "LOADING HOME..." : "NO VIDEO HOME SECTIONS", kMuted);
+            renderEmptyState(homeLoading_ ? "Loading your library" : "Your library is empty",
+                homeLoading_ ? "Connecting to your Jellyfin server" : "Check your server connection and available libraries.");
             return;
         }
 
@@ -5307,7 +5334,7 @@ private:
         const int selected = homeState_.selection(row, static_cast<int>(items.size()));
 
         if (title == "My Media") {
-            renderer_.text(72.0f, top, 3.05f, "MY MEDIA", homeState_.row() == row ? kText : kSecondaryText, 420.0f);
+            renderer_.text(72.0f, top, 3.05f, "My media", homeState_.row() == row ? kText : kSecondaryText, 420.0f);
             constexpr float cardW = 420.0f;
             constexpr float cardH = 225.0f;
             constexpr float gap = 28.0f;
@@ -5318,23 +5345,24 @@ private:
                 if (x + cardW > 1885.0f && index > start) break;
                 const bool focused = homeState_.row() == row && index == selected;
                 const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, materialCardFocusScale());
-                if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, material_tv::cornerMedium,
-                    Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
                 const bool hasArtwork = drawHomeArtwork(items[static_cast<size_t>(index)], bounds[0], bounds[1], bounds[2], bounds[3]);
                 if (!hasArtwork) {
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], material_tv::cornerSmall, kPanelAlt);
                     renderer_.textCentered(bounds[0] + 22.0f, bounds[1] + 22.0f, bounds[2] - 44.0f, bounds[3] - 44.0f,
-                        2.45f, items[static_cast<size_t>(index)].name, kText);
+                        2.45f, fitTextLines(items[static_cast<size_t>(index)].name, 2.45f, bounds[2] - 44.0f, 2), kText);
                 }
                 if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, material_tv::cornerSmall);
                 renderer_.text(x + 4.0f, imageY + cardH + 24.0f, 2.05f,
-                    items[static_cast<size_t>(index)].name, focused ? kText : kSecondaryText, cardW - 8.0f);
+                    fitTextLines(items[static_cast<size_t>(index)].name, 2.05f, cardW - 8.0f, 1),
+                    focused ? kText : kSecondaryText, cardW - 8.0f);
                 x += cardW + gap;
             }
             return;
         }
 
-        renderer_.text(72.0f, top, 3.05f, title, homeState_.row() == row ? kText : kSecondaryText, 900.0f);
+        renderer_.text(72.0f, top, 3.05f,
+            fitTextLines(title, 3.05f, 900.0f, 1),
+            homeState_.row() == row ? kText : kSecondaryText, 900.0f);
         const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 5);
         constexpr float cardH = 202.0f;
         constexpr float cardW = 350.0f;
@@ -5342,10 +5370,8 @@ private:
         const float imageY = top + 82.0f;
         float x = 54.0f;
 
-        auto singleLine = [&](std::string value, float scale, float width) {
-            if (renderer_.textWidth(scale, value) <= width) return value;
-            while (value.size() > 4 && renderer_.textWidth(scale, value + "...") > width) value.pop_back();
-            return value + "...";
+        auto singleLine = [&](std::string_view value, float scale, float width) {
+            return fitTextLines(value, scale, width, 1);
         };
 
         for (int index = start; index < static_cast<int>(items.size()); ++index) {
@@ -5353,8 +5379,6 @@ private:
             const auto& item = items[static_cast<size_t>(index)];
             const bool focused = homeState_.row() == row && index == selected;
             const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, materialCardFocusScale());
-            if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, material_tv::cornerMedium,
-                Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
             const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3]);
             if (!hasArtwork) renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], material_tv::cornerSmall, kPanelAlt);
             if (item.positionTicks > 0 && item.runtimeTicks > 0) {
@@ -5376,7 +5400,8 @@ private:
                     episode += item.name;
                 }
                 if (!episode.empty()) {
-                    renderer_.text(x + 2.0f, titleY + 56.0f, 1.58f,
+                    const float secondaryY = titleY + 11.0f * 2.45f * uiTextScale(settings_.uiTextSize) + 4.0f;
+                    renderer_.text(x + 2.0f, secondaryY, 1.58f,
                         singleLine(episode, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
                 }
             }
@@ -5392,21 +5417,20 @@ private:
         float slotWidth,
         bool focused,
         bool showState = true,
-        bool preferSeriesCover = false
+        bool preferSeriesCover = false,
+        bool alignToPortraitBand = false
     ) {
         const bool seriesCoverForEpisode = preferSeriesCover
             && item.type == "Episode"
             && !item.seriesId.empty()
             && !item.seriesPrimaryImageTag.empty();
         const bool landscape = usesLandscapeMediaCard(item.type) && !seriesCoverForEpisode;
-        const float imageWidth = landscape ? slotWidth : 232.0f;
-        const float imageHeight = landscape ? 180.0f : 348.0f;
+        const float imageWidth = landscape ? slotWidth : mediaPosterWidth();
+        const float imageHeight = landscape ? 180.0f : mediaPosterHeight();
+        const float artworkBandHeight = alignToPortraitBand ? mediaPosterHeight() : imageHeight;
         const float imageX = x + (slotWidth - imageWidth) * 0.5f;
-        const auto bounds = focusedBounds(imageX, y, imageWidth, imageHeight, focused, materialCardFocusScale());
-        if (focused) {
-            renderer_.roundedRect(bounds[0] - 14.0f, bounds[1] - 14.0f, bounds[2] + 28.0f, bounds[3] + 28.0f, material_tv::cornerLarge,
-                Color{kFocus.r, kFocus.g, kFocus.b, 0.09f});
-        }
+        const float imageY = y + std::max(0.0f, (artworkBandHeight - imageHeight) * 0.5f);
+        const auto bounds = focusedBounds(imageX, imageY, imageWidth, imageHeight, focused, materialCardFocusScale());
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], material_tv::cornerSmall, kPanelAlt);
         JellyfinItem cover = item;
         if (seriesCoverForEpisode) {
@@ -5429,7 +5453,7 @@ private:
                 static_cast<float>((bounds[2] - 20.0f) * fraction), 5.0f, 2.5f, kFocus);
         }
         if (showState && (item.favorite || (settings_.showWatchedIndicators && item.played))) {
-            const std::string label = item.favorite ? "FAVORITE" : "WATCHED";
+            const std::string label = item.favorite ? "Favorite" : "Watched";
             const float badgeWidth = item.favorite ? 132.0f : 118.0f;
             const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
             const float badgeY = bounds[1] + 12.0f;
@@ -5441,14 +5465,24 @@ private:
         }
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, material_tv::cornerSmall);
 
-        const float titleY = y + imageHeight + 28.0f;
+        const float titleY = y + artworkBandHeight + 24.0f;
         const int titleLines = landscape ? 1 : 2;
-        renderer_.text(imageX + 2.0f, titleY, 2.05f,
-            fitTextLines(item.name, 2.05f, imageWidth - 4.0f, titleLines), kText, imageWidth - 4.0f);
+        const std::string fittedTitle = fitTextLines(
+            item.name, material_tv::type::label, imageWidth - 4.0f, titleLines);
+        renderer_.text(imageX + 2.0f, titleY, material_tv::type::label,
+            fittedTitle, kText, imageWidth - 4.0f);
         const std::string secondary = episodeLabel(item);
         if (!secondary.empty()) {
-            renderer_.text(imageX + 2.0f, titleY + (titleLines == 1 ? 52.0f : 94.0f), 1.45f,
-                secondary, kMuted, imageWidth - 4.0f);
+            const int renderedTitleLines = fittedTitle.empty()
+                ? 0
+                : 1 + static_cast<int>(std::count(fittedTitle.begin(), fittedTitle.end(), '\n'));
+            const float titleLineHeight = 11.0f * material_tv::type::label * uiTextScale(settings_.uiTextSize);
+            const float secondaryY = titleY + titleLineHeight * static_cast<float>(renderedTitleLines) + 3.0f;
+            const float secondaryHeight = 10.0f * 1.45f * uiTextScale(settings_.uiTextSize);
+            if (secondaryY + secondaryHeight <= Renderer::logicalHeight() - 8.0f) {
+                renderer_.text(imageX + 2.0f, secondaryY, 1.45f,
+                    fitTextLines(secondary, 1.45f, imageWidth - 4.0f, 1), kMuted, imageWidth - 4.0f);
+            }
         }
     }
 
@@ -5457,7 +5491,7 @@ private:
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], material_tv::cornerMedium, focused ? kPanelElevated : kPanel);
         renderer_.textCentered(bounds[0] + 28.0f, bounds[1] + 18.0f, bounds[2] - 56.0f, 42.0f, 1.25f, item.type, kTertiary);
         renderer_.textCentered(bounds[0] + 28.0f, bounds[1] + 58.0f, bounds[2] - 56.0f, bounds[3] - 76.0f,
-            2.55f, item.name, kText);
+            2.55f, fitTextLines(item.name, 2.55f, bounds[2] - 56.0f, 1), kText);
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, material_tv::cornerMedium);
     }
 
@@ -5473,11 +5507,11 @@ private:
                 const bool active = static_cast<int>(index) == browseState_.filterSelection();
                 if (focused) {
                     const auto bounds = drawTabSurface(x, 190.0f, width, 58.0f, true, active);
-                    renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f, labels[index], kText);
+                    renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f, materialLabel(labels[index]), kText);
                 } else {
                     renderer_.roundedRect(x, 190.0f, width, 58.0f, material_tv::cornerLarge, active ? kFocusSoft : kPanel);
                     if (!active) renderer_.roundedOutline(x, 190.0f, width, 58.0f, material_tv::cornerLarge, 1.5f, kOutline);
-                    renderer_.textCentered(x, 190.0f, width, 58.0f, 1.65f, labels[index], active ? kText : kMuted);
+                    renderer_.textCentered(x, 190.0f, width, 58.0f, 1.65f, materialLabel(labels[index]), active ? kText : kMuted);
                 }
                 x += width + 10.0f;
             }
@@ -5485,8 +5519,8 @@ private:
 
         const auto& items = browseState_.items();
         if (items.empty()) {
-            renderer_.text(690.0f, 450.0f, 3.5f, loading_ ? "LOADING..." : "NOTHING HERE", kText, 600.0f);
-            renderer_.text(690.0f, 520.0f, 1.8f, loading_ ? "FETCHING YOUR JELLYFIN LIBRARY" : "TRY ANOTHER FILTER", kMuted, 600.0f);
+            renderEmptyState(loading_ ? "Loading your library" : "No titles found",
+                loading_ ? "Fetching titles from Jellyfin" : "Try another filter to discover more titles.");
             return;
         }
 
@@ -5499,8 +5533,7 @@ private:
         });
         const float rowStep = syntheticPage ? 190.0f : (hasPortraitCards ? 430.0f : 300.0f);
         const int visibleRows = syntheticPage ? 4 : (hasPortraitCards ? 1 : 2);
-        const int selectedRow = browseState_.selection() / columns;
-        const int firstRow = std::max(0, selectedRow - 1);
+        const int firstRow = mediaFirstVisibleRow(browseState_.selection(), visibleRows);
         for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
             const int row = index / columns - firstRow;
             const int col = index % columns;
@@ -5512,7 +5545,7 @@ private:
             if (syntheticPage) renderTextTile(item, x, y, slotWidth, 160.0f, focused);
             else {
                 const bool showState = item.type != "BoxSet" && item.type != "CollectionFolder";
-                renderMediaArtworkCard(item, x, y, slotWidth, focused, showState);
+                renderMediaArtworkCard(item, x, y, slotWidth, focused, showState, false, hasPortraitCards);
             }
         }
     }
@@ -5520,26 +5553,29 @@ private:
     void renderSearch() {
         const auto& results = searchState_.results();
         const auto& query = searchState_.query();
-        renderer_.text(72.0f, 58.0f, 4.0f, "SEARCH", kText, 520.0f);
+        renderer_.text(80.0f, 44.0f, material_tv::type::headline, "Search", kText, 520.0f);
         constexpr float searchTop = 145.0f;
         constexpr float searchWidth = 1450.0f;
         const bool searchFieldFocused = !searchState_.keyboard() && results.empty();
         const auto searchBounds = drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused);
+        const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
         renderer_.textVerticallyCentered(searchBounds[0] + 34.0f, searchBounds[1], searchBounds[3], 2.15f,
-            query.empty() ? "Movies, shows and episodes" : query,
+            fitTextLines(searchDisplay, 2.15f, searchBounds[2] - 68.0f, 1),
             query.empty() ? kMuted : kText, searchBounds[2] - 68.0f);
         renderer_.text(1575.0f, searchTop + 22.0f, 1.45f,
-            searchState_.keyboard() ? "FALLBACK KEYS" : "OK TO TYPE", searchState_.keyboard() ? kFocus : kSecondaryText, 250.0f);
+            searchState_.keyboard() ? "On-screen keyboard" : "Press OK to type", searchState_.keyboard() ? kFocus : kSecondaryText, 250.0f);
 
         if (searchState_.keyboard()) {
             renderKeyboard(270.0f);
-            renderer_.text(650.0f, 900.0f, 1.38f, "DONE RUNS SEARCH   |   BACK CLOSES KEYS", kMuted, 680.0f);
+            renderer_.textCentered(560.0f, 886.0f, 800.0f, 58.0f, 1.62f,
+                "Done runs search   |   Back closes keyboard", kMuted);
             return;
         }
 
         if (results.empty()) {
-            renderer_.text(72.0f, 300.0f, 2.15f, searchState_.loading() ? "SEARCHING..." : "TYPE A TITLE, ACTOR OR EPISODE", kSecondaryText, 780.0f);
-            renderer_.text(72.0f, 350.0f, 1.45f, "Use the TV keyboard or press SEARCH from anywhere in sloppaTV.", kMuted, 900.0f);
+            renderEmptyState(searchState_.loading() ? "Searching your library" :
+                (query.empty() ? "Find your next favorite" : "No results found"),
+                query.empty() ? "Search for a movie, show, actor or episode." : "Try another title or search term.");
             return;
         }
 
@@ -5556,6 +5592,11 @@ private:
             const int localStart = searchState_.firstVisibleInRow(semanticRow, columns);
             const int begin = searchState_.rowStart(semanticRow) + localStart;
             const int end = std::min(begin + columns, searchState_.rowStart(semanticRow) + count);
+            const bool rowHasPortraitCards = std::any_of(
+                results.begin() + begin,
+                results.begin() + end,
+                [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); }
+            );
             for (int index = begin; index < end; ++index) {
                 const int col = index - begin;
                 const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
@@ -5566,16 +5607,17 @@ private:
                     slotWidth,
                     index == searchState_.selection(),
                     true,
-                    false
+                    false,
+                    rowHasPortraitCards
                 );
             }
         };
 
         if (topLevelCount > 0) {
-            renderResultRow(0, "MOVIES & SHOWS", 258.0f, 314.0f);
+            renderResultRow(0, "Movies & shows", 258.0f, 314.0f);
         }
         if (episodeCount > 0) {
-            renderResultRow(1, "EPISODES", topLevelCount > 0 ? 726.0f : 258.0f, topLevelCount > 0 ? 780.0f : 314.0f);
+            renderResultRow(1, "Episodes", topLevelCount > 0 ? 726.0f : 258.0f, topLevelCount > 0 ? 780.0f : 314.0f);
         }
     }
 
@@ -5646,7 +5688,11 @@ private:
             const float boxWidth = std::clamp(widest + horizontalPadding * 2.0f, 320.0f, 1520.0f);
             const float boxHeight = verticalPadding * 2.0f + lineHeight * static_cast<float>(lines.size());
             const float boxX = (Renderer::logicalWidth() - boxWidth) * 0.5f;
-            const float bottomY = subtitleBottomY(showOverlay, settings_.subtitlePosition);
+            const float bottomY = subtitleBottomY(
+                showOverlay,
+                playerScreenState_.controlsActive(),
+                settings_.subtitlePosition
+            );
             const float boxY = bottomY - boxHeight;
             if (settings_.subtitleBackground) {
                 renderer_.roundedRect(boxX, boxY, boxWidth, boxHeight, material_tv::cornerMedium, Color{0.0f, 0.0f, 0.0f, 0.80f});
@@ -5703,7 +5749,7 @@ private:
         }
         if (!showOverlay) return;
 
-        renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 210.0f,
+        renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f,
             Color{0.0f, 0.0f, 0.0f, 0.74f},
             Color{0.0f, 0.0f, 0.0f, 0.0f});
         renderer_.verticalGradient(0.0f, 650.0f, 1920.0f, 430.0f,
@@ -5716,7 +5762,7 @@ private:
             const bool hasNextArtwork = drawHomeArtwork(nextItem, 1210.0f, 200.0f, 260.0f, 146.0f);
             const float textX = hasNextArtwork ? 1500.0f : 1230.0f;
             const float textWidth = hasNextArtwork ? 285.0f : 560.0f;
-            const std::string nextHeading = "Up next  ·  " + std::to_string(std::max(0, remainingMs / 1000)) + "s";
+            const std::string nextHeading = "Up next  |  " + std::to_string(std::max(0, remainingMs / 1000)) + "s";
             renderer_.text(textX, 205.0f, 1.65f,
                 fitTextLines(nextHeading, 1.65f, textWidth, 1), kFocus, textWidth);
             renderer_.text(textX, 250.0f, 2.15f,
@@ -5729,12 +5775,18 @@ private:
         const std::string heading = activePlaybackItem_.seriesName.empty()
             ? activePlaybackItem_.name
             : activePlaybackItem_.seriesName;
-        renderer_.text(76.0f, 34.0f, 4.8f, heading.empty() ? "PLAYBACK" : heading, kText, 1540.0f);
+        const std::string playbackHeading = heading.empty() ? "Playback" : heading;
+        renderer_.text(80.0f, 42.0f, material_tv::type::headline,
+            fitTextLines(playbackHeading, material_tv::type::headline, 1460.0f, 1), kText, 1460.0f);
         const std::string playerEpisodeNumber = episodeNumberLabel(activePlaybackItem_);
         const std::string secondary = activePlaybackItem_.seriesName.empty()
             ? episodeLabel(activePlaybackItem_)
             : playerEpisodeNumber + (activePlaybackItem_.name.empty() ? "" : "  |  " + activePlaybackItem_.name);
-        if (!secondary.empty() && secondary != heading) renderer_.text(80.0f, 116.0f, 2.6f, secondary, kMuted, 1500.0f);
+        if (!secondary.empty() && secondary != heading) {
+            const float secondaryY = 42.0f + 11.0f * material_tv::type::headline * uiTextScale(settings_.uiTextSize) + 8.0f;
+            renderer_.text(80.0f, secondaryY, 2.6f,
+                fitTextLines(secondary, 2.6f, 1500.0f, 1), kMuted, 1500.0f);
+        }
 
         const int position = playerScreenState_.positionMs();
         const int duration = playerScreenState_.durationMs();
@@ -5744,14 +5796,14 @@ private:
                 formatLocalClock(wallNow, settings_.clock24Hour), kMuted, 210.0f);
             if (remainingMs > 0 && status == PlayerStatus::Playing) {
                 const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
-                const std::string finishLabel = "ENDS " + formatLocalClock(finishAt, settings_.clock24Hour);
+                const std::string finishLabel = "Ends " + formatLocalClock(finishAt, settings_.clock24Hour);
                 const float finishWidth = renderer_.textWidth(1.75f, finishLabel);
                 renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, finishLabel, kSecondaryText, 590.0f);
             }
         }
-        const std::string state = transitionState_.fallbackResolving() ? "RETRYING TRANSCODE" :
-            (transitionState_.loading() ? "LOADING NEXT EPISODE" :
-            (status == PlayerStatus::Preparing ? "LOADING" : ""));
+        const std::string state = transitionState_.fallbackResolving() ? "Retrying playback" :
+            (transitionState_.loading() ? "Loading next episode" :
+            (status == PlayerStatus::Preparing ? "Loading" : ""));
         if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
 
         constexpr float progressX = 150.0f;
@@ -5771,8 +5823,8 @@ private:
         if (playerScreenState_.controlsActive()) {
             const std::array<std::string, 3> controls{
                 "",
-                "AUDIO  " + playerTrackLabel(2),
-                "SUBTITLES  " + playerTrackLabel(4),
+                "Audio  " + std::string(materialLabel(playerTrackLabel(2))),
+                "Subtitles  " + std::string(materialLabel(playerTrackLabel(4))),
             };
             const std::array<float, 3> widths{104.0f, 310.0f, 350.0f};
             float x = 578.0f;
@@ -5805,7 +5857,7 @@ private:
                         bounds[1],
                         bounds[3],
                         1.72f,
-                        controls[i],
+                        fitTextLines(controls[i], 1.72f, bounds[2] - 76.0f, 1),
                         selected ? kText : kSecondaryText,
                         bounds[2] - 76.0f
                     );
@@ -5813,14 +5865,17 @@ private:
                 x += widths[i] + 28.0f;
             }
         } else {
-            const std::string queueHint = queueState_.empty() ? "" : "   |   DOWN QUEUE";
-            renderer_.text(
-                330.0f,
-                946.0f,
-                1.75f,
-                "LEFT/RIGHT SEEK   |   OK PLAY/PAUSE   |   UP OPTIONS" + queueHint + "   |   BACK EXIT",
-                kMuted,
-                1280.0f
+            const std::string queueHint = queueState_.empty() ? "" : "   |   Down opens queue";
+            const std::string hint = "Left / Right seeks   |   OK plays or pauses   |   Up opens options"
+                + queueHint + "   |   Back exits";
+            renderer_.textCentered(
+                230.0f,
+                920.0f,
+                1460.0f,
+                72.0f,
+                1.90f,
+                fitTextLines(hint, 1.90f, 1440.0f, 1),
+                kSecondaryText
             );
         }
     }
@@ -5834,9 +5889,9 @@ private:
 
         renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, kScrim);
         drawModalSurface(790.0f, 28.0f, 1090.0f, 1020.0f);
-        renderer_.text(842.0f, 72.0f, 3.35f, "PLAYBACK QUEUE", kText, 620.0f);
+        renderer_.text(842.0f, 72.0f, 3.35f, "Playback queue", kText, 620.0f);
         renderer_.roundedRect(1555.0f, 70.0f, 255.0f, 46.0f, 18.0f, kPanelAlt);
-        renderer_.textCentered(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, std::to_string(size - current) + " REMAINING", kMuted);
+        renderer_.textCentered(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, std::to_string(size - current) + " remaining", kMuted);
 
         constexpr int visibleRows = 5;
         const int first = std::clamp(selection - 2, current, std::max(current, size - visibleRows));
@@ -5849,24 +5904,26 @@ private:
             const auto& item = queueState_.items()[static_cast<size_t>(index)];
             const auto bounds = drawListItemSurface(830.0f, y, 990.0f, 90.0f, selected);
             drawHomeArtwork(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f);
-            const std::string marker = isCurrent ? "CURRENT" : (index == current + 1 ? "NEXT" : std::to_string(index - current + 1));
+            const std::string marker = isCurrent ? "Current" : (index == current + 1 ? "Next" : std::to_string(index - current + 1));
             const float markerWidth = isCurrent ? 122.0f : (index == current + 1 ? 88.0f : 58.0f);
             renderer_.roundedRect(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 16.0f, isCurrent ? kFocusSoft : kPanelAlt);
             renderer_.textCentered(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 1.20f, marker,
                 isCurrent ? kText : kMuted);
-            renderer_.text(bounds[0] + 300.0f, bounds[1] + 18.0f, 1.95f, item.name, kText, 610.0f);
+            renderer_.text(bounds[0] + 300.0f, bounds[1] + 18.0f, 1.95f,
+                fitTextLines(item.name, 1.95f, 610.0f, 1), kText, 610.0f);
             const std::string secondary = episodeLabel(item);
-            if (!secondary.empty()) renderer_.text(bounds[0] + 300.0f, bounds[1] + 54.0f, 1.35f, secondary, kMuted, 610.0f);
+            if (!secondary.empty()) renderer_.text(bounds[0] + 300.0f, bounds[1] + 54.0f, 1.35f,
+                fitTextLines(secondary, 1.35f, 610.0f, 1), kMuted, 610.0f);
         }
 
         const std::array<std::string, 7> actions{
-            "PLAY NOW",
-            "PLAY NEXT",
-            "MOVE UP",
-            "MOVE DOWN",
-            "REMOVE",
-            "SHUFFLE",
-            std::string("REPEAT ") + queueRepeatModeName(queueState_.repeatMode()),
+            "Play now",
+            "Play next",
+            "Move up",
+            "Move down",
+            "Remove",
+            "Shuffle",
+            std::string("Repeat ") + queueRepeatModeName(queueState_.repeatMode()),
         };
         auto enabled = [&](int action) {
             if (action == 0) return queueCanPlayNow(selection, current, size);
@@ -5888,11 +5945,12 @@ private:
             std::array<float, 4> actionBounds{x, y, width, 68.0f};
             if (available) actionBounds = drawButtonSurface(x, y, width, 68.0f, focused, focused, i == 4);
             else drawDisabledButtonSurface(x, y, width, 68.0f);
-            renderer_.textCentered(actionBounds[0], actionBounds[1], actionBounds[2], actionBounds[3], 1.45f, actions[i],
+            renderer_.textCentered(actionBounds[0], actionBounds[1], actionBounds[2], actionBounds[3], 1.45f, materialLabel(actions[i]),
                 available ? kText : kTertiary);
         }
-        renderer_.text(905.0f, 918.0f, 1.35f, "UP / DOWN  SELECT ITEM   |   LEFT / RIGHT  CHOOSE ACTION   |   OK  APPLY", kMuted, 850.0f);
-        renderer_.text(1250.0f, 970.0f, 1.25f, "BACK  CLOSE QUEUE", kTertiary, 320.0f);
+        renderer_.textCentered(875.0f, 905.0f, 920.0f, 52.0f, 1.50f,
+            "Up / Down selects item   |   Left / Right chooses action   |   OK applies", kMuted);
+        renderer_.textCentered(1170.0f, 958.0f, 500.0f, 48.0f, 1.40f, "Back closes queue", kMuted);
     }
 
     void renderScreensaver() {
@@ -5914,13 +5972,13 @@ private:
 
         const std::string clock = formatLocalClock(std::time(nullptr), settings_.clock24Hour);
 
-        renderer_.text(position[0], position[1], 4.2f, "SLOPPATV", material_tv::primary, 600.0f);
+        renderer_.text(position[0], position[1], 4.2f, "sloppaTV", material_tv::primary, 600.0f);
         renderer_.text(position[0], position[1] + 88.0f, 9.0f, clock, kText, 650.0f);
-        renderer_.text(735.0f, 1020.0f, 1.45f, "PRESS ANY BUTTON TO RETURN", kTertiary, 520.0f);
+        renderer_.text(735.0f, 1020.0f, 1.45f, "Press any button to return", kTertiary, 520.0f);
     }
 
     void renderSettings() {
-        renderer_.text(72.0f, 58.0f, 4.0f, "SETTINGS", kText, 560.0f);
+        renderer_.text(80.0f, 58.0f, material_tv::type::headline, "Settings", kText, 560.0f);
         const auto& labels = settingsLabels();
         const auto values = settingsValues(
             settings_,
@@ -5931,26 +5989,27 @@ private:
         );
 
         const auto settingsSearchBounds = drawInputSurface(1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused());
+        const std::string settingsSearchDisplay = settingsScreen_.searchQuery().empty()
+            ? "Search settings"
+            : settingsScreen_.searchQuery();
         renderer_.textVerticallyCentered(settingsSearchBounds[0] + 32.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
-            settingsScreen_.searchQuery().empty() ? "Search settings" : settingsScreen_.searchQuery(),
+            fitTextLines(settingsSearchDisplay, 2.20f, settingsSearchBounds[2] - 190.0f, 1),
             settingsScreen_.searchQuery().empty() ? kMuted : kText, settingsSearchBounds[2] - 190.0f);
-        renderer_.textCentered(1640.0f, 52.0f, 170.0f, 58.0f, 1.60f, "SEARCH", settingsScreen_.searchFocused() ? kFocus : kMuted);
+        renderer_.textCentered(1640.0f, 52.0f, 170.0f, 58.0f, 1.60f, "Search", settingsScreen_.searchFocused() ? kFocus : kMuted);
 
         const auto matches = settingsScreen_.matches();
         if (matches.empty()) {
-            renderer_.text(610.0f, 445.0f, 3.2f, "NO SETTINGS MATCH", kText, 700.0f);
-            renderer_.text(570.0f, 510.0f, 1.75f, "PRESS OK OR SEARCH TO EDIT THE FILTER", kMuted, 820.0f);
+            renderEmptyState("No matching settings", "Press OK or Search to change your filter.");
             return;
         }
 
         renderer_.text(120.0f, 165.0f, 2.10f,
-            settingsScreen_.advanced() ? "ADVANCED / TECHNICAL" : "COMMON SETTINGS", kSecondaryText, 620.0f);
-        renderer_.text(120.0f, 205.0f, 1.40f,
-            settingsScreen_.advanced()
-                ? "Codec overrides, compatibility and device-level controls"
-                : "The settings you are most likely to change",
-            kMuted,
-            920.0f);
+            settingsScreen_.advanced() ? "Advanced settings" : "Common settings", kSecondaryText, 620.0f);
+        const std::string settingsDescription = settingsScreen_.advanced()
+            ? "Codec overrides, compatibility and device-level controls"
+            : "The settings you are most likely to change";
+        renderer_.text(120.0f, 220.0f, 1.40f,
+            fitTextLines(settingsDescription, 1.40f, 920.0f, 1), kMuted, 920.0f);
 
         constexpr int visibleRows = 6;
         const int maxFirst = std::max(0, static_cast<int>(matches.size()) - visibleRows);
@@ -5970,16 +6029,17 @@ private:
                 material_tv::cornerMedium, 1.015f
             );
             const std::string rowLabel = i == kAdvancedSettingsToggle && settingsScreen_.advanced()
-                ? "BASIC SETTINGS"
+                ? "Basic settings"
                 : labels[static_cast<size_t>(i)];
-            renderer_.textVerticallyCentered(rowBounds[0] + 35.0f, rowBounds[1], rowBounds[3], 2.20f, rowLabel,
+            renderer_.textVerticallyCentered(rowBounds[0] + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
+                fitTextLines(materialLabel(rowLabel), 2.20f, 900.0f, 1),
                 focused ? kText : kSecondaryText, 900.0f);
             const std::string& value = values[static_cast<size_t>(i)];
             if (actionRow) {
                 const float valueScale = 1.70f;
                 const float valueWidth = renderer_.textWidth(valueScale, value);
                 renderer_.textVerticallyCentered(std::max(1190.0f, rowBounds[0] + rowBounds[2] - 50.0f - valueWidth), rowBounds[1], rowBounds[3], valueScale,
-                    value, focused ? kFocus : kText, 570.0f);
+                    fitTextLines(materialLabel(value), valueScale, 570.0f, 1), focused ? kFocus : kText, 570.0f);
             } else if (isBooleanSetting(i)) {
                 drawSwitch(1653.0f, y + 8.0f, value == "ON", focused);
             } else {
@@ -5987,17 +6047,22 @@ private:
                 const float chipX = 1765.0f - chipWidth;
                 renderer_.roundedRect(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, focused ? kFocusSoft : kPanelAlt);
                 if (!focused) renderer_.roundedOutline(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, 1.0f, kOutline);
-                renderer_.textCentered(chipX, y + 8.0f, chipWidth, 56.0f, 1.65f, value, focused ? kText : kSecondaryText);
+                renderer_.textCentered(chipX, y + 8.0f, chipWidth, 56.0f, 1.65f,
+                    fitTextLines(materialLabel(value), 1.65f, chipWidth - 24.0f, 1),
+                    focused ? kText : kSecondaryText);
             }
         }
-        renderer_.text(470.0f, 985.0f, 1.52f,
-            "LEFT / RIGHT CHANGE   |   OK OPENS OPTIONS   |   UP TO SEARCH", kTertiary, 1120.0f);
+        renderer_.textCentered(330.0f, 956.0f, 1260.0f, 58.0f, 1.65f,
+            fitTextLines("Left / Right changes   |   OK opens options   |   Up searches", 1.65f, 1240.0f, 1),
+            kMuted);
 
         if (settingsScreen_.subtitleLanguagePicker()) {
             renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, kScrim);
             drawModalSurface(430.0f, 92.0f, 1060.0f, 896.0f);
-            renderer_.text(490.0f, 132.0f, 3.15f, "SUBTITLE LANGUAGES", kText, 820.0f);
-            renderer_.text(490.0f, 192.0f, 1.50f, "ONLY SELECTED LANGUAGES WILL APPEAR DURING PLAYBACK", kMuted, 920.0f);
+            renderer_.text(490.0f, 132.0f, 3.15f, "Subtitle languages", kText, 820.0f);
+            renderer_.text(490.0f, 192.0f, 1.50f,
+                fitTextLines("Only selected languages will appear during playback", 1.50f, 920.0f, 1),
+                kMuted, 920.0f);
             constexpr int visibleLanguageRows = 8;
             constexpr int languageCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
             const int firstLanguage = std::clamp(settingsScreen_.subtitleLanguageFirstVisible(), 0, std::max(0, languageCount - visibleLanguageRows));
@@ -6018,18 +6083,20 @@ private:
                     material_tv::cornerSmall, 1.015f
                 );
                 const std::string label = languageIndex == 0
-                    ? "ALL LANGUAGES"
+                    ? "All languages"
                     : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
                 renderer_.textVerticallyCentered(languageBounds[0] + 32.0f, languageBounds[1], languageBounds[3], 2.05f,
-                    label, focused ? kText : kSecondaryText, 620.0f);
+                    fitTextLines(materialLabel(label), 2.05f, 620.0f, 1), focused ? kText : kSecondaryText, 620.0f);
                 drawChip(1280.0f, y + 5.0f, selected ? "ON" : "OFF", selected, 1.45f, 42.0f, 116.0f);
             }
-            renderer_.text(600.0f, 930.0f, 1.48f, "OK TO TOGGLE   |   BACK TO SETTINGS", kTertiary, 720.0f);
+            renderer_.textCentered(540.0f, 918.0f, 840.0f, 52.0f, 1.62f,
+                fitTextLines("OK toggles selection   |   Back returns to settings", 1.62f, 820.0f, 1),
+                kMuted);
         }
     }
 
     void renderDiagnostics() {
-        renderHeader("DIAGNOSTICS");
+        renderHeader("Diagnostics");
         const auto& codecs = api_.deviceCodecSupport();
         const auto videoCodecs = codecs.jellyfinVideoCodecs();
         const auto audioCodecs = codecs.jellyfinAudioCodecs(codecs.maxAudioOutputChannels);
@@ -6049,16 +6116,16 @@ private:
 #endif
 
         std::vector<std::pair<std::string, std::string>> rows{
-            {"APP VERSION", SLOPPATV_VERSION_NAME},
+            {"App version", SLOPPATV_VERSION_NAME},
             {"ABI", architecture},
-            {"SERVER", serverInfo_.name.empty() ? session_.server : serverInfo_.name},
-            {"JELLYFIN VERSION", serverInfo_.version.empty() ? (loading_ ? "LOADING..." : "UNKNOWN") : serverInfo_.version},
-            {"VIDEO DECODERS", videoCodecs.empty() ? "NONE DETECTED" : joinGenres(videoCodecs, videoCodecs.size())},
-            {"AUDIO DIRECT", audioCodecs.empty() ? "AAC TRANSCODE FALLBACK" : joinGenres(audioCodecs, audioCodecs.size())},
-            {"AUDIO OUTPUT", std::to_string(codecs.maxAudioOutputChannels) + " CHANNELS"},
-            {"HEVC MAX", codecs.maxHevcWidth > 0 ? std::to_string(codecs.maxHevcWidth) + "X" + std::to_string(codecs.maxHevcHeight) : "UNKNOWN"},
-            {"HDR DISPLAY", hdr.empty() ? "SDR / NONE DETECTED" : joinGenres(hdr, hdr.size())},
-            {"LAST PLAYBACK", lastPlaybackSummary_.empty() ? "NOT YET PLAYED THIS SESSION" : lastPlaybackSummary_},
+            {"Server", serverInfo_.name.empty() ? session_.server : serverInfo_.name},
+            {"Jellyfin version", serverInfo_.version.empty() ? (loading_ ? "Loading…" : "UNKNOWN") : serverInfo_.version},
+            {"Video decoders", videoCodecs.empty() ? "NONE DETECTED" : joinGenres(videoCodecs, videoCodecs.size())},
+            {"Direct audio", audioCodecs.empty() ? "AAC TRANSCODE FALLBACK" : joinGenres(audioCodecs, audioCodecs.size())},
+            {"Audio output", std::to_string(codecs.maxAudioOutputChannels) + " CHANNELS"},
+            {"HEVC maximum", codecs.maxHevcWidth > 0 ? std::to_string(codecs.maxHevcWidth) + "X" + std::to_string(codecs.maxHevcHeight) : "UNKNOWN"},
+            {"HDR display", hdr.empty() ? "SDR / NONE DETECTED" : joinGenres(hdr, hdr.size())},
+            {"Last playback", lastPlaybackSummary_.empty() ? "NOT YET PLAYED THIS SESSION" : lastPlaybackSummary_},
         };
         auto renderPanel = [&](float x, float y, float width, float height, const std::string& title, std::initializer_list<int> indices) {
             renderer_.roundedRect(x, y, width, height, material_tv::cornerLarge, kPanelAlt);
@@ -6071,17 +6138,19 @@ private:
                 if (index < 0 || index >= static_cast<int>(rows.size())) continue;
                 if (row > 0) renderer_.rect(x + 28.0f, rowY - 13.0f, width - 56.0f, 1.0f, kDivider);
                 renderer_.text(x + 28.0f, rowY, 1.45f, rows[static_cast<size_t>(index)].first, kTertiary, 260.0f);
-                renderer_.text(x + 300.0f, rowY - 2.0f, 1.75f, rows[static_cast<size_t>(index)].second, kText, width - 330.0f);
+                renderer_.text(x + 300.0f, rowY - 2.0f, 1.75f,
+                    fitTextLines(rows[static_cast<size_t>(index)].second, 1.75f, width - 330.0f, 1),
+                    kText, width - 330.0f);
                 rowY += 58.0f;
                 ++row;
             }
         };
 
-        renderPanel(85.0f, 175.0f, 840.0f, 300.0f, "APP & SERVER", {0, 1, 2, 3});
-        renderPanel(995.0f, 175.0f, 840.0f, 300.0f, "VIDEO & DISPLAY", {4, 7, 8});
-        renderPanel(85.0f, 515.0f, 840.0f, 250.0f, "AUDIO", {5, 6});
-        renderPanel(995.0f, 515.0f, 840.0f, 250.0f, "LAST PLAYBACK", {9});
-        renderer_.text(690.0f, 965.0f, 1.75f, "BACK OR OK  |  RETURN TO SETTINGS", kMuted, 620.0f);
+        renderPanel(85.0f, 175.0f, 840.0f, 300.0f, "App & server", {0, 1, 2, 3});
+        renderPanel(995.0f, 175.0f, 840.0f, 300.0f, "Video & display", {4, 7, 8});
+        renderPanel(85.0f, 515.0f, 840.0f, 250.0f, "Audio", {5, 6});
+        renderPanel(995.0f, 515.0f, 840.0f, 250.0f, "Last playback", {9});
+        renderer_.text(690.0f, 965.0f, 1.75f, "Back or OK returns to settings", kMuted, 620.0f);
     }
 
     void renderItemMenu() {
@@ -6089,17 +6158,17 @@ private:
 
         if (detailsState_.deleteConfirmation()) {
             drawModalSurface(405.0f, 275.0f, 1110.0f, 520.0f);
-            renderer_.text(470.0f, 335.0f, 3.25f, "DELETE THIS MEDIA?", kError, 980.0f);
+            renderer_.text(470.0f, 335.0f, 3.25f, "Delete this media?", kError, 980.0f);
             renderer_.text(
                 470.0f,
                 415.0f,
                 2.0f,
-                "JELLYFIN WILL DELETE THIS ITEM AND ITS MEDIA FILES.\nTHIS CANNOT BE UNDONE.",
+                "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
                 kText,
                 980.0f
             );
 
-            const std::array<std::string, 2> actions{"DELETE PERMANENTLY", "CANCEL"};
+            const std::array<std::string, 2> actions{"Delete permanently", "Cancel"};
             for (int i = 0; i < 2; ++i) {
                 const float x = i == 0 ? 470.0f : 995.0f;
                 const bool focused = detailsState_.deleteConfirmationSelection() == i;
@@ -6107,7 +6176,7 @@ private:
                 renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], i == 0 ? 1.75f : 2.0f,
                     actions[static_cast<size_t>(i)], focused || i == 1 ? kText : kMuted);
             }
-            renderer_.text(670.0f, 745.0f, 1.55f, "CANCEL IS SELECTED BY DEFAULT   |   BACK ALSO CANCELS", kTertiary, 660.0f);
+            renderer_.text(670.0f, 745.0f, 1.55f, "Press Back to cancel", kTertiary, 660.0f);
             return;
         }
 
@@ -6119,9 +6188,10 @@ private:
         const float panelY = std::max(72.0f, (Renderer::logicalHeight() - panelHeight) * 0.5f);
         drawModalSurface(panelX, panelY, panelWidth, panelHeight);
         renderer_.text(panelX + 38.0f, panelY + 30.0f, 2.35f,
-            fitTextLines(detail_.name.empty() ? "ITEM" : detail_.name, 2.35f, panelWidth - 76.0f, 1), kText, panelWidth - 76.0f);
+            fitTextLines(detail_.name.empty() ? "Item" : detail_.name, 2.35f, panelWidth - 76.0f, 1), kText, panelWidth - 76.0f);
         renderer_.text(panelX + 40.0f, panelY + 79.0f, 1.35f,
-            detail_.type.empty() ? "MEDIA" : detail_.type, kMuted, panelWidth - 80.0f);
+            fitTextLines(detail_.type.empty() ? "Media" : detail_.type, 1.35f, panelWidth - 80.0f, 1),
+            kMuted, panelWidth - 80.0f);
         renderer_.rect(panelX + 34.0f, panelY + 118.0f, panelWidth - 68.0f, 1.0f, kDivider);
 
         const float firstActionY = panelY + 136.0f;
@@ -6130,20 +6200,21 @@ private:
             const bool focused = detailsState_.itemMenuSelection() == static_cast<int>(i);
             const bool destructive = actions[i] == "DELETE MEDIA";
             const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, focused && !destructive, destructive);
-            renderer_.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, actions[i],
+            renderer_.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, materialLabel(actions[i]),
                 destructive && !focused ? kMuted : kText, bounds[2] - 48.0f);
         }
         renderer_.text(panelX + 170.0f, panelY + panelHeight - 34.0f, 1.30f,
-            "OK SELECT   |   BACK CLOSE", kTertiary, 390.0f);
+            "OK selects   |   Back closes", kTertiary, 390.0f);
     }
 
-    std::string fitTextLines(const std::string& value, float scale, float maxWidth, int maxLines) const {
+    std::string fitTextLines(std::string_view value, float scale, float maxWidth, int maxLines) const {
         if (value.empty() || maxWidth <= 0.0f || maxLines <= 0) return {};
+        const std::string displayValue = displayText(value);
         auto ellipsize = [&](std::string line) {
             while (!line.empty() && renderer_.textWidth(scale, line + "...") > maxWidth) line.pop_back();
             return line + "...";
         };
-        std::istringstream words(value);
+        std::istringstream words(displayValue);
         std::string word;
         std::string current;
         std::string fitted;
@@ -6154,7 +6225,14 @@ private:
                 current = candidate;
                 continue;
             }
-            if (current.empty()) current = ellipsize(word);
+            if (current.empty()) {
+                if (!fitted.empty()) fitted += '\n';
+                fitted += ellipsize(word);
+                if (line >= maxLines) return fitted;
+                ++line;
+                current.clear();
+                continue;
+            }
             if (line >= maxLines) {
                 if (!fitted.empty()) fitted += '\n';
                 fitted += ellipsize(current);
@@ -6175,21 +6253,26 @@ private:
     void renderMediaGrid(const std::string& title, const std::vector<JellyfinItem>& items, int selection) {
         renderHeader(title);
         if (items.empty()) {
-            renderer_.text(690.0f, 430.0f, 3.5f, loading_ ? "LOADING..." : "NOTHING HERE", kText, 600.0f);
+            renderEmptyState(loading_ ? "Loading titles" : "No titles available",
+                loading_ ? "Fetching titles from Jellyfin" : "Press Back to return to your library.");
             return;
         }
         constexpr int columns = mediaGridColumns();
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
-        const int selectedRow = selection / columns;
-        const int firstRow = std::max(0, selectedRow - 1);
+        const bool hasPortraitCards = std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) {
+            return !usesLandscapeMediaCard(item.type);
+        });
+        const int firstRow = mediaFirstVisibleRow(selection, 2);
         for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
             const int row = index / columns - firstRow;
             const int col = index % columns;
             if (row >= 2) break;
             const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
             const float y = 195.0f + static_cast<float>(row) * 430.0f;
-            renderMediaArtworkCard(items[static_cast<size_t>(index)], x, y, slotWidth, index == selection);
+            renderMediaArtworkCard(
+                items[static_cast<size_t>(index)], x, y, slotWidth, index == selection,
+                true, false, hasPortraitCards);
         }
     }
 
@@ -6203,10 +6286,10 @@ private:
     }
 
     void renderCast() {
-        const std::string heading = detail_.name.empty() ? "CAST" : detail_.name + " - CAST";
+        const std::string heading = detail_.name.empty() ? "Cast" : detail_.name + " | Cast";
         renderHeader(heading);
         if (detail_.people.empty()) {
-            renderer_.text(700.0f, 430.0f, 3.5f, "NO CAST DATA", kMuted, 520.0f);
+            renderEmptyState("No cast information", "Jellyfin has no cast information for this title.");
             return;
         }
         constexpr int columns = 5;
@@ -6214,8 +6297,7 @@ private:
         constexpr float xGap = 32.0f;
         constexpr float imageWidth = 190.0f;
         constexpr float imageHeight = 285.0f;
-        const int selectedRow = detailsState_.castSelection() / columns;
-        const int firstRow = std::max(0, selectedRow - 1);
+        const int firstRow = mediaFirstVisibleRow(detailsState_.castSelection(), 2);
         for (int index = firstRow * columns; index < static_cast<int>(detail_.people.size()); ++index) {
             const int row = index / columns - firstRow;
             const int col = index % columns;
@@ -6224,31 +6306,40 @@ private:
             const float y = 195.0f + static_cast<float>(row) * 420.0f;
             const bool focused = index == detailsState_.castSelection();
             const float imageX = x + (slotWidth - imageWidth) * 0.5f;
-            const auto bounds = drawListItemSurface(imageX, y, imageWidth, imageHeight, focused, 16.0f, materialCardFocusScale());
+            const auto bounds = focusedBounds(imageX, y, imageWidth, imageHeight, focused);
+            renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3],
+                material_tv::cornerSmall, kPanelAlt);
             const auto& person = detail_.people[static_cast<size_t>(index)];
             const JellyfinItem artworkItem = personArtworkItem(person);
             drawArtwork(artworkItem, bounds[0], bounds[1], bounds[2], bounds[3]);
-            renderer_.text(x + 4.0f, y + imageHeight + 18.0f, 2.25f, person.name, kText, slotWidth - 8.0f);
-            if (!person.role.empty()) renderer_.text(x + 4.0f, y + imageHeight + 64.0f, 1.55f, person.role, kMuted, slotWidth - 8.0f);
+            if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, material_tv::cornerSmall);
+            const float personTitleY = y + imageHeight + 24.0f;
+            renderer_.text(imageX, personTitleY, material_tv::type::label,
+                fitTextLines(person.name, material_tv::type::label, imageWidth, 1), kText, imageWidth);
+            if (!person.role.empty()) {
+                const float roleY = personTitleY + 11.0f * material_tv::type::label * uiTextScale(settings_.uiTextSize) + 4.0f;
+                renderer_.text(imageX, roleY, material_tv::type::supporting,
+                    fitTextLines(person.role, material_tv::type::supporting, imageWidth, 1), kMuted, imageWidth);
+            }
         }
-        renderer_.text(590.0f, 1015.0f, 1.55f, "OK OPENS TITLES FEATURING THIS PERSON", kTertiary, 780.0f);
+        renderer_.text(590.0f, 1026.0f, 1.55f, "Press OK to explore titles featuring this person", kTertiary, 780.0f);
     }
 
     void renderPersonItems() {
         const auto& person = detailsState_.selectedPerson();
-        const std::string heading = person.name.empty() ? "PERSON" : "FEATURING " + person.name;
+        const std::string heading = person.name.empty() ? "Person" : "Featuring " + person.name;
         renderMediaGrid(heading, detailsState_.personItems(), detailsState_.personItemSelection());
     }
 
     void renderSeasons() {
         const auto& series = detailsState_.seriesDetail();
-        renderMediaGrid(series.name.empty() ? "SEASONS" : series.name + " - SEASONS", detailsState_.seasons(), detailsState_.seasonSelection());
+        renderMediaGrid(series.name.empty() ? "Seasons" : series.name + " | Seasons", detailsState_.seasons(), detailsState_.seasonSelection());
     }
 
     void renderEpisodes() {
         const auto& series = detailsState_.seriesDetail();
         const auto& season = detailsState_.selectedSeason();
-        const std::string heading = season.name.empty() ? "EPISODES" : series.name + " - " + season.name;
+        const std::string heading = season.name.empty() ? "Episodes" : series.name + " - " + season.name;
         renderMediaGrid(heading, detailsState_.episodes(), detailsState_.episodeSelection());
     }
 
@@ -6271,19 +6362,22 @@ private:
         }
 
         if (continuationState_.stillWatchingPrompt()) {
-            renderer_.roundedRect(1110.0f, 54.0f, 580.0f, 54.0f, material_tv::cornerLarge, kPanelElevated);
-            renderer_.roundedOutline(1110.0f, 54.0f, 580.0f, 54.0f, material_tv::cornerLarge, 1.5f, kOutline);
-            renderer_.textCentered(1110.0f, 54.0f, 580.0f, 54.0f, 1.95f, "STILL WATCHING?  OK TO CONTINUE", kText);
+            constexpr float promptX = 820.0f;
+            constexpr float promptWidth = 800.0f;
+            renderer_.roundedRect(promptX, 54.0f, promptWidth, 54.0f, material_tv::cornerLarge, kPanelElevated);
+            renderer_.roundedOutline(promptX, 54.0f, promptWidth, 54.0f, material_tv::cornerLarge, 1.5f, kOutline);
+            renderer_.textCentered(promptX, 54.0f, promptWidth, 54.0f, 1.95f,
+                fitTextLines("Still watching? Press OK to continue", 1.95f, promptWidth - 40.0f, 1), kText);
         }
 
         constexpr float contentX = 72.0f;
-        constexpr float contentWidth = 820.0f;
+        constexpr float contentWidth = 920.0f;
         const bool episode = detail_.type == "Episode";
         const std::string mainTitle = episode && !detail_.seriesName.empty() ? detail_.seriesName : detail_.name;
         const bool hasLogo = drawLogo(detail_, contentX, 132.0f, 700.0f, 138.0f);
         if (!hasLogo) {
             renderer_.text(contentX, 142.0f, 6.0f,
-                fitTextLines(mainTitle.empty() ? "LOADING..." : mainTitle, 6.0f, contentWidth, 1), kText, contentWidth);
+                fitTextLines(mainTitle.empty() ? "Loading…" : mainTitle, 6.0f, contentWidth, 1), kText, contentWidth);
         }
 
         const std::string episodeNumber = episodeNumberLabel(detail_);
@@ -6292,8 +6386,11 @@ private:
                 ? episodeNumber
                 : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail_.name)
             : episodeLabel(detail_);
+        const float uiScale = uiTextScale(settings_.uiTextSize);
+        const float titleBottom = hasLogo ? 270.0f : 142.0f + 10.0f * 6.0f * uiScale;
+        const float secondaryY = std::max(286.0f, titleBottom + 12.0f);
         if (!secondary.empty()) {
-            renderer_.text(contentX, 286.0f, 2.80f,
+            renderer_.text(contentX, secondaryY, 2.80f,
                 fitTextLines(secondary, 2.80f, contentWidth, 1), kSecondaryText, contentWidth);
         }
 
@@ -6307,47 +6404,51 @@ private:
             metadata.emplace_back(rating.str());
         }
         if (!detail_.genres.empty()) metadata.emplace_back(detail_.genres.front());
+        constexpr float metadataY = 380.0f;
         float metadataX = contentX;
         for (const auto& value : metadata) {
             const float available = contentX + contentWidth - metadataX;
             if (available < 72.0f) break;
-            const float width = drawChip(metadataX, 334.0f, value, false, 1.38f, 42.0f, available);
+            const float width = drawChip(metadataX, metadataY, value, false, 1.38f, 42.0f, available);
             metadataX += width + 10.0f;
         }
 
+        constexpr float overviewY = 438.0f;
+        const int overviewLines = settings_.uiTextSize > 0 ? 2 : 3;
         if (!detail_.overview.empty()) {
-            renderer_.text(contentX, 392.0f, 2.35f,
-                fitTextLines(detail_.overview, 2.35f, contentWidth, 3), kSecondaryText, contentWidth);
+            renderer_.text(contentX, overviewY, 2.35f,
+                fitTextLines(detail_.overview, 2.35f, contentWidth, overviewLines), kSecondaryText, contentWidth);
         }
+        constexpr float stateY = 600.0f;
         float stateX = contentX;
-        if (detail_.favorite) stateX += drawChip(stateX, 548.0f, "FAVORITE", true, 1.42f, 42.0f, 180.0f) + 10.0f;
+        if (detail_.favorite) stateX += drawChip(stateX, stateY, "Favorite", true, 1.42f, 42.0f, 180.0f) + 10.0f;
         if (settings_.showWatchedIndicators && detail_.played) {
-            drawChip(stateX, 548.0f, "WATCHED", true, 1.42f, 42.0f, 180.0f);
+            drawChip(stateX, stateY, "Watched", true, 1.42f, 42.0f, 180.0f);
         }
 
         const auto actions = detailActions();
         const bool overlayOpen = screen_ == Screen::ItemMenu;
-        constexpr float actionY = 615.0f;
+        constexpr float actionY = 658.0f;
         float actionX = contentX;
         for (size_t i = 0; i < actions.size(); ++i) {
             const bool focused = !overlayOpen && !detailsState_.similarFocused() && detailsState_.actionSelection() == static_cast<int>(i);
-            const float width = std::max(145.0f, renderer_.textWidth(1.80f, actions[i]) + 46.0f);
+            const float width = std::max(145.0f, renderer_.textWidth(material_tv::type::label, materialLabel(actions[i])) + 56.0f);
             const bool primaryAction = i == 0;
             const auto bounds = drawButtonSurface(actionX, actionY, width, 64.0f, focused, primaryAction);
-            renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.80f, actions[i],
+            renderer_.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.80f, materialLabel(actions[i]),
                 primaryAction || focused ? kText : kSecondaryText);
             actionX += width + 18.0f;
         }
 
         if (detail_.positionTicks > 0 && detail_.runtimeTicks > 0) {
             const double fraction = std::clamp(static_cast<double>(detail_.positionTicks) / static_cast<double>(detail_.runtimeTicks), 0.0, 1.0);
-            renderer_.roundedRect(contentX, 700.0f, 560.0f, 4.0f, 2.0f, kTrack);
-            renderer_.roundedRect(contentX, 700.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, kFocus);
+            renderer_.roundedRect(contentX, 735.0f, 560.0f, 4.0f, 2.0f, kTrack);
+            renderer_.roundedRect(contentX, 735.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, kFocus);
         }
 
         const auto& similarItems = detailsState_.similar();
         if (!similarItems.empty()) {
-            renderer_.text(72.0f, 748.0f, 2.30f, "MORE LIKE THIS", detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
+            renderer_.text(72.0f, 760.0f, 2.30f, "More like this", detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
             constexpr int visible = 5;
             const int maxStart = std::max(0, static_cast<int>(similarItems.size()) - visible);
             const int start = std::clamp(detailsState_.similarSelection() - 1, 0, maxStart);
@@ -6359,14 +6460,17 @@ private:
                 if (index >= static_cast<int>(similarItems.size())) break;
                 const auto& similar = similarItems[static_cast<size_t>(index)];
                 const float x = 72.0f + static_cast<float>(slot) * (cardWidth + cardGap);
-                const float y = 800.0f;
+                const float y = 825.0f;
                 const bool focused = !overlayOpen && detailsState_.similarFocused() && index == detailsState_.similarSelection();
                 const auto bounds = focusedBounds(x, y, cardWidth, cardHeight, focused, materialCardFocusScale());
                 if (!drawHomeArtwork(similar, bounds[0], bounds[1], bounds[2], bounds[3])) {
                     renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], material_tv::cornerExtraSmall, kPanelAlt);
                 }
                 if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, material_tv::cornerExtraSmall);
-                renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f, similar.name, focused ? kText : kSecondaryText, cardWidth - 10.0f);
+                const int similarTitleLines = settings_.uiTextSize > 0 ? 1 : 2;
+                renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f,
+                    fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, similarTitleLines),
+                    focused ? kText : kSecondaryText, cardWidth - 10.0f);
             }
         }
     }
@@ -6376,7 +6480,7 @@ private:
         if (loading_ || homeLoading_ || mutationLoading_) {
             renderer_.roundedRect(1510.0f, 976.0f, 300.0f, 58.0f, 29.0f, kPanelElevated);
             renderer_.roundedRect(1532.0f, 997.0f, 16.0f, 16.0f, 8.0f, kFocus);
-            renderer_.textVerticallyCentered(1570.0f, 976.0f, 58.0f, 1.75f, "LOADING...", kText, 210.0f);
+            renderer_.textVerticallyCentered(1570.0f, 976.0f, 58.0f, 1.75f, "Loading…", kText, 210.0f);
         }
         if (!noticePersistent_ && !notice_.empty() && now >= noticeUntil_) {
             notice_.clear();
@@ -6390,7 +6494,8 @@ private:
             constexpr float noticeX = (1920.0f - noticeWidth) * 0.5f;
             renderer_.roundedRect(noticeX, noticeY, noticeWidth, 68.0f, material_tv::cornerMedium, kPanelElevated);
             renderer_.roundedRect(noticeX + 18.0f, noticeY + 18.0f, 7.0f, 32.0f, 3.5f, kFocus);
-            renderer_.textVerticallyCentered(noticeX + 46.0f, noticeY, 68.0f, 1.65f, notice_, kText, noticeWidth - 74.0f);
+            renderer_.textVerticallyCentered(noticeX + 46.0f, noticeY, 68.0f, 1.65f,
+                fitTextLines(notice_, 1.65f, noticeWidth - 74.0f, 1), kText, noticeWidth - 74.0f);
         }
 
         if (error_.empty()) {
@@ -6413,7 +6518,8 @@ private:
             renderer_.roundedRect(errorX + 18.0f, errorY + 18.0f, 7.0f, 32.0f, 3.5f, kError);
             renderer_.roundedOutline(errorX, errorY, errorWidth, 68.0f, material_tv::cornerMedium, 1.5f,
                 Color{kError.r, kError.g, kError.b, 0.55f});
-            renderer_.textVerticallyCentered(errorX + 46.0f, errorY, 68.0f, 1.55f, presentedError_, kText, errorWidth - 74.0f);
+            renderer_.textVerticallyCentered(errorX + 46.0f, errorY, 68.0f, 1.55f,
+                fitTextLines(presentedError_, 1.55f, errorWidth - 74.0f, 1), kText, errorWidth - 74.0f);
         }
     }
 

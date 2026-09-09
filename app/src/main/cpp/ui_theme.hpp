@@ -35,4 +35,19 @@ constexpr float cornerLarge = 32.0f;
 constexpr float focusOutlineWidth = 4.0f;
 constexpr float focusHaloWidth = 10.0f;
 
+// Type sizes are renderer scales in the 1920 x 1080 logical TV canvas.
+namespace type {
+inline constexpr float display = 6.0f;
+inline constexpr float headline = 3.8f;
+inline constexpr float title = 2.8f;
+inline constexpr float body = 2.15f;
+inline constexpr float label = 1.8f;
+inline constexpr float supporting = 1.55f;
+}
+namespace layout {
+inline constexpr float pageInset = 80.0f;
+inline constexpr float contentWidth = 1760.0f;
+inline constexpr float headerHeight = 160.0f;
+}
+
 } // namespace material_tv
