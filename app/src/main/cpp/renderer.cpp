@@ -1,5 +1,6 @@
 #include "renderer.hpp"
 #include "jni_env.hpp"
+#include "ui_theme.hpp"
 #include "unicode_text.hpp"
 
 #include <android/bitmap.h>
@@ -463,7 +464,12 @@ void Renderer::shutdown() {
 void Renderer::beginFrame() {
     if (!ready()) return;
     glViewport(0, 0, surfaceWidth_, surfaceHeight_);
-    glClearColor(0.000f, 0.027f, 0.082f, 1.0f);
+    glClearColor(
+        material_tv::background.r,
+        material_tv::background.g,
+        material_tv::background.b,
+        material_tv::background.a
+    );
     glClear(GL_COLOR_BUFFER_BIT);
     vertices_.clear();
 }

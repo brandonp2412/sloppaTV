@@ -36,6 +36,12 @@ The final optimized Release then completed the canonical `--final-suite` on the 
 
 Raw A/B samples are tracked in [`docs/benchmarks/home-startup-optimization-ab-2026-09-09.json`](docs/benchmarks/home-startup-optimization-ab-2026-09-09.json). The canonical final-suite samples are tracked in [`docs/benchmarks/google-tv-streamer-optimization-final-2026-09-09.json`](docs/benchmarks/google-tv-streamer-optimization-final-2026-09-09.json).
 
+### Material TV alignment checkpoint — 2026-09-09
+
+After consolidating the native UI onto semantic Material-style colour, shape and focus tokens, the non-debuggable Benchmark APK was installed in place on the same Google TV Streamer with persisted app data intact. A 5-startup / 2-memory / 2-navigation regression checkpoint recorded **216 ms median / 215 ms mean** startup, **32,370 KB PSS / 131,088 KB RSS**, **0.0% idle CPU**, and **16.67 ms median / 16.74 ms p95** navigation with **1.2% >20 ms** and **1.2% >33.4 ms**. The navigation median/p95 and memory remain effectively aligned with the preceding clean renderer checkpoint (**204.5 ms startup median, 32,647 KB PSS, 16.67 ms navigation median / 16.74 ms p95**); the small five-sample startup checkpoint is 11.5 ms higher and is retained as measured rather than presented as an improvement. This smaller checkpoint is regression evidence only, not a replacement for the canonical final-suite sample counts.
+
+Raw samples are tracked in [`docs/benchmarks/google-tv-streamer-material-ui-2026-09-09.json`](docs/benchmarks/google-tv-streamer-material-ui-2026-09-09.json).
+
 ### Renderer font-startup follow-up — 2026-09-09
 
 Commit `f957e6e` overlaps normal Android font-atlas preparation with EGL initialization, defers the subtitle-only outline atlas until outlined text is first required, and avoids an unnecessary intermediate atlas copy for tightly packed Android bitmaps. The exact Release APK for that commit was installed in place on the same physical Google TV Streamer with persisted app data and settings preserved.

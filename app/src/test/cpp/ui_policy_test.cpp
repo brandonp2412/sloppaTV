@@ -28,7 +28,9 @@ int main() {
     assert(uiSafeAreaFraction(4) == 0.04f);
     assert(uiSafeAreaFraction(99) == 0.06f);
     assert(materialButtonFocusScale() == 1.10f);
-    assert(materialTabFocusScale() == 1.06f);
+    assert(materialCardFocusScale() == 1.05f);
+    assert(materialListItemFocusScale() == 1.025f);
+    assert(materialTabFocusScale() == 1.05f);
     assert(materialInputFocusScale() == 1.015f);
     assert(wrappedIndex(0, -1, 10) == 9);
     assert(wrappedIndex(9, 1, 10) == 0);

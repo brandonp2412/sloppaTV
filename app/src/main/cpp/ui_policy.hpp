@@ -26,7 +26,9 @@ constexpr float uiSafeAreaFraction(int percent) {
 }
 
 constexpr float materialButtonFocusScale() { return 1.10f; }
-constexpr float materialTabFocusScale() { return 1.06f; }
+constexpr float materialCardFocusScale() { return 1.05f; }
+constexpr float materialListItemFocusScale() { return 1.025f; }
+constexpr float materialTabFocusScale() { return 1.05f; }
 constexpr float materialInputFocusScale() { return 1.015f; }
 
 constexpr float subtitleBottomY(bool playbackOverlayVisible, int position) {
