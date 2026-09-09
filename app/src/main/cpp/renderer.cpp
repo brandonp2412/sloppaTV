@@ -10,6 +10,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <future>
 #include <string_view>
 #include <vector>
 
@@ -113,6 +114,7 @@ void main() {
     outColor = vec4(sampled.rgb, sampled.a * uAlpha);
 }
 )";
+
 }
 
 Renderer::Renderer(JavaVM* vm, jobject activity) : vm_(vm) {
@@ -129,6 +131,74 @@ Renderer::~Renderer() {
     JNIEnv* env = scoped.get();
     if (env) env->DeleteGlobalRef(activity_);
     activity_ = nullptr;
+}
+
+Renderer::PreparedFontAtlas Renderer::prepareFontAtlas(JavaVM* vm, jobject activity) {
+    PreparedFontAtlas prepared;
+    if (!vm || !activity) return prepared;
+    ScopedEnv scoped(vm);
+    JNIEnv* env = scoped.get();
+    if (!env) return prepared;
+
+    jclass activityClass = env->GetObjectClass(activity);
+    jmethodID createAtlas = activityClass
+        ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;")
+        : nullptr;
+    jmethodID createAdvances = activityClass
+        ? env->GetMethodID(activityClass, "createFontAdvances", "()[F")
+        : nullptr;
+    jobject bitmap = createAtlas ? env->CallObjectMethod(activity, createAtlas) : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        bitmap = nullptr;
+    }
+    jfloatArray advances = createAdvances
+        ? static_cast<jfloatArray>(env->CallObjectMethod(activity, createAdvances))
+        : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        advances = nullptr;
+    }
+    if (advances && env->GetArrayLength(advances) >= static_cast<jsize>(prepared.advances.size())) {
+        env->GetFloatArrayRegion(advances, 0, static_cast<jsize>(prepared.advances.size()), prepared.advances.data());
+        if (!env->ExceptionCheck()) prepared.advancesReady = true;
+        else env->ExceptionClear();
+    }
+    if (advances) env->DeleteLocalRef(advances);
+
+    if (bitmap) {
+        AndroidBitmapInfo info{};
+        void* pixels = nullptr;
+        const bool locked = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS
+            && info.width > 0 && info.height > 0
+            && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
+            && AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
+            && pixels;
+        if (locked) {
+            prepared.width = static_cast<int>(info.width);
+            prepared.height = static_cast<int>(info.height);
+            const size_t rowBytes = static_cast<size_t>(info.width) * 4;
+            prepared.rgba.resize(rowBytes * static_cast<size_t>(info.height));
+            for (uint32_t row = 0; row < info.height; ++row) {
+                std::memcpy(
+                    prepared.rgba.data() + static_cast<size_t>(row) * rowBytes,
+                    static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride,
+                    rowBytes
+                );
+            }
+            AndroidBitmap_unlockPixels(env, bitmap);
+            for (size_t pixel = 0; pixel + 3 < prepared.rgba.size(); pixel += 4) {
+                if (prepared.rgba[pixel + 3] != 0) {
+                    prepared.rgba[pixel] = 255;
+                    prepared.rgba[pixel + 1] = 255;
+                    prepared.rgba[pixel + 2] = 255;
+                }
+            }
+        }
+        env->DeleteLocalRef(bitmap);
+    }
+    if (activityClass) env->DeleteLocalRef(activityClass);
+    return prepared;
 }
 
 GLuint Renderer::compileShader(GLenum type, const char* source) {
@@ -150,6 +220,11 @@ GLuint Renderer::compileShader(GLenum type, const char* source) {
 bool Renderer::init(ANativeWindow* window) {
     shutdown();
     if (!window) return false;
+    JavaVM* const fontVm = vm_;
+    jobject const fontActivity = activity_;
+    auto fontAtlasFuture = std::async(std::launch::async, [fontVm, fontActivity] {
+        return prepareFontAtlas(fontVm, fontActivity);
+    });
 
     display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (display_ == EGL_NO_DISPLAY || !eglInitialize(display_, nullptr, nullptr)) {
@@ -275,8 +350,17 @@ bool Renderer::init(ANativeWindow* window) {
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     vertices_.reserve(32768);
     ++generation_;
-    fontAtlasAttempted_ = false;
-    loadFontAtlas();
+    fontAtlasAttempted_ = true;
+    PreparedFontAtlas preparedFont = fontAtlasFuture.get();
+    if (preparedFont.valid()) {
+        fontAdvances_ = preparedFont.advances;
+        fontAdvancesReady_ = preparedFont.advancesReady;
+        fontTexture_ = createTexture(preparedFont.width, preparedFont.height, preparedFont.rgba.data());
+    }
+    if (!fontTexture_) {
+        fontAtlasAttempted_ = false;
+        loadFontAtlas();
+    }
     __android_log_print(ANDROID_LOG_INFO, kTag, "Renderer initialized at %dx%d (generation %llu)", surfaceWidth_, surfaceHeight_, static_cast<unsigned long long>(generation_));
     return true;
 }
@@ -368,6 +452,7 @@ void Renderer::shutdown() {
     fontTexture_ = 0;
     fontOutlineTexture_ = 0;
     fontAtlasAttempted_ = false;
+    fontOutlineAtlasAttempted_ = false;
     fontAdvances_.fill(0.0f);
     fontAdvancesReady_ = false;
     surfaceWidth_ = 0;
@@ -789,82 +874,64 @@ bool Renderer::externalImage(
     return true;
 }
 
+GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
+    if (!env || !bitmap) return 0;
+    AndroidBitmapInfo info{};
+    void* pixels = nullptr;
+    const bool locked = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS
+        && info.width > 0 && info.height > 0
+        && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
+        && AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
+        && pixels;
+    if (!locked) return 0;
+
+    const size_t rowBytes = static_cast<size_t>(info.width) * 4;
+    const size_t pixelCount = static_cast<size_t>(info.width) * static_cast<size_t>(info.height);
+    GLuint texture = 0;
+    if (info.stride == rowBytes) {
+        auto* rgba = static_cast<uint8_t*>(pixels);
+        for (size_t pixel = 0; pixel < pixelCount; ++pixel) {
+            const size_t offset = pixel * 4;
+            if (rgba[offset + 3] != 0) {
+                rgba[offset] = 255;
+                rgba[offset + 1] = 255;
+                rgba[offset + 2] = 255;
+            }
+        }
+        texture = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), rgba);
+    } else {
+        std::vector<uint8_t> packed(rowBytes * static_cast<size_t>(info.height));
+        for (uint32_t row = 0; row < info.height; ++row) {
+            std::memcpy(
+                packed.data() + static_cast<size_t>(row) * rowBytes,
+                static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride,
+                rowBytes
+            );
+        }
+        for (size_t pixel = 0; pixel < pixelCount; ++pixel) {
+            const size_t offset = pixel * 4;
+            if (packed[offset + 3] != 0) {
+                packed[offset] = 255;
+                packed[offset + 1] = 255;
+                packed[offset + 2] = 255;
+            }
+        }
+        texture = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), packed.data());
+    }
+    AndroidBitmap_unlockPixels(env, bitmap);
+    return texture;
+}
+
 bool Renderer::loadFontAtlas() {
     if (fontTexture_ != 0) return true;
     if (fontAtlasAttempted_ || !ready() || !activity_) return false;
     fontAtlasAttempted_ = true;
-    ScopedEnv scoped(vm_);
-    JNIEnv* env = scoped.get();
-    if (!env) return false;
-    jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID createAtlas = activityClass
-        ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;")
-        : nullptr;
-    jmethodID createOutlineAtlas = activityClass
-        ? env->GetMethodID(activityClass, "createFontOutlineAtlas", "()Landroid/graphics/Bitmap;")
-        : nullptr;
-    jmethodID createAdvances = activityClass
-        ? env->GetMethodID(activityClass, "createFontAdvances", "()[F")
-        : nullptr;
-    jobject bitmap = createAtlas ? env->CallObjectMethod(activity_, createAtlas) : nullptr;
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        bitmap = nullptr;
+    PreparedFontAtlas prepared = prepareFontAtlas(vm_, activity_);
+    if (prepared.valid()) {
+        fontAdvances_ = prepared.advances;
+        fontAdvancesReady_ = prepared.advancesReady;
+        fontTexture_ = createTexture(prepared.width, prepared.height, prepared.rgba.data());
     }
-    jobject outlineBitmap = createOutlineAtlas ? env->CallObjectMethod(activity_, createOutlineAtlas) : nullptr;
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        outlineBitmap = nullptr;
-    }
-    jfloatArray advances = createAdvances
-        ? static_cast<jfloatArray>(env->CallObjectMethod(activity_, createAdvances))
-        : nullptr;
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        advances = nullptr;
-    }
-    if (advances && env->GetArrayLength(advances) >= static_cast<jsize>(fontAdvances_.size())) {
-        env->GetFloatArrayRegion(advances, 0, static_cast<jsize>(fontAdvances_.size()), fontAdvances_.data());
-        if (!env->ExceptionCheck()) fontAdvancesReady_ = true;
-        else env->ExceptionClear();
-    }
-    if (advances) env->DeleteLocalRef(advances);
-
-    auto uploadAtlas = [&](jobject source) -> GLuint {
-        if (!source) return 0;
-        AndroidBitmapInfo info{};
-        void* pixels = nullptr;
-        const bool locked = AndroidBitmap_getInfo(env, source, &info) == ANDROID_BITMAP_RESULT_SUCCESS
-            && info.width > 0 && info.height > 0
-            && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
-            && AndroidBitmap_lockPixels(env, source, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
-            && pixels;
-        if (!locked) return 0;
-        std::vector<uint8_t> packed(static_cast<size_t>(info.width) * static_cast<size_t>(info.height) * 4);
-        for (uint32_t row = 0; row < info.height; ++row) {
-            std::memcpy(
-                packed.data() + static_cast<size_t>(row) * static_cast<size_t>(info.width) * 4,
-                static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride,
-                static_cast<size_t>(info.width) * 4
-            );
-        }
-        for (size_t pixel = 0; pixel + 3 < packed.size(); pixel += 4) {
-            if (packed[pixel + 3] != 0) {
-                packed[pixel] = 255;
-                packed[pixel + 1] = 255;
-                packed[pixel + 2] = 255;
-            }
-        }
-        const GLuint texture = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), packed.data());
-        AndroidBitmap_unlockPixels(env, source);
-        return texture;
-    };
-
-    fontTexture_ = uploadAtlas(bitmap);
-    fontOutlineTexture_ = uploadAtlas(outlineBitmap);
-    if (bitmap) env->DeleteLocalRef(bitmap);
-    if (outlineBitmap) env->DeleteLocalRef(outlineBitmap);
-    if (activityClass) env->DeleteLocalRef(activityClass);
     if (!fontTexture_) {
         __android_log_print(ANDROID_LOG_WARN, kTag, "System font atlas unavailable; using pixel fallback");
         return false;
@@ -872,10 +939,36 @@ bool Renderer::loadFontAtlas() {
     __android_log_print(
         ANDROID_LOG_INFO,
         kTag,
-        "Loaded proportional antialiased Android system font atlas (metrics=%d outline=%d)",
-        fontAdvancesReady_,
-        fontOutlineTexture_ != 0
+        "Loaded proportional antialiased Android system font atlas (metrics=%d)",
+        fontAdvancesReady_
     );
+    return true;
+}
+
+bool Renderer::loadFontOutlineAtlas() {
+    if (fontOutlineTexture_ != 0) return true;
+    if (fontOutlineAtlasAttempted_ || !ready() || !activity_) return false;
+    fontOutlineAtlasAttempted_ = true;
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (!env) return false;
+    jclass activityClass = env->GetObjectClass(activity_);
+    jmethodID createOutlineAtlas = activityClass
+        ? env->GetMethodID(activityClass, "createFontOutlineAtlas", "()Landroid/graphics/Bitmap;")
+        : nullptr;
+    jobject bitmap = createOutlineAtlas ? env->CallObjectMethod(activity_, createOutlineAtlas) : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        bitmap = nullptr;
+    }
+    fontOutlineTexture_ = uploadFontAtlasBitmap(env, bitmap);
+    if (bitmap) env->DeleteLocalRef(bitmap);
+    if (activityClass) env->DeleteLocalRef(activityClass);
+    if (!fontOutlineTexture_) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "System font outline atlas unavailable; using shadow fallback");
+        return false;
+    }
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded system font outline atlas on demand");
     return true;
 }
 
@@ -1072,6 +1165,7 @@ void Renderer::outlinedText(
     Color outline,
     float maxWidth
 ) {
+    if (!fontOutlineTexture_) loadFontOutlineAtlas();
     if (fontOutlineTexture_) textWithAtlas(fontOutlineTexture_, x, y, scale, value, outline, maxWidth);
     else textWithAtlas(fontTexture_, x + 2.0f, y + 2.0f, scale, value, outline, maxWidth);
     textWithAtlas(fontTexture_, x, y, scale, value, fill, maxWidth);

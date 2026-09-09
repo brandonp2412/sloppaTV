@@ -116,9 +116,25 @@ private:
         float localY;
     };
 
+    struct PreparedFontAtlas {
+        int width = 0;
+        int height = 0;
+        std::vector<uint8_t> rgba;
+        std::array<float, 95> advances{};
+        bool advancesReady = false;
+
+        [[nodiscard]] bool valid() const {
+            return width > 0 && height > 0
+                && rgba.size() == static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+        }
+    };
+
     void flush();
     bool ensureExternalProgram();
     bool loadFontAtlas();
+    bool loadFontOutlineAtlas();
+    static PreparedFontAtlas prepareFontAtlas(JavaVM* vm, jobject activity);
+    GLuint uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap);
     void imageRegionTint(
         GLuint texture,
         float x,
@@ -174,6 +190,7 @@ private:
     GLuint fontTexture_ = 0;
     GLuint fontOutlineTexture_ = 0;
     bool fontAtlasAttempted_ = false;
+    bool fontOutlineAtlasAttempted_ = false;
     std::array<float, 95> fontAdvances_{};
     bool fontAdvancesReady_ = false;
     JavaVM* vm_ = nullptr;
