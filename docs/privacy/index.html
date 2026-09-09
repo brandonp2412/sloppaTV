@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="index,follow">
+  <meta name="description" content="Privacy policy for sloppaTV, an independent Android TV client for Jellyfin.">
+  <link rel="canonical" href="https://brandonp2412.github.io/sloppaTV/privacy/">
+  <title>sloppaTV Privacy Policy</title>
+  <style>
+    :root { color-scheme: dark; --bg: #0f1115; --panel: #171a21; --text: #f3f5f7; --muted: #a9b0ba; --line: #2b303a; --accent: #d4ff5f; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.65 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    main { width: min(860px, calc(100% - 32px)); margin: 48px auto; }
+    article { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: clamp(24px, 5vw, 52px); box-shadow: 0 18px 50px rgba(0,0,0,.22); }
+    h1 { margin: 0 0 8px; font-size: clamp(2.1rem, 6vw, 3.5rem); line-height: 1.05; letter-spacing: -.04em; }
+    h2 { margin-top: 2.2em; font-size: 1.3rem; }
+    p, li { color: var(--muted); }
+    strong { color: var(--text); }
+    a { color: var(--accent); }
+    .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .08em; text-transform: uppercase; font-size: .78rem; }
+    .updated { margin-top: 0; color: var(--muted); }
+    .summary { margin: 28px 0; padding: 18px 20px; border-left: 4px solid var(--accent); background: #11141a; border-radius: 10px; }
+    .summary p { margin: 0; color: var(--text); }
+    footer { margin-top: 32px; color: var(--muted); font-size: .9rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <article>
+      <div class="eyebrow">sloppaTV</div>
+      <h1>Privacy Policy</h1>
+      <p class="updated">Last updated: 10 September 2026</p>
+
+      <div class="summary"><p><strong>Short version:</strong> the sloppaTV developer does not collect your personal information. The app talks directly to the Jellyfin server you choose and stores the session information it needs locally on your Android TV device.</p></div>
+
+      <p>sloppaTV is an independent Android TV client for Jellyfin. This policy explains what information sloppaTV handles and, in particular, what the sloppaTV developer does and does not collect.</p>
+
+      <h2>Information collected by the developer</h2>
+      <p>The sloppaTV developer <strong>does not collect personal information through the app</strong>.</p>
+      <p>sloppaTV contains no advertising SDKs, analytics SDKs, tracking SDKs, crash-reporting services, developer-operated telemetry, or developer-operated cloud backend. The developer does not sell, rent, share, or otherwise receive personal data from sloppaTV users.</p>
+
+      <h2>Information handled locally by sloppaTV</h2>
+      <p>To connect to a Jellyfin server, sloppaTV handles information supplied by the user or returned by that Jellyfin server. This can include:</p>
+      <ul>
+        <li>Jellyfin server address;</li>
+        <li>username;</li>
+        <li>Jellyfin user identifier;</li>
+        <li>Jellyfin access token or Quick Connect authorization;</li>
+        <li>a locally generated device identifier; and</li>
+        <li>sloppaTV settings and preferences.</li>
+      </ul>
+      <p>Saved account/session information and settings are stored in the app's private storage on the Android TV device so the user can remain signed in. This information is not sent to the sloppaTV developer.</p>
+
+      <h2>Communication with your Jellyfin server</h2>
+      <p>When a user signs in, browses a library, changes watched or favourite state, selects tracks, requests metadata operations, deletes media where permitted, or plays media, sloppaTV communicates directly with the Jellyfin server selected by that user.</p>
+      <p>Depending on the action, this communication can include authentication information, library metadata, artwork requests, playback requests, playback progress, watched/favourite changes, subtitle and audio selections, metadata refresh requests, and user-initiated deletion requests.</p>
+      <p>sloppaTV does not operate an intermediary service and does not receive this Jellyfin traffic. The Jellyfin server operator controls that server's own logging, retention, security, and privacy practices.</p>
+
+      <h2>Data sharing</h2>
+      <p>sloppaTV does not share user information with advertisers, analytics companies, data brokers, or the sloppaTV developer.</p>
+      <p>Information is sent only as needed to the Jellyfin server chosen by the user, and to network destinations explicitly required by user-requested playback or external-player actions.</p>
+
+      <h2>Permissions</h2>
+      <p>sloppaTV requests Internet access so it can connect to Jellyfin servers and stream media. It does not request location, contacts, camera, microphone, advertising identifier, or broad storage permissions.</p>
+
+      <h2>Security</h2>
+      <p>Local session information is stored in Android app-private storage. Network security depends on the Jellyfin server configured by the user. Users should prefer HTTPS for remote or untrusted networks and keep their Jellyfin server secured and up to date.</p>
+
+      <h2>Retention and deletion</h2>
+      <p>The sloppaTV developer does not retain user data because the developer does not receive it.</p>
+      <p>Users can remove saved Jellyfin accounts from within sloppaTV. Uninstalling sloppaTV removes its locally stored app data according to Android's normal app-data behaviour. Data stored by a Jellyfin server is controlled by that server's operator and must be managed there.</p>
+
+      <h2>Children</h2>
+      <p>sloppaTV is a general-audience media player and is not designed specifically for children. Media availability and age suitability are determined by the user's Jellyfin server, account, and server operator.</p>
+
+      <h2>Changes to this policy</h2>
+      <p>If sloppaTV's data-handling behaviour materially changes, this policy will be updated before or alongside the relevant app release. The date at the top of this page identifies the current version.</p>
+
+      <h2>Contact</h2>
+      <p>Privacy questions can be raised through the <a href="https://github.com/brandonp2412/sloppaTV/issues">sloppaTV issue tracker</a>. The <a href="https://github.com/brandonp2412/sloppaTV">source code is public on GitHub</a>.</p>
+    </article>
+    <footer>This policy page is hosted on GitHub Pages. GitHub's own privacy terms apply when visiting this website.</footer>
+  </main>
+</body>
+</html>
