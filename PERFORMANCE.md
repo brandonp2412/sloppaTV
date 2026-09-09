@@ -16,6 +16,26 @@ Target device: the same Android TV test target used for both sloppaTV and the in
 
 Host-side microbenchmarks cover subtitle parsing/preferences, home image caching, audio preference matching, Jellyfin item parsing, and search row bookkeeping under `tools/benchmark_*.cpp`. Raw Nox optimization samples from 2026-09-08 are preserved in `docs/benchmarks/nox-optimization-2026-09-08.json`; these support isolated hot-path claims only and do not replace physical-TV validation.
 
+### Physical Google TV Streamer Home/startup optimization — 2026-09-09
+
+The production-signed Release build was measured on the physical Google TV Streamer against clean `00a6fd2` and against the immediately preceding optimized build, using the same signing identity and persisted account/settings state. Each install received one discarded warm-up launch before the measured cold-launch batches.
+
+The Home API A/B isolated concurrent fan-out of independent Jellyfin requests (`Views`, `Resume`, `NextUp`, per-library `Latest`, `Recommended`, and `Favorites`):
+
+- Activity-manager launch median: **244 → 235 ms** (-3.7%).
+- primary Home rows median: **258 → 253 ms** (-1.9%).
+- full Home enrichment median: **412 → 370 ms** (-10.2%).
+
+A separate interleaved A/B isolated startup external-player enumeration. When the persisted player is already `INTERNAL`, skipping the unnecessary package enumeration until Settings is opened reduced cold-launch median **248.5 → 214.5 ms** (-13.7%) and mean **242.2 → 224.3 ms**, while primary/enrichment Home timings were effectively unchanged.
+
+The final optimized Release then completed the canonical `--final-suite` on the same Google TV Streamer against the installed Jellyfin Android TV `0.0.0-dev.1` comparator:
+
+- sloppaTV startup: **202.0 ms median / 218.1 ms mean** across 20 cold launches; Jellyfin: **392.0 / 356.8 ms**.
+- settled sloppaTV Home memory medians: **35,423 KB PSS**, **134,627 KB RSS**, **4,164 KB Java heap**, **10,024 KB native heap**; idle CPU **0.0%** across all five samples.
+- rapid-DPAD SurfaceFlinger: **16.67 ms median / 16.73 ms p95**, **0.8% >20 ms** across five 80-event runs. Jellyfin measured **50.0 ms p95** and **15.9% >20 ms** in the same harness.
+
+Raw A/B samples are tracked in [`docs/benchmarks/home-startup-optimization-ab-2026-09-09.json`](docs/benchmarks/home-startup-optimization-ab-2026-09-09.json). The canonical final-suite samples are tracked in [`docs/benchmarks/google-tv-streamer-optimization-final-2026-09-09.json`](docs/benchmarks/google-tv-streamer-optimization-final-2026-09-09.json).
+
 ## Release-candidate evidence — 2026-09-01
 
 The measurements below predate the build-type split and used the then-current Android `release` build type (`isDebuggable=false`, native C++ optimized) signed locally with the standard Android debug key solely for installation on the test TV. Equivalent installable performance/device testing now uses the non-debuggable `benchmark` build type; `release` remains unsigned unless production signing credentials are explicitly supplied.

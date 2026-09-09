@@ -1,0 +1,314 @@
+{
+  "captured_at": "2026-09-09T04:43:49.927036+00:00",
+  "parameters": {
+    "runs": 20,
+    "memory_runs": 5,
+    "nav_runs": 5,
+    "nav_events": 80,
+    "settle_seconds": 6.0,
+    "final_suite": true
+  },
+  "apps": [
+    {
+      "name": "sloppaTV",
+      "package": "app.sloppatv",
+      "activity": "app.sloppatv/app.sloppatv.SloppaNativeActivity",
+      "layer_contains": "SloppaNativeActivity",
+      "setup_keys": [
+        "20"
+      ]
+    },
+    {
+      "name": "Jellyfin",
+      "package": "org.jellyfin.androidtv",
+      "activity": "org.jellyfin.androidtv/.ui.startup.StartupActivity",
+      "layer_contains": "MainActivity",
+      "setup_keys": [
+        "20"
+      ]
+    }
+  ],
+  "startup": {
+    "sloppaTV": {
+      "samples_ms": [
+        301,
+        209,
+        195,
+        238,
+        191,
+        217,
+        197,
+        196,
+        192,
+        239,
+        193,
+        363,
+        190,
+        226,
+        202,
+        202,
+        214,
+        206,
+        200,
+        190
+      ],
+      "median_ms": 202.0,
+      "mean_ms": 218.1,
+      "min_ms": 190,
+      "max_ms": 363
+    },
+    "Jellyfin": {
+      "samples_ms": [
+        398,
+        209,
+        393,
+        420,
+        396,
+        474,
+        380,
+        218,
+        392,
+        226,
+        395,
+        209,
+        381,
+        423,
+        392,
+        411,
+        379,
+        226,
+        389,
+        424
+      ],
+      "median_ms": 392.0,
+      "mean_ms": 356.8,
+      "min_ms": 209,
+      "max_ms": 474
+    }
+  },
+  "memory": {
+    "sloppaTV": {
+      "total_pss_kb": 35423.0,
+      "total_rss_kb": 134627.0,
+      "java_heap_kb": 4164.0,
+      "native_heap_kb": 10024.0
+    },
+    "Jellyfin": {
+      "total_pss_kb": 138197.0,
+      "total_rss_kb": 249107.0,
+      "java_heap_kb": 36384.0,
+      "native_heap_kb": 17612.0
+    }
+  },
+  "memory_samples": {
+    "sloppaTV": [
+      {
+        "total_pss_kb": 35414,
+        "total_rss_kb": 134627,
+        "java_heap_kb": 4156,
+        "native_heap_kb": 9972
+      },
+      {
+        "total_pss_kb": 35423,
+        "total_rss_kb": 134595,
+        "java_heap_kb": 4140,
+        "native_heap_kb": 10024
+      },
+      {
+        "total_pss_kb": 35623,
+        "total_rss_kb": 134791,
+        "java_heap_kb": 4192,
+        "native_heap_kb": 10132
+      },
+      {
+        "total_pss_kb": 34883,
+        "total_rss_kb": 134075,
+        "java_heap_kb": 4164,
+        "native_heap_kb": 9400
+      },
+      {
+        "total_pss_kb": 35887,
+        "total_rss_kb": 135059,
+        "java_heap_kb": 4172,
+        "native_heap_kb": 10336
+      }
+    ],
+    "Jellyfin": [
+      {
+        "total_pss_kb": 144286,
+        "total_rss_kb": 255121,
+        "java_heap_kb": 37312,
+        "native_heap_kb": 17704
+      },
+      {
+        "total_pss_kb": 141506,
+        "total_rss_kb": 252469,
+        "java_heap_kb": 36292,
+        "native_heap_kb": 19548
+      },
+      {
+        "total_pss_kb": 138197,
+        "total_rss_kb": 249107,
+        "java_heap_kb": 36384,
+        "native_heap_kb": 17260
+      },
+      {
+        "total_pss_kb": 136224,
+        "total_rss_kb": 247555,
+        "java_heap_kb": 37352,
+        "native_heap_kb": 17612
+      },
+      {
+        "total_pss_kb": 137758,
+        "total_rss_kb": 248612,
+        "java_heap_kb": 36240,
+        "native_heap_kb": 17264
+      }
+    ]
+  },
+  "idle_cpu_pct": {
+    "sloppaTV": 0.0,
+    "Jellyfin": 0.0
+  },
+  "idle_cpu_samples_pct": {
+    "sloppaTV": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "Jellyfin": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  },
+  "navigation": {
+    "sloppaTV": {
+      "frames": 127.0,
+      "median_interval_ms": 16.67,
+      "p95_interval_ms": 16.73,
+      "over_20ms_pct": 0.8,
+      "over_33_4ms_pct": 0.8,
+      "dropped_frames": 0.0,
+      "average_fps": 0.0
+    },
+    "Jellyfin": {
+      "frames": 127.0,
+      "median_interval_ms": 16.67,
+      "p95_interval_ms": 50.0,
+      "over_20ms_pct": 15.9,
+      "over_33_4ms_pct": 7.1,
+      "dropped_frames": 0.0,
+      "average_fps": 0.0
+    }
+  },
+  "navigation_samples": {
+    "sloppaTV": [
+      {
+        "frames": 127,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 16.73,
+        "over_20ms_pct": 0.8,
+        "over_33_4ms_pct": 0.8,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.66,
+        "p95_interval_ms": 16.73,
+        "over_20ms_pct": 0.8,
+        "over_33_4ms_pct": 0.8,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 16.73,
+        "over_20ms_pct": 0.8,
+        "over_33_4ms_pct": 0.8,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.66,
+        "p95_interval_ms": 16.74,
+        "over_20ms_pct": 0.8,
+        "over_33_4ms_pct": 0.8,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 16.74,
+        "over_20ms_pct": 0.8,
+        "over_33_4ms_pct": 0.8,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      }
+    ],
+    "Jellyfin": [
+      {
+        "frames": 127,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 49.98,
+        "over_20ms_pct": 17.5,
+        "over_33_4ms_pct": 7.1,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 50.0,
+        "over_20ms_pct": 15.9,
+        "over_33_4ms_pct": 5.6,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 49.98,
+        "over_20ms_pct": 15.1,
+        "over_33_4ms_pct": 7.1,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.68,
+        "p95_interval_ms": 50.02,
+        "over_20ms_pct": 19.0,
+        "over_33_4ms_pct": 9.5,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      },
+      {
+        "frames": 127,
+        "median_interval_ms": 16.67,
+        "p95_interval_ms": 50.03,
+        "over_20ms_pct": 12.7,
+        "over_33_4ms_pct": 6.3,
+        "dropped_frames": 0,
+        "average_fps": 0.0
+      }
+    ]
+  },
+  "comparison": {
+    "startup_median_lower_pct": 48.5,
+    "startup_mean_lower_pct": 38.9,
+    "pss_lower_pct": 74.4,
+    "rss_lower_pct": 46.0,
+    "java_heap_lower_pct": 88.6,
+    "navigation_p95_lower_pct": 66.5,
+    "navigation_over_20ms_lower_pct": 95.0
+  }
+}

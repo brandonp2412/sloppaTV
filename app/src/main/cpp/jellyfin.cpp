@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <future>
 #include <iomanip>
 #include <sstream>
 
@@ -428,7 +429,33 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         return result;
     }
 
-    auto views = loadViews(session);
+    const std::string common =
+        "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        "&EnableTotalRecordCount=false";
+    auto addWarning = [&](const std::string& warning) {
+        if (!result.value.warning.empty()) result.value.warning += " | ";
+        result.value.warning += warning;
+    };
+
+    auto viewsFuture = std::async(std::launch::async, [this, &session] {
+        return loadViews(session);
+    });
+    auto resumeFuture = std::async(std::launch::async, [this, &session, &common] {
+        return parseItemList(http_.request(
+            "GET",
+            session.server + "/Users/" + session.userId + "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" + common,
+            headers(&session, session.deviceId)
+        ));
+    });
+    auto nextUpFuture = std::async(std::launch::async, [this, &session, &common] {
+        return parseItemList(http_.request(
+            "GET",
+            session.server + "/Shows/NextUp?UserId=" + session.userId + "&Limit=30&EnableResumable=false" + common,
+            headers(&session, session.deviceId)
+        ));
+    });
+
+    auto views = viewsFuture.get();
     if (!views.ok) {
         result.error = "Libraries: " + views.error;
         return result;
@@ -438,30 +465,14 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         result.value.rows.push_back({"My Media", result.value.views});
     }
 
-    const std::string common =
-        "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-        "&EnableTotalRecordCount=false";
-    auto addWarning = [&](const std::string& warning) {
-        if (!result.value.warning.empty()) result.value.warning += " | ";
-        result.value.warning += warning;
-    };
-
-    auto resume = parseItemList(http_.request(
-        "GET",
-        session.server + "/Users/" + session.userId + "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" + common,
-        headers(&session, session.deviceId)
-    ));
+    auto resume = resumeFuture.get();
     if (resume.ok) {
         if (!resume.value.empty()) result.value.rows.push_back({"Continue Watching", std::move(resume.value)});
     } else {
         addWarning("Continue Watching unavailable");
     }
 
-    auto nextUp = parseItemList(http_.request(
-        "GET",
-        session.server + "/Shows/NextUp?UserId=" + session.userId + "&Limit=30&EnableResumable=false" + common,
-        headers(&session, session.deviceId)
-    ));
+    auto nextUp = nextUpFuture.get();
     if (nextUp.ok) {
         if (!nextUp.value.empty()) result.value.rows.push_back({"Next Up", std::move(nextUp.value)});
     } else {
@@ -491,13 +502,43 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
         result.value.warning += warning;
     };
 
+    std::vector<JellyfinItem> latestViews;
+    std::vector<std::future<ApiValueResult<std::vector<JellyfinItem>>>> latestFutures;
+    latestViews.reserve(views.size());
+    latestFutures.reserve(views.size());
     for (const auto& view : views) {
         if (view.id.empty()) continue;
-        const std::string url = session.server + "/Users/" + session.userId + "/Items/Latest"
-            + "?ParentId=" + urlEncode(view.id)
-            + "&Limit=24&GroupItems=true" + common;
-        auto latest = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
-        if (latest.ok) retainScopedVideoItems(latest.value);
+        latestViews.push_back(view);
+        latestFutures.push_back(std::async(std::launch::async, [this, &session, &common, view] {
+            const std::string url = session.server + "/Users/" + session.userId + "/Items/Latest"
+                + "?ParentId=" + urlEncode(view.id)
+                + "&Limit=24&GroupItems=true" + common;
+            auto latest = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
+            if (latest.ok) retainScopedVideoItems(latest.value);
+            return latest;
+        }));
+    }
+
+    auto recommendedFuture = std::async(std::launch::async, [this, &session, &common] {
+        return parseItemList(http_.request(
+            "GET",
+            session.server + "/Users/" + session.userId + "/Items?Recursive=true&IncludeItemTypes=Movie,Series"
+                "&Limit=30&SortBy=Random&EnableTotalRecordCount=false" + common,
+            headers(&session, session.deviceId)
+        ));
+    });
+    auto favoritesFuture = std::async(std::launch::async, [this, &session, &common] {
+        return parseItemList(http_.request(
+            "GET",
+            session.server + "/Users/" + session.userId + "/Items?Recursive=true&Filters=IsFavorite"
+                "&IncludeItemTypes=Movie,Series,Episode&Limit=30&SortBy=SortName&SortOrder=Ascending" + common,
+            headers(&session, session.deviceId)
+        ));
+    });
+
+    for (size_t index = 0; index < latestFutures.size(); ++index) {
+        auto latest = latestFutures[index].get();
+        const auto& view = latestViews[index];
         if (!latest.ok) {
             addWarning("Recently added " + view.name + " unavailable");
             continue;
@@ -507,24 +548,14 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
         }
     }
 
-    auto recommended = parseItemList(http_.request(
-        "GET",
-        session.server + "/Users/" + session.userId + "/Items?Recursive=true&IncludeItemTypes=Movie,Series"
-            "&Limit=30&SortBy=Random&EnableTotalRecordCount=false" + common,
-        headers(&session, session.deviceId)
-    ));
+    auto recommended = recommendedFuture.get();
     if (recommended.ok) {
         if (!recommended.value.empty()) result.value.rows.push_back({"Recommended", std::move(recommended.value)});
     } else {
         addWarning("Recommendations unavailable");
     }
 
-    auto favorites = parseItemList(http_.request(
-        "GET",
-        session.server + "/Users/" + session.userId + "/Items?Recursive=true&Filters=IsFavorite"
-            "&IncludeItemTypes=Movie,Series,Episode&Limit=30&SortBy=SortName&SortOrder=Ascending" + common,
-        headers(&session, session.deviceId)
-    ));
+    auto favorites = favoritesFuture.get();
     if (favorites.ok) {
         if (!favorites.value.empty()) result.value.rows.push_back({"Favorites", std::move(favorites.value)});
     } else {

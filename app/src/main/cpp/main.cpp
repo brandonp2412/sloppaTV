@@ -324,7 +324,7 @@ public:
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
         loadSession();
-        refreshExternalPlayers();
+        if (!settings_.externalPlayerComponent.empty()) refreshExternalPlayers();
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: session loaded valid=%d", session_.valid() ? 1 : 0);
         if (session_.valid()) {
             resetNavigation(Screen::Home);

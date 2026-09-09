@@ -1,0 +1,47 @@
+{
+  "captured_at": "2026-09-09",
+  "device": "Google TV Streamer",
+  "build_type": "release",
+  "notes": "Same signing identity and persisted app data. Each install was followed by one discarded warm-up launch before measured cold launches. HTTP A/B isolates concurrent Home API fan-out. Startup A/B isolates skipping external-player enumeration when the saved player is INTERNAL.",
+  "home_http_ab": {
+    "clean_head": {
+      "commit": "00a6fd2",
+      "launch_ms": [214, 246, 225, 244, 258, 246, 221, 244, 204],
+      "home_primary_ms": [247, 278, 258, 281, 238, 260, 267, 246, 251],
+      "home_enrichment_ms": [378, 415, 412, 460, 371, 401, 434, 385, 423],
+      "launch_median_ms": 244.0,
+      "home_primary_median_ms": 258.0,
+      "home_enrichment_median_ms": 412.0
+    },
+    "concurrent_home_requests": {
+      "launch_ms": [235, 248, 255, 220, 213, 244, 242, 219, 235],
+      "home_primary_ms": [247, 253, 223, 270, 258, 236, 263, 261, 245],
+      "home_enrichment_ms": [353, 342, 355, 367, 444, 370, 372, 425, 394],
+      "launch_median_ms": 235.0,
+      "home_primary_median_ms": 253.0,
+      "home_enrichment_median_ms": 370.0,
+      "median_delta_pct": {
+        "launch": -3.7,
+        "home_primary": -1.9,
+        "home_enrichment": -10.2
+      }
+    }
+  },
+  "external_player_startup_ab": {
+    "before": {
+      "launch_ms": [218, 244, 270, 254, 245, 255, 256, 220, 252, 208],
+      "home_primary_ms": [250, 237, 241, 250, 274, 245, 260, 261, 254, 237],
+      "home_enrichment_ms": [346, 327, 394, 375, 381, 359, 348, 349, 354, 345],
+      "launch_median_ms": 248.5,
+      "launch_mean_ms": 242.2
+    },
+    "skip_enumeration_when_internal": {
+      "launch_ms": [202, 230, 217, 212, 191, 231, 253, 210, 288, 209],
+      "home_primary_ms": [257, 257, 233, 263, 248, 249, 284, 236, 259, 253],
+      "home_enrichment_ms": [398, 350, 328, 374, 347, 398, 377, 345, 349, 354],
+      "launch_median_ms": 214.5,
+      "launch_mean_ms": 224.3,
+      "median_delta_pct": -13.7
+    }
+  }
+}
