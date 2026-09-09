@@ -89,6 +89,8 @@ constexpr Color kTertiary{0.48f, 0.55f, 0.64f, 1.0f};
 constexpr Color kFocus{0.180f, 0.475f, 0.745f, 1.0f};
 constexpr Color kFocusSoft{0.075f, 0.275f, 0.455f, 0.82f};
 constexpr Color kOutline{0.40f, 0.48f, 0.58f, 0.52f};
+constexpr Color kDivider{0.40f, 0.48f, 0.58f, 0.20f};
+constexpr Color kTrack{0.40f, 0.48f, 0.58f, 0.38f};
 constexpr Color kModalSurface{0.028f, 0.050f, 0.082f, 0.985f};
 constexpr Color kScrim{0.0f, 0.0f, 0.0f, 0.62f};
 constexpr Color kBrandGold{0.757f, 0.596f, 0.431f, 1.0f};
@@ -4863,6 +4865,22 @@ private:
         return bounds;
     }
 
+    float drawChip(
+        float x,
+        float y,
+        const std::string& label,
+        bool selected = false,
+        float scale = 1.45f,
+        float height = 42.0f,
+        float maxWidth = 360.0f
+    ) {
+        const float width = std::clamp(renderer_.textWidth(scale, label) + 34.0f, 72.0f, maxWidth);
+        renderer_.roundedRect(x, y, width, height, height * 0.5f, selected ? kFocusSoft : kPanelAlt);
+        if (!selected) renderer_.roundedOutline(x, y, width, height, height * 0.5f, 1.0f, kOutline);
+        renderer_.textCentered(x, y, width, height, scale,
+            fitTextLines(label, scale, std::max(1.0f, width - 28.0f), 1), selected ? kText : kSecondaryText);
+        return width;
+    }
 
     void renderHeader(const std::string& title) {
         renderer_.text(72, 46, 3.9f, "SLOPPATV", kText);
@@ -5202,10 +5220,10 @@ private:
             if (focused) renderer_.roundedRect(bounds[0] - 10.0f, bounds[1] - 10.0f, bounds[2] + 20.0f, bounds[3] + 20.0f, 22.0f,
                 Color{kFocus.r, kFocus.g, kFocus.b, 0.10f});
             const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3]);
-            if (!hasArtwork) renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, Color{0.055f, 0.06f, 0.075f, 0.94f});
+            if (!hasArtwork) renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], 16.0f, kPanelAlt);
             if (item.positionTicks > 0 && item.runtimeTicks > 0) {
                 const double progress = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, Color{0.05f, 0.05f, 0.06f, 0.72f});
+                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, kTrack);
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
                     static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, kFocus);
             }
@@ -5270,8 +5288,7 @@ private:
         }
         if (item.positionTicks > 0 && item.runtimeTicks > 0) {
             const double fraction = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-            renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f, bounds[2] - 20.0f, 5.0f, 2.5f,
-                Color{0.08f, 0.09f, 0.12f, 0.94f});
+            renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f, bounds[2] - 20.0f, 5.0f, 2.5f, kTrack);
             renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f,
                 static_cast<float>((bounds[2] - 20.0f) * fraction), 5.0f, 2.5f, kFocus);
         }
@@ -5280,7 +5297,7 @@ private:
             const float badgeWidth = item.favorite ? 132.0f : 118.0f;
             const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
             const float badgeY = bounds[1] + 12.0f;
-            renderer_.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, Color{0.02f, 0.04f, 0.07f, 0.88f});
+            renderer_.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, kModalSurface);
             renderer_.textCentered(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, item.favorite ? kFocus : kSecondaryText);
         }
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, 16.0f);
@@ -5572,7 +5589,7 @@ private:
         renderer_.text(progressX, 834.0f, 2.0f, formatPlaybackTime(position), kText, 180.0f);
         const std::string durationText = formatPlaybackTime(duration);
         renderer_.text(1610.0f, 834.0f, 2.0f, durationText, kText, 180.0f);
-        renderer_.roundedRect(progressX, 878.0f, progressWidth, 7.0f, 3.5f, Color{0.30f, 0.31f, 0.35f, 0.78f});
+        renderer_.roundedRect(progressX, 878.0f, progressWidth, 7.0f, 3.5f, kTrack);
         if (duration > 0) {
             const double progress = std::clamp(static_cast<double>(position) / static_cast<double>(duration), 0.0, 1.0);
             const float progressPixels = static_cast<float>(progressWidth * progress);
@@ -5784,17 +5801,26 @@ private:
             if (focused) {
                 drawFocusedSurface(110.0f, y - 8.0f, 1700.0f, 88.0f, true);
             } else {
-                renderer_.rect(132.0f, y + 82.0f, 1650.0f, 1.0f, Color{0.25f, 0.27f, 0.32f, 0.14f});
+                renderer_.rect(132.0f, y + 82.0f, 1650.0f, 1.0f, kDivider);
             }
             const std::string rowLabel = i == kAdvancedSettingsToggle && settingsScreen_.advanced()
                 ? "BASIC SETTINGS"
                 : labels[static_cast<size_t>(i)];
             renderer_.textVerticallyCentered(145.0f, y - 8.0f, 88.0f, 2.20f, rowLabel,
                 focused ? kText : kSecondaryText, 900.0f);
-            const float valueScale = actionRow ? 1.70f : 1.95f;
-            const float valueWidth = renderer_.textWidth(valueScale, values[static_cast<size_t>(i)]);
-            renderer_.textVerticallyCentered(std::max(1190.0f, 1760.0f - valueWidth), y - 8.0f, 88.0f, valueScale,
-                values[static_cast<size_t>(i)], actionRow ? (focused ? kFocus : kText) : (focused ? kFocus : kMuted), 570.0f);
+            const std::string& value = values[static_cast<size_t>(i)];
+            if (actionRow) {
+                const float valueScale = 1.70f;
+                const float valueWidth = renderer_.textWidth(valueScale, value);
+                renderer_.textVerticallyCentered(std::max(1190.0f, 1760.0f - valueWidth), y - 8.0f, 88.0f, valueScale,
+                    value, focused ? kFocus : kText, 570.0f);
+            } else {
+                const float chipWidth = std::clamp(renderer_.textWidth(1.65f, value) + 44.0f, 112.0f, 570.0f);
+                const float chipX = 1765.0f - chipWidth;
+                renderer_.roundedRect(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, focused ? kFocusSoft : kPanelAlt);
+                if (!focused) renderer_.roundedOutline(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, 1.0f, kOutline);
+                renderer_.textCentered(chipX, y + 8.0f, chipWidth, 56.0f, 1.65f, value, focused ? kText : kSecondaryText);
+            }
         }
         renderer_.text(470.0f, 985.0f, 1.52f,
             "LEFT / RIGHT CHANGE   |   OK OPENS OPTIONS   |   UP TO SEARCH", kTertiary, 1120.0f);
@@ -5820,15 +5846,12 @@ private:
                         settings_.subtitleLanguages.end(),
                         kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code
                     ) != settings_.subtitleLanguages.end();
-                if (focused) {
-                    renderer_.roundedRect(478.0f, y - 8.0f, 964.0f, 68.0f, 18.0f, kPanelElevated);
-                    drawFocusHalo(478.0f, y - 8.0f, 964.0f, 68.0f, kFocus, 18.0f);
-                }
+                if (focused) drawFocusedSurface(478.0f, y - 8.0f, 964.0f, 68.0f, true);
                 const std::string label = languageIndex == 0
                     ? "ALL LANGUAGES"
                     : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
                 renderer_.textVerticallyCentered(510.0f, y - 8.0f, 68.0f, 2.05f, label, focused ? kText : kSecondaryText, 620.0f);
-                renderer_.textVerticallyCentered(1290.0f, y - 8.0f, 68.0f, 1.75f, selected ? "ON" : "OFF", selected ? kFocus : kMuted, 110.0f);
+                drawChip(1280.0f, y + 5.0f, selected ? "ON" : "OFF", selected, 1.45f, 42.0f, 116.0f);
             }
             renderer_.text(600.0f, 930.0f, 1.48f, "OK TO TOGGLE   |   BACK TO SETTINGS", kTertiary, 720.0f);
         }
@@ -5926,7 +5949,7 @@ private:
             fitTextLines(detail_.name.empty() ? "ITEM" : detail_.name, 2.35f, panelWidth - 76.0f, 1), kText, panelWidth - 76.0f);
         renderer_.text(panelX + 40.0f, panelY + 79.0f, 1.35f,
             detail_.type.empty() ? "MEDIA" : detail_.type, kMuted, panelWidth - 80.0f);
-        renderer_.rect(panelX + 34.0f, panelY + 118.0f, panelWidth - 68.0f, 1.0f, Color{0.30f, 0.32f, 0.40f, 0.22f});
+        renderer_.rect(panelX + 34.0f, panelY + 118.0f, panelWidth - 68.0f, 1.0f, kDivider);
 
         const float firstActionY = panelY + 136.0f;
         for (size_t i = 0; i < actions.size(); ++i) {
@@ -6103,36 +6126,33 @@ private:
                 fitTextLines(secondary, 2.80f, contentWidth, 1), kSecondaryText, contentWidth);
         }
 
-        std::string metadata;
-        auto appendMetadata = [&](const std::string& value) {
-            if (value.empty()) return;
-            if (!metadata.empty()) metadata += "   |   ";
-            metadata += value;
-        };
-        if (detail_.productionYear > 0) appendMetadata(std::to_string(detail_.productionYear));
-        if (!detail_.officialRating.empty()) appendMetadata(detail_.officialRating);
-        if (detail_.runtimeTicks > 0) appendMetadata(formatPlaybackTime(static_cast<int>(detail_.runtimeTicks / 10000)));
+        std::vector<std::string> metadata;
+        if (detail_.productionYear > 0) metadata.emplace_back(std::to_string(detail_.productionYear));
+        if (!detail_.officialRating.empty()) metadata.emplace_back(detail_.officialRating);
+        if (detail_.runtimeTicks > 0) metadata.emplace_back(formatPlaybackTime(static_cast<int>(detail_.runtimeTicks / 10000)));
         if (detail_.communityRating >= 0.0f) {
             std::ostringstream rating;
             rating << std::fixed << std::setprecision(1) << detail_.communityRating << "/10";
-            appendMetadata(rating.str());
+            metadata.emplace_back(rating.str());
         }
-        const std::string genres = joinGenres(detail_.genres);
-        if (!genres.empty()) appendMetadata(genres);
-        renderer_.text(contentX, 340.0f, 1.80f,
-            fitTextLines(metadata, 1.80f, contentWidth, 1), kMuted, contentWidth);
+        if (!detail_.genres.empty()) metadata.emplace_back(detail_.genres.front());
+        float metadataX = contentX;
+        for (const auto& value : metadata) {
+            const float available = contentX + contentWidth - metadataX;
+            if (available < 72.0f) break;
+            const float width = drawChip(metadataX, 334.0f, value, false, 1.38f, 42.0f, available);
+            metadataX += width + 10.0f;
+        }
 
         if (!detail_.overview.empty()) {
             renderer_.text(contentX, 392.0f, 2.35f,
-                fitTextLines(detail_.overview, 2.35f, contentWidth, 3), Color{0.92f, 0.93f, 0.96f, 0.96f}, contentWidth);
+                fitTextLines(detail_.overview, 2.35f, contentWidth, 3), kSecondaryText, contentWidth);
         }
-        std::string state;
-        if (detail_.favorite) state = "FAVORITE";
+        float stateX = contentX;
+        if (detail_.favorite) stateX += drawChip(stateX, 548.0f, "FAVORITE", true, 1.42f, 42.0f, 180.0f) + 10.0f;
         if (settings_.showWatchedIndicators && detail_.played) {
-            if (!state.empty()) state += "   |   ";
-            state += "WATCHED";
+            drawChip(stateX, 548.0f, "WATCHED", true, 1.42f, 42.0f, 180.0f);
         }
-        if (!state.empty()) renderer_.text(contentX, 558.0f, 1.70f, state, kFocus, 420.0f);
 
         const auto actions = detailActions();
         const bool overlayOpen = screen_ == Screen::ItemMenu;
@@ -6150,7 +6170,7 @@ private:
 
         if (detail_.positionTicks > 0 && detail_.runtimeTicks > 0) {
             const double fraction = std::clamp(static_cast<double>(detail_.positionTicks) / static_cast<double>(detail_.runtimeTicks), 0.0, 1.0);
-            renderer_.roundedRect(contentX, 700.0f, 560.0f, 4.0f, 2.0f, Color{0.45f, 0.46f, 0.50f, 0.45f});
+            renderer_.roundedRect(contentX, 700.0f, 560.0f, 4.0f, 2.0f, kTrack);
             renderer_.roundedRect(contentX, 700.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, kFocus);
         }
 
