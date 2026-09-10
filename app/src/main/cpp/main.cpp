@@ -532,6 +532,41 @@ public:
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
+    void onSystemBackPressed() {
+        const auto now = std::chrono::steady_clock::now();
+        {
+            std::scoped_lock lock(stateMutex_);
+            if (systemTextInputMode_ >= 0) return;
+            renderBurstUntil_ = now + 150ms;
+            lastInteraction_ = now;
+            if (screensaverActive_) {
+                screensaverActive_ = false;
+            } else if (queueState_.overlayActive()) {
+                handleQueueOverlayKey(AKEYCODE_BACK);
+            } else if (screen_ == Screen::Player) {
+                handlePlayerKey(AKEYCODE_BACK);
+            } else {
+                switch (screen_) {
+                    case Screen::Login: handleLoginKey(AKEYCODE_BACK); break;
+                    case Screen::Profiles: handleProfilesKey(AKEYCODE_BACK); break;
+                    case Screen::Home: handleHomeKey(AKEYCODE_BACK); break;
+                    case Screen::Browse: handleBrowseKey(AKEYCODE_BACK); break;
+                    case Screen::Search: handleSearchKey(AKEYCODE_BACK); break;
+                    case Screen::Settings: handleSettingsKey(AKEYCODE_BACK); break;
+                    case Screen::Diagnostics: handleDiagnosticsKey(AKEYCODE_BACK); break;
+                    case Screen::Details: handleDetailsKey(AKEYCODE_BACK); break;
+                    case Screen::Cast: handleCastKey(AKEYCODE_BACK); break;
+                    case Screen::PersonItems: handlePersonItemsKey(AKEYCODE_BACK); break;
+                    case Screen::ItemMenu: handleItemMenuKey(AKEYCODE_BACK); break;
+                    case Screen::Seasons: handleSeasonsKey(AKEYCODE_BACK); break;
+                    case Screen::Episodes: handleEpisodesKey(AKEYCODE_BACK); break;
+                    case Screen::Player: break;
+                }
+            }
+        }
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
 private:
     void onAppCommand(int32_t command) {
         std::scoped_lock lock(stateMutex_);
@@ -1033,8 +1068,15 @@ private:
         return item.type == "Folder" || item.type == "BoxSet" || item.type == "CollectionFolder";
     }
 
+    void cancelContentLoadForNavigation() {
+        if (!loading_) return;
+        requestEpochs_.content.invalidate();
+        loading_ = false;
+    }
+
     void handleBrowseKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
+            cancelContentLoadForNavigation();
             const BrowseBackAction action = browseState_.back();
             if (action == BrowseBackAction::Reload) {
                 loadBrowsePageAsync(false);
@@ -1281,12 +1323,18 @@ private:
 
     void handleDiagnosticsKey(int32_t key) {
         if (key == AKEYCODE_BACK || key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            // Diagnostics owns the current content request. Cancel it before
+            // returning so an in-flight server-info response cannot leave the
+            // app's global loading state stuck after this screen is gone.
+            requestEpochs_.content.invalidate();
+            loading_ = false;
             popScreen(Screen::Settings);
         }
     }
 
     void handleDetailsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
+            cancelContentLoadForNavigation();
             continuationState_.setStillWatchingPrompt(false);
             continuationState_.resetAutoplayChain();
             popScreen(Screen::Home);
@@ -1375,6 +1423,7 @@ private:
 
     void handlePersonItemsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
+            cancelContentLoadForNavigation();
             popScreen(Screen::Cast);
             return;
         }
@@ -1504,11 +1553,17 @@ private:
 
             const std::string videoUrl = api_.staticVideoUrl(session, playable);
             std::string subtitleUrl;
-            const int subtitleIndex = subtitleIndexForPlaybackItem(
-                playable,
-                -1,
-                trackState_.subtitleLanguagePreference()
-            );
+            int subtitleIndex = kSubtitleOffIndex;
+            {
+                // Subtitle policy reads mutable settings and the carried language preference.
+                // Snapshot both under the app-state lock instead of racing the UI thread.
+                std::scoped_lock lock(stateMutex_);
+                subtitleIndex = subtitleIndexForPlaybackItem(
+                    playable,
+                    -1,
+                    trackState_.subtitleLanguagePreference()
+                );
+            }
             if (subtitleIndex >= 0) {
                 const auto subtitle = std::find_if(
                     playable.subtitles.begin(),
@@ -1562,6 +1617,7 @@ private:
 
     void handleSeasonsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
+            cancelContentLoadForNavigation();
             detail_ = detailsState_.seriesDetail();
             popScreen(Screen::Details);
             return;
@@ -1579,6 +1635,7 @@ private:
 
     void handleEpisodesKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
+            cancelContentLoadForNavigation();
             popScreen(Screen::Seasons);
             return;
         }
@@ -2238,13 +2295,14 @@ private:
         const float x = std::clamp(centerX - previewWidth * 0.5f, 80.0f, Renderer::logicalWidth() - 80.0f - previewWidth);
         constexpr float y = 555.0f;
         const auto& decoded = trickplayState_.decoded();
-        const float sourceWidth = static_cast<float>(decoded.width);
-        const float sourceHeight = static_cast<float>(decoded.height);
-        const float u0 = std::clamp((frame.cellX * info.width) / sourceWidth, 0.0f, 1.0f);
-        const float v0 = std::clamp((frame.cellY * info.height) / sourceHeight, 0.0f, 1.0f);
-        const float u1 = std::clamp(((frame.cellX + 1) * info.width) / sourceWidth, 0.0f, 1.0f);
-        const float v1 = std::clamp(((frame.cellY + 1) * info.height) / sourceHeight, 0.0f, 1.0f);
-        if (u1 <= u0 || v1 <= v0) return false;
+        const TrickplayUvRegion uv = trickplayUvRegion(
+            frame,
+            info.width,
+            info.height,
+            decoded.width,
+            decoded.height
+        );
+        if (!uv.valid()) return false;
 
         constexpr float previewRadius = material_tv::cornerSmall;
         renderer_.roundedRect(
@@ -2255,7 +2313,7 @@ private:
             previewRadius + 7.0f, 4.0f, kFocus);
         renderer_.roundedImageRegion(
             trickplayState_.texture(), x, y, previewWidth, previewHeight, previewRadius,
-            u0, v0, u1, v1);
+            uv.u0, uv.v0, uv.u1, uv.v1);
         drawLeftAlignedSingleLineFit(
             x + 14.0f, y + previewHeight + 7.0f, previewWidth - 28.0f, 44.0f, 1.65f,
             formatPlaybackTime(trickplayState_.positionMs()), kText);
@@ -2821,7 +2879,7 @@ private:
         if (desired) detail_.positionTicks = 0;
         if (desired) {
             for (auto& row : home_.rows) {
-                if (row.title == "My Media") continue;
+                if (!homeRowDropsItemWhenPlayed(row.title)) continue;
                 std::erase_if(row.items, [&](const JellyfinItem& homeItem) { return homeItem.id == item.id; });
             }
             clampHomeSelections();
@@ -3310,7 +3368,11 @@ private:
             auto detailed = api_.getItem(session, queued.id);
             if (detailed.ok) queued = std::move(detailed.value);
             const int audioStreamIndex = audioIndexForPlaybackItem(queued, audioPreference);
-            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(queued, audioStreamIndex, subtitlePreference);
+            int subtitleStreamIndex = kSubtitleOffIndex;
+            {
+                std::scoped_lock lock(stateMutex_);
+                subtitleStreamIndex = subtitleIndexForPlaybackItem(queued, audioStreamIndex, subtitlePreference);
+            }
             auto target = api_.resolvePlayback(
                 session,
                 queued,
@@ -3554,7 +3616,11 @@ private:
             }
 
             const int audioStreamIndex = audioIndexForPlaybackItem(playable, audioPreference);
-            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(playable, audioStreamIndex, subtitlePreference);
+            int subtitleStreamIndex = kSubtitleOffIndex;
+            {
+                std::scoped_lock lock(stateMutex_);
+                subtitleStreamIndex = subtitleIndexForPlaybackItem(playable, audioStreamIndex, subtitlePreference);
+            }
             auto target = api_.resolvePlayback(
                 session,
                 playable,
@@ -3583,10 +3649,13 @@ private:
     }
 
     void requestMediaSegmentsAsync() {
-        if (!session_.valid() || activePlaybackItem_.id.empty() || !playbackSessionState_.beginMediaSegmentsRequest()) return;
+        if (!session_.valid() || activePlaybackItem_.id.empty()
+            || !playbackSessionState_.beginMediaSegmentsRequest(std::chrono::steady_clock::now())) {
+            return;
+        }
         const JellyfinSession session = session_;
         const std::string itemId = activePlaybackItem_.id;
-        tasks_.submit([this, session, itemId] {
+        if (!tasks_.submit([this, session, itemId] {
             auto result = api_.getMediaSegments(session, itemId);
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Player || activePlaybackItem_.id != itemId) return;
@@ -3598,7 +3667,9 @@ private:
             const size_t segmentCount = result.value.size();
             playbackSessionState_.setMediaSegments(std::move(result.value));
             __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
-        });
+        })) {
+            playbackSessionState_.failMediaSegmentsRequest(std::chrono::steady_clock::now());
+        }
     }
 
     void requestNextEpisodeAsync() {
@@ -3609,13 +3680,13 @@ private:
         }
         if (!session_.valid() || activePlaybackItem_.type != "Episode"
             || activePlaybackItem_.seriesId.empty() || activePlaybackItem_.id.empty()
-            || !continuationState_.beginNextEpisodeRequest()) {
+            || !continuationState_.beginNextEpisodeRequest(std::chrono::steady_clock::now())) {
             return;
         }
         const JellyfinSession session = session_;
         const std::string seriesId = activePlaybackItem_.seriesId;
         const std::string currentItemId = activePlaybackItem_.id;
-        tasks_.submit([this, session, seriesId, currentItemId] {
+        if (!tasks_.submit([this, session, seriesId, currentItemId] {
             auto next = api_.getFollowingEpisodeForSeries(session, seriesId, currentItemId);
             if (!next.ok) {
                 std::scoped_lock lock(stateMutex_);
@@ -3631,7 +3702,9 @@ private:
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Player || activePlaybackItem_.id != currentItemId) return;
             continuationState_.setNextItem(std::move(item));
-        });
+        })) {
+            continuationState_.failNextEpisodeRequest(std::chrono::steady_clock::now());
+        }
     }
 
     void releaseActivePlayback(bool reportStop) {
@@ -3690,7 +3763,11 @@ private:
             auto detailed = api_.getItem(session, nextItem.id);
             if (detailed.ok) nextItem = std::move(detailed.value);
             const int audioStreamIndex = audioIndexForPlaybackItem(nextItem, audioPreference);
-            const int subtitleStreamIndex = subtitleIndexForPlaybackItem(nextItem, audioStreamIndex, subtitlePreference);
+            int subtitleStreamIndex = kSubtitleOffIndex;
+            {
+                std::scoped_lock lock(stateMutex_);
+                subtitleStreamIndex = subtitleIndexForPlaybackItem(nextItem, audioStreamIndex, subtitlePreference);
+            }
             auto target = api_.resolvePlayback(
                 session,
                 nextItem,
@@ -4643,7 +4720,11 @@ private:
             static_cast<int>(items.size()),
             (firstVisibleRow + visibleRows + warmRowsAhead) * columns
         );
-        for (int index = begin; index < end; ++index) requestArtwork(items[static_cast<size_t>(index)]);
+        for (int index = begin; index < end; ++index) {
+            const auto& item = items[static_cast<size_t>(index)];
+            if (usesLandscapeMediaCard(item.type)) requestHomeArtwork(item);
+            else requestArtwork(item);
+        }
     }
 
     void requestProfileArtwork(const JellyfinSession& saved) {
@@ -4771,7 +4852,7 @@ private:
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
-            auto bytes = api_.downloadBackdropImage(session, itemCopy, 1280, 720);
+            auto bytes = api_.downloadBackdropImage(session, itemCopy, 1920, 1080);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
                 backdrops_.markFailed(key);
@@ -5025,8 +5106,15 @@ private:
             materialTabFocusScale(), material_tv::cornerLarge, !selected);
     }
 
-    std::array<float, 4> drawInputSurface(float x, float y, float width, float height, bool focused) {
-        const auto bounds = focusedBounds(x, y, width, height, focused, materialInputFocusScale());
+    std::array<float, 4> drawInputSurface(
+        float x,
+        float y,
+        float width,
+        float height,
+        bool focused,
+        float focusScale = materialInputFocusScale()
+    ) {
+        const auto bounds = focusedBounds(x, y, width, height, focused, focusScale);
         constexpr float radius = material_tv::cornerMedium;
         const float radiusScale = height > 0.0f ? bounds[3] / height : 1.0f;
         const float renderedRadius = radius * radiusScale;
@@ -5243,7 +5331,8 @@ private:
             return;
         }
 
-        drawModalSurface(410.0f, 225.0f, 1100.0f, 615.0f);
+        const bool hasSavedUsers = !sessionRegistry_.empty();
+        drawModalSurface(410.0f, 225.0f, 1100.0f, hasSavedUsers ? 680.0f : 615.0f);
         static constexpr std::array<const char*, 3> labels{"Server", "Username", "Password"};
         for (int i = 0; i < 3; ++i) {
             const float y = 290.0f + static_cast<float>(i) * 128.0f;
@@ -5251,13 +5340,13 @@ private:
                 495.0f, y - 45.0f, 420.0f, 32.0f, 1.35f,
                 labels[static_cast<size_t>(i)], kMuted);
             const bool focused = !accountState_.keyboardActive() && accountState_.loginFocus() == i;
-            const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused);
+            const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused, materialWideInputFocusScale());
             std::string value = accountState_.field(i);
             if (i == 2 && !value.empty()) value.assign(value.size(), '*');
             const bool placeholder = value.empty() && i == 0;
             if (placeholder) value = "https://your-jellyfin-server";
-            renderer_.textVerticallyCentered(bounds[0] + 30.0f, bounds[1], bounds[3], 2.35f,
-                fitTextLines(value, 2.35f, bounds[2] - 60.0f, 1), placeholder ? kTertiary : kText, bounds[2] - 60.0f);
+            renderer_.textVerticallyCentered(520.0f, bounds[1], bounds[3], 2.35f,
+                fitTextLines(value, 2.35f, 880.0f, 1), placeholder ? kTertiary : kText, 880.0f);
         }
 
         const bool loginFocused = accountState_.loginFocus() == AccountScreenState::kLoginAction && !accountState_.keyboardActive();
@@ -5270,7 +5359,7 @@ private:
         const auto discoverBounds = drawButtonSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
         drawCenteredSingleLineFit(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f, "Discover", kText, 18.0f, 6.0f);
 
-        if (!sessionRegistry_.empty()) {
+        if (hasSavedUsers) {
             const bool savedFocused = accountState_.loginFocus() == AccountScreenState::kSavedUsersAction && !accountState_.keyboardActive();
             const auto savedBounds = drawFocusedSurface(650.0f, 785.0f, 620.0f, 58.0f, savedFocused);
             drawCenteredSingleLineFit(
@@ -5640,7 +5729,9 @@ private:
             cover.imageTag = item.seriesPrimaryImageTag;
             cover.type = "Series";
         }
-        const bool hasArtwork = drawArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], 1.0f, cardRadius);
+        const bool hasArtwork = landscape
+            ? drawHomeArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius)
+            : drawArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], 1.0f, cardRadius);
         if (!hasArtwork) {
             drawArtworkPlaceholder(item, bounds[0] + 1.0f, bounds[1] + 1.0f, bounds[2] - 2.0f, bounds[3] - 2.0f,
                 std::max(0.0f, cardRadius - 1.0f));
@@ -5765,11 +5856,12 @@ private:
         const bool systemSearchInputActive = systemTextInputMode_ == kTextInputSearch;
         const bool searchFieldFocused =
             systemSearchInputActive || (!searchState_.keyboard() && results.empty());
-        const auto searchBounds = drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused);
+        const auto searchBounds = drawInputSurface(
+            72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused, materialWideInputFocusScale());
         const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
-        renderer_.textVerticallyCentered(searchBounds[0] + 34.0f, searchBounds[1], searchBounds[3], 2.15f,
-            fitTextLines(searchDisplay, 2.15f, searchBounds[2] - 68.0f, 1),
-            query.empty() ? kMuted : kText, searchBounds[2] - 68.0f);
+        renderer_.textVerticallyCentered(106.0f, searchBounds[1], searchBounds[3], 2.15f,
+            fitTextLines(searchDisplay, 2.15f, searchWidth - 68.0f, 1),
+            query.empty() ? kMuted : kText, searchWidth - 68.0f);
         const std::string_view searchHint = searchState_.keyboard()
             ? "On-screen keyboard"
             : (systemSearchInputActive ? "Typing…" : (results.empty() ? "Press OK to type" : "Up to edit"));
@@ -6036,13 +6128,16 @@ private:
         renderer_.text(progressX, 834.0f, 2.0f, formatPlaybackTime(position), kText);
         const std::string durationText = formatPlaybackTime(duration);
         drawRightAlignedSingleLine(progressX + progressWidth, 834.0f, 2.0f, durationText, kText, 220.0f);
-        renderer_.roundedRect(progressX, 878.0f, progressWidth, 7.0f, 3.5f, kTrack);
+        // Leave enough vertical separation for the enlarged time labels. At the
+        // largest UI text size their glyph box reaches y=882 from the y=834 row.
+        constexpr float progressTrackY = 890.0f;
+        renderer_.roundedRect(progressX, progressTrackY, progressWidth, 7.0f, 3.5f, kTrack);
         if (duration > 0) {
             const float progress = std::clamp(static_cast<float>(position) / static_cast<float>(duration), 0.0f, 1.0f);
             const float progressPixels = progressWidth * progress;
-            renderer_.roundedRect(progressX, 878.0f, progressPixels, 7.0f, 3.5f, kFocus);
+            renderer_.roundedRect(progressX, progressTrackY, progressPixels, 7.0f, 3.5f, kFocus);
             const float thumbCenterX = playbackProgressThumbCenterX(progressX, progressWidth, progress, 9.0f);
-            renderer_.roundedRect(thumbCenterX - 9.0f, 872.5f, 18.0f, 18.0f, 9.0f, kText);
+            renderer_.roundedRect(thumbCenterX - 9.0f, progressTrackY - 5.5f, 18.0f, 18.0f, 9.0f, kText);
         }
         drawTrickplayPreview();
 
@@ -6239,17 +6334,18 @@ private:
             settingsScreen_.advanced()
         );
 
-        const auto settingsSearchBounds = drawInputSurface(1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused());
+        const auto settingsSearchBounds = drawInputSurface(
+            1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused(), materialWideInputFocusScale());
         const std::string settingsSearchDisplay = settingsScreen_.searchQuery().empty()
             ? "Search settings"
             : settingsScreen_.searchQuery();
         constexpr float settingsSearchTextWidth = 520.0f;
-        renderer_.textVerticallyCentered(settingsSearchBounds[0] + 32.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
+        renderer_.textVerticallyCentered(1102.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
             fitTextLines(settingsSearchDisplay, 2.20f, settingsSearchTextWidth, 1),
             settingsScreen_.searchQuery().empty() ? kMuted : kText, settingsSearchTextWidth);
         const bool systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch;
         drawCenteredSingleLineFit(
-            settingsSearchBounds[0] + settingsSearchBounds[2] - 190.0f,
+            1640.0f,
             settingsSearchBounds[1], 170.0f, settingsSearchBounds[3], 1.60f,
             systemSettingsInputActive ? "Typing…" : "Search",
             settingsScreen_.searchFocused() ? kFocus : kMuted, 10.0f, 4.0f);
@@ -6289,19 +6385,22 @@ private:
                 && i == settingsScreen_.selection();
             const bool actionRow = i == 22 || i == 23 || i == kSubtitleLanguagesSetting || i == kAdvancedSettingsToggle;
             // Settings use contained TV list rows, which remain readable at distance.
+            constexpr float rowX = 110.0f;
+            constexpr float rowWidth = 1700.0f;
             const auto rowBounds = drawListItemSurface(
-                110.0f, y - 8.0f, 1700.0f, 88.0f, focused,
-                material_tv::cornerMedium, materialListItemFocusScale()
+                rowX, y - 8.0f, rowWidth, 88.0f, focused,
+                material_tv::cornerMedium, materialWideListItemFocusScale()
             );
             const std::string rowLabel = i == kAdvancedSettingsToggle && settingsScreen_.advanced()
                 ? "Basic settings"
                 : labels[static_cast<size_t>(i)];
-            renderer_.textVerticallyCentered(rowBounds[0] + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
+            renderer_.textVerticallyCentered(rowX + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
                 fitTextLines(materialLabel(rowLabel), 2.20f, 900.0f, 1),
                 focused ? kText : kSecondaryText, 900.0f);
             const std::string& value = values[static_cast<size_t>(i)];
             constexpr float valueRightInset = 45.0f;
-            const float valueRight = std::round(rowBounds[0] + rowBounds[2] - valueRightInset);
+            // Keep row content anchored while the focus surface grows around it.
+            const float valueRight = std::round(rowX + rowWidth - valueRightInset);
             if (actionRow) {
                 const float valueScale = 1.70f;
                 const std::string displayValue = fitTextLines(materialLabel(value), valueScale, 570.0f, 1);
@@ -6552,7 +6651,7 @@ private:
             const float y = 195.0f + static_cast<float>(row) * rowStep;
             renderMediaArtworkCard(
                 items[static_cast<size_t>(index)], x, y, slotWidth, index == selection,
-                true, false, hasPortraitCards,
+                true, hasPortraitCards, hasPortraitCards,
                 mediaGridTitleLineLimit(row, settings_.uiTextSize, hasPortraitCards));
         }
     }
@@ -6755,7 +6854,9 @@ private:
 
         const auto& similarItems = detailsState_.similar();
         if (!similarItems.empty()) {
-            renderer_.text(72.0f, 760.0f, 2.30f, "More like this", detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
+            // Keep the largest UI-text mode clear of the focused card's 10 px halo.
+            // At y=760 the heading descenders can overlap the first card focus ring.
+            renderer_.text(72.0f, 752.0f, 2.30f, "More like this", detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
             constexpr int visible = 5;
             const int maxStart = std::max(0, static_cast<int>(similarItems.size()) - visible);
             const int start = std::clamp(detailsState_.similarSelection() - 1, 0, maxStart);
@@ -6775,9 +6876,11 @@ private:
                     drawArtworkPlaceholder(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
                 }
                 if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
-                const int similarTitleLines = settings_.uiTextSize > 0 ? 1 : 2;
+                // Similar-card titles sit at the bottom edge of the 1080p canvas.
+                // Two normal-size lines leave only a few pixels for descenders and
+                // antialiasing, so keep every text-size mode to one stable line.
                 renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f,
-                    fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, similarTitleLines),
+                    fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, 1),
                     focused ? kText : kSecondaryText, cardWidth - 10.0f);
             }
         }
@@ -6976,6 +7079,15 @@ Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
     if (gActiveApp) gActiveApp->onNewLaunchIntent(actionValue, dataValue, queryValue);
 }
 
+
+extern "C" JNIEXPORT void JNICALL
+Java_app_sloppatv_SloppaNativeActivity_nativeOnBackPressed(
+    JNIEnv*,
+    jclass
+) {
+    std::scoped_lock lock(gActiveAppMutex);
+    if (gActiveApp) gActiveApp->onSystemBackPressed();
+}
 
 extern "C" JNIEXPORT void JNICALL
 Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(

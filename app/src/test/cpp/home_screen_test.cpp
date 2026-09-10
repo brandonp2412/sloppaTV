@@ -3,6 +3,11 @@
 #include <cassert>
 
 int main() {
+    assert(homeRowDropsItemWhenPlayed("Continue Watching"));
+    assert(homeRowDropsItemWhenPlayed("Next Up"));
+    assert(!homeRowDropsItemWhenPlayed("Favorites"));
+    assert(!homeRowDropsItemWhenPlayed("Latest Movies"));
+    assert(!homeRowDropsItemWhenPlayed("My Media"));
     assert(homeImageKind(true, true, true) == ArtworkKind::Primary);
     assert(homeImageKind(false, true, true) == ArtworkKind::Thumb);
     assert(homeImageKind(false, false, true) == ArtworkKind::Backdrop);
