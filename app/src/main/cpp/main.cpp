@@ -470,7 +470,7 @@ public:
 
     void onSystemTextInputChanged(int mode, const std::string& value) {
         std::scoped_lock lock(stateMutex_);
-        const std::string text = value.substr(0, 160);
+        const std::string text = truncateUtf8Bytes(value, 160);
         if (mode == kTextInputSearch) {
             searchState_.setQuery(text);
             searchState_.setKeyboard(false);
@@ -487,7 +487,7 @@ public:
 
     void onSystemTextInputCancelled(int mode, const std::string& value) {
         std::scoped_lock lock(stateMutex_);
-        const std::string text = value.substr(0, 160);
+        const std::string text = truncateUtf8Bytes(value, 160);
         systemTextInputMode_ = -1;
         if (mode == kTextInputSearch) {
             searchState_.setQuery(text);
@@ -504,7 +504,7 @@ public:
 
     void onSystemTextInputDone(int mode, const std::string& value) {
         std::scoped_lock lock(stateMutex_);
-        const std::string text = value.substr(0, 160);
+        const std::string text = truncateUtf8Bytes(value, 160);
         systemTextInputMode_ = -1;
         if (mode == kTextInputSearch) {
             searchState_.setQuery(text);
@@ -2861,7 +2861,7 @@ private:
         };
         for (auto& row : home_.rows) remove(row.items);
         browseState_.removeItem(itemId);
-        remove(searchState_.results());
+        searchState_.removeItem(itemId);
         detailsState_.removeItem(itemId);
     }
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "unicode_text.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -30,8 +32,7 @@ public:
     bool backspaceFocusedField() {
         if (loginFocus_ < 0 || loginFocus_ >= static_cast<int>(fields_.size())) return false;
         auto& value = fields_[static_cast<size_t>(loginFocus_)];
-        if (!value.empty()) value.pop_back();
-        return true;
+        return eraseLastUtf8CodePoint(value);
     }
 
     [[nodiscard]] int loginFocus() const { return loginFocus_; }

@@ -4,6 +4,26 @@
 #include <string>
 #include <string_view>
 
+inline size_t utf8PrefixLength(std::string_view text, size_t maxBytes) {
+    if (text.size() <= maxBytes) return text.size();
+    size_t end = maxBytes;
+    while (end > 0 && (static_cast<unsigned char>(text[end]) & 0xC0u) == 0x80u) --end;
+    return end;
+}
+
+inline std::string truncateUtf8Bytes(std::string value, size_t maxBytes) {
+    value.resize(utf8PrefixLength(value, maxBytes));
+    return value;
+}
+
+inline bool eraseLastUtf8CodePoint(std::string& value) {
+    if (value.empty()) return false;
+    size_t start = value.size() - 1;
+    while (start > 0 && (static_cast<unsigned char>(value[start]) & 0xC0u) == 0x80u) --start;
+    value.erase(start);
+    return true;
+}
+
 inline uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
     constexpr uint32_t replacement = 0xFFFDu;
     const auto first = static_cast<unsigned char>(text[index++]);
