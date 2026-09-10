@@ -22,7 +22,8 @@ struct HttpResponse {
 
 class JniHttpClient {
 public:
-    explicit JniHttpClient(JavaVM* vm) : vm_(vm) {}
+    JniHttpClient(JavaVM* vm, jobject activity);
+    ~JniHttpClient();
 
     HttpResponse request(
         const std::string& method,
@@ -64,6 +65,7 @@ private:
     ) const;
 
     JavaVM* vm_ = nullptr;
+    jobject activity_ = nullptr;
     mutable std::mutex cacheMutex_;
     mutable std::unordered_map<std::string, CacheEntry> getCache_;
     mutable std::unordered_map<std::string, std::shared_ptr<InFlightRequest>> inFlightGets_;

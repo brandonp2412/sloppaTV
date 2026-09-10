@@ -10,7 +10,6 @@
 #include <chrono>
 #include <sstream>
 #include <thread>
-#include <vector>
 
 namespace {
 constexpr const char* kTag = "sloppaTV/http";
@@ -58,40 +57,21 @@ jstring toJString(JNIEnv* env, const std::string& value) {
     return env->NewStringUTF(value.c_str());
 }
 
-std::string readStream(JNIEnv* env, jobject stream, std::string& error) {
-    if (!stream) return {};
-
-    jclass inputClass = env->FindClass("java/io/InputStream");
-    if (clearException(env, "FindClass(InputStream)", error) || !inputClass) return {};
-    jmethodID readMethod = env->GetMethodID(inputClass, "read", "([B)I");
-    jmethodID closeMethod = env->GetMethodID(inputClass, "close", "()V");
-    if (clearException(env, "InputStream methods", error) || !readMethod) {
-        env->DeleteLocalRef(inputClass);
-        return {};
-    }
-
-    jbyteArray buffer = env->NewByteArray(16 * 1024);
-    std::string result;
-    std::vector<jbyte> temp(16 * 1024);
-
-    while (true) {
-        const jint count = env->CallIntMethod(stream, readMethod, buffer);
-        if (clearException(env, "InputStream.read", error)) break;
-        if (count <= 0) break;
-        env->GetByteArrayRegion(buffer, 0, count, temp.data());
-        if (clearException(env, "GetByteArrayRegion", error)) break;
-        result.append(reinterpret_cast<const char*>(temp.data()), static_cast<size_t>(count));
-    }
-
-    if (closeMethod) {
-        env->CallVoidMethod(stream, closeMethod);
-        if (env->ExceptionCheck()) env->ExceptionClear();
-    }
-
-    env->DeleteLocalRef(buffer);
-    env->DeleteLocalRef(inputClass);
-    return result;
 }
+
+JniHttpClient::JniHttpClient(JavaVM* vm, jobject activity) : vm_(vm) {
+    if (!vm_ || !activity) return;
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (env) activity_ = env->NewGlobalRef(activity);
+}
+
+JniHttpClient::~JniHttpClient() {
+    if (!activity_) return;
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (env) env->DeleteGlobalRef(activity_);
+    activity_ = nullptr;
 }
 
 std::string JniHttpClient::getCacheKey(
@@ -243,91 +223,64 @@ HttpResponse JniHttpClient::requestOnce(
     HttpResponse response;
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
-    if (!env) {
-        response.error = "Unable to attach native HTTP thread to JVM";
+    if (!env || !activity_) {
+        response.error = "Unable to access Android HTTP bridge";
         return response;
     }
 
-    jclass urlClass = env->FindClass("java/net/URL");
-    jclass connectionClass = env->FindClass("java/net/HttpURLConnection");
-    if (clearException(env, "HTTP classes", response.error) || !urlClass || !connectionClass) return response;
-
-    jmethodID urlCtor = env->GetMethodID(urlClass, "<init>", "(Ljava/lang/String;)V");
-    jmethodID openConnection = env->GetMethodID(urlClass, "openConnection", "()Ljava/net/URLConnection;");
-    jmethodID setMethod = env->GetMethodID(connectionClass, "setRequestMethod", "(Ljava/lang/String;)V");
-    jmethodID setProperty = env->GetMethodID(connectionClass, "setRequestProperty", "(Ljava/lang/String;Ljava/lang/String;)V");
-    jmethodID setConnectTimeout = env->GetMethodID(connectionClass, "setConnectTimeout", "(I)V");
-    jmethodID setReadTimeout = env->GetMethodID(connectionClass, "setReadTimeout", "(I)V");
-    jmethodID setDoOutput = env->GetMethodID(connectionClass, "setDoOutput", "(Z)V");
-    jmethodID setFollowRedirects = env->GetMethodID(connectionClass, "setInstanceFollowRedirects", "(Z)V");
-    jmethodID getOutputStream = env->GetMethodID(connectionClass, "getOutputStream", "()Ljava/io/OutputStream;");
-    jmethodID getResponseCode = env->GetMethodID(connectionClass, "getResponseCode", "()I");
-    jmethodID getInputStream = env->GetMethodID(connectionClass, "getInputStream", "()Ljava/io/InputStream;");
-    jmethodID getErrorStream = env->GetMethodID(connectionClass, "getErrorStream", "()Ljava/io/InputStream;");
-    jmethodID disconnect = env->GetMethodID(connectionClass, "disconnect", "()V");
-
-    if (clearException(env, "HTTP method lookup", response.error) || !urlCtor || !openConnection || !setMethod || !getResponseCode) {
-        env->DeleteLocalRef(urlClass);
-        env->DeleteLocalRef(connectionClass);
+    jclass activityClass = env->GetObjectClass(activity_);
+    jmethodID performRequest = activityClass
+        ? env->GetMethodID(
+            activityClass,
+            "performHttpRequestBridge",
+            "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[B)Lapp/sloppatv/SloppaNativeActivity$HttpResult;"
+        )
+        : nullptr;
+    if (clearException(env, "HTTP bridge lookup", response.error) || !activityClass || !performRequest) {
+        if (activityClass) env->DeleteLocalRef(activityClass);
         return response;
     }
 
-    jstring jUrl = toJString(env, url);
-    jobject urlObject = env->NewObject(urlClass, urlCtor, jUrl);
-    if (clearException(env, "URL constructor", response.error) || !urlObject) {
-        env->DeleteLocalRef(jUrl);
-        env->DeleteLocalRef(urlClass);
-        env->DeleteLocalRef(connectionClass);
+    jclass stringClass = env->FindClass("java/lang/String");
+    if (clearException(env, "HTTP bridge String class", response.error) || !stringClass) {
+        env->DeleteLocalRef(activityClass);
         return response;
     }
-
-    jobject connection = env->CallObjectMethod(urlObject, openConnection);
-    if (clearException(env, "URL.openConnection", response.error) || !connection) {
-        env->DeleteLocalRef(urlObject);
-        env->DeleteLocalRef(jUrl);
-        env->DeleteLocalRef(urlClass);
-        env->DeleteLocalRef(connectionClass);
-        return response;
-    }
-
-    env->CallVoidMethod(connection, setConnectTimeout, 10000);
-    env->CallVoidMethod(connection, setReadTimeout, 30000);
-    env->CallVoidMethod(connection, setFollowRedirects, JNI_TRUE);
 
     jstring jMethod = toJString(env, method);
-    env->CallVoidMethod(connection, setMethod, jMethod);
-    env->DeleteLocalRef(jMethod);
-
+    jstring jUrl = toJString(env, url);
+    jobjectArray jHeaders = env->NewObjectArray(static_cast<jsize>(headers.size() * 2), stringClass, nullptr);
+    jsize headerIndex = 0;
     for (const auto& [key, value] : headers) {
         jstring jKey = toJString(env, key);
         jstring jValue = toJString(env, value);
-        env->CallVoidMethod(connection, setProperty, jKey, jValue);
+        env->SetObjectArrayElement(jHeaders, headerIndex++, jKey);
+        env->SetObjectArrayElement(jHeaders, headerIndex++, jValue);
         env->DeleteLocalRef(jKey);
         env->DeleteLocalRef(jValue);
     }
-    if (clearException(env, "HTTP request setup", response.error)) goto cleanup;
 
-    if (!body.empty()) {
-        env->CallVoidMethod(connection, setDoOutput, JNI_TRUE);
-        jobject output = env->CallObjectMethod(connection, getOutputStream);
-        if (clearException(env, "getOutputStream", response.error) || !output) goto cleanup;
-
-        jclass outputClass = env->FindClass("java/io/OutputStream");
-        jmethodID writeMethod = env->GetMethodID(outputClass, "write", "([B)V");
-        jmethodID closeMethod = env->GetMethodID(outputClass, "close", "()V");
-        jbyteArray bytes = env->NewByteArray(static_cast<jsize>(body.size()));
-        env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(body.size()), reinterpret_cast<const jbyte*>(body.data()));
-        env->CallVoidMethod(output, writeMethod, bytes);
-        if (closeMethod) env->CallVoidMethod(output, closeMethod);
-        clearException(env, "OutputStream.write", response.error);
-        env->DeleteLocalRef(bytes);
-        env->DeleteLocalRef(outputClass);
-        env->DeleteLocalRef(output);
-        if (!response.error.empty()) goto cleanup;
+    jbyteArray jBody = env->NewByteArray(static_cast<jsize>(body.size()));
+    if (jBody && !body.empty()) {
+        env->SetByteArrayRegion(
+            jBody,
+            0,
+            static_cast<jsize>(body.size()),
+            reinterpret_cast<const jbyte*>(body.data())
+        );
+    }
+    if (clearException(env, "HTTP bridge request setup", response.error)) {
+        if (jBody) env->DeleteLocalRef(jBody);
+        if (jHeaders) env->DeleteLocalRef(jHeaders);
+        if (jUrl) env->DeleteLocalRef(jUrl);
+        if (jMethod) env->DeleteLocalRef(jMethod);
+        env->DeleteLocalRef(stringClass);
+        env->DeleteLocalRef(activityClass);
+        return response;
     }
 
-    response.status = env->CallIntMethod(connection, getResponseCode);
-    if (clearException(env, "getResponseCode", response.error)) {
+    jobject result = env->CallObjectMethod(activity_, performRequest, jMethod, jUrl, jHeaders, jBody);
+    if (clearException(env, "HTTP bridge request", response.error) || !result) {
         const std::string safeUrl = requestUrlForLog(url);
         __android_log_print(
             ANDROID_LOG_ERROR,
@@ -337,35 +290,48 @@ HttpResponse JniHttpClient::requestOnce(
             safeUrl.c_str(),
             response.error.c_str()
         );
-        goto cleanup;
+    } else {
+        jclass resultClass = env->GetObjectClass(result);
+        jfieldID statusField = resultClass ? env->GetFieldID(resultClass, "status", "I") : nullptr;
+        jfieldID bodyField = resultClass ? env->GetFieldID(resultClass, "body", "[B") : nullptr;
+        jfieldID errorField = resultClass ? env->GetFieldID(resultClass, "error", "Ljava/lang/String;") : nullptr;
+        if (!clearException(env, "HTTP bridge result fields", response.error)
+            && statusField && bodyField && errorField) {
+            response.status = env->GetIntField(result, statusField);
+            auto responseBytes = static_cast<jbyteArray>(env->GetObjectField(result, bodyField));
+            auto errorText = static_cast<jstring>(env->GetObjectField(result, errorField));
+
+            if (responseBytes) {
+                const jsize length = env->GetArrayLength(responseBytes);
+                if (length > 0) {
+                    response.body.resize(static_cast<size_t>(length));
+                    env->GetByteArrayRegion(
+                        responseBytes,
+                        0,
+                        length,
+                        reinterpret_cast<jbyte*>(response.body.data())
+                    );
+                }
+                env->DeleteLocalRef(responseBytes);
+            }
+            if (errorText) {
+                const std::string detail = jniString(env, errorText);
+                if (!detail.empty()) {
+                    response.error = userFacingJavaHttpError("HTTP request", detail);
+                    __android_log_print(ANDROID_LOG_ERROR, kTag, "%s (%s)", response.error.c_str(), detail.c_str());
+                }
+                env->DeleteLocalRef(errorText);
+            }
+        }
+        if (resultClass) env->DeleteLocalRef(resultClass);
+        env->DeleteLocalRef(result);
     }
 
-    {
-        jobject stream = nullptr;
-        if (response.status >= 400 && getErrorStream) {
-            stream = env->CallObjectMethod(connection, getErrorStream);
-        } else if (getInputStream) {
-            stream = env->CallObjectMethod(connection, getInputStream);
-        }
-        if (env->ExceptionCheck()) {
-            env->ExceptionClear();
-            stream = nullptr;
-        }
-        if (stream) {
-            response.body = readStream(env, stream, response.error);
-            env->DeleteLocalRef(stream);
-        }
-    }
-
-cleanup:
-    if (connection && disconnect) {
-        env->CallVoidMethod(connection, disconnect);
-        if (env->ExceptionCheck()) env->ExceptionClear();
-    }
-    env->DeleteLocalRef(connection);
-    env->DeleteLocalRef(urlObject);
-    env->DeleteLocalRef(jUrl);
-    env->DeleteLocalRef(urlClass);
-    env->DeleteLocalRef(connectionClass);
+    if (jBody) env->DeleteLocalRef(jBody);
+    if (jHeaders) env->DeleteLocalRef(jHeaders);
+    if (jUrl) env->DeleteLocalRef(jUrl);
+    if (jMethod) env->DeleteLocalRef(jMethod);
+    env->DeleteLocalRef(stringClass);
+    env->DeleteLocalRef(activityClass);
     return response;
 }
