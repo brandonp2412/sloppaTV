@@ -28,6 +28,13 @@ class AndroidTvManifestTest(unittest.TestCase):
         }
         self.assertIn("android.intent.category.LEANBACK_LAUNCHER", categories)
 
+    def test_native_activity_keeps_tv_system_bars_hidden(self) -> None:
+        source = (ROOT / "app" / "src" / "main" / "java" / "app" / "sloppatv" / "SloppaNativeActivity.java").read_text()
+        self.assertIn("WindowInsets.Type.navigationBars()", source)
+        self.assertIn("BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE", source)
+        self.assertIn("SYSTEM_UI_FLAG_HIDE_NAVIGATION", source)
+        self.assertIn("onWindowFocusChanged", source)
+
 
 if __name__ == "__main__":
     unittest.main()
