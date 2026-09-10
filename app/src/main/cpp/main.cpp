@@ -3441,9 +3441,18 @@ private:
 
                 size_t selected = begin;
                 if (end - begin > 1) {
-                    bool selectedAvailable = api_.isStaticStreamAvailable(session, episodes.value[selected]);
+                    const auto staticStreamAvailable = [&](size_t index) {
+                        auto& candidate = episodes.value[index];
+                        if (candidate.mediaSourceId.empty() || candidate.container.empty()) {
+                            auto detailed = api_.getItem(session, candidate.id);
+                            if (!detailed.ok) return false;
+                            candidate = std::move(detailed.value);
+                        }
+                        return api_.isStaticStreamAvailable(session, candidate);
+                    };
+                    bool selectedAvailable = staticStreamAvailable(selected);
                     for (size_t candidate = begin + 1; candidate < end && !selectedAvailable; ++candidate) {
-                        const bool candidateAvailable = api_.isStaticStreamAvailable(session, episodes.value[candidate]);
+                        const bool candidateAvailable = staticStreamAvailable(candidate);
                         if (preferAvailableDuplicate(selectedAvailable, candidateAvailable)) {
                             selected = candidate;
                             selectedAvailable = true;
