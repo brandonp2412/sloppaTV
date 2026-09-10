@@ -1,5 +1,6 @@
 #pragma once
 
+#include "grid_navigation.hpp"
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
@@ -230,17 +231,7 @@ private:
     }
 
     static void moveGridSelection(int& selection, int count, int dx, int dy, int columns) {
-        if (count <= 0 || columns <= 0) {
-            selection = 0;
-            return;
-        }
-        const int rows = (count + columns - 1) / columns;
-        int row = selection / columns;
-        int col = selection % columns;
-        row = std::clamp(row + dy, 0, rows - 1);
-        col = std::clamp(col + dx, 0, columns - 1);
-        const int next = row * columns + col;
-        if (next >= 0 && next < count) selection = next;
+        selection = gridSelectionAfterMove(selection, count, dx, dy, columns);
     }
 
     static const JellyfinItem* selectedItem(const std::vector<JellyfinItem>& items, int selection) {

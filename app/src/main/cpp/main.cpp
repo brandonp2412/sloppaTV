@@ -1546,17 +1546,14 @@ private:
     }
 
     void moveGridSelectionByCount(int32_t key, int itemCount, int& selection) {
-        if (itemCount <= 0) return;
-        constexpr int columns = mediaGridColumns();
-        const int rows = (itemCount + columns - 1) / columns;
-        int row = selection / columns;
-        int col = selection % columns;
-        if (key == AKEYCODE_DPAD_LEFT) col = std::max(0, col - 1);
-        else if (key == AKEYCODE_DPAD_RIGHT) col = std::min(columns - 1, col + 1);
-        else if (key == AKEYCODE_DPAD_UP) row = std::max(0, row - 1);
-        else if (key == AKEYCODE_DPAD_DOWN) row = std::min(rows - 1, row + 1);
-        const int next = row * columns + col;
-        if (next >= 0 && next < itemCount) selection = next;
+        int dx = 0;
+        int dy = 0;
+        if (key == AKEYCODE_DPAD_LEFT) dx = -1;
+        else if (key == AKEYCODE_DPAD_RIGHT) dx = 1;
+        else if (key == AKEYCODE_DPAD_UP) dy = -1;
+        else if (key == AKEYCODE_DPAD_DOWN) dy = 1;
+        else return;
+        selection = gridSelectionAfterMove(selection, itemCount, dx, dy, mediaGridColumns());
     }
 
     void moveGridSelection(int32_t key, const std::vector<JellyfinItem>& items, int& selection) {
