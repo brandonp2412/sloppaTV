@@ -83,7 +83,14 @@ int main() {
     {"server": 123, "username": "broken", "userId": "broken-user", "token": "broken-token"},
     {"server": "https://saved.example", "username": "saved", "userId": "saved-user", "token": "saved-token"}
   ],
-  "settings": {"maxBitrateMbps": 120}
+  "settings": {
+    "maxBitrateMbps": 120,
+    "playbackBufferPreset": "bad",
+    "clock24Hour": "yes",
+    "externalPlayerComponent": 42,
+    "subtitleStyleDefaultsVersion": 1,
+    "subtitleSize": 2
+  }
 })JSON";
     }
     loaded = loadSessionState(directory.string(), "fallback", warning);
@@ -94,6 +101,10 @@ int main() {
     assert(loaded.savedSessions.size() == 1);
     assert(loaded.savedSessions.front().userId == "saved-user");
     assert(loaded.settings.maxBitrateMbps == 120);
+    assert(loaded.settings.playbackBufferPreset == AppSettings{}.playbackBufferPreset);
+    assert(loaded.settings.clock24Hour == AppSettings{}.clock24Hour);
+    assert(loaded.settings.externalPlayerComponent.empty());
+    assert(loaded.settings.subtitleSize == 2);
 
     const std::string generated = generateDeviceId();
     assert(generated.rfind("sloppatv-", 0) == 0);
