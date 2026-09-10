@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 int main() {
@@ -22,6 +23,26 @@ int main() {
     cache.write("first-key", "replacement");
     const auto replaced = cache.read("first-key");
     assert(replaced && *replaced == "replacement");
+
+    cache.write("preserve-key", "original");
+    fs::path preservePath;
+    for (const auto& entry : fs::directory_iterator(root / "home-image-cache")) {
+        if (!entry.is_regular_file()) continue;
+        std::ifstream input(entry.path(), std::ios::binary);
+        std::string value((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        if (value == "original") {
+            preservePath = entry.path();
+            break;
+        }
+    }
+    assert(!preservePath.empty());
+    const fs::path blockedTemporaryPath = preservePath.string() + ".tmp";
+    fs::create_directories(blockedTemporaryPath / "child", ec);
+    assert(!ec);
+    cache.write("preserve-key", "should-not-replace");
+    const auto preserved = cache.read("preserve-key");
+    assert(preserved && *preserved == "original");
+    fs::remove_all(blockedTemporaryPath, ec);
 
     cache.write("empty", "");
     assert(!cache.read("empty"));
