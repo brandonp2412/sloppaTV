@@ -40,6 +40,15 @@ int main() {
     state.setSubtitleEnabled(false);
     assert(state.activeSubtitleCue(600) == nullptr);
     state.setSubtitleEnabled(true);
+
+    std::vector<SubtitleCue> overlappingCues{
+        {.startMs = 1'000, .endMs = 5'000, .text = "long dialogue"},
+        {.startMs = 2'000, .endMs = 3'000, .text = "brief sign"},
+    };
+    state.applySubtitle(7, "English", std::move(overlappingCues));
+    assert(state.activeSubtitleCue(2'500)->text == "brief sign");
+    assert(state.activeSubtitleCue(3'500)->text == "long dialogue");
+
     state.failSelectedSubtitle();
     assert(!state.subtitleBusy());
     assert(state.selectedSubtitleServerIndex() == -1);
