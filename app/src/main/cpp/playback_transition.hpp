@@ -39,6 +39,7 @@ public:
     }
 
     [[nodiscard]] bool hasPending() const { return pending_.has_value(); }
+    void clearPending() { pending_.reset(); }
 
     std::optional<PendingPlaybackTransition> take() {
         if (!pending_) return std::nullopt;

@@ -54,6 +54,30 @@ int main() {
     resized.results().erase(resized.results().begin());
     assert(resized.topLevelCount() == 1);
 
+    SearchScreenState deletion;
+    deletion.setQuery("delete");
+    std::vector<JellyfinItem> deletionResults(3);
+    deletionResults[0].id = "movie";
+    deletionResults[0].type = "Movie";
+    deletionResults[1].id = "series";
+    deletionResults[1].type = "Series";
+    deletionResults[2].id = "episode";
+    deletionResults[2].type = "Episode";
+    assert(deletion.finishSearch("delete", std::move(deletionResults)));
+    deletion.setSelection(2);
+    assert(deletion.removeItem("episode"));
+    assert(deletion.results().size() == 2);
+    assert(deletion.selection() == 1);
+    assert(deletion.selectedRow() == 0);
+    assert(deletion.topLevelCount() == 2);
+    assert(!deletion.removeItem("missing"));
+    assert(deletion.removeItem("movie"));
+    assert(deletion.selection() == 0);
+    assert(deletion.results().front().id == "series");
+    assert(deletion.removeItem("series"));
+    assert(deletion.results().empty());
+    assert(deletion.selection() == 0);
+
     state.moveSelection(1, 0, 5);
     assert(state.selection() == 1);
     state.moveSelection(0, 1, 5);

@@ -332,7 +332,12 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
     } options[] = {
         {"config", "no", true},
         {"profile", "fast", false},
-        {"vo", "mediacodec_embed", true},
+        // Use Android/EGL rather than mediacodec_embed. The GPU VO can still use
+        // zero-copy MediaCodec when the device supports it, but unlike
+        // mediacodec_embed it can render software-decoded frames when a codec
+        // advertises support and then fails to initialize at runtime.
+        {"vo", "gpu", true},
+        {"gpu-context", "android", true},
         {"hwdec", "mediacodec,no", true},
         {"hwdec-codecs", "all", true},
         {"vd-lavc-dr", "auto", false},
@@ -400,10 +405,8 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
 
 void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     if (symbols_ && mpv_) {
-        // mediacodec_embed requires a valid Android Surface for the lifetime of its VO.
-        // Setting wid=0 before teardown can make the VO reconfigure against an invalid
-        // surface and abort. Destroy mpv first while surface_ is still retained, then
-        // release the Java Surface below.
+        // Keep the Android Surface alive until mpv has torn down its decoder and EGL
+        // output. Releasing the Surface first can race a decoder/output reconfigure.
         symbols_->terminateDestroy(mpv_);
         mpv_ = nullptr;
     }
@@ -734,6 +737,11 @@ PlayerStatus NativeMediaPlayer::status() const {
     const auto now = std::chrono::steady_clock::now();
     std::scoped_lock lock(mutex_);
     if (!mpv_) return error_.empty() ? PlayerStatus::Idle : PlayerStatus::Error;
+    // END_FILE errors are consumed while polling libmpv. Rendering also polls
+    // status(), so keep a terminal error latched until stop()/startAsync()
+    // clears it; otherwise a later property snapshot can overwrite Error with
+    // Preparing before the app's playback recovery tick observes the failure.
+    if (cachedStatus_ == PlayerStatus::Error && !error_.empty()) return PlayerStatus::Error;
 
     while (true) {
         MpvEvent* event = symbols_->waitEvent(mpv_, 0.0);
@@ -759,6 +767,15 @@ PlayerStatus NativeMediaPlayer::status() const {
                 return cachedStatus_;
             }
         }
+    }
+    // Playback failures are terminal for the current mpv load. Another caller
+    // (notably rendering) may consume MPV_EVENT_END_FILE before the app tick sees
+    // it, so keep Error sticky until startAsync()/stop() explicitly clears it.
+    // Otherwise the following property snapshot can turn the failed load back
+    // into Preparing and delay recovery until the prepare timeout fires.
+    if (!error_.empty()) {
+        cachedStatus_ = PlayerStatus::Error;
+        return cachedStatus_;
     }
     if (lastSnapshotPoll_ != std::chrono::steady_clock::time_point{}
         && now - lastSnapshotPoll_ < std::chrono::milliseconds(50)) {

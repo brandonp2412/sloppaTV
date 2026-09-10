@@ -21,15 +21,16 @@ bool clearException(JNIEnv* env, const char* operation) {
     return true;
 }
 
-void setPlaybackKeepScreenOn(JNIEnv* env, jobject activity, bool enabled) {
-    if (!env || !activity) return;
+bool setPlaybackKeepScreenOn(JNIEnv* env, jobject activity, bool enabled) {
+    if (!env || !activity) return false;
     jclass activityClass = env->GetObjectClass(activity);
     jmethodID method = activityClass
         ? env->GetMethodID(activityClass, "setPlaybackKeepScreenOn", "(Z)V")
         : nullptr;
     if (method) env->CallVoidMethod(activity, method, enabled ? JNI_TRUE : JNI_FALSE);
-    clearException(env, "playback keep-screen-on update");
+    const bool failed = clearException(env, "playback keep-screen-on update");
     if (activityClass) env->DeleteLocalRef(activityClass);
+    return method != nullptr && !failed;
 }
 
 int playbackStateValue(MediaSessionState state) {

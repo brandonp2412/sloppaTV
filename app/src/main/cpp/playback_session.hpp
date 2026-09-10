@@ -29,6 +29,7 @@ public:
             return false;
         }
         mediaSegmentsRequested_ = true;
+        mediaSegmentsRetryAt_ = {};
         return true;
     }
     void mediaSegmentsRequestFailed(TimePoint now = Clock::now()) {
@@ -41,6 +42,7 @@ public:
         mediaSegments_.clear();
     }
     void setMediaSegments(std::vector<JellyfinMediaSegment> segments) {
+        mediaSegmentsRetryAt_ = {};
         mediaSegments_ = std::move(segments);
         mediaSegmentsRetryAfter_ = {};
     }

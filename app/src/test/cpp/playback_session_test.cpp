@@ -1,6 +1,7 @@
 #include "playback_session.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <vector>
 
@@ -32,6 +33,7 @@ int main() {
     assert(intro);
     assert(intro->type == "Intro");
     assert(!state.activeSkippableSegment(75'000'000));
+    assert(state.mediaSegmentsRequested());
 
     state.markFallbackAttempted();
     assert(state.fallbackAttempted());

@@ -34,7 +34,7 @@ int main() {
     assert(searchMediaRowHeight(true) == 430.0f);
     assert(searchMediaRowHeight(false) == 300.0f);
     assert(mediaGridTitleLineLimit(0, 2, true) == 0);
-    assert(mediaGridTitleLineLimit(1, 0, true) == 0);
+    assert(mediaGridTitleLineLimit(1, 0, true) == 1);
     assert(mediaGridTitleLineLimit(1, 1, true) == 1);
     assert(mediaGridTitleLineLimit(1, 2, true) == 1);
     assert(mediaGridTitleLineLimit(1, 2, false) == 0);
@@ -85,8 +85,10 @@ int main() {
     assert(materialButtonFocusScale() == 1.05f);
     assert(materialCardFocusScale() == 1.05f);
     assert(materialListItemFocusScale() == 1.04f);
+    assert(materialWideListItemFocusScale() == 1.015f);
     assert(materialTabFocusScale() == 1.05f);
     assert(materialInputFocusScale() == 1.04f);
+    assert(materialWideInputFocusScale() == 1.015f);
     assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 0.0f, 9.0f) == 159.0f);
     assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 0.5f, 9.0f) == 960.0f);
     assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 1.0f, 9.0f) == 1761.0f);
