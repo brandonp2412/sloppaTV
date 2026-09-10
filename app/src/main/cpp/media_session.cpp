@@ -166,15 +166,13 @@ void NativeMediaSession::updateMetadata(
 }
 
 void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs) {
-    {
+    const bool keepScreenOn = state == MediaSessionState::Playing || state == MediaSessionState::Buffering;
+    if (!keepScreenOn_.has_value() || *keepScreenOn_ != keepScreenOn) {
         ScopedEnv scoped(vm_);
         JNIEnv* env = scoped.get();
         if (env) {
-            setPlaybackKeepScreenOn(
-                env,
-                activity_,
-                state == MediaSessionState::Playing || state == MediaSessionState::Buffering
-            );
+            setPlaybackKeepScreenOn(env, activity_, keepScreenOn);
+            keepScreenOn_ = keepScreenOn;
         }
     }
     if (state == MediaSessionState::Stopped && !session_) return;
@@ -272,7 +270,8 @@ void NativeMediaSession::clear() {
 
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
-    if (env) setPlaybackKeepScreenOn(env, activity_, false);
+    if (env && keepScreenOn_.value_or(false)) setPlaybackKeepScreenOn(env, activity_, false);
+    keepScreenOn_ = false;
     if (!session_ || !env) return;
     jclass sessionClass = env->FindClass("android/media/session/MediaSession");
     if (sessionClass) {
