@@ -172,15 +172,26 @@ public:
 
     void removeItem(const std::string& itemId) {
         if (itemId.empty()) return;
-        auto remove = [&](std::vector<JellyfinItem>& items, int& nextIndex) {
+        auto remove = [&](std::vector<JellyfinItem>& items, int& nextIndex, int& selection) {
             const size_t previousSize = items.size();
+            const size_t selectedOffset = selection <= 0
+                ? 0
+                : std::min(static_cast<size_t>(selection), items.size());
+            const int removedBeforeSelection = static_cast<int>(std::count_if(
+                items.begin(),
+                items.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
+                [&](const JellyfinItem& item) { return item.id == itemId; }
+            ));
             std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
             const int removed = static_cast<int>(previousSize - items.size());
-            if (removed > 0) nextIndex = std::max(0, nextIndex - removed);
+            if (removed == 0) return;
+            nextIndex = std::max(0, nextIndex - removed);
+            selection = items.empty()
+                ? 0
+                : std::clamp(selection - removedBeforeSelection, 0, static_cast<int>(items.size()) - 1);
         };
-        remove(items_, nextIndex_);
-        for (auto& snapshot : stack_) remove(snapshot.items, snapshot.nextIndex);
-        setSelection(selection_);
+        remove(items_, nextIndex_, selection_);
+        for (auto& snapshot : stack_) remove(snapshot.items, snapshot.nextIndex, snapshot.selection);
     }
 
     [[nodiscard]] std::string heading() const {
