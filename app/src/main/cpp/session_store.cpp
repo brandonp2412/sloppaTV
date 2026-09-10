@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdio>
 #include <fstream>
 #include <random>
 #include <sstream>
@@ -181,13 +182,29 @@ bool saveSessionState(const std::string& dataPath, const StoredSessionState& sta
         data["savedSessions"] = std::move(savedSessions);
         data["settings"] = writeSettings(state.settings);
 
-        std::ofstream output(dataPath + "/session.json", std::ios::trunc);
-        if (!output) {
-            warning = "unable to open session.json for writing";
+        const std::string sessionPath = dataPath + "/session.json";
+        const std::string temporaryPath = sessionPath + ".tmp";
+        {
+            std::ofstream output(temporaryPath, std::ios::trunc);
+            if (!output) {
+                warning = "unable to open temporary session file for writing";
+                return false;
+            }
+            output << data.dump(2);
+            output.flush();
+            if (!output) {
+                warning = "unable to write temporary session file";
+                output.close();
+                std::remove(temporaryPath.c_str());
+                return false;
+            }
+        }
+        if (std::rename(temporaryPath.c_str(), sessionPath.c_str()) != 0) {
+            warning = "unable to replace session.json";
+            std::remove(temporaryPath.c_str());
             return false;
         }
-        output << data.dump(2);
-        return static_cast<bool>(output);
+        return true;
     } catch (const std::exception& e) {
         warning = e.what();
         return false;
