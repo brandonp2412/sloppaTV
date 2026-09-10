@@ -622,6 +622,7 @@ private:
                     if (status == PlayerStatus::Playing || status == PlayerStatus::Preparing) {
                         playerScreenState_.requestResumeOnFocus();
                         player_.pause();
+                        mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
                     }
                 }
                 break;
