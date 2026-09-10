@@ -4672,8 +4672,7 @@ private:
             if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
         }
         if (entry.texture == 0) return false;
-        renderer_.roundedImageRegion(entry.texture, x, y, size, size, size * 0.5f,
-            0.0f, 0.0f, 1.0f, 1.0f);
+        drawCoverTexture(entry, x, y, size, size, 1.0f, size * 0.5f);
         return true;
     }
 
@@ -4794,7 +4793,8 @@ private:
         }
         if (entry.texture == 0) return false;
         const float effectiveAlpha = settings_.backdropMode == 1 ? std::max(alpha, 0.34f) : alpha;
-        renderer_.image(entry.texture, 0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), effectiveAlpha);
+        drawCoverTexture(
+            entry, 0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), effectiveAlpha, 0.0f);
         renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, settings_.backdropMode == 1 ? 0.26f : 0.12f});
         return true;
     }
@@ -5542,9 +5542,9 @@ private:
         const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 5);
         constexpr float cardH = 202.0f;
         constexpr float cardW = 350.0f;
-        constexpr float gap = 24.0f;
+        constexpr float gap = 18.0f;
         const float imageY = top + imageOffset;
-        float x = 54.0f;
+        float x = 72.0f;
 
         auto singleLine = [&](std::string_view value, float scale, float width) {
             return fitTextLines(value, scale, width, 1);
@@ -5739,16 +5739,21 @@ private:
         renderer_.text(80.0f, 44.0f, material_tv::type::headline, "Search", kText, 520.0f);
         constexpr float searchTop = 155.0f;
         constexpr float searchWidth = 1450.0f;
-        const bool searchFieldFocused = !searchState_.keyboard() && results.empty();
+        const bool systemSearchInputActive = systemTextInputMode_ == kTextInputSearch;
+        const bool searchFieldFocused =
+            systemSearchInputActive || (!searchState_.keyboard() && results.empty());
         const auto searchBounds = drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused);
         const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
         renderer_.textVerticallyCentered(searchBounds[0] + 34.0f, searchBounds[1], searchBounds[3], 2.15f,
             fitTextLines(searchDisplay, 2.15f, searchBounds[2] - 68.0f, 1),
             query.empty() ? kMuted : kText, searchBounds[2] - 68.0f);
+        const std::string_view searchHint = searchState_.keyboard()
+            ? "On-screen keyboard"
+            : (systemSearchInputActive ? "Typing…" : (results.empty() ? "Press OK to type" : "Up to edit"));
         drawLeftAlignedSingleLineFit(
             1575.0f, searchTop, 250.0f, 68.0f, 1.45f,
-            searchState_.keyboard() ? "On-screen keyboard" : "Press OK to type",
-            searchState_.keyboard() ? kFocus : kSecondaryText);
+            searchHint,
+            (searchState_.keyboard() || systemSearchInputActive) ? kFocus : kSecondaryText);
 
         if (searchState_.keyboard()) {
             renderKeyboard(270.0f);
@@ -5759,9 +5764,15 @@ private:
         }
 
         if (results.empty()) {
-            renderEmptyState(searchState_.loading() ? "Searching your library" :
-                (query.empty() ? "Find your next favorite" : "No results found"),
-                query.empty() ? "Search for a movie, show, actor or episode." : "Try another title or search term.");
+            if (systemSearchInputActive) {
+                drawCenteredSingleLineFit(
+                    480.0f, 300.0f, 960.0f, 64.0f, 1.75f,
+                    "Type to search your library", kMuted, 16.0f, 5.0f);
+            } else {
+                renderEmptyState(searchState_.loading() ? "Searching your library" :
+                    (query.empty() ? "Find your next favorite" : "No results found"),
+                    query.empty() ? "Search for a movie, show, actor or episode." : "Try another title or search term.");
+            }
             return;
         }
 
@@ -5791,7 +5802,7 @@ private:
                     x,
                     cardY,
                     slotWidth,
-                    index == searchState_.selection(),
+                    !systemSearchInputActive && index == searchState_.selection(),
                     true,
                     false,
                     rowHasPortraitCards,
@@ -6019,7 +6030,9 @@ private:
                 "Subtitles  " + std::string(materialLabel(playerTrackLabel(4))),
             };
             const std::array<float, 3> widths{104.0f, 310.0f, 350.0f};
-            float x = 578.0f;
+            constexpr float controlGap = 28.0f;
+            const float controlGroupWidth = widths[0] + widths[1] + widths[2] + controlGap * 2.0f;
+            float x = (Renderer::logicalWidth() - controlGroupWidth) * 0.5f;
             for (size_t i = 0; i < controls.size(); ++i) {
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
                 const auto bounds = drawButtonSurface(x, 925.0f, widths[i], 66.0f, selected, i == 0);
@@ -6061,7 +6074,7 @@ private:
                         labelWidth
                     );
                 }
-                x += widths[i] + 28.0f;
+                x += widths[i] + controlGap;
             }
         } else {
             const std::string queueHint = queueState_.empty() ? "" : "   |   Down opens queue";
@@ -6211,14 +6224,22 @@ private:
         renderer_.textVerticallyCentered(settingsSearchBounds[0] + 32.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
             fitTextLines(settingsSearchDisplay, 2.20f, settingsSearchTextWidth, 1),
             settingsScreen_.searchQuery().empty() ? kMuted : kText, settingsSearchTextWidth);
+        const bool systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch;
         drawCenteredSingleLineFit(
             settingsSearchBounds[0] + settingsSearchBounds[2] - 190.0f,
             settingsSearchBounds[1], 170.0f, settingsSearchBounds[3], 1.60f,
-            "Search", settingsScreen_.searchFocused() ? kFocus : kMuted, 10.0f, 4.0f);
+            systemSettingsInputActive ? "Typing…" : "Search",
+            settingsScreen_.searchFocused() ? kFocus : kMuted, 10.0f, 4.0f);
 
         const auto matches = settingsScreen_.matches();
         if (matches.empty()) {
-            renderEmptyState("No matching settings", "Press OK or Search to change your filter.");
+            if (systemSettingsInputActive) {
+                drawCenteredSingleLineFit(
+                    480.0f, 300.0f, 960.0f, 64.0f, 1.75f,
+                    "Type to filter settings", kMuted, 16.0f, 5.0f);
+            } else {
+                renderEmptyState("No matching settings", "Press OK or Search to change your filter.");
+            }
             return;
         }
 
