@@ -101,6 +101,22 @@ int main() {
     assert(state.back() == BrowseBackAction::RestoredSnapshot);
     assert(state.items().size() == 2);
     assert(state.nextIndex() == 2);
+    assert(state.selection() == 1);
+
+    state.replacePage({item("a", "A"), item("b", "B"), item("c", "C")}, 60);
+    state.setSelection(1);
+    state.removeItem("a");
+    assert(state.selection() == 0);
+    assert(state.items()[static_cast<size_t>(state.selection())].id == "b");
+
+    state.setSelection(1);
+    state.openContainer(box, true);
+    state.replacePage({item("child", "Child")}, 60);
+    state.removeItem("b");
+    assert(state.back() == BrowseBackAction::RestoredSnapshot);
+    assert(state.items().size() == 1);
+    assert(state.selection() == 0);
+    assert(state.items()[0].id == "c");
 
     state.clear();
     assert(state.activeContainer().id.empty());
