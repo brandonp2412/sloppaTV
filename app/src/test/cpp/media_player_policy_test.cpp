@@ -9,6 +9,11 @@ int main() {
     assert(clampSeekPositionMs(0) == 0);
     assert(clampSeekPositionMs(1234) == 1234);
     assert(clampSeekPositionMs(std::numeric_limits<int64_t>::max()) == std::numeric_limits<int>::max());
+    assert(relativeSeekPositionMs(10'000, -15'000, 60'000) == 0);
+    assert(relativeSeekPositionMs(10'000, 15'000, 60'000) == 25'000);
+    assert(relativeSeekPositionMs(55'000, 15'000, 60'000) == 60'000);
+    assert(relativeSeekPositionMs(std::numeric_limits<int>::max() - 100, 60'000, 0)
+        == std::numeric_limits<int>::max());
     assert(playbackTicksFromPositionMs(-1) == 0);
     assert(playbackTicksFromPositionMs(1234) == 12'340'000);
     assert(playbackPositionMsFromTicks(-1) == 0);
