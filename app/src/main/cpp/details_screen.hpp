@@ -212,23 +212,28 @@ public:
     }
 
     void removeItem(const std::string& itemId) {
-        auto remove = [&](auto& items) {
+        if (itemId.empty()) return;
+        auto remove = [&](auto& items, int& selection) {
+            const size_t selectedOffset = selection <= 0
+                ? 0
+                : std::min(static_cast<size_t>(selection), items.size());
+            const int removedBeforeSelection = static_cast<int>(std::count_if(
+                items.begin(),
+                items.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
+                [&](const JellyfinItem& item) { return item.id == itemId; }
+            ));
             std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
+            selection = items.empty()
+                ? 0
+                : std::clamp(selection - removedBeforeSelection, 0, static_cast<int>(items.size()) - 1);
         };
-        remove(similar_);
-        remove(personItems_);
-        remove(seasons_);
-        remove(episodes_);
-        clampSelection(personItemSelection_, personItems_.size());
-        clampSelection(seasonSelection_, seasons_.size());
-        clampSelection(episodeSelection_, episodes_.size());
-        clampSelection(similarSelection_, similar_.size());
+        remove(similar_, similarSelection_);
+        remove(personItems_, personItemSelection_);
+        remove(seasons_, seasonSelection_);
+        remove(episodes_, episodeSelection_);
     }
 
 private:
-    static void clampSelection(int& selection, size_t count) {
-        selection = count == 0 ? 0 : std::clamp(selection, 0, static_cast<int>(count) - 1);
-    }
 
     static void moveGridSelection(int& selection, int count, int dx, int dy, int columns) {
         selection = gridSelectionAfterMove(selection, count, dx, dy, columns);
