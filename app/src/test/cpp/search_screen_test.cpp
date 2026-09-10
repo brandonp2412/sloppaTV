@@ -83,6 +83,21 @@ int main() {
     removal.removeItem("missing");
     assert(removal.selection() == 4);
 
+    SearchScreenState focusRemoval;
+    focusRemoval.setQuery("focus");
+    std::vector<JellyfinItem> focusResults(3);
+    focusResults[0].id = "a";
+    focusResults[0].type = "Movie";
+    focusResults[1].id = "b";
+    focusResults[1].type = "Movie";
+    focusResults[2].id = "c";
+    focusResults[2].type = "Movie";
+    assert(focusRemoval.finishSearch("focus", std::move(focusResults)));
+    focusRemoval.setSelection(1);
+    focusRemoval.removeItem("a");
+    assert(focusRemoval.selection() == 0);
+    assert(focusRemoval.results()[static_cast<size_t>(focusRemoval.selection())].id == "b");
+
     state.setQuery("brook");
     state.setLoading(true);
     std::vector<JellyfinItem> stale(1);

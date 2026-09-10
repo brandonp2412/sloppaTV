@@ -154,12 +154,20 @@ public:
     void removeItem(const std::string& itemId) {
         if (itemId.empty()) return;
         const size_t previousSize = results_.size();
+        const size_t selectedOffset = selection_ <= 0
+            ? 0
+            : std::min(static_cast<size_t>(selection_), results_.size());
+        const int removedBeforeSelection = static_cast<int>(std::count_if(
+            results_.begin(),
+            results_.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
+            [&](const JellyfinItem& item) { return item.id == itemId; }
+        ));
         std::erase_if(results_, [&](const JellyfinItem& item) { return item.id == itemId; });
         if (results_.size() == previousSize) return;
 
         selection_ = results_.empty()
             ? 0
-            : std::min(selection_, static_cast<int>(results_.size()) - 1);
+            : std::clamp(selection_ - removedBeforeSelection, 0, static_cast<int>(results_.size()) - 1);
         const auto firstEpisode = std::find_if(results_.begin(), results_.end(), [](const JellyfinItem& item) {
             return item.type == "Episode";
         });
