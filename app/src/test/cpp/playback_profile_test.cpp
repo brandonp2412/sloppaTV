@@ -90,6 +90,38 @@ int main() {
     assert(!plan.directVideoSupported);
     assert(!containsCodec(plan.videoCodecs, "h264"));
 
+    auto h264BitDepthOnly = high10;
+    h264BitDepthOnly.profile.clear();
+    plan = makePlaybackProfilePlan(device, h264BitDepthOnly, surround, {}, 8, {});
+    assert(!plan.directVideoSupported);
+    assert(!containsCodec(plan.videoCodecs, "h264"));
+
+    auto noAv1Main10 = device;
+    noAv1Main10.av1Main10 = false;
+    const PlaybackVideoCapabilityInput av1ProfileOnly{
+        .codec = "av1",
+        .profile = "Main 10",
+        .rangeType = "",
+        .bitDepth = 0,
+        .width = 1920,
+        .height = 1080,
+    };
+    plan = makePlaybackProfilePlan(noAv1Main10, av1ProfileOnly, surround, {}, 8, {});
+    assert(!plan.directVideoSupported);
+    assert(!containsCodec(plan.videoCodecs, "av1"));
+
+    auto widthOnlyLimit = device;
+    widthOnlyLimit.maxHevcHeight = 0;
+    plan = makePlaybackProfilePlan(widthOnlyLimit, hevcHdr, surround, {}, 8, {});
+    assert(plan.directVideoSupported);
+    assert(containsCodec(plan.videoCodecs, "hevc"));
+
+    auto heightOnlyLimit = device;
+    heightOnlyLimit.maxHevcWidth = 0;
+    plan = makePlaybackProfilePlan(heightOnlyLimit, hevcHdr, surround, {}, 8, {});
+    assert(plan.directVideoSupported);
+    assert(containsCodec(plan.videoCodecs, "hevc"));
+
     auto stereoRoute = device;
     stereoRoute.maxAudioOutputChannels = 2;
     plan = makePlaybackProfilePlan(stereoRoute, {}, surround, {}, 8, {});

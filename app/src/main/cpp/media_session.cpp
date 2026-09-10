@@ -171,8 +171,10 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
     if (!keepScreenOn_.has_value() || *keepScreenOn_ != keepScreenOn) {
         ScopedEnv scoped(vm_);
         JNIEnv* env = scoped.get();
-        if (env) {
-            setPlaybackKeepScreenOn(env, activity_, keepScreenOn);
+        // Cache only a successful platform update. If attaching to the JVM or the
+        // Activity bridge fails transiently, the next playback tick must retry or
+        // Android can be allowed to sleep in the middle of playback.
+        if (env && setPlaybackKeepScreenOn(env, activity_, keepScreenOn)) {
             keepScreenOn_ = keepScreenOn;
         }
     }
@@ -263,6 +265,13 @@ void NativeMediaSession::handlePlatformCommand(int command, int64_t positionMs) 
 }
 
 void NativeMediaSession::clear() {
+    {
+        std::scoped_lock lock(commandMutex_);
+        // Commands can race with a stop/queue transition through the Java
+        // MediaSession callback. Never let a Pause/Seek/Next from the old item
+        // execute against the next playback session.
+        pendingCommand_.reset();
+    }
     title_.clear();
     subtitle_.clear();
     durationMs_ = -1;

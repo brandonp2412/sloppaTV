@@ -134,20 +134,27 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(
         if ((video.bitDepth > 8 || profile.find("main 10") != std::string::npos) && !device.hevcMain10) {
             rejectVideoCodec("hevc", "HEVC Main10 unsupported");
         }
-        if (device.maxHevcWidth > 0 && (video.width > device.maxHevcWidth || video.height > device.maxHevcHeight)) {
+        if ((device.maxHevcWidth > 0 && video.width > device.maxHevcWidth)
+            || (device.maxHevcHeight > 0 && video.height > device.maxHevcHeight)) {
             rejectVideoCodec("hevc", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) rejectVideoCodec("hevc", "HDR range unsupported by connected display");
     } else if (codec == "h264") {
         if (!codecLevelAllowed(video.level, overrides.maxAvcLevel)) rejectVideoCodec("h264", "level exceeds user override");
-        if (profile.find("high 10") != std::string::npos && !device.h264High10) rejectVideoCodec("h264", "H.264 High10 unsupported");
-        if (device.maxH264Width > 0 && (video.width > device.maxH264Width || video.height > device.maxH264Height)) {
+        if ((video.bitDepth > 8 || profile.find("high 10") != std::string::npos) && !device.h264High10) {
+            rejectVideoCodec("h264", "H.264 High10 unsupported");
+        }
+        if ((device.maxH264Width > 0 && video.width > device.maxH264Width)
+            || (device.maxH264Height > 0 && video.height > device.maxH264Height)) {
             rejectVideoCodec("h264", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) rejectVideoCodec("h264", "HDR range unsupported by connected display");
     } else if (codec == "av1") {
-        if (video.bitDepth > 8 && !device.av1Main10) rejectVideoCodec("av1", "AV1 Main10 unsupported");
-        if (device.maxAv1Width > 0 && (video.width > device.maxAv1Width || video.height > device.maxAv1Height)) {
+        if ((video.bitDepth > 8 || profile.find("main 10") != std::string::npos) && !device.av1Main10) {
+            rejectVideoCodec("av1", "AV1 Main10 unsupported");
+        }
+        if ((device.maxAv1Width > 0 && video.width > device.maxAv1Width)
+            || (device.maxAv1Height > 0 && video.height > device.maxAv1Height)) {
             rejectVideoCodec("av1", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) rejectVideoCodec("av1", "HDR range unsupported by connected display");

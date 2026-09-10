@@ -106,6 +106,22 @@ int main() {
     assert(loaded.settings.externalPlayerComponent.empty());
     assert(loaded.settings.subtitleSize == 2);
 
+    {
+        std::ofstream output(directory / "session.json", std::ios::trunc);
+        assert(output);
+        output << R"JSON({
+  "server": "https://current.example",
+  "username": "current",
+  "userId": "current-user",
+  "token": "current-token",
+  "deviceId": ""
+})JSON";
+    }
+    loaded = loadSessionState(directory.string(), "fallback-device", warning);
+    assert(warning.empty());
+    assert(loaded.deviceId == "fallback-device");
+    assert(loaded.currentSession.valid());
+
     const std::string generated = generateDeviceId();
     assert(generated.rfind("sloppatv-", 0) == 0);
 

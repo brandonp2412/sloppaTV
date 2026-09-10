@@ -153,7 +153,8 @@ StoredSessionState loadSessionState(const std::string& dataPath, std::string def
     try {
         json data;
         input >> data;
-        state.deviceId = valueOr(data, "deviceId", state.deviceId);
+        const std::string savedDeviceId = valueOr(data, "deviceId", std::string{});
+        if (!savedDeviceId.empty()) state.deviceId = savedDeviceId;
         if (data.contains("hiddenHomeItems") && data["hiddenHomeItems"].is_array()) {
             for (const auto& hidden : data["hiddenHomeItems"]) {
                 if (hidden.is_string()) state.hiddenHomeItems.insert(hidden.get<std::string>());
