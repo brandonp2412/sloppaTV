@@ -4,6 +4,7 @@
 #include <array>
 #include <charconv>
 #include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -49,10 +50,25 @@ public:
         const bool existed = std::filesystem::is_regular_file(path, ec);
         const uintmax_t previousSize = existed ? std::filesystem::file_size(path, ec) : 0;
         if (ec) ec.clear();
-        std::ofstream output(path, std::ios::binary | std::ios::trunc);
-        if (!output) return;
-        output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
-        output.close();
+
+        const std::filesystem::path temporaryPath = path.string() + ".tmp";
+        std::remove(temporaryPath.c_str());
+        {
+            std::ofstream output(temporaryPath, std::ios::binary | std::ios::trunc);
+            if (!output) return;
+            output.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+            output.flush();
+            if (!output) {
+                output.close();
+                std::remove(temporaryPath.c_str());
+                return;
+            }
+        }
+        if (std::rename(temporaryPath.c_str(), path.c_str()) != 0) {
+            std::remove(temporaryPath.c_str());
+            return;
+        }
+
         if (usageKnown_) {
             totalBytes_ = previousSize > totalBytes_ ? bytes.size() : totalBytes_ - previousSize + bytes.size();
             if (!existed) ++fileCount_;
