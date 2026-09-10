@@ -10,6 +10,17 @@
 using nlohmann::json;
 
 namespace {
+template <typename T>
+T scalarValueOr(const json& value, const char* key, T fallback) {
+    const auto match = value.find(key);
+    if (match == value.end() || match->is_null()) return fallback;
+    try {
+        return match->get<T>();
+    } catch (const json::exception&) {
+        return fallback;
+    }
+}
+
 std::string joinCodecs(const std::vector<std::string>& codecs) {
     std::ostringstream out;
     for (size_t index = 0; index < codecs.size(); ++index) {
@@ -138,37 +149,46 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
             return result;
         }
 
-        const auto& source = data["MediaSources"][0];
+        const auto source = std::find_if(
+            data["MediaSources"].begin(),
+            data["MediaSources"].end(),
+            [](const json& candidate) { return candidate.is_object(); }
+        );
+        if (source == data["MediaSources"].end()) {
+            result.error = "Jellyfin returned no playable media source";
+            return result;
+        }
+
         PlaybackInfoOffer offer;
-        offer.playSessionId = data.value("PlaySessionId", std::string{});
-        offer.mediaSourceId = source.value("Id", std::string{});
+        offer.playSessionId = scalarValueOr(data, "PlaySessionId", std::string{});
+        offer.mediaSourceId = scalarValueOr(*source, "Id", std::string{});
         offer.audioStreamIndex = audioStreamIndex >= 0
             ? audioStreamIndex
-            : source.value("DefaultAudioStreamIndex", -1);
+            : scalarValueOr(*source, "DefaultAudioStreamIndex", -1);
         offer.subtitleStreamIndex = resolvedSubtitleIndex(
             subtitleStreamIndex,
-            source.value("DefaultSubtitleStreamIndex", kSubtitleOffIndex)
+            scalarValueOr(*source, "DefaultSubtitleStreamIndex", kSubtitleOffIndex)
         );
-        offer.transcodingUrl = source.value("TranscodingUrl", std::string{});
-        offer.container = source.value("Container", std::string{});
-        offer.supportsDirectPlay = source.value("SupportsDirectPlay", false);
-        offer.supportsDirectStream = source.value("SupportsDirectStream", false);
-        offer.supportsTranscoding = source.value("SupportsTranscoding", false);
+        offer.transcodingUrl = scalarValueOr(*source, "TranscodingUrl", std::string{});
+        offer.container = scalarValueOr(*source, "Container", std::string{});
+        offer.supportsDirectPlay = scalarValueOr(*source, "SupportsDirectPlay", false);
+        offer.supportsDirectStream = scalarValueOr(*source, "SupportsDirectStream", false);
+        offer.supportsTranscoding = scalarValueOr(*source, "SupportsTranscoding", false);
 
-        if (offer.subtitleStreamIndex >= 0 && source.contains("MediaStreams") && source["MediaStreams"].is_array()) {
+        if (offer.subtitleStreamIndex >= 0 && source->contains("MediaStreams") && (*source)["MediaStreams"].is_array()) {
             const auto stream = std::find_if(
-                source["MediaStreams"].begin(),
-                source["MediaStreams"].end(),
+                (*source)["MediaStreams"].begin(),
+                (*source)["MediaStreams"].end(),
                 [&](const json& candidate) {
                     return candidate.is_object()
-                        && candidate.value("Type", std::string{}) == "Subtitle"
-                        && candidate.value("Index", -1) == offer.subtitleStreamIndex;
+                        && scalarValueOr(candidate, "Type", std::string{}) == "Subtitle"
+                        && scalarValueOr(candidate, "Index", -1) == offer.subtitleStreamIndex;
                 }
             );
-            if (stream != source["MediaStreams"].end()) {
-                const std::string subtitleCodec = stream->value("Codec", std::string{});
-                const std::string delivery = stream->value("DeliveryMethod", std::string{});
-                const std::string deliveryUrl = stream->value("DeliveryUrl", std::string{});
+            if (stream != (*source)["MediaStreams"].end()) {
+                const std::string subtitleCodec = scalarValueOr(*stream, "Codec", std::string{});
+                const std::string delivery = scalarValueOr(*stream, "DeliveryMethod", std::string{});
+                const std::string deliveryUrl = scalarValueOr(*stream, "DeliveryUrl", std::string{});
                 if (delivery == "External" && !deliveryUrl.empty()
                     && subtitleStrategy(subtitleCodec) != SubtitleStrategy::ServerTranscode) {
                     offer.subtitleDeliveryUrl = deliveryUrl;

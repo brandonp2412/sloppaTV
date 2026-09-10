@@ -116,9 +116,36 @@ int main() {
     assert(offer.value.subtitleStreamIndex == 4);
     assert(offer.value.subtitleDeliveryUrl == "/subtitle");
 
+    const auto noisyOffer = parsePlaybackInfoOffer(R"({
+        "PlaySessionId": null,
+        "MediaSources": [
+            null,
+            {
+                "Id": "usable-source",
+                "Container": null,
+                "DefaultAudioStreamIndex": null,
+                "DefaultSubtitleStreamIndex": null,
+                "SupportsDirectPlay": true,
+                "SupportsDirectStream": null,
+                "SupportsTranscoding": true,
+                "TranscodingUrl": null,
+                "MediaStreams": [null, {"Type":"Subtitle","Index":4,"Codec":null}]
+            }
+        ]
+    })", -1, kSubtitleServerDefaultIndex);
+    assert(noisyOffer.ok);
+    assert(noisyOffer.value.mediaSourceId == "usable-source");
+    assert(noisyOffer.value.audioStreamIndex == -1);
+    assert(noisyOffer.value.subtitleStreamIndex == kSubtitleOffIndex);
+    assert(noisyOffer.value.transcodingUrl.empty());
+    assert(noisyOffer.value.supportsDirectPlay);
+
     const auto noSources = parsePlaybackInfoOffer(R"({"MediaSources":[]})", -1, kSubtitleServerDefaultIndex);
     assert(!noSources.ok);
     assert(noSources.error == "Jellyfin returned no playable media source");
+    const auto noObjectSources = parsePlaybackInfoOffer(R"({"MediaSources":[null,"bad"]})", -1, kSubtitleServerDefaultIndex);
+    assert(!noObjectSources.ok);
+    assert(noObjectSources.error == "Jellyfin returned no playable media source");
 
     const auto malformed = parsePlaybackInfoOffer("not-json", -1, kSubtitleServerDefaultIndex);
     assert(!malformed.ok);
