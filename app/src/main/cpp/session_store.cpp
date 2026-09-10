@@ -14,17 +14,23 @@
 using nlohmann::json;
 
 namespace {
-std::string stringValue(const json& data, const char* key) {
+template <typename T>
+T valueOr(const json& data, const char* key, T fallback) {
     const auto value = data.find(key);
-    return value != data.end() && value->is_string() ? value->get<std::string>() : std::string{};
+    if (value == data.end() || value->is_null()) return fallback;
+    try {
+        return value->get<T>();
+    } catch (const json::exception&) {
+        return fallback;
+    }
 }
 
 StoredSession readSession(const json& data) {
     StoredSession session;
-    session.server = stringValue(data, "server");
-    session.username = stringValue(data, "username");
-    session.userId = stringValue(data, "userId");
-    session.token = stringValue(data, "token");
+    session.server = valueOr<std::string>(data, "server", {});
+    session.username = valueOr<std::string>(data, "username", {});
+    session.userId = valueOr<std::string>(data, "userId", {});
+    session.token = valueOr<std::string>(data, "token", {});
     return session;
 }
 
@@ -38,33 +44,33 @@ json writeSession(const StoredSession& session) {
 }
 
 void readSettings(const json& saved, AppSettings& settings) {
-    settings.maxBitrateMbps = std::clamp(saved.value("maxBitrateMbps", settings.maxBitrateMbps), 20, 200);
-    settings.playbackBufferPreset = std::clamp(saved.value("playbackBufferPreset", settings.playbackBufferPreset), 0, 2);
-    settings.seekBackSeconds = std::clamp(saved.value("seekBackSeconds", settings.seekBackSeconds), 5, 60);
-    settings.seekForwardSeconds = std::clamp(saved.value("seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
-    settings.zoomMode = std::clamp(saved.value("zoomMode", settings.zoomMode), 0, 2);
-    settings.autoplayNext = saved.value("autoplayNext", settings.autoplayNext);
-    settings.stillWatchingAfter = std::clamp(saved.value("stillWatchingAfter", settings.stillWatchingAfter), 2, 6);
-    settings.refreshRateSwitching = saved.value("refreshRateSwitching", settings.refreshRateSwitching);
-    settings.showWatchedIndicators = saved.value("showWatchedIndicators", settings.showWatchedIndicators);
-    settings.showClock = saved.value("showClock", settings.showClock);
-    settings.clock24Hour = saved.value("clock24Hour", settings.clock24Hour);
+    settings.maxBitrateMbps = std::clamp(valueOr(saved, "maxBitrateMbps", settings.maxBitrateMbps), 20, 200);
+    settings.playbackBufferPreset = std::clamp(valueOr(saved, "playbackBufferPreset", settings.playbackBufferPreset), 0, 2);
+    settings.seekBackSeconds = std::clamp(valueOr(saved, "seekBackSeconds", settings.seekBackSeconds), 5, 60);
+    settings.seekForwardSeconds = std::clamp(valueOr(saved, "seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
+    settings.zoomMode = std::clamp(valueOr(saved, "zoomMode", settings.zoomMode), 0, 2);
+    settings.autoplayNext = valueOr(saved, "autoplayNext", settings.autoplayNext);
+    settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 2, 6);
+    settings.refreshRateSwitching = valueOr(saved, "refreshRateSwitching", settings.refreshRateSwitching);
+    settings.showWatchedIndicators = valueOr(saved, "showWatchedIndicators", settings.showWatchedIndicators);
+    settings.showClock = valueOr(saved, "showClock", settings.showClock);
+    settings.clock24Hour = valueOr(saved, "clock24Hour", settings.clock24Hour);
     if (saved.contains("backdropMode")) {
-        settings.backdropMode = std::clamp(saved.value("backdropMode", settings.backdropMode), 0, 2);
+        settings.backdropMode = std::clamp(valueOr(saved, "backdropMode", settings.backdropMode), 0, 2);
     } else {
-        settings.backdropMode = saved.value("showBackdrops", true) ? 1 : 0;
+        settings.backdropMode = valueOr(saved, "showBackdrops", true) ? 1 : 0;
     }
-    const int subtitleStyleDefaultsVersion = saved.value("subtitleStyleDefaultsVersion", 0);
+    const int subtitleStyleDefaultsVersion = valueOr(saved, "subtitleStyleDefaultsVersion", 0);
     settings.subtitleSize = subtitleStyleDefaultsVersion < 1
         ? 1
-        : std::clamp(saved.value("subtitleSize", settings.subtitleSize), 0, 2);
+        : std::clamp(valueOr(saved, "subtitleSize", settings.subtitleSize), 0, 2);
     settings.subtitleBackground = subtitleStyleDefaultsVersion < 1
         ? false
-        : saved.value("subtitleBackground", settings.subtitleBackground);
-    settings.subtitlePosition = std::clamp(saved.value("subtitlePosition", settings.subtitlePosition), 0, 2);
-    settings.autoSubtitles = saved.value("autoSubtitles", settings.autoSubtitles);
-    settings.autoSubtitleLanguage = normalizeSubtitleLanguage(saved.value("autoSubtitleLanguage", settings.autoSubtitleLanguage));
-    settings.autoSubtitleSourceLanguage = saved.value("autoSubtitleSourceLanguage", settings.autoSubtitleSourceLanguage);
+        : valueOr(saved, "subtitleBackground", settings.subtitleBackground);
+    settings.subtitlePosition = std::clamp(valueOr(saved, "subtitlePosition", settings.subtitlePosition), 0, 2);
+    settings.autoSubtitles = valueOr(saved, "autoSubtitles", settings.autoSubtitles);
+    settings.autoSubtitleLanguage = normalizeSubtitleLanguage(valueOr(saved, "autoSubtitleLanguage", settings.autoSubtitleLanguage));
+    settings.autoSubtitleSourceLanguage = valueOr(saved, "autoSubtitleSourceLanguage", settings.autoSubtitleSourceLanguage);
     if (settings.autoSubtitleSourceLanguage != "any" && settings.autoSubtitleSourceLanguage != "different") {
         settings.autoSubtitleSourceLanguage = normalizeSubtitleLanguage(settings.autoSubtitleSourceLanguage);
     }
@@ -78,16 +84,16 @@ void readSettings(const json& saved, AppSettings& settings) {
             }
         }
     }
-    const int savedMaxAudioChannels = saved.value("maxAudioChannels", settings.maxAudioChannels);
+    const int savedMaxAudioChannels = valueOr(saved, "maxAudioChannels", settings.maxAudioChannels);
     settings.maxAudioChannels = savedMaxAudioChannels <= 2 ? 2 : 8;
-    settings.avcLevelOverride = saved.value("avcLevelOverride", settings.avcLevelOverride);
-    settings.hevcLevelOverride = saved.value("hevcLevelOverride", settings.hevcLevelOverride);
-    settings.hdrOverride = std::clamp(saved.value("hdrOverride", settings.hdrOverride), 0, 2);
-    settings.uiTextSize = std::clamp(saved.value("uiTextSize", settings.uiTextSize), 0, 2);
-    const int savedSafeArea = saved.value("safeAreaPercent", settings.safeAreaPercent);
+    settings.avcLevelOverride = valueOr(saved, "avcLevelOverride", settings.avcLevelOverride);
+    settings.hevcLevelOverride = valueOr(saved, "hevcLevelOverride", settings.hevcLevelOverride);
+    settings.hdrOverride = std::clamp(valueOr(saved, "hdrOverride", settings.hdrOverride), 0, 2);
+    settings.uiTextSize = std::clamp(valueOr(saved, "uiTextSize", settings.uiTextSize), 0, 2);
+    const int savedSafeArea = valueOr(saved, "safeAreaPercent", settings.safeAreaPercent);
     settings.safeAreaPercent = savedSafeArea <= 0 ? 0 : (savedSafeArea <= 2 ? 2 : (savedSafeArea <= 4 ? 4 : 6));
-    settings.screensaverMinutes = normalizedScreensaverMinutes(saved.value("screensaverMinutes", settings.screensaverMinutes));
-    settings.externalPlayerComponent = saved.value("externalPlayerComponent", std::string{});
+    settings.screensaverMinutes = normalizedScreensaverMinutes(valueOr(saved, "screensaverMinutes", settings.screensaverMinutes));
+    settings.externalPlayerComponent = valueOr<std::string>(saved, "externalPlayerComponent", {});
 }
 
 json writeSettings(const AppSettings& settings) {
@@ -147,7 +153,7 @@ StoredSessionState loadSessionState(const std::string& dataPath, std::string def
     try {
         json data;
         input >> data;
-        state.deviceId = data.value("deviceId", state.deviceId);
+        state.deviceId = valueOr(data, "deviceId", state.deviceId);
         if (data.contains("hiddenHomeItems") && data["hiddenHomeItems"].is_array()) {
             for (const auto& hidden : data["hiddenHomeItems"]) {
                 if (hidden.is_string()) state.hiddenHomeItems.insert(hidden.get<std::string>());
