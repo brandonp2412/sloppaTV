@@ -39,6 +39,16 @@ int main() {
     assert(state.similarFocused());
     assert(state.similarSelection() == 2);
     assert(state.selectedSimilar()->id == "c");
+    std::vector<JellyfinItem> focusSimilar(3);
+    focusSimilar[0].id = "a";
+    focusSimilar[1].id = "b";
+    focusSimilar[2].id = "c";
+    state.setSimilar(std::move(focusSimilar));
+    state.moveSimilar(1);
+    assert(state.selectedSimilar()->id == "b");
+    state.removeItem("a");
+    assert(state.similarSelection() == 0);
+    assert(state.selectedSimilar()->id == "b");
 
     state.beginItemMenu();
     auto menu = state.itemMenuActions(series, true, true, false);
@@ -73,6 +83,9 @@ int main() {
     assert(state.selectedPerson().id == "p1");
     state.movePersonItem(1, 0, 5);
     assert(state.personItemSelection() == 1);
+    assert(state.selectedPersonItem()->id == "person-item-1");
+    state.removeItem("person-item-0");
+    assert(state.personItemSelection() == 0);
     assert(state.selectedPersonItem()->id == "person-item-1");
 
     JellyfinItem seasonOne;
