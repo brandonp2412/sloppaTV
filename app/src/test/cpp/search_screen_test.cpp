@@ -82,6 +82,15 @@ int main() {
 
     assert(state.backspace());
     assert(state.query() == "broo");
+    state.setQuery("M\xC4\x81ori");
+    assert(state.backspace());
+    assert(state.query() == "M\xC4\x81or");
+    assert(state.backspace());
+    assert(state.query() == "M\xC4\x81o");
+    assert(state.backspace());
+    assert(state.query() == "M\xC4\x81");
+    assert(state.backspace());
+    assert(state.query() == "M");
     state.setQuery("");
     assert(!state.scheduleDebounce(start));
     assert(state.results().empty());
