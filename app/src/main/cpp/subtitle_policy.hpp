@@ -197,6 +197,11 @@ inline std::string subtitleTextFormat(std::string codec) {
     return {};
 }
 
+inline bool subtitleMayFallbackToSrt(const std::string& codec) {
+    const std::string format = subtitleTextFormat(codec);
+    return format != "ass" && format != "ssa";
+}
+
 inline std::vector<SubtitleCue> parseSubRipCues(const std::string& input) {
     std::vector<SubtitleCue> cues;
     std::istringstream stream(input);
