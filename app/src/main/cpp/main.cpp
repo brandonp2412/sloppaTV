@@ -4225,16 +4225,16 @@ private:
 
         if (activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
             const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
-            const int recoveryTargetMs = pendingSeekTargetMs > 0
+            const int recoveryTargetMs = pendingSeekTargetMs >= 0
                 ? pendingSeekTargetMs
                 : playerScreenState_.recentSeekTargetMs();
-            if (recoveryTargetMs > 0) {
+            if (recoveryTargetMs >= 0) {
                 const auto now = std::chrono::steady_clock::now();
                 const int observedPositionMs = player_.positionMs();
                 const bool mediaSeekable = player_.seekable();
                 const bool failedSeek = !mediaSeekable
                     && !postSeekPositionMatchesTarget(observedPositionMs, recoveryTargetMs)
-                    && ((pendingSeekTargetMs > 0)
+                    && ((pendingSeekTargetMs >= 0)
                         || playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
                         || playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now));
                 if (failedSeek) {
