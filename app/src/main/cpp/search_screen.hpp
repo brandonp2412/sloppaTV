@@ -151,8 +151,8 @@ public:
         firstVisible_ = {0, 0};
     }
 
-    void removeItem(const std::string& itemId) {
-        if (itemId.empty()) return;
+    bool removeItem(const std::string& itemId) {
+        if (itemId.empty()) return false;
         const size_t previousSize = results_.size();
         const size_t selectedOffset = selection_ <= 0
             ? 0
@@ -163,7 +163,7 @@ public:
             [&](const JellyfinItem& item) { return item.id == itemId; }
         ));
         std::erase_if(results_, [&](const JellyfinItem& item) { return item.id == itemId; });
-        if (results_.size() == previousSize) return;
+        if (results_.size() == previousSize) return false;
 
         selection_ = results_.empty()
             ? 0
@@ -177,6 +177,7 @@ public:
             const int maxFirst = std::max(0, rowItemCount(row) - 1);
             firstVisible_[static_cast<size_t>(row)] = std::clamp(firstVisible_[static_cast<size_t>(row)], 0, maxFirst);
         }
+        return true;
     }
 
     void moveSelection(int dx, int dy, int columns) {

@@ -33,7 +33,7 @@ public:
             return false;
         }
         nextEpisodeRequested_ = true;
-        nextEpisodeRetryAt_ = {};
+        nextEpisodeRetryAfter_ = {};
         return true;
     }
     void markNextEpisodeRequested() {

@@ -3668,7 +3668,7 @@ private:
             playbackSessionState_.setMediaSegments(std::move(result.value));
             __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
         })) {
-            playbackSessionState_.failMediaSegmentsRequest(std::chrono::steady_clock::now());
+            playbackSessionState_.mediaSegmentsRequestFailed(std::chrono::steady_clock::now());
         }
     }
 
@@ -3703,7 +3703,7 @@ private:
             if (screen_ != Screen::Player || activePlaybackItem_.id != currentItemId) return;
             continuationState_.setNextItem(std::move(item));
         })) {
-            continuationState_.failNextEpisodeRequest(std::chrono::steady_clock::now());
+            continuationState_.nextEpisodeRequestFailed(std::chrono::steady_clock::now());
         }
     }
 

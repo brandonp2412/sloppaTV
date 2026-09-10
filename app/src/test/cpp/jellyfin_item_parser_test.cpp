@@ -115,6 +115,7 @@ int main() {
     const JellyfinItem nullable = parseJellyfinItem(nullableMetadata);
     assert(nullable.id == "nullable-item");
     assert(nullable.productionYear == 0);
+    assert(nullable.communityRating == -1.0F);
     assert(nullable.runtimeTicks == 0);
     assert(nullable.positionTicks == 0);
     assert(!nullable.favorite);

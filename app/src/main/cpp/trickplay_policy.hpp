@@ -35,14 +35,13 @@ constexpr TrickplayFrame trickplayFrameForPosition(
     if (intervalMs <= 0 || thumbnailCount <= 0 || tileWidth <= 0 || tileHeight <= 0) return {};
     const int64_t rawIndex = std::max<int64_t>(0, positionMs) / intervalMs;
     const int thumbnailIndex = static_cast<int>(std::min<int64_t>(rawIndex, thumbnailCount - 1));
-    const int tileSize = tileWidth * tileHeight;
-    if (tileSize <= 0) return {};
-    const int tileOffset = thumbnailIndex % tileSize;
+    const int64_t tileSize = static_cast<int64_t>(tileWidth) * static_cast<int64_t>(tileHeight);
+    const int64_t tileOffset = static_cast<int64_t>(thumbnailIndex) % tileSize;
     return {
         .thumbnailIndex = thumbnailIndex,
-        .tileIndex = thumbnailIndex / tileSize,
-        .cellX = tileOffset % tileWidth,
-        .cellY = tileOffset / tileWidth,
+        .tileIndex = static_cast<int>(static_cast<int64_t>(thumbnailIndex) / tileSize),
+        .cellX = static_cast<int>(tileOffset % tileWidth),
+        .cellY = static_cast<int>(tileOffset / tileWidth),
     };
 }
 

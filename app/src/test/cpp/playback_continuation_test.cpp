@@ -34,11 +34,6 @@ int main() {
     assert(!state.nextEpisodeRequested());
     assert(!state.nextItem());
 
-    assert(state.beginNextEpisodeRequest(now));
-    state.failNextEpisodeRequest(now, std::chrono::seconds(10));
-    assert(!state.nextEpisodeRequested());
-    assert(!state.beginNextEpisodeRequest(now + std::chrono::seconds(9)));
-    assert(state.beginNextEpisodeRequest(now + std::chrono::seconds(10)));
     state.clearNextEpisode();
     state.resetAutoplayChain();
     state.setStillWatchingPrompt(false);

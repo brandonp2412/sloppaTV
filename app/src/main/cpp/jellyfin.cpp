@@ -2,6 +2,7 @@
 #include "audio_policy.hpp"
 #include "home_screen.hpp"
 #include "jellyfin_item_parser.hpp"
+#include "jellyfin_media_segment_parser.hpp"
 #include "jni_env.hpp"
 #include "media_player_policy.hpp"
 #include "playback_info.hpp"
@@ -859,30 +860,7 @@ ApiValueResult<std::vector<JellyfinMediaSegment>> JellyfinClient::getMediaSegmen
         result.error = apiError(response);
         return result;
     }
-    try {
-        const auto data = json::parse(response.body);
-        if (!data.contains("Items") || !data["Items"].is_array()) {
-            result.error = "Jellyfin media-segment response did not contain Items";
-            return result;
-        }
-        for (const auto& value : data["Items"]) {
-            if (!value.is_object()) continue;
-            JellyfinMediaSegment segment;
-            segment.type = value.value("Type", std::string{});
-            segment.startTicks = value.value("StartTicks", static_cast<int64_t>(0));
-            segment.endTicks = value.value("EndTicks", static_cast<int64_t>(0));
-            if (!segment.type.empty() && segment.endTicks > segment.startTicks) {
-                result.value.push_back(std::move(segment));
-            }
-        }
-        std::sort(result.value.begin(), result.value.end(), [](const auto& left, const auto& right) {
-            return left.startTicks < right.startTicks;
-        });
-        result.ok = true;
-    } catch (const std::exception& e) {
-        result.error = std::string("Unable to parse media segments: ") + e.what();
-    }
-    return result;
+    return parseJellyfinMediaSegments(response.body);
 }
 
 ApiValueResult<JellyfinItem> JellyfinClient::getNextUpForSeries(const JellyfinSession& session, const std::string& seriesId) const {

@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <limits>
 
 int main() {
     assert(!trickplayFrameForPosition(0, 0, 100, 10, 10).valid());
@@ -46,5 +47,18 @@ int main() {
     assert(std::abs(uv.v1 - 0.50f) < 0.0001f);
     assert(!trickplayUvRegion({}, 320, 180, 1280, 720).valid());
     assert(!trickplayUvRegion(uvFrame, 320, 180, 0, 720).valid());
+
+    const auto hugeTile = trickplayFrameForPosition(
+        10'000,
+        10'000,
+        2,
+        std::numeric_limits<int>::max(),
+        2
+    );
+    assert(hugeTile.valid());
+    assert(hugeTile.thumbnailIndex == 1);
+    assert(hugeTile.tileIndex == 0);
+    assert(hugeTile.cellX == 1);
+    assert(hugeTile.cellY == 0);
     return 0;
 }
