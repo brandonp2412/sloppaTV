@@ -176,6 +176,13 @@ constexpr int clampSeekPositionMs(int64_t positionMs) {
     return static_cast<int>(std::clamp<int64_t>(positionMs, 0, std::numeric_limits<int>::max()));
 }
 
+constexpr int relativeSeekPositionMs(int currentPositionMs, int64_t deltaMs, int durationMs) {
+    const int64_t upperBound = durationMs > 0
+        ? static_cast<int64_t>(durationMs)
+        : static_cast<int64_t>(std::numeric_limits<int>::max());
+    return static_cast<int>(std::clamp<int64_t>(static_cast<int64_t>(currentPositionMs) + deltaMs, 0, upperBound));
+}
+
 constexpr int64_t playbackTicksFromPositionMs(int64_t positionMs) {
     return static_cast<int64_t>(clampSeekPositionMs(positionMs)) * 10000;
 }

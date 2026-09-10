@@ -2344,12 +2344,20 @@ private:
             player_.togglePause();
             reportProgressAsync(true);
         } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_MEDIA_REWIND) {
-            const int targetMs = std::max(0, playerScreenState_.positionMs() - settings_.seekBackSeconds * 1000);
+            const int targetMs = relativeSeekPositionMs(
+                playerScreenState_.positionMs(),
+                -static_cast<int64_t>(settings_.seekBackSeconds) * 1000,
+                playerScreenState_.durationMs()
+            );
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
         } else if (key == AKEYCODE_DPAD_RIGHT || key == AKEYCODE_MEDIA_FAST_FORWARD) {
-            const int targetMs = playerScreenState_.positionMs() + settings_.seekForwardSeconds * 1000;
+            const int targetMs = relativeSeekPositionMs(
+                playerScreenState_.positionMs(),
+                static_cast<int64_t>(settings_.seekForwardSeconds) * 1000,
+                playerScreenState_.durationMs()
+            );
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
@@ -2450,8 +2458,8 @@ private:
             auto result = api_.getServerInfo(session);
             if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
-            if (screen_ != Screen::Diagnostics) return;
             loading_ = false;
+            if (screen_ != Screen::Diagnostics) return;
             if (!result.ok) {
                 error_ = "SERVER INFO: " + result.error;
                 return;
