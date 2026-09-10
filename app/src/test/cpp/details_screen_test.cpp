@@ -60,8 +60,9 @@ int main() {
     state.moveCastSelection(series.people, 1, 0, 5);
     assert(state.castSelection() == 1);
     state.moveCastSelection(series.people, 0, 1, 5);
-    assert(state.castSelection() == 1);
-    state.moveCastSelection(series.people, -1, 0, 5);
+    assert(state.castSelection() == 5);
+    assert(state.selectedCastPerson(series.people)->name == "Six");
+    state.moveCastSelection(series.people, 0, -1, 5);
     assert(state.castSelection() == 0);
     assert(state.selectedCastPerson(series.people)->name == "One");
 
