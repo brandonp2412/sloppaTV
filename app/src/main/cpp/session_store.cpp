@@ -14,12 +14,17 @@
 using nlohmann::json;
 
 namespace {
+std::string stringValue(const json& data, const char* key) {
+    const auto value = data.find(key);
+    return value != data.end() && value->is_string() ? value->get<std::string>() : std::string{};
+}
+
 StoredSession readSession(const json& data) {
     StoredSession session;
-    session.server = data.value("server", std::string{});
-    session.username = data.value("username", std::string{});
-    session.userId = data.value("userId", std::string{});
-    session.token = data.value("token", std::string{});
+    session.server = stringValue(data, "server");
+    session.username = stringValue(data, "username");
+    session.userId = stringValue(data, "userId");
+    session.token = stringValue(data, "token");
     return session;
 }
 
