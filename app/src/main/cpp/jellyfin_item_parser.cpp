@@ -11,6 +11,22 @@ std::string stringValueOrFallback(const json& value, const char* primary, const 
     }
     return value.value(fallback, std::string{});
 }
+
+std::string firstStringValue(const json& values) {
+    if (!values.is_array()) return {};
+    for (const auto& value : values) {
+        if (value.is_string()) return value.get<std::string>();
+    }
+    return {};
+}
+
+const json* firstObjectValue(const json& values) {
+    if (!values.is_array()) return nullptr;
+    for (const auto& value : values) {
+        if (value.is_object()) return &value;
+    }
+    return nullptr;
+}
 }
 
 JellyfinItem parseJellyfinItem(const json& value) {
@@ -76,61 +92,63 @@ JellyfinItem parseJellyfinItem(const json& value) {
         item.logoTag = value.value("ParentLogoImageTag", std::string{});
         item.logoItemId = value.value("ParentLogoItemId", std::string{});
     }
-    if (const auto backdrops = value.find("BackdropImageTags"); backdrops != value.end() && backdrops->is_array() && !backdrops->empty()) {
-        item.backdropTag = backdrops->front().get<std::string>();
-        item.backdropItemId = item.id;
+    if (const auto backdrops = value.find("BackdropImageTags"); backdrops != value.end() && backdrops->is_array()) {
+        item.backdropTag = firstStringValue(*backdrops);
+        if (!item.backdropTag.empty()) item.backdropItemId = item.id;
     }
     if (item.backdropTag.empty()) {
         const auto backdrops = value.find("ParentBackdropImageTags");
-        if (backdrops != value.end() && backdrops->is_array() && !backdrops->empty()) {
-            item.backdropTag = backdrops->front().get<std::string>();
-            item.backdropItemId = value.value("ParentBackdropItemId", std::string{});
+        if (backdrops != value.end() && backdrops->is_array()) {
+            item.backdropTag = firstStringValue(*backdrops);
+            if (!item.backdropTag.empty()) item.backdropItemId = value.value("ParentBackdropItemId", std::string{});
         }
     }
-    if (const auto mediaSources = value.find("MediaSources"); mediaSources != value.end() && mediaSources->is_array() && !mediaSources->empty()) {
-        const auto& source = mediaSources->front();
-        item.mediaSourceId = source.value("Id", std::string{});
-        if (item.container.empty()) item.container = source.value("Container", std::string{});
-        if (const auto streams = source.find("MediaStreams"); streams != source.end() && streams->is_array()) {
-            item.audios.reserve(streams->size());
-            item.subtitles.reserve(streams->size());
-            for (const auto& stream : *streams) {
-                if (!stream.is_object()) continue;
-                const std::string streamType = stream.value("Type", std::string{});
-                if (streamType == "Video" && item.videoCodec.empty()) {
-                    item.videoCodec = stream.value("Codec", std::string{});
-                    item.videoProfile = stream.value("Profile", std::string{});
-                    item.videoRangeType = stream.value("VideoRangeType", std::string{});
-                    item.videoWidth = stream.value("Width", 0);
-                    item.videoHeight = stream.value("Height", 0);
-                    item.videoBitDepth = stream.value("BitDepth", 0);
-                    if (const auto level = stream.find("Level"); level != stream.end() && level->is_number_integer()) {
-                        item.videoLevel = level->get<int>();
+    if (const auto mediaSources = value.find("MediaSources"); mediaSources != value.end() && mediaSources->is_array()) {
+        const json* source = firstObjectValue(*mediaSources);
+        if (source) {
+            item.mediaSourceId = source->value("Id", std::string{});
+            if (item.container.empty()) item.container = source->value("Container", std::string{});
+            if (const auto streams = source->find("MediaStreams"); streams != source->end() && streams->is_array()) {
+                item.audios.reserve(streams->size());
+                item.subtitles.reserve(streams->size());
+                for (const auto& stream : *streams) {
+                    if (!stream.is_object()) continue;
+                    const std::string streamType = stream.value("Type", std::string{});
+                    if (streamType == "Video" && item.videoCodec.empty()) {
+                        item.videoCodec = stream.value("Codec", std::string{});
+                        item.videoProfile = stream.value("Profile", std::string{});
+                        item.videoRangeType = stream.value("VideoRangeType", std::string{});
+                        item.videoWidth = stream.value("Width", 0);
+                        item.videoHeight = stream.value("Height", 0);
+                        item.videoBitDepth = stream.value("BitDepth", 0);
+                        if (const auto level = stream.find("Level"); level != stream.end() && level->is_number_integer()) {
+                            item.videoLevel = level->get<int>();
+                        }
+                        if (const auto frameRate = stream.find("RealFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
+                            item.videoFrameRate = frameRate->get<float>();
+                        } else if (const auto frameRate = stream.find("AverageFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
+                            item.videoFrameRate = frameRate->get<float>();
+                        }
+                    } else if (streamType == "Audio") {
+                        JellyfinAudioStream audio;
+                        audio.index = stream.value("Index", -1);
+                        audio.channels = stream.value("Channels", 0);
+                        audio.codec = stream.value("Codec", std::string{});
+                        audio.language = stream.value("Language", std::string{});
+                        audio.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
+                        audio.isDefault = stream.value("IsDefault", false);
+                        if (audio.index >= 0) item.audios.push_back(std::move(audio));
+                    } else if (streamType == "Subtitle") {
+                        JellyfinSubtitleStream subtitle;
+                        subtitle.index = stream.value("Index", -1);
+                        subtitle.codec = stream.value("Codec", std::string{});
+                        subtitle.language = stream.value("Language", std::string{});
+                        subtitle.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
+                        subtitle.forced = stream.value("IsForced", false);
+                        subtitle.isDefault = stream.value("IsDefault", false);
+                        subtitle.isExternal = stream.value("IsExternal", false);
+                        if (subtitle.index >= 0) item.subtitles.push_back(std::move(subtitle));
                     }
-                    if (const auto frameRate = stream.find("RealFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
-                        item.videoFrameRate = frameRate->get<float>();
-                    } else if (const auto frameRate = stream.find("AverageFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
-                        item.videoFrameRate = frameRate->get<float>();
-                    }
-                } else if (streamType == "Audio") {
-                    JellyfinAudioStream audio;
-                    audio.index = stream.value("Index", -1);
-                    audio.channels = stream.value("Channels", 0);
-                    audio.codec = stream.value("Codec", std::string{});
-                    audio.language = stream.value("Language", std::string{});
-                    audio.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
-                    audio.isDefault = stream.value("IsDefault", false);
-                    if (audio.index >= 0) item.audios.push_back(std::move(audio));
-                } else if (streamType == "Subtitle") {
-                    JellyfinSubtitleStream subtitle;
-                    subtitle.index = stream.value("Index", -1);
-                    subtitle.codec = stream.value("Codec", std::string{});
-                    subtitle.language = stream.value("Language", std::string{});
-                    subtitle.title = stringValueOrFallback(stream, "DisplayTitle", "Title");
-                    subtitle.forced = stream.value("IsForced", false);
-                    subtitle.isDefault = stream.value("IsDefault", false);
-                    subtitle.isExternal = stream.value("IsExternal", false);
-                    if (subtitle.index >= 0) item.subtitles.push_back(std::move(subtitle));
                 }
             }
         }
