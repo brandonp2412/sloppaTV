@@ -57,6 +57,18 @@ int main() {
     assert(loaded.settings.safeAreaPercent == 4);
     assert(loaded.settings.externalPlayerComponent == "org.example/.Player");
 
+    const std::filesystem::path temporaryPath = directory / "session.json.tmp";
+    std::filesystem::create_directory(temporaryPath, ec);
+    assert(!ec);
+    StoredSessionState replacement = state;
+    replacement.deviceId = "replacement-device";
+    assert(!saveSessionState(directory.string(), replacement, warning));
+    assert(!warning.empty());
+
+    loaded = loadSessionState(directory.string(), "fallback", warning);
+    assert(warning.empty());
+    assert(loaded.deviceId == "device-test");
+
     const std::string generated = generateDeviceId();
     assert(generated.rfind("sloppatv-", 0) == 0);
 
