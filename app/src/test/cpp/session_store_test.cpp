@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <filesystem>
+#include <fstream>
 #include <string>
 
 int main() {
@@ -68,6 +69,31 @@ int main() {
     loaded = loadSessionState(directory.string(), "fallback", warning);
     assert(warning.empty());
     assert(loaded.deviceId == "device-test");
+
+    {
+        std::ofstream output(directory / "session.json", std::ios::trunc);
+        assert(output);
+        output << R"JSON({
+  "server": "https://current.example",
+  "username": "current",
+  "userId": "current-user",
+  "token": "current-token",
+  "deviceId": "device-resilient",
+  "savedSessions": [
+    {"server": 123, "username": "broken", "userId": "broken-user", "token": "broken-token"},
+    {"server": "https://saved.example", "username": "saved", "userId": "saved-user", "token": "saved-token"}
+  ],
+  "settings": {"maxBitrateMbps": 120}
+})JSON";
+    }
+    loaded = loadSessionState(directory.string(), "fallback", warning);
+    assert(warning.empty());
+    assert(loaded.deviceId == "device-resilient");
+    assert(loaded.currentSession.valid());
+    assert(loaded.currentSession.userId == "current-user");
+    assert(loaded.savedSessions.size() == 1);
+    assert(loaded.savedSessions.front().userId == "saved-user");
+    assert(loaded.settings.maxBitrateMbps == 120);
 
     const std::string generated = generateDeviceId();
     assert(generated.rfind("sloppatv-", 0) == 0);
