@@ -82,6 +82,24 @@ int main() {
     assert(inherited.logoTag == "parent-logo" && inherited.logoItemId == "series-1");
     assert(inherited.backdropTag == "parent-backdrop" && inherited.backdropItemId == "series-1");
 
+    const nlohmann::json malformedArrays = {
+        {"Id", "movie-with-noisy-metadata"},
+        {"Name", "Still playable"},
+        {"Type", "Movie"},
+        {"BackdropImageTags", {nullptr, 123, "usable-backdrop"}},
+        {"MediaSources", {nullptr, "bad-source", {
+            {"Id", "usable-source"},
+            {"Container", "mp4"},
+            {"MediaStreams", nlohmann::json::array()}
+        }}}
+    };
+    const JellyfinItem resilient = parseJellyfinItem(malformedArrays);
+    assert(resilient.id == "movie-with-noisy-metadata");
+    assert(resilient.backdropTag == "usable-backdrop");
+    assert(resilient.backdropItemId == "movie-with-noisy-metadata");
+    assert(resilient.mediaSourceId == "usable-source");
+    assert(resilient.container == "mp4");
+
     const nlohmann::json secondValid = {
         {"Id", "movie-2"},
         {"Name", "Second"},
