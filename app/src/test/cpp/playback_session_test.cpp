@@ -5,6 +5,7 @@
 #include <vector>
 
 int main() {
+    using namespace std::chrono_literals;
     PlaybackSessionState state;
     assert(!state.mediaSegmentsRequested());
     assert(!state.fallbackAttempted());
@@ -15,8 +16,13 @@ int main() {
     assert(!state.fallbackAttempted());
     assert(state.zoomMode() == VideoZoomMode::Fill);
 
-    assert(state.beginMediaSegmentsRequest());
-    assert(!state.beginMediaSegmentsRequest());
+    const auto requestStart = PlaybackSessionState::Clock::now();
+    assert(state.beginMediaSegmentsRequest(requestStart));
+    assert(!state.beginMediaSegmentsRequest(requestStart));
+    state.mediaSegmentsRequestFailed(requestStart);
+    assert(!state.mediaSegmentsRequested());
+    assert(!state.beginMediaSegmentsRequest(requestStart + 4999ms));
+    assert(state.beginMediaSegmentsRequest(requestStart + 5000ms));
     state.setMediaSegments({
         JellyfinMediaSegment{"Intro", 10'000'000, 60'000'000},
         JellyfinMediaSegment{"Tiny", 70'000'000, 80'000'000},

@@ -3577,6 +3577,7 @@ private:
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Player || activePlaybackItem_.id != itemId) return;
             if (!result.ok) {
+                playbackSessionState_.mediaSegmentsRequestFailed();
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s", result.error.c_str());
                 return;
             }
@@ -3602,7 +3603,15 @@ private:
         const std::string currentItemId = activePlaybackItem_.id;
         tasks_.submit([this, session, seriesId, currentItemId] {
             auto next = api_.getFollowingEpisodeForSeries(session, seriesId, currentItemId);
-            if (!next.ok || next.value.id.empty() || next.value.id == currentItemId) return;
+            if (!next.ok) {
+                std::scoped_lock lock(stateMutex_);
+                if (screen_ == Screen::Player && activePlaybackItem_.id == currentItemId) {
+                    continuationState_.nextEpisodeRequestFailed();
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s", next.error.c_str());
+                }
+                return;
+            }
+            if (next.value.id.empty() || next.value.id == currentItemId) return;
             auto detailed = api_.getItem(session, next.value.id);
             JellyfinItem item = detailed.ok ? std::move(detailed.value) : std::move(next.value);
             std::scoped_lock lock(stateMutex_);
