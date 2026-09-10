@@ -8,7 +8,12 @@ readonly PROJECT_DIR
 readonly SCREENSHOT_TARGET="${SLOPPATV_SCREENSHOT_TARGET:-android-tv-emulator}"
 readonly SCREENSHOT_DIR="$PROJECT_DIR/artifacts/$([[ "$SCREENSHOT_TARGET" == "waydroid" ]] && echo e2e-waydroid || echo ci-screenshots)"
 readonly SCREENSHOT_SUITE="$SCRIPT_DIR/screenshot-suites/ci-login.json"
+readonly FIXTURE_PORT="${SLOPPATV_FIXTURE_PORT:-18096}"
 
+if ! [[ "$FIXTURE_PORT" =~ ^[0-9]+$ ]] || (( FIXTURE_PORT < 1024 || FIXTURE_PORT > 65535 )); then
+    echo "SLOPPATV_FIXTURE_PORT must be a TCP port between 1024 and 65535" >&2
+    exit 2
+fi
 if [[ -z "${ANDROID_SERIAL:-}" ]]; then
     echo "ANDROID_SERIAL must be set" >&2
     exit 2
@@ -51,11 +56,11 @@ fi
 
 mkdir -p "$SCREENSHOT_DIR"
 find "$SCREENSHOT_DIR" -maxdepth 1 -type f -delete
-python3 "$SCRIPT_DIR/screenshot_fixture_server.py" >"$SCREENSHOT_DIR/fixture-server.log" 2>&1 &
+python3 "$SCRIPT_DIR/screenshot_fixture_server.py" --port "$FIXTURE_PORT" >"$SCREENSHOT_DIR/fixture-server.log" 2>&1 &
 fixture_pid=$!
 fixture_ready=0
 for _ in {1..50}; do
-    if curl --fail --silent --show-error http://127.0.0.1:18096/System/Info/Public >/dev/null 2>&1; then
+    if curl --fail --silent --show-error "http://127.0.0.1:$FIXTURE_PORT/System/Info/Public" >/dev/null 2>&1; then
         fixture_ready=1
         break
     fi
@@ -75,7 +80,7 @@ adb -s "$ANDROID_SERIAL" install -r "$SLOPPATV_APK"
 adb -s "$ANDROID_SERIAL" shell wm size 1920x1080
 # Route the Android target's loopback HTTP port to the host fixture. This avoids
 # depending on target-specific host aliases and keeps URL entry deterministic.
-adb -s "$ANDROID_SERIAL" reverse tcp:1024 tcp:18096
+adb -s "$ANDROID_SERIAL" reverse tcp:1024 "tcp:$FIXTURE_PORT"
 timeout --foreground -k 15 240 python3 "$SCRIPT_DIR/waydroid_e2e.py" \
     --serial "$ANDROID_SERIAL" \
     --target "$SCREENSHOT_TARGET" \

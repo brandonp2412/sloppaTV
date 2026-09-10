@@ -1,5 +1,6 @@
 package app.sloppatv;
 
+import android.annotation.SuppressLint;
 import android.app.NativeActivity;
 import android.content.Context;
 import android.content.Intent;
@@ -79,6 +80,23 @@ public final class SloppaNativeActivity extends NativeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         hideSystemBars();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                this::dispatchBackToNative
+            );
+        }
+    }
+
+    private void dispatchBackToNative() {
+        nativeOnBackPressed();
+    }
+
+    @Override
+    @SuppressLint("GestureBackNavigation")
+    @SuppressWarnings("deprecation")
+    public void onBackPressed() {
+        dispatchBackToNative();
     }
 
     @Override
@@ -232,7 +250,7 @@ public final class SloppaNativeActivity extends NativeActivity {
                     if (keyCode == KeyEvent.KEYCODE_BACK) {
                         if (event.getAction() == KeyEvent.ACTION_UP) {
                             nativeOnSystemTextInputCancelled(mode, getText().toString());
-                            post(() -> removeNativeTextInput(false));
+                            post(() -> removeNativeTextInput(true));
                         }
                         return true;
                     }
@@ -452,6 +470,7 @@ public final class SloppaNativeActivity extends NativeActivity {
 
     private static native void nativeOnActivityResult(int requestCode, int resultCode, Intent data);
     private static native void nativeOnNewIntent(String action, String data, String query);
+    private static native void nativeOnBackPressed();
     private static native void nativeOnMediaSessionCommand(int command, long positionMs);
     private static native void nativeOnSystemTextInputChanged(int mode, String text);
     private static native void nativeOnSystemTextInputDone(int mode, String text);

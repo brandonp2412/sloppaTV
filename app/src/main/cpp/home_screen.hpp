@@ -53,6 +53,10 @@ inline bool preferHomeLandscapeArtwork(const std::string& itemType) {
     return itemType != "UserView" && itemType != "CollectionFolder" && itemType != "Folder";
 }
 
+inline bool homeRowDropsItemWhenPlayed(const std::string& rowTitle) {
+    return rowTitle == "Continue Watching" || rowTitle == "Next Up";
+}
+
 inline ArtworkReference homeArtworkReference(
     const std::string& itemId,
     const std::string& primaryTag,

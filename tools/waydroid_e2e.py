@@ -107,8 +107,19 @@ def key(name: str) -> None:
     adb("shell", "input", "keyevent", key_name)
 
 
+def wait_for_foreground(timeout_seconds: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() < deadline:
+        activity_dump = adb("shell", "dumpsys", "activity", "activities", capture=True, timeout=60.0)
+        if foreground_is_package(activity_dump, PACKAGE):
+            return
+        time.sleep(0.1)
+    raise RuntimeError(f"{PACKAGE} did not become the foreground activity within {timeout_seconds:g}s")
+
+
 def launch() -> None:
     adb("shell", "am", "start", "-n", COMPONENT)
+    wait_for_foreground()
 
 
 def restart() -> None:
@@ -128,10 +139,32 @@ def require_running() -> str:
     return pid
 
 
-def require_playback_session() -> None:
-    sessions = adb("shell", "dumpsys", "media_session", capture=True, timeout=60.0)
-    if f"{PACKAGE}/sloppaTV" not in sessions:
-        raise RuntimeError("sloppaTV playback is not active; open a title before running this player acceptance command")
+def media_session_playback_state(output: str, package: str) -> int | None:
+    session = re.search(
+        rf"(?s)\b{re.escape(package)}/sloppaTV\b.*?"
+        rf"state=PlaybackState \{{state=(?:[A-Z_]+\()?(\d+)\)?(?:,|\s)",
+        output,
+    )
+    return int(session.group(1)) if session else None
+
+
+def require_playback_session(timeout_seconds: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout_seconds
+    last_state: int | None = None
+    while time.monotonic() < deadline:
+        sessions = adb("shell", "dumpsys", "media_session", capture=True, timeout=60.0)
+        last_state = media_session_playback_state(sessions, PACKAGE)
+        # Android PlaybackState: 2=paused, 3=playing. Merely having a MediaSession
+        # is not enough: failed libmpv startup used to leave acceptance screenshots
+        # looking like a player test had passed after playback had already aborted.
+        if last_state in {2, 3}:
+            return
+        time.sleep(0.2)
+    state_label = "missing" if last_state is None else str(last_state)
+    raise RuntimeError(
+        "sloppaTV playback is not active; expected playing/paused media session "
+        f"but state was {state_label}"
+    )
 
 
 def pull_with_reconnect(remote: str, local: Path, attempts: int = 4) -> None:
@@ -190,7 +223,7 @@ def load_screenshot_suite(path: Path) -> dict:
     steps = suite.get("steps")
     if not isinstance(steps, list) or not steps:
         raise ValueError("screenshot suite must have at least one step")
-    allowed = {"launch", "restart", "key", "text", "search", "capture", "wait", "fixture_log"}
+    allowed = {"launch", "restart", "key", "text", "search", "capture", "wait", "fixture_log", "playback_session"}
     for index, step in enumerate(steps):
         if not isinstance(step, dict) or step.get("action") not in allowed:
             raise ValueError(f"unsupported screenshot step {index}")
@@ -217,6 +250,10 @@ def load_screenshot_suite(path: Path) -> dict:
                 raise ValueError(f"invalid fixture log assertion in screenshot step {index}")
             if not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 30:
                 raise ValueError(f"invalid fixture log timeout in screenshot step {index}")
+        if step["action"] == "playback_session":
+            timeout_seconds = step.get("timeout_seconds", 5)
+            if not isinstance(timeout_seconds, (int, float)) or not 0 < timeout_seconds <= 30:
+                raise ValueError(f"invalid playback session timeout in screenshot step {index}")
     return suite
 
 
@@ -232,6 +269,9 @@ def wait_for_fixture_log(needle: str, timeout_seconds: float) -> None:
 
 def screenshot_suite(path: Path) -> Path:
     suite = load_screenshot_suite(path)
+    # Acceptance evidence must describe this run only. Stale mpv/network errors
+    # from a previous installation otherwise make a clean run look broken.
+    adb("logcat", "-c")
     screenshots: list[dict[str, int | str | bool]] = []
     for step in suite["steps"]:
         action = step["action"]
@@ -258,6 +298,8 @@ def screenshot_suite(path: Path) -> Path:
             )
         elif action == "fixture_log":
             wait_for_fixture_log(step["contains"], float(step.get("timeout_seconds", 8)))
+        elif action == "playback_session":
+            require_playback_session(float(step.get("timeout_seconds", 5)))
         elif action == "capture":
             screenshot = capture(step["name"])
             width, height = png_dimensions(screenshot)
@@ -326,12 +368,19 @@ def filtered_logs(name: str) -> Path:
 
 def fatal_lines(lines: list[str]) -> list[str]:
     result: list[str] = []
-    for line in lines:
-        if PACKAGE not in line and "sloppaTV" not in line:
+    for index, line in enumerate(lines):
+        if re.search(rf"ANR in\s+{re.escape(PACKAGE)}", line, re.IGNORECASE):
+            result.append(line)
             continue
-        if re.search(rf"ANR in\s+{re.escape(PACKAGE)}", line, re.IGNORECASE) or any(
-            pattern.search(line) for pattern in FATAL_PATTERNS
-        ):
+        if not any(pattern.search(line) for pattern in FATAL_PATTERNS):
+            continue
+        # A normal Android Java crash is split across lines: "FATAL EXCEPTION"
+        # is followed by a separate "Process: app.sloppatv" line. Inspect a
+        # small adjacent window instead of requiring both tokens on one line.
+        start = max(0, index - 2)
+        end = min(len(lines), index + 4)
+        context = "\n".join(lines[start:end])
+        if PACKAGE in context or "sloppaTV" in context:
             result.append(line)
     return result
 

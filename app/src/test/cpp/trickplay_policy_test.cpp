@@ -1,6 +1,7 @@
 #include "trickplay_policy.hpp"
 
 #include <cassert>
+#include <cmath>
 
 int main() {
     assert(!trickplayFrameForPosition(0, 0, 100, 10, 10).valid());
@@ -30,5 +31,20 @@ int main() {
     assert(clamped.tileIndex == 2);
     assert(clamped.cellX == 9);
     assert(clamped.cellY == 4);
+
+    const TrickplayFrame uvFrame{
+        .thumbnailIndex = 11,
+        .tileIndex = 0,
+        .cellX = 1,
+        .cellY = 1,
+    };
+    const auto uv = trickplayUvRegion(uvFrame, 320, 180, 1280, 720);
+    assert(uv.valid());
+    assert(std::abs(uv.u0 - 0.25f) < 0.0001f);
+    assert(std::abs(uv.v0 - 0.25f) < 0.0001f);
+    assert(std::abs(uv.u1 - 0.50f) < 0.0001f);
+    assert(std::abs(uv.v1 - 0.50f) < 0.0001f);
+    assert(!trickplayUvRegion({}, 320, 180, 1280, 720).valid());
+    assert(!trickplayUvRegion(uvFrame, 320, 180, 0, 720).valid());
     return 0;
 }

@@ -92,6 +92,18 @@ int main() {
     state.removeItem("m3");
     assert(state.items().size() == 3);
     assert(state.selection() == 2);
+    assert(state.nextIndex() == 3);
+
+    state.setSelection(1);
+    state.openContainer(box, true);
+    state.replacePage({item("child-1", "Child One"), item("child-2", "Child Two")}, 2);
+    assert(state.nextIndex() == 2);
+    state.removeItem("m2");
+    assert(state.back() == BrowseBackAction::RestoredSnapshot);
+    assert(state.items().size() == 2);
+    assert(state.nextIndex() == 2);
+    assert(state.items()[0].id == "m1");
+    assert(state.items()[1].id == "m4");
 
     state.clear();
     assert(state.activeContainer().id.empty());

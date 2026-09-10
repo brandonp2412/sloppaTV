@@ -1,6 +1,7 @@
 #include "playback_continuation.hpp"
 
 #include <cassert>
+#include <chrono>
 
 int main() {
     PlaybackContinuationState state;
@@ -9,8 +10,9 @@ int main() {
     assert(state.autoplayChainCount() == 0);
     assert(!state.stillWatchingPrompt());
 
-    assert(state.beginNextEpisodeRequest());
-    assert(!state.beginNextEpisodeRequest());
+    const auto now = std::chrono::steady_clock::time_point(std::chrono::seconds(100));
+    assert(state.beginNextEpisodeRequest(now));
+    assert(!state.beginNextEpisodeRequest(now));
     JellyfinItem next;
     next.id = "episode-2";
     state.setNextItem(next);
@@ -26,6 +28,13 @@ int main() {
     state.clearNextEpisode();
     assert(!state.nextEpisodeRequested());
     assert(!state.nextItem());
+
+    assert(state.beginNextEpisodeRequest(now));
+    state.failNextEpisodeRequest(now, std::chrono::seconds(10));
+    assert(!state.nextEpisodeRequested());
+    assert(!state.beginNextEpisodeRequest(now + std::chrono::seconds(9)));
+    assert(state.beginNextEpisodeRequest(now + std::chrono::seconds(10)));
+    state.clearNextEpisode();
     state.resetAutoplayChain();
     state.setStillWatchingPrompt(false);
     assert(state.autoplayChainCount() == 0);

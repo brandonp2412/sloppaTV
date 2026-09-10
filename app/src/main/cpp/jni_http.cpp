@@ -193,13 +193,20 @@ HttpResponse JniHttpClient::requestWithRetry(
             return response;
         }
         response = requestOnce(method, url, headers, body);
-        if (response.status != 0 || response.error.empty()) return response;
-        if (attempt == retryCount) break;
+        const bool retryable = shouldRetryTransientHttpResponse(
+            method,
+            response.status,
+            !response.error.empty()
+        );
+        if (!retryable || attempt == retryCount) return response;
+        const std::string failure = response.status != 0
+            ? "HTTP " + std::to_string(response.status)
+            : response.error;
         __android_log_print(
             ANDROID_LOG_WARN,
             kTag,
             "Transient request failure (%s); retrying in %lldms",
-            response.error.c_str(),
+            failure.c_str(),
             static_cast<long long>(retryDelays[attempt].count())
         );
         std::unique_lock retryLock(retryMutex_);

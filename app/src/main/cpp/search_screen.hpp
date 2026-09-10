@@ -151,6 +151,21 @@ public:
         firstVisible_ = {0, 0};
     }
 
+    bool removeItem(const std::string& itemId) {
+        if (itemId.empty() || results_.empty()) return false;
+        const size_t previousSize = results_.size();
+        std::erase_if(results_, [&](const JellyfinItem& item) { return item.id == itemId; });
+        if (results_.size() == previousSize) return false;
+        topLevelCountSize_ = previousSize;
+        setSelection(selection_);
+        for (int row = 0; row < 2; ++row) {
+            const int maxFirst = std::max(0, rowItemCount(row) - 1);
+            firstVisible_[static_cast<size_t>(row)] = std::clamp(
+                firstVisible_[static_cast<size_t>(row)], 0, maxFirst);
+        }
+        return true;
+    }
+
     void moveSelection(int dx, int dy, int columns) {
         if (results_.empty() || columns <= 0) return;
         int row = selectedRow();

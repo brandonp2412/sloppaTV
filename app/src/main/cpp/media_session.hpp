@@ -59,6 +59,7 @@ private:
     int64_t durationMs_ = -1;
     MediaSessionState state_ = MediaSessionState::Stopped;
     int64_t lastPositionMs_ = -1;
+    bool keepScreenOn_ = false;
     std::mutex commandMutex_;
     std::optional<MediaSessionCommand> pendingCommand_;
 };

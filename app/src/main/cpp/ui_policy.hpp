@@ -21,7 +21,11 @@ constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
 }
 constexpr float searchMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 430.0f : 300.0f; }
 constexpr int mediaGridTitleLineLimit(int visibleRow, int uiTextSize, bool hasPortraitCards) {
-    return hasPortraitCards && visibleRow > 0 && uiTextSize > 0 ? 1 : 0;
+    (void)uiTextSize;
+    // The lower portrait row starts at y=625 on the 1080p canvas. Two title
+    // lines can consume the space reserved for episode metadata even at the
+    // normal text setting, so keep that row to one line at every text size.
+    return hasPortraitCards && visibleRow > 0 ? 1 : 0;
 }
 constexpr float detailActionTextScale(std::size_t labelLength) {
     return labelLength > 10 ? 1.6f : 1.8f;
@@ -68,8 +72,12 @@ constexpr float keyboardKeyHeight(float top, int rowCount, float gap) {
 constexpr float materialButtonFocusScale() { return 1.05f; }
 constexpr float materialCardFocusScale() { return 1.05f; }
 constexpr float materialListItemFocusScale() { return 1.04f; }
+// Full-width rows should not inherit the same percentage growth as compact
+// cards: 4% of a 1700 px settings row is a distracting 68 px jump.
+constexpr float materialWideListItemFocusScale() { return 1.015f; }
 constexpr float materialTabFocusScale() { return 1.05f; }
 constexpr float materialInputFocusScale() { return 1.04f; }
+constexpr float materialWideInputFocusScale() { return 1.015f; }
 
 constexpr float playbackProgressThumbCenterX(float trackX, float trackWidth, float progress, float thumbRadius) {
     if (trackWidth <= 0.0f) return trackX;

@@ -173,10 +173,14 @@ public:
     void removeItem(const std::string& itemId) {
         if (itemId.empty()) return;
         auto remove = [&](std::vector<JellyfinItem>& items) {
+            const size_t previousSize = items.size();
             std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
+            return static_cast<int>(previousSize - items.size());
         };
-        remove(items_);
-        for (auto& snapshot : stack_) remove(snapshot.items);
+        nextIndex_ = std::max(0, nextIndex_ - remove(items_));
+        for (auto& snapshot : stack_) {
+            snapshot.nextIndex = std::max(0, snapshot.nextIndex - remove(snapshot.items));
+        }
         setSelection(selection_);
     }
 

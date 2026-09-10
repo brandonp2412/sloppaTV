@@ -3,6 +3,7 @@
 #include "app_settings.hpp"
 #include "jellyfin_types.hpp"
 
+#include <chrono>
 #include <utility>
 #include <vector>
 
@@ -13,21 +14,34 @@ public:
     void begin(VideoZoomMode zoomMode) {
         mediaSegments_.clear();
         mediaSegmentsRequested_ = false;
+        mediaSegmentsRetryAt_ = {};
         fallbackAttempted_ = false;
         zoomMode_ = zoomMode;
     }
 
     [[nodiscard]] bool mediaSegmentsRequested() const { return mediaSegmentsRequested_; }
-    bool beginMediaSegmentsRequest() {
-        if (mediaSegmentsRequested_) return false;
+    bool beginMediaSegmentsRequest(std::chrono::steady_clock::time_point now) {
+        if (mediaSegmentsRequested_ || (mediaSegmentsRetryAt_ != std::chrono::steady_clock::time_point{} && now < mediaSegmentsRetryAt_)) {
+            return false;
+        }
         mediaSegmentsRequested_ = true;
+        mediaSegmentsRetryAt_ = {};
         return true;
+    }
+    void failMediaSegmentsRequest(
+        std::chrono::steady_clock::time_point now,
+        std::chrono::seconds retryDelay = std::chrono::seconds(10)
+    ) {
+        mediaSegmentsRequested_ = false;
+        mediaSegmentsRetryAt_ = now + retryDelay;
     }
     void resetMediaSegments() {
         mediaSegmentsRequested_ = false;
+        mediaSegmentsRetryAt_ = {};
         mediaSegments_.clear();
     }
     void setMediaSegments(std::vector<JellyfinMediaSegment> segments) {
+        mediaSegmentsRetryAt_ = {};
         mediaSegments_ = std::move(segments);
     }
     [[nodiscard]] const std::vector<JellyfinMediaSegment>& mediaSegments() const { return mediaSegments_; }
@@ -50,6 +64,7 @@ public:
 private:
     std::vector<JellyfinMediaSegment> mediaSegments_;
     bool mediaSegmentsRequested_ = false;
+    std::chrono::steady_clock::time_point mediaSegmentsRetryAt_{};
     bool fallbackAttempted_ = false;
     VideoZoomMode zoomMode_ = VideoZoomMode::Fit;
 };

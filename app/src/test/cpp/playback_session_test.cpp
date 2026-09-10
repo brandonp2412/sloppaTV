@@ -1,6 +1,7 @@
 #include "playback_session.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <vector>
 
@@ -15,8 +16,13 @@ int main() {
     assert(!state.fallbackAttempted());
     assert(state.zoomMode() == VideoZoomMode::Fill);
 
-    assert(state.beginMediaSegmentsRequest());
-    assert(!state.beginMediaSegmentsRequest());
+    const auto now = std::chrono::steady_clock::time_point(std::chrono::seconds(100));
+    assert(state.beginMediaSegmentsRequest(now));
+    assert(!state.beginMediaSegmentsRequest(now));
+    state.failMediaSegmentsRequest(now, std::chrono::seconds(10));
+    assert(!state.mediaSegmentsRequested());
+    assert(!state.beginMediaSegmentsRequest(now + std::chrono::seconds(9)));
+    assert(state.beginMediaSegmentsRequest(now + std::chrono::seconds(10)));
     state.setMediaSegments({
         JellyfinMediaSegment{"Intro", 10'000'000, 60'000'000},
         JellyfinMediaSegment{"Tiny", 70'000'000, 80'000'000},
@@ -26,6 +32,7 @@ int main() {
     assert(intro);
     assert(intro->type == "Intro");
     assert(!state.activeSkippableSegment(75'000'000));
+    assert(state.mediaSegmentsRequested());
 
     state.markFallbackAttempted();
     assert(state.fallbackAttempted());

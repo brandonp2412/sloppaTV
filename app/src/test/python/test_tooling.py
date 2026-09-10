@@ -304,7 +304,8 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("target: android-tv", workflow)
         script = (ROOT / "tools" / "ci_screenshots.sh").read_text(encoding="utf-8")
         self.assertIn("screenshot_fixture_server.py", script)
-        self.assertIn('reverse tcp:1024 tcp:18096', script)
+        self.assertIn('SLOPPATV_FIXTURE_PORT:-18096', script)
+        self.assertIn('reverse tcp:1024 "tcp:$FIXTURE_PORT"', script)
         self.assertIn("POST /Users/AuthenticateByName", script)
 
     def test_target_model_guard_requires_explicit_physical_target(self) -> None:
@@ -327,6 +328,17 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertTrue(waydroid_e2e.foreground_is_package(resumed, waydroid_e2e.DEFAULT_PACKAGE))
         self.assertFalse(waydroid_e2e.foreground_is_package(launcher, waydroid_e2e.DEFAULT_PACKAGE))
         self.assertFalse(waydroid_e2e.foreground_is_package(stopped, waydroid_e2e.DEFAULT_PACKAGE))
+
+    def test_launch_waits_for_sloppatv_to_be_foreground(self) -> None:
+        launcher = "topResumedActivity=ActivityRecord{123 com.android.launcher3/.Launcher}"
+        sloppa = "topResumedActivity=ActivityRecord{456 app.sloppatv/.SloppaNativeActivity}"
+        with patch.object(waydroid_e2e, "adb", side_effect=["", launcher, sloppa]) as adb, patch.object(
+            waydroid_e2e.time, "sleep", return_value=None
+        ):
+            waydroid_e2e.launch()
+        self.assertEqual(adb.call_count, 3)
+        self.assertTrue(adb.call_args_list[1].kwargs["capture"])
+        self.assertTrue(adb.call_args_list[2].kwargs["capture"])
 
     def test_power_state_parser_requires_awake(self) -> None:
         self.assertTrue(waydroid_e2e.power_state_is_awake("mWakefulness=Awake\nmWakefulnessChanging=false"))
@@ -367,6 +379,12 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertEqual(waydroid_e2e.fatal_lines([app_fatal]), [app_fatal])
         self.assertEqual(waydroid_e2e.fatal_lines([other_fatal]), [])
 
+    def test_fatal_log_detection_handles_android_split_process_line(self) -> None:
+        waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
+        fatal = "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main"
+        process = "09-02 22:00:00 E AndroidRuntime: Process: app.sloppatv, PID: 123"
+        self.assertEqual(waydroid_e2e.fatal_lines([fatal, process]), [fatal])
+
     def test_anr_detection_uses_selected_package(self) -> None:
         waydroid_e2e.PACKAGE = "app.sloppatv.custom"
         line = "09-02 22:00:00 E ActivityManager: ANR in app.sloppatv.custom"
@@ -374,15 +392,43 @@ class WaydroidToolingTest(unittest.TestCase):
 
     def test_player_acceptance_requires_active_media_session(self) -> None:
         waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
-        with patch.object(waydroid_e2e, "adb", return_value="Media button session is com.example.other/player"):
-            with self.assertRaisesRegex(RuntimeError, "playback is not active"):
-                waydroid_e2e.require_playback_session()
-        with patch.object(
-            waydroid_e2e,
-            "adb",
-            return_value=f"Media button session is {waydroid_e2e.DEFAULT_PACKAGE}/sloppaTV",
+        with patch.object(waydroid_e2e, "adb", return_value="Media button session is com.example.other/player"), patch.object(
+            waydroid_e2e.time, "sleep"
         ):
+            with self.assertRaisesRegex(RuntimeError, "playback is not active"):
+                waydroid_e2e.require_playback_session(0.001)
+        active = (
+            f"sloppaTV {waydroid_e2e.DEFAULT_PACKAGE}/sloppaTV (userId=0)\n"
+            "  active=true\n"
+            "  state=PlaybackState {state=3, position=1000, buffered position=0, speed=1.0, error=null}"
+        )
+        with patch.object(waydroid_e2e, "adb", return_value=active):
             waydroid_e2e.require_playback_session()
+
+    def test_player_acceptance_parses_named_android_playback_state(self) -> None:
+        waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
+        active = (
+            f"sloppaTV {waydroid_e2e.DEFAULT_PACKAGE}/sloppaTV (userId=0)\n"
+            "  active=true\n"
+            "  state=PlaybackState {state=PLAYING(3), position=1000, buffered position=0, speed=1.0, error=null}"
+        )
+        self.assertEqual(
+            waydroid_e2e.media_session_playback_state(active, waydroid_e2e.DEFAULT_PACKAGE),
+            3,
+        )
+        with patch.object(waydroid_e2e, "adb", return_value=active):
+            waydroid_e2e.require_playback_session()
+
+    def test_player_acceptance_rejects_registered_but_stopped_session(self) -> None:
+        waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
+        stopped = (
+            f"sloppaTV {waydroid_e2e.DEFAULT_PACKAGE}/sloppaTV (userId=0)\n"
+            "  active=true\n"
+            "  state=PlaybackState {state=1, position=0, buffered position=0, speed=0.0, error=null}"
+        )
+        with patch.object(waydroid_e2e, "adb", return_value=stopped), patch.object(waydroid_e2e.time, "sleep"):
+            with self.assertRaisesRegex(RuntimeError, "state was 1"):
+                waydroid_e2e.require_playback_session(0.001)
 
     def test_search_quotes_multi_word_query_for_adb_shell(self) -> None:
         with patch.object(waydroid_e2e, "adb") as adb, patch.object(waydroid_e2e, "capture"), patch.object(
@@ -426,6 +472,13 @@ class WaydroidToolingTest(unittest.TestCase):
 
     def test_load_screenshot_suite_accepts_deterministic_search_steps(self) -> None:
         suite = {"name": "search", "steps": [{"action": "search", "query": "Caminandes"}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "suite.json"
+            path.write_text(json.dumps(suite), encoding="utf-8")
+            self.assertEqual(waydroid_e2e.load_screenshot_suite(path), suite)
+
+    def test_load_screenshot_suite_accepts_playback_assertion(self) -> None:
+        suite = {"name": "player", "steps": [{"action": "playback_session", "timeout_seconds": 8}]}
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "suite.json"
             path.write_text(json.dumps(suite), encoding="utf-8")

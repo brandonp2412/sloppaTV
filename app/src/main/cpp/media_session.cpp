@@ -21,15 +21,16 @@ bool clearException(JNIEnv* env, const char* operation) {
     return true;
 }
 
-void setPlaybackKeepScreenOn(JNIEnv* env, jobject activity, bool enabled) {
-    if (!env || !activity) return;
+bool setPlaybackKeepScreenOn(JNIEnv* env, jobject activity, bool enabled) {
+    if (!env || !activity) return false;
     jclass activityClass = env->GetObjectClass(activity);
     jmethodID method = activityClass
         ? env->GetMethodID(activityClass, "setPlaybackKeepScreenOn", "(Z)V")
         : nullptr;
     if (method) env->CallVoidMethod(activity, method, enabled ? JNI_TRUE : JNI_FALSE);
-    clearException(env, "playback keep-screen-on update");
+    const bool failed = clearException(env, "playback keep-screen-on update");
     if (activityClass) env->DeleteLocalRef(activityClass);
+    return method != nullptr && !failed;
 }
 
 int playbackStateValue(MediaSessionState state) {
@@ -166,6 +167,14 @@ void NativeMediaSession::updateMetadata(
 }
 
 void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs) {
+    const bool keepScreenOn = state == MediaSessionState::Playing || state == MediaSessionState::Buffering;
+    if (keepScreenOn != keepScreenOn_) {
+        ScopedEnv keepScreenScoped(vm_);
+        if (JNIEnv* env = keepScreenScoped.get(); env && setPlaybackKeepScreenOn(env, activity_, keepScreenOn)) {
+            keepScreenOn_ = keepScreenOn;
+        }
+    }
+
     if (state == MediaSessionState::Stopped && !session_) return;
     if (!ensureSession()) return;
     positionMs = std::max<int64_t>(0, positionMs);
@@ -174,11 +183,6 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (!env) return;
-    setPlaybackKeepScreenOn(
-        env,
-        activity_,
-        state == MediaSessionState::Playing || state == MediaSessionState::Buffering
-    );
     jclass builderClass = env->FindClass("android/media/session/PlaybackState$Builder");
     jclass sessionClass = env->FindClass("android/media/session/MediaSession");
     jclass clockClass = env->FindClass("android/os/SystemClock");
@@ -266,7 +270,7 @@ void NativeMediaSession::clear() {
 
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
-    if (env) setPlaybackKeepScreenOn(env, activity_, false);
+    if (env && setPlaybackKeepScreenOn(env, activity_, false)) keepScreenOn_ = false;
     if (!session_ || !env) return;
     jclass sessionClass = env->FindClass("android/media/session/MediaSession");
     if (sessionClass) {

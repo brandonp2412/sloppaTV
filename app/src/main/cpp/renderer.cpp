@@ -597,10 +597,13 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
     w *= uiScale_;
     h *= uiScale_;
     radius = std::clamp(radius * uiScale_, 0.0f, std::min(w, h) * 0.5f);
-    // One-pixel TV outlines alias badly around large pill radii. Preserve the
-    // hierarchy between idle and focused states, but ensure idle strokes have
-    // enough coverage for the antialias fringe to resolve cleanly.
-    thickness = std::clamp(std::max(thickness, 3.0f) * uiScale_, 0.5f, std::min(w, h) * 0.45f);
+    // One-pixel TV outlines alias badly around pill-shaped controls, but a
+    // global minimum also makes dialog, card and panel borders look heavy.
+    // Strengthen only genuinely pill-like outlines; preserve the requested
+    // hierarchy everywhere else.
+    const bool pillLike = radius >= std::min(w, h) * 0.33f;
+    const float logicalThickness = pillLike ? std::max(thickness, 3.0f) : thickness;
+    thickness = std::clamp(logicalThickness * uiScale_, 0.5f, std::min(w, h) * 0.45f);
     const float innerW = std::max(0.0f, w - thickness * 2.0f);
     const float innerH = std::max(0.0f, h - thickness * 2.0f);
     if (innerW <= 0.0f || innerH <= 0.0f) {
