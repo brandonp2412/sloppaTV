@@ -100,6 +100,27 @@ int main() {
     assert(resilient.mediaSourceId == "usable-source");
     assert(resilient.container == "mp4");
 
+    const nlohmann::json nullableMetadata = {
+        {"Id", "nullable-item"},
+        {"Name", "Nullable"},
+        {"Type", "Movie"},
+        {"ProductionYear", nullptr},
+        {"RunTimeTicks", nullptr},
+        {"UserData", {{"PlaybackPositionTicks", nullptr}, {"IsFavorite", nullptr}}},
+        {"MediaSources", {{{"Id", "nullable-source"}, {"MediaStreams", {
+            {{"Type", "Audio"}, {"Index", nullptr}, {"Channels", nullptr}, {"Codec", nullptr}},
+            {{"Type", "Subtitle"}, {"Index", 4}, {"Language", nullptr}, {"IsForced", nullptr}}
+        }}}}}
+    };
+    const JellyfinItem nullable = parseJellyfinItem(nullableMetadata);
+    assert(nullable.id == "nullable-item");
+    assert(nullable.productionYear == 0);
+    assert(nullable.runtimeTicks == 0);
+    assert(nullable.positionTicks == 0);
+    assert(!nullable.favorite);
+    assert(nullable.audios.empty());
+    assert(nullable.subtitles.size() == 1 && nullable.subtitles[0].index == 4);
+
     const nlohmann::json secondValid = {
         {"Id", "movie-2"},
         {"Name", "Second"},
@@ -114,11 +135,14 @@ int main() {
         nullptr,
         {{"Name", "Missing Id"}},
         malformed,
+        nullableMetadata,
         secondValid
     }));
-    assert(items.size() == 2);
+    assert(items.size() == 4);
     assert(items[0].id == "episode-1");
-    assert(items[1].id == "movie-2");
+    assert(items[1].id == "broken" && items[1].productionYear == 0);
+    assert(items[2].id == "nullable-item");
+    assert(items[3].id == "movie-2");
     assert(parseJellyfinItems(nlohmann::json::object()).empty());
     return 0;
 }
