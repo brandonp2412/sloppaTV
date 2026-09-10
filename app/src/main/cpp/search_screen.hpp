@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jellyfin_types.hpp"
+#include "unicode_text.hpp"
 
 #include <algorithm>
 #include <array>
@@ -72,10 +73,7 @@ public:
     }
 
     [[nodiscard]] bool backspace() {
-        if (query_.empty()) return false;
-        size_t start = query_.size() - 1;
-        while (start > 0 && (static_cast<unsigned char>(query_[start]) & 0xC0u) == 0x80u) --start;
-        query_.erase(start);
+        if (!eraseLastUtf8CodePoint(query_)) return false;
         selection_ = 0;
         firstVisible_ = {0, 0};
         return true;
@@ -151,6 +149,26 @@ public:
         topLevelCountSize_ = 0;
         selection_ = 0;
         firstVisible_ = {0, 0};
+    }
+
+    void removeItem(const std::string& itemId) {
+        if (itemId.empty()) return;
+        const size_t previousSize = results_.size();
+        std::erase_if(results_, [&](const JellyfinItem& item) { return item.id == itemId; });
+        if (results_.size() == previousSize) return;
+
+        selection_ = results_.empty()
+            ? 0
+            : std::min(selection_, static_cast<int>(results_.size()) - 1);
+        const auto firstEpisode = std::find_if(results_.begin(), results_.end(), [](const JellyfinItem& item) {
+            return item.type == "Episode";
+        });
+        topLevelCount_ = static_cast<int>(std::distance(results_.begin(), firstEpisode));
+        topLevelCountSize_ = results_.size();
+        for (int row = 0; row < 2; ++row) {
+            const int maxFirst = std::max(0, rowItemCount(row) - 1);
+            firstVisible_[static_cast<size_t>(row)] = std::clamp(firstVisible_[static_cast<size_t>(row)], 0, maxFirst);
+        }
     }
 
     void moveSelection(int dx, int dy, int columns) {

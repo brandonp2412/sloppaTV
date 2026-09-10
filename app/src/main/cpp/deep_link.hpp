@@ -1,5 +1,7 @@
 #pragma once
 
+#include "unicode_text.hpp"
+
 #include <cctype>
 #include <string>
 
@@ -30,10 +32,6 @@ inline std::string normalizeExternalSearchQuery(std::string value) {
     for (char& c : value) {
         if (static_cast<unsigned char>(c) < 0x20) c = ' ';
     }
-    if (value.size() > 120) {
-        size_t end = 120;
-        while (end > 0 && (static_cast<unsigned char>(value[end]) & 0xC0u) == 0x80u) --end;
-        value.resize(end);
-    }
+    value = truncateUtf8Bytes(std::move(value), 120);
     return trimExternalText(std::move(value));
 }

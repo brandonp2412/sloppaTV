@@ -4,6 +4,20 @@
 #include <string>
 
 int main() {
+    assert(utf8PrefixLength("plain", 3) == 3);
+    assert(utf8PrefixLength("plain", 10) == 5);
+    assert(utf8PrefixLength("A\xC4\x81", 2) == 1);
+    assert(utf8PrefixLength("A\xC4\x81", 3) == 3);
+    assert(truncateUtf8Bytes("A\xC4\x81", 2) == "A");
+    assert(truncateUtf8Bytes("A\xC4\x81", 3) == "A\xC4\x81");
+
+    std::string erase = "M\xC4\x81";
+    assert(eraseLastUtf8CodePoint(erase));
+    assert(erase == "M");
+    assert(eraseLastUtf8CodePoint(erase));
+    assert(erase.empty());
+    assert(!eraseLastUtf8CodePoint(erase));
+
     assert(displayText("plain ASCII") == "plain ASCII");
     assert(displayText("caf\xC3\xA9") == "cafe");
     assert(displayText("cafe\xCC\x81") == "cafe");

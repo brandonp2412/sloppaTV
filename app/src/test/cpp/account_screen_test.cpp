@@ -16,6 +16,10 @@ int main() {
     assert(state.backspaceFocusedField());
     assert(!state.field(AccountScreenState::kServerField).ends_with('x'));
 
+    state.setField(AccountScreenState::kServerField, "https://example/\xC4\x81");
+    assert(state.backspaceFocusedField());
+    assert(state.field(AccountScreenState::kServerField) == "https://example/");
+
     state.moveLoginVertical(1);
     assert(state.loginFocus() == AccountScreenState::kUsernameField);
     state.moveLoginVertical(1);

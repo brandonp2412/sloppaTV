@@ -69,6 +69,20 @@ int main() {
     assert(state.selection() == 1);
     assert(state.selectionOnFirstResultRow());
 
+    SearchScreenState removal = state;
+    removal.setSelection(6);
+    removal.removeItem("3");
+    assert(removal.results().size() == 6);
+    assert(removal.selection() == 5);
+    assert(removal.results()[static_cast<size_t>(removal.selection())].id == "5");
+    assert(removal.topLevelCount() == 4);
+    assert(removal.rowItemCount(1) == 2);
+    removal.removeItem("0");
+    assert(removal.topLevelCount() == 3);
+    assert(removal.selection() == 4);
+    removal.removeItem("missing");
+    assert(removal.selection() == 4);
+
     state.setQuery("brook");
     state.setLoading(true);
     std::vector<JellyfinItem> stale(1);
