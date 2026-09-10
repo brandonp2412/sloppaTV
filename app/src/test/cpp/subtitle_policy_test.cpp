@@ -43,6 +43,12 @@ int main() {
     assert(subtitleTextFormat("subrip") == "srt");
     assert(subtitleTextFormat("webvtt") == "vtt");
     assert(subtitleTextFormat("pgs").empty());
+    assert(!subtitleMayFallbackToSrt("ass"));
+    assert(!subtitleMayFallbackToSrt("ASS"));
+    assert(!subtitleMayFallbackToSrt("ssa"));
+    assert(!subtitleMayFallbackToSrt("SSA"));
+    assert(subtitleMayFallbackToSrt("vtt"));
+    assert(subtitleMayFallbackToSrt("SRT"));
 
     const auto assCues = parseTextSubtitleCues(
         "\xEF\xBB\xBF[Script Info]\n"

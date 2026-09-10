@@ -1897,8 +1897,7 @@ private:
                     if ((!response.ok || response.value.empty()) && candidateIndex == 0 && !deliveryUrl.empty()) {
                         response = api_.downloadSubtitleUrl(session, deliveryUrl);
                     }
-                    if ((!response.ok || response.value.empty())
-                        && candidate.codec != "ass" && candidate.codec != "ssa") {
+                    if ((!response.ok || response.value.empty()) && subtitleMayFallbackToSrt(candidate.codec)) {
                         response = api_.downloadSubtitleSrt(session, item, candidate.index);
                     }
                     return response;
