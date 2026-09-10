@@ -119,7 +119,7 @@ public:
         return postSeekPositionFailed(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs);
     }
     [[nodiscard]] bool recentSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
-        if (lastSeekTargetMs_ <= 0 || lastSeekIssued_ == TimePoint{}) return false;
+        if (lastSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
         const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             now - lastSeekIssued_
         ).count();

@@ -865,19 +865,7 @@ ApiValueResult<std::vector<JellyfinMediaSegment>> JellyfinClient::getMediaSegmen
             result.error = "Jellyfin media-segment response did not contain Items";
             return result;
         }
-        for (const auto& value : data["Items"]) {
-            if (!value.is_object()) continue;
-            JellyfinMediaSegment segment;
-            segment.type = value.value("Type", std::string{});
-            segment.startTicks = value.value("StartTicks", static_cast<int64_t>(0));
-            segment.endTicks = value.value("EndTicks", static_cast<int64_t>(0));
-            if (!segment.type.empty() && segment.endTicks > segment.startTicks) {
-                result.value.push_back(std::move(segment));
-            }
-        }
-        std::sort(result.value.begin(), result.value.end(), [](const auto& left, const auto& right) {
-            return left.startTicks < right.startTicks;
-        });
+        result.value = parseJellyfinMediaSegments(data["Items"]);
         result.ok = true;
     } catch (const std::exception& e) {
         result.error = std::string("Unable to parse media segments: ") + e.what();

@@ -106,9 +106,35 @@ int main() {
         {"Type", "Movie"}
     };
     const nlohmann::json malformed = {
-        {"Id", "broken"},
-        {"ProductionYear", "not-a-number"}
+        {"Id", "noisy-scalars"},
+        {"Name", 7},
+        {"Type", "Movie"},
+        {"ProductionYear", "not-a-number"},
+        {"CanDelete", "yes"},
+        {"UserData", {
+            {"PlaybackPositionTicks", "later"},
+            {"IsFavorite", "sometimes"},
+            {"Played", 1}
+        }},
+        {"MediaSources", {{
+            {"Id", "source-with-noisy-streams"},
+            {"MediaStreams", {
+                {{"Type", "Video"}, {"Width", "4k"}, {"Height", nullptr}},
+                {{"Type", "Audio"}, {"Index", "one"}},
+                {{"Type", "Subtitle"}, {"Index", "two"}}
+            }}
+        }}}
     };
+    const JellyfinItem noisyScalars = parseJellyfinItem(malformed);
+    assert(noisyScalars.id == "noisy-scalars");
+    assert(noisyScalars.name.empty());
+    assert(noisyScalars.productionYear == 0);
+    assert(!noisyScalars.canDelete);
+    assert(noisyScalars.positionTicks == 0 && !noisyScalars.favorite && !noisyScalars.played);
+    assert(noisyScalars.mediaSourceId == "source-with-noisy-streams");
+    assert(noisyScalars.videoWidth == 0 && noisyScalars.videoHeight == 0);
+    assert(noisyScalars.audios.empty() && noisyScalars.subtitles.empty());
+
     const auto items = parseJellyfinItems(nlohmann::json::array({
         value,
         nullptr,
@@ -116,9 +142,25 @@ int main() {
         malformed,
         secondValid
     }));
-    assert(items.size() == 2);
+    assert(items.size() == 3);
     assert(items[0].id == "episode-1");
-    assert(items[1].id == "movie-2");
+    assert(items[1].id == "noisy-scalars");
+    assert(items[2].id == "movie-2");
     assert(parseJellyfinItems(nlohmann::json::object()).empty());
+
+    const auto segments = parseJellyfinMediaSegments(nlohmann::json::array({
+        {{"Type", "Outro"}, {"StartTicks", 90'000'000LL}, {"EndTicks", 120'000'000LL}},
+        nullptr,
+        {{"Type", "Intro"}, {"StartTicks", 10'000'000LL}, {"EndTicks", 60'000'000LL}},
+        {{"Type", 4}, {"StartTicks", 1LL}, {"EndTicks", 2LL}},
+        {{"Type", "Preview"}, {"StartTicks", "bad"}, {"EndTicks", 80'000'000LL}},
+        {{"Type", "Invalid"}, {"StartTicks", 50'000'000LL}, {"EndTicks", 40'000'000LL}}
+    }));
+    assert(segments.size() == 2);
+    assert(segments[0].type == "Intro");
+    assert(segments[0].startTicks == 10'000'000LL && segments[0].endTicks == 60'000'000LL);
+    assert(segments[1].type == "Outro");
+    assert(segments[1].startTicks == 90'000'000LL && segments[1].endTicks == 120'000'000LL);
+    assert(parseJellyfinMediaSegments(nlohmann::json::object()).empty());
     return 0;
 }

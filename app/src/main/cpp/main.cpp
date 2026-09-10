@@ -3625,7 +3625,19 @@ private:
                 }
                 return;
             }
-            if (next.value.id.empty() || next.value.id == currentItemId) return;
+            if (next.value.id.empty() || next.value.id == currentItemId) {
+                std::scoped_lock lock(stateMutex_);
+                if (screen_ == Screen::Player && activePlaybackItem_.id == currentItemId) {
+                    continuationState_.nextEpisodeRequestFailed();
+                    __android_log_print(
+                        ANDROID_LOG_WARN,
+                        kTag,
+                        "Next episode lookup returned no usable successor for %s; retrying later",
+                        currentItemId.c_str()
+                    );
+                }
+                return;
+            }
             auto detailed = api_.getItem(session, next.value.id);
             JellyfinItem item = detailed.ok ? std::move(detailed.value) : std::move(next.value);
             std::scoped_lock lock(stateMutex_);
@@ -4225,16 +4237,16 @@ private:
 
         if (activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
             const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
-            const int recoveryTargetMs = pendingSeekTargetMs > 0
+            const int recoveryTargetMs = pendingSeekTargetMs >= 0
                 ? pendingSeekTargetMs
                 : playerScreenState_.recentSeekTargetMs();
-            if (recoveryTargetMs > 0) {
+            if (recoveryTargetMs >= 0) {
                 const auto now = std::chrono::steady_clock::now();
                 const int observedPositionMs = player_.positionMs();
                 const bool mediaSeekable = player_.seekable();
                 const bool failedSeek = !mediaSeekable
                     && !postSeekPositionMatchesTarget(observedPositionMs, recoveryTargetMs)
-                    && ((pendingSeekTargetMs > 0)
+                    && ((pendingSeekTargetMs >= 0)
                         || playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
                         || playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now));
                 if (failedSeek) {
