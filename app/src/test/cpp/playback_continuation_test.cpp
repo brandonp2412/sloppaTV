@@ -3,14 +3,20 @@
 #include <cassert>
 
 int main() {
+    using namespace std::chrono_literals;
     PlaybackContinuationState state;
     assert(!state.nextItem());
     assert(!state.nextEpisodeRequested());
     assert(state.autoplayChainCount() == 0);
     assert(!state.stillWatchingPrompt());
 
-    assert(state.beginNextEpisodeRequest());
-    assert(!state.beginNextEpisodeRequest());
+    const auto requestStart = PlaybackContinuationState::Clock::now();
+    assert(state.beginNextEpisodeRequest(requestStart));
+    assert(!state.beginNextEpisodeRequest(requestStart));
+    state.nextEpisodeRequestFailed(requestStart);
+    assert(!state.nextEpisodeRequested());
+    assert(!state.beginNextEpisodeRequest(requestStart + 9999ms));
+    assert(state.beginNextEpisodeRequest(requestStart + 10000ms));
     JellyfinItem next;
     next.id = "episode-2";
     state.setNextItem(next);
