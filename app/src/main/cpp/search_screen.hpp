@@ -73,7 +73,9 @@ public:
 
     [[nodiscard]] bool backspace() {
         if (query_.empty()) return false;
-        query_.pop_back();
+        size_t start = query_.size() - 1;
+        while (start > 0 && (static_cast<unsigned char>(query_[start]) & 0xC0u) == 0x80u) --start;
+        query_.erase(start);
         selection_ = 0;
         firstVisible_ = {0, 0};
         return true;
