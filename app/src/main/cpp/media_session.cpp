@@ -166,6 +166,17 @@ void NativeMediaSession::updateMetadata(
 }
 
 void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs) {
+    {
+        ScopedEnv scoped(vm_);
+        JNIEnv* env = scoped.get();
+        if (env) {
+            setPlaybackKeepScreenOn(
+                env,
+                activity_,
+                state == MediaSessionState::Playing || state == MediaSessionState::Buffering
+            );
+        }
+    }
     if (state == MediaSessionState::Stopped && !session_) return;
     if (!ensureSession()) return;
     positionMs = std::max<int64_t>(0, positionMs);
@@ -174,11 +185,6 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (!env) return;
-    setPlaybackKeepScreenOn(
-        env,
-        activity_,
-        state == MediaSessionState::Playing || state == MediaSessionState::Buffering
-    );
     jclass builderClass = env->FindClass("android/media/session/PlaybackState$Builder");
     jclass sessionClass = env->FindClass("android/media/session/MediaSession");
     jclass clockClass = env->FindClass("android/os/SystemClock");
