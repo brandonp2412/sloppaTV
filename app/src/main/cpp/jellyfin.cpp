@@ -73,7 +73,7 @@ void retainScopedVideoItems(std::vector<JellyfinItem>& items) {
 }
 }
 
-JellyfinClient::JellyfinClient(JavaVM* vm, jobject activity) : http_(vm), vm_(vm) {
+JellyfinClient::JellyfinClient(JavaVM* vm, jobject activity) : http_(vm, activity), vm_(vm) {
     if (!vm_ || !activity) return;
     ScopedJniEnv scoped(vm_);
     JNIEnv* env = scoped.get();
