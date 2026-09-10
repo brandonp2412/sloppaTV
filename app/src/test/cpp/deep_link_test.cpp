@@ -14,5 +14,17 @@ int main() {
     assert(normalizeExternalSearchQuery("\n\t").empty());
     assert(normalizeExternalSearchQuery("Planet\nEarth") == "Planet Earth");
     assert(normalizeExternalSearchQuery(std::string(200, 'A')).size() == 120);
+
+    std::string splitUtf8(119, 'A');
+    splitUtf8 += "\xC4\x81";
+    const std::string truncatedSplitUtf8 = normalizeExternalSearchQuery(splitUtf8);
+    assert(truncatedSplitUtf8 == std::string(119, 'A'));
+
+    std::string exactUtf8(118, 'A');
+    exactUtf8 += "\xC4\x81";
+    exactUtf8 += "B";
+    const std::string truncatedExactUtf8 = normalizeExternalSearchQuery(exactUtf8);
+    assert(truncatedExactUtf8.size() == 120);
+    assert(truncatedExactUtf8.ends_with("\xC4\x81"));
     return 0;
 }
