@@ -139,7 +139,8 @@ std::string buildPlaybackInfoRequestBody(
 ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
     std::string_view responseBody,
     int audioStreamIndex,
-    int subtitleStreamIndex
+    int subtitleStreamIndex,
+    PlaybackOverrides overrides
 ) {
     ApiValueResult<PlaybackInfoOffer> result;
     try {
@@ -149,14 +150,49 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
             return result;
         }
 
-        const auto source = std::find_if(
-            data["MediaSources"].begin(),
-            data["MediaSources"].end(),
+        const auto& sources = data["MediaSources"];
+        const auto firstObject = std::find_if(
+            sources.begin(),
+            sources.end(),
             [](const json& candidate) { return candidate.is_object(); }
         );
-        if (source == data["MediaSources"].end()) {
+        if (firstObject == sources.end()) {
             result.error = "Jellyfin returned no playable media source";
             return result;
+        }
+        // Jellyfin can return multiple media versions. Rank each source with the same
+        // route policy used by resolvePlayback so forced server-stream/transcode modes
+        // cannot accidentally select a direct-play-only version and report a false
+        // "no playback path" failure. Stable ranking preserves the first server result
+        // when routes are equivalent or when older/noisy servers omit all capability flags.
+        const auto routeRank = [](PlaybackServerRoute route) {
+            switch (route) {
+                case PlaybackServerRoute::DirectPlay: return 0;
+                case PlaybackServerRoute::DirectStream: return 1;
+                case PlaybackServerRoute::Transcode: return 2;
+                case PlaybackServerRoute::Unavailable: return 3;
+            }
+            return 3;
+        };
+        auto source = firstObject;
+        int bestRank = 4;
+        for (auto candidate = firstObject; candidate != sources.end(); ++candidate) {
+            if (!candidate->is_object()) continue;
+            const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
+            const PlaybackServerRoute route = choosePlaybackServerRoute(
+                {
+                    .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
+                    .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
+                    .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
+                    .transcodingUrl = transcodingUrl,
+                },
+                overrides
+            );
+            const int rank = routeRank(route);
+            if (rank < bestRank) {
+                source = candidate;
+                bestRank = rank;
+            }
         }
 
         PlaybackInfoOffer offer;

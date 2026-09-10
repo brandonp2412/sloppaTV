@@ -35,6 +35,10 @@ int main() {
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientStyled, true));
     assert(useNativeSubtitleRenderer(SubtitleStrategy::ClientText, true));
     assert(!useNativeSubtitleRenderer(SubtitleStrategy::ClientText, false));
+    assert(canSwitchEmbeddedSubtitleInPlayer(SubtitleStrategy::ClientEmbedded, false));
+    assert(!canSwitchEmbeddedSubtitleInPlayer(SubtitleStrategy::ClientEmbedded, true));
+    assert(!canSwitchEmbeddedSubtitleInPlayer(SubtitleStrategy::ClientText, false));
+    assert(!canSwitchEmbeddedSubtitleInPlayer(SubtitleStrategy::ServerTranscode, false));
     assert(codecLevelAllowed(51, 0));
     assert(codecLevelAllowed(0, 41));
     assert(codecLevelAllowed(41, 41));

@@ -245,3 +245,7 @@ constexpr bool useNativeSubtitleRenderer(SubtitleStrategy strategy, bool subtitl
         && (strategy == SubtitleStrategy::ClientText
             || strategy == SubtitleStrategy::ClientStyled);
 }
+
+constexpr bool canSwitchEmbeddedSubtitleInPlayer(SubtitleStrategy strategy, bool isExternal) {
+    return strategy == SubtitleStrategy::ClientEmbedded && !isExternal;
+}

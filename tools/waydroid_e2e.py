@@ -91,12 +91,25 @@ def ensure_awake() -> None:
     raise RuntimeError("Android TV target did not wake for visual acceptance")
 
 
+def surface_size_is_1080p(size: str) -> bool:
+    # Android reports wm size in the display's natural orientation. TV/Waydroid
+    # targets locked to landscape can therefore report 1080x1920 while the app's
+    # rendered surface and screenshots are 1920x1080. When an override exists it
+    # is the effective surface size; accepting a matching physical size would let
+    # a stale 720p override pass visual acceptance unnoticed.
+    parsed: dict[str, tuple[int, int]] = {}
+    for label, width, height in re.findall(r"(?im)^\s*(Physical|Override) size:\s*(\d+)x(\d+)\s*$", size):
+        parsed[label.lower()] = (int(width), int(height))
+    dimensions = parsed.get("override") or parsed.get("physical")
+    return dimensions in {(1920, 1080), (1080, 1920)}
+
+
 def verify_target(target: str) -> None:
     model = adb("shell", "getprop", "ro.product.model", capture=True).strip()
     if not model_matches_target(model, target):
         raise SystemExit(f"Refusing device {SERIAL}: model is {model!r}, expected target {target!r}")
     size = adb("shell", "wm", "size", capture=True)
-    if "1920x1080" not in size:
+    if not surface_size_is_1080p(size):
         raise SystemExit(f"Target is not configured for a 1920x1080 UI surface: {size}")
     ensure_awake()
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
@@ -128,7 +141,10 @@ def restart() -> None:
 
 
 def process_pid() -> str:
-    output = adb("shell", "pidof", PACKAGE, capture=True).strip()
+    try:
+        output = adb("shell", "pidof", PACKAGE, capture=True).strip()
+    except subprocess.CalledProcessError:
+        return ""
     return output.split()[0] if output else ""
 
 
@@ -137,6 +153,14 @@ def require_running() -> str:
     if not pid:
         raise RuntimeError(f"{PACKAGE} is not running")
     return pid
+
+
+def ensure_running() -> str:
+    pid = process_pid()
+    if pid:
+        return pid
+    launch()
+    return require_running()
 
 
 def media_session_playback_state(output: str, package: str) -> int | None:
@@ -492,7 +516,7 @@ def planet_core() -> None:
 
 def lifecycle() -> None:
     adb("logcat", "-c")
-    require_running()
+    ensure_running()
     before = memory_snapshot()
     pair("lifecycle-before-home", 2.0)
     key("HOME")
@@ -542,7 +566,7 @@ def action_search(query: str) -> None:
 
 
 def media_session() -> None:
-    require_running()
+    ensure_running()
     output = adb("shell", "dumpsys", "media_session", capture=True, timeout=60.0)
     path = ARTIFACTS / "media-session.txt"
     path.write_text(output, encoding="utf-8")
@@ -588,7 +612,7 @@ def soak(seconds: int, sample_seconds: int) -> None:
     if seconds < sample_seconds or sample_seconds < 1:
         raise SystemExit("soak duration must be >= sample interval >= 1 second")
     adb("logcat", "-c")
-    require_running()
+    ensure_running()
     started = time.monotonic()
     samples: list[dict[str, int | float | str]] = []
     while True:

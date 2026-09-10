@@ -55,6 +55,17 @@ class BenchmarkToolingTest(unittest.TestCase):
         )
 
 
+class WaydroidSurfaceToolingTest(unittest.TestCase):
+    def test_1080p_surface_accepts_landscape_and_natural_orientation(self) -> None:
+        self.assertTrue(waydroid_e2e.surface_size_is_1080p("Override size: 1920x1080"))
+        self.assertTrue(waydroid_e2e.surface_size_is_1080p("Physical size: 1920x1200\nOverride size: 1080x1920"))
+        self.assertTrue(waydroid_e2e.surface_size_is_1080p("Physical size: 1920x1080"))
+        self.assertFalse(waydroid_e2e.surface_size_is_1080p("Override size: 1280x720"))
+        self.assertFalse(
+            waydroid_e2e.surface_size_is_1080p("Physical size: 1920x1080\nOverride size: 1280x720")
+        )
+
+
 class ManifestToolingTest(unittest.TestCase):
     def test_external_video_players_are_visible_to_package_manager(self) -> None:
         manifest = ET.parse(ROOT / "app" / "src" / "main" / "AndroidManifest.xml").getroot()
@@ -339,6 +350,29 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertEqual(adb.call_count, 3)
         self.assertTrue(adb.call_args_list[1].kwargs["capture"])
         self.assertTrue(adb.call_args_list[2].kwargs["capture"])
+
+    def test_process_pid_treats_missing_process_as_stopped(self) -> None:
+        failure = subprocess.CalledProcessError(1, ["adb", "shell", "pidof", waydroid_e2e.DEFAULT_PACKAGE])
+        with patch.object(waydroid_e2e, "adb", side_effect=failure):
+            self.assertEqual(waydroid_e2e.process_pid(), "")
+
+    def test_ensure_running_keeps_existing_process(self) -> None:
+        with patch.object(waydroid_e2e, "process_pid", return_value="123") as process_pid, patch.object(
+            waydroid_e2e, "launch"
+        ) as launch, patch.object(waydroid_e2e, "require_running") as require_running:
+            self.assertEqual(waydroid_e2e.ensure_running(), "123")
+        process_pid.assert_called_once_with()
+        launch.assert_not_called()
+        require_running.assert_not_called()
+
+    def test_ensure_running_launches_stopped_app(self) -> None:
+        with patch.object(waydroid_e2e, "process_pid", return_value="") as process_pid, patch.object(
+            waydroid_e2e, "launch"
+        ) as launch, patch.object(waydroid_e2e, "require_running", return_value="456") as require_running:
+            self.assertEqual(waydroid_e2e.ensure_running(), "456")
+        process_pid.assert_called_once_with()
+        launch.assert_called_once_with()
+        require_running.assert_called_once_with()
 
     def test_power_state_parser_requires_awake(self) -> None:
         self.assertTrue(waydroid_e2e.power_state_is_awake("mWakefulness=Awake\nmWakefulnessChanging=false"))

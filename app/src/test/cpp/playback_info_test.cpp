@@ -140,6 +140,128 @@ int main() {
     assert(noisyOffer.value.transcodingUrl.empty());
     assert(noisyOffer.value.supportsDirectPlay);
 
+    const auto alternateVersionOffer = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {
+                "Id": "offline-version",
+                "Container": "mkv",
+                "SupportsDirectPlay": false,
+                "SupportsDirectStream": false,
+                "SupportsTranscoding": false
+            },
+            {
+                "Id": "playable-version",
+                "Container": "mp4",
+                "DefaultAudioStreamIndex": 2,
+                "SupportsDirectPlay": true
+            }
+        ]
+    })", -1, kSubtitleServerDefaultIndex);
+    assert(alternateVersionOffer.ok);
+    assert(alternateVersionOffer.value.mediaSourceId == "playable-version");
+    assert(alternateVersionOffer.value.container == "mp4");
+    assert(alternateVersionOffer.value.audioStreamIndex == 2);
+    assert(alternateVersionOffer.value.supportsDirectPlay);
+
+    const auto preferDirectPlayOffer = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {
+                "Id": "transcode-version",
+                "Container": "mkv",
+                "SupportsTranscoding": true,
+                "TranscodingUrl": "/Videos/item/master.m3u8"
+            },
+            {
+                "Id": "direct-version",
+                "Container": "mp4",
+                "SupportsDirectPlay": true
+            }
+        ]
+    })", -1, kSubtitleServerDefaultIndex);
+    assert(preferDirectPlayOffer.ok);
+    assert(preferDirectPlayOffer.value.mediaSourceId == "direct-version");
+    assert(preferDirectPlayOffer.value.supportsDirectPlay);
+    assert(preferDirectPlayOffer.value.transcodingUrl.empty());
+
+    const auto preferDirectStreamOffer = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {
+                "Id": "transcode-version",
+                "SupportsTranscoding": true,
+                "TranscodingUrl": "/Videos/item/master.m3u8"
+            },
+            {
+                "Id": "direct-stream-version",
+                "SupportsDirectStream": true,
+                "TranscodingUrl": "/Videos/item/directstream.m3u8?TranscodeReasons=ContainerNotSupported"
+            }
+        ]
+    })", -1, kSubtitleServerDefaultIndex);
+    assert(preferDirectStreamOffer.ok);
+    assert(preferDirectStreamOffer.value.mediaSourceId == "direct-stream-version");
+    assert(preferDirectStreamOffer.value.supportsDirectStream);
+    assert(!preferDirectStreamOffer.value.supportsTranscoding);
+
+    PlaybackOverrides forceTranscodeOffer;
+    forceTranscodeOffer.forceTranscode = true;
+    const auto forcedTranscodeOffer = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {
+                "Id": "direct-only-version",
+                "Container": "mp4",
+                "SupportsDirectPlay": true
+            },
+            {
+                "Id": "transcode-version",
+                "Container": "mkv",
+                "SupportsTranscoding": true,
+                "TranscodingUrl": "/Videos/item/transcode.m3u8?TranscodeReasons=VideoCodecNotSupported"
+            }
+        ]
+    })", -1, kSubtitleServerDefaultIndex, forceTranscodeOffer);
+    assert(forcedTranscodeOffer.ok);
+    assert(forcedTranscodeOffer.value.mediaSourceId == "transcode-version");
+    assert(forcedTranscodeOffer.value.supportsTranscoding);
+    assert(!forcedTranscodeOffer.value.transcodingUrl.empty());
+
+    PlaybackOverrides forceServerStreamOffer;
+    forceServerStreamOffer.forceServerStream = true;
+    const auto forcedServerStream = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {
+                "Id": "direct-only-version",
+                "Container": "mp4",
+                "SupportsDirectPlay": true
+            },
+            {
+                "Id": "stream-version",
+                "Container": "mkv",
+                "SupportsDirectStream": true,
+                "TranscodingUrl": "/Videos/item/directstream.m3u8?TranscodeReasons=ContainerNotSupported"
+            }
+        ]
+    })", -1, kSubtitleServerDefaultIndex, forceServerStreamOffer);
+    assert(forcedServerStream.ok);
+    assert(forcedServerStream.value.mediaSourceId == "stream-version");
+    assert(forcedServerStream.value.supportsDirectStream);
+
+    const auto missingDirectStreamUrl = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {
+                "Id": "broken-stream-version",
+                "SupportsDirectStream": true
+            },
+            {
+                "Id": "working-transcode-version",
+                "SupportsTranscoding": true,
+                "TranscodingUrl": "/Videos/item/master.m3u8?TranscodeReasons=VideoCodecNotSupported"
+            }
+        ]
+    })", -1, kSubtitleServerDefaultIndex);
+    assert(missingDirectStreamUrl.ok);
+    assert(missingDirectStreamUrl.value.mediaSourceId == "working-transcode-version");
+    assert(missingDirectStreamUrl.value.supportsTranscoding);
+
     const auto noSources = parsePlaybackInfoOffer(R"({"MediaSources":[]})", -1, kSubtitleServerDefaultIndex);
     assert(!noSources.ok);
     assert(noSources.error == "Jellyfin returned no playable media source");

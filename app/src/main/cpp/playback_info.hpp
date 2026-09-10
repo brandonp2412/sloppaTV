@@ -33,5 +33,6 @@ std::string buildPlaybackInfoRequestBody(
 ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
     std::string_view responseBody,
     int audioStreamIndex,
-    int subtitleStreamIndex
+    int subtitleStreamIndex,
+    PlaybackOverrides overrides = {}
 );

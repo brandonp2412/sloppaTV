@@ -60,7 +60,12 @@ python3 "$SCRIPT_DIR/screenshot_fixture_server.py" --port "$FIXTURE_PORT" >"$SCR
 fixture_pid=$!
 fixture_ready=0
 for _ in {1..50}; do
-    if curl --fail --silent --show-error "http://127.0.0.1:$FIXTURE_PORT/System/Info/Public" >/dev/null 2>&1; then
+    if ! kill -0 "$fixture_pid" 2>/dev/null; then
+        echo "Screenshot fixture server exited before becoming ready" >&2
+        wait "$fixture_pid" 2>/dev/null || true
+        exit 1
+    fi
+    if curl --fail --silent --show-error --connect-timeout 1 --max-time 1 "http://127.0.0.1:$FIXTURE_PORT/System/Info/Public" >/dev/null 2>&1; then
         fixture_ready=1
         break
     fi
