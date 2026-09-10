@@ -15,8 +15,8 @@
 static size_t rebuild(const JellyfinItem& item, const PlayerTrackState& state, int iterations) {
     size_t checksum = 0;
     for (int i = 0; i < iterations; ++i) {
-        const std::string audio = "AUDIO  " + audioTrackLabel(item, state.selectedAudioServerIndex());
-        const std::string subtitle = "SUBTITLES  " + subtitleTrackLabel(item, state);
+        const std::string audio = "Audio  " + audioTrackLabel(item, state.selectedAudioServerIndex());
+        const std::string subtitle = "Subtitles  " + subtitleTrackLabel(item, state);
         checksum += consume(audio, subtitle);
     }
     return checksum;

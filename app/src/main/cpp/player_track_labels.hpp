@@ -78,8 +78,8 @@ public:
         subtitleBusy_ = state.subtitleBusy();
         subtitleEnabled_ = state.subtitleEnabled();
         hasCues_ = hasCues;
-        audio = "AUDIO  " + audioTrackLabel(item, audioIndex_);
-        subtitle = "SUBTITLES  " + subtitleTrackLabel(item, state);
+        audio = "Audio  " + audioTrackLabel(item, audioIndex_);
+        subtitle = "Subtitles  " + subtitleTrackLabel(item, state);
     }
 
     void clear() {

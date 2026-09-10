@@ -29,16 +29,16 @@ int main() {
 
     PlayerControlLabelCache cache;
     cache.update(item, state);
-    assert(cache.audio == "AUDIO  JPN 2/2");
-    assert(cache.subtitle == "SUBTITLES  ENG");
+    assert(cache.audio == "Audio  JPN 2/2");
+    assert(cache.subtitle == "Subtitles  ENG");
 
     state.setSelectedSubtitleServerIndex(-1);
     cache.update(item, state);
-    assert(cache.subtitle == "SUBTITLES  OFF");
+    assert(cache.subtitle == "Subtitles  OFF");
 
     std::vector<SubtitleCue> cues{{0, 1000, "hello"}};
     state.applySubtitle(4, "fra", std::move(cues));
     cache.update(item, state);
-    assert(cache.subtitle == "SUBTITLES  FRA 2/2");
+    assert(cache.subtitle == "Subtitles  FRA 2/2");
     return 0;
 }

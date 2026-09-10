@@ -189,11 +189,9 @@ Renderer::PreparedFontAtlas Renderer::prepareFontAtlas(JavaVM* vm, jobject activ
             }
             AndroidBitmap_unlockPixels(env, bitmap);
             for (size_t pixel = 0; pixel + 3 < prepared.rgba.size(); pixel += 4) {
-                if (prepared.rgba[pixel + 3] != 0) {
-                    prepared.rgba[pixel] = 255;
-                    prepared.rgba[pixel + 1] = 255;
-                    prepared.rgba[pixel + 2] = 255;
-                }
+                prepared.rgba[pixel] = 255;
+                prepared.rgba[pixel + 1] = 255;
+                prepared.rgba[pixel + 2] = 255;
             }
         }
         env->DeleteLocalRef(bitmap);
@@ -898,11 +896,9 @@ GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
         auto* rgba = static_cast<uint8_t*>(pixels);
         for (size_t pixel = 0; pixel < pixelCount; ++pixel) {
             const size_t offset = pixel * 4;
-            if (rgba[offset + 3] != 0) {
-                rgba[offset] = 255;
-                rgba[offset + 1] = 255;
-                rgba[offset + 2] = 255;
-            }
+            rgba[offset] = 255;
+            rgba[offset + 1] = 255;
+            rgba[offset + 2] = 255;
         }
         texture = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), rgba);
     } else {
@@ -916,11 +912,9 @@ GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
         }
         for (size_t pixel = 0; pixel < pixelCount; ++pixel) {
             const size_t offset = pixel * 4;
-            if (packed[offset + 3] != 0) {
-                packed[offset] = 255;
-                packed[offset + 1] = 255;
-                packed[offset + 2] = 255;
-            }
+            packed[offset] = 255;
+            packed[offset + 1] = 255;
+            packed[offset + 2] = 255;
         }
         texture = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), packed.data());
     }

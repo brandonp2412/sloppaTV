@@ -5,6 +5,23 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <string>
+
+static std::array<std::string, 30> allSettingValues(
+    const AppSettings& settings,
+    int maxAudioOutputChannels,
+    std::string_view externalPlayer,
+    std::string_view username,
+    bool advanced
+) {
+    std::array<std::string, 30> values;
+    for (int index = 0; index < static_cast<int>(values.size()); ++index) {
+        values[static_cast<size_t>(index)] = settingValue(
+            settings, index, maxAudioOutputChannels, externalPlayer, username, advanced
+        );
+    }
+    return values;
+}
 
 int main(int argc, char** argv) {
     const int iterations = argc > 1 ? std::atoi(argv[1]) : 500000;
@@ -24,7 +41,7 @@ int main(int argc, char** argv) {
             checksum += settingValue(settings, index, 6, "MPV", "viewer", false).size();
         }
 #else
-        const auto values = settingsValues(settings, 6, "MPV", "viewer", false);
+        const auto values = allSettingValues(settings, 6, "MPV", "viewer", false);
         for (const int index : visible) checksum += values[static_cast<size_t>(index)].size();
 #endif
     }
