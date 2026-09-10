@@ -172,6 +172,18 @@ constexpr bool postSeekPositionFailed(
         && !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs, toleranceMs);
 }
 
+constexpr bool shouldFallbackAfterUnseekableSeek(
+    bool mediaSeekable,
+    int observedPositionMs,
+    int targetPositionMs,
+    bool seekFailureMatured
+) {
+    return targetPositionMs >= 0
+        && !mediaSeekable
+        && !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs)
+        && seekFailureMatured;
+}
+
 constexpr int clampSeekPositionMs(int64_t positionMs) {
     return static_cast<int>(std::clamp<int64_t>(positionMs, 0, std::numeric_limits<int>::max()));
 }

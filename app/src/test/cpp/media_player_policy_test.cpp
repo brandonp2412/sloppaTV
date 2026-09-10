@@ -99,6 +99,12 @@ int main() {
     assert(!postSeekPositionFailed(10'000, 20'000, 1'499));
     assert(postSeekPositionFailed(10'000, 20'000, 1'500));
     assert(!postSeekPositionFailed(20'800, 20'000, 1'500));
+    assert(!shouldFallbackAfterUnseekableSeek(false, 10'000, 20'000, false));
+    assert(shouldFallbackAfterUnseekableSeek(false, 10'000, 20'000, true));
+    assert(!shouldFallbackAfterUnseekableSeek(true, 10'000, 20'000, true));
+    assert(!shouldFallbackAfterUnseekableSeek(false, 20'800, 20'000, true));
+    assert(shouldFallbackAfterUnseekableSeek(false, 10'000, 0, true));
+    assert(!shouldFallbackAfterUnseekableSeek(false, 10'000, -1, true));
 
     assert(static_cast<int>(StartupStep::StartPlayback) < static_cast<int>(StartupStep::ReadTrackMetadata));
     return 0;

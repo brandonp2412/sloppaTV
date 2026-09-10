@@ -4232,11 +4232,15 @@ private:
                 const auto now = std::chrono::steady_clock::now();
                 const int observedPositionMs = player_.positionMs();
                 const bool mediaSeekable = player_.seekable();
-                const bool failedSeek = !mediaSeekable
-                    && !postSeekPositionMatchesTarget(observedPositionMs, recoveryTargetMs)
-                    && ((pendingSeekTargetMs >= 0)
-                        || playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
-                        || playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now));
+                const bool seekFailureMatured = pendingSeekTargetMs >= 0
+                    ? playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
+                    : playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now);
+                const bool failedSeek = shouldFallbackAfterUnseekableSeek(
+                    mediaSeekable,
+                    observedPositionMs,
+                    recoveryTargetMs,
+                    seekFailureMatured
+                );
                 if (failedSeek) {
                     std::scoped_lock lock(stateMutex_);
                     playerScreenState_.setPositionMs(recoveryTargetMs);
