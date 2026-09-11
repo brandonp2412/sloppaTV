@@ -12,6 +12,7 @@ enum class PlayerStatus {
     Preparing,
     Playing,
     Paused,
+    Ended,
     Error,
 };
 

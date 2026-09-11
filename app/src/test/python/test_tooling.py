@@ -391,6 +391,19 @@ class WaydroidToolingTest(unittest.TestCase):
             self.assertEqual(adb.call_args_list[1].args, ("wait-for-device",))
             self.assertEqual(adb.call_args_list[2].args[:2], ("pull", "/sdcard/screen.png"))
 
+    def test_screencap_stream_retries_without_sdcard_staging(self) -> None:
+        failure = subprocess.TimeoutExpired(["adb", "exec-out", "screencap"], 30)
+        png = b"\x89PNG\r\n\x1a\nfixture"
+        with tempfile.TemporaryDirectory() as directory:
+            local = Path(directory) / "screen.png"
+            local.write_bytes(b"partial")
+            with patch.object(waydroid_e2e, "screencap_bytes", side_effect=[failure, png]), patch.object(
+                waydroid_e2e, "adb", return_value=""
+            ) as adb, patch.object(waydroid_e2e.time, "sleep"):
+                waydroid_e2e.screencap_with_reconnect(local)
+            self.assertEqual(local.read_bytes(), png)
+            adb.assert_called_once_with("wait-for-device", timeout=45.0)
+
     def test_ensure_awake_wakes_sleeping_target(self) -> None:
         with patch.object(
             waydroid_e2e,

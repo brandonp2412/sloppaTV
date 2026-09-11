@@ -17,6 +17,7 @@ int main() {
     assert(!state.playbackStartReported());
     assert(!state.progressReportDue(now + 9s));
     assert(state.progressReportDue(now + 10s));
+    assert(!state.progressReportDue(now + 10s, false));
     assert(state.markPlaybackStartReported());
     assert(!state.markPlaybackStartReported());
 
@@ -33,6 +34,7 @@ int main() {
     state.markProgressReport(now + 10s);
     assert(!state.progressReportDue(now + 19s));
     assert(state.progressReportDue(now + 20s));
+    assert(!state.progressReportDue(now + 20s, false));
 
     state.clearPlaybackStartReported();
     state.resetReadIntervals();

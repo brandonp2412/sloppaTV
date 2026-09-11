@@ -1,0 +1,26 @@
+{
+  "name": "bughunt-playback-recovery",
+  "steps": [
+    {"action": "restart", "wait_seconds": 2},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 1},
+    {"action": "text", "value": "http://127.0.0.1:1024", "wait_seconds": 0.5},
+    {"action": "key", "key": "BACK", "wait_seconds": 1},
+    {"action": "key", "key": "DPAD_DOWN"},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 0.5},
+    {"action": "text", "value": "viewer", "wait_seconds": 0.5},
+    {"action": "key", "key": "BACK", "wait_seconds": 1},
+    {"action": "key", "key": "DPAD_DOWN"},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 0.5},
+    {"action": "text", "value": "demo", "wait_seconds": 0.5},
+    {"action": "key", "key": "BACK", "wait_seconds": 1},
+    {"action": "key", "key": "DPAD_DOWN"},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 1},
+    {"action": "wait", "wait_seconds": 2},
+    {"action": "capture", "name": "bughunt-playback-home", "store": false},
+    {"action": "restart", "wait_seconds": 3},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 1.5},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 1.5},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 5},
+    {"action": "capture", "name": "bughunt-playback-recovered", "store": false}
+  ]
+}

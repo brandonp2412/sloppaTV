@@ -167,14 +167,12 @@ void NativeMediaSession::updateMetadata(
 }
 
 void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs) {
-    const bool keepScreenOn = state == MediaSessionState::Playing || state == MediaSessionState::Buffering;
-    if (!keepScreenOn_.has_value() || *keepScreenOn_ != keepScreenOn) {
+    const bool keepScreenOn = mediaSessionNeedsScreenOn(state);
+    if (shouldUpdateKeepScreenOn(keepScreenOn_, keepScreenOn)) {
         ScopedEnv scoped(vm_);
         JNIEnv* env = scoped.get();
-        if (env) {
-            setPlaybackKeepScreenOn(env, activity_, keepScreenOn);
-            keepScreenOn_ = keepScreenOn;
-        }
+        const bool updated = env && setPlaybackKeepScreenOn(env, activity_, keepScreenOn);
+        keepScreenOn_ = keepScreenOnAfterAttempt(keepScreenOn_, keepScreenOn, updated);
     }
     if (state == MediaSessionState::Stopped && !session_) return;
     if (!ensureSession()) return;
@@ -268,6 +266,10 @@ void NativeMediaSession::clear() {
     durationMs_ = -1;
     state_ = MediaSessionState::Stopped;
     lastPositionMs_ = -1;
+    {
+        std::scoped_lock lock(commandMutex_);
+        pendingCommand_.reset();
+    }
 
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();

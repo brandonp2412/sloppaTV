@@ -1,18 +1,13 @@
 #pragma once
 
+#include "media_session_policy.hpp"
+
 #include <jni.h>
 
 #include <cstdint>
 #include <mutex>
 #include <optional>
 #include <string>
-
-enum class MediaSessionState {
-    Stopped,
-    Buffering,
-    Playing,
-    Paused,
-};
 
 enum class MediaSessionCommandType {
     Play,

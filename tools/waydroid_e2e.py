@@ -207,15 +207,42 @@ def pull_with_reconnect(remote: str, local: Path, attempts: int = 4) -> None:
     raise RuntimeError(f"unable to pull {remote}")
 
 
+def screencap_bytes(timeout: float = 30.0) -> bytes:
+    result = subprocess.run(
+        ["adb", "-s", SERIAL, "exec-out", "screencap", "-p"],
+        check=True,
+        capture_output=True,
+        timeout=timeout,
+    )
+    return result.stdout
+
+
+def screencap_with_reconnect(local: Path, attempts: int = 4) -> None:
+    for attempt in range(1, attempts + 1):
+        try:
+            data = screencap_bytes()
+            if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+                raise RuntimeError("ADB screencap returned invalid PNG data")
+            local.write_bytes(data)
+            return
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, RuntimeError):
+            if local.exists():
+                local.unlink()
+            if attempt == attempts:
+                raise
+            print(f"ADB screencap interrupted; waiting for device before retry {attempt + 1}/{attempts}")
+            adb("wait-for-device", timeout=45.0)
+            time.sleep(1.0)
+    raise RuntimeError("unable to capture Android screenshot")
+
+
 def capture(name: str) -> Path:
     require_running()
     activity_dump = adb("shell", "dumpsys", "activity", "activities", capture=True, timeout=60.0)
     if not foreground_is_package(activity_dump, PACKAGE):
         raise RuntimeError(f"{PACKAGE} is not the foreground activity; refusing to capture {name}")
-    remote = f"/sdcard/{name}.png"
     local = ARTIFACTS / f"{name}.png"
-    adb("shell", "screencap", "-p", remote)
-    pull_with_reconnect(remote, local)
+    screencap_with_reconnect(local)
     return local
 
 

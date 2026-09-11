@@ -44,8 +44,9 @@ public:
         lastPlaybackDurationProbe_ = {};
     }
 
-    [[nodiscard]] bool progressReportDue(TimePoint now) const {
-        return lastProgressReport_ == TimePoint{} || now - lastProgressReport_ >= std::chrono::seconds(10);
+    [[nodiscard]] bool progressReportDue(TimePoint now, bool playbackAdvancing = true) const {
+        return playbackAdvancing
+            && (lastProgressReport_ == TimePoint{} || now - lastProgressReport_ >= std::chrono::seconds(10));
     }
     void markProgressReport(TimePoint now) { lastProgressReport_ = now; }
 

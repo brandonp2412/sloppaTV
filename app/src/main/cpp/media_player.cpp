@@ -742,6 +742,7 @@ PlayerStatus NativeMediaPlayer::status() const {
     // clears it; otherwise a later property snapshot can overwrite Error with
     // Preparing before the app's playback recovery tick observes the failure.
     if (cachedStatus_ == PlayerStatus::Error && !error_.empty()) return PlayerStatus::Error;
+    if (cachedStatus_ == PlayerStatus::Ended) return PlayerStatus::Ended;
 
     while (true) {
         MpvEvent* event = symbols_->waitEvent(mpv_, 0.0);
@@ -764,8 +765,11 @@ PlayerStatus NativeMediaPlayer::status() const {
                 error_ = std::string("mpv playback ended with error: ") + (message ? message : "unknown");
                 cachedStatus_ = PlayerStatus::Error;
                 __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error_.c_str());
-                return cachedStatus_;
+            } else {
+                cachedStatus_ = PlayerStatus::Ended;
+                __android_log_print(ANDROID_LOG_INFO, kTag, "Embedded playback reached end of file");
             }
+            return cachedStatus_;
         }
     }
     // Playback failures are terminal for the current mpv load. Another caller
@@ -801,7 +805,7 @@ PlayerStatus NativeMediaPlayer::status() const {
     cachedSubtitleText_ = getStringPropertyLocked("sub-text");
 
     if (haveEof && eof) {
-        cachedStatus_ = PlayerStatus::Paused;
+        cachedStatus_ = PlayerStatus::Ended;
     } else if (haveIdle && idle && !haveDuration) {
         cachedStatus_ = PlayerStatus::Preparing;
     } else if (!havePosition && !haveDuration) {

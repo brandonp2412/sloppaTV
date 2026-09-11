@@ -134,6 +134,15 @@ public:
         return item == items_.end() ? -1 : static_cast<int>(std::distance(items_.begin(), item));
     }
 
+    bool updateCachedUserData(const JellyfinItem& updated) {
+        auto* item = itemAt(findItemIndex(updated.id));
+        if (!item) return false;
+        item->favorite = updated.favorite;
+        item->played = updated.played;
+        item->positionTicks = updated.positionTicks;
+        return true;
+    }
+
     void replace(std::vector<JellyfinItem> items, int currentIndex) {
         items_ = std::move(items);
         currentIndex_ = items_.empty() ? -1 : std::clamp(currentIndex, 0, size() - 1);

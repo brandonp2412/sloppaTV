@@ -590,6 +590,7 @@ private:
                     const bool preservedPlayer = reusedRendererContext
                         && videoSurface_.ready()
                         && restoreStatus != PlayerStatus::Idle
+                        && restoreStatus != PlayerStatus::Ended
                         && restoreStatus != PlayerStatus::Error;
                     if (preservedPlayer) {
                         if (shouldResumePlayback) player_.play();
@@ -2810,6 +2811,7 @@ private:
         for (auto& item : browseState_.items()) apply(item);
         for (auto& item : searchState_.results()) apply(item);
         detailsState_.updateCachedUserData(updated);
+        queueState_.updateCachedUserData(updated);
 
         for (auto& row : home_.rows) {
             if (row.title == "Favorites") {
@@ -3332,7 +3334,7 @@ private:
         syncNextPlaybackFromQueue();
     }
 
-    void playQueuedIndexAsync(int index, bool restartCurrent = false) {
+    void playQueuedIndexAsync(int index, bool restartCurrent = false, bool replacingCompleted = false) {
         if (loading_ || index < 0 || index >= queueState_.size() || !session_.valid()) return;
         if (index == queueState_.currentIndex() && screen_ == Screen::Player && !restartCurrent) {
             queueState_.closeOverlay();
@@ -3341,7 +3343,7 @@ private:
 
         const Screen originScreen = screen_;
         const bool replacingPlayer = screen_ == Screen::Player && !activePlaybackItem_.id.empty();
-        if (replacingPlayer) releaseActivePlayback(true);
+        if (replacingPlayer) releaseActivePlayback(true, replacingCompleted);
         const int previousQueueIndex = queueState_.currentIndex();
         queueState_.closeOverlay();
         loading_ = true;
@@ -3700,19 +3702,28 @@ private:
         }
     }
 
-    void releaseActivePlayback(bool reportStop) {
+    void releaseActivePlayback(bool reportStop, bool completed = false) {
         requestEpochs_.playback.invalidate();
         if (player_.status() == PlayerStatus::Playing || player_.status() == PlayerStatus::Paused) {
             refreshPlaybackTelemetry(true);
         }
-        const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
         const auto session = session_;
         const auto item = activePlaybackItem_;
         const auto target = activeTarget_;
+        const int64_t ticks = completed && item.runtimeTicks > 0
+            ? item.runtimeTicks
+            : playbackTicksFromPositionMs(playerScreenState_.positionMs());
         const bool shouldReport = reportStop && telemetryState_.playbackStartReported() && session.valid()
             && !item.id.empty() && !target.url.empty();
-        if (!item.id.empty() && detail_.id == item.id) {
-            detail_.positionTicks = ticks;
+        if (!item.id.empty()) {
+            JellyfinItem updated = item;
+            updated.positionTicks = completed ? 0 : ticks;
+            if (completed) updated.played = true;
+            updateCachedUserData(updated);
+            if (detail_.id == item.id) {
+                detail_.played = updated.played;
+                detail_.positionTicks = updated.positionTicks;
+            }
         }
         player_.stop();
         playbackPreparingSince_ = {};
@@ -3738,7 +3749,7 @@ private:
 
     void queueAutoplayNext(JellyfinItem nextItem) {
         const int queuedNextIndex = queueState_.autoplayAdvanceIndex(nextItem);
-        releaseActivePlayback(true);
+        releaseActivePlayback(true, true);
         continuationState_.incrementAutoplayChain();
         loading_ = true;
         transitionState_.setLoading(true);
@@ -3790,7 +3801,7 @@ private:
     }
 
     void showStillWatching(JellyfinItem nextItem) {
-        releaseActivePlayback(true);
+        releaseActivePlayback(true, true);
         continuationState_.resetAutoplayChain();
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
@@ -4151,19 +4162,32 @@ private:
             return;
         }
 
+        const bool playbackCompleted = result.completionKnown && result.completed;
         std::optional<int64_t> positionTicks;
         if (result.positionMs >= 0) {
             positionTicks = static_cast<int64_t>(result.positionMs) * 10000;
-        } else if (result.completionKnown && result.completed && completed.item.runtimeTicks > 0) {
+        } else if (playbackCompleted && completed.item.runtimeTicks > 0) {
             positionTicks = completed.item.runtimeTicks;
         }
-        if (positionTicks) {
-            const int64_t boundedTicks = completed.item.runtimeTicks > 0
-                ? std::clamp<int64_t>(*positionTicks, 0, completed.item.runtimeTicks)
-                : std::max<int64_t>(0, *positionTicks);
-            positionTicks = boundedTicks;
+        if (positionTicks || playbackCompleted) {
+            JellyfinItem updated = completed.item;
+            if (positionTicks) {
+                const int64_t boundedTicks = completed.item.runtimeTicks > 0
+                    ? std::clamp<int64_t>(*positionTicks, 0, completed.item.runtimeTicks)
+                    : std::max<int64_t>(0, *positionTicks);
+                positionTicks = boundedTicks;
+                updated.positionTicks = boundedTicks;
+            }
+            if (playbackCompleted) {
+                updated.played = true;
+                updated.positionTicks = 0;
+            }
             std::scoped_lock lock(stateMutex_);
-            if (detail_.id == completed.item.id) detail_.positionTicks = boundedTicks;
+            updateCachedUserData(updated);
+            if (detail_.id == completed.item.id) {
+                detail_.played = updated.played;
+                detail_.positionTicks = updated.positionTicks;
+            }
         }
         const JellyfinSession reportSession = session_;
         const JellyfinItem reportItem = completed.item;
@@ -4291,9 +4315,13 @@ private:
             stopPlayback();
             return;
         }
-        if (status != PlayerStatus::Playing && status != PlayerStatus::Paused) return;
+        const bool playbackEnded = status == PlayerStatus::Ended;
+        if (!playbackEnded && status != PlayerStatus::Playing && status != PlayerStatus::Paused) return;
+        if (playbackEnded && playerScreenState_.durationMs() > 0) {
+            playerScreenState_.setPositionMs(playerScreenState_.durationMs());
+        }
 
-        if (activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
+        if (!playbackEnded && activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
             const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
             const int recoveryTargetMs = pendingSeekTargetMs >= 0
                 ? pendingSeekTargetMs
@@ -4330,11 +4358,13 @@ private:
             }
         }
 
-        refreshPlaybackTelemetry();
-        mediaSession_.updateState(
-            status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
-            playerScreenState_.positionMs()
-        );
+        if (!playbackEnded) {
+            refreshPlaybackTelemetry();
+            mediaSession_.updateState(
+                status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
+                playerScreenState_.positionMs()
+            );
+        }
         if (!playbackSessionState_.mediaSegmentsRequested()) requestMediaSegmentsAsync();
         if (telemetryState_.markPlaybackStartReported()) {
             const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
@@ -4350,7 +4380,7 @@ private:
             });
         }
         const auto now = std::chrono::steady_clock::now();
-        if (telemetryState_.progressReportDue(now)) {
+        if (telemetryState_.progressReportDue(now, status == PlayerStatus::Playing)) {
             telemetryState_.markProgressReport(now);
             reportProgressAsync(false);
         }
@@ -4358,14 +4388,15 @@ private:
             && playerScreenState_.positionMs() >= 30000) {
             requestNextEpisodeAsync();
         }
-        if (playerScreenState_.durationMs() <= 1000
-            || playerScreenState_.positionMs() < playerScreenState_.durationMs() - 1000) {
+        if (!playbackEnded
+            && (playerScreenState_.durationMs() <= 1000
+                || playerScreenState_.positionMs() < playerScreenState_.durationMs() - 1000)) {
             return;
         }
         if (queueState_.currentIndex() >= 0 && queueState_.repeatMode() != QueueRepeatMode::Off) {
             const int next = queueState_.nextIndex(false);
-            if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex());
-            else stopPlayback();
+            if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex(), true);
+            else stopPlayback(true);
         } else if (continuationState_.nextItem()) {
             JellyfinItem next = *continuationState_.nextItem();
             if (shouldAutoplayNextEpisode(settings_.autoplayNext, continuationState_.autoplayChainCount(), settings_.stillWatchingAfter)) {
@@ -4374,7 +4405,7 @@ private:
                 showStillWatching(std::move(next));
             }
         } else {
-            stopPlayback();
+            stopPlayback(true);
             continuationState_.resetAutoplayChain();
         }
     }
@@ -4421,9 +4452,9 @@ private:
         });
     }
 
-    void stopPlayback() {
+    void stopPlayback(bool completed = false) {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
-        releaseActivePlayback(true);
+        releaseActivePlayback(true, completed);
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
         trackState_.clearLanguagePreferences();
