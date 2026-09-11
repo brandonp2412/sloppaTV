@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import struct
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 ANDROID = "{http://schemas.android.com/apk/res/android}"
+
+
+def png_dimensions(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    if data[:8] != b"\x89PNG\r\n\x1a\n" or data[12:16] != b"IHDR":
+        raise AssertionError(f"Expected PNG launcher asset: {path}")
+    return struct.unpack(">II", data[16:24])
 
 
 class AndroidTvManifestTest(unittest.TestCase):
@@ -27,6 +35,13 @@ class AndroidTvManifestTest(unittest.TestCase):
             for category in self.activity.findall("./intent-filter/category")
         }
         self.assertIn("android.intent.category.LEANBACK_LAUNCHER", categories)
+
+    def test_launcher_assets_match_google_play_tv_dimensions(self) -> None:
+        self.assertEqual(self.application.get(ANDROID + "icon"), "@mipmap/ic_launcher")
+        icon = ROOT / "app" / "src" / "main" / "res" / "mipmap-nodpi" / "ic_launcher.png"
+        banner = ROOT / "app" / "src" / "main" / "res" / "drawable-xhdpi" / "sloppatv_banner.png"
+        self.assertEqual(png_dimensions(icon), (512, 512))
+        self.assertEqual(png_dimensions(banner), (320, 180))
 
     def test_native_activity_keeps_tv_system_bars_hidden(self) -> None:
         source = (ROOT / "app" / "src" / "main" / "java" / "app" / "sloppatv" / "SloppaNativeActivity.java").read_text()
