@@ -8,3 +8,4 @@
 
 JellyfinItem parseJellyfinItem(const nlohmann::json& value);
 std::vector<JellyfinItem> parseJellyfinItems(const nlohmann::json& values);
+std::vector<JellyfinMediaSegment> parseJellyfinMediaSegments(const nlohmann::json& values);

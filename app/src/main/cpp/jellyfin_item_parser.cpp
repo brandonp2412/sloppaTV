@@ -212,3 +212,22 @@ std::vector<JellyfinItem> parseJellyfinItems(const json& values) {
     }
     return items;
 }
+
+std::vector<JellyfinMediaSegment> parseJellyfinMediaSegments(const json& values) {
+    std::vector<JellyfinMediaSegment> segments;
+    if (!values.is_array()) return segments;
+    segments.reserve(values.size());
+    for (const auto& value : values) {
+        if (!value.is_object()) continue;
+        JellyfinMediaSegment segment;
+        segment.type = scalarValueOr(value, "Type", std::string{});
+        segment.startTicks = scalarValueOr(value, "StartTicks", static_cast<int64_t>(0));
+        segment.endTicks = scalarValueOr(value, "EndTicks", static_cast<int64_t>(0));
+        if (segment.type.empty() || segment.startTicks < 0 || segment.endTicks <= segment.startTicks) continue;
+        segments.push_back(std::move(segment));
+    }
+    std::sort(segments.begin(), segments.end(), [](const auto& left, const auto& right) {
+        return left.startTicks < right.startTicks;
+    });
+    return segments;
+}
