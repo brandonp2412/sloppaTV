@@ -171,8 +171,7 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
     if (!keepScreenOn_.has_value() || *keepScreenOn_ != keepScreenOn) {
         ScopedEnv scoped(vm_);
         JNIEnv* env = scoped.get();
-        if (env) {
-            setPlaybackKeepScreenOn(env, activity_, keepScreenOn);
+        if (env && setPlaybackKeepScreenOn(env, activity_, keepScreenOn)) {
             keepScreenOn_ = keepScreenOn;
         }
     }
