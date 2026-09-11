@@ -332,13 +332,13 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
     } options[] = {
         {"config", "no", true},
         {"profile", "fast", false},
-        // Use Android/EGL rather than mediacodec_embed. The GPU VO can still use
-        // zero-copy MediaCodec when the device supports it, but unlike
-        // mediacodec_embed it can render software-decoded frames when a codec
-        // advertises support and then fails to initialize at runtime.
-        {"vo", "gpu", true},
-        {"gpu-context", "android", true},
-        {"hwdec", "mediacodec,no", true},
+        // Let MediaCodec render directly into the Android SurfaceTexture. Routing
+        // zero-copy MediaCodec through mpv's Android GPU VO corrupts 10-bit HEVC
+        // output on the Google TV Streamer's MediaTek decoder (solid/flashing
+        // colours instead of picture frames). mediacodec_embed keeps the decoder
+        // surface path native and avoids that extra EGL handoff.
+        {"vo", "mediacodec_embed", true},
+        {"hwdec", "mediacodec", true},
         {"hwdec-codecs", "all", true},
         {"vd-lavc-dr", "auto", false},
         {"vd-lavc-film-grain", "auto", false},
