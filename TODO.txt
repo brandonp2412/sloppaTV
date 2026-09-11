@@ -1,0 +1,14 @@
+- PERFORMANCE.md should not be a historical list of past performance reports.
+  The past is sufficiently recorded in Git.
+- Use astral suite for the python suite and make sure they pass ty checks etc
+- Shellcheck on the ci_screenshots.sh
+- Some top level functions need more spacing e.g. in @account_screen.hpp each
+of those funcs should have a newline between them (some do, some dont). Do it
+everywhere.
+- Are these variable names with trailing underscores a C++ idiom? or should we
+rename all that.
+- What's up with all these Shaders in renderer.cpp is that the best way to do
+that?
+- Apply some kind of automated formatter + linter on all cpp and .hpp code
+- Is it normal to have third party libs pasted in like in src/main/cpp/third_party?
+or are we supposed to be using some kind of package manager?
