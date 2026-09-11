@@ -4,6 +4,7 @@
 
 #include <cctype>
 #include <string>
+#include <string_view>
 
 inline std::string trimExternalText(std::string value) {
     const auto first = value.find_first_not_of(" \t\r\n");
@@ -15,6 +16,12 @@ inline std::string trimExternalText(std::string value) {
 inline std::string normalizeJellyfinItemId(std::string value) {
     value = trimExternalText(std::move(value));
     if (value.empty()) return {};
+
+    constexpr std::string_view deepLinkPrefix = "sloppatv://item/";
+    if (value.starts_with(deepLinkPrefix)) {
+        value.erase(0, deepLinkPrefix.size());
+        if (value.find_first_of("/?#") != std::string::npos) return {};
+    }
 
     std::string compact;
     compact.reserve(32);

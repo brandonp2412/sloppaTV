@@ -6,6 +6,9 @@ int main() {
     assert(normalizeJellyfinItemId("becd2d781967b8036ee6f144014fb009") == "becd2d781967b8036ee6f144014fb009");
     assert(normalizeJellyfinItemId("BECD2D78-1967-B803-6EE6-F144014FB009") == "becd2d781967b8036ee6f144014fb009");
     assert(normalizeJellyfinItemId("  becd2d781967b8036ee6f144014fb009\n") == "becd2d781967b8036ee6f144014fb009");
+    assert(normalizeJellyfinItemId("sloppatv://item/becd2d781967b8036ee6f144014fb009") == "becd2d781967b8036ee6f144014fb009");
+    assert(normalizeJellyfinItemId("sloppatv://item/BECD2D78-1967-B803-6EE6-F144014FB009") == "becd2d781967b8036ee6f144014fb009");
+    assert(normalizeJellyfinItemId("sloppatv://item/becd2d781967b8036ee6f144014fb009?from=browser").empty());
     assert(normalizeJellyfinItemId("not-an-item-id").empty());
     assert(normalizeJellyfinItemId("https://example.invalid/item/becd2d781967b8036ee6f144014fb009").empty());
     assert(normalizeJellyfinItemId("becd2d781967b8036ee6f144014fb00").empty());
