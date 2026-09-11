@@ -1,0 +1,1 @@
+Fix the Android TV launcher icon so the artwork fills the full 512×512 icon space required by Google Play.
