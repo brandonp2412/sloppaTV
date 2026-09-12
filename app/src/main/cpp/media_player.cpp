@@ -659,6 +659,22 @@ bool NativeMediaPlayer::selectEmbeddedAudioOrdinal(int ordinal) {
     return mpv_ != nullptr;
 }
 
+bool NativeMediaPlayer::selectEmbeddedAudioStream(int streamIndex, int ordinal) {
+    if (streamIndex < 0 && ordinal < 0) return false;
+    std::scoped_lock lock(mutex_);
+    if (!mpv_) return false;
+    if (!selectTrackStreamIndexLocked("audio", "aid", streamIndex, ordinal)) return false;
+    pendingAudioOrdinal_ = -1;
+    __android_log_print(
+        ANDROID_LOG_INFO,
+        kTag,
+        "Selected embedded audio stream %d (fallback ordinal %d)",
+        streamIndex,
+        ordinal
+    );
+    return true;
+}
+
 bool NativeMediaPlayer::selectEmbeddedSubtitleStream(int streamIndex, int ordinal) {
     if (streamIndex < 0) return disableSubtitles();
     std::scoped_lock lock(mutex_);

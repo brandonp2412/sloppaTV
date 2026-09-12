@@ -40,6 +40,7 @@ public:
     void seekBy(int deltaMs);
     void seekTo(int positionMs);
     bool selectEmbeddedAudioOrdinal(int ordinal);
+    bool selectEmbeddedAudioStream(int streamIndex, int ordinal = -1);
     bool selectEmbeddedSubtitleStream(int streamIndex, int ordinal = -1);
     bool disableSubtitles();
     bool addExternalSubtitle(const std::string& url, bool select = true);

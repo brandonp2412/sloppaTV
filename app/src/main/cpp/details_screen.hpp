@@ -28,6 +28,8 @@ public:
         selectedSeason_ = {};
         episodes_.clear();
         episodeSelection_ = 0;
+        episodeContextFocused_ = false;
+        episodeContextSelection_ = 0;
     }
 
     void beginDetails() {
@@ -35,6 +37,12 @@ public:
         similar_.clear();
         similarSelection_ = 0;
         similarFocused_ = false;
+        seriesDetail_ = {};
+        seasons_.clear();
+        selectedSeason_ = {};
+        episodes_.clear();
+        episodeContextFocused_ = false;
+        episodeContextSelection_ = 0;
     }
 
     [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
@@ -45,11 +53,14 @@ public:
                 ? "KEEP WATCHING"
                 : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY"))
         );
-        if (item.type == "Series") result.emplace_back("EPISODES");
+        if (item.type == "Series") {
+            result.emplace_back("EPISODES");
+            result.emplace_back("PLAY ALL");
+        }
         result.emplace_back(item.favorite ? "UNFAVORITE" : "FAVORITE");
         result.emplace_back(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
         if (!item.people.empty()) result.emplace_back("CAST");
-        result.emplace_back("MORE");
+        if (item.type != "Series") result.emplace_back("MORE");
         result.emplace_back("BACK");
         return result;
     }
@@ -198,6 +209,34 @@ public:
         return selectedItem(episodes_, episodeSelection_);
     }
 
+    void setEpisodeSeriesContext(JellyfinItem series, std::vector<JellyfinItem> seasons) {
+        seriesDetail_ = std::move(series);
+        seasons_ = std::move(seasons);
+        episodeContextSelection_ = 0;
+        episodeContextFocused_ = false;
+    }
+    [[nodiscard]] bool hasEpisodeSeriesContext() const { return !seriesDetail_.id.empty(); }
+    [[nodiscard]] bool episodeContextFocused() const { return episodeContextFocused_; }
+    void setEpisodeContextFocused(bool focused) {
+        episodeContextFocused_ = focused && hasEpisodeSeriesContext();
+    }
+    [[nodiscard]] int episodeContextSelection() const { return episodeContextSelection_; }
+    [[nodiscard]] int episodeContextCount() const {
+        return hasEpisodeSeriesContext() ? static_cast<int>(seasons_.size()) + 1 : 0;
+    }
+    void moveEpisodeContext(int direction) {
+        const int count = episodeContextCount();
+        if (count <= 0) {
+            episodeContextSelection_ = 0;
+            return;
+        }
+        episodeContextSelection_ = std::clamp(episodeContextSelection_ + direction, 0, count - 1);
+    }
+    [[nodiscard]] const JellyfinItem* selectedEpisodeContextSeason() const {
+        const int index = episodeContextSelection_ - 1;
+        return selectedItem(seasons_, index);
+    }
+
     void updateCachedUserData(const JellyfinItem& updated) {
         auto apply = [&](JellyfinItem& item) {
             if (item.id != updated.id) return;
@@ -260,4 +299,6 @@ private:
     JellyfinItem selectedSeason_;
     std::vector<JellyfinItem> episodes_;
     int episodeSelection_ = 0;
+    bool episodeContextFocused_ = false;
+    int episodeContextSelection_ = 0;
 };

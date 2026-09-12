@@ -8,9 +8,9 @@ int main() {
     PlayerScreenState state;
     const auto now = PlayerScreenState::Clock::time_point{10s};
 
-    assert(PlayerScreenState::controlCount() == 3);
+    assert(PlayerScreenState::controlCount() == 5);
     assert(!state.controlsActive());
-    assert(state.controlSelection() == 0);
+    assert(state.controlSelection() == 1);
     assert(!state.overlayVisible(now));
 
     state.showControls(now);
@@ -20,9 +20,10 @@ int main() {
     state.moveControl(1);
     state.moveControl(1);
     state.moveControl(1);
-    assert(state.controlSelection() == 2);
+    state.moveControl(1);
+    assert(state.controlSelection() == 4);
     state.moveControl(-1);
-    assert(state.controlSelection() == 1);
+    assert(state.controlSelection() == 3);
     assert(state.shouldDismissOnBack(now + 20s));
     state.dismissOverlay(now + 20s);
     assert(!state.controlsActive());
@@ -31,6 +32,14 @@ int main() {
     state.beginPlayback(12'000, 60'000);
     assert(state.positionMs() == 12'000);
     assert(state.durationMs() == 60'000);
+    state.showSeekFeedback(30, now);
+    assert(state.seekFeedbackVisible(now));
+    assert(state.seekFeedbackSeconds() == 30);
+    assert(state.seekFeedbackAlpha(now + 300ms) == 1.0f);
+    assert(state.seekFeedbackAlpha(now + 575ms) > 0.0f);
+    assert(!state.seekFeedbackVisible(now + 850ms));
+    assert(state.seekFeedbackAlpha(now + 850ms) == 0.0f);
+
     state.beginSeek(30'000, now);
     assert(state.positionMs() == 30'000);
     assert(state.pendingSeekTargetMs() == 30'000);
@@ -79,11 +88,13 @@ int main() {
 
     state.resetSession();
     assert(!state.controlsActive());
-    assert(state.controlSelection() == 0);
+    assert(state.controlSelection() == 1);
     assert(state.positionMs() == 0);
     assert(state.durationMs() == 0);
     assert(state.pendingSeekTargetMs() == -1);
     assert(state.recentSeekTargetMs() == -1);
+    assert(!state.seekFeedbackVisible(now));
+    assert(state.seekFeedbackSeconds() == 0);
     assert(!state.windowRestorePending());
     assert(!state.resumeOnFocusRequested());
 

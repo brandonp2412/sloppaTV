@@ -22,6 +22,8 @@ int main() {
     const auto actions = state.actions(series, false);
     assert(actions.front() == "PLAY NEXT");
     assert(actions[1] == "EPISODES");
+    assert(actions[2] == "PLAY ALL");
+    assert(std::find(actions.begin(), actions.end(), "MORE") == actions.end());
     assert(actions.back() == "BACK");
 
     state.moveAction(1, static_cast<int>(actions.size()));
@@ -100,6 +102,15 @@ int main() {
     state.moveSeason(1, 0, 5);
     assert(state.selectedSeasonItem()->id == "season-2");
 
+    state.setEpisodeSeriesContext(series, {seasonOne, seasonTwo});
+    assert(state.hasEpisodeSeriesContext());
+    assert(state.episodeContextCount() == 3);
+    state.setEpisodeContextFocused(true);
+    assert(state.episodeContextFocused());
+    state.moveEpisodeContext(2);
+    assert(state.episodeContextSelection() == 2);
+    assert(state.selectedEpisodeContextSeason()->id == "season-2");
+
     state.beginSeason(seasonTwo);
     JellyfinItem episodeOne;
     episodeOne.id = "episode-1";
@@ -127,6 +138,8 @@ int main() {
     assert(state.personItems().empty());
     assert(state.seasons().empty());
     assert(state.episodes().empty());
+    assert(!state.episodeContextFocused());
+    assert(state.episodeContextSelection() == 0);
     assert(state.itemMenuSelection() == 0);
     return 0;
 }

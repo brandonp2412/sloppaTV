@@ -12,6 +12,15 @@ int main() {
     assert(relativeSeekPositionMs(10'000, -15'000, 60'000) == 0);
     assert(relativeSeekPositionMs(10'000, 15'000, 60'000) == 25'000);
     assert(relativeSeekPositionMs(55'000, 15'000, 60'000) == 60'000);
+    assert(heldSeekMultiplier(0) == 1);
+    assert(heldSeekMultiplier(3) == 2);
+    assert(heldSeekMultiplier(8) == 4);
+    assert(heldSeekMultiplier(14) == 8);
+    assert(heldSeekMultiplier(22) == 16);
+    assert(heldSeekMultiplier(32) == 32);
+    assert(heldSeekDeltaMs(15, 0) == 15'000);
+    assert(heldSeekDeltaMs(15, 14) == 120'000);
+    assert(heldSeekDeltaMs(15, 40) == 480'000);
     assert(relativeSeekPositionMs(std::numeric_limits<int>::max() - 100, 60'000, 0)
         == std::numeric_limits<int>::max());
     assert(playbackTicksFromPositionMs(-1) == 0);

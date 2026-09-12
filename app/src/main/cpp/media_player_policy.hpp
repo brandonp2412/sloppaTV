@@ -71,6 +71,21 @@ constexpr bool shouldAutoplayNextEpisode(bool autoplayEnabled, int completedAuto
     return completedAutoplays < threshold;
 }
 
+constexpr int heldSeekMultiplier(int repeatCount) {
+    if (repeatCount < 3) return 1;
+    if (repeatCount < 8) return 2;
+    if (repeatCount < 14) return 4;
+    if (repeatCount < 22) return 8;
+    if (repeatCount < 32) return 16;
+    return 32;
+}
+
+constexpr int64_t heldSeekDeltaMs(int seekSeconds, int repeatCount) {
+    return static_cast<int64_t>(std::max(0, seekSeconds))
+        * 1000
+        * heldSeekMultiplier(std::max(0, repeatCount));
+}
+
 constexpr int playbackPrepareTimeoutMs(bool transcoding) {
     return transcoding ? 30'000 : 15'000;
 }

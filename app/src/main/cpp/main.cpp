@@ -64,6 +64,7 @@
 #include <iomanip>
 #include <iterator>
 #include <mutex>
+#include <numeric>
 #include <optional>
 #include <random>
 #include <sstream>
@@ -674,6 +675,7 @@ private:
 
         const int32_t key = AKeyEvent_getKeyCode(event);
         const int32_t meta = AKeyEvent_getMetaState(event);
+        const int repeatCount = AKeyEvent_getRepeatCount(event);
         const auto inputNow = std::chrono::steady_clock::now();
         renderBurstUntil_ = inputNow + 150ms;
         std::scoped_lock lock(stateMutex_);
@@ -708,14 +710,13 @@ private:
         }
 
         if (screen_ == Screen::Player) {
-            handlePlayerKey(key);
+            handlePlayerKey(key, repeatCount);
             return 1;
         }
 
         if (screen_ == Screen::Home
             && homeState_.row() >= 0
             && (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)) {
-            const int repeatCount = AKeyEvent_getRepeatCount(event);
             if (repeatCount == 0) {
                 homeState_.beginCenterPress();
                 return 1;
@@ -1342,7 +1343,28 @@ private:
             popScreen(Screen::Home);
             return;
         }
+        if (isItemContextKey(key)) {
+            openItemMenu();
+            return;
+        }
         const auto actions = detailActions();
+        if (detailsState_.episodeContextFocused()) {
+            if (key == AKEYCODE_DPAD_UP) {
+                detailsState_.setEpisodeContextFocused(false);
+            } else if (key == AKEYCODE_DPAD_LEFT) {
+                detailsState_.moveEpisodeContext(-1);
+            } else if (key == AKEYCODE_DPAD_RIGHT) {
+                detailsState_.moveEpisodeContext(1);
+            } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+                if (detailsState_.episodeContextSelection() == 0) {
+                    const JellyfinItem series = detailsState_.seriesDetail();
+                    if (!series.id.empty()) openDetails(series, true);
+                } else if (const auto* season = detailsState_.selectedEpisodeContextSeason()) {
+                    openEpisodes(*season);
+                }
+            }
+            return;
+        }
         if (detailsState_.similarFocused()) {
             if (key == AKEYCODE_DPAD_UP) {
                 detailsState_.setSimilarFocused(false);
@@ -1359,12 +1381,15 @@ private:
             detailsState_.moveAction(-1, static_cast<int>(actions.size()));
         } else if (key == AKEYCODE_DPAD_RIGHT) {
             detailsState_.moveAction(1, static_cast<int>(actions.size()));
+        } else if (key == AKEYCODE_DPAD_DOWN && detail_.type == "Episode" && detailsState_.hasEpisodeSeriesContext()) {
+            detailsState_.setEpisodeContextFocused(true);
         } else if (key == AKEYCODE_DPAD_DOWN && !detailsState_.similar().empty()) {
             detailsState_.setSimilarFocused(true);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const std::string& action = actions[static_cast<size_t>(detailsState_.actionSelection())];
             if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING") beginPlayback();
             else if (action == "EPISODES") openSeasons();
+            else if (action == "PLAY ALL") beginSeriesPlayAll();
             else if (action == "FAVORITE" || action == "UNFAVORITE") toggleFavoriteAsync();
             else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") togglePlayedAsync();
             else if (action == "CAST") openCast();
@@ -1766,22 +1791,24 @@ private:
             ? 0
             : (static_cast<size_t>(std::distance(tracks.begin(), selected)) + 1) % tracks.size();
         rememberPlaybackAudioPreference(tracks[next].index);
+        refreshPlaybackTelemetry(true);
+        const int switchPositionMs = playerScreenState_.positionMs();
         const int autoSubtitleIndex = settings_.autoSubtitles
             ? autoSubtitleIndexForPlaybackItem(activePlaybackItem_, tracks[next].index)
             : trackState_.selectedSubtitleServerIndex();
         if (autoSubtitleIndex != trackState_.selectedSubtitleServerIndex()) {
-            restartPlaybackAt(playerScreenState_.positionMs(), tracks[next].index, autoSubtitleIndex);
+            restartPlaybackAt(switchPositionMs, tracks[next].index, autoSubtitleIndex);
             return;
         }
         if (activeTarget_.playMethod == PlaybackMethod::DirectPlay
-            && player_.selectEmbeddedAudioOrdinal(static_cast<int>(next))) {
+            && player_.selectEmbeddedAudioStream(tracks[next].index, static_cast<int>(next))) {
             trackState_.setSelectedAudioServerIndex(tracks[next].index);
             activeTarget_.audioStreamIndex = tracks[next].index;
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
             return;
         }
-        restartPlaybackAt(playerScreenState_.positionMs(), tracks[next].index, trackState_.selectedSubtitleServerIndex());
+        restartPlaybackAt(switchPositionMs, tracks[next].index, trackState_.selectedSubtitleServerIndex());
     }
 
     bool subtitleAllowed(const JellyfinSubtitleStream& subtitle) const {
@@ -2135,6 +2162,7 @@ private:
                 }
             }
         }
+        refreshPlaybackTelemetry(true);
         restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(), nextIndex);
     }
 
@@ -2356,17 +2384,19 @@ private:
 
     void activatePlayerControl() {
         switch (playerScreenState_.controlSelection()) {
-            case 0:
+            case 0: playAdjacentEpisode(-1); break;
+            case 1:
                 player_.togglePause();
                 reportProgressAsync(true);
                 break;
-            case 1: cycleAudioTrack(); break;
-            case 2: cycleSubtitleTrack(); break;
+            case 2: playAdjacentEpisode(1); break;
+            case 3: cycleAudioTrack(); break;
+            case 4: cycleSubtitleTrack(); break;
             default: break;
         }
     }
 
-    void handlePlayerKey(int32_t key) {
+    void handlePlayerKey(int32_t key, int repeatCount = 0) {
         const auto now = std::chrono::steady_clock::now();
         if (key == AKEYCODE_BACK) {
             if (playerScreenState_.shouldDismissOnBack(now)) playerScreenState_.dismissOverlay(now);
@@ -2392,28 +2422,33 @@ private:
         }
         if (key == AKEYCODE_DPAD_DOWN) {
             openQueueOverlay();
-        } else if (key == AKEYCODE_MEDIA_NEXT && queueState_.currentIndex() >= 0) {
-            const int next = queueState_.nextIndex(true);
-            if (next >= 0) playQueuedIndexAsync(next);
+        } else if (key == AKEYCODE_MEDIA_PREVIOUS) {
+            playAdjacentEpisode(-1);
+        } else if (key == AKEYCODE_MEDIA_NEXT) {
+            playAdjacentEpisode(1);
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && skipActiveMediaSegment()) {
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER || key == AKEYCODE_MEDIA_PLAY_PAUSE) {
             player_.togglePause();
             reportProgressAsync(true);
         } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_MEDIA_REWIND) {
+            const int64_t deltaMs = heldSeekDeltaMs(settings_.seekBackSeconds, repeatCount);
             const int targetMs = relativeSeekPositionMs(
                 playerScreenState_.positionMs(),
-                -static_cast<int64_t>(settings_.seekBackSeconds) * 1000,
+                -deltaMs,
                 playerScreenState_.durationMs()
             );
+            playerScreenState_.showSeekFeedback(-static_cast<int>(deltaMs / 1000), now);
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
         } else if (key == AKEYCODE_DPAD_RIGHT || key == AKEYCODE_MEDIA_FAST_FORWARD) {
+            const int64_t deltaMs = heldSeekDeltaMs(settings_.seekForwardSeconds, repeatCount);
             const int targetMs = relativeSeekPositionMs(
                 playerScreenState_.positionMs(),
-                static_cast<int64_t>(settings_.seekForwardSeconds) * 1000,
+                deltaMs,
                 playerScreenState_.durationMs()
             );
+            playerScreenState_.showSeekFeedback(static_cast<int>(deltaMs / 1000), now);
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
@@ -2869,6 +2904,17 @@ private:
         const JellyfinItem item = detail_;
         JellyfinHomeData previousHome = home_;
         HomeSelectionSnapshot previousHomeSelection = homeState_.snapshot(home_.rows);
+        int nextUpReplacementIndex = -1;
+        for (const auto& row : home_.rows) {
+            if (row.title != "Next Up") continue;
+            const auto current = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& homeItem) {
+                return homeItem.id == item.id;
+            });
+            if (current != row.items.end()) {
+                nextUpReplacementIndex = static_cast<int>(std::distance(row.items.begin(), current));
+            }
+            break;
+        }
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
@@ -2893,10 +2939,20 @@ private:
             item,
             desired,
             sessionEpoch,
+            nextUpReplacementIndex,
             previousHome = std::move(previousHome),
             previousHomeSelection = std::move(previousHomeSelection)
         ]() mutable {
             auto result = api_.setPlayed(session, item, desired);
+            std::optional<JellyfinItem> nextUpReplacement;
+            if (result.ok && desired && nextUpReplacementIndex >= 0
+                && item.type == "Episode" && !item.seriesId.empty()) {
+                auto next = api_.getNextUpForSeries(session, item.seriesId);
+                if (next.ok && !next.value.id.empty() && next.value.id != item.id) {
+                    auto detailed = api_.getItem(session, next.value.id);
+                    nextUpReplacement = detailed.ok ? std::move(detailed.value) : std::move(next.value);
+                }
+            }
             std::scoped_lock lock(stateMutex_);
             if (!requestEpochs_.session.active(sessionEpoch)) return;
             mutationLoading_ = false;
@@ -2911,6 +2967,24 @@ private:
                 if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) detail_ = item;
                 error_ = result.error;
                 return;
+            }
+            if (nextUpReplacement) {
+                const auto row = std::find_if(home_.rows.begin(), home_.rows.end(), [](const JellyfinHomeRow& candidate) {
+                    return candidate.title == "Next Up";
+                });
+                if (row != home_.rows.end()) {
+                    const bool alreadyPresent = std::any_of(row->items.begin(), row->items.end(), [&](const JellyfinItem& candidate) {
+                        return candidate.id == nextUpReplacement->id;
+                    });
+                    if (!alreadyPresent && !isHiddenFromHome(*nextUpReplacement)) {
+                        const auto insertAt = row->items.begin() + std::min<size_t>(
+                            static_cast<size_t>(std::max(0, nextUpReplacementIndex)),
+                            row->items.size()
+                        );
+                        row->items.insert(insertAt, std::move(*nextUpReplacement));
+                        clampHomeSelections();
+                    }
+                }
             }
             if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) {
                 detail_.played = desired;
@@ -3283,8 +3357,9 @@ private:
         });
     }
 
-    void openDetails(const JellyfinItem& item) {
-        pushScreen(Screen::Details);
+    void openDetails(const JellyfinItem& item, bool replaceCurrent = false) {
+        if (replaceCurrent) replaceScreen(Screen::Details);
+        else pushScreen(Screen::Details);
         continuationState_.setStillWatchingPrompt(false);
         detail_ = item;
         detailsState_.beginDetails();
@@ -3308,10 +3383,26 @@ private:
             }
 
             auto similar = api_.getSimilar(session, id, 18);
-            if (!requestEpochs_.content.active(generation) || !similar.ok) return;
+            if (!requestEpochs_.content.active(generation)) return;
+            if (similar.ok) {
+                std::scoped_lock lock(stateMutex_);
+                if (screen_ != Screen::Details || detail_.id != id) return;
+                detailsState_.setSimilar(std::move(similar.value));
+            }
+
+            std::string seriesId;
+            {
+                std::scoped_lock lock(stateMutex_);
+                if (screen_ != Screen::Details || detail_.id != id || detail_.type != "Episode") return;
+                seriesId = detail_.seriesId;
+            }
+            if (seriesId.empty()) return;
+            auto series = api_.getItem(session, seriesId);
+            auto seasons = api_.getSeasons(session, seriesId);
+            if (!requestEpochs_.content.active(generation) || !series.ok || !seasons.ok) return;
             std::scoped_lock lock(stateMutex_);
             if (screen_ != Screen::Details || detail_.id != id) return;
-            detailsState_.setSimilar(std::move(similar.value));
+            detailsState_.setEpisodeSeriesContext(std::move(series.value), std::move(seasons.value));
         });
     }
 
@@ -3401,6 +3492,149 @@ private:
             queueState_.setCurrentIndex(index);
             queueState_.setItemAt(index, queued);
             transitionState_.stage(std::move(target.value), std::move(queued));
+        });
+    }
+
+    void playPlayerItemAsync(JellyfinItem selected) {
+        if (loading_ || screen_ != Screen::Player || !session_.valid() || selected.id.empty()) return;
+        const JellyfinSession session = session_;
+        const auto audioPreference = trackState_.audioLanguagePreference();
+        const auto subtitlePreference = trackState_.subtitleLanguagePreference();
+        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+
+        queueState_.reset();
+        releaseActivePlayback(true, false);
+        loading_ = true;
+        transitionState_.setLoading(true);
+        continuationState_.setStillWatchingPrompt(false);
+        error_.clear();
+        const uint64_t generation = requestEpochs_.playback.begin();
+        tasks_.submit([
+            this,
+            session,
+            selected = std::move(selected),
+            audioPreference,
+            subtitlePreference,
+            maxStreamingBitrate,
+            maxAudioChannels,
+            playbackOverrides,
+            generation
+        ]() mutable {
+            auto detailed = api_.getItem(session, selected.id);
+            if (detailed.ok) selected = std::move(detailed.value);
+            const int audioStreamIndex = audioIndexForPlaybackItem(selected, audioPreference);
+            int subtitleStreamIndex = kSubtitleOffIndex;
+            {
+                std::scoped_lock lock(stateMutex_);
+                subtitleStreamIndex = subtitleIndexForPlaybackItem(selected, audioStreamIndex, subtitlePreference);
+            }
+            auto target = api_.resolvePlayback(
+                session,
+                selected,
+                maxStreamingBitrate,
+                maxAudioChannels,
+                playbackOverrides,
+                audioStreamIndex,
+                subtitleStreamIndex
+            );
+            if (!requestEpochs_.playback.active(generation)) return;
+            std::scoped_lock lock(stateMutex_);
+            loading_ = false;
+            transitionState_.setLoading(false);
+            if (screen_ != Screen::Player) return;
+            if (!target.ok) {
+                error_ = "EPISODE: " + target.error;
+                return;
+            }
+            detail_ = selected;
+            transitionState_.stage(std::move(target.value), std::move(selected));
+        });
+    }
+
+    void playAdjacentEpisode(int direction) {
+        if (direction == 0 || loading_ || screen_ != Screen::Player) return;
+        const int currentQueueIndex = queueState_.currentIndex();
+        if (currentQueueIndex >= 0) {
+            const int targetIndex = direction > 0
+                ? queueState_.nextIndex(true)
+                : currentQueueIndex - 1;
+            if (targetIndex >= 0 && targetIndex < queueState_.size()) {
+                playQueuedIndexAsync(targetIndex);
+                return;
+            }
+        }
+        if (direction > 0 && continuationState_.nextItem()) {
+            playPlayerItemAsync(*continuationState_.nextItem());
+            return;
+        }
+        if (adjacentEpisodeLookup_ || !session_.valid() || activePlaybackItem_.type != "Episode"
+            || activePlaybackItem_.seriesId.empty() || activePlaybackItem_.id.empty()) {
+            return;
+        }
+
+        adjacentEpisodeLookup_ = true;
+        const JellyfinSession session = session_;
+        const std::string currentItemId = activePlaybackItem_.id;
+        const std::string seriesId = activePlaybackItem_.seriesId;
+        const int currentSeason = activePlaybackItem_.parentIndexNumber;
+        const int currentEpisode = activePlaybackItem_.indexNumber;
+        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
+        tasks_.submit([this, session, currentItemId, seriesId, currentSeason, currentEpisode, direction] {
+            auto episodes = api_.getSeriesEpisodes(session, seriesId, 1000);
+            std::optional<JellyfinItem> adjacent;
+            if (episodes.ok) {
+                std::sort(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& left, const JellyfinItem& right) {
+                    if (left.parentIndexNumber != right.parentIndexNumber) return left.parentIndexNumber < right.parentIndexNumber;
+                    if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
+                    return left.name < right.name;
+                });
+                auto current = std::find_if(episodes.value.begin(), episodes.value.end(), [&](const JellyfinItem& candidate) {
+                    return candidate.id == currentItemId;
+                });
+                if (current == episodes.value.end() && currentSeason >= 0 && currentEpisode >= 0) {
+                    current = std::find_if(episodes.value.begin(), episodes.value.end(), [&](const JellyfinItem& candidate) {
+                        return sameEpisodeSlot(
+                            candidate.parentIndexNumber,
+                            candidate.indexNumber,
+                            currentSeason,
+                            currentEpisode
+                        );
+                    });
+                }
+                if (current != episodes.value.end()) {
+                    int candidateIndex = static_cast<int>(std::distance(episodes.value.begin(), current)) + direction;
+                    while (candidateIndex >= 0 && candidateIndex < static_cast<int>(episodes.value.size())) {
+                        const auto& candidate = episodes.value[static_cast<size_t>(candidateIndex)];
+                        const bool duplicateSlot = sameEpisodeSlot(
+                            candidate.parentIndexNumber,
+                            candidate.indexNumber,
+                            current->parentIndexNumber,
+                            current->indexNumber
+                        );
+                        const bool specialOutsideRegularRun = current->parentIndexNumber > 0 && candidate.parentIndexNumber <= 0;
+                        if (!duplicateSlot && !specialOutsideRegularRun) {
+                            adjacent = candidate;
+                            break;
+                        }
+                        candidateIndex += direction;
+                    }
+                }
+            }
+
+            std::scoped_lock lock(stateMutex_);
+            adjacentEpisodeLookup_ = false;
+            if (screen_ != Screen::Player || activePlaybackItem_.id != currentItemId) return;
+            if (!episodes.ok) {
+                showNotice("EPISODE LIST UNAVAILABLE", 2s);
+                return;
+            }
+            if (!adjacent) {
+                showNotice(direction < 0 ? "NO PREVIOUS EPISODE" : "NO NEXT EPISODE", 2s);
+                return;
+            }
+            playPlayerItemAsync(std::move(*adjacent));
         });
     }
 
@@ -6112,6 +6346,41 @@ private:
                 labelWidth
             );
         }
+        if (playerScreenState_.seekFeedbackVisible(now)) {
+            const int seconds = playerScreenState_.seekFeedbackSeconds();
+            const bool forward = seconds > 0;
+            const float fade = playerScreenState_.seekFeedbackAlpha(now);
+            const Color wash{1.0f, 1.0f, 1.0f, 0.18f * fade};
+            const Color glyph{1.0f, 1.0f, 1.0f, fade};
+            constexpr float ovalWidth = 620.0f;
+            constexpr float ovalHeight = 460.0f;
+            const float ovalX = forward ? 1600.0f : -300.0f;
+            constexpr float ovalY = 270.0f;
+            renderer_.roundedRect(ovalX, ovalY, ovalWidth, ovalHeight, ovalHeight * 0.5f, wash);
+            const float centerX = forward ? 1665.0f : 255.0f;
+            constexpr float centerY = 500.0f;
+            constexpr float arrowGap = 30.0f;
+            for (int arrow = 0; arrow < 3; ++arrow) {
+                const float offset = static_cast<float>(arrow - 1) * arrowGap;
+                if (forward) {
+                    const float x = centerX + 82.0f + offset;
+                    renderer_.triangle(x - 10.0f, centerY - 17.0f, x - 10.0f, centerY + 17.0f, x + 12.0f, centerY, glyph);
+                } else {
+                    const float x = centerX - 82.0f + offset;
+                    renderer_.triangle(x + 10.0f, centerY - 17.0f, x + 10.0f, centerY + 17.0f, x - 12.0f, centerY, glyph);
+                }
+            }
+            const std::string seekLabel = (seconds > 0 ? "+" : "") + std::to_string(seconds) + "s";
+            renderer_.textCentered(
+                centerX - 72.0f,
+                centerY - 24.0f,
+                144.0f,
+                48.0f,
+                2.35f,
+                seekLabel,
+                glyph
+            );
+        }
         if (!showOverlay) return;
 
         if (showNextUp && continuationState_.nextItem()) {
@@ -6174,8 +6443,9 @@ private:
             }
         }
         const std::string state = transitionState_.fallbackResolving() ? "Retrying playback" :
-            (transitionState_.loading() ? "Loading next episode" :
-            (status == PlayerStatus::Preparing ? "Loading" : ""));
+            (transitionState_.loading()
+                ? (activePlaybackItem_.id.empty() ? "Loading episode" : "Switching track")
+                : (status == PlayerStatus::Preparing ? "Loading" : ""));
         if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
 
         constexpr float progressX = 150.0f;
@@ -6197,18 +6467,29 @@ private:
         drawTrickplayPreview();
 
         if (playerScreenState_.controlsActive()) {
-            constexpr float controlWidth = 104.0f;
+            constexpr std::array<float, 5> controlWidths{112.0f, 112.0f, 112.0f, 300.0f, 340.0f};
             constexpr float controlHeight = 66.0f;
-            constexpr float controlGap = 24.0f;
+            constexpr float controlGap = 18.0f;
             constexpr float controlY = 925.0f;
-            const float controlGroupWidth = controlWidth * 3.0f + controlGap * 2.0f;
+            const float controlGroupWidth = std::accumulate(controlWidths.begin(), controlWidths.end(), 0.0f)
+                + controlGap * static_cast<float>(controlWidths.size() - 1);
             float x = (Renderer::logicalWidth() - controlGroupWidth) * 0.5f;
-            for (size_t i = 0; i < 3; ++i) {
+            for (size_t i = 0; i < controlWidths.size(); ++i) {
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
-                const auto bounds = drawButtonSurface(x, controlY, controlWidth, controlHeight, selected, i == 0);
+                const auto bounds = drawButtonSurface(x, controlY, controlWidths[i], controlHeight, selected, i == 1);
                 const float iconCenterX = std::round(bounds[0] + bounds[2] * 0.5f);
                 const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
-                if (i == 0) {
+                if (i == 0 || i == 2) {
+                    const bool forward = i == 2;
+                    const float center = iconCenterX;
+                    if (forward) {
+                        renderer_.triangle(center - 12.0f, iconCenterY - 14.0f, center - 12.0f, iconCenterY + 14.0f, center + 10.0f, iconCenterY, kText);
+                        renderer_.roundedRect(center + 13.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, kText);
+                    } else {
+                        renderer_.roundedRect(center - 17.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, kText);
+                        renderer_.triangle(center + 12.0f, iconCenterY - 14.0f, center + 12.0f, iconCenterY + 14.0f, center - 10.0f, iconCenterY, kText);
+                    }
+                } else if (i == 1) {
                     if (status == PlayerStatus::Paused) {
                         const float playLeft = iconCenterX - 22.0f / 3.0f;
                         renderer_.triangle(playLeft, iconCenterY - 13.0f, playLeft, iconCenterY + 13.0f, playLeft + 22.0f, iconCenterY, kText);
@@ -6217,28 +6498,34 @@ private:
                         renderer_.roundedRect(pauseLeft, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
                         renderer_.roundedRect(pauseLeft + 13.0f, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
                     }
-                } else if (i == 1) {
-                    const float iconX = iconCenterX - 15.0f;
+                } else if (i == 3) {
+                    constexpr float iconWidth = 36.0f;
+                    constexpr float gap = 14.0f;
+                    const std::string audioTrackLabel = playerTrackLabel(2);
+                    const std::string label = "Audio  " + std::string(materialLabel(audioTrackLabel));
+                    const std::string fitted = fitTextLines(label, 1.45f, bounds[2] - 78.0f, 1);
+                    const float textWidth = renderer_.textWidth(1.45f, fitted);
+                    const float groupWidth = iconWidth + gap + textWidth;
+                    const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
                     renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
                     renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
                     renderer_.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, kText);
                     renderer_.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, kText);
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], 1.45f, fitted, kText, textWidth);
                 } else {
-                    renderer_.roundedOutline(iconCenterX - 18.0f, iconCenterY - 13.0f, 36.0f, 26.0f, 6.0f, 2.0f, kText);
-                    renderer_.textCentered(iconCenterX - 18.0f, iconCenterY - 13.0f, 36.0f, 26.0f, 0.82f, "CC", kText);
+                    constexpr float iconWidth = 42.0f;
+                    constexpr float gap = 14.0f;
+                    const std::string subtitleTrackLabel = playerTrackLabel(4);
+                    const std::string label = "Subtitles  " + std::string(materialLabel(subtitleTrackLabel));
+                    const std::string fitted = fitTextLines(label, 1.45f, bounds[2] - 86.0f, 1);
+                    const float textWidth = renderer_.textWidth(1.45f, fitted);
+                    const float groupWidth = iconWidth + gap + textWidth;
+                    const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
+                    renderer_.roundedOutline(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 6.0f, 2.0f, kText);
+                    renderer_.textCentered(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 0.82f, "CC", kText);
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], 1.45f, fitted, kText, textWidth);
                 }
-                x += controlWidth + controlGap;
-            }
-
-            const int selectedControl = playerScreenState_.controlSelection();
-            if (selectedControl == 1 || selectedControl == 2) {
-                const int trackLabelIndex = selectedControl == 1 ? 2 : 4;
-                const std::string trackLabel(materialLabel(playerTrackLabel(trackLabelIndex)));
-                if (!trackLabel.empty()) {
-                    drawCenteredSingleLineFit(
-                        610.0f, 1004.0f, 700.0f, 42.0f, 1.35f,
-                        trackLabel, kSecondaryText, 8.0f, 2.0f);
-                }
+                x += controlWidths[i] + controlGap;
             }
         }
     }
@@ -6874,7 +7161,10 @@ private:
             : 1.0f;
         float actionX = contentX;
         for (size_t i = 0; i < actions.size(); ++i) {
-            const bool focused = !overlayOpen && !detailsState_.similarFocused() && detailsState_.actionSelection() == static_cast<int>(i);
+            const bool focused = !overlayOpen
+                && !detailsState_.similarFocused()
+                && !detailsState_.episodeContextFocused()
+                && detailsState_.actionSelection() == static_cast<int>(i);
             const float width = std::round(desiredActionWidth(actions[i]) * actionWidthScale);
             const bool primaryAction = i == 0;
             const auto bounds = drawButtonSurface(actionX, actionY, width, 64.0f, focused, primaryAction);
@@ -6891,8 +7181,45 @@ private:
             renderer_.roundedRect(contentX, 744.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, kFocus);
         }
 
-        const auto& similarItems = detailsState_.similar();
-        if (!similarItems.empty()) {
+        if (episode && detailsState_.hasEpisodeSeriesContext()) {
+            renderer_.text(
+                72.0f,
+                752.0f,
+                2.30f,
+                "Show & seasons",
+                detailsState_.episodeContextFocused() ? kText : kSecondaryText,
+                520.0f
+            );
+            const int count = detailsState_.episodeContextCount();
+            constexpr int visible = 5;
+            const int maxStart = std::max(0, count - visible);
+            const int start = std::clamp(detailsState_.episodeContextSelection() - 1, 0, maxStart);
+            constexpr float buttonWidth = 320.0f;
+            constexpr float buttonHeight = 72.0f;
+            constexpr float buttonGap = 26.0f;
+            constexpr float rowY = 825.0f;
+            for (int slot = 0; slot < visible; ++slot) {
+                const int index = start + slot;
+                if (index >= count) break;
+                const float x = 72.0f + static_cast<float>(slot) * (buttonWidth + buttonGap);
+                const bool focused = !overlayOpen
+                    && detailsState_.episodeContextFocused()
+                    && detailsState_.episodeContextSelection() == index;
+                const auto bounds = drawButtonSurface(x, rowY, buttonWidth, buttonHeight, focused, index == 0);
+                std::string label = "GO TO SHOW";
+                if (index > 0 && static_cast<size_t>(index - 1) < detailsState_.seasons().size()) {
+                    const auto& season = detailsState_.seasons()[static_cast<size_t>(index - 1)];
+                    label = season.name.empty() ? "SEASON " + std::to_string(index) : season.name;
+                }
+                drawCenteredSingleLineFit(
+                    bounds[0], bounds[1], bounds[2], bounds[3], 1.75f,
+                    materialLabel(label), index == 0 || focused ? kText : kSecondaryText,
+                    18.0f, 5.0f
+                );
+            }
+        } else {
+            const auto& similarItems = detailsState_.similar();
+            if (!similarItems.empty()) {
             // Keep the largest UI-text mode clear of the focused card's 10 px halo.
             // At y=760 the heading descenders can overlap the first card focus ring.
             renderer_.text(72.0f, 752.0f, 2.30f, "More like this", detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
@@ -6921,6 +7248,7 @@ private:
                 renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f,
                     fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, 1),
                     focused ? kText : kSecondaryText, cardWidth - 10.0f);
+                }
             }
         }
     }
@@ -7084,6 +7412,7 @@ private:
     DetailsScreenState detailsState_;
 
     PlaybackQueueState queueState_;
+    bool adjacentEpisodeLookup_ = false;
 
     ExternalPlaybackState externalPlaybackState_;
     PlaybackTransitionState transitionState_;

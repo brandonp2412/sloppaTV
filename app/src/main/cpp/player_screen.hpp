@@ -11,12 +11,15 @@ public:
     using Clock = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
 
-    static constexpr std::size_t controlCount() { return 3; }
+    static constexpr std::size_t controlCount() { return 5; }
 
     void resetSession() {
         controlsActive_ = false;
-        controlSelection_ = 0;
+        controlSelection_ = 1;
         overlayUntil_ = {};
+        seekFeedbackSeconds_ = 0;
+        seekFeedbackStarted_ = {};
+        seekFeedbackUntil_ = {};
         windowRestorePending_ = false;
         resumeOnFocus_ = false;
         resetPosition();
@@ -28,11 +31,14 @@ public:
         pendingSeekTargetMs_ = -1;
         lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
+        seekFeedbackSeconds_ = 0;
+        seekFeedbackStarted_ = {};
+        seekFeedbackUntil_ = {};
     }
 
     void beginPlayback(int positionMs, int durationMs) {
         controlsActive_ = false;
-        controlSelection_ = 0;
+        controlSelection_ = 1;
         positionMs_ = std::max(0, positionMs);
         durationMs_ = std::max(0, durationMs);
         pendingSeekTargetMs_ = -1;
@@ -45,7 +51,7 @@ public:
 
     void showControls(TimePoint now) {
         controlsActive_ = true;
-        controlSelection_ = 0;
+        controlSelection_ = 1;
         showOverlayFor(now, std::chrono::seconds(10));
     }
 
@@ -60,6 +66,26 @@ public:
     }
 
     [[nodiscard]] bool overlayVisible(TimePoint now) const { return now < overlayUntil_; }
+
+    void showSeekFeedback(int seconds, TimePoint now) {
+        seekFeedbackSeconds_ = seconds;
+        seekFeedbackStarted_ = now;
+        seekFeedbackUntil_ = now + std::chrono::milliseconds(850);
+    }
+
+    [[nodiscard]] bool seekFeedbackVisible(TimePoint now) const {
+        return seekFeedbackSeconds_ != 0 && now < seekFeedbackUntil_;
+    }
+
+    [[nodiscard]] int seekFeedbackSeconds() const { return seekFeedbackSeconds_; }
+
+    [[nodiscard]] float seekFeedbackAlpha(TimePoint now) const {
+        if (!seekFeedbackVisible(now)) return 0.0f;
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - seekFeedbackStarted_).count();
+        if (elapsed <= 300) return 1.0f;
+        const float fade = 1.0f - static_cast<float>(elapsed - 300) / 550.0f;
+        return std::clamp(fade, 0.0f, 1.0f);
+    }
 
     template <typename Duration>
     void showOverlayFor(TimePoint now, Duration duration) {
@@ -147,8 +173,11 @@ public:
 
 private:
     bool controlsActive_ = false;
-    int controlSelection_ = 0;
+    int controlSelection_ = 1;
     TimePoint overlayUntil_{};
+    int seekFeedbackSeconds_ = 0;
+    TimePoint seekFeedbackStarted_{};
+    TimePoint seekFeedbackUntil_{};
     int positionMs_ = 0;
     int durationMs_ = 0;
     int pendingSeekTargetMs_ = -1;
