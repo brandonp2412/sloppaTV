@@ -93,10 +93,12 @@ jobs:
               | tr -d ':' \
               | tr '[:lower:]' '[:upper:]'
           )"
-          expected_sha1="63D1345BF11526974C5D73F535578E51018D9B61"
+          expected_sha1="86636BB37031DC15310C37BCC52EEB058222EFDC"
+          echo "Signing SHA-1: $actual_sha1"
           test "$actual_sha1" = "$expected_sha1" || {
-            echo "::error::Signing secret is not the Google Play upload key for sloppaTV."
-            echo "::error::Expected SHA-1 63:D1:34:5B:F1:15:26:97:4C:5D:73:F5:35:57:8E:51:01:8D:9B:61."
+            echo "::error::Signing secret does not match Flexify's current Android release key."
+            echo "::error::Expected SHA-1 86:63:6B:B3:70:31:DC:15:31:0C:37:BC:C5:2E:EB:05:82:22:EF:DC."
+            echo "::error::Actual SHA-1 $actual_sha1."
             exit 1
           }
 
