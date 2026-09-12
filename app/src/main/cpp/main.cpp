@@ -2928,6 +2928,7 @@ private:
         if (desired) {
             for (auto& row : home_.rows) {
                 if (!homeRowDropsItemWhenPlayed(row.title)) continue;
+                if (row.title == "Next Up" && nextUpReplacementIndex >= 0) continue;
                 std::erase_if(row.items, [&](const JellyfinItem& homeItem) { return homeItem.id == item.id; });
             }
             clampHomeSelections();
@@ -2968,22 +2969,24 @@ private:
                 error_ = result.error;
                 return;
             }
-            if (nextUpReplacement) {
-                const auto row = std::find_if(home_.rows.begin(), home_.rows.end(), [](const JellyfinHomeRow& candidate) {
-                    return candidate.title == "Next Up";
-                });
-                if (row != home_.rows.end()) {
-                    const bool alreadyPresent = std::any_of(row->items.begin(), row->items.end(), [&](const JellyfinItem& candidate) {
-                        return candidate.id == nextUpReplacement->id;
-                    });
-                    if (!alreadyPresent && !isHiddenFromHome(*nextUpReplacement)) {
-                        const auto insertAt = row->items.begin() + std::min<size_t>(
-                            static_cast<size_t>(std::max(0, nextUpReplacementIndex)),
-                            row->items.size()
-                        );
-                        row->items.insert(insertAt, std::move(*nextUpReplacement));
-                        clampHomeSelections();
-                    }
+            const auto nextUpRow = std::find_if(home_.rows.begin(), home_.rows.end(), [](const JellyfinHomeRow& candidate) {
+                return candidate.title == "Next Up";
+            });
+            if (nextUpReplacementIndex >= 0 && nextUpRow != home_.rows.end()) {
+                const size_t replacementIndex = static_cast<size_t>(nextUpReplacementIndex);
+                const bool slotStillMatches = replacementIndex < nextUpRow->items.size()
+                    && nextUpRow->items[replacementIndex].id == item.id;
+                if (nextUpReplacement && slotStillMatches && !isHiddenFromHome(*nextUpReplacement)) {
+                    const std::string replacementId = nextUpReplacement->id;
+                    nextUpRow->items[replacementIndex] = std::move(*nextUpReplacement);
+                    nextUpReplacementFadeIndex_ = nextUpReplacementIndex;
+                    nextUpReplacementFadeItemId_ = replacementId;
+                    nextUpReplacementFadeStarted_ = std::chrono::steady_clock::now();
+                    renderBurstUntil_ = std::max(renderBurstUntil_, nextUpReplacementFadeStarted_ + 320ms);
+                    if (app_ && app_->looper) ALooper_wake(app_->looper);
+                } else if (slotStillMatches) {
+                    nextUpRow->items.erase(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(replacementIndex));
+                    clampHomeSelections();
                 }
             }
             if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) {
@@ -4942,7 +4945,8 @@ private:
         float y,
         float width,
         float height,
-        float radius = material_tv::cornerSmall
+        float radius = material_tv::cornerSmall,
+        float alpha = 1.0f
     ) {
         if (item.id.empty()) return false;
         const std::string key = homeArtworkKey(item);
@@ -4972,7 +4976,7 @@ private:
             }
         }
         if (entry.texture == 0) return false;
-        drawCoverTexture(entry, x, y, width, height, 1.0f, radius);
+        drawCoverTexture(entry, x, y, width, height, alpha, radius);
         return true;
     }
 
@@ -5522,16 +5526,21 @@ private:
         float y,
         float width,
         float height,
-        float radius = material_tv::cornerSmall
+        float radius = material_tv::cornerSmall,
+        float alpha = 1.0f
     ) {
-        renderer_.roundedRect(x, y, width, height, radius, kPanelAlt);
-        renderer_.roundedOutline(x, y, width, height, radius, 1.0f, kOutline);
+        const auto faded = [alpha](Color color) {
+            color.a *= alpha;
+            return color;
+        };
+        renderer_.roundedRect(x, y, width, height, radius, faded(kPanelAlt));
+        renderer_.roundedOutline(x, y, width, height, radius, 1.0f, faded(kOutline));
         const std::string& source = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
         std::string initial = "?";
         const auto first = std::find_if(source.begin(), source.end(), [](unsigned char c) { return std::isalnum(c) != 0; });
         if (first != source.end()) initial.assign(1, static_cast<char>(std::toupper(static_cast<unsigned char>(*first))));
         const float scale = height < 100.0f ? 2.0f : (height < 200.0f ? 3.0f : 4.2f);
-        renderer_.textCentered(x, y, width, height, scale, initial, kMuted);
+        renderer_.textCentered(x, y, width, height, scale, initial, faded(kMuted));
     }
 
     void renderHeader(const std::string& title) {
@@ -5898,6 +5907,7 @@ private:
 
     void renderHomeRow(const std::string& title, const std::vector<JellyfinItem>& items, int row, float top) {
         if (items.empty()) return;
+        const auto now = std::chrono::steady_clock::now();
         const int selected = homeState_.selection(row, static_cast<int>(items.size()));
         const float imageOffset = homeRowImageOffset(settings_.uiTextSize);
 
@@ -5943,23 +5953,35 @@ private:
         for (int index = start; index < static_cast<int>(items.size()); ++index) {
             if (x + cardW > 1908.0f && index > start) break;
             const auto& item = items[static_cast<size_t>(index)];
+            float itemAlpha = 1.0f;
+            if (title == "Next Up" && index == nextUpReplacementFadeIndex_
+                && item.id == nextUpReplacementFadeItemId_
+                && nextUpReplacementFadeStarted_ != std::chrono::steady_clock::time_point{}) {
+                const auto fadeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - nextUpReplacementFadeStarted_).count();
+                const float progress = std::clamp(static_cast<float>(fadeElapsed) / 300.0f, 0.0f, 1.0f);
+                itemAlpha = progress * progress * (3.0f - 2.0f * progress);
+            }
+            const auto faded = [itemAlpha](Color color) {
+                color.a *= itemAlpha;
+                return color;
+            };
             const bool focused = homeState_.row() == row && index == selected;
             const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, materialCardFocusScale());
             const float cardRadius = material_tv::cornerSmall * bounds[3] / cardH;
-            const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
-            if (!hasArtwork) drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
+            const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
+            if (!hasArtwork) drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
             if (item.positionTicks > 0 && item.runtimeTicks > 0) {
                 const double progress = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, kTrack);
+                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, faded(kTrack));
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
-                    static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, kFocus);
+                    static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
             }
-            if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
+            if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], faded(kFocus), cardRadius);
 
             std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
             primary = singleLine(primary, 2.45f, cardW - 18.0f);
             const float titleY = imageY + cardH + 22.0f;
-            renderer_.text(x + 2.0f, titleY, 2.45f, primary, focused ? kText : kSecondaryText, cardW - 4.0f);
+            renderer_.text(x + 2.0f, titleY, 2.45f, primary, faded(focused ? kText : kSecondaryText), cardW - 4.0f);
             if (item.type == "Episode") {
                 std::string episode = episodeNumberLabel(item);
                 if (!item.name.empty() && item.name != item.seriesName) {
@@ -5969,7 +5991,7 @@ private:
                 if (!episode.empty()) {
                     const float secondaryY = titleY + 11.0f * 2.45f * uiTextScale(settings_.uiTextSize) + 4.0f;
                     renderer_.text(x + 2.0f, secondaryY, 1.58f,
-                        singleLine(episode, 1.58f, cardW - 4.0f), kMuted, cardW - 4.0f);
+                        singleLine(episode, 1.58f, cardW - 4.0f), faded(kMuted), cardW - 4.0f);
                 }
             }
             x += cardW + gap;
@@ -6370,16 +6392,6 @@ private:
                     renderer_.triangle(x + 10.0f, centerY - 17.0f, x + 10.0f, centerY + 17.0f, x - 12.0f, centerY, glyph);
                 }
             }
-            const std::string seekLabel = (seconds > 0 ? "+" : "") + std::to_string(seconds) + "s";
-            renderer_.textCentered(
-                centerX - 72.0f,
-                centerY - 24.0f,
-                144.0f,
-                48.0f,
-                2.35f,
-                seekLabel,
-                glyph
-            );
         }
         if (!showOverlay) return;
 
@@ -7401,6 +7413,9 @@ private:
     uint64_t brandMarkTextureGeneration_ = 0;
     HomeScreenState homeState_;
     std::unordered_set<std::string> hiddenHomeItems_;
+    int nextUpReplacementFadeIndex_ = -1;
+    std::string nextUpReplacementFadeItemId_;
+    std::chrono::steady_clock::time_point nextUpReplacementFadeStarted_{};
     BrowseScreenState browseState_;
 
     int systemTextInputMode_ = -1;
