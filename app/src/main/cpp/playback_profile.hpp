@@ -162,12 +162,11 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(
     plan.allowAudioStreamCopy = audio.selected
         && audioStreamCopyAllowed(plan.audioCodecs, audio.codec, audio.channels, plan.maxAudioChannels);
     const SubtitleStrategy subtitleMode = subtitleStrategy(subtitle.codec);
-    // Text/styled subtitles are rendered by SloppaTV's native subtitle path, while
-    // bitmap/embedded formats such as PGS are rendered directly by libmpv from
-    // the original media container. Only truly unsupported subtitle formats need
-    // Jellyfin to burn subtitles into a server-side transcode.
-    plan.clientSubtitle = subtitle.selected && subtitleMode != SubtitleStrategy::ServerTranscode;
-    plan.serverSubtitle = subtitle.selected && subtitleMode == SubtitleStrategy::ServerTranscode;
+    // mediacodec_embed renders decoded video directly to the Android Surface and
+    // cannot composite libmpv bitmap subtitles. Keep text/styled subtitles on the
+    // native GLES path, but ask Jellyfin to burn bitmap/unsupported formats in.
+    plan.clientSubtitle = subtitle.selected && useNativeSubtitleRenderer(subtitleMode, true);
+    plan.serverSubtitle = subtitle.selected && !plan.clientSubtitle;
     return plan;
 }
 
