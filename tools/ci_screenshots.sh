@@ -49,7 +49,25 @@ diagnostics() {
 }
 trap diagnostics EXIT
 
-if ! timeout --foreground -k 2 10 adb -s "$ANDROID_SERIAL" shell true >/dev/null 2>&1; then
+# The emulator runner can report boot complete just before adbd finishes its
+# final restart. Treat that short offline window as startup noise instead of a
+# screenshot failure.
+adb start-server >/dev/null
+if ! timeout --foreground -k 2 30 adb -s "$ANDROID_SERIAL" wait-for-device >/dev/null 2>&1; then
+    adb devices -l >&2 || true
+    echo "ADB device did not become available for $ANDROID_SERIAL" >&2
+    exit 1
+fi
+adb_ready=0
+for _ in {1..30}; do
+    if timeout --foreground -k 2 5 adb -s "$ANDROID_SERIAL" shell true >/dev/null 2>&1; then
+        adb_ready=1
+        break
+    fi
+    sleep 1
+done
+if (( adb_ready == 0 )); then
+    adb devices -l >&2 || true
     echo "ADB shell is not authorized or responsive for $ANDROID_SERIAL" >&2
     exit 1
 fi
