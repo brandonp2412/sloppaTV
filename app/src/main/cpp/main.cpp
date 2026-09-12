@@ -6503,27 +6503,29 @@ private:
                     constexpr float gap = 14.0f;
                     const std::string audioTrackLabel = playerTrackLabel(2);
                     const std::string label = "Audio  " + std::string(materialLabel(audioTrackLabel));
-                    const std::string fitted = fitTextLines(label, 1.45f, bounds[2] - 78.0f, 1);
-                    const float textWidth = renderer_.textWidth(1.45f, fitted);
+                    const float textAvailableWidth = std::max(1.0f, bounds[2] - 78.0f);
+                    const float labelScale = fittedSingleLineScale(1.45f, label, textAvailableWidth, bounds[3] - 8.0f);
+                    const float textWidth = renderer_.textWidth(labelScale, label);
                     const float groupWidth = iconWidth + gap + textWidth;
                     const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
                     renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
                     renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
                     renderer_.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, kText);
                     renderer_.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, kText);
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], 1.45f, fitted, kText, textWidth);
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText, textWidth);
                 } else {
                     constexpr float iconWidth = 42.0f;
                     constexpr float gap = 14.0f;
                     const std::string subtitleTrackLabel = playerTrackLabel(4);
                     const std::string label = "Subtitles  " + std::string(materialLabel(subtitleTrackLabel));
-                    const std::string fitted = fitTextLines(label, 1.45f, bounds[2] - 86.0f, 1);
-                    const float textWidth = renderer_.textWidth(1.45f, fitted);
+                    const float textAvailableWidth = std::max(1.0f, bounds[2] - 86.0f);
+                    const float labelScale = fittedSingleLineScale(1.45f, label, textAvailableWidth, bounds[3] - 8.0f);
+                    const float textWidth = renderer_.textWidth(labelScale, label);
                     const float groupWidth = iconWidth + gap + textWidth;
                     const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
                     renderer_.roundedOutline(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 6.0f, 2.0f, kText);
                     renderer_.textCentered(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 0.82f, "CC", kText);
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], 1.45f, fitted, kText, textWidth);
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText, textWidth);
                 }
                 x += controlWidths[i] + controlGap;
             }
