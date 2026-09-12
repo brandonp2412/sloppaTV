@@ -1,0 +1,1 @@
+Fix Google Play installation checks by exposing the Android TV activity through the standard launcher category as well as the TV launcher.

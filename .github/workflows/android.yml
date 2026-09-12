@@ -63,16 +63,8 @@ jobs:
           SLOPPATV_KEY_PASSWORD: ${{ secrets.SLOPPATV_KEY_PASSWORD }}
         run: |
           CI_KEYSTORE="$RUNNER_TEMP/sloppatv-ci.jks"
-          if [[ -n "$SLOPPATV_KEYSTORE_BASE64" && -n "$SLOPPATV_STORE_PASSWORD" && -n "$SLOPPATV_KEY_ALIAS" && -n "$SLOPPATV_KEY_PASSWORD" ]]; then
-            printf '%s' "$SLOPPATV_KEYSTORE_BASE64" | base64 --decode > "$CI_KEYSTORE"
-            {
-              printf 'storeFile=%s\n' "$CI_KEYSTORE"
-              printf 'storePassword=%s\n' "$SLOPPATV_STORE_PASSWORD"
-              printf 'keyAlias=%s\n' "$SLOPPATV_KEY_ALIAS"
-              printf 'keyPassword=%s\n' "$SLOPPATV_KEY_PASSWORD"
-            } > key.properties
-            printf 'SLOPPATV_SIGNING_MODE=stable\n' >> "$GITHUB_ENV"
-          else
+          write_ephemeral_signing() {
+            rm -f "$CI_KEYSTORE"
             keytool -genkeypair \
               -keystore "$CI_KEYSTORE" \
               -storetype JKS \
@@ -91,6 +83,27 @@ jobs:
               printf 'keyPassword=%s\n' 'sloppatv-ci'
             } > key.properties
             printf 'SLOPPATV_SIGNING_MODE=ephemeral\n' >> "$GITHUB_ENV"
+          }
+
+          if [[ -n "$SLOPPATV_KEYSTORE_BASE64" && -n "$SLOPPATV_STORE_PASSWORD" && -n "$SLOPPATV_KEY_ALIAS" && -n "$SLOPPATV_KEY_PASSWORD" ]]; then
+            printf '%s' "$SLOPPATV_KEYSTORE_BASE64" | base64 --decode > "$CI_KEYSTORE"
+            if keytool -list \
+              -keystore "$CI_KEYSTORE" \
+              -storepass "$SLOPPATV_STORE_PASSWORD" \
+              -alias "$SLOPPATV_KEY_ALIAS" >/dev/null 2>&1; then
+              {
+                printf 'storeFile=%s\n' "$CI_KEYSTORE"
+                printf 'storePassword=%s\n' "$SLOPPATV_STORE_PASSWORD"
+                printf 'keyAlias=%s\n' "$SLOPPATV_KEY_ALIAS"
+                printf 'keyPassword=%s\n' "$SLOPPATV_KEY_PASSWORD"
+              } > key.properties
+              printf 'SLOPPATV_SIGNING_MODE=stable\n' >> "$GITHUB_ENV"
+            else
+              printf '%s\n' '::warning::Configured signing secret is invalid; using an ephemeral CI key.'
+              write_ephemeral_signing
+            fi
+          else
+            write_ephemeral_signing
           fi
 
       - name: Run host policy tests

@@ -29,12 +29,13 @@ class AndroidTvManifestTest(unittest.TestCase):
         self.assertEqual(self.application.get(ANDROID + "banner"), "@drawable/sloppatv_banner")
         self.assertEqual(self.activity.get(ANDROID + "banner"), "@drawable/sloppatv_banner")
 
-    def test_launcher_activity_exposes_leanback_category(self) -> None:
+    def test_launcher_activity_exposes_tv_and_standard_launcher_categories(self) -> None:
         categories = {
             category.get(ANDROID + "name")
             for category in self.activity.findall("./intent-filter/category")
         }
         self.assertIn("android.intent.category.LEANBACK_LAUNCHER", categories)
+        self.assertIn("android.intent.category.LAUNCHER", categories)
 
     def test_launcher_assets_match_google_play_tv_dimensions(self) -> None:
         self.assertEqual(self.application.get(ANDROID + "icon"), "@mipmap/ic_launcher")
