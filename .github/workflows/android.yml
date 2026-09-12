@@ -54,57 +54,58 @@ jobs:
             "ndk;29.0.14206865" \
             "cmake;3.22.1"
 
-      - name: Configure signing identity
+      - name: Configure Play signing identity
         shell: bash
         env:
-          SLOPPATV_KEYSTORE_BASE64: ${{ secrets.SLOPPATV_KEYSTORE_BASE64 }}
-          SLOPPATV_STORE_PASSWORD: ${{ secrets.SLOPPATV_STORE_PASSWORD }}
-          SLOPPATV_KEY_ALIAS: ${{ secrets.SLOPPATV_KEY_ALIAS }}
-          SLOPPATV_KEY_PASSWORD: ${{ secrets.SLOPPATV_KEY_PASSWORD }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          CI_KEYSTORE="$RUNNER_TEMP/sloppatv-ci.jks"
-          write_ephemeral_signing() {
-            rm -f "$CI_KEYSTORE"
-            keytool -genkeypair \
+          set -euo pipefail
+
+          : "${ANDROID_KEYSTORE_BASE64:?ANDROID_KEYSTORE_BASE64 secret is required}"
+          : "${ANDROID_STORE_PASSWORD:?ANDROID_STORE_PASSWORD secret is required}"
+          : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS secret is required}"
+          : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD secret is required}"
+
+          CI_KEYSTORE="$RUNNER_TEMP/sloppatv-release.p12"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$CI_KEYSTORE"
+
+          keytool -list \
+            -keystore "$CI_KEYSTORE" \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+
+          keytool -certreq \
+            -keystore "$CI_KEYSTORE" \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -keypass "$ANDROID_KEY_PASSWORD" \
+            -file "$RUNNER_TEMP/sloppatv-signing-check.csr" >/dev/null
+
+          actual_sha1="$(
+            keytool -list -v \
               -keystore "$CI_KEYSTORE" \
-              -storetype JKS \
-              -storepass sloppatv-ci \
-              -keypass sloppatv-ci \
-              -alias sloppatv-ci \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 1 \
-              -dname "CN=sloppaTV CI, OU=CI, O=sloppaTV, L=Auckland, ST=Auckland, C=NZ" \
-              -noprompt
-            {
-              printf 'storeFile=%s\n' "$CI_KEYSTORE"
-              printf 'storePassword=%s\n' 'sloppatv-ci'
-              printf 'keyAlias=%s\n' 'sloppatv-ci'
-              printf 'keyPassword=%s\n' 'sloppatv-ci'
-            } > key.properties
-            printf 'SLOPPATV_SIGNING_MODE=ephemeral\n' >> "$GITHUB_ENV"
+              -storepass "$ANDROID_STORE_PASSWORD" \
+              -alias "$ANDROID_KEY_ALIAS" \
+              | sed -n 's/^[[:space:]]*SHA1: //p' \
+              | tr -d ':' \
+              | tr '[:lower:]' '[:upper:]'
+          )"
+          expected_sha1="63D1345BF11526974C5D73F535578E51018D9B61"
+          test "$actual_sha1" = "$expected_sha1" || {
+            echo "::error::Signing secret is not the Google Play upload key for sloppaTV."
+            echo "::error::Expected SHA-1 63:D1:34:5B:F1:15:26:97:4C:5D:73:F5:35:57:8E:51:01:8D:9B:61."
+            exit 1
           }
 
-          if [[ -n "$SLOPPATV_KEYSTORE_BASE64" && -n "$SLOPPATV_STORE_PASSWORD" && -n "$SLOPPATV_KEY_ALIAS" && -n "$SLOPPATV_KEY_PASSWORD" ]]; then
-            printf '%s' "$SLOPPATV_KEYSTORE_BASE64" | base64 --decode > "$CI_KEYSTORE"
-            if keytool -list \
-              -keystore "$CI_KEYSTORE" \
-              -storepass "$SLOPPATV_STORE_PASSWORD" \
-              -alias "$SLOPPATV_KEY_ALIAS" >/dev/null 2>&1; then
-              {
-                printf 'storeFile=%s\n' "$CI_KEYSTORE"
-                printf 'storePassword=%s\n' "$SLOPPATV_STORE_PASSWORD"
-                printf 'keyAlias=%s\n' "$SLOPPATV_KEY_ALIAS"
-                printf 'keyPassword=%s\n' "$SLOPPATV_KEY_PASSWORD"
-              } > key.properties
-              printf 'SLOPPATV_SIGNING_MODE=stable\n' >> "$GITHUB_ENV"
-            else
-              printf '%s\n' '::warning::Configured signing secret is invalid; using an ephemeral CI key.'
-              write_ephemeral_signing
-            fi
-          else
-            write_ephemeral_signing
-          fi
+          {
+            printf 'storeFile=%s\n' "$CI_KEYSTORE"
+            printf 'storePassword=%s\n' "$ANDROID_STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+          } > key.properties
 
       - name: Run host policy tests
         run: ./tools/run_host_tests.py
