@@ -275,7 +275,7 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
     }
 }
 
-inline std::array<std::string, 30> settingsValues(
+inline std::array<std::string, 32> settingsValues(
     const AppSettings& settings,
     int maxAudioOutputChannels,
     std::string externalPlayer,
@@ -314,6 +314,8 @@ inline std::array<std::string, 30> settingsValues(
         settings.autoSubtitles ? "ON" : "OFF",
         subtitleLanguageLabel(settings.autoSubtitleLanguage),
         autoSubtitleSourceName(settings),
+        settings.seerrServer.empty() ? "NOT CONNECTED" : settings.seerrServer,
+        settings.seerrApiKey.empty() ? "NOT SET" : "SET",
         advanced ? "SHOW COMMON" : "SHOW TECHNICAL",
     };
 }

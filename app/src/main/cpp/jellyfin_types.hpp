@@ -109,6 +109,18 @@ struct JellyfinItem {
     bool favorite = false;
     bool played = false;
     bool canDelete = false;
+
+    // Synthetic external media fields used by optional request-manager integrations.
+    // Empty externalSource means this is an ordinary Jellyfin item.
+    std::string externalSource;
+    std::string externalMediaType;
+    std::string externalPosterUrl;
+    std::string externalBackdropUrl;
+    std::string externalStatus;
+    int externalRequestId = 0;
+    int externalMediaStatus = 0;
+    bool externalRequested = false;
+    bool externalAvailable = false;
 };
 
 struct JellyfinHomeRow {

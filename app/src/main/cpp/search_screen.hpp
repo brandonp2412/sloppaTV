@@ -14,14 +14,23 @@ class SearchScreenState {
 public:
     using Clock = std::chrono::steady_clock;
     static constexpr auto kDebounceDelay = std::chrono::milliseconds(180);
+    static constexpr int kLibraryRow = 0;
+    static constexpr int kSeerrRow = 1;
+    static constexpr int kEpisodeRow = 2;
+    static constexpr int kRowCount = 3;
 
     void reset() {
         query_.clear();
+        libraryTitles_.clear();
+        seerrResults_.clear();
+        episodes_.clear();
         results_.clear();
         selection_ = 0;
-        firstVisible_ = {0, 0};
+        firstVisible_ = {0, 0, 0};
         keyboard_ = true;
         loading_ = false;
+        seerrLoading_ = false;
+        seerrError_.clear();
         debouncePending_ = false;
         debounceDeadline_ = {};
     }
@@ -32,55 +41,71 @@ public:
     [[nodiscard]] int selection() const { return selection_; }
     [[nodiscard]] bool keyboard() const { return keyboard_; }
     [[nodiscard]] bool loading() const { return loading_; }
+    [[nodiscard]] bool seerrLoading() const { return seerrLoading_; }
+    [[nodiscard]] const std::string& seerrError() const { return seerrError_; }
     [[nodiscard]] bool debouncePending() const { return debouncePending_; }
     [[nodiscard]] Clock::time_point debounceDeadline() const { return debounceDeadline_; }
-    [[nodiscard]] int topLevelCount() const {
-        if (topLevelCountSize_ == results_.size()) return topLevelCount_;
-        const auto firstEpisode = std::find_if(results_.begin(), results_.end(), [](const JellyfinItem& item) {
-            return item.type == "Episode";
-        });
-        topLevelCount_ = static_cast<int>(std::distance(results_.begin(), firstEpisode));
-        topLevelCountSize_ = results_.size();
-        return topLevelCount_;
+
+    [[nodiscard]] int rowStart(int row) const {
+        if (row <= kLibraryRow) return 0;
+        if (row == kSeerrRow) return static_cast<int>(libraryTitles_.size());
+        return static_cast<int>(libraryTitles_.size() + visibleSeerrCount());
     }
-    [[nodiscard]] int rowStart(int row) const { return row <= 0 ? 0 : topLevelCount(); }
+
     [[nodiscard]] int rowItemCount(int row) const {
-        const int top = topLevelCount();
-        return row <= 0 ? top : static_cast<int>(results_.size()) - top;
+        if (row == kLibraryRow) return static_cast<int>(libraryTitles_.size());
+        if (row == kSeerrRow) return static_cast<int>(visibleSeerrCount());
+        if (row == kEpisodeRow) return static_cast<int>(episodes_.size());
+        return 0;
     }
+
     [[nodiscard]] int selectedRow() const {
-        if (results_.empty()) return 0;
-        return results_[static_cast<size_t>(selection_)].type == "Episode" ? 1 : 0;
+        if (results_.empty()) return firstPopulatedRow();
+        const int libraryEnd = static_cast<int>(libraryTitles_.size());
+        const int seerrEnd = libraryEnd + static_cast<int>(visibleSeerrCount());
+        if (selection_ < libraryEnd) return kLibraryRow;
+        if (selection_ < seerrEnd) return kSeerrRow;
+        return kEpisodeRow;
     }
+
+    [[nodiscard]] int firstPopulatedRow() const {
+        for (int row = 0; row < kRowCount; ++row) {
+            if (rowItemCount(row) > 0) return row;
+        }
+        return kLibraryRow;
+    }
+
     [[nodiscard]] bool selectionOnFirstResultRow() const {
-        return selectedRow() == 0 || topLevelCount() == 0;
+        return selectedRow() == firstPopulatedRow();
     }
+
     [[nodiscard]] int firstVisibleInRow(int row, int columns) const {
-        if (row < 0 || row > 1 || columns <= 0) return 0;
+        if (row < 0 || row >= kRowCount || columns <= 0) return 0;
         return std::clamp(firstVisible_[static_cast<size_t>(row)], 0, std::max(0, rowItemCount(row) - columns));
     }
 
     void setQuery(std::string query) {
         query_ = std::move(query);
         selection_ = 0;
-        firstVisible_ = {0, 0};
+        firstVisible_ = {0, 0, 0};
     }
 
     void append(char value) {
         query_.push_back(value);
         selection_ = 0;
-        firstVisible_ = {0, 0};
+        firstVisible_ = {0, 0, 0};
     }
 
     [[nodiscard]] bool backspace() {
         if (!eraseLastUtf8CodePoint(query_)) return false;
         selection_ = 0;
-        firstVisible_ = {0, 0};
+        firstVisible_ = {0, 0, 0};
         return true;
     }
 
     void setKeyboard(bool keyboard) { keyboard_ = keyboard; }
     void setLoading(bool loading) { loading_ = loading; }
+    void setSeerrLoading(bool loading) { seerrLoading_ = loading; }
     void setSelection(int selection) {
         selection_ = results_.empty()
             ? 0
@@ -92,8 +117,13 @@ public:
         if (query_.empty()) {
             debouncePending_ = false;
             loading_ = false;
+            seerrLoading_ = false;
+            libraryTitles_.clear();
+            seerrResults_.clear();
+            episodes_.clear();
             results_.clear();
-            firstVisible_ = {0, 0};
+            seerrError_.clear();
+            firstVisible_ = {0, 0, 0};
             return false;
         }
         debouncePending_ = true;
@@ -104,6 +134,7 @@ public:
     void cancelPending() {
         debouncePending_ = false;
         loading_ = false;
+        seerrLoading_ = false;
     }
 
     [[nodiscard]] bool debounceDue(Clock::time_point now) const {
@@ -115,68 +146,87 @@ public:
         selection_ = 0;
         if (query_.empty()) {
             loading_ = false;
-            results_.clear();
-            firstVisible_ = {0, 0};
+            seerrLoading_ = false;
+            clearResults();
             return false;
         }
         loading_ = true;
+        libraryTitles_.clear();
+        episodes_.clear();
+        rebuildResults();
         return true;
     }
 
-    [[nodiscard]] bool finishSearch(const std::string& query, std::vector<JellyfinItem> results) {
+    void beginSeerrSearch() {
+        seerrLoading_ = true;
+        seerrError_.clear();
+        seerrResults_.clear();
+        rebuildResults();
+    }
+
+    [[nodiscard]] bool finishLibrarySearch(const std::string& query, std::vector<JellyfinItem> results) {
         if (query_ != query) return false;
         loading_ = false;
         const auto firstEpisode = std::stable_partition(results.begin(), results.end(), [](const JellyfinItem& item) {
             return item.type != "Episode";
         });
-        topLevelCount_ = static_cast<int>(std::distance(results.begin(), firstEpisode));
-        results_ = std::move(results);
-        topLevelCountSize_ = results_.size();
-        selection_ = 0;
-        firstVisible_ = {0, 0};
+        libraryTitles_.assign(results.begin(), firstEpisode);
+        episodes_.assign(firstEpisode, results.end());
+        rebuildResults();
         return true;
     }
 
-    [[nodiscard]] bool failSearch(const std::string& query) {
+    [[nodiscard]] bool failLibrarySearch(const std::string& query) {
         if (query_ != query) return false;
         loading_ = false;
         return true;
     }
 
+    [[nodiscard]] bool finishSeerrSearch(const std::string& query, std::vector<JellyfinItem> results) {
+        if (query_ != query) return false;
+        seerrLoading_ = false;
+        seerrError_.clear();
+        seerrResults_ = std::move(results);
+        rebuildResults();
+        return true;
+    }
+
+    [[nodiscard]] bool failSeerrSearch(const std::string& query, std::string error) {
+        if (query_ != query) return false;
+        seerrLoading_ = false;
+        seerrError_ = std::move(error);
+        seerrResults_.clear();
+        rebuildResults();
+        return true;
+    }
+
+    void markSeerrRequested(const std::string& itemId, std::string status) {
+        for (auto& item : seerrResults_) {
+            if (item.id != itemId) continue;
+            item.externalRequested = true;
+            item.externalStatus = std::move(status);
+            if (item.externalMediaStatus <= 1) item.externalMediaStatus = 2;
+            break;
+        }
+        rebuildResults();
+    }
+
     void clearResults() {
+        libraryTitles_.clear();
+        seerrResults_.clear();
+        episodes_.clear();
         results_.clear();
-        topLevelCount_ = 0;
-        topLevelCountSize_ = 0;
         selection_ = 0;
-        firstVisible_ = {0, 0};
+        firstVisible_ = {0, 0, 0};
     }
 
     bool removeItem(const std::string& itemId) {
         if (itemId.empty()) return false;
-        const size_t previousSize = results_.size();
-        const size_t selectedOffset = selection_ <= 0
-            ? 0
-            : std::min(static_cast<size_t>(selection_), results_.size());
-        const int removedBeforeSelection = static_cast<int>(std::count_if(
-            results_.begin(),
-            results_.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
-            [&](const JellyfinItem& item) { return item.id == itemId; }
-        ));
-        std::erase_if(results_, [&](const JellyfinItem& item) { return item.id == itemId; });
-        if (results_.size() == previousSize) return false;
-
-        selection_ = results_.empty()
-            ? 0
-            : std::clamp(selection_ - removedBeforeSelection, 0, static_cast<int>(results_.size()) - 1);
-        const auto firstEpisode = std::find_if(results_.begin(), results_.end(), [](const JellyfinItem& item) {
-            return item.type == "Episode";
-        });
-        topLevelCount_ = static_cast<int>(std::distance(results_.begin(), firstEpisode));
-        topLevelCountSize_ = results_.size();
-        for (int row = 0; row < 2; ++row) {
-            const int maxFirst = std::max(0, rowItemCount(row) - 1);
-            firstVisible_[static_cast<size_t>(row)] = std::clamp(firstVisible_[static_cast<size_t>(row)], 0, maxFirst);
-        }
+        const size_t before = libraryTitles_.size() + episodes_.size();
+        std::erase_if(libraryTitles_, [&](const JellyfinItem& item) { return item.id == itemId; });
+        std::erase_if(episodes_, [&](const JellyfinItem& item) { return item.id == itemId; });
+        if (libraryTitles_.size() + episodes_.size() == before) return false;
+        rebuildResults();
         return true;
     }
 
@@ -193,11 +243,15 @@ public:
         }
 
         if (dy != 0) {
-            const int targetRow = std::clamp(row + (dy > 0 ? 1 : -1), 0, 1);
-            const int targetCount = rowItemCount(targetRow);
-            if (targetRow != row && targetCount > 0) {
+            int targetRow = row;
+            while (true) {
+                targetRow += dy > 0 ? 1 : -1;
+                if (targetRow < 0 || targetRow >= kRowCount) break;
+                const int targetCount = rowItemCount(targetRow);
+                if (targetCount <= 0) continue;
                 row = targetRow;
                 selection_ = rowStart(row) + std::min(local, targetCount - 1);
+                break;
             }
         }
 
@@ -211,14 +265,58 @@ public:
     }
 
 private:
+    [[nodiscard]] bool duplicatesLocalLibrary(const JellyfinItem& candidate) const {
+        if (candidate.tmdbId.empty()) return false;
+        return std::any_of(libraryTitles_.begin(), libraryTitles_.end(), [&](const JellyfinItem& local) {
+            return !local.tmdbId.empty() && local.tmdbId == candidate.tmdbId;
+        });
+    }
+
+    [[nodiscard]] size_t visibleSeerrCount() const {
+        return static_cast<size_t>(std::count_if(seerrResults_.begin(), seerrResults_.end(), [&](const JellyfinItem& item) {
+            return !duplicatesLocalLibrary(item);
+        }));
+    }
+
+    void rebuildResults() {
+        std::string selectedId;
+        if (!results_.empty() && selection_ >= 0 && selection_ < static_cast<int>(results_.size())) {
+            selectedId = results_[static_cast<size_t>(selection_)].id;
+        }
+
+        results_.clear();
+        results_.reserve(libraryTitles_.size() + seerrResults_.size() + episodes_.size());
+        results_.insert(results_.end(), libraryTitles_.begin(), libraryTitles_.end());
+        for (const auto& item : seerrResults_) {
+            if (!duplicatesLocalLibrary(item)) results_.push_back(item);
+        }
+        results_.insert(results_.end(), episodes_.begin(), episodes_.end());
+
+        if (!selectedId.empty()) {
+            const auto selected = std::find_if(results_.begin(), results_.end(), [&](const JellyfinItem& item) {
+                return item.id == selectedId;
+            });
+            if (selected != results_.end()) selection_ = static_cast<int>(std::distance(results_.begin(), selected));
+        }
+        if (results_.empty()) selection_ = 0;
+        else selection_ = std::clamp(selection_, 0, static_cast<int>(results_.size()) - 1);
+        for (int row = 0; row < kRowCount; ++row) {
+            firstVisible_[static_cast<size_t>(row)] = std::clamp(
+                firstVisible_[static_cast<size_t>(row)], 0, std::max(0, rowItemCount(row) - 1));
+        }
+    }
+
     std::string query_;
+    std::vector<JellyfinItem> libraryTitles_;
+    std::vector<JellyfinItem> seerrResults_;
+    std::vector<JellyfinItem> episodes_;
     std::vector<JellyfinItem> results_;
-    mutable int topLevelCount_ = 0;
-    mutable size_t topLevelCountSize_ = 0;
     int selection_ = 0;
-    std::array<int, 2> firstVisible_{0, 0};
+    std::array<int, kRowCount> firstVisible_{0, 0, 0};
     bool keyboard_ = true;
     bool loading_ = false;
+    bool seerrLoading_ = false;
+    std::string seerrError_;
     bool debouncePending_ = false;
     Clock::time_point debounceDeadline_{};
 };

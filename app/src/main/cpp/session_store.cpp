@@ -94,6 +94,8 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.safeAreaPercent = savedSafeArea <= 0 ? 0 : (savedSafeArea <= 2 ? 2 : (savedSafeArea <= 4 ? 4 : 6));
     settings.screensaverMinutes = normalizedScreensaverMinutes(valueOr(saved, "screensaverMinutes", settings.screensaverMinutes));
     settings.externalPlayerComponent = valueOr<std::string>(saved, "externalPlayerComponent", {});
+    settings.seerrServer = valueOr<std::string>(saved, "seerrServer", {});
+    settings.seerrApiKey = valueOr<std::string>(saved, "seerrApiKey", {});
 }
 
 json writeSettings(const AppSettings& settings) {
@@ -126,6 +128,8 @@ json writeSettings(const AppSettings& settings) {
         {"safeAreaPercent", settings.safeAreaPercent},
         {"screensaverMinutes", settings.screensaverMinutes},
         {"externalPlayerComponent", settings.externalPlayerComponent},
+        {"seerrServer", settings.seerrServer},
+        {"seerrApiKey", settings.seerrApiKey},
     };
 }
 }

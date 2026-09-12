@@ -69,6 +69,8 @@ struct AppSettings {
     int safeAreaPercent = 0;
     int screensaverMinutes = 0;
     std::string externalPlayerComponent;
+    std::string seerrServer;
+    std::string seerrApiKey;
 };
 
 constexpr int kSubtitleLanguagesSetting = 24;
@@ -76,7 +78,9 @@ constexpr int kTimeFormatSetting = 25;
 constexpr int kAutoSubtitlesSetting = 26;
 constexpr int kAutoSubtitleLanguageSetting = 27;
 constexpr int kAutoSubtitleSourceSetting = 28;
-constexpr int kAdvancedSettingsToggle = 29;
+constexpr int kSeerrServerSetting = 29;
+constexpr int kSeerrApiKeySetting = 30;
+constexpr int kAdvancedSettingsToggle = 31;
 
 constexpr bool isBooleanSetting(int setting) {
     return setting == 5
@@ -204,8 +208,8 @@ inline std::string subtitleLanguageSummary(const AppSettings& settings) {
     return std::to_string(settings.subtitleLanguages.size()) + " SELECTED";
 }
 
-inline const std::array<std::string, 30>& settingsLabels() {
-    static const std::array<std::string, 30> labels{
+inline const std::array<std::string, 32>& settingsLabels() {
+    static const std::array<std::string, 32> labels{
         "MAX STREAMING BITRATE",
         "PLAYBACK BUFFER",
         "SKIP BACK",
@@ -235,6 +239,8 @@ inline const std::array<std::string, 30>& settingsLabels() {
         "AUTO SUBTITLES",
         "AUTO SUBTITLE LANGUAGE",
         "AUTO SUBTITLE SOURCE AUDIO",
+        "SEERR SERVER",
+        "SEERR API KEY",
         "ADVANCED SETTINGS",
     };
     return labels;
@@ -253,9 +259,10 @@ inline bool settingLabelContains(std::string_view text, std::string_view query) 
 }
 
 inline std::vector<int> matchingSettings(const std::string& query, bool advanced) {
-    static constexpr std::array<int, 20> commonOrder{
+    static constexpr std::array<int, 22> commonOrder{
         18, 10, 11, 13, 12, kSubtitleLanguagesSetting,
         kAutoSubtitlesSetting, kAutoSubtitleLanguageSetting, kAutoSubtitleSourceSetting,
+        kSeerrServerSetting, kSeerrApiKeySetting,
         5, 6, 2, 3, 8, 9, kTimeFormatSetting, 14, 20, 23, kAdvancedSettingsToggle,
     };
     static constexpr std::array<int, 12> advancedOrder{

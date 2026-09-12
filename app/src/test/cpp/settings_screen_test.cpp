@@ -61,6 +61,8 @@ int main() {
     effect = adjustSetting(settings, kAutoSubtitleSourceSetting, 1);
     assert(settings.autoSubtitleSourceLanguage == "different");
 
+    settings.seerrServer = "https://seerr.example.nz";
+    settings.seerrApiKey = "secret";
     const auto values = settingsValues(settings, 6, "MPV", "viewer", false);
     assert(values[0] == "80 MBIT/S");
     assert(values[14] == "DIRECT / 6CH ROUTE");
@@ -71,7 +73,16 @@ int main() {
     assert(values[26] == "ON");
     assert(values[27] == "MAORI");
     assert(values[28] == "AUDIO NOT MAORI");
-    assert(values[29] == "SHOW TECHNICAL");
+    assert(values[kSeerrServerSetting] == "https://seerr.example.nz");
+    assert(values[kSeerrApiKeySetting] == "SET");
+    assert(values[kAdvancedSettingsToggle] == "SHOW TECHNICAL");
+
+    screen.reset();
+    screen.setSearchText("seerr");
+    const auto seerrMatches = screen.matches();
+    assert(seerrMatches.size() == 2);
+    assert(seerrMatches[0] == kSeerrServerSetting);
+    assert(seerrMatches[1] == kSeerrApiKeySetting);
 
     screen.openSubtitleLanguagePicker();
     assert(screen.subtitleLanguagePicker());

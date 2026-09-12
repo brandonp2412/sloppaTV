@@ -35,6 +35,7 @@
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
+#include "seerr.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
@@ -257,6 +258,8 @@ constexpr int kTextInputSearch = 1;
 constexpr int kTextInputSettingsSearch = 2;
 constexpr int kTextInputLoginServer = 10;
 constexpr int kTextInputLoginPassword = 12;
+constexpr int kTextInputSeerrServer = 20;
+constexpr int kTextInputSeerrApiKey = 21;
 
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
     static const std::vector<std::vector<VirtualKey>> rows = {
@@ -312,6 +315,7 @@ public:
         : app_(app),
           renderer_(app->activity->vm, app->activity->clazz),
           api_(app->activity->vm, app->activity->clazz),
+          seerr_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
           externalPlayer_(app->activity->vm, app->activity->clazz),
@@ -366,6 +370,7 @@ public:
 
     ~SloppaApp() {
         api_.cancelPendingRequests();
+        seerr_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         tasks_.shutdown();
         stopPlayback();
@@ -396,7 +401,8 @@ public:
                 std::scoped_lock lock(stateMutex_);
                 if (screen_ == Screen::Player || burstActive) timeoutMs = 0;
                 else if (screensaverActive_) timeoutMs = 30000;
-                else if (loading_ || homeLoading_ || mutationLoading_ || accountState_.quickConnectActive()) timeoutMs = 100;
+                else if (loading_ || homeLoading_ || mutationLoading_ || searchState_.loading()
+                    || searchState_.seerrLoading() || accountState_.quickConnectActive()) timeoutMs = 100;
                 else {
                     const int64_t delayMs = screensaverDelayMs(settings_.screensaverMinutes);
                     if (delayMs > 0) {
@@ -459,7 +465,8 @@ public:
                         settings_.screensaverMinutes,
                         idleMs,
                         false,
-                        loading_ || homeLoading_ || mutationLoading_ || accountState_.quickConnectActive()
+                        loading_ || homeLoading_ || mutationLoading_ || searchState_.loading()
+                            || searchState_.seerrLoading() || accountState_.quickConnectActive()
                     );
                 }
                 screensaver = screensaverActive_;
@@ -514,6 +521,16 @@ public:
             searchAsync();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
+        } else if (mode == kTextInputSeerrServer) {
+            settings_.seerrServer = text;
+            saveSession(session_);
+            showNotice(settings_.seerrServer.empty() ? "SEERR DISCONNECTED" : "SEERR SERVER SAVED", 3s);
+            if (SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)) refreshSeerrPendingAsync();
+        } else if (mode == kTextInputSeerrApiKey) {
+            settings_.seerrApiKey = text;
+            saveSession(session_);
+            showNotice(settings_.seerrApiKey.empty() ? "SEERR API KEY CLEARED" : "SEERR API KEY SAVED", 3s);
+            if (SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)) refreshSeerrPendingAsync();
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             const int field = mode - kTextInputLoginServer;
             accountState_.finishTextField(field, text);
@@ -1046,12 +1063,16 @@ private:
             homeState_.moveRow(1, static_cast<int>(home_.rows.size()));
         } else if (isItemContextKey(key) && !items.empty() && section.title != "My Media") {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
-            openItemMenuForItem(items[static_cast<size_t>(selection)]);
+            const auto& selected = items[static_cast<size_t>(selection)];
+            if (!isSeerrItem(selected)) openItemMenuForItem(selected);
             return;
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
-            if (section.title == "My Media") openLibrary(items[static_cast<size_t>(selection)]);
-            else openDetails(items[static_cast<size_t>(selection)]);
+            const auto& selected = items[static_cast<size_t>(selection)];
+            if (section.title == "My Media") openLibrary(selected);
+            else if (isSeerrItem(selected)) {
+                showNotice(selected.externalStatus.empty() ? "REQUESTED IN SEERR" : selected.externalStatus, 5s);
+            } else openDetails(selected);
             return;
         }
         homeState_.updateViewport(static_cast<int>(home_.rows.size()));
@@ -1172,17 +1193,20 @@ private:
         if (key == AKEYCODE_SEARCH
             || (key == AKEYCODE_DPAD_UP && (results.empty() || searchState_.selectionOnFirstResultRow()))
             || ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && results.empty())) {
-            searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin", kTextInputSearch));
+            searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
             if (searchState_.keyboard()) keyboardRow_ = keyboardCol_ = 0;
             return;
         }
         if (results.empty()) return;
         if (isItemContextKey(key)) {
-            openItemMenuForItem(results[static_cast<size_t>(searchState_.selection())]);
+            const auto& selected = results[static_cast<size_t>(searchState_.selection())];
+            if (!isSeerrItem(selected)) openItemMenuForItem(selected);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            openDetails(results[static_cast<size_t>(searchState_.selection())]);
+            const auto selected = results[static_cast<size_t>(searchState_.selection())];
+            if (isSeerrItem(selected)) requestSeerrItemAsync(selected);
+            else openDetails(selected);
             return;
         }
         constexpr int columns = mediaGridColumns();
@@ -1318,6 +1342,10 @@ private:
                 openProfiles();
             } else if (selection == kSubtitleLanguagesSetting) {
                 settingsScreen_.openSubtitleLanguagePicker();
+            } else if (selection == kSeerrServerSetting) {
+                showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
+            } else if (selection == kSeerrApiKeySetting) {
+                showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
             } else if (selection == kAdvancedSettingsToggle) {
                 settingsScreen_.toggleAdvanced();
             }
@@ -3298,6 +3326,8 @@ private:
                 }
             }
 
+            refreshSeerrPendingAsync();
+
             tasks_.submit([this, session, generation, views = std::move(views), homeSnapshot, coreRestoredRow, homeLoadStarted] {
                 auto secondary = api_.loadHomeSecondary(session, views);
                 if (!requestEpochs_.home.active(generation)) return;
@@ -3337,10 +3367,100 @@ private:
         });
     }
 
+    void syncSeerrHomeRowLocked() {
+        const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
+        std::erase_if(home_.rows, [](const JellyfinHomeRow& row) {
+            return row.title == "Seerr requests";
+        });
+        if (!seerrPending_.empty()) {
+            home_.rows.push_back(JellyfinHomeRow{
+                .title = "Seerr requests",
+                .items = seerrPending_,
+            });
+        }
+        HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home_.rows);
+        homeState_.setSelections(std::move(restore.selections));
+        homeState_.setRow(restore.focusedRow);
+        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+    }
+
+    void refreshSeerrPendingAsync() {
+        const std::string server = settings_.seerrServer;
+        const std::string apiKey = settings_.seerrApiKey;
+        if (!SeerrClient::configured(server, apiKey)) {
+            seerrPendingLoading_ = false;
+            seerrPending_.clear();
+            syncSeerrHomeRowLocked();
+            return;
+        }
+        seerrPendingLoading_ = true;
+        tasks_.submit([this, server, apiKey] {
+            auto result = seerr_.pendingRequests(server, apiKey, 20);
+            std::scoped_lock lock(stateMutex_);
+            if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
+            seerrPendingLoading_ = false;
+            if (!result.ok) {
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
+                return;
+            }
+            seerrPending_ = std::move(result.value);
+            syncSeerrHomeRowLocked();
+        });
+    }
+
+    void requestSeerrItemAsync(const JellyfinItem& item) {
+        if (!isSeerrItem(item)) return;
+        if (item.externalRequested) {
+            showNotice(item.externalStatus.empty() ? "ALREADY REQUESTED IN SEERR" : item.externalStatus, 5s);
+            return;
+        }
+        const std::string server = settings_.seerrServer;
+        const std::string apiKey = settings_.seerrApiKey;
+        if (!SeerrClient::configured(server, apiKey)) {
+            showNotice("CONNECT SEERR IN SETTINGS FIRST", 5s);
+            return;
+        }
+        mutationLoading_ = true;
+        const JellyfinItem requestedItem = item;
+        tasks_.submit([this, server, apiKey, requestedItem] {
+            const ApiResult result = seerr_.requestMedia(server, apiKey, requestedItem);
+            std::scoped_lock lock(stateMutex_);
+            mutationLoading_ = false;
+            if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
+            if (!result.ok) {
+                error_ = "SEERR REQUEST: " + result.error;
+                return;
+            }
+
+            const std::string status = requestedItem.externalMediaType == "tv"
+                ? "Queued · Episode 1 waiting"
+                : "Queued for download";
+            searchState_.markSeerrRequested(requestedItem.id, status);
+            JellyfinItem pending = requestedItem;
+            pending.externalRequested = true;
+            pending.externalMediaStatus = 2;
+            pending.externalStatus = status;
+            const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& candidate) {
+                return candidate.id == pending.id;
+            });
+            if (existing == seerrPending_.end()) seerrPending_.insert(seerrPending_.begin(), std::move(pending));
+            else *existing = std::move(pending);
+            syncSeerrHomeRowLocked();
+            showNotice("REQUEST SENT TO SEERR", 4s);
+            error_.clear();
+            refreshSeerrPendingAsync();
+        });
+    }
+
     void searchAsync() {
         if (!session_.valid() || !searchState_.beginSearch()) return;
         const JellyfinSession session = session_;
         const std::string query = searchState_.query();
+        const std::string seerrServer = settings_.seerrServer;
+        const std::string seerrApiKey = settings_.seerrApiKey;
+        const bool seerrConfigured = SeerrClient::configured(seerrServer, seerrApiKey);
+        searchState_.beginSeerrSearch();
+        if (!seerrConfigured) (void) searchState_.finishSeerrSearch(query, {});
         error_.clear();
         const uint64_t generation = requestEpochs_.search.begin();
         tasks_.submit([this, session, query, generation] {
@@ -3352,12 +3472,28 @@ private:
                 return;
             }
             if (!result.ok) {
-                if (searchState_.failSearch(query)) error_ = result.error;
+                if (searchState_.failLibrarySearch(query)) error_ = result.error;
                 return;
             }
-            if (!searchState_.finishSearch(query, std::move(result.value))) return;
+            if (!searchState_.finishLibrarySearch(query, std::move(result.value))) return;
             error_.clear();
         });
+        if (seerrConfigured) {
+            tasks_.submit([this, seerrServer, seerrApiKey, query, generation] {
+                auto result = seerr_.search(seerrServer, seerrApiKey, query);
+                std::scoped_lock lock(stateMutex_);
+                if (!requestEpochs_.search.active(generation)) return;
+                if (screen_ != Screen::Search) {
+                    searchState_.setSeerrLoading(false);
+                    return;
+                }
+                if (!result.ok) {
+                    (void) searchState_.failSeerrSearch(query, result.error);
+                    return;
+                }
+                (void) searchState_.finishSeerrSearch(query, std::move(result.value));
+            });
+        }
     }
 
     void openDetails(const JellyfinItem& item, bool replaceCurrent = false) {
@@ -4767,6 +4903,7 @@ private:
     }
 
     std::string artworkKey(const JellyfinItem& item) const {
+        if (isSeerrItem(item)) return "seerr:poster:" + item.externalPosterUrl;
         std::string key;
         key.reserve(session_.server.size() + session_.userId.size() + item.id.size() + item.imageTag.size() + 16);
         key.append(session_.server)
@@ -4807,6 +4944,10 @@ private:
     }
 
     std::string homeArtworkKey(const JellyfinItem& item) const {
+        if (isSeerrItem(item)) {
+            const std::string& source = item.externalBackdropUrl.empty() ? item.externalPosterUrl : item.externalBackdropUrl;
+            return "seerr:home:" + source;
+        }
         const ArtworkReference artwork = homeArtworkReference(
             item.id,
             item.imageTag,
@@ -4862,7 +5003,9 @@ private:
                 encoded = std::move(*cached);
                 fromDisk = true;
             } else {
-                auto bytes = api_.downloadHomeImage(session, itemCopy, 480, 270);
+                auto bytes = isSeerrItem(itemCopy)
+                    ? seerr_.downloadImage(itemCopy.externalBackdropUrl.empty() ? itemCopy.externalPosterUrl : itemCopy.externalBackdropUrl)
+                    : api_.downloadHomeImage(session, itemCopy, 480, 270);
                 if (!bytes.ok) {
                     __android_log_print(
                         ANDROID_LOG_WARN,
@@ -4883,7 +5026,9 @@ private:
             DecodedImage decoded = imageDecoder_.decode(encoded, decodeError);
             if (!decoded.valid() && fromDisk) {
                 homeDiskCache_.erase(key);
-                auto bytes = api_.downloadHomeImage(session, itemCopy, 480, 270);
+                auto bytes = isSeerrItem(itemCopy)
+                    ? seerr_.downloadImage(itemCopy.externalBackdropUrl.empty() ? itemCopy.externalPosterUrl : itemCopy.externalBackdropUrl)
+                    : api_.downloadHomeImage(session, itemCopy, 480, 270);
                 if (bytes.ok) {
                     encoded = std::move(bytes.value);
                     decodeError.clear();
@@ -5070,7 +5215,9 @@ private:
         const JellyfinSession session = session_;
         const JellyfinItem itemCopy = item;
         tasks_.submit([this, session, itemCopy, key] {
-            auto bytes = api_.downloadPrimaryImage(session, itemCopy, 384, 576);
+            auto bytes = isSeerrItem(itemCopy)
+                ? seerr_.downloadImage(itemCopy.externalPosterUrl)
+                : api_.downloadPrimaryImage(session, itemCopy, 384, 576);
             if (!bytes.ok) {
                 std::scoped_lock lock(stateMutex_);
                 artwork_.markFailed(key);
@@ -5982,7 +6129,11 @@ private:
             primary = singleLine(primary, 2.45f, cardW - 18.0f);
             const float titleY = imageY + cardH + 22.0f;
             renderer_.text(x + 2.0f, titleY, 2.45f, primary, faded(focused ? kText : kSecondaryText), cardW - 4.0f);
-            if (item.type == "Episode") {
+            if (isSeerrItem(item) && !item.externalStatus.empty()) {
+                const float secondaryY = titleY + 11.0f * 2.45f * uiTextScale(settings_.uiTextSize) + 4.0f;
+                renderer_.text(x + 2.0f, secondaryY, 1.58f,
+                    singleLine(item.externalStatus, 1.58f, cardW - 4.0f), faded(kMuted), cardW - 4.0f);
+            } else if (item.type == "Episode") {
                 std::string episode = episodeNumberLabel(item);
                 if (!item.name.empty() && item.name != item.seriesName) {
                     if (!episode.empty()) episode += "  |  ";
@@ -6062,7 +6213,11 @@ private:
             item.name, material_tv::type::label, imageWidth - 4.0f, titleLines);
         renderer_.text(imageX + 2.0f, titleY, material_tv::type::label,
             fittedTitle, kText, imageWidth - 4.0f);
-        const std::string secondary = episodeLabel(item);
+        const std::string secondary = isSeerrItem(item)
+            ? (item.externalRequested
+                ? item.externalStatus
+                : std::string("Press OK to request"))
+            : episodeLabel(item);
         if (!secondary.empty()) {
             const int renderedTitleLines = fittedTitle.empty()
                 ? 0
@@ -6150,12 +6305,13 @@ private:
     void renderSearch() {
         const auto& results = searchState_.results();
         const auto& query = searchState_.query();
+        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey);
         renderer_.text(80.0f, 44.0f, material_tv::type::headline, "Search", kText, 520.0f);
         constexpr float searchTop = 155.0f;
         constexpr float searchWidth = 1450.0f;
         const bool systemSearchInputActive = systemTextInputMode_ == kTextInputSearch;
         const bool searchFieldFocused =
-            systemSearchInputActive || (!searchState_.keyboard() && results.empty());
+            systemSearchInputActive || (!searchState_.keyboard() && results.empty() && !searchState_.seerrLoading());
         const auto searchBounds = drawInputSurface(
             72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused, materialWideInputFocusScale());
         const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
@@ -6178,32 +6334,118 @@ private:
             return;
         }
 
-        if (results.empty()) {
-            if (systemSearchInputActive) {
-                drawCenteredSingleLineFit(
-                    480.0f, 300.0f, 960.0f, 64.0f, 1.75f,
-                    "Type to search your library", kMuted, 16.0f, 5.0f);
-            } else {
-                renderEmptyState(searchState_.loading() ? "Searching your library" :
-                    (query.empty() ? "Find your next favorite" : "No results found"),
-                    query.empty() ? "Search for a movie, show, actor or episode." : "Try another title or search term.");
-            }
+        if (systemSearchInputActive && results.empty() && !searchState_.seerrLoading()) {
+            drawCenteredSingleLineFit(
+                480.0f, 300.0f, 960.0f, 64.0f, 1.75f,
+                "Type to search Jellyfin and Seerr", kMuted, 16.0f, 5.0f);
+            return;
+        }
+        if (query.empty() && results.empty()) {
+            renderEmptyState("Find your next favorite", "Search your library and request anything missing through Seerr.");
             return;
         }
 
         constexpr int columns = mediaGridColumns();
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
-        const int topLevelCount = searchState_.rowItemCount(0);
-        const int episodeCount = searchState_.rowItemCount(1);
 
-        auto renderResultRow = [&](int semanticRow, const std::string& label, float labelY, float cardY) {
+        std::vector<int> semanticRows;
+        if (searchState_.rowItemCount(SearchScreenState::kLibraryRow) > 0 || searchState_.loading()) {
+            semanticRows.push_back(SearchScreenState::kLibraryRow);
+        }
+        if (seerrConfigured) semanticRows.push_back(SearchScreenState::kSeerrRow);
+        if (searchState_.rowItemCount(SearchScreenState::kEpisodeRow) > 0) {
+            semanticRows.push_back(SearchScreenState::kEpisodeRow);
+        }
+        if (semanticRows.empty()) {
+            renderEmptyState("No results found", seerrConfigured
+                ? "No Jellyfin or Seerr matches for this search."
+                : "No Jellyfin matches. Connect Seerr in Settings to search for more.");
+            return;
+        }
+
+        int selectedSemanticRow = searchState_.selectedRow();
+        auto selectedPosition = std::find(semanticRows.begin(), semanticRows.end(), selectedSemanticRow);
+        int selectedRowPosition = selectedPosition == semanticRows.end()
+            ? 0
+            : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
+        const int firstSemantic = std::clamp(selectedRowPosition - 1, 0, std::max(0, static_cast<int>(semanticRows.size()) - 2));
+
+        auto drawLoadingDots = [&](float x, float y) {
+            const double seconds = std::chrono::duration<double>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            for (int i = 0; i < 3; ++i) {
+                const float pulse = 0.45f + 0.55f * static_cast<float>((std::sin(seconds * 5.0 - i * 1.2) + 1.0) * 0.5);
+                const float size = 9.0f + pulse * 5.0f;
+                renderer_.roundedRect(
+                    x + static_cast<float>(i) * 24.0f,
+                    y + (14.0f - size) * 0.5f,
+                    size, size, size * 0.5f,
+                    Color{kFocus.r, kFocus.g, kFocus.b, 0.45f + pulse * 0.55f});
+            }
+        };
+
+        auto renderResultRow = [&](int semanticRow, int visibleSlot) {
+            const float labelY = visibleSlot == 0 ? 258.0f : 726.0f;
+            const float cardY = visibleSlot == 0 ? 314.0f : 780.0f;
             const int count = searchState_.rowItemCount(semanticRow);
+            std::string label = semanticRow == SearchScreenState::kLibraryRow
+                ? "In your library"
+                : (semanticRow == SearchScreenState::kSeerrRow ? "Seerr" : "Episodes");
+
+            if (semanticRow == SearchScreenState::kSeerrRow) {
+                renderer_.rect(72.0f, labelY - 22.0f, 1776.0f, 1.5f, kDivider);
+                renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
+                if (searchState_.seerrLoading()) {
+                    drawLoadingDots(196.0f, labelY + 8.0f);
+                    renderer_.text(288.0f, labelY + 1.0f, 1.45f, "Searching Seerr…", kMuted, 440.0f);
+                } else if (count <= 0) {
+                    const std::string message = searchState_.seerrError().empty()
+                        ? "No additional matches"
+                        : "Seerr unavailable";
+                    renderer_.text(196.0f, labelY + 1.0f, 1.45f, message, kMuted, 520.0f);
+                    return;
+                }
+            } else {
+                renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
+                if (semanticRow == SearchScreenState::kLibraryRow && searchState_.loading() && count <= 0) {
+                    drawLoadingDots(228.0f, labelY + 8.0f);
+                    renderer_.text(320.0f, labelY + 1.0f, 1.45f, "Searching Jellyfin…", kMuted, 440.0f);
+                    return;
+                }
+            }
             if (count <= 0) return;
-            renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
+
             const int localStart = searchState_.firstVisibleInRow(semanticRow, columns);
             const int begin = searchState_.rowStart(semanticRow) + localStart;
             const int end = std::min(begin + columns, searchState_.rowStart(semanticRow) + count);
+            if (semanticRow == SearchScreenState::kSeerrRow) {
+                const float imageHeight = slotWidth * 0.56f;
+                for (int index = begin; index < end; ++index) {
+                    const int col = index - begin;
+                    const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
+                    const auto& item = results[static_cast<size_t>(index)];
+                    const bool focused = !systemSearchInputActive && index == searchState_.selection();
+                    const auto bounds = focusedBounds(x, cardY, slotWidth, imageHeight, focused, materialCardFocusScale());
+                    const float radius = material_tv::cornerSmall * bounds[3] / imageHeight;
+                    renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], radius, kPanelAlt);
+                    if (!drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], radius)) {
+                        drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], radius);
+                    }
+                    if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, radius);
+                    const float titleY = cardY + imageHeight + 18.0f;
+                    renderer_.text(x + 2.0f, titleY, 1.95f,
+                        fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1),
+                        focused ? kText : kSecondaryText, slotWidth - 4.0f);
+                    const std::string state = item.externalRequested
+                        ? item.externalStatus
+                        : std::string("Press OK to request");
+                    renderer_.text(x + 2.0f, titleY + 27.0f, 1.35f,
+                        fitTextLines(state, 1.35f, slotWidth - 4.0f, 1), kMuted, slotWidth - 4.0f);
+                }
+                return;
+            }
+
             const bool rowHasPortraitCards = std::any_of(
                 results.begin() + begin,
                 results.begin() + end,
@@ -6221,19 +6463,13 @@ private:
                     true,
                     false,
                     rowHasPortraitCards,
-                    semanticRow == 0 && episodeCount > 0 ? 1 : 0
+                    1
                 );
             }
         };
 
-        if (topLevelCount > 0) {
-            renderResultRow(0, "Movies & shows", 258.0f, 314.0f);
-        }
-        if (episodeCount > 0) {
-            // The top row is forced to one title line when both groups are visible,
-            // so the episode row can sit higher without colliding and retain room
-            // for episode metadata at the bottom of the 1080p canvas.
-            renderResultRow(1, "Episodes", topLevelCount > 0 ? 726.0f : 258.0f, topLevelCount > 0 ? 780.0f : 314.0f);
+        for (int slot = 0; slot < 2 && firstSemantic + slot < static_cast<int>(semanticRows.size()); ++slot) {
+            renderResultRow(semanticRows[static_cast<size_t>(firstSemantic + slot)], slot);
         }
     }
 
@@ -6723,7 +6959,8 @@ private:
             const bool focused = !settingsScreen_.subtitleLanguagePicker()
                 && !settingsScreen_.searchFocused()
                 && i == settingsScreen_.selection();
-            const bool actionRow = i == 22 || i == 23 || i == kSubtitleLanguagesSetting || i == kAdvancedSettingsToggle;
+            const bool actionRow = i == 22 || i == 23 || i == kSubtitleLanguagesSetting
+                || i == kSeerrServerSetting || i == kSeerrApiKeySetting || i == kAdvancedSettingsToggle;
             // Settings use contained TV list rows, which remain readable at distance.
             constexpr float rowX = 110.0f;
             constexpr float rowWidth = 1700.0f;
@@ -7360,6 +7597,7 @@ private:
     android_app* app_ = nullptr;
     Renderer renderer_;
     JellyfinClient api_;
+    SeerrClient seerr_;
     DisplayModeController displayMode_;
     NativeMediaPlayer player_;
     NativeMediaSession mediaSession_;
@@ -7402,6 +7640,8 @@ private:
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
+    std::vector<JellyfinItem> seerrPending_;
+    bool seerrPendingLoading_ = false;
     ArtworkCache artwork_{30};
     ArtworkCache profileArtwork_;
     ArtworkCache homeArtwork_{48};

@@ -26,6 +26,7 @@ add_library(sloppatv SHARED
     media_player.cpp
     media_session.cpp
     playback_info.cpp
+    seerr.cpp
     session_store.cpp
     task_runner.cpp
     video_surface.cpp
