@@ -10,9 +10,10 @@ int main() {
     assert(resolvedSubtitleIndex(kSubtitleServerDefaultIndex, kSubtitleOffIndex) == kSubtitleOffIndex);
     assert(resolvedSubtitleIndex(kSubtitleOffIndex, 4) == kSubtitleOffIndex);
     assert(resolvedSubtitleIndex(7, 4) == 7);
-    assert(shouldRetryFailedSubtitleTranscode(true, 2));
-    assert(!shouldRetryFailedSubtitleTranscode(false, 2));
-    assert(!shouldRetryFailedSubtitleTranscode(true, kSubtitleOffIndex));
+    assert(shouldRetryFailedSubtitleTranscode(true, 2, true));
+    assert(!shouldRetryFailedSubtitleTranscode(true, 2, false));
+    assert(!shouldRetryFailedSubtitleTranscode(false, 2, true));
+    assert(!shouldRetryFailedSubtitleTranscode(true, kSubtitleOffIndex, true));
     assert(shouldApplyLoadedSubtitle("item", "item", 3, 3, true));
     assert(!shouldApplyLoadedSubtitle("item", "other", 3, 3, true));
     assert(!shouldApplyLoadedSubtitle("item", "item", 3, 4, true));

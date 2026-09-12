@@ -17,8 +17,12 @@ constexpr int resolvedSubtitleIndex(int requestedIndex, int serverDefaultIndex) 
     return requestedIndex == kSubtitleServerDefaultIndex ? serverDefaultIndex : requestedIndex;
 }
 
-constexpr bool shouldRetryFailedSubtitleTranscode(bool isTranscode, int selectedSubtitleIndex) {
-    return isTranscode && selectedSubtitleIndex >= 0;
+constexpr bool shouldRetryFailedSubtitleTranscode(
+    bool isTranscode,
+    int selectedSubtitleIndex,
+    bool subtitleRequiresServerTranscode
+) {
+    return isTranscode && selectedSubtitleIndex >= 0 && subtitleRequiresServerTranscode;
 }
 
 constexpr bool shouldApplyLoadedSubtitle(
