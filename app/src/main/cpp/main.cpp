@@ -6017,14 +6017,19 @@ private:
         const int remainingMs = playerScreenState_.durationMs() > 0
             ? std::max(0, playerScreenState_.durationMs() - playerScreenState_.positionMs())
             : 0;
-        const bool showNextUp = continuationState_.nextItem().has_value() && remainingMs > 0 && remainingMs <= 30000;
         const auto skipSegment = activeSkippableSegment();
+        const bool userOverlayVisible = playerScreenState_.overlayVisible(now);
+        const bool showNextUp = shouldShowNextUpCard(
+            continuationState_.nextItem().has_value(),
+            remainingMs,
+            userOverlayVisible,
+            skipSegment != nullptr
+        );
         const bool showOverlay = status == PlayerStatus::Preparing
             || status == PlayerStatus::Paused
             || transitionState_.loading()
             || transitionState_.fallbackResolving()
-            || showNextUp
-            || playerScreenState_.overlayVisible(now);
+            || userOverlayVisible;
         if (showOverlay) {
             renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f,
                 Color{0.0f, 0.0f, 0.0f, 0.74f},
@@ -6084,22 +6089,28 @@ private:
             }
         }
         if (skipSegment) {
-            const auto bounds = drawButtonSurface(1460.0f, 640.0f, 360.0f, 86.0f, true, true);
+            const auto bounds = drawButtonSurface(1480.0f, 654.0f, 320.0f, 74.0f, true, true);
             const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
-            constexpr float horizontalPadding = 24.0f;
-            constexpr float labelHeight = 48.0f;
-            constexpr float helperHeight = 30.0f;
-            constexpr float lineGap = 2.0f;
-            const float contentX = bounds[0] + horizontalPadding;
-            const float contentWidth = std::max(1.0f, bounds[2] - horizontalPadding * 2.0f);
-            const float stackHeight = labelHeight + lineGap + helperHeight;
-            const float stackY = bounds[1] + (bounds[3] - stackHeight) * 0.5f;
-            drawCenteredSingleLineFit(
-                contentX, stackY, contentWidth, labelHeight, 2.05f,
-                skipLabel, kText);
-            drawCenteredSingleLineFit(
-                contentX, stackY + labelHeight + lineGap, contentWidth, helperHeight, 1.35f,
-                "Press OK to skip", kSecondaryText);
+            constexpr float labelScale = 1.82f;
+            constexpr float iconWidth = 34.0f;
+            constexpr float iconGap = 14.0f;
+            const std::string fittedLabel = fitTextLines(skipLabel, labelScale, 224.0f, 1);
+            const float labelWidth = renderer_.textWidth(labelScale, fittedLabel);
+            const float groupWidth = iconWidth + iconGap + labelWidth;
+            const float iconX = std::round(bounds[0] + (bounds[2] - groupWidth) * 0.5f);
+            const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
+            renderer_.triangle(iconX, iconCenterY - 11.0f, iconX, iconCenterY + 11.0f, iconX + 13.0f, iconCenterY, kText);
+            renderer_.triangle(iconX + 11.0f, iconCenterY - 11.0f, iconX + 11.0f, iconCenterY + 11.0f, iconX + 24.0f, iconCenterY, kText);
+            renderer_.roundedRect(iconX + 27.0f, iconCenterY - 12.0f, 4.0f, 24.0f, 2.0f, kText);
+            renderer_.textVerticallyCentered(
+                iconX + iconWidth + iconGap,
+                bounds[1],
+                bounds[3],
+                labelScale,
+                fittedLabel,
+                kText,
+                labelWidth
+            );
         }
         if (!showOverlay) return;
 
@@ -6186,22 +6197,18 @@ private:
         drawTrickplayPreview();
 
         if (playerScreenState_.controlsActive()) {
-            const std::array<std::string, 3> controls{
-                "",
-                "Audio  " + std::string(materialLabel(playerTrackLabel(2))),
-                "Subtitles  " + std::string(materialLabel(playerTrackLabel(4))),
-            };
-            const std::array<float, 3> widths{104.0f, 310.0f, 350.0f};
-            constexpr float controlGap = 28.0f;
-            const float controlGroupWidth = widths[0] + widths[1] + widths[2] + controlGap * 2.0f;
+            constexpr float controlWidth = 104.0f;
+            constexpr float controlHeight = 66.0f;
+            constexpr float controlGap = 24.0f;
+            constexpr float controlY = 925.0f;
+            const float controlGroupWidth = controlWidth * 3.0f + controlGap * 2.0f;
             float x = (Renderer::logicalWidth() - controlGroupWidth) * 0.5f;
-            for (size_t i = 0; i < controls.size(); ++i) {
+            for (size_t i = 0; i < 3; ++i) {
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
-                const auto bounds = drawButtonSurface(x, 925.0f, widths[i], 66.0f, selected, i == 0);
-
+                const auto bounds = drawButtonSurface(x, controlY, controlWidth, controlHeight, selected, i == 0);
+                const float iconCenterX = std::round(bounds[0] + bounds[2] * 0.5f);
                 const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
                 if (i == 0) {
-                    const float iconCenterX = bounds[0] + bounds[2] * 0.5f;
                     if (status == PlayerStatus::Paused) {
                         const float playLeft = iconCenterX - 22.0f / 3.0f;
                         renderer_.triangle(playLeft, iconCenterY - 13.0f, playLeft, iconCenterY + 13.0f, playLeft + 22.0f, iconCenterY, kText);
@@ -6210,41 +6217,29 @@ private:
                         renderer_.roundedRect(pauseLeft, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
                         renderer_.roundedRect(pauseLeft + 13.0f, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
                     }
+                } else if (i == 1) {
+                    const float iconX = iconCenterX - 15.0f;
+                    renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
+                    renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
+                    renderer_.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, kText);
+                    renderer_.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, kText);
                 } else {
-                    constexpr float labelScale = 1.72f;
-                    constexpr float iconLabelGap = 16.0f;
-                    const float iconWidth = i == 1 ? 20.0f : 26.0f;
-                    const std::string label = fitTextLines(
-                        controls[i], labelScale, std::max(1.0f, bounds[2] - iconWidth - iconLabelGap - 36.0f), 1);
-                    const float labelWidth = renderer_.textWidth(labelScale, label);
-                    const float groupWidth = iconWidth + iconLabelGap + labelWidth;
-                    const float iconX = std::round(bounds[0] + std::max(18.0f, (bounds[2] - groupWidth) * 0.5f));
-                    if (i == 1) {
-                        renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
-                        renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
-                    } else {
-                        renderer_.roundedOutline(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 5.0f, 2.0f, kText);
-                        renderer_.textCentered(iconX, iconCenterY - 11.0f, 26.0f, 22.0f, 0.72f, "CC", kText);
-                    }
-                    renderer_.textVerticallyCentered(
-                        iconX + iconWidth + iconLabelGap,
-                        bounds[1],
-                        bounds[3],
-                        labelScale,
-                        label,
-                        selected ? kText : kSecondaryText,
-                        labelWidth
-                    );
+                    renderer_.roundedOutline(iconCenterX - 18.0f, iconCenterY - 13.0f, 36.0f, 26.0f, 6.0f, 2.0f, kText);
+                    renderer_.textCentered(iconCenterX - 18.0f, iconCenterY - 13.0f, 36.0f, 26.0f, 0.82f, "CC", kText);
                 }
-                x += widths[i] + controlGap;
+                x += controlWidth + controlGap;
             }
-        } else {
-            const std::string queueHint = queueState_.empty() ? "" : "   |   Down opens queue";
-            const std::string hint = "Left / Right seeks   |   OK plays or pauses   |   Up opens options"
-                + queueHint + "   |   Back exits";
-            drawCenteredSingleLineFit(
-                230.0f, 920.0f, 1460.0f, 72.0f, 1.90f,
-                hint, kSecondaryText, 18.0f, 6.0f);
+
+            const int selectedControl = playerScreenState_.controlSelection();
+            if (selectedControl == 1 || selectedControl == 2) {
+                const int trackLabelIndex = selectedControl == 1 ? 2 : 4;
+                const std::string trackLabel(materialLabel(playerTrackLabel(trackLabelIndex)));
+                if (!trackLabel.empty()) {
+                    drawCenteredSingleLineFit(
+                        610.0f, 1004.0f, 700.0f, 42.0f, 1.35f,
+                        trackLabel, kSecondaryText, 8.0f, 2.0f);
+                }
+            }
         }
     }
 

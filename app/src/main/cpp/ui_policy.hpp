@@ -98,6 +98,19 @@ constexpr float subtitleBottomY(
     return base - static_cast<float>(clamped) * 95.0f;
 }
 
+constexpr bool shouldShowNextUpCard(
+    bool hasNextItem,
+    int remainingMs,
+    bool userOverlayVisible,
+    bool skipButtonVisible
+) {
+    return hasNextItem
+        && remainingMs > 0
+        && remainingMs <= 30000
+        && userOverlayVisible
+        && !skipButtonVisible;
+}
+
 constexpr int wrappedIndex(int index, int delta, int count) {
     if (count <= 0) return 0;
     const int value = (index + delta) % count;

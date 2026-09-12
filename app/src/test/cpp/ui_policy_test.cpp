@@ -110,5 +110,11 @@ int main() {
     assert(subtitleBottomY(false, false, 0, true) == 610.0f);
     assert(subtitleBottomY(true, true, 0, true) == 610.0f);
     assert(subtitleBottomY(false, false, 2, true) == 420.0f);
+    assert(!shouldShowNextUpCard(true, 30000, false, false));
+    assert(shouldShowNextUpCard(true, 30000, true, false));
+    assert(shouldShowNextUpCard(true, 1, true, false));
+    assert(!shouldShowNextUpCard(true, 30001, true, false));
+    assert(!shouldShowNextUpCard(false, 10000, true, false));
+    assert(!shouldShowNextUpCard(true, 10000, true, true));
     return 0;
 }
