@@ -1,0 +1,17 @@
+#include "seerr_progress.hpp"
+
+#include <cassert>
+
+int main() {
+    assert(seerrProgressPercent(1000.0, 500.0) == 50);
+    assert(seerrProgressPercent(1000.0, 0.0) == 100);
+    assert(seerrProgressPercent(0.0, 0.0) == -1);
+    assert(seerrCompactTimeLeft("00:11:42") == "11m left");
+    assert(seerrCompactTimeLeft("01:02:03") == "1h 2m left");
+    assert(seerrCompactTimeLeft("1.02:03:04") == "1d 2h left");
+    assert(seerrProgressStatus("movie", -1, -1, 63, "00:11:42") == "Downloading · 63% · 11m left");
+    assert(seerrProgressStatus("movie", -1, -1, 100, "00:00:00") == "Downloaded · 100% · Waiting for import");
+    assert(seerrProgressStatus("tv", 1, 1, 63, "00:11:42") == "S1E1 · 63% · 11m left");
+    assert(seerrProgressStatus("tv", -1, -1, 63, "00:11:42") == "Season pack · 63% · 11m left");
+    return 0;
+}

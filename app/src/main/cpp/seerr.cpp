@@ -1,4 +1,5 @@
 #include "seerr.hpp"
+#include "seerr_progress.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -41,6 +42,17 @@ int integerValue(const json& value, const char* key, int fallback = 0) {
     return fallback;
 }
 
+double doubleValue(const json& value, const char* key, double fallback = 0.0) {
+    const auto found = value.find(key);
+    if (found == value.end() || found->is_null()) return fallback;
+    try {
+        if (found->is_number()) return found->get<double>();
+        if (found->is_string()) return std::stod(found->get<std::string>());
+    } catch (...) {
+    }
+    return fallback;
+}
+
 std::string stringValue(const json& value, const char* key) {
     const auto found = value.find(key);
     return found != value.end() && found->is_string() ? found->get<std::string>() : std::string{};
@@ -57,7 +69,7 @@ std::string mediaStatusLabel(int status, bool television) {
     switch (status) {
         case 1: return "Requested" + episode + " waiting";
         case 2: return "Queued" + episode + " waiting";
-        case 3: return "Downloading" + episode + " pending";
+        case 3: return "Waiting for download" + episode + " pending";
         case 4: return "Partially available" + episode + " check";
         case 5: return "Available";
         case 6: return "Blocklisted";
@@ -113,6 +125,47 @@ void applyMediaDetails(JellyfinItem& item, const JellyfinItem& details) {
     if (!details.externalPosterUrl.empty()) item.externalPosterUrl = details.externalPosterUrl;
     if (!details.externalBackdropUrl.empty()) item.externalBackdropUrl = details.externalBackdropUrl;
     if (details.productionYear > 0) item.productionYear = details.productionYear;
+}
+
+void applyDownloadProgress(JellyfinItem& item, const json& downloads) {
+    if (!downloads.is_array() || downloads.empty()) return;
+
+    const json* selected = nullptr;
+    int selectedSeason = -1;
+    int selectedEpisode = -1;
+    int selectedScore = 0;
+    for (const auto& download : downloads) {
+        if (!download.is_object()) continue;
+        if (!selected) selected = &download;
+        if (item.externalMediaType != "tv") continue;
+        const auto episode = download.find("episode");
+        if (episode == download.end() || !episode->is_object()) continue;
+        const int season = integerValue(*episode, "seasonNumber", -1);
+        const int number = integerValue(*episode, "episodeNumber", -1);
+        if (season < 0 || number < 0) continue;
+        const int score = (season > 0 ? season : 10000 + season) * 10000 + number;
+        if (selectedSeason < 0 || score < selectedScore) {
+            selected = &download;
+            selectedSeason = season;
+            selectedEpisode = number;
+            selectedScore = score;
+        }
+    }
+    if (!selected) return;
+
+    const int percent = seerrProgressPercent(
+        doubleValue(*selected, "size"),
+        doubleValue(*selected, "sizeLeft")
+    );
+    if (percent < 0) return;
+    item.externalProgressPercent = percent;
+    item.externalStatus = seerrProgressStatus(
+        item.externalMediaType,
+        selectedSeason,
+        selectedEpisode,
+        percent,
+        stringValue(*selected, "timeLeft")
+    );
 }
 }
 
@@ -273,8 +326,11 @@ ApiValueResult<std::vector<JellyfinItem>> SeerrClient::pendingRequests(
             item.type = mediaType == "tv" ? "Series" : "Movie";
             item.externalRequestId = integerValue(request, "id");
             item.externalRequested = true;
-            item.externalMediaStatus = integerValue(*media, request.value("is4k", false) ? "status4k" : "status");
+            const bool is4k = request.value("is4k", false);
+            item.externalMediaStatus = integerValue(*media, is4k ? "status4k" : "status");
             item.externalStatus = mediaStatusLabel(item.externalMediaStatus, mediaType == "tv");
+            const auto downloads = media->find(is4k ? "downloadStatus4k" : "downloadStatus");
+            if (downloads != media->end()) applyDownloadProgress(item, *downloads);
 
             auto details = loadMediaDetails(server, apiKey, mediaType, tmdbId);
             if (details.ok) applyMediaDetails(item, details.value);

@@ -439,6 +439,10 @@ public:
                 if (!noticePersistent_ && !notice_.empty()) tightenTimeoutUntil(noticeUntil_);
                 if (!presentedError_.empty()) tightenTimeoutUntil(errorUntil_);
                 tightenTimeoutUntil(homeRetryAt_);
+                if (!seerrPendingLoading_
+                    && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
+                    tightenTimeoutUntil(seerrPendingRefreshAt_);
+                }
             }
 
             int events = 0;
@@ -3469,21 +3473,30 @@ private:
         const std::string apiKey = settings_.seerrApiKey;
         if (!SeerrClient::configured(server, apiKey)) {
             seerrPendingLoading_ = false;
+            seerrPendingRefreshAt_ = {};
             seerrPending_.clear();
             syncSeerrHomeRowLocked();
             return;
         }
+        if (seerrPendingLoading_) return;
         seerrPendingLoading_ = true;
         tasks_.submit([this, server, apiKey] {
             auto result = seerr_.pendingRequests(server, apiKey, 20);
             std::scoped_lock lock(stateMutex_);
             if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
             seerrPendingLoading_ = false;
+            seerrPendingRefreshAt_ = std::chrono::steady_clock::now() + 60s;
             if (!result.ok) {
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
                 return;
             }
             seerrPending_ = std::move(result.value);
+            if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
+                const auto current = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& item) {
+                    return item.id == detail_.id;
+                });
+                if (current != seerrPending_.end()) detail_ = *current;
+            }
             syncSeerrHomeRowLocked();
         });
     }
@@ -4893,17 +4906,28 @@ private:
         applyPendingRuntimeLaunchRequest();
 
         bool retryHome = false;
+        bool refreshSeerr = false;
         {
             std::scoped_lock lock(stateMutex_);
+            const auto now = std::chrono::steady_clock::now();
             if (!homeLoading_
                 && homeRetryAt_ != std::chrono::steady_clock::time_point{}
-                && std::chrono::steady_clock::now() >= homeRetryAt_
+                && now >= homeRetryAt_
                 && session_.valid()) {
                 homeRetryAt_ = {};
                 retryHome = true;
             }
+            if (!seerrPendingLoading_
+                && seerrPendingRefreshAt_ != std::chrono::steady_clock::time_point{}
+                && now >= seerrPendingRefreshAt_
+                && SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)
+                && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
+                seerrPendingRefreshAt_ = {};
+                refreshSeerr = true;
+            }
         }
         if (retryHome) loadHomeAsync();
+        if (refreshSeerr) refreshSeerrPendingAsync();
 
         auto work = collectPendingTickWork();
         finishExternalPlayback(work);
@@ -6205,7 +6229,12 @@ private:
             const float cardRadius = material_tv::cornerSmall * bounds[3] / cardH;
             const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
             if (!hasArtwork) drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
-            if (item.positionTicks > 0 && item.runtimeTicks > 0) {
+            if (item.externalProgressPercent >= 0) {
+                const double progress = std::clamp(static_cast<double>(item.externalProgressPercent) / 100.0, 0.0, 1.0);
+                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, faded(kTrack));
+                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
+                    static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
+            } else if (item.positionTicks > 0 && item.runtimeTicks > 0) {
                 const double progress = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, faded(kTrack));
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
@@ -7243,7 +7272,9 @@ private:
         constexpr float panelX = 1110.0f;
         constexpr float panelWidth = 700.0f;
         constexpr float rowStep = 66.0f;
-        const float panelHeight = 170.0f + static_cast<float>(actions.size()) * rowStep + 46.0f;
+        const bool seerrRequest = isSeerrItem(detail_);
+        const float panelHeaderHeight = seerrRequest && !detail_.externalStatus.empty() ? 194.0f : 170.0f;
+        const float panelHeight = panelHeaderHeight + static_cast<float>(actions.size()) * rowStep + 46.0f;
         const float panelY = std::max(72.0f, (Renderer::logicalHeight() - panelHeight) * 0.5f);
         drawModalSurface(panelX, panelY, panelWidth, panelHeight);
         renderer_.text(panelX + 38.0f, panelY + 24.0f, 2.35f,
@@ -7251,9 +7282,15 @@ private:
         renderer_.text(panelX + 40.0f, panelY + 92.0f, 1.35f,
             fitTextLines(detail_.type.empty() ? "Media" : detail_.type, 1.35f, panelWidth - 80.0f, 1),
             kMuted, panelWidth - 80.0f);
-        renderer_.rect(panelX + 34.0f, panelY + 138.0f, panelWidth - 68.0f, 1.0f, kDivider);
+        if (seerrRequest && !detail_.externalStatus.empty()) {
+            renderer_.text(panelX + 40.0f, panelY + 122.0f, 1.55f,
+                fitTextLines(detail_.externalStatus, 1.55f, panelWidth - 80.0f, 1),
+                kFocus, panelWidth - 80.0f);
+        }
+        const float dividerY = panelY + (seerrRequest && !detail_.externalStatus.empty() ? 162.0f : 138.0f);
+        renderer_.rect(panelX + 34.0f, dividerY, panelWidth - 68.0f, 1.0f, kDivider);
 
-        const float firstActionY = panelY + 154.0f;
+        const float firstActionY = dividerY + 16.0f;
         for (size_t i = 0; i < actions.size(); ++i) {
             const float y = firstActionY + static_cast<float>(i) * rowStep;
             const bool focused = detailsState_.itemMenuSelection() == static_cast<int>(i);
@@ -7748,6 +7785,7 @@ private:
     JellyfinHomeData home_;
     std::vector<JellyfinItem> seerrPending_;
     bool seerrPendingLoading_ = false;
+    std::chrono::steady_clock::time_point seerrPendingRefreshAt_{};
     ArtworkCache artwork_{30};
     ArtworkCache profileArtwork_;
     ArtworkCache homeArtwork_{48};

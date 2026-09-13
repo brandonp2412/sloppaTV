@@ -117,6 +117,7 @@ struct JellyfinItem {
     std::string externalPosterUrl;
     std::string externalBackdropUrl;
     std::string externalStatus;
+    int externalProgressPercent = -1;
     int externalRequestId = 0;
     int externalMediaStatus = 0;
     bool externalRequested = false;
