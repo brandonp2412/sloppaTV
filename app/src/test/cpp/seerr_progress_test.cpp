@@ -9,9 +9,14 @@ int main() {
     assert(seerrCompactTimeLeft("00:11:42") == "11m left");
     assert(seerrCompactTimeLeft("01:02:03") == "1h 2m left");
     assert(seerrCompactTimeLeft("1.02:03:04") == "1d 2h left");
-    assert(seerrProgressStatus("movie", -1, -1, 63, "00:11:42") == "Downloading · 63% · 11m left");
-    assert(seerrProgressStatus("movie", -1, -1, 100, "00:00:00") == "Downloaded · 100% · Waiting for import");
-    assert(seerrProgressStatus("tv", 1, 1, 63, "00:11:42") == "S1E1 · 63% · 11m left");
-    assert(seerrProgressStatus("tv", -1, -1, 63, "00:11:42") == "Season pack · 63% · 11m left");
+    assert(seerrProgressLabel("movie", -1, -1, 63) == "Downloading");
+    assert(seerrProgressLabel("tv", 1, 1, 63) == "S1E1 downloading");
+    assert(seerrProgressLabel("tv", -1, -1, 63) == "Season pack downloading");
+    assert(seerrProgressEta(63, "00:11:42") == "11m left");
+    assert(seerrProgressEta(100, "00:00:00") == "Waiting for import");
+    assert(seerrProgressStatus("movie", -1, -1, 63, "00:11:42") == "Downloading 63%  11m left");
+    assert(seerrProgressStatus("movie", -1, -1, 100, "00:00:00") == "Downloaded 100%  Waiting for import");
+    assert(seerrProgressStatus("tv", 1, 1, 63, "00:11:42") == "S1E1 downloading 63%  11m left");
+    assert(seerrProgressStatus("tv", -1, -1, 63, "00:11:42") == "Season pack downloading 63%  11m left");
     return 0;
 }

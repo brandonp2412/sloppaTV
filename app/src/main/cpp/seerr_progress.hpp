@@ -47,6 +47,28 @@ inline std::string seerrCompactTimeLeft(std::string value) {
     return "<1m left";
 }
 
+inline std::string seerrProgressLabel(
+    const std::string& mediaType,
+    int seasonNumber,
+    int episodeNumber,
+    int percent
+) {
+    if (percent < 0) return {};
+    const bool complete = percent >= 100;
+    if (mediaType == "movie") return complete ? "Downloaded" : "Downloading";
+    if (seasonNumber >= 0 && episodeNumber >= 0) {
+        return "S" + std::to_string(seasonNumber) + "E" + std::to_string(episodeNumber)
+            + (complete ? " downloaded" : " downloading");
+    }
+    return complete ? "Season pack downloaded" : "Season pack downloading";
+}
+
+inline std::string seerrProgressEta(int percent, const std::string& timeLeft) {
+    if (percent < 0) return {};
+    if (percent >= 100) return "Waiting for import";
+    return seerrCompactTimeLeft(timeLeft);
+}
+
 inline std::string seerrProgressStatus(
     const std::string& mediaType,
     int seasonNumber,
@@ -55,17 +77,9 @@ inline std::string seerrProgressStatus(
     const std::string& timeLeft
 ) {
     if (percent < 0) return {};
-    std::string prefix;
-    if (mediaType == "movie") prefix = percent >= 100 ? "Downloaded" : "Downloading";
-    else if (seasonNumber >= 0 && episodeNumber >= 0) {
-        prefix = "S" + std::to_string(seasonNumber) + "E" + std::to_string(episodeNumber);
-    } else {
-        prefix = "Season pack";
-    }
-
-    std::string result = prefix + " · " + std::to_string(percent) + "%";
-    if (percent >= 100) return result + " · Waiting for import";
-    const std::string compact = seerrCompactTimeLeft(timeLeft);
-    if (!compact.empty()) result += " · " + compact;
+    std::string result = seerrProgressLabel(mediaType, seasonNumber, episodeNumber, percent)
+        + " " + std::to_string(percent) + "%";
+    const std::string eta = seerrProgressEta(percent, timeLeft);
+    if (!eta.empty()) result += "  " + eta;
     return result;
 }

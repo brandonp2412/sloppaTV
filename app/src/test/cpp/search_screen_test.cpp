@@ -77,14 +77,14 @@ int main() {
     assert(state.selectedRow() == SearchScreenState::kLibraryRow);
     assert(state.selectionOnFirstResultRow());
 
-    state.markSeerrRequested("seerr:tv:300", "Queued · Episode 1 waiting", 42);
+    state.markSeerrRequested("seerr:tv:300", "Episode 1 queued", 42);
     const auto requested = std::find_if(state.results().begin(), state.results().end(), [](const JellyfinItem& item) {
         return item.id == "seerr:tv:300";
     });
     assert(requested != state.results().end());
     assert(requested->externalRequested);
     assert(requested->externalRequestId == 42);
-    assert(requested->externalStatus == "Queued · Episode 1 waiting");
+    assert(requested->externalStatus == "Episode 1 queued");
     state.markSeerrUnrequested("seerr:tv:300");
     const auto unrequested = std::find_if(state.results().begin(), state.results().end(), [](const JellyfinItem& item) {
         return item.id == "seerr:tv:300";

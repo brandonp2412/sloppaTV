@@ -65,16 +65,27 @@ std::string tmdbImageUrl(const std::string& base, const std::string& path) {
 }
 
 std::string mediaStatusLabel(int status, bool television) {
-    const std::string episode = television ? " · Episode 1" : std::string{};
+    if (television) {
+        switch (status) {
+            case 1: return "Episode 1 requested";
+            case 2: return "Episode 1 queued";
+            case 3: return "Episode 1 waiting for download";
+            case 4: return "Episode 1 partially available";
+            case 5: return "Available";
+            case 6: return "Blocklisted";
+            case 7: return "Deleted";
+            default: return "Episode 1 requested";
+        }
+    }
     switch (status) {
-        case 1: return "Requested" + episode + " waiting";
-        case 2: return "Queued" + episode + " waiting";
-        case 3: return "Waiting for download" + episode + " pending";
-        case 4: return "Partially available" + episode + " check";
+        case 1: return "Requested";
+        case 2: return "Queued";
+        case 3: return "Waiting for download";
+        case 4: return "Partially available";
         case 5: return "Available";
         case 6: return "Blocklisted";
         case 7: return "Deleted";
-        default: return "Requested" + episode + " waiting";
+        default: return "Requested";
     }
 }
 
@@ -158,13 +169,21 @@ void applyDownloadProgress(JellyfinItem& item, const json& downloads) {
         doubleValue(*selected, "sizeLeft")
     );
     if (percent < 0) return;
+    const std::string timeLeft = stringValue(*selected, "timeLeft");
     item.externalProgressPercent = percent;
+    item.externalProgressLabel = seerrProgressLabel(
+        item.externalMediaType,
+        selectedSeason,
+        selectedEpisode,
+        percent
+    );
+    item.externalProgressEta = seerrProgressEta(percent, timeLeft);
     item.externalStatus = seerrProgressStatus(
         item.externalMediaType,
         selectedSeason,
         selectedEpisode,
         percent,
-        stringValue(*selected, "timeLeft")
+        timeLeft
     );
 }
 }
