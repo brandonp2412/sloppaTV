@@ -485,6 +485,10 @@ public:
             scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
+        } else if (mode == kTextInputSeerrServer) {
+            settings_.seerrServer = text;
+        } else if (mode == kTextInputSeerrApiKey) {
+            settings_.seerrApiKey = text;
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             accountState_.setField(mode - kTextInputLoginServer, text);
         }
@@ -503,6 +507,12 @@ public:
             scheduleLiveSearch();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
+        } else if (mode == kTextInputSeerrServer) {
+            settings_.seerrServer = systemTextInputOriginal_;
+            systemTextInputOriginal_.clear();
+        } else if (mode == kTextInputSeerrApiKey) {
+            settings_.seerrApiKey = systemTextInputOriginal_;
+            systemTextInputOriginal_.clear();
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             accountState_.setField(mode - kTextInputLoginServer, text);
         }
@@ -523,11 +533,13 @@ public:
             settingsScreen_.setSearchText(text);
         } else if (mode == kTextInputSeerrServer) {
             settings_.seerrServer = text;
+            systemTextInputOriginal_.clear();
             saveSession(session_);
             showNotice(settings_.seerrServer.empty() ? "SEERR DISCONNECTED" : "SEERR SERVER SAVED", 3s);
             if (SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)) refreshSeerrPendingAsync();
         } else if (mode == kTextInputSeerrApiKey) {
             settings_.seerrApiKey = text;
+            systemTextInputOriginal_.clear();
             saveSession(session_);
             showNotice(settings_.seerrApiKey.empty() ? "SEERR API KEY CLEARED" : "SEERR API KEY SAVED", 3s);
             if (SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)) refreshSeerrPendingAsync();
@@ -843,7 +855,12 @@ private:
         if (jHint) env->DeleteLocalRef(jHint);
         if (jInitial) env->DeleteLocalRef(jInitial);
         if (activityClass) env->DeleteLocalRef(activityClass);
-        if (shown == JNI_TRUE) systemTextInputMode_ = mode;
+        if (shown == JNI_TRUE) {
+            systemTextInputMode_ = mode;
+            if (mode == kTextInputSeerrServer || mode == kTextInputSeerrApiKey) {
+                systemTextInputOriginal_ = initial;
+            }
+        }
         return shown == JNI_TRUE;
     }
 
@@ -6902,13 +6919,23 @@ private:
     void renderSettings() {
         renderer_.text(80.0f, 58.0f, material_tv::type::headline, "Settings", kText, 560.0f);
         const auto& labels = settingsLabels();
-        const auto values = settingsValues(
+        auto values = settingsValues(
             settings_,
             api_.deviceCodecSupport().maxAudioOutputChannels,
             externalPlayerLabel(),
             session_.username,
             settingsScreen_.advanced()
         );
+        if (systemTextInputMode_ == kTextInputSeerrApiKey) {
+            const size_t visibleMask = std::min<size_t>(settings_.seerrApiKey.size(), 24);
+            values[static_cast<size_t>(kSeerrApiKeySetting)] = std::string(visibleMask, '*');
+            if (settings_.seerrApiKey.size() > visibleMask) {
+                values[static_cast<size_t>(kSeerrApiKeySetting)] += "…";
+            }
+            if (values[static_cast<size_t>(kSeerrApiKeySetting)].empty()) {
+                values[static_cast<size_t>(kSeerrApiKeySetting)] = "Typing…";
+            }
+        }
 
         const auto settingsSearchBounds = drawInputSurface(
             1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused(), materialWideInputFocusScale());
@@ -7659,6 +7686,7 @@ private:
     BrowseScreenState browseState_;
 
     int systemTextInputMode_ = -1;
+    std::string systemTextInputOriginal_;
 
     SearchScreenState searchState_;
 

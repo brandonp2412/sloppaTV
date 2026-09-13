@@ -35,6 +35,8 @@ inline std::string_view materialLabel(std::string_view value) {
         {"AUTO SUBTITLES", "Auto subtitles"},
         {"AUTO SUBTITLE LANGUAGE", "Auto subtitle language"},
         {"AUTO SUBTITLE SOURCE AUDIO", "Auto subtitle source audio"},
+        {"SEERR SERVER", "Seerr Server"},
+        {"SEERR API KEY", "Seerr API Key"},
         {"ADVANCED SETTINGS", "Advanced settings"},
         {"KEEP WATCHING", "Keep watching"},
         {"PLAY NEXT", "Play next"},
