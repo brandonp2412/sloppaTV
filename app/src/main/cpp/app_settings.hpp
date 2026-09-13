@@ -70,7 +70,9 @@ struct AppSettings {
     int screensaverMinutes = 0;
     std::string externalPlayerComponent;
     std::string seerrServer;
+    std::string seerrSessionCookie;
     std::string seerrApiKey;
+    bool seerrSelectDrive = false;
 };
 
 constexpr int kSubtitleLanguagesSetting = 24;
@@ -79,8 +81,10 @@ constexpr int kAutoSubtitlesSetting = 26;
 constexpr int kAutoSubtitleLanguageSetting = 27;
 constexpr int kAutoSubtitleSourceSetting = 28;
 constexpr int kSeerrServerSetting = 29;
-constexpr int kSeerrApiKeySetting = 30;
-constexpr int kAdvancedSettingsToggle = 31;
+constexpr int kSeerrConnectionSetting = 30;
+constexpr int kSeerrDriveSelectionSetting = 31;
+constexpr int kSeerrApiKeySetting = 32;
+constexpr int kAdvancedSettingsToggle = 33;
 
 constexpr bool isBooleanSetting(int setting) {
     return setting == 5
@@ -88,7 +92,8 @@ constexpr bool isBooleanSetting(int setting) {
         || setting == 8
         || setting == 9
         || setting == 12
-        || setting == kAutoSubtitlesSetting;
+        || setting == kAutoSubtitlesSetting
+        || setting == kSeerrDriveSelectionSetting;
 }
 
 inline PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
@@ -208,8 +213,8 @@ inline std::string subtitleLanguageSummary(const AppSettings& settings) {
     return std::to_string(settings.subtitleLanguages.size()) + " SELECTED";
 }
 
-inline const std::array<std::string, 32>& settingsLabels() {
-    static const std::array<std::string, 32> labels{
+inline const std::array<std::string, 34>& settingsLabels() {
+    static const std::array<std::string, 34> labels{
         "MAX STREAMING BITRATE",
         "PLAYBACK BUFFER",
         "SKIP BACK",
@@ -240,7 +245,9 @@ inline const std::array<std::string, 32>& settingsLabels() {
         "AUTO SUBTITLE LANGUAGE",
         "AUTO SUBTITLE SOURCE AUDIO",
         "SEERR SERVER",
-        "SEERR API KEY",
+        "SEERR CONNECTION",
+        "SEERR DRIVE SELECTION",
+        "SEERR API KEY (LEGACY)",
         "ADVANCED SETTINGS",
     };
     return labels;
@@ -259,14 +266,14 @@ inline bool settingLabelContains(std::string_view text, std::string_view query) 
 }
 
 inline std::vector<int> matchingSettings(const std::string& query, bool advanced) {
-    static constexpr std::array<int, 22> commonOrder{
+    static constexpr std::array<int, 23> commonOrder{
         18, 10, 11, 13, 12, kSubtitleLanguagesSetting,
         kAutoSubtitlesSetting, kAutoSubtitleLanguageSetting, kAutoSubtitleSourceSetting,
-        kSeerrServerSetting, kSeerrApiKeySetting,
+        kSeerrServerSetting, kSeerrConnectionSetting, kSeerrDriveSelectionSetting,
         5, 6, 2, 3, 8, 9, kTimeFormatSetting, 14, 20, 23, kAdvancedSettingsToggle,
     };
-    static constexpr std::array<int, 12> advancedOrder{
-        0, 1, 4, 7, 17, 19, 15, 16, 21, 22, 23, kAdvancedSettingsToggle,
+    static constexpr std::array<int, 13> advancedOrder{
+        0, 1, 4, 7, 17, 19, 15, 16, 21, 22, 23, kSeerrApiKeySetting, kAdvancedSettingsToggle,
     };
 
     std::vector<int> matches;

@@ -95,7 +95,9 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.screensaverMinutes = normalizedScreensaverMinutes(valueOr(saved, "screensaverMinutes", settings.screensaverMinutes));
     settings.externalPlayerComponent = valueOr<std::string>(saved, "externalPlayerComponent", {});
     settings.seerrServer = valueOr<std::string>(saved, "seerrServer", {});
+    settings.seerrSessionCookie = valueOr<std::string>(saved, "seerrSessionCookie", {});
     settings.seerrApiKey = valueOr<std::string>(saved, "seerrApiKey", {});
+    settings.seerrSelectDrive = valueOr(saved, "seerrSelectDrive", false);
 }
 
 json writeSettings(const AppSettings& settings) {
@@ -129,7 +131,9 @@ json writeSettings(const AppSettings& settings) {
         {"screensaverMinutes", settings.screensaverMinutes},
         {"externalPlayerComponent", settings.externalPlayerComponent},
         {"seerrServer", settings.seerrServer},
+        {"seerrSessionCookie", settings.seerrSessionCookie},
         {"seerrApiKey", settings.seerrApiKey},
+        {"seerrSelectDrive", settings.seerrSelectDrive},
     };
 }
 }

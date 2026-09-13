@@ -33,6 +33,7 @@ public:
     ApiValueResult<QuickConnectRequest> initiateQuickConnect(std::string server, const std::string& deviceId) const;
     ApiValueResult<bool> pollQuickConnect(const QuickConnectRequest& request, const std::string& deviceId) const;
     ApiValueResult<JellyfinSession> completeQuickConnect(const QuickConnectRequest& request, const std::string& deviceId) const;
+    ApiValueResult<bool> authorizeQuickConnectCode(const JellyfinSession& session, const std::string& code) const;
 
     ApiValueResult<JellyfinServerInfo> getServerInfo(const JellyfinSession& session) const;
     ApiValueResult<JellyfinHomeData> loadHomeCore(const JellyfinSession& session) const;

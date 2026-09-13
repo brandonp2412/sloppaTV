@@ -66,11 +66,13 @@ public final class SloppaNativeActivity extends NativeActivity {
         public final int status;
         public final byte[] body;
         public final String error;
+        public final String setCookie;
 
-        HttpResult(int status, byte[] body, String error) {
+        HttpResult(int status, byte[] body, String error, String setCookie) {
             this.status = status;
             this.body = body;
             this.error = error;
+            this.setCookie = setCookie;
         }
     }
 
@@ -146,7 +148,7 @@ public final class SloppaNativeActivity extends NativeActivity {
             if (future != null) future.cancel(true);
             if (error instanceof InterruptedException) Thread.currentThread().interrupt();
             Throwable cause = error.getCause() != null ? error.getCause() : error;
-            return new HttpResult(0, new byte[0], cause.toString());
+            return new HttpResult(0, new byte[0], cause.toString(), "");
         }
     }
 
@@ -181,9 +183,19 @@ public final class SloppaNativeActivity extends NativeActivity {
                     responseBody = output.toByteArray();
                 }
             }
-            return new HttpResult(status, responseBody, "");
+            StringBuilder setCookies = new StringBuilder();
+            for (int headerIndex = 0; ; ++headerIndex) {
+                String key = connection.getHeaderFieldKey(headerIndex);
+                String value = connection.getHeaderField(headerIndex);
+                if (key == null && value == null) break;
+                if (key != null && "Set-Cookie".equalsIgnoreCase(key) && value != null) {
+                    if (setCookies.length() > 0) setCookies.append('\n');
+                    setCookies.append(value);
+                }
+            }
+            return new HttpResult(status, responseBody, "", setCookies.toString());
         } catch (Exception error) {
-            return new HttpResult(0, new byte[0], error.toString());
+            return new HttpResult(0, new byte[0], error.toString(), "");
         } finally {
             if (connection != null) connection.disconnect();
         }

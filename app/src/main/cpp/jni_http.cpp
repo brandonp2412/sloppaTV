@@ -302,11 +302,13 @@ HttpResponse JniHttpClient::requestOnce(
         jfieldID statusField = resultClass ? env->GetFieldID(resultClass, "status", "I") : nullptr;
         jfieldID bodyField = resultClass ? env->GetFieldID(resultClass, "body", "[B") : nullptr;
         jfieldID errorField = resultClass ? env->GetFieldID(resultClass, "error", "Ljava/lang/String;") : nullptr;
+        jfieldID setCookieField = resultClass ? env->GetFieldID(resultClass, "setCookie", "Ljava/lang/String;") : nullptr;
         if (!clearException(env, "HTTP bridge result fields", response.error)
-            && statusField && bodyField && errorField) {
+            && statusField && bodyField && errorField && setCookieField) {
             response.status = env->GetIntField(result, statusField);
             auto responseBytes = static_cast<jbyteArray>(env->GetObjectField(result, bodyField));
             auto errorText = static_cast<jstring>(env->GetObjectField(result, errorField));
+            auto setCookieText = static_cast<jstring>(env->GetObjectField(result, setCookieField));
 
             if (responseBytes) {
                 const jsize length = env->GetArrayLength(responseBytes);
@@ -320,6 +322,10 @@ HttpResponse JniHttpClient::requestOnce(
                     );
                 }
                 env->DeleteLocalRef(responseBytes);
+            }
+            if (setCookieText) {
+                response.setCookie = jniString(env, setCookieText);
+                env->DeleteLocalRef(setCookieText);
             }
             if (errorText) {
                 const std::string detail = jniString(env, errorText);

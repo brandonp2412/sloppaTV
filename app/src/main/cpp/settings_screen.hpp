@@ -252,6 +252,9 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
         case kTimeFormatSetting:
             settings.clock24Hour = !settings.clock24Hour;
             return SettingChangeEffect::Save;
+        case kSeerrDriveSelectionSetting:
+            settings.seerrSelectDrive = !settings.seerrSelectDrive;
+            return SettingChangeEffect::Save;
         case kAutoSubtitlesSetting:
             settings.autoSubtitles = !settings.autoSubtitles;
             return SettingChangeEffect::Save;
@@ -275,7 +278,7 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
     }
 }
 
-inline std::array<std::string, 32> settingsValues(
+inline std::array<std::string, 34> settingsValues(
     const AppSettings& settings,
     int maxAudioOutputChannels,
     std::string externalPlayer,
@@ -314,7 +317,9 @@ inline std::array<std::string, 32> settingsValues(
         settings.autoSubtitles ? "ON" : "OFF",
         subtitleLanguageLabel(settings.autoSubtitleLanguage),
         autoSubtitleSourceName(settings),
-        settings.seerrServer.empty() ? "NOT CONNECTED" : settings.seerrServer,
+        settings.seerrServer.empty() ? "NOT SET" : settings.seerrServer,
+        !settings.seerrSessionCookie.empty() ? "CONNECTED" : (settings.seerrApiKey.empty() ? "CONNECT WITH JELLYFIN" : "LEGACY API KEY"),
+        settings.seerrSelectDrive ? "ON" : "OFF",
         settings.seerrApiKey.empty() ? "NOT SET" : "SET",
         advanced ? "SHOW COMMON" : "SHOW TECHNICAL",
     };

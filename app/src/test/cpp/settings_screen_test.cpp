@@ -62,7 +62,9 @@ int main() {
     assert(settings.autoSubtitleSourceLanguage == "different");
 
     settings.seerrServer = "https://seerr.example.nz";
+    settings.seerrSessionCookie = "connect.sid=session";
     settings.seerrApiKey = "secret";
+    settings.seerrSelectDrive = true;
     const auto values = settingsValues(settings, 6, "MPV", "viewer", false);
     assert(values[0] == "80 MBIT/S");
     assert(values[14] == "DIRECT / 6CH ROUTE");
@@ -74,15 +76,18 @@ int main() {
     assert(values[27] == "MAORI");
     assert(values[28] == "AUDIO NOT MAORI");
     assert(values[kSeerrServerSetting] == "https://seerr.example.nz");
+    assert(values[kSeerrConnectionSetting] == "CONNECTED");
+    assert(values[kSeerrDriveSelectionSetting] == "ON");
     assert(values[kSeerrApiKeySetting] == "SET");
     assert(values[kAdvancedSettingsToggle] == "SHOW TECHNICAL");
 
     screen.reset();
     screen.setSearchText("seerr");
     const auto seerrMatches = screen.matches();
-    assert(seerrMatches.size() == 2);
+    assert(seerrMatches.size() == 3);
     assert(seerrMatches[0] == kSeerrServerSetting);
-    assert(seerrMatches[1] == kSeerrApiKeySetting);
+    assert(seerrMatches[1] == kSeerrConnectionSetting);
+    assert(seerrMatches[2] == kSeerrDriveSelectionSetting);
 
     screen.openSubtitleLanguagePicker();
     assert(screen.subtitleLanguagePicker());

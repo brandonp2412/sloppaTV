@@ -355,6 +355,30 @@ ApiValueResult<bool> JellyfinClient::pollQuickConnect(
     return result;
 }
 
+ApiValueResult<bool> JellyfinClient::authorizeQuickConnectCode(
+    const JellyfinSession& session,
+    const std::string& code
+) const {
+    ApiValueResult<bool> result;
+    if (!session.valid() || code.empty()) {
+        result.error = "Quick Connect authorization is incomplete";
+        return result;
+    }
+    const auto response = http_.request(
+        "POST",
+        session.server + "/QuickConnect/Authorize?code=" + urlEncode(code),
+        headers(&session, session.deviceId)
+    );
+    if (!response.ok()) {
+        result.error = apiError(response);
+        return result;
+    }
+    result.value = response.body.empty() || response.body.find("true") != std::string::npos;
+    result.ok = result.value;
+    if (!result.ok) result.error = "Jellyfin rejected the Seerr Quick Connect code";
+    return result;
+}
+
 ApiValueResult<JellyfinSession> JellyfinClient::completeQuickConnect(
     const QuickConnectRequest& request,
     const std::string& deviceId

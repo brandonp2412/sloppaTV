@@ -239,6 +239,7 @@ enum class Screen {
     ItemMenu,
     Seasons,
     Episodes,
+    SeerrDrivePicker,
     Player,
 };
 
@@ -545,17 +546,24 @@ public:
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
         } else if (mode == kTextInputSeerrServer) {
+            const bool changed = settings_.seerrServer != text;
             settings_.seerrServer = text;
+            if (changed) {
+                settings_.seerrSessionCookie.clear();
+                seerrStorage_.clear();
+            }
             systemTextInputOriginal_.clear();
             saveSession(session_);
             showNotice(settings_.seerrServer.empty() ? "SEERR DISCONNECTED" : "SEERR SERVER SAVED", 3s);
-            if (SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)) refreshSeerrPendingAsync();
+            refreshSeerrPendingAsync();
+            refreshSeerrStorageAsync(true);
         } else if (mode == kTextInputSeerrApiKey) {
             settings_.seerrApiKey = text;
             systemTextInputOriginal_.clear();
             saveSession(session_);
             showNotice(settings_.seerrApiKey.empty() ? "SEERR API KEY CLEARED" : "SEERR API KEY SAVED", 3s);
-            if (SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)) refreshSeerrPendingAsync();
+            refreshSeerrPendingAsync();
+            refreshSeerrStorageAsync(true);
         } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
             const int field = mode - kTextInputLoginServer;
             accountState_.finishTextField(field, text);
@@ -603,6 +611,7 @@ public:
                     case Screen::ItemMenu: handleItemMenuKey(AKEYCODE_BACK); break;
                     case Screen::Seasons: handleSeasonsKey(AKEYCODE_BACK); break;
                     case Screen::Episodes: handleEpisodesKey(AKEYCODE_BACK); break;
+                    case Screen::SeerrDrivePicker: handleSeerrDrivePickerKey(AKEYCODE_BACK); break;
                     case Screen::Player: break;
                 }
             }
@@ -794,6 +803,7 @@ private:
             case Screen::ItemMenu: handleItemMenuKey(key); break;
             case Screen::Seasons: handleSeasonsKey(key); break;
             case Screen::Episodes: handleEpisodesKey(key); break;
+            case Screen::SeerrDrivePicker: handleSeerrDrivePickerKey(key); break;
             case Screen::Player: break;
         }
         return 1;
@@ -824,7 +834,7 @@ private:
     void scheduleLiveSearch() {
         const auto now = std::chrono::steady_clock::now();
         requestEpochs_.search.invalidate();
-        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey);
+        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth());
         if (searchState_.scheduleSeerrDebounce(now, seerrConfigured)) {
             requestEpochs_.seerrSearch.invalidate();
             seerrSearch_.cancelPendingRequests();
@@ -1382,6 +1392,12 @@ private:
                 settingsScreen_.openSubtitleLanguagePicker();
             } else if (selection == kSeerrServerSetting) {
                 showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
+            } else if (selection == kSeerrConnectionSetting) {
+                connectSeerrAsync();
+            } else if (selection == kSeerrDriveSelectionSetting) {
+                settings_.seerrSelectDrive = !settings_.seerrSelectDrive;
+                saveSession(session_);
+                if (settings_.seerrSelectDrive) refreshSeerrStorageAsync(true);
             } else if (selection == kSeerrApiKeySetting) {
                 showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
             } else if (selection == kAdvancedSettingsToggle) {
@@ -2465,6 +2481,28 @@ private:
         }
     }
 
+    void handleSeerrDrivePickerKey(int32_t key) {
+        if (key == AKEYCODE_BACK) {
+            pendingSeerrRequest_ = {};
+            seerrDriveChoices_.clear();
+            popScreen(Screen::Search);
+            return;
+        }
+        if (seerrDriveChoices_.empty()) return;
+        if (key == AKEYCODE_DPAD_UP) {
+            seerrDriveSelection_ = std::max(0, seerrDriveSelection_ - 1);
+        } else if (key == AKEYCODE_DPAD_DOWN) {
+            seerrDriveSelection_ = std::min(static_cast<int>(seerrDriveChoices_.size()) - 1, seerrDriveSelection_ + 1);
+        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            const JellyfinItem item = pendingSeerrRequest_;
+            const SeerrStorageTarget target = seerrDriveChoices_[static_cast<size_t>(seerrDriveSelection_)];
+            pendingSeerrRequest_ = {};
+            seerrDriveChoices_.clear();
+            popScreen(Screen::Search);
+            requestSeerrItemAsync(item, &target, true);
+        }
+    }
+
     void handlePlayerKey(int32_t key, int repeatCount = 0) {
         const auto now = std::chrono::steady_clock::now();
         if (key == AKEYCODE_BACK) {
@@ -2662,6 +2700,9 @@ private:
             pendingRuntimeLaunchRequest_.reset();
         }
         session_ = {};
+        settings_.seerrSessionCookie.clear();
+        seerrStorage_.clear();
+        seerrStorageRefreshAt_ = {};
         serverInfo_ = {};
         serverInfoLoading_ = false;
         home_ = {};
@@ -3105,8 +3146,8 @@ private:
             return;
         }
         const std::string server = settings_.seerrServer;
-        const std::string apiKey = settings_.seerrApiKey;
-        if (!SeerrClient::configured(server, apiKey)) {
+        const SeerrAuth auth = seerrAuth();
+        if (!SeerrClient::configured(server, auth)) {
             error_ = "SEERR IS NOT CONNECTED";
             detailsState_.setDeleteConfirmation(false);
             return;
@@ -3114,11 +3155,11 @@ private:
         const JellyfinItem item = detail_;
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, server, apiKey, item] {
-            const ApiResult result = seerr_.deleteRequest(server, apiKey, item.externalRequestId);
+        tasks_.submit([this, server, auth, item] {
+            const ApiResult result = seerr_.deleteRequest(server, auth, item.externalRequestId);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
-            if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) return;
             if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = "SEERR DELETE: " + result.error;
@@ -3347,6 +3388,8 @@ private:
                     searchState_.setLoading(false);
                     session_.token.clear();
                     session_.userId.clear();
+                    settings_.seerrSessionCookie.clear();
+                    seerrStorage_.clear();
                     resetNavigation(Screen::Login);
                     error_ = "SESSION EXPIRED - LOG IN AGAIN";
                     saveSession(session_);
@@ -3451,6 +3494,127 @@ private:
         });
     }
 
+    [[nodiscard]] SeerrAuth seerrAuth() const {
+        return SeerrAuth{
+            .sessionCookie = settings_.seerrSessionCookie,
+            .apiKey = settings_.seerrApiKey,
+        };
+    }
+
+    void connectSeerrAsync() {
+        if (seerrConnectLoading_) return;
+        if (settings_.seerrServer.empty()) {
+            showNotice("SET THE SEERR SERVER FIRST", 4s);
+            return;
+        }
+        if (!session_.valid()) {
+            showNotice("JELLYFIN LOGIN REQUIRED", 4s);
+            return;
+        }
+        const std::string server = settings_.seerrServer;
+        const JellyfinSession jellyfin = session_;
+        seerrConnectLoading_ = true;
+        error_.clear();
+        showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);
+        tasks_.submit([this, server, jellyfin] {
+            auto initiated = seerr_.initiateQuickConnect(server);
+            if (!initiated.ok) {
+                std::scoped_lock lock(stateMutex_);
+                seerrConnectLoading_ = false;
+                notice_.clear();
+                error_ = "SEERR QUICK CONNECT: " + initiated.error;
+                return;
+            }
+            auto authorized = api_.authorizeQuickConnectCode(jellyfin, initiated.value.code);
+            if (!authorized.ok || !authorized.value) {
+                std::scoped_lock lock(stateMutex_);
+                seerrConnectLoading_ = false;
+                notice_.clear();
+                error_ = "JELLYFIN QUICK CONNECT: " + authorized.error;
+                return;
+            }
+            auto authenticated = seerr_.authenticateQuickConnect(server, initiated.value);
+            std::scoped_lock lock(stateMutex_);
+            seerrConnectLoading_ = false;
+            notice_.clear();
+            if (settings_.seerrServer != server || session_.userId != jellyfin.userId) return;
+            if (!authenticated.ok) {
+                error_ = "SEERR QUICK CONNECT: " + authenticated.error;
+                return;
+            }
+            settings_.seerrSessionCookie = std::move(authenticated.value);
+            saveSession(session_);
+            error_.clear();
+            showNotice("SEERR CONNECTED WITH JELLYFIN", 4s);
+            refreshSeerrPendingAsync();
+            refreshSeerrStorageAsync(true);
+        });
+    }
+
+    void refreshSeerrStorageAsync(bool force = false) {
+        const std::string server = settings_.seerrServer;
+        const SeerrAuth auth = seerrAuth();
+        if (!SeerrClient::configured(server, auth)) {
+            seerrStorage_.clear();
+            seerrStorageLoading_ = false;
+            seerrStorageRefreshAt_ = {};
+            return;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (seerrStorageLoading_ || (!force && seerrStorageRefreshAt_ != std::chrono::steady_clock::time_point{} && now < seerrStorageRefreshAt_)) return;
+        seerrStorageLoading_ = true;
+        tasks_.submit([this, server, auth] {
+            auto result = seerr_.storageTargets(server, auth);
+            std::scoped_lock lock(stateMutex_);
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) {
+                seerrStorageLoading_ = false;
+                return;
+            }
+            seerrStorageLoading_ = false;
+            seerrStorageRefreshAt_ = std::chrono::steady_clock::now() + 60s;
+            if (!result.ok) {
+                if (!pendingSeerrRequest_.id.empty()) {
+                    pendingSeerrRequest_ = {};
+                    error_ = "SEERR STORAGE: " + result.error;
+                }
+                return;
+            }
+            seerrStorage_ = std::move(result.value);
+            if (!pendingSeerrRequest_.id.empty() && settings_.seerrSelectDrive) {
+                const JellyfinItem item = pendingSeerrRequest_;
+                pendingSeerrRequest_ = {};
+                openSeerrDrivePicker(item);
+            }
+        });
+    }
+
+    static double bytesToGb(int64_t bytes) {
+        return static_cast<double>(std::max<int64_t>(0, bytes)) / 1000000000.0;
+    }
+
+    void openSeerrDrivePicker(const JellyfinItem& item) {
+        seerrDriveChoices_.clear();
+        for (const auto& target : seerrStorage_) {
+            if (target.mediaType == item.externalMediaType) seerrDriveChoices_.push_back(target);
+        }
+        if (seerrDriveChoices_.empty()) {
+            if (seerrStorageLoading_) {
+                pendingSeerrRequest_ = item;
+                showNotice("LOADING SEERR STORAGE…", 4s);
+            } else {
+                pendingSeerrRequest_ = {};
+                error_ = "NO SEERR STORAGE TARGETS ARE AVAILABLE";
+            }
+            return;
+        }
+        std::stable_sort(seerrDriveChoices_.begin(), seerrDriveChoices_.end(), [](const auto& a, const auto& b) {
+            return a.isDefault > b.isDefault;
+        });
+        pendingSeerrRequest_ = item;
+        seerrDriveSelection_ = 0;
+        pushScreen(Screen::SeerrDrivePicker);
+    }
+
     void syncSeerrHomeRowLocked() {
         const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
         std::erase_if(home_.rows, [](const JellyfinHomeRow& row) {
@@ -3470,8 +3634,8 @@ private:
 
     void refreshSeerrPendingAsync() {
         const std::string server = settings_.seerrServer;
-        const std::string apiKey = settings_.seerrApiKey;
-        if (!SeerrClient::configured(server, apiKey)) {
+        const SeerrAuth auth = seerrAuth();
+        if (!SeerrClient::configured(server, auth)) {
             seerrPendingLoading_ = false;
             seerrPendingRefreshAt_ = {};
             seerrPending_.clear();
@@ -3480,10 +3644,13 @@ private:
         }
         if (seerrPendingLoading_) return;
         seerrPendingLoading_ = true;
-        tasks_.submit([this, server, apiKey] {
-            auto result = seerr_.pendingRequests(server, apiKey, 20);
+        tasks_.submit([this, server, auth] {
+            auto result = seerr_.pendingRequests(server, auth, 20);
             std::scoped_lock lock(stateMutex_);
-            if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) {
+                seerrPendingLoading_ = false;
+                return;
+            }
             seerrPendingLoading_ = false;
             seerrPendingRefreshAt_ = std::chrono::steady_clock::now() + 60s;
             if (!result.ok) {
@@ -3501,25 +3668,38 @@ private:
         });
     }
 
-    void requestSeerrItemAsync(const JellyfinItem& item) {
+    void requestSeerrItemAsync(
+        const JellyfinItem& item,
+        const SeerrStorageTarget* selectedTarget = nullptr,
+        bool skipDrivePrompt = false
+    ) {
         if (!isSeerrItem(item)) return;
         if (item.externalRequested) {
             showNotice(item.externalStatus.empty() ? "ALREADY REQUESTED IN SEERR" : item.externalStatus, 5s);
             return;
         }
         const std::string server = settings_.seerrServer;
-        const std::string apiKey = settings_.seerrApiKey;
-        if (!SeerrClient::configured(server, apiKey)) {
+        const SeerrAuth auth = seerrAuth();
+        if (!SeerrClient::configured(server, auth)) {
             showNotice("CONNECT SEERR IN SETTINGS FIRST", 5s);
+            return;
+        }
+        if (settings_.seerrSelectDrive && !skipDrivePrompt && !selectedTarget) {
+            refreshSeerrStorageAsync();
+            openSeerrDrivePicker(item);
             return;
         }
         mutationLoading_ = true;
         const JellyfinItem requestedItem = item;
-        tasks_.submit([this, server, apiKey, requestedItem] {
-            const ApiValueResult<int> result = seerr_.requestMedia(server, apiKey, requestedItem);
+        const std::optional<SeerrStorageTarget> target = selectedTarget
+            ? std::optional<SeerrStorageTarget>(*selectedTarget)
+            : std::nullopt;
+        tasks_.submit([this, server, auth, requestedItem, target] {
+            const ApiValueResult<int> result = seerr_.requestMedia(
+                server, auth, requestedItem, target ? &*target : nullptr);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
-            if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) return;
             if (!result.ok) {
                 error_ = "SEERR REQUEST: " + result.error;
                 return;
@@ -3543,22 +3723,24 @@ private:
             showNotice("REQUEST SENT TO SEERR", 4s);
             error_.clear();
             refreshSeerrPendingAsync();
+            refreshSeerrStorageAsync(true);
         });
     }
 
     void searchSeerrAsync(bool immediate) {
         const std::string seerrServer = settings_.seerrServer;
-        const std::string seerrApiKey = settings_.seerrApiKey;
-        const bool configured = SeerrClient::configured(seerrServer, seerrApiKey);
+        const SeerrAuth auth = seerrAuth();
+        const bool configured = SeerrClient::configured(seerrServer, auth);
         const bool shouldStart = immediate
             ? searchState_.beginImmediateSeerrSearch(configured)
             : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
         if (!shouldStart) return;
 
+        refreshSeerrStorageAsync();
         const std::string query = searchState_.query();
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
-        tasks_.submit([this, seerrServer, seerrApiKey, query, generation] {
-            auto result = seerrSearch_.search(seerrServer, seerrApiKey, query);
+        tasks_.submit([this, seerrServer, auth, query, generation] {
+            auto result = seerrSearch_.search(seerrServer, auth, query);
             std::scoped_lock lock(stateMutex_);
             if (!requestEpochs_.seerrSearch.active(generation)) return;
             if (screen_ != Screen::Search) {
@@ -4920,7 +5102,7 @@ private:
             if (!seerrPendingLoading_
                 && seerrPendingRefreshAt_ != std::chrono::steady_clock::time_point{}
                 && now >= seerrPendingRefreshAt_
-                && SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey)
+                && SeerrClient::configured(settings_.seerrServer, seerrAuth())
                 && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
                 seerrPendingRefreshAt_ = {};
                 refreshSeerr = true;
@@ -4993,6 +5175,7 @@ private:
                 case Screen::ItemMenu: renderDetails(); break;
                 case Screen::Seasons: renderSeasons(); break;
                 case Screen::Episodes: renderEpisodes(); break;
+                case Screen::SeerrDrivePicker: renderSeerrDrivePicker(); break;
                 case Screen::Player: renderPlayer(); break;
             }
         };
@@ -6450,7 +6633,7 @@ private:
     void renderSearch() {
         const auto& results = searchState_.results();
         const auto& query = searchState_.query();
-        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey);
+        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth());
         renderer_.text(80.0f, 44.0f, material_tv::type::headline, "Search", kText, 520.0f);
         constexpr float searchTop = 155.0f;
         constexpr float searchWidth = 1450.0f;
@@ -6541,6 +6724,34 @@ private:
             if (semanticRow == SearchScreenState::kSeerrRow) {
                 renderer_.rect(72.0f, labelY - 22.0f, 1776.0f, 1.5f, kDivider);
                 renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
+
+                // Right-aligned storage health: a tiny drive glyph plus percentage full.
+                float badgeRight = 1848.0f;
+                int shownDrives = 0;
+                std::unordered_set<std::string> shownStorage;
+                for (auto it = seerrStorage_.rbegin(); it != seerrStorage_.rend() && shownDrives < 5; ++it) {
+                    const std::string identity = it->path + ":" + std::to_string(it->totalSpace);
+                    if (!shownStorage.insert(identity).second || it->totalSpace <= 0) continue;
+                    const int percent = std::clamp(it->usedPercent(), 0, 100);
+                    const std::string text = std::to_string(percent) + "%";
+                    const float badgeWidth = 108.0f;
+                    const float badgeX = badgeRight - badgeWidth;
+                    const float badgeY = labelY - 8.0f;
+                    renderer_.roundedRect(badgeX, badgeY, badgeWidth, 43.0f, 15.0f, kPanelElevated);
+                    renderer_.roundedRect(badgeX + 11.0f, badgeY + 11.0f, 29.0f, 21.0f, 5.0f, kPanel);
+                    renderer_.roundedRect(badgeX + 16.0f, badgeY + 16.0f, 19.0f, 4.0f, 2.0f,
+                        percent >= 90 ? kError : kSecondaryText);
+                    renderer_.roundedRect(badgeX + 31.0f, badgeY + 25.0f, 4.0f, 4.0f, 2.0f,
+                        percent >= 90 ? kError : kFocus);
+                    drawCenteredSingleLineFit(badgeX + 43.0f, badgeY, 58.0f, 43.0f, 1.32f,
+                        text, percent >= 90 ? kError : kSecondaryText, 4.0f, 2.0f);
+                    badgeRight = badgeX - 10.0f;
+                    ++shownDrives;
+                }
+                if (seerrStorageLoading_ && shownDrives == 0) {
+                    renderer_.text(1635.0f, labelY + 1.0f, 1.30f, "Loading storage…", kMuted, 210.0f);
+                }
+
                 if (searchState_.seerrLoading()) {
                     drawLoadingDots(196.0f, labelY + 8.0f);
                     renderer_.text(288.0f, labelY + 1.0f, 1.45f, "Searching Seerr…", kMuted, 440.0f);
@@ -6616,6 +6827,68 @@ private:
         for (int slot = 0; slot < 2 && firstSemantic + slot < static_cast<int>(semanticRows.size()); ++slot) {
             renderResultRow(semanticRows[static_cast<size_t>(firstSemantic + slot)], slot);
         }
+    }
+
+    void renderSeerrDrivePicker() {
+        renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
+        const std::string subtitle = pendingSeerrRequest_.name.empty()
+            ? "Choose where Seerr should place this request"
+            : "Choose storage for " + pendingSeerrRequest_.name;
+        renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
+
+        if (seerrDriveChoices_.empty()) {
+            renderEmptyState("No storage targets", "Back returns to search.");
+            return;
+        }
+
+        const int first = std::clamp(seerrDriveSelection_ - 2, 0, std::max(0, static_cast<int>(seerrDriveChoices_.size()) - 5));
+        for (int slot = 0; slot < 5; ++slot) {
+            const int index = first + slot;
+            if (index >= static_cast<int>(seerrDriveChoices_.size())) break;
+            const auto& target = seerrDriveChoices_[static_cast<size_t>(index)];
+            const bool focused = index == seerrDriveSelection_;
+            const float x = 120.0f;
+            const float y = 220.0f + static_cast<float>(slot) * 145.0f;
+            constexpr float width = 1680.0f;
+            drawListItemSurface(x, y, width, 116.0f, focused,
+                material_tv::cornerMedium, materialWideListItemFocusScale());
+
+            // Compact physical-drive glyph: body, platter slot, activity light.
+            const float iconX = x + 34.0f;
+            const float iconY = y + 30.0f;
+            renderer_.roundedRect(iconX, iconY, 58.0f, 52.0f, 10.0f, focused ? kFocusSoft : kPanelElevated);
+            renderer_.roundedRect(iconX + 10.0f, iconY + 11.0f, 38.0f, 7.0f, 3.5f, focused ? kFocus : kMuted);
+            renderer_.roundedRect(iconX + 40.0f, iconY + 33.0f, 7.0f, 7.0f, 3.5f, focused ? kFocus : kSecondaryText);
+
+            std::string name = target.path;
+            while (name.size() > 1 && name.back() == '/') name.pop_back();
+            const size_t slash = name.find_last_of('/');
+            if (slash != std::string::npos && slash + 1 < name.size()) name = name.substr(slash + 1);
+            if (name.empty()) name = target.serviceName.empty() ? "Storage" : target.serviceName;
+            if (!target.serviceName.empty() && name != target.serviceName) name += " · " + target.serviceName;
+            renderer_.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f,
+                fitTextLines(name, 2.05f, 760.0f, 1), focused ? kText : kSecondaryText, 760.0f);
+
+            const double usedGb = bytesToGb(target.totalSpace - target.freeSpace);
+            const double totalGb = bytesToGb(target.totalSpace);
+            std::ostringstream usage;
+            usage << std::fixed << std::setprecision(totalGb >= 100.0 ? 0 : 1)
+                  << usedGb << " / " << totalGb << " GB";
+            renderer_.text(x + 120.0f, y + 78.0f, 1.38f, usage.str(), kMuted, 760.0f);
+
+            const int percent = std::clamp(target.usedPercent(), 0, 100);
+            const float barX = 1085.0f;
+            const float barY = y + 48.0f;
+            constexpr float barWidth = 500.0f;
+            renderer_.roundedRect(barX, barY, barWidth, 14.0f, 7.0f, kPanelElevated);
+            renderer_.roundedRect(barX, barY, barWidth * static_cast<float>(percent) / 100.0f, 14.0f, 7.0f,
+                percent >= 90 ? kError : (focused ? kFocus : kSecondaryText));
+            const std::string pct = std::to_string(percent) + "% full";
+            drawCenteredSingleLineFit(1600.0f, y + 26.0f, 150.0f, 58.0f, 1.70f, pct,
+                percent >= 90 ? kError : (focused ? kText : kSecondaryText), 8.0f, 3.0f);
+        }
+        drawCenteredSingleLineFit(590.0f, 970.0f, 740.0f, 48.0f, 1.45f,
+            "Up / Down selects   ·   OK requests   ·   Back cancels", kMuted, 12.0f, 4.0f);
     }
 
     void renderPlayer() {
@@ -7115,7 +7388,7 @@ private:
                 && !settingsScreen_.searchFocused()
                 && i == settingsScreen_.selection();
             const bool actionRow = i == 22 || i == 23 || i == kSubtitleLanguagesSetting
-                || i == kSeerrServerSetting || i == kSeerrApiKeySetting || i == kAdvancedSettingsToggle;
+                || i == kSeerrServerSetting || i == kSeerrConnectionSetting || i == kSeerrApiKeySetting || i == kAdvancedSettingsToggle;
             // Settings use contained TV list rows, which remain readable at distance.
             constexpr float rowX = 110.0f;
             constexpr float rowWidth = 1700.0f;
@@ -7844,6 +8117,13 @@ private:
     std::vector<JellyfinItem> seerrPending_;
     bool seerrPendingLoading_ = false;
     std::chrono::steady_clock::time_point seerrPendingRefreshAt_{};
+    std::vector<SeerrStorageTarget> seerrStorage_;
+    bool seerrStorageLoading_ = false;
+    std::chrono::steady_clock::time_point seerrStorageRefreshAt_{};
+    JellyfinItem pendingSeerrRequest_;
+    std::vector<SeerrStorageTarget> seerrDriveChoices_;
+    int seerrDriveSelection_ = 0;
+    bool seerrConnectLoading_ = false;
     ArtworkCache artwork_{30};
     ArtworkCache profileArtwork_;
     ArtworkCache homeArtwork_{48};

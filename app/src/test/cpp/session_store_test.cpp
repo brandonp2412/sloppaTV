@@ -33,7 +33,9 @@ int main() {
     state.settings.safeAreaPercent = 4;
     state.settings.externalPlayerComponent = "org.example/.Player";
     state.settings.seerrServer = "https://seerr.example";
+    state.settings.seerrSessionCookie = "connect.sid=session";
     state.settings.seerrApiKey = "api-key";
+    state.settings.seerrSelectDrive = true;
 
     std::string warning;
     assert(saveSessionState(directory.string(), state, warning));
@@ -60,7 +62,9 @@ int main() {
     assert(loaded.settings.safeAreaPercent == 4);
     assert(loaded.settings.externalPlayerComponent == "org.example/.Player");
     assert(loaded.settings.seerrServer == "https://seerr.example");
+    assert(loaded.settings.seerrSessionCookie == "connect.sid=session");
     assert(loaded.settings.seerrApiKey == "api-key");
+    assert(loaded.settings.seerrSelectDrive);
 
     const std::filesystem::path temporaryPath = directory / "session.json.tmp";
     std::filesystem::create_directory(temporaryPath, ec);
