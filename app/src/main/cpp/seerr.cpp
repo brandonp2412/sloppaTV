@@ -288,12 +288,12 @@ ApiValueResult<std::vector<JellyfinItem>> SeerrClient::pendingRequests(
     return result;
 }
 
-ApiResult SeerrClient::requestMedia(
+ApiValueResult<int> SeerrClient::requestMedia(
     const std::string& server,
     const std::string& apiKey,
     const JellyfinItem& item
 ) const {
-    ApiResult result;
+    ApiValueResult<int> result;
     if (!configured(server, apiKey)) {
         result.error = "Seerr is not connected";
         return result;
@@ -317,6 +317,38 @@ ApiResult SeerrClient::requestMedia(
     if (item.externalMediaType == "tv") body["seasons"] = "all";
     const auto response = http_.request("POST", apiBase(server) + "/request", headers(apiKey), body.dump());
     result.ok = response.status == 201;
+    if (!result.ok) {
+        result.error = apiError(response);
+        return result;
+    }
+    try {
+        if (!response.body.empty()) result.value = integerValue(json::parse(response.body), "id");
+    } catch (...) {
+        result.value = 0;
+    }
+    return result;
+}
+
+ApiResult SeerrClient::deleteRequest(
+    const std::string& server,
+    const std::string& apiKey,
+    int requestId
+) const {
+    ApiResult result;
+    if (!configured(server, apiKey)) {
+        result.error = "Seerr is not connected";
+        return result;
+    }
+    if (requestId <= 0) {
+        result.error = "Seerr request ID is unavailable";
+        return result;
+    }
+    const auto response = http_.request(
+        "DELETE",
+        apiBase(server) + "/request/" + std::to_string(requestId),
+        headers(apiKey)
+    );
+    result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 }

@@ -18,6 +18,7 @@ struct RequestEpochs {
     RequestEpoch auth;
     RequestEpoch home;
     RequestEpoch search;
+    RequestEpoch seerrSearch;
     RequestEpoch content;
     RequestEpoch playback;
     RequestEpoch session;
@@ -26,6 +27,7 @@ struct RequestEpochs {
         auth.invalidate();
         home.invalidate();
         search.invalidate();
+        seerrSearch.invalidate();
         content.invalidate();
         playback.invalidate();
     }

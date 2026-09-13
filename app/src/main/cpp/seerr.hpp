@@ -33,10 +33,15 @@ public:
         const std::string& apiKey,
         int limit = 20
     ) const;
-    ApiResult requestMedia(
+    ApiValueResult<int> requestMedia(
         const std::string& server,
         const std::string& apiKey,
         const JellyfinItem& item
+    ) const;
+    ApiResult deleteRequest(
+        const std::string& server,
+        const std::string& apiKey,
+        int requestId
     ) const;
     ApiValueResult<std::string> downloadImage(const std::string& url) const;
 

@@ -316,6 +316,7 @@ public:
           renderer_(app->activity->vm, app->activity->clazz),
           api_(app->activity->vm, app->activity->clazz),
           seerr_(app->activity->vm, app->activity->clazz),
+          seerrSearch_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
           externalPlayer_(app->activity->vm, app->activity->clazz),
@@ -371,6 +372,7 @@ public:
     ~SloppaApp() {
         api_.cancelPendingRequests();
         seerr_.cancelPendingRequests();
+        seerrSearch_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         tasks_.shutdown();
         stopPlayback();
@@ -416,6 +418,13 @@ public:
                     ).count();
                     const int searchTimeoutMs = static_cast<int>(std::max<int64_t>(0, searchDelayMs));
                     timeoutMs = timeoutMs < 0 ? searchTimeoutMs : std::min(timeoutMs, searchTimeoutMs);
+                }
+                if (searchState_.seerrDebouncePending()) {
+                    const int64_t seerrDelayMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        searchState_.seerrDebounceDeadline() - pollNow
+                    ).count();
+                    const int seerrTimeoutMs = static_cast<int>(std::max<int64_t>(0, seerrDelayMs));
+                    timeoutMs = timeoutMs < 0 ? seerrTimeoutMs : std::min(timeoutMs, seerrTimeoutMs);
                 }
                 auto tightenTimeoutUntil = [&](std::chrono::steady_clock::time_point deadline) {
                     if (deadline == std::chrono::steady_clock::time_point{}) return;
@@ -809,24 +818,29 @@ private:
     }
 
     void scheduleLiveSearch() {
+        const auto now = std::chrono::steady_clock::now();
         requestEpochs_.search.invalidate();
-        if (!searchState_.scheduleDebounce(std::chrono::steady_clock::now())) {
-            error_.clear();
-            return;
+        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, settings_.seerrApiKey);
+        if (searchState_.scheduleSeerrDebounce(now, seerrConfigured)) {
+            requestEpochs_.seerrSearch.invalidate();
+            seerrSearch_.cancelPendingRequests();
         }
+        if (!searchState_.scheduleDebounce(now)) error_.clear();
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     void runDueLiveSearch() {
         std::scoped_lock lock(stateMutex_);
-        if (!searchState_.debouncePending()) return;
         if (screen_ != Screen::Search) {
             searchState_.cancelPending();
             requestEpochs_.search.invalidate();
+            requestEpochs_.seerrSearch.invalidate();
+            seerrSearch_.cancelPendingRequests();
             return;
         }
-        if (!searchState_.debounceDue(std::chrono::steady_clock::now())) return;
-        searchAsync();
+        const auto now = std::chrono::steady_clock::now();
+        if (searchState_.debounceDue(now)) searchAsync(false);
+        if (searchState_.seerrDebounceDue(now)) searchSeerrAsync(false);
     }
 
     bool showSystemTextInput(const std::string& initial, const std::string& hint, int mode, bool password = false) {
@@ -1017,6 +1031,7 @@ private:
         pushScreen(Screen::ItemMenu);
         detailsState_.beginItemMenu();
         error_.clear();
+        if (isSeerrItem(item)) return;
 
         const JellyfinSession session = session_;
         const std::string itemId = item.id;
@@ -1082,15 +1097,14 @@ private:
         } else if (isItemContextKey(key) && !items.empty() && section.title != "My Media") {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             const auto& selected = items[static_cast<size_t>(selection)];
-            if (!isSeerrItem(selected)) openItemMenuForItem(selected);
+            openItemMenuForItem(selected);
             return;
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             const auto& selected = items[static_cast<size_t>(selection)];
             if (section.title == "My Media") openLibrary(selected);
-            else if (isSeerrItem(selected)) {
-                showNotice(selected.externalStatus.empty() ? "REQUESTED IN SEERR" : selected.externalStatus, 5s);
-            } else openDetails(selected);
+            else if (isSeerrItem(selected)) openItemMenuForItem(selected);
+            else openDetails(selected);
             return;
         }
         homeState_.updateViewport(static_cast<int>(home_.rows.size()));
@@ -1186,6 +1200,8 @@ private:
             } else {
                 searchState_.cancelPending();
                 requestEpochs_.search.invalidate();
+                requestEpochs_.seerrSearch.invalidate();
+                seerrSearch_.cancelPendingRequests();
                 hideSystemTextInput();
                 popScreen(Screen::Home);
                 if (screen_ == Screen::Home) {
@@ -1516,6 +1532,7 @@ private:
     }
 
     std::vector<std::string> itemMenuActions() const {
+        if (isSeerrItem(detail_)) return {"DELETE REQUEST", "BACK"};
         return detailsState_.itemMenuActions(
             detail_,
             selectedExternalPlayer().has_value(),
@@ -1533,16 +1550,18 @@ private:
 
     void handleItemMenuKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            detailsState_.setDeleteConfirmation(false);
-            popScreen(Screen::Details);
+            if (detailsState_.deleteConfirmation()) detailsState_.setDeleteConfirmation(false);
+            else popScreen(Screen::Details);
             return;
         }
         if (detailsState_.deleteConfirmation()) {
             if (key == AKEYCODE_DPAD_UP || key == AKEYCODE_DPAD_LEFT) detailsState_.setDeleteConfirmationSelection(0);
             else if (key == AKEYCODE_DPAD_DOWN || key == AKEYCODE_DPAD_RIGHT) detailsState_.setDeleteConfirmationSelection(1);
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (detailsState_.deleteConfirmationSelection() == 0) deleteCurrentItemAsync();
-                else detailsState_.setDeleteConfirmation(false);
+                if (detailsState_.deleteConfirmationSelection() == 0) {
+                    if (isSeerrItem(detail_)) deleteSeerrRequestAsync();
+                    else deleteCurrentItemAsync();
+                } else detailsState_.setDeleteConfirmation(false);
             }
             return;
         }
@@ -1576,7 +1595,7 @@ private:
                 popScreen(Screen::Details);
                 refreshCurrentItemMetadataAsync();
             }
-            else if (action == "DELETE MEDIA") {
+            else if (action == "DELETE MEDIA" || action == "DELETE REQUEST") {
                 detailsState_.setDeleteConfirmation(true);
             } else {
                 popScreen(Screen::Details);
@@ -3073,6 +3092,49 @@ private:
         });
     }
 
+    void deleteSeerrRequestAsync() {
+        if (loading_ || mutationLoading_ || !isSeerrItem(detail_) || detail_.externalRequestId <= 0) {
+            if (isSeerrItem(detail_) && detail_.externalRequestId <= 0) {
+                error_ = "SEERR REQUEST ID IS NOT AVAILABLE YET";
+                detailsState_.setDeleteConfirmation(false);
+            }
+            return;
+        }
+        const std::string server = settings_.seerrServer;
+        const std::string apiKey = settings_.seerrApiKey;
+        if (!SeerrClient::configured(server, apiKey)) {
+            error_ = "SEERR IS NOT CONNECTED";
+            detailsState_.setDeleteConfirmation(false);
+            return;
+        }
+        const JellyfinItem item = detail_;
+        mutationLoading_ = true;
+        error_.clear();
+        tasks_.submit([this, server, apiKey, item] {
+            const ApiResult result = seerr_.deleteRequest(server, apiKey, item.externalRequestId);
+            std::scoped_lock lock(stateMutex_);
+            mutationLoading_ = false;
+            if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
+            if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
+            if (!result.ok) {
+                error_ = "SEERR DELETE: " + result.error;
+                detailsState_.setDeleteConfirmation(false);
+                return;
+            }
+            std::erase_if(seerrPending_, [&](const JellyfinItem& pending) {
+                return pending.externalRequestId == item.externalRequestId || pending.id == item.id;
+            });
+            searchState_.markSeerrUnrequested(item.id);
+            syncSeerrHomeRowLocked();
+            detail_ = {};
+            detailsState_.setDeleteConfirmation(false);
+            popScreen(Screen::Home);
+            if (screen_ != Screen::Home) resetNavigation(Screen::Home);
+            showNotice("SEERR REQUEST DELETED", 4s);
+            error_.clear();
+        });
+    }
+
     void deleteCurrentItemAsync() {
         if (loading_ || mutationLoading_ || detail_.id.empty() || !detail_.canDelete) return;
         const JellyfinSession session = session_;
@@ -3102,7 +3164,7 @@ private:
 
     void openSearch() {
         pushScreen(Screen::Search);
-        searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin", kTextInputSearch));
+        searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
         keyboardRow_ = keyboardCol_ = 0;
         error_.clear();
     }
@@ -3441,7 +3503,7 @@ private:
         mutationLoading_ = true;
         const JellyfinItem requestedItem = item;
         tasks_.submit([this, server, apiKey, requestedItem] {
-            const ApiResult result = seerr_.requestMedia(server, apiKey, requestedItem);
+            const ApiValueResult<int> result = seerr_.requestMedia(server, apiKey, requestedItem);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
             if (settings_.seerrServer != server || settings_.seerrApiKey != apiKey) return;
@@ -3453,9 +3515,10 @@ private:
             const std::string status = requestedItem.externalMediaType == "tv"
                 ? "Queued · Episode 1 waiting"
                 : "Queued for download";
-            searchState_.markSeerrRequested(requestedItem.id, status);
+            searchState_.markSeerrRequested(requestedItem.id, status, result.value);
             JellyfinItem pending = requestedItem;
             pending.externalRequested = true;
+            pending.externalRequestId = result.value;
             pending.externalMediaStatus = 2;
             pending.externalStatus = status;
             const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& candidate) {
@@ -3470,15 +3533,37 @@ private:
         });
     }
 
-    void searchAsync() {
+    void searchSeerrAsync(bool immediate) {
+        const std::string seerrServer = settings_.seerrServer;
+        const std::string seerrApiKey = settings_.seerrApiKey;
+        const bool configured = SeerrClient::configured(seerrServer, seerrApiKey);
+        const bool shouldStart = immediate
+            ? searchState_.beginImmediateSeerrSearch(configured)
+            : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
+        if (!shouldStart) return;
+
+        const std::string query = searchState_.query();
+        const uint64_t generation = requestEpochs_.seerrSearch.begin();
+        tasks_.submit([this, seerrServer, seerrApiKey, query, generation] {
+            auto result = seerrSearch_.search(seerrServer, seerrApiKey, query);
+            std::scoped_lock lock(stateMutex_);
+            if (!requestEpochs_.seerrSearch.active(generation)) return;
+            if (screen_ != Screen::Search) {
+                searchState_.setSeerrLoading(false);
+                return;
+            }
+            if (!result.ok) {
+                (void) searchState_.failSeerrSearch(query, result.error);
+                return;
+            }
+            (void) searchState_.finishSeerrSearch(query, std::move(result.value));
+        });
+    }
+
+    void searchAsync(bool includeSeerrImmediately = true) {
         if (!session_.valid() || !searchState_.beginSearch()) return;
         const JellyfinSession session = session_;
         const std::string query = searchState_.query();
-        const std::string seerrServer = settings_.seerrServer;
-        const std::string seerrApiKey = settings_.seerrApiKey;
-        const bool seerrConfigured = SeerrClient::configured(seerrServer, seerrApiKey);
-        searchState_.beginSeerrSearch();
-        if (!seerrConfigured) (void) searchState_.finishSeerrSearch(query, {});
         error_.clear();
         const uint64_t generation = requestEpochs_.search.begin();
         tasks_.submit([this, session, query, generation] {
@@ -3496,22 +3581,7 @@ private:
             if (!searchState_.finishLibrarySearch(query, std::move(result.value))) return;
             error_.clear();
         });
-        if (seerrConfigured) {
-            tasks_.submit([this, seerrServer, seerrApiKey, query, generation] {
-                auto result = seerr_.search(seerrServer, seerrApiKey, query);
-                std::scoped_lock lock(stateMutex_);
-                if (!requestEpochs_.search.active(generation)) return;
-                if (screen_ != Screen::Search) {
-                    searchState_.setSeerrLoading(false);
-                    return;
-                }
-                if (!result.ok) {
-                    (void) searchState_.failSeerrSearch(query, result.error);
-                    return;
-                }
-                (void) searchState_.finishSeerrSearch(query, std::move(result.value));
-            });
-        }
+        if (includeSeerrImmediately) searchSeerrAsync(true);
     }
 
     void openDetails(const JellyfinItem& item, bool replaceCurrent = false) {
@@ -7136,18 +7206,25 @@ private:
         renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kScrim);
 
         if (detailsState_.deleteConfirmation()) {
+            const bool seerrRequest = isSeerrItem(detail_);
             drawModalSurface(405.0f, 275.0f, 1110.0f, 520.0f);
-            renderer_.text(470.0f, 335.0f, 3.25f, "Delete this media?", kError, 980.0f);
+            renderer_.text(470.0f, 335.0f, 3.25f,
+                seerrRequest ? "Delete this request?" : "Delete this media?", kError, 980.0f);
             renderer_.text(
                 470.0f,
                 435.0f,
                 2.0f,
-                "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
+                seerrRequest
+                    ? "Removes the request from Seerr. Already-sent Sonarr/Radarr downloads may continue."
+                    : "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
                 kText,
                 980.0f
             );
 
-            const std::array<std::string, 2> actions{"Delete permanently", "Cancel"};
+            const std::array<std::string, 2> actions{
+                seerrRequest ? "Delete request" : "Delete permanently",
+                "Cancel"
+            };
             for (int i = 0; i < 2; ++i) {
                 const float x = i == 0 ? 470.0f : 995.0f;
                 const bool focused = detailsState_.deleteConfirmationSelection() == i;
@@ -7180,7 +7257,7 @@ private:
         for (size_t i = 0; i < actions.size(); ++i) {
             const float y = firstActionY + static_cast<float>(i) * rowStep;
             const bool focused = detailsState_.itemMenuSelection() == static_cast<int>(i);
-            const bool destructive = actions[i] == "DELETE MEDIA";
+            const bool destructive = actions[i] == "DELETE MEDIA" || actions[i] == "DELETE REQUEST";
             const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, focused && !destructive, destructive);
             renderer_.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, materialLabel(actions[i]),
                 destructive && !focused ? kMuted : kText, bounds[2] - 48.0f);
@@ -7626,6 +7703,7 @@ private:
     Renderer renderer_;
     JellyfinClient api_;
     SeerrClient seerr_;
+    SeerrClient seerrSearch_;
     DisplayModeController displayMode_;
     NativeMediaPlayer player_;
     NativeMediaSession mediaSession_;

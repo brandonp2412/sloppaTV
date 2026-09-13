@@ -14,6 +14,8 @@ class SearchScreenState {
 public:
     using Clock = std::chrono::steady_clock;
     static constexpr auto kDebounceDelay = std::chrono::milliseconds(180);
+    static constexpr auto kSeerrDebounceDelay = std::chrono::milliseconds(550);
+    static constexpr size_t kSeerrMinQueryBytes = 3;
     static constexpr int kLibraryRow = 0;
     static constexpr int kSeerrRow = 1;
     static constexpr int kEpisodeRow = 2;
@@ -33,6 +35,9 @@ public:
         seerrError_.clear();
         debouncePending_ = false;
         debounceDeadline_ = {};
+        seerrDebouncePending_ = false;
+        seerrDebounceDeadline_ = {};
+        seerrQuery_.clear();
     }
 
     [[nodiscard]] const std::string& query() const { return query_; }
@@ -45,6 +50,8 @@ public:
     [[nodiscard]] const std::string& seerrError() const { return seerrError_; }
     [[nodiscard]] bool debouncePending() const { return debouncePending_; }
     [[nodiscard]] Clock::time_point debounceDeadline() const { return debounceDeadline_; }
+    [[nodiscard]] bool seerrDebouncePending() const { return seerrDebouncePending_; }
+    [[nodiscard]] Clock::time_point seerrDebounceDeadline() const { return seerrDebounceDeadline_; }
 
     [[nodiscard]] int rowStart(int row) const {
         if (row <= kLibraryRow) return 0;
@@ -133,12 +140,69 @@ public:
 
     void cancelPending() {
         debouncePending_ = false;
+        seerrDebouncePending_ = false;
         loading_ = false;
         seerrLoading_ = false;
     }
 
     [[nodiscard]] bool debounceDue(Clock::time_point now) const {
         return debouncePending_ && now >= debounceDeadline_;
+    }
+
+    [[nodiscard]] bool scheduleSeerrDebounce(Clock::time_point now, bool configured) {
+        const bool eligible = configured && query_.size() >= kSeerrMinQueryBytes;
+        if (!eligible) {
+            const bool changed = seerrDebouncePending_ || seerrLoading_ || !seerrQuery_.empty()
+                || !seerrResults_.empty() || !seerrError_.empty();
+            seerrDebouncePending_ = false;
+            seerrLoading_ = false;
+            seerrDebounceDeadline_ = {};
+            seerrQuery_.clear();
+            seerrResults_.clear();
+            seerrError_.clear();
+            if (changed) rebuildResults();
+            return changed;
+        }
+        if (query_ == seerrQuery_) return false;
+        seerrQuery_ = query_;
+        seerrDebouncePending_ = true;
+        seerrDebounceDeadline_ = now + kSeerrDebounceDelay;
+        seerrLoading_ = false;
+        seerrResults_.clear();
+        seerrError_.clear();
+        rebuildResults();
+        return true;
+    }
+
+    [[nodiscard]] bool seerrDebounceDue(Clock::time_point now) const {
+        return seerrDebouncePending_ && now >= seerrDebounceDeadline_;
+    }
+
+    [[nodiscard]] bool beginDueSeerrSearch(Clock::time_point now) {
+        if (!seerrDebounceDue(now)) return false;
+        seerrDebouncePending_ = false;
+        seerrLoading_ = true;
+        return true;
+    }
+
+    [[nodiscard]] bool beginImmediateSeerrSearch(bool configured) {
+        if (!configured || query_.size() < kSeerrMinQueryBytes) {
+            (void)scheduleSeerrDebounce(Clock::now(), false);
+            return false;
+        }
+        if (query_ == seerrQuery_) {
+            if (!seerrDebouncePending_) return false;
+            seerrDebouncePending_ = false;
+            seerrLoading_ = true;
+            return true;
+        }
+        seerrQuery_ = query_;
+        seerrDebouncePending_ = false;
+        seerrLoading_ = true;
+        seerrResults_.clear();
+        seerrError_.clear();
+        rebuildResults();
+        return true;
     }
 
     [[nodiscard]] bool beginSearch() {
@@ -158,7 +222,9 @@ public:
     }
 
     void beginSeerrSearch() {
+        seerrDebouncePending_ = false;
         seerrLoading_ = true;
+        seerrQuery_ = query_;
         seerrError_.clear();
         seerrResults_.clear();
         rebuildResults();
@@ -183,7 +249,7 @@ public:
     }
 
     [[nodiscard]] bool finishSeerrSearch(const std::string& query, std::vector<JellyfinItem> results) {
-        if (query_ != query) return false;
+        if (query_ != query || seerrQuery_ != query) return false;
         seerrLoading_ = false;
         seerrError_.clear();
         seerrResults_ = std::move(results);
@@ -192,7 +258,7 @@ public:
     }
 
     [[nodiscard]] bool failSeerrSearch(const std::string& query, std::string error) {
-        if (query_ != query) return false;
+        if (query_ != query || seerrQuery_ != query) return false;
         seerrLoading_ = false;
         seerrError_ = std::move(error);
         seerrResults_.clear();
@@ -200,14 +266,30 @@ public:
         return true;
     }
 
-    void markSeerrRequested(const std::string& itemId, std::string status) {
+    void markSeerrRequested(const std::string& itemId, std::string status, int requestId = 0) {
         for (auto& item : seerrResults_) {
             if (item.id != itemId) continue;
             item.externalRequested = true;
+            item.externalRequestId = requestId;
             item.externalStatus = std::move(status);
             if (item.externalMediaStatus <= 1) item.externalMediaStatus = 2;
             break;
         }
+        rebuildResults();
+    }
+
+    void markSeerrUnrequested(const std::string& itemId) {
+        for (auto& item : seerrResults_) {
+            if (item.id != itemId) continue;
+            item.externalRequested = false;
+            item.externalRequestId = 0;
+            item.externalMediaStatus = 0;
+            item.externalStatus.clear();
+            break;
+        }
+        // Force a future search of the same text to re-check Seerr instead of
+        // treating the pre-delete result as a valid cached remote query.
+        seerrQuery_.clear();
         rebuildResults();
     }
 
@@ -319,4 +401,7 @@ private:
     std::string seerrError_;
     bool debouncePending_ = false;
     Clock::time_point debounceDeadline_{};
+    bool seerrDebouncePending_ = false;
+    Clock::time_point seerrDebounceDeadline_{};
+    std::string seerrQuery_;
 };

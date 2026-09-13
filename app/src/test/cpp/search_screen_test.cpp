@@ -16,10 +16,14 @@ int main() {
 
     state.setQuery("bro");
     assert(state.scheduleDebounce(start));
+    assert(state.scheduleSeerrDebounce(start, true));
+    assert(!state.seerrLoading());
     assert(!state.debounceDue(start + 179ms));
     assert(state.debounceDue(start + 180ms));
+    assert(!state.seerrDebounceDue(start + 549ms));
+    assert(state.seerrDebounceDue(start + 550ms));
     assert(state.beginSearch());
-    state.beginSeerrSearch();
+    assert(state.beginDueSeerrSearch(start + 550ms));
     assert(state.loading());
     assert(state.seerrLoading());
 
@@ -73,16 +77,25 @@ int main() {
     assert(state.selectedRow() == SearchScreenState::kLibraryRow);
     assert(state.selectionOnFirstResultRow());
 
-    state.markSeerrRequested("seerr:tv:300", "Queued · Episode 1 waiting");
+    state.markSeerrRequested("seerr:tv:300", "Queued · Episode 1 waiting", 42);
     const auto requested = std::find_if(state.results().begin(), state.results().end(), [](const JellyfinItem& item) {
         return item.id == "seerr:tv:300";
     });
     assert(requested != state.results().end());
     assert(requested->externalRequested);
+    assert(requested->externalRequestId == 42);
     assert(requested->externalStatus == "Queued · Episode 1 waiting");
+    state.markSeerrUnrequested("seerr:tv:300");
+    const auto unrequested = std::find_if(state.results().begin(), state.results().end(), [](const JellyfinItem& item) {
+        return item.id == "seerr:tv:300";
+    });
+    assert(unrequested != state.results().end());
+    assert(!unrequested->externalRequested);
+    assert(unrequested->externalRequestId == 0);
 
     state.setQuery("brook");
     state.setLoading(true);
+    assert(state.scheduleSeerrDebounce(start + 1s, true));
     std::vector<JellyfinItem> stale(1);
     assert(!state.finishLibrarySearch("bro", std::move(stale)));
     assert(state.loading());
@@ -90,8 +103,10 @@ int main() {
     assert(state.failLibrarySearch("brook"));
     assert(!state.loading());
     assert(!state.failSeerrSearch("bro", "stale"));
+    assert(state.beginDueSeerrSearch(start + 1550ms));
     assert(state.failSeerrSearch("brook", "offline"));
     assert(state.seerrError() == "offline");
+    assert(!state.scheduleSeerrDebounce(start + 2s, true));
 
     SearchScreenState deletion;
     deletion.setQuery("delete");
@@ -121,8 +136,14 @@ int main() {
     assert(state.backspace());
     assert(state.query() == "M");
 
+    state.setQuery("ab");
+    assert(state.scheduleSeerrDebounce(start + 3s, true));
+    assert(!state.seerrLoading());
+    assert(!state.seerrDebouncePending());
+
     state.setQuery("");
     assert(!state.scheduleDebounce(start));
+    assert(!state.scheduleSeerrDebounce(start, true));
     assert(state.results().empty());
     assert(!state.loading());
     assert(!state.seerrLoading());

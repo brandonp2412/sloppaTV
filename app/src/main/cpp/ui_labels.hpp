@@ -57,6 +57,7 @@ inline std::string_view materialLabel(std::string_view value) {
         {"HIDE FROM HOME", "Hide from home"},
         {"REFRESH METADATA", "Refresh metadata"},
         {"DELETE MEDIA", "Delete media"},
+        {"DELETE REQUEST", "Delete request"},
         {"ALL", "All"},
         {"FAVORITES", "Favorites"},
         {"GENRES", "Genres"},
