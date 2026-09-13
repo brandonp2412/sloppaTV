@@ -247,7 +247,7 @@ public final class SloppaNativeActivity extends NativeActivity {
             EditText input = new EditText(this) {
                 @Override
                 public boolean onKeyPreIme(int keyCode, KeyEvent event) {
-                    if (keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
                         if (event.getAction() == KeyEvent.ACTION_UP) {
                             nativeOnSystemTextInputCancelled(mode, getText().toString());
                             post(() -> removeNativeTextInput(true));

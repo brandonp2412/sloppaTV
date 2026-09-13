@@ -702,7 +702,8 @@ private:
         const int32_t action = AKeyEvent_getAction(event);
         if (action != AKEY_EVENT_ACTION_DOWN && action != AKEY_EVENT_ACTION_UP) return 0;
 
-        const int32_t key = AKeyEvent_getKeyCode(event);
+        const int32_t rawKey = AKeyEvent_getKeyCode(event);
+        const int32_t key = rawKey == AKEYCODE_ESCAPE ? AKEYCODE_BACK : rawKey;
         const int32_t meta = AKeyEvent_getMetaState(event);
         const int repeatCount = AKeyEvent_getRepeatCount(event);
         const auto inputNow = std::chrono::steady_clock::now();
