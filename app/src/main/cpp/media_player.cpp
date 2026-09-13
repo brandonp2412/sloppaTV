@@ -429,6 +429,7 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     pendingSubtitleOrdinal_ = -1;
     pendingSubtitleOff_ = false;
     telemetryLogged_ = false;
+    serverHttpErrorCount_ = 0;
     cachedStatus_ = PlayerStatus::Idle;
     cachedVideoWidth_ = 0;
     cachedVideoHeight_ = 0;
@@ -496,6 +497,7 @@ void NativeMediaPlayer::startAsync(
     }
 
     error_.clear();
+    serverHttpErrorCount_ = 0;
     cachedStatus_ = PlayerStatus::Preparing;
     lastSnapshotPoll_ = {};
     __android_log_print(
@@ -774,6 +776,16 @@ PlayerStatus NativeMediaPlayer::status() const {
                 message->level ? message->level : "?",
                 safeText.c_str()
             );
+            const int httpStatus = mpvHttpStatus(safeText);
+            if (cachedStatus_ == PlayerStatus::Preparing && httpStatus >= 500 && httpStatus <= 599) {
+                ++serverHttpErrorCount_;
+                if (repeatedPlaybackServerError(httpStatus, serverHttpErrorCount_)) {
+                    error_ = "Playback server failed repeatedly (HTTP " + std::to_string(httpStatus) + ")";
+                    cachedStatus_ = PlayerStatus::Error;
+                    __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error_.c_str());
+                    return cachedStatus_;
+                }
+            }
         } else if (event->eventId == kMpvEventEndFile && event->data) {
             const auto* end = static_cast<const MpvEventEndFile*>(event->data);
             if (end->error < 0) {
@@ -832,6 +844,7 @@ PlayerStatus NativeMediaPlayer::status() const {
         cachedStatus_ = PlayerStatus::Playing;
     }
     if (cachedStatus_ == PlayerStatus::Playing || cachedStatus_ == PlayerStatus::Paused) {
+        serverHttpErrorCount_ = 0;
         logPlaybackTelemetryLocked();
     }
     lastSnapshotPoll_ = now;

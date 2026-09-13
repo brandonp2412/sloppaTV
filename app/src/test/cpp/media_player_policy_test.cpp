@@ -87,6 +87,14 @@ int main() {
     assert(playbackPrepareTimedOut(false, 15'000));
     assert(!playbackPrepareTimedOut(true, 29'999));
     assert(playbackPrepareTimedOut(true, 30'000));
+    assert(mpvHttpStatus("HTTP error 500") == 500);
+    assert(mpvHttpStatus("curl: HTTP error 503 while fetching") == 503);
+    assert(mpvHttpStatus("HTTP error nope") == 0);
+    assert(mpvHttpStatus("network error") == 0);
+    assert(!repeatedPlaybackServerError(500, 2));
+    assert(repeatedPlaybackServerError(500, 3));
+    assert(repeatedPlaybackServerError(503, 4));
+    assert(!repeatedPlaybackServerError(404, 10));
 
     assert(transcodingReasonsFromUrl("/master.m3u8?TranscodeReasons=ContainerNotSupported") == "ContainerNotSupported");
     assert(transcodingReasonsFromUrl("/master.m3u8?x=1&TranscodeReasons=ContainerNotSupported%2CAudioCodecNotSupported&y=2")

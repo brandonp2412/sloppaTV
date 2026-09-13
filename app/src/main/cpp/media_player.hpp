@@ -100,4 +100,5 @@ private:
     mutable int pendingSubtitleOrdinal_ = -1;
     mutable bool pendingSubtitleOff_ = false;
     mutable bool telemetryLogged_ = false;
+    mutable int serverHttpErrorCount_ = 0;
 };

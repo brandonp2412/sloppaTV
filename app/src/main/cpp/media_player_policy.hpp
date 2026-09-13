@@ -94,6 +94,23 @@ constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs) {
     return elapsedMs >= playbackPrepareTimeoutMs(transcoding);
 }
 
+inline int mpvHttpStatus(std::string_view text) {
+    constexpr std::string_view marker = "HTTP error ";
+    const size_t begin = text.find(marker);
+    if (begin == std::string_view::npos) return 0;
+    const size_t value = begin + marker.size();
+    if (value + 3 > text.size()) return 0;
+    const char a = text[value];
+    const char b = text[value + 1];
+    const char c = text[value + 2];
+    if (a < '0' || a > '9' || b < '0' || b > '9' || c < '0' || c > '9') return 0;
+    return (a - '0') * 100 + (b - '0') * 10 + (c - '0');
+}
+
+constexpr bool repeatedPlaybackServerError(int httpStatus, int errorCount) {
+    return httpStatus >= 500 && httpStatus <= 599 && errorCount >= 3;
+}
+
 inline std::string transcodingReasonsFromUrl(std::string_view url) {
     constexpr std::string_view marker = "TranscodeReasons=";
     const size_t begin = url.find(marker);
