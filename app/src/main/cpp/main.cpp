@@ -6249,14 +6249,32 @@ private:
             if (isSeerrItem(item) && !item.externalStatus.empty()) {
                 const float secondaryY = titleY + 11.0f * 2.45f * uiTextScale(settings_.uiTextSize) + 4.0f;
                 if (item.externalProgressPercent >= 0 && !item.externalProgressLabel.empty()) {
-                    renderer_.text(x + 2.0f, secondaryY, 1.48f,
-                        singleLine(item.externalProgressLabel, 1.48f, cardW - 4.0f), faded(kMuted), cardW - 4.0f);
-                    float chipX = x + 2.0f;
-                    const float chipY = secondaryY + 24.0f;
-                    chipX += drawChip(chipX, chipY, std::to_string(item.externalProgressPercent) + "%",
-                        false, 1.08f, 30.0f, 88.0f) + 8.0f;
+                    const std::string percentLabel = std::to_string(item.externalProgressPercent) + "%";
+                    const auto chipWidth = [&](const std::string& label, float maxWidth) {
+                        return std::round(std::clamp(
+                            renderer_.textWidth(1.08f, materialLabel(label)) + 34.0f,
+                            72.0f,
+                            maxWidth));
+                    };
+                    const float percentWidth = chipWidth(percentLabel, 88.0f);
+                    const float etaWidth = item.externalProgressEta.empty()
+                        ? 0.0f
+                        : chipWidth(item.externalProgressEta, 210.0f);
+                    constexpr float chipGap = 8.0f;
+                    constexpr float statusToChipsGap = 22.0f;
+                    const float rightEdge = x + cardW - 2.0f;
+                    const float etaX = rightEdge - etaWidth;
+                    const float percentX = item.externalProgressEta.empty()
+                        ? rightEdge - percentWidth
+                        : etaX - chipGap - percentWidth;
+                     const float statusWidth = std::max(60.0f, percentX - (x + 2.0f) - statusToChipsGap);
+                     renderer_.text(x + 2.0f, secondaryY, 1.48f,
+                         singleLine(item.externalProgressLabel, 1.48f, statusWidth), faded(kMuted), statusWidth);
+                     drawChip(percentX, secondaryY - 3.0f, percentLabel,
+                         false, 1.08f, 30.0f, 88.0f);
                     if (!item.externalProgressEta.empty()) {
-                        drawChip(chipX, chipY, item.externalProgressEta, false, 1.08f, 30.0f, 210.0f);
+                        drawChip(etaX, secondaryY - 3.0f, item.externalProgressEta,
+                            false, 1.08f, 30.0f, 210.0f);
                     }
                 } else {
                     renderer_.text(x + 2.0f, secondaryY, 1.58f,
@@ -7297,14 +7315,32 @@ private:
         if (seerrRequest && !detail_.externalStatus.empty()) {
             if (detail_.externalProgressPercent >= 0 && !detail_.externalProgressLabel.empty()) {
                 const float statusY = panelY + 119.0f;
+                const std::string percentLabel = std::to_string(detail_.externalProgressPercent) + "%";
+                const auto chipWidth = [&](const std::string& label, float maxWidth) {
+                    return std::round(std::clamp(
+                        renderer_.textWidth(1.05f, materialLabel(label)) + 34.0f,
+                        72.0f,
+                        maxWidth));
+                };
+                const float percentWidth = chipWidth(percentLabel, 88.0f);
+                const float etaWidth = detail_.externalProgressEta.empty()
+                    ? 0.0f
+                    : chipWidth(detail_.externalProgressEta, 240.0f);
+                constexpr float chipGap = 8.0f;
+                constexpr float statusToChipsGap = 28.0f;
+                const float rightEdge = panelX + panelWidth - 40.0f;
+                const float etaX = rightEdge - etaWidth;
+                const float percentX = detail_.externalProgressEta.empty()
+                    ? rightEdge - percentWidth
+                    : etaX - chipGap - percentWidth;
+                const float statusWidth = std::max(120.0f, percentX - (panelX + 40.0f) - statusToChipsGap);
                 renderer_.text(panelX + 40.0f, statusY, 1.45f,
-                    fitTextLines(detail_.externalProgressLabel, 1.45f, 250.0f, 1),
-                    kFocus, 250.0f);
-                float chipX = panelX + 300.0f;
-                chipX += drawChip(chipX, panelY + 115.0f,
-                    std::to_string(detail_.externalProgressPercent) + "%", false, 1.05f, 32.0f, 88.0f) + 8.0f;
+                    fitTextLines(detail_.externalProgressLabel, 1.45f, statusWidth, 1),
+                    kFocus, statusWidth);
+                drawChip(percentX, panelY + 115.0f,
+                    percentLabel, false, 1.05f, 32.0f, 88.0f);
                 if (!detail_.externalProgressEta.empty()) {
-                    drawChip(chipX, panelY + 115.0f, detail_.externalProgressEta,
+                    drawChip(etaX, panelY + 115.0f, detail_.externalProgressEta,
                         false, 1.05f, 32.0f, 240.0f);
                 }
             } else {
