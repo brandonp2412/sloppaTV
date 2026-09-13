@@ -3621,7 +3621,8 @@ private:
             return row.title == "Seerr requests";
         });
         if (!seerrPending_.empty()) {
-            home_.rows.push_back(JellyfinHomeRow{
+            const auto insertAt = home_.rows.begin() + static_cast<std::ptrdiff_t>(std::min<size_t>(1, home_.rows.size()));
+            home_.rows.insert(insertAt, JellyfinHomeRow{
                 .title = "Seerr requests",
                 .items = seerrPending_,
             });
@@ -4405,7 +4406,13 @@ private:
         playbackSessionState_.resetMediaSegments();
         if (shouldReport) {
             tasks_.submit([this, session, item, target, ticks] {
-                logPlaybackReportFailure("stop", item.id, api_.reportPlaybackStopped(session, item, target, ticks));
+                const ApiResult result = api_.reportPlaybackStopped(session, item, target, ticks);
+                logPlaybackReportFailure("stop", item.id, result);
+                if (!result.ok) return;
+                std::scoped_lock lock(stateMutex_);
+                if (session_.server != session.server || session_.userId != session.userId || screen_ == Screen::Player) return;
+                homeRefreshAfterPlaybackStop_ = true;
+                if (app_ && app_->looper) ALooper_wake(app_->looper);
             });
         }
     }
@@ -5088,6 +5095,7 @@ private:
         applyPendingRuntimeLaunchRequest();
 
         bool retryHome = false;
+        bool refreshHomeAfterPlaybackStop = false;
         bool refreshSeerr = false;
         {
             std::scoped_lock lock(stateMutex_);
@@ -5099,6 +5107,10 @@ private:
                 homeRetryAt_ = {};
                 retryHome = true;
             }
+            if (!homeLoading_ && homeRefreshAfterPlaybackStop_ && session_.valid() && screen_ != Screen::Player) {
+                homeRefreshAfterPlaybackStop_ = false;
+                refreshHomeAfterPlaybackStop = true;
+            }
             if (!seerrPendingLoading_
                 && seerrPendingRefreshAt_ != std::chrono::steady_clock::time_point{}
                 && now >= seerrPendingRefreshAt_
@@ -5108,7 +5120,7 @@ private:
                 refreshSeerr = true;
             }
         }
-        if (retryHome) loadHomeAsync();
+        if (retryHome || refreshHomeAfterPlaybackStop) loadHomeAsync();
         if (refreshSeerr) refreshSeerrPendingAsync();
 
         auto work = collectPendingTickWork();
@@ -6999,7 +7011,7 @@ private:
             }
         }
         if (skipSegment) {
-            const auto bounds = drawButtonSurface(1480.0f, 654.0f, 320.0f, 74.0f, true, true);
+            const auto bounds = drawButtonSurface(1480.0f, skipButtonY(showOverlay), 320.0f, 74.0f, true, true);
             const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
             constexpr float labelScale = 1.82f;
             constexpr float iconWidth = 34.0f;
@@ -8115,6 +8127,7 @@ private:
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
     std::vector<JellyfinItem> seerrPending_;
+    bool homeRefreshAfterPlaybackStop_ = false;
     bool seerrPendingLoading_ = false;
     std::chrono::steady_clock::time_point seerrPendingRefreshAt_{};
     std::vector<SeerrStorageTarget> seerrStorage_;

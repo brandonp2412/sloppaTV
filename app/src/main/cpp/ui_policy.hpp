@@ -86,6 +86,10 @@ constexpr float playbackProgressThumbCenterX(float trackX, float trackWidth, flo
     return std::clamp(trackX + trackWidth * fraction, trackX + radius, trackX + trackWidth - radius);
 }
 
+constexpr float skipButtonY(bool playbackOverlayVisible) {
+    return playbackOverlayVisible ? 720.0f : 810.0f;
+}
+
 constexpr float subtitleBottomY(
     bool playbackOverlayVisible,
     bool playbackControlsActive,
@@ -93,8 +97,8 @@ constexpr float subtitleBottomY(
     bool skipButtonVisible = false
 ) {
     const int clamped = std::clamp(position, 0, 2);
-    float base = playbackControlsActive ? 670.0f : (playbackOverlayVisible ? 790.0f : 1000.0f);
-    if (skipButtonVisible) base = std::min(base, 610.0f);
+    float base = playbackControlsActive ? 735.0f : (playbackOverlayVisible ? 835.0f : 1025.0f);
+    if (skipButtonVisible) base = std::min(base, skipButtonY(playbackOverlayVisible) - 28.0f);
     return base - static_cast<float>(clamped) * 95.0f;
 }
 
