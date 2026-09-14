@@ -7191,7 +7191,8 @@ private:
                     renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
                     renderer_.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, kText);
                     renderer_.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, kText);
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText, textWidth);
+                    // Already fitted to one line; disabling maxWidth avoids atlas rounding wrapping the final glyph.
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText);
                 } else {
                     constexpr float iconWidth = 42.0f;
                     constexpr float gap = 14.0f;
@@ -7204,7 +7205,8 @@ private:
                     const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
                     renderer_.roundedOutline(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 6.0f, 2.0f, kText);
                     renderer_.textCentered(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 0.82f, "CC", kText);
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText, textWidth);
+                    // Already fitted to one line; disabling maxWidth avoids atlas rounding wrapping the final glyph.
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText);
                 }
                 x += controlWidths[i] + controlGap;
             }
