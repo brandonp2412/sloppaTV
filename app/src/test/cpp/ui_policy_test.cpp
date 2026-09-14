@@ -100,8 +100,12 @@ int main() {
     assert(wrappedIndex(9, 1, 10) == 0);
     assert(wrappedIndex(2, 1, 5) == 3);
     assert(wrappedIndex(4, 1, 5) == 0);
-    assert(skipButtonY(false) == 810.0f);
-    assert(skipButtonY(true) == 720.0f);
+    assert(skipButtonY(false) == 900.0f);
+    assert(skipButtonY(true) == 790.0f);
+    assert(subtitleBoxMaxWidth(false) == 1520.0f);
+    assert(subtitleBoxMaxWidth(true) == 1000.0f);
+    assert(playbackDurationRightX(false) == 1770.0f);
+    assert(playbackDurationRightX(true) == 1430.0f);
     assert(subtitleBottomY(false, false, 0) == 1025.0f);
     assert(subtitleBottomY(false, false, 1) == 930.0f);
     assert(subtitleBottomY(false, false, 2) == 835.0f);
@@ -109,9 +113,9 @@ int main() {
     assert(subtitleBottomY(true, false, 2) == 645.0f);
     assert(subtitleBottomY(true, true, 0) == 735.0f);
     assert(subtitleBottomY(false, true, 2) == 545.0f);
-    assert(subtitleBottomY(false, false, 0, true) == 782.0f);
-    assert(subtitleBottomY(true, true, 0, true) == 692.0f);
-    assert(subtitleBottomY(false, false, 2, true) == 592.0f);
+    assert(subtitleBottomY(false, false, 0, true) == 1025.0f);
+    assert(subtitleBottomY(true, true, 0, true) == 735.0f);
+    assert(subtitleBottomY(false, false, 2, true) == 835.0f);
     assert(!shouldShowNextUpCard(true, 30000, false, false));
     assert(shouldShowNextUpCard(true, 30000, true, false));
     assert(shouldShowNextUpCard(true, 1, true, false));

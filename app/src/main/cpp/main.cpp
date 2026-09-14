@@ -6963,10 +6963,10 @@ private:
         std::string subtitleText = player_.subtitleText();
         if (const SubtitleCue* cue = activeSubtitleCue()) subtitleText = cue->text;
         if (!subtitleText.empty()) {
-            constexpr float boxMaxWidth = 1520.0f;
+            const float boxMaxWidth = subtitleBoxMaxWidth(skipSegment != nullptr);
             constexpr float horizontalPadding = 32.0f;
             constexpr float verticalPadding = 20.0f;
-            constexpr float textMaxWidth = boxMaxWidth - horizontalPadding * 2.0f;
+            const float textMaxWidth = boxMaxWidth - horizontalPadding * 2.0f;
             const float textScale = subtitleTextScale(settings_.subtitleSize);
             const std::string subtitle = fitTextLines(
                 normalizeSubtitleDisplayText(subtitleText), textScale, textMaxWidth, 3
@@ -7113,7 +7113,7 @@ private:
             drawRightAlignedSingleLine(
                 1840.0f, 46.0f, 2.05f,
                 formatLocalClock(wallNow, settings_.clock24Hour), kMuted, 210.0f);
-            if (remainingMs > 0 && status == PlayerStatus::Playing) {
+            if (remainingMs > 0 && status == PlayerStatus::Playing && !skipSegment) {
                 const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
                 const std::string finishLabel = "Ends " + formatLocalClock(finishAt, settings_.clock24Hour);
                 const float finishWidth = renderer_.textWidth(1.75f, finishLabel);
@@ -7130,7 +7130,8 @@ private:
         constexpr float progressWidth = 1620.0f;
         renderer_.text(progressX, 834.0f, 2.0f, formatPlaybackTime(position), kText);
         const std::string durationText = formatPlaybackTime(duration);
-        drawRightAlignedSingleLine(progressX + progressWidth, 834.0f, 2.0f, durationText, kText, 220.0f);
+        const float durationRight = playbackDurationRightX(skipSegment != nullptr);
+        drawRightAlignedSingleLine(durationRight, 834.0f, 2.0f, durationText, kText, 220.0f);
         // Leave enough vertical separation for the enlarged time labels. At the
         // largest UI text size their glyph box reaches y=882 from the y=834 row.
         constexpr float progressTrackY = 890.0f;
