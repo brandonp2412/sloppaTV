@@ -65,18 +65,7 @@ std::string tmdbImageUrl(const std::string& base, const std::string& path) {
 }
 
 std::string mediaStatusLabel(int status, bool television) {
-    if (television) {
-        switch (status) {
-            case 1: return "Episode 1 requested";
-            case 2: return "Episode 1 queued";
-            case 3: return "Episode 1 waiting for download";
-            case 4: return "Episode 1 partially available";
-            case 5: return "Available";
-            case 6: return "Blocklisted";
-            case 7: return "Deleted";
-            default: return "Episode 1 requested";
-        }
-    }
+    (void)television;
     switch (status) {
         case 1: return "Requested";
         case 2: return "Queued";
