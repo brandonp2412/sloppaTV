@@ -430,7 +430,10 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
                     target.freeSpace = int64Value(folder, "freeSpace");
                     target.totalSpace = int64Value(folder, "totalSpace");
                     target.isDefault = isDefault;
-                    if (!target.path.empty() && target.totalSpace > 0) result.value.push_back(std::move(target));
+                    // A valid Servarr root folder may not expose total capacity (for example
+                    // some network/FUSE mounts).  Capacity is presentation metadata, not a
+                    // requirement for routing a Seerr request.
+                    if (!target.path.empty()) result.value.push_back(std::move(target));
                 }
             }
         } catch (...) {

@@ -444,6 +444,15 @@ public:
                     && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
                     tightenTimeoutUntil(seerrPendingRefreshAt_);
                 }
+                if (screen_ == Screen::Search && !searchState_.keyboard() && !searchState_.results().empty()) {
+                    constexpr auto marqueeDelay = 1200ms;
+                    const auto marqueeStart = lastInteraction_ + marqueeDelay;
+                    if (pollNow < marqueeStart) {
+                        tightenTimeoutUntil(marqueeStart);
+                    } else {
+                        timeoutMs = timeoutMs < 0 ? 160 : std::min(timeoutMs, 160);
+                    }
+                }
             }
 
             int events = 0;
@@ -6690,7 +6699,9 @@ private:
         constexpr float xGap = 32.0f;
 
         std::vector<int> semanticRows;
-        if (searchState_.rowItemCount(SearchScreenState::kLibraryRow) > 0 || searchState_.loading()) {
+        // Keep the library lane reserved for the lifetime of a query. Otherwise the
+        // Seerr lane jumps upward when an async Jellyfin search returns zero matches.
+        if (!query.empty() || searchState_.rowItemCount(SearchScreenState::kLibraryRow) > 0 || searchState_.loading()) {
             semanticRows.push_back(SearchScreenState::kLibraryRow);
         }
         if (seerrConfigured) semanticRows.push_back(SearchScreenState::kSeerrRow);
@@ -6781,6 +6792,10 @@ private:
                     renderer_.text(320.0f, labelY + 1.0f, 1.45f, "Searching Jellyfin…", kMuted, 440.0f);
                     return;
                 }
+                if (semanticRow == SearchScreenState::kLibraryRow && count <= 0) {
+                    renderer_.text(228.0f, labelY + 1.0f, 1.45f, "No library matches", kMuted, 440.0f);
+                    return;
+                }
             }
             if (count <= 0) return;
 
@@ -6802,9 +6817,12 @@ private:
                     }
                     if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, radius);
                     const float titleY = cardY + imageHeight + 18.0f;
+                    const auto titleNow = std::chrono::steady_clock::now();
+                    const std::string title = focused
+                        ? lingeringTitleWindow(item.name, 1.95f, slotWidth - 4.0f, titleNow)
+                        : fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1);
                     renderer_.text(x + 2.0f, titleY, 1.95f,
-                        fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1),
-                        focused ? kText : kSecondaryText, slotWidth - 4.0f);
+                        title, focused ? kText : kSecondaryText, slotWidth - 4.0f);
                     const std::string state = item.externalRequested
                         ? item.externalStatus
                         : std::string("Press OK to request");
@@ -6881,23 +6899,30 @@ private:
             renderer_.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f,
                 fitTextLines(name, 2.05f, 760.0f, 1), focused ? kText : kSecondaryText, 760.0f);
 
-            const double usedGb = bytesToGb(target.totalSpace - target.freeSpace);
-            const double totalGb = bytesToGb(target.totalSpace);
-            std::ostringstream usage;
-            usage << std::fixed << std::setprecision(totalGb >= 100.0 ? 0 : 1)
-                  << usedGb << " / " << totalGb << " GB";
-            renderer_.text(x + 120.0f, y + 78.0f, 1.38f, usage.str(), kMuted, 760.0f);
-
-            const int percent = std::clamp(target.usedPercent(), 0, 100);
             const float barX = 1085.0f;
             const float barY = y + 48.0f;
             constexpr float barWidth = 500.0f;
+            const bool hasCapacity = target.totalSpace > 0;
+            const int percent = hasCapacity ? std::clamp(target.usedPercent(), 0, 100) : 0;
             renderer_.roundedRect(barX, barY, barWidth, 14.0f, 7.0f, kPanelElevated);
-            renderer_.roundedRect(barX, barY, barWidth * static_cast<float>(percent) / 100.0f, 14.0f, 7.0f,
-                percent >= 90 ? kError : (focused ? kFocus : kSecondaryText));
-            const std::string pct = std::to_string(percent) + "% full";
+            if (hasCapacity) {
+                const double usedGb = bytesToGb(target.totalSpace - target.freeSpace);
+                const double totalGb = bytesToGb(target.totalSpace);
+                std::ostringstream usage;
+                usage << std::fixed << std::setprecision(totalGb >= 100.0 ? 0 : 1)
+                      << usedGb << " / " << totalGb << " GB";
+                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, usage.str(), kMuted, 760.0f);
+
+                renderer_.roundedRect(barX, barY, barWidth * static_cast<float>(percent) / 100.0f, 14.0f, 7.0f,
+                    percent >= 90 ? kError : (focused ? kFocus : kSecondaryText));
+            } else {
+                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, "Space unavailable", kMuted, 760.0f);
+                renderer_.roundedRect(barX, barY, barWidth * 0.18f, 14.0f, 7.0f,
+                    focused ? kFocusSoft : kOutline);
+            }
+            const std::string pct = hasCapacity ? std::to_string(percent) + "% full" : "Space n/a";
             drawCenteredSingleLineFit(1600.0f, y + 26.0f, 150.0f, 58.0f, 1.70f, pct,
-                percent >= 90 ? kError : (focused ? kText : kSecondaryText), 8.0f, 3.0f);
+                hasCapacity && percent >= 90 ? kError : (focused ? kText : kSecondaryText), 8.0f, 3.0f);
         }
         drawCenteredSingleLineFit(590.0f, 970.0f, 740.0f, 48.0f, 1.45f,
             "Up / Down selects   ·   OK requests   ·   Back cancels", kMuted, 12.0f, 4.0f);
@@ -7038,24 +7063,24 @@ private:
             const int seconds = playerScreenState_.seekFeedbackSeconds();
             const bool forward = seconds > 0;
             const float fade = playerScreenState_.seekFeedbackAlpha(now);
-            const Color wash{1.0f, 1.0f, 1.0f, 0.18f * fade};
-            const Color glyph{1.0f, 1.0f, 1.0f, fade};
-            constexpr float ovalWidth = 620.0f;
-            constexpr float ovalHeight = 460.0f;
-            const float ovalX = forward ? 1600.0f : -300.0f;
-            constexpr float ovalY = 270.0f;
+            const Color wash{1.0f, 1.0f, 1.0f, 0.09f * fade};
+            const Color glyph{1.0f, 1.0f, 1.0f, 0.72f * fade};
+            constexpr float ovalWidth = 420.0f;
+            constexpr float ovalHeight = 300.0f;
+            const float ovalX = forward ? 1675.0f : -175.0f;
+            constexpr float ovalY = 350.0f;
             renderer_.roundedRect(ovalX, ovalY, ovalWidth, ovalHeight, ovalHeight * 0.5f, wash);
-            const float centerX = forward ? 1665.0f : 255.0f;
+            const float centerX = forward ? 1740.0f : 180.0f;
             constexpr float centerY = 500.0f;
-            constexpr float arrowGap = 30.0f;
-            for (int arrow = 0; arrow < 3; ++arrow) {
-                const float offset = static_cast<float>(arrow - 1) * arrowGap;
+            constexpr float arrowGap = 20.0f;
+            for (int arrow = 0; arrow < 2; ++arrow) {
+                const float offset = (static_cast<float>(arrow) - 0.5f) * arrowGap;
                 if (forward) {
-                    const float x = centerX + 82.0f + offset;
-                    renderer_.triangle(x - 10.0f, centerY - 17.0f, x - 10.0f, centerY + 17.0f, x + 12.0f, centerY, glyph);
+                    const float x = centerX + 54.0f + offset;
+                    renderer_.triangle(x - 8.0f, centerY - 13.0f, x - 8.0f, centerY + 13.0f, x + 9.0f, centerY, glyph);
                 } else {
-                    const float x = centerX - 82.0f + offset;
-                    renderer_.triangle(x + 10.0f, centerY - 17.0f, x + 10.0f, centerY + 17.0f, x - 12.0f, centerY, glyph);
+                    const float x = centerX - 54.0f + offset;
+                    renderer_.triangle(x + 8.0f, centerY - 13.0f, x + 8.0f, centerY + 13.0f, x - 9.0f, centerY, glyph);
                 }
             }
         }
@@ -7648,6 +7673,33 @@ private:
         drawCenteredSingleLineFit(
             panelX + 40.0f, panelY + panelHeight - 56.0f, panelWidth - 80.0f, 44.0f, 1.30f,
             "OK selects   |   Back closes", kTertiary, 10.0f, 3.0f);
+    }
+
+    std::string lingeringTitleWindow(
+        std::string_view value,
+        float scale,
+        float maxWidth,
+        std::chrono::steady_clock::time_point now
+    ) const {
+        const std::string displayValue = displayText(value);
+        if (displayValue.empty() || renderer_.textWidth(scale, displayValue) <= maxWidth) return displayValue;
+        constexpr auto linger = 1200ms;
+        if (now < lastInteraction_ + linger) return fitTextLines(displayValue, scale, maxWidth, 1);
+
+        constexpr auto step = 180ms;
+        constexpr size_t gap = 6;
+        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            now - (lastInteraction_ + linger));
+        const size_t offset = static_cast<size_t>(elapsed / step) % (displayValue.size() + gap);
+        const std::string track = displayValue + std::string(gap, ' ') + displayValue;
+        std::string visible;
+        visible.reserve(displayValue.size());
+        for (size_t i = offset; i < track.size(); ++i) {
+            const std::string candidate = visible + track[i];
+            if (!visible.empty() && renderer_.textWidth(scale, candidate) > maxWidth) break;
+            visible = candidate;
+        }
+        return visible.empty() ? fitTextLines(displayValue, scale, maxWidth, 1) : visible;
     }
 
     std::string fitTextLines(std::string_view value, float scale, float maxWidth, int maxLines) const {

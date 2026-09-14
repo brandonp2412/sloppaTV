@@ -82,12 +82,12 @@ int main() {
     assert(uiSafeAreaFraction(-1) == 0.0f);
     assert(uiSafeAreaFraction(4) == 0.04f);
     assert(uiSafeAreaFraction(99) == 0.06f);
-    assert(materialButtonFocusScale() == 1.05f);
-    assert(materialCardFocusScale() == 1.05f);
-    assert(materialListItemFocusScale() == 1.04f);
+    assert(materialButtonFocusScale() == 1.025f);
+    assert(materialCardFocusScale() == 1.025f);
+    assert(materialListItemFocusScale() == 1.02f);
     assert(materialWideListItemFocusScale() == 1.015f);
-    assert(materialTabFocusScale() == 1.05f);
-    assert(materialInputFocusScale() == 1.04f);
+    assert(materialTabFocusScale() == 1.025f);
+    assert(materialInputFocusScale() == 1.02f);
     assert(materialWideInputFocusScale() == 1.015f);
     assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 0.0f, 9.0f) == 159.0f);
     assert(playbackProgressThumbCenterX(150.0f, 1620.0f, 0.5f, 9.0f) == 960.0f);

@@ -69,14 +69,14 @@ constexpr float keyboardKeyHeight(float top, int rowCount, float gap) {
     return std::clamp(available / static_cast<float>(rowCount), minKeyHeight, maxKeyHeight);
 }
 
-constexpr float materialButtonFocusScale() { return 1.05f; }
-constexpr float materialCardFocusScale() { return 1.05f; }
-constexpr float materialListItemFocusScale() { return 1.04f; }
+constexpr float materialButtonFocusScale() { return 1.025f; }
+constexpr float materialCardFocusScale() { return 1.025f; }
+constexpr float materialListItemFocusScale() { return 1.02f; }
 // Full-width rows should not inherit the same percentage growth as compact
 // cards: 4% of a 1700 px settings row is a distracting 68 px jump.
 constexpr float materialWideListItemFocusScale() { return 1.015f; }
-constexpr float materialTabFocusScale() { return 1.05f; }
-constexpr float materialInputFocusScale() { return 1.04f; }
+constexpr float materialTabFocusScale() { return 1.025f; }
+constexpr float materialInputFocusScale() { return 1.02f; }
 constexpr float materialWideInputFocusScale() { return 1.015f; }
 
 constexpr float playbackProgressThumbCenterX(float trackX, float trackWidth, float progress, float thumbRadius) {
