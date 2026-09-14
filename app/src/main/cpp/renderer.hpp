@@ -34,6 +34,8 @@ public:
     void beginFrame();
     void endFrame();
     void setUiTransform(float safeAreaFraction, float textScale);
+    void beginClipRect(float x, float y, float w, float h);
+    void endClipRect();
 
     void rect(float x, float y, float w, float h, Color color);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3, Color color);

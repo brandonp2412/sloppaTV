@@ -341,10 +341,18 @@ public:
         pendingSearchQuery_ = launchRequest.searchQuery;
         loadSession();
         if (!settings_.externalPlayerComponent.empty()) refreshExternalPlayers();
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: session loaded valid=%d", session_.valid() ? 1 : 0);
+        __android_log_print(ANDROID_LOG_INFO, kTag,
+            "Startup init: session loaded valid=%d seerrConfigured=%d seerrSession=%d drivePicker=%d",
+            session_.valid() ? 1 : 0,
+            !settings_.seerrServer.empty() ? 1 : 0,
+            !settings_.seerrSessionCookie.empty() ? 1 : 0,
+            settings_.seerrSelectDrive ? 1 : 0);
         if (session_.valid()) {
             resetNavigation(Screen::Home);
             loadHomeAsync();
+            if (!settings_.seerrServer.empty() && !settings_.seerrSessionCookie.empty()) {
+                connectSeerrAsync(false);
+            }
         } else {
             resetNavigation(Screen::Login);
         }
@@ -445,13 +453,9 @@ public:
                     tightenTimeoutUntil(seerrPendingRefreshAt_);
                 }
                 if (screen_ == Screen::Search && !searchState_.keyboard() && !searchState_.results().empty()) {
-                    constexpr auto marqueeDelay = 1200ms;
-                    const auto marqueeStart = lastInteraction_ + marqueeDelay;
-                    if (pollNow < marqueeStart) {
-                        tightenTimeoutUntil(marqueeStart);
-                    } else {
-                        timeoutMs = timeoutMs < 0 ? 160 : std::min(timeoutMs, 160);
-                    }
+                    // Search cards can contain a slow pixel-based marquee. Redraw near display
+                    // cadence without busy-spinning the looper when the search screen is idle.
+                    timeoutMs = timeoutMs < 0 ? 16 : std::min(timeoutMs, 16);
                 }
             }
 
@@ -3510,53 +3514,82 @@ private:
         };
     }
 
-    void connectSeerrAsync() {
+    static bool isSeerrAuthError(std::string_view error) {
+        return error.find("HTTP 401") != std::string_view::npos
+            || error.find("HTTP 403") != std::string_view::npos;
+    }
+
+    void connectSeerrAsync(bool announce = true) {
         if (seerrConnectLoading_) return;
         if (settings_.seerrServer.empty()) {
-            showNotice("SET THE SEERR SERVER FIRST", 4s);
+            if (announce) showNotice("SET THE SEERR SERVER FIRST", 4s);
             return;
         }
         if (!session_.valid()) {
-            showNotice("JELLYFIN LOGIN REQUIRED", 4s);
+            if (announce) showNotice("JELLYFIN LOGIN REQUIRED", 4s);
             return;
         }
         const std::string server = settings_.seerrServer;
         const JellyfinSession jellyfin = session_;
         seerrConnectLoading_ = true;
-        error_.clear();
-        showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);
-        tasks_.submit([this, server, jellyfin] {
+        if (announce) {
+            error_.clear();
+            showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);
+        }
+        tasks_.submit([this, server, jellyfin, announce] {
             auto initiated = seerr_.initiateQuickConnect(server);
             if (!initiated.ok) {
                 std::scoped_lock lock(stateMutex_);
                 seerrConnectLoading_ = false;
-                notice_.clear();
-                error_ = "SEERR QUICK CONNECT: " + initiated.error;
+                if (announce) {
+                    notice_.clear();
+                    error_ = "SEERR QUICK CONNECT: " + initiated.error;
+                } else {
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s", initiated.error.c_str());
+                }
+                seerrRetrySearchAfterConnect_ = false;
                 return;
             }
             auto authorized = api_.authorizeQuickConnectCode(jellyfin, initiated.value.code);
             if (!authorized.ok || !authorized.value) {
                 std::scoped_lock lock(stateMutex_);
                 seerrConnectLoading_ = false;
-                notice_.clear();
-                error_ = "JELLYFIN QUICK CONNECT: " + authorized.error;
+                if (announce) {
+                    notice_.clear();
+                    error_ = "JELLYFIN QUICK CONNECT: " + authorized.error;
+                } else {
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s", authorized.error.c_str());
+                }
+                seerrRetrySearchAfterConnect_ = false;
                 return;
             }
             auto authenticated = seerr_.authenticateQuickConnect(server, initiated.value);
             std::scoped_lock lock(stateMutex_);
             seerrConnectLoading_ = false;
-            notice_.clear();
+            if (announce) notice_.clear();
             if (settings_.seerrServer != server || session_.userId != jellyfin.userId) return;
             if (!authenticated.ok) {
-                error_ = "SEERR QUICK CONNECT: " + authenticated.error;
+                if (announce) error_ = "SEERR QUICK CONNECT: " + authenticated.error;
+                else __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s", authenticated.error.c_str());
+                seerrRetrySearchAfterConnect_ = false;
                 return;
             }
             settings_.seerrSessionCookie = std::move(authenticated.value);
             saveSession(session_);
-            error_.clear();
-            showNotice("SEERR CONNECTED WITH JELLYFIN", 4s);
+            if (announce) {
+                error_.clear();
+                showNotice("SEERR CONNECTED WITH JELLYFIN", 4s);
+            }
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
             refreshSeerrPendingAsync();
             refreshSeerrStorageAsync(true);
+            if (seerrRetrySearchAfterConnect_ && screen_ == Screen::Search && !searchState_.query().empty()) {
+                seerrRetrySearchAfterConnect_ = false;
+                (void)searchState_.scheduleSeerrDebounce(std::chrono::steady_clock::now(), false);
+                searchSeerrAsync(true);
+            } else {
+                seerrRetrySearchAfterConnect_ = false;
+            }
         });
     }
 
@@ -3580,15 +3613,24 @@ private:
                 return;
             }
             seerrStorageLoading_ = false;
-            seerrStorageRefreshAt_ = std::chrono::steady_clock::now() + 60s;
             if (!result.ok) {
+                seerrStorageRefreshAt_ = {};
+                seerrStorageError_ = result.error;
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
+                if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
+                    connectSeerrAsync(false);
+                    return;
+                }
                 if (!pendingSeerrRequest_.id.empty()) {
                     pendingSeerrRequest_ = {};
-                    error_ = "SEERR STORAGE: " + result.error;
+                    showNotice("SEERR STORAGE: " + result.error, 5s);
                 }
                 return;
             }
+            seerrStorageRefreshAt_ = std::chrono::steady_clock::now() + 60s;
+            seerrStorageError_.clear();
             seerrStorage_ = std::move(result.value);
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets", seerrStorage_.size());
             if (!pendingSeerrRequest_.id.empty() && settings_.seerrSelectDrive) {
                 const JellyfinItem item = pendingSeerrRequest_;
                 pendingSeerrRequest_ = {};
@@ -3612,7 +3654,12 @@ private:
                 showNotice("LOADING SEERR STORAGE…", 4s);
             } else {
                 pendingSeerrRequest_ = {};
-                error_ = "NO SEERR STORAGE TARGETS ARE AVAILABLE";
+                showNotice(
+                    seerrStorageError_.empty()
+                        ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
+                        : "SEERR STORAGE: " + seerrStorageError_,
+                    5s
+                );
             }
             return;
         }
@@ -3695,7 +3742,10 @@ private:
             return;
         }
         if (settings_.seerrSelectDrive && !skipDrivePrompt && !selectedTarget) {
-            refreshSeerrStorageAsync();
+            // A deliberate request should not be blocked by a cached empty result.
+            // Force discovery when there are no known targets and let the pending
+            // item automatically open the picker when discovery completes.
+            refreshSeerrStorageAsync(seerrStorage_.empty());
             openSeerrDrivePicker(item);
             return;
         }
@@ -3746,7 +3796,7 @@ private:
             : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
         if (!shouldStart) return;
 
-        refreshSeerrStorageAsync();
+        if (!seerrConnectLoading_) refreshSeerrStorageAsync();
         const std::string query = searchState_.query();
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
         tasks_.submit([this, seerrServer, auth, query, generation] {
@@ -3759,6 +3809,10 @@ private:
             }
             if (!result.ok) {
                 (void) searchState_.failSeerrSearch(query, result.error);
+                if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
+                    seerrRetrySearchAfterConnect_ = true;
+                    connectSeerrAsync(false);
+                }
                 return;
             }
             (void) searchState_.finishSeerrSearch(query, std::move(result.value));
@@ -6817,12 +6871,15 @@ private:
                     }
                     if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, radius);
                     const float titleY = cardY + imageHeight + 18.0f;
-                    const auto titleNow = std::chrono::steady_clock::now();
-                    const std::string title = focused
-                        ? lingeringTitleWindow(item.name, 1.95f, slotWidth - 4.0f, titleNow)
-                        : fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1);
-                    renderer_.text(x + 2.0f, titleY, 1.95f,
-                        title, focused ? kText : kSecondaryText, slotWidth - 4.0f);
+                    if (focused) {
+                        drawLingeringTitle(
+                            x + 2.0f, titleY, 1.95f, item.name, slotWidth - 4.0f, kText,
+                            std::chrono::steady_clock::now());
+                    } else {
+                        renderer_.text(x + 2.0f, titleY, 1.95f,
+                            fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1),
+                            kSecondaryText, slotWidth - 4.0f);
+                    }
                     const std::string state = item.externalRequested
                         ? item.externalStatus
                         : std::string("Press OK to request");
@@ -7675,31 +7732,39 @@ private:
             "OK selects   |   Back closes", kTertiary, 10.0f, 3.0f);
     }
 
-    std::string lingeringTitleWindow(
-        std::string_view value,
+    void drawLingeringTitle(
+        float x,
+        float y,
         float scale,
+        std::string_view value,
         float maxWidth,
+        Color color,
         std::chrono::steady_clock::time_point now
-    ) const {
+    ) {
         const std::string displayValue = displayText(value);
-        if (displayValue.empty() || renderer_.textWidth(scale, displayValue) <= maxWidth) return displayValue;
-        constexpr auto linger = 1200ms;
-        if (now < lastInteraction_ + linger) return fitTextLines(displayValue, scale, maxWidth, 1);
-
-        constexpr auto step = 180ms;
-        constexpr size_t gap = 6;
-        const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - (lastInteraction_ + linger));
-        const size_t offset = static_cast<size_t>(elapsed / step) % (displayValue.size() + gap);
-        const std::string track = displayValue + std::string(gap, ' ') + displayValue;
-        std::string visible;
-        visible.reserve(displayValue.size());
-        for (size_t i = offset; i < track.size(); ++i) {
-            const std::string candidate = visible + track[i];
-            if (!visible.empty() && renderer_.textWidth(scale, candidate) > maxWidth) break;
-            visible = candidate;
+        if (displayValue.empty()) return;
+        const float titleWidth = renderer_.textWidth(scale, displayValue);
+        if (titleWidth <= maxWidth) {
+            renderer_.text(x, y, scale, displayValue, color, maxWidth);
+            return;
         }
-        return visible.empty() ? fitTextLines(displayValue, scale, maxWidth, 1) : visible;
+
+        constexpr auto linger = 1200ms;
+        const auto marqueeStart = lastInteraction_ + linger;
+        if (now < marqueeStart) {
+            renderer_.text(x, y, scale, fitTextLines(displayValue, scale, maxWidth, 1), color, maxWidth);
+            return;
+        }
+
+        constexpr float speedPixelsPerSecond = 28.0f;
+        const std::string gap = "      ";
+        const float cycleWidth = titleWidth + renderer_.textWidth(scale, gap);
+        const float elapsedSeconds = std::chrono::duration<float>(now - marqueeStart).count();
+        const float offset = std::fmod(elapsedSeconds * speedPixelsPerSecond, cycleWidth);
+        const std::string track = displayValue + gap + displayValue;
+        renderer_.beginClipRect(x, y - 4.0f, maxWidth, 64.0f);
+        renderer_.text(x - offset, y, scale, track, color);
+        renderer_.endClipRect();
     }
 
     std::string fitTextLines(std::string_view value, float scale, float maxWidth, int maxLines) const {
@@ -8187,11 +8252,13 @@ private:
     std::chrono::steady_clock::time_point seerrPendingRefreshAt_{};
     std::vector<SeerrStorageTarget> seerrStorage_;
     bool seerrStorageLoading_ = false;
+    std::string seerrStorageError_;
     std::chrono::steady_clock::time_point seerrStorageRefreshAt_{};
     JellyfinItem pendingSeerrRequest_;
     std::vector<SeerrStorageTarget> seerrDriveChoices_;
     int seerrDriveSelection_ = 0;
     bool seerrConnectLoading_ = false;
+    bool seerrRetrySearchAfterConnect_ = false;
     ArtworkCache artwork_{30};
     ArtworkCache profileArtwork_;
     ArtworkCache homeArtwork_{48};

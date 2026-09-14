@@ -392,53 +392,131 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
         result.error = "Seerr is not connected";
         return result;
     }
+
+    std::unordered_set<std::string> seenTargets;
+    std::vector<std::string> failures;
+    auto addTarget = [&](const std::string& mediaType,
+                         const std::string& serviceName,
+                         const std::string& path,
+                         int serverId,
+                         int profileId,
+                         int64_t freeSpace,
+                         int64_t totalSpace,
+                         bool isDefault,
+                         bool is4k) {
+        if (path.empty() || serverId < 0) return;
+        const std::string key = mediaType + ":" + std::to_string(serverId) + ":" + path;
+        if (!seenTargets.insert(key).second) return;
+        SeerrStorageTarget target;
+        target.mediaType = mediaType;
+        target.serviceName = serviceName;
+        target.path = path;
+        target.serverId = serverId;
+        target.profileId = profileId;
+        target.freeSpace = freeSpace;
+        target.totalSpace = totalSpace;
+        target.isDefault = isDefault;
+        target.is4k = is4k;
+        result.value.push_back(std::move(target));
+    };
+
     for (const std::string& mediaType : {std::string("movie"), std::string("tv")}) {
         const std::string service = mediaType == "movie" ? "radarr" : "sonarr";
         const auto servers = http_.request("GET", apiBase(server) + "/service/" + service, headers(auth));
-        if (!servers.ok()) continue;
-        try {
-            const auto list = json::parse(servers.body);
-            if (!list.is_array()) continue;
-            for (const auto& entry : list) {
-                if (!entry.is_object() || entry.value("is4k", false)) continue;
-                const int id = integerValue(entry, "id");
-                if (id <= 0) continue;
-                const auto detailsResponse = http_.request(
-                    "GET", apiBase(server) + "/service/" + service + "/" + std::to_string(id), headers(auth));
-                if (!detailsResponse.ok()) continue;
-                const auto details = json::parse(detailsResponse.body);
-                const auto serverInfo = details.find("server");
-                const int profileId = serverInfo != details.end() && serverInfo->is_object()
-                    ? integerValue(*serverInfo, "activeProfileId")
-                    : integerValue(entry, "activeProfileId");
-                const std::string name = serverInfo != details.end() && serverInfo->is_object()
-                    ? stringValue(*serverInfo, "name")
-                    : stringValue(entry, "name");
-                const bool isDefault = serverInfo != details.end() && serverInfo->is_object()
-                    ? serverInfo->value("isDefault", false)
-                    : entry.value("isDefault", false);
-                const auto folders = details.find("rootFolders");
-                if (folders == details.end() || !folders->is_array()) continue;
-                for (const auto& folder : *folders) {
-                    if (!folder.is_object()) continue;
-                    SeerrStorageTarget target;
-                    target.mediaType = mediaType;
-                    target.serviceName = name;
-                    target.path = stringValue(folder, "path");
-                    target.serverId = id;
-                    target.profileId = profileId;
-                    target.freeSpace = int64Value(folder, "freeSpace");
-                    target.totalSpace = int64Value(folder, "totalSpace");
-                    target.isDefault = isDefault;
-                    // A valid Servarr root folder may not expose total capacity (for example
-                    // some network/FUSE mounts).  Capacity is presentation metadata, not a
-                    // requirement for routing a Seerr request.
-                    if (!target.path.empty()) result.value.push_back(std::move(target));
-                }
-            }
-        } catch (...) {
+        if (!servers.ok()) {
+            failures.push_back(service + ": " + apiError(servers));
             continue;
         }
+        try {
+            const auto list = json::parse(servers.body);
+            if (!list.is_array()) {
+                failures.push_back(service + ": invalid service response");
+                continue;
+            }
+            for (const auto& entry : list) {
+                if (!entry.is_object()) continue;
+                const int id = integerValue(entry, "id", -1);
+                if (id < 0) continue;
+
+                bool is4k = entry.value("is4k", false);
+                bool isDefault = entry.value("isDefault", false);
+                std::string name = stringValue(entry, "name");
+                int profileId = integerValue(entry, "activeProfileId");
+                int animeProfileId = integerValue(entry, "activeAnimeProfileId");
+                std::string activeDirectory = stringValue(entry, "activeDirectory");
+                std::string animeDirectory = stringValue(entry, "activeAnimeDirectory");
+
+                const auto detailsResponse = http_.request(
+                    "GET", apiBase(server) + "/service/" + service + "/" + std::to_string(id), headers(auth));
+                if (detailsResponse.ok()) {
+                    try {
+                        const auto details = json::parse(detailsResponse.body);
+                        const auto serverInfo = details.find("server");
+                        if (serverInfo != details.end() && serverInfo->is_object()) {
+                            if (!stringValue(*serverInfo, "name").empty()) name = stringValue(*serverInfo, "name");
+                            is4k = serverInfo->value("is4k", is4k);
+                            isDefault = serverInfo->value("isDefault", isDefault);
+                            profileId = integerValue(*serverInfo, "activeProfileId", profileId);
+                            animeProfileId = integerValue(*serverInfo, "activeAnimeProfileId", animeProfileId);
+                            if (!stringValue(*serverInfo, "activeDirectory").empty()) {
+                                activeDirectory = stringValue(*serverInfo, "activeDirectory");
+                            }
+                            if (!stringValue(*serverInfo, "activeAnimeDirectory").empty()) {
+                                animeDirectory = stringValue(*serverInfo, "activeAnimeDirectory");
+                            }
+                        }
+                        const auto folders = details.find("rootFolders");
+                        if (folders != details.end() && folders->is_array()) {
+                            for (const auto& folder : *folders) {
+                                if (!folder.is_object()) continue;
+                                const std::string path = stringValue(folder, "path");
+                                const bool anime = mediaType == "tv" && !animeDirectory.empty() && path == animeDirectory;
+                                addTarget(
+                                    mediaType,
+                                    anime ? name + " - Anime" : name,
+                                    path,
+                                    id,
+                                    anime && animeProfileId > 0 ? animeProfileId : profileId,
+                                    int64Value(folder, "freeSpace"),
+                                    int64Value(folder, "totalSpace"),
+                                    isDefault,
+                                    is4k
+                                );
+                            }
+                        }
+                    } catch (const std::exception& e) {
+                        failures.push_back(service + " details: " + e.what());
+                    }
+                } else {
+                    failures.push_back(service + " details: " + apiError(detailsResponse));
+                }
+
+                // Seerr's service list already contains the configured active directories.
+                // Keep those as routing fallbacks when Sonarr/Radarr cannot report root-folder
+                // capacity/details (common with some remote mounts and permission setups).
+                addTarget(mediaType, name, activeDirectory, id, profileId, 0, 0, isDefault, is4k);
+                if (mediaType == "tv" && !animeDirectory.empty() && animeDirectory != activeDirectory) {
+                    addTarget(
+                        mediaType,
+                        name + " - Anime",
+                        animeDirectory,
+                        id,
+                        animeProfileId > 0 ? animeProfileId : profileId,
+                        0,
+                        0,
+                        isDefault,
+                        is4k
+                    );
+                }
+            }
+        } catch (const std::exception& e) {
+            failures.push_back(service + ": " + e.what());
+        }
+    }
+
+    if (result.value.empty()) {
+        result.error = failures.empty() ? "No Sonarr/Radarr storage directories are configured" : failures.front();
+        return result;
     }
     result.ok = true;
     return result;
@@ -613,10 +691,10 @@ ApiValueResult<int> SeerrClient::requestMedia(
     json body{
         {"mediaType", item.externalMediaType},
         {"mediaId", mediaId},
-        {"is4k", false},
+        {"is4k", target ? target->is4k : false},
     };
     if (item.externalMediaType == "tv") body["seasons"] = "all";
-    if (target && target->serverId > 0 && !target->path.empty()) {
+    if (target && target->serverId >= 0 && !target->path.empty()) {
         body["serverId"] = target->serverId;
         body["rootFolder"] = target->path;
         if (target->profileId > 0) body["profileId"] = target->profileId;

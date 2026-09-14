@@ -32,11 +32,12 @@ struct SeerrStorageTarget {
     std::string mediaType;
     std::string serviceName;
     std::string path;
-    int serverId = 0;
+    int serverId = -1;
     int profileId = 0;
     int64_t freeSpace = 0;
     int64_t totalSpace = 0;
     bool isDefault = false;
+    bool is4k = false;
 
     [[nodiscard]] int usedPercent() const {
         if (totalSpace <= 0) return 0;

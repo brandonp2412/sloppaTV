@@ -464,6 +464,7 @@ void Renderer::shutdown() {
 void Renderer::beginFrame() {
     if (!ready()) return;
     glViewport(0, 0, surfaceWidth_, surfaceHeight_);
+    glDisable(GL_SCISSOR_TEST);
     glClearColor(
         material_tv::background.r,
         material_tv::background.g,
@@ -485,7 +486,31 @@ void Renderer::setUiTransform(float safeAreaFraction, float textScale) {
 void Renderer::endFrame() {
     if (!ready()) return;
     flush();
+    glDisable(GL_SCISSOR_TEST);
     eglSwapBuffers(display_, surface_);
+}
+
+void Renderer::beginClipRect(float x, float y, float w, float h) {
+    if (!ready() || w <= 0.0f || h <= 0.0f) return;
+    flush();
+    const float logicalX = uiOffsetX_ + x * uiScale_;
+    const float logicalY = uiOffsetY_ + y * uiScale_;
+    const float logicalW = w * uiScale_;
+    const float logicalH = h * uiScale_;
+    const float sx = static_cast<float>(surfaceWidth_) / logicalWidth();
+    const float sy = static_cast<float>(surfaceHeight_) / logicalHeight();
+    const GLint clipX = static_cast<GLint>(std::floor(logicalX * sx));
+    const GLint clipY = static_cast<GLint>(std::floor((logicalHeight() - logicalY - logicalH) * sy));
+    const GLsizei clipW = static_cast<GLsizei>(std::ceil(logicalW * sx));
+    const GLsizei clipH = static_cast<GLsizei>(std::ceil(logicalH * sy));
+    glEnable(GL_SCISSOR_TEST);
+    glScissor(clipX, clipY, std::max<GLsizei>(0, clipW), std::max<GLsizei>(0, clipH));
+}
+
+void Renderer::endClipRect() {
+    if (!ready()) return;
+    flush();
+    glDisable(GL_SCISSOR_TEST);
 }
 
 void Renderer::flush() {
