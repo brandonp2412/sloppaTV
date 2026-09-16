@@ -48,20 +48,23 @@ int main() {
     assert(state.results()[1].id == "2");
     assert(state.results()[4].id == "1");
 
-    std::vector<JellyfinItem> seerr(2);
+    std::vector<SeerrMediaItem> seerr(2);
     seerr[0].id = "seerr:movie:100";
-    seerr[0].type = "Movie";
-    seerr[0].tmdbId = "100";
-    seerr[0].externalSource = "seerr";
+    seerr[0].mediaType = "movie";
+    seerr[0].tmdbId = 100;
     seerr[1].id = "seerr:tv:300";
-    seerr[1].type = "Series";
-    seerr[1].tmdbId = "300";
-    seerr[1].externalSource = "seerr";
+    seerr[1].mediaType = "tv";
+    seerr[1].tmdbId = 300;
+    seerr[1].jellyfinId = "jellyfin-series-300";
+    seerr[1].available = true;
     assert(state.finishSeerrSearch("bro", std::move(seerr)));
     assert(!state.seerrLoading());
     assert(state.rowItemCount(SearchScreenState::kSeerrRow) == 1);
     assert(state.results().size() == 8);
     assert(state.results()[4].id == "seerr:tv:300");
+    assert(state.results()[4].externalSource == "seerr");
+    assert(state.results()[4].externalJellyfinId == "jellyfin-series-300");
+    assert(state.results()[4].externalAvailable);
     assert(state.results()[5].id == "1");
 
     state.moveSelection(1, 0, 5);

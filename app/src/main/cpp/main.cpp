@@ -3921,12 +3921,10 @@ private:
                 }
                 return;
             }
-            std::vector<JellyfinItem> seerrResults;
-            seerrResults.reserve(result.value.size());
             bool discoveredPending = false;
             for (const auto& media : result.value) {
-                JellyfinItem item = jellyfinItemFromSeerrMedia(media);
                 if (media.requested) {
+                    JellyfinItem item = jellyfinItemFromSeerrMedia(media);
                     const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& pending) {
                         return pending.id == item.id || (item.externalRequestId > 0 && pending.externalRequestId == item.externalRequestId);
                     });
@@ -3934,13 +3932,12 @@ private:
                     else *existing = item;
                     discoveredPending = true;
                 }
-                seerrResults.push_back(std::move(item));
             }
             if (discoveredPending) {
                 seerrOptimisticPendingUntil_ = std::chrono::steady_clock::now() + 5min;
                 syncSeerrHomeRowLocked();
             }
-            (void) searchState_.finishSeerrSearch(query, std::move(seerrResults));
+            (void) searchState_.finishSeerrSearch(query, std::move(result.value));
         });
     }
 

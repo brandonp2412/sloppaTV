@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jellyfin_types.hpp"
+#include "seerr_jellyfin_adapter.hpp"
 #include "unicode_text.hpp"
 
 #include <algorithm>
@@ -248,7 +249,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool finishSeerrSearch(const std::string& query, std::vector<JellyfinItem> results) {
+    [[nodiscard]] bool finishSeerrSearch(const std::string& query, std::vector<SeerrMediaItem> results) {
         if (query_ != query || seerrQuery_ != query) return false;
         seerrLoading_ = false;
         seerrError_.clear();
@@ -269,10 +270,10 @@ public:
     void markSeerrRequested(const std::string& itemId, std::string status, int requestId = 0) {
         for (auto& item : seerrResults_) {
             if (item.id != itemId) continue;
-            item.externalRequested = true;
-            item.externalRequestId = requestId;
-            item.externalStatus = std::move(status);
-            if (item.externalMediaStatus <= 1) item.externalMediaStatus = 2;
+            item.requested = true;
+            item.requestId = requestId;
+            item.status = std::move(status);
+            if (item.mediaStatus <= 1) item.mediaStatus = 2;
             break;
         }
         rebuildResults();
@@ -281,10 +282,10 @@ public:
     void markSeerrUnrequested(const std::string& itemId) {
         for (auto& item : seerrResults_) {
             if (item.id != itemId) continue;
-            item.externalRequested = false;
-            item.externalRequestId = 0;
-            item.externalMediaStatus = 0;
-            item.externalStatus.clear();
+            item.requested = false;
+            item.requestId = 0;
+            item.mediaStatus = 0;
+            item.status.clear();
             break;
         }
         // Force a future search of the same text to re-check Seerr instead of
@@ -347,15 +348,16 @@ public:
     }
 
 private:
-    [[nodiscard]] bool duplicatesLocalLibrary(const JellyfinItem& candidate) const {
-        if (candidate.tmdbId.empty()) return false;
+    [[nodiscard]] bool duplicatesLocalLibrary(const SeerrMediaItem& candidate) const {
+        if (candidate.tmdbId <= 0) return false;
+        const std::string tmdbId = std::to_string(candidate.tmdbId);
         return std::any_of(libraryTitles_.begin(), libraryTitles_.end(), [&](const JellyfinItem& local) {
-            return !local.tmdbId.empty() && local.tmdbId == candidate.tmdbId;
+            return !local.tmdbId.empty() && local.tmdbId == tmdbId;
         });
     }
 
     [[nodiscard]] size_t visibleSeerrCount() const {
-        return static_cast<size_t>(std::count_if(seerrResults_.begin(), seerrResults_.end(), [&](const JellyfinItem& item) {
+        return static_cast<size_t>(std::count_if(seerrResults_.begin(), seerrResults_.end(), [&](const SeerrMediaItem& item) {
             return !duplicatesLocalLibrary(item);
         }));
     }
@@ -370,7 +372,7 @@ private:
         results_.reserve(libraryTitles_.size() + seerrResults_.size() + episodes_.size());
         results_.insert(results_.end(), libraryTitles_.begin(), libraryTitles_.end());
         for (const auto& item : seerrResults_) {
-            if (!duplicatesLocalLibrary(item)) results_.push_back(item);
+            if (!duplicatesLocalLibrary(item)) results_.push_back(jellyfinItemFromSeerrMedia(item));
         }
         results_.insert(results_.end(), episodes_.begin(), episodes_.end());
 
@@ -390,7 +392,7 @@ private:
 
     std::string query_;
     std::vector<JellyfinItem> libraryTitles_;
-    std::vector<JellyfinItem> seerrResults_;
+    std::vector<SeerrMediaItem> seerrResults_;
     std::vector<JellyfinItem> episodes_;
     std::vector<JellyfinItem> results_;
     int selection_ = 0;
