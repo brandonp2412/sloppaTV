@@ -2533,12 +2533,13 @@ private:
             else stopPlayback();
             return;
         }
-        if (key == AKEYCODE_DPAD_UP && !playerScreenState_.controlsActive()) {
+        if (key == AKEYCODE_DPAD_UP && !playerScreenState_.controlsActive(now)) {
             playerScreenState_.showControls(now);
             return;
         }
-        playerScreenState_.showOverlayFor(now, playerScreenState_.controlsActive() ? 10s : 5s);
-        if (playerScreenState_.controlsActive()) {
+        if (playerScreenState_.controlsActive(now)) playerScreenState_.refreshControls(now);
+        else playerScreenState_.showOverlayFor(now, 5s);
+        if (playerScreenState_.controlsActive(now)) {
             if (key == AKEYCODE_DPAD_DOWN) {
                 playerScreenState_.hideControls();
             } else if (key == AKEYCODE_DPAD_LEFT) {
@@ -7160,7 +7161,7 @@ private:
             const float boxX = (Renderer::logicalWidth() - boxWidth) * 0.5f;
             const float bottomY = subtitleBottomY(
                 showOverlay,
-                playerScreenState_.controlsActive(),
+                playerScreenState_.controlsActive(now),
                 settings_.subtitlePosition,
                 skipSegment != nullptr
             );
@@ -7319,7 +7320,7 @@ private:
         }
         drawTrickplayPreview();
 
-        if (playerScreenState_.controlsActive()) {
+        if (playerScreenState_.controlsActive(now)) {
             constexpr std::array<float, 5> controlWidths{112.0f, 112.0f, 112.0f, 300.0f, 340.0f};
             constexpr float controlHeight = 66.0f;
             constexpr float controlGap = 18.0f;

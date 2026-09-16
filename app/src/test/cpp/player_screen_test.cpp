@@ -9,14 +9,21 @@ int main() {
     const auto now = PlayerScreenState::Clock::time_point{10s};
 
     assert(PlayerScreenState::controlCount() == 5);
-    assert(!state.controlsActive());
+    assert(!state.controlsActive(now));
     assert(state.controlSelection() == 1);
     assert(!state.overlayVisible(now));
 
     state.showControls(now);
-    assert(state.controlsActive());
+    assert(state.controlsActive(now + 9s));
+    state.refreshControls(now + 9s);
+    assert(state.controlsActive(now + 18s));
+    assert(!state.controlsActive(now + 19s));
+    state.showControls(now);
     assert(state.overlayVisible(now + 9s));
+    assert(!state.controlsActive(now + 10s));
     assert(!state.overlayVisible(now + 10s));
+    state.showOverlayFor(now + 11s, 5s);
+    assert(!state.controlsActive(now + 11s));
     state.moveControl(1);
     state.moveControl(1);
     state.moveControl(1);
@@ -24,10 +31,12 @@ int main() {
     assert(state.controlSelection() == 4);
     state.moveControl(-1);
     assert(state.controlSelection() == 3);
-    assert(state.shouldDismissOnBack(now + 20s));
-    state.dismissOverlay(now + 20s);
-    assert(!state.controlsActive());
     assert(!state.shouldDismissOnBack(now + 20s));
+    state.showOverlayFor(now + 20s, 5s);
+    assert(state.shouldDismissOnBack(now + 21s));
+    state.dismissOverlay(now + 21s);
+    assert(!state.controlsActive(now + 21s));
+    assert(!state.shouldDismissOnBack(now + 21s));
 
     state.beginPlayback(12'000, 60'000);
     assert(state.positionMs() == 12'000);
@@ -87,7 +96,7 @@ int main() {
     assert(!state.resumeOnFocusRequested());
 
     state.resetSession();
-    assert(!state.controlsActive());
+    assert(!state.controlsActive(now));
     assert(state.controlSelection() == 1);
     assert(state.positionMs() == 0);
     assert(state.durationMs() == 0);

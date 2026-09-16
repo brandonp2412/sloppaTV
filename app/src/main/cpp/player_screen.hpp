@@ -16,6 +16,7 @@ public:
     void resetSession() {
         controlsActive_ = false;
         controlSelection_ = 1;
+        controlsUntil_ = {};
         overlayUntil_ = {};
         seekFeedbackSeconds_ = 0;
         seekFeedbackStarted_ = {};
@@ -39,6 +40,7 @@ public:
     void beginPlayback(int positionMs, int durationMs) {
         controlsActive_ = false;
         controlSelection_ = 1;
+        controlsUntil_ = {};
         positionMs_ = std::max(0, positionMs);
         durationMs_ = std::max(0, durationMs);
         pendingSeekTargetMs_ = -1;
@@ -46,16 +48,28 @@ public:
         lastSeekIssued_ = {};
     }
 
-    [[nodiscard]] bool controlsActive() const { return controlsActive_; }
+    [[nodiscard]] bool controlsActive(TimePoint now) const {
+        return controlsActive_ && now < controlsUntil_;
+    }
     [[nodiscard]] int controlSelection() const { return controlSelection_; }
 
     void showControls(TimePoint now) {
         controlsActive_ = true;
         controlSelection_ = 1;
+        controlsUntil_ = now + std::chrono::seconds(10);
         showOverlayFor(now, std::chrono::seconds(10));
     }
 
-    void hideControls() { controlsActive_ = false; }
+    void refreshControls(TimePoint now) {
+        if (!controlsActive(now)) return;
+        controlsUntil_ = now + std::chrono::seconds(10);
+        showOverlayFor(now, std::chrono::seconds(10));
+    }
+
+    void hideControls() {
+        controlsActive_ = false;
+        controlsUntil_ = {};
+    }
 
     void moveControl(int delta) {
         controlSelection_ = std::clamp(
@@ -93,12 +107,12 @@ public:
     }
 
     void dismissOverlay(TimePoint now) {
-        controlsActive_ = false;
+        hideControls();
         overlayUntil_ = now;
     }
 
     [[nodiscard]] bool shouldDismissOnBack(TimePoint now) const {
-        return controlsActive_ || overlayVisible(now);
+        return overlayVisible(now);
     }
 
     [[nodiscard]] int positionMs() const { return positionMs_; }
@@ -174,6 +188,7 @@ public:
 private:
     bool controlsActive_ = false;
     int controlSelection_ = 1;
+    TimePoint controlsUntil_{};
     TimePoint overlayUntil_{};
     int seekFeedbackSeconds_ = 0;
     TimePoint seekFeedbackStarted_{};
