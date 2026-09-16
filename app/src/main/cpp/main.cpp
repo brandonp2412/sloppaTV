@@ -4799,7 +4799,14 @@ private:
         auto& target = transition.target;
         auto& item = transition.item;
         const bool streamRestart = transition.streamRestart;
-        transitionState_.setPauseAfterRestart(streamRestart && transition.restartPaused);
+        const PlaybackTransitionPlan playbackPlan = planPlaybackTransition(
+            target,
+            item,
+            streamRestart,
+            transition.restartPaused,
+            transition.audioStreamIndex
+        );
+        transitionState_.setPauseAfterRestart(playbackPlan.pauseAfterRestart);
         activePlaybackItem_ = item;
         activeTarget_ = target;
         std::ostringstream playbackSummary;
@@ -4809,27 +4816,15 @@ private:
         lastPlaybackSummary_ = playbackSummary.str();
         playbackSessionState_.resetFallbackAttempted();
         telemetryState_.beginPlayback(std::chrono::steady_clock::now());
-        playerScreenState_.beginPlayback(
-            playbackPositionMsFromTicks(target.startTicks),
-            playbackPositionMsFromTicks(item.runtimeTicks)
-        );
+        playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
         playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
-        if (!streamRestart) {
+        if (playbackPlan.resetContinuation) {
             continuationState_.clearNextEpisode();
             syncNextPlaybackFromQueue();
         }
         trackState_.resetPlayback();
-        int selectedAudioServerIndex = transition.audioStreamIndex >= 0
-            ? transition.audioStreamIndex
-            : target.audioStreamIndex;
-        if (selectedAudioServerIndex < 0 && !item.audios.empty()) {
-            const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
-                return audio.isDefault;
-            });
-            selectedAudioServerIndex = preferred == item.audios.end() ? item.audios.front().index : preferred->index;
-        }
-        trackState_.setSelectedAudioServerIndex(selectedAudioServerIndex);
-        trackState_.setSelectedSubtitleServerIndex(target.subtitleStreamIndex);
+        trackState_.setSelectedAudioServerIndex(playbackPlan.selectedAudioServerIndex);
+        trackState_.setSelectedSubtitleServerIndex(playbackPlan.selectedSubtitleServerIndex);
         if (trackState_.selectedSubtitleServerIndex() >= 0) {
             const auto selectedSubtitle = std::find_if(
                 item.subtitles.begin(),
@@ -4848,7 +4843,7 @@ private:
                 }
             }
         }
-        if (!streamRestart) playbackSessionState_.resetMediaSegments();
+        if (playbackPlan.resetMediaSegments) playbackSessionState_.resetMediaSegments();
         transitionState_.setLoading(false);
         if (!streamRestart) {
             if (screen_ == Screen::Player) replaceScreen(Screen::Player);

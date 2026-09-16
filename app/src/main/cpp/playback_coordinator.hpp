@@ -6,6 +6,7 @@
 #include "playback_session.hpp"
 #include "playback_telemetry.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <string_view>
 
@@ -47,6 +48,16 @@ struct PlaybackFallbackPlan {
     bool offeredDirectStream = false;
     bool forceServerStream = false;
     bool forceTranscode = false;
+};
+
+struct PlaybackTransitionPlan {
+    int startPositionMs = 0;
+    int durationMs = 0;
+    int selectedAudioServerIndex = -1;
+    int selectedSubtitleServerIndex = -1;
+    bool pauseAfterRestart = false;
+    bool resetContinuation = false;
+    bool resetMediaSegments = false;
 };
 
 inline PlaybackTickPlan planPlaybackTick(
@@ -136,6 +147,34 @@ inline PlaybackTarget offeredPlaybackFallbackTarget(
         : PlaybackMethod::Transcode;
     target.startTicks = plan.resumeTicks;
     return target;
+}
+
+inline PlaybackTransitionPlan planPlaybackTransition(
+    const PlaybackTarget& target,
+    const JellyfinItem& item,
+    bool streamRestart,
+    bool restartPaused,
+    int audioStreamIndex
+) {
+    PlaybackTransitionPlan plan;
+    plan.startPositionMs = playbackPositionMsFromTicks(target.startTicks);
+    plan.durationMs = playbackPositionMsFromTicks(item.runtimeTicks);
+    plan.selectedAudioServerIndex = audioStreamIndex >= 0
+        ? audioStreamIndex
+        : target.audioStreamIndex;
+    if (plan.selectedAudioServerIndex < 0 && !item.audios.empty()) {
+        const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
+            return audio.isDefault;
+        });
+        plan.selectedAudioServerIndex = preferred == item.audios.end()
+            ? item.audios.front().index
+            : preferred->index;
+    }
+    plan.selectedSubtitleServerIndex = target.subtitleStreamIndex;
+    plan.pauseAfterRestart = streamRestart && restartPaused;
+    plan.resetContinuation = !streamRestart;
+    plan.resetMediaSegments = !streamRestart;
+    return plan;
 }
 
 inline PlaybackContinuationPlan planPlaybackContinuation(

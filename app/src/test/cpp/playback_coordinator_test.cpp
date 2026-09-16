@@ -225,6 +225,79 @@ int main() {
         false
     ).retry);
 
+    JellyfinItem transitionItem;
+    transitionItem.runtimeTicks = 900'000'000;
+    transitionItem.audios = {
+        {.index = 1, .channels = 2, .codec = "aac", .language = "eng", .title = "Track 1", .isDefault = false},
+        {.index = 3, .channels = 2, .codec = "aac", .language = "eng", .title = "Track 3", .isDefault = true},
+    };
+    PlaybackTarget transitionTarget;
+    transitionTarget.startTicks = 420'000'000;
+    transitionTarget.audioStreamIndex = -1;
+    transitionTarget.subtitleStreamIndex = 8;
+
+    auto transitionPlan = planPlaybackTransition(
+        transitionTarget,
+        transitionItem,
+        false,
+        true,
+        -1
+    );
+    assert(transitionPlan.startPositionMs == 42000);
+    assert(transitionPlan.durationMs == 90000);
+    assert(transitionPlan.selectedAudioServerIndex == 3);
+    assert(transitionPlan.selectedSubtitleServerIndex == 8);
+    assert(!transitionPlan.pauseAfterRestart);
+    assert(transitionPlan.resetContinuation);
+    assert(transitionPlan.resetMediaSegments);
+
+    transitionPlan = planPlaybackTransition(
+        transitionTarget,
+        transitionItem,
+        true,
+        true,
+        7
+    );
+    assert(transitionPlan.selectedAudioServerIndex == 7);
+    assert(transitionPlan.pauseAfterRestart);
+    assert(!transitionPlan.resetContinuation);
+    assert(!transitionPlan.resetMediaSegments);
+
+    transitionTarget.audioStreamIndex = 9;
+    transitionPlan = planPlaybackTransition(
+        transitionTarget,
+        transitionItem,
+        true,
+        false,
+        -1
+    );
+    assert(transitionPlan.selectedAudioServerIndex == 9);
+    assert(!transitionPlan.pauseAfterRestart);
+
+    transitionTarget.audioStreamIndex = -1;
+    transitionItem.audios = {
+        {.index = 5, .channels = 2, .codec = "aac", .language = "eng", .title = "Track 5", .isDefault = false},
+        {.index = 6, .channels = 2, .codec = "aac", .language = "eng", .title = "Track 6", .isDefault = false},
+    };
+    transitionPlan = planPlaybackTransition(
+        transitionTarget,
+        transitionItem,
+        false,
+        false,
+        -1
+    );
+    assert(transitionPlan.selectedAudioServerIndex == 5);
+
+    transitionItem.audios.clear();
+    transitionPlan = planPlaybackTransition(
+        transitionTarget,
+        transitionItem,
+        false,
+        false,
+        -1
+    );
+    assert(transitionPlan.selectedAudioServerIndex == -1);
+
     JellyfinItem episode1;
     episode1.id = "episode-1";
     JellyfinItem episode2;
