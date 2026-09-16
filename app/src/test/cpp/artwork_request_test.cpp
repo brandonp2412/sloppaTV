@@ -37,38 +37,28 @@ int main() {
     );
 
     const PosterArtworkRequest poster = posterArtworkRequest(session, item, false);
-    const JellyfinItem posterItem = poster.jellyfinItem();
     assert(poster.itemId == item.id);
     assert(poster.imageTag == item.imageTag);
-    assert(posterItem.id == item.id);
-    assert(posterItem.imageTag == item.imageTag);
-    assert(posterItem.name.empty());
-    assert(posterItem.thumbTag.empty());
+    assert(!poster.external);
+    assert(poster.externalUrl.empty());
 
     const HomeArtworkRequest home = homeArtworkRequest(session, item, false);
-    const JellyfinItem homeItem = home.jellyfinItem();
-    assert(homeItem.id == item.id);
-    assert(homeItem.type == item.type);
-    assert(homeItem.imageTag == item.imageTag);
-    assert(homeItem.thumbTag == item.thumbTag);
-    assert(homeItem.backdropTag == item.backdropTag);
-    assert(homeItem.backdropItemId == item.backdropItemId);
-    assert(homeItem.name.empty());
-    assert(homeItem.logoTag.empty());
+    assert(home.itemId == item.id);
+    assert(home.itemType == item.type);
+    assert(home.artwork.itemId == item.id);
+    assert(home.artwork.tag == item.thumbTag);
+    assert(home.artwork.kind == ArtworkKind::Thumb);
+    assert(home.key == homeArtworkKey(session, home.artwork));
+    assert(!home.external);
+    assert(home.externalUrl.empty());
 
     const BackdropArtworkRequest backdrop = backdropArtworkRequest(session, item, 2);
-    const JellyfinItem backdropItem = backdrop.jellyfinItem();
-    assert(backdropItem.id == item.id);
-    assert(backdropItem.backdropItemId == item.backdropItemId);
-    assert(backdropItem.backdropTag == item.backdropTag);
-    assert(backdropItem.imageTag.empty());
+    assert(backdrop.artworkItemId == item.backdropItemId);
+    assert(backdrop.artworkTag == item.backdropTag);
 
     const LogoArtworkRequest logo = logoArtworkRequest(session, item);
-    const JellyfinItem logoItem = logo.jellyfinItem();
-    assert(logoItem.id == item.id);
-    assert(logoItem.logoItemId == item.logoItemId);
-    assert(logoItem.logoTag == item.logoTag);
-    assert(logoItem.backdropTag.empty());
+    assert(logo.artworkItemId == item.logoItemId);
+    assert(logo.artworkTag == item.logoTag);
 
     item.externalPosterUrl = "https://images.example/poster.jpg";
     item.externalBackdropUrl = "https://images.example/backdrop.jpg";

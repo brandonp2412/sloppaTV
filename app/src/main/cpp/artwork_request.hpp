@@ -11,70 +11,27 @@ struct PosterArtworkRequest {
     std::string imageTag;
     std::string externalUrl;
     bool external = false;
-
-    [[nodiscard]] JellyfinItem jellyfinItem() const {
-        JellyfinItem item;
-        item.id = itemId;
-        item.imageTag = imageTag;
-        return item;
-    }
 };
 
 struct HomeArtworkRequest {
     std::string key;
     std::string itemId;
     std::string itemType;
-    std::string imageTag;
-    std::string seriesId;
-    std::string seriesPrimaryImageTag;
-    std::string thumbTag;
-    std::string backdropTag;
-    std::string backdropItemId;
+    ArtworkReference artwork;
     std::string externalUrl;
     bool external = false;
-
-    [[nodiscard]] JellyfinItem jellyfinItem() const {
-        JellyfinItem item;
-        item.id = itemId;
-        item.type = itemType;
-        item.imageTag = imageTag;
-        item.seriesId = seriesId;
-        item.seriesPrimaryImageTag = seriesPrimaryImageTag;
-        item.thumbTag = thumbTag;
-        item.backdropTag = backdropTag;
-        item.backdropItemId = backdropItemId;
-        return item;
-    }
 };
 
 struct BackdropArtworkRequest {
     std::string key;
-    std::string itemId;
-    std::string backdropItemId;
-    std::string backdropTag;
-
-    [[nodiscard]] JellyfinItem jellyfinItem() const {
-        JellyfinItem item;
-        item.id = itemId;
-        item.backdropItemId = backdropItemId;
-        item.backdropTag = backdropTag;
-        return item;
-    }
+    std::string artworkItemId;
+    std::string artworkTag;
 };
 
 struct LogoArtworkRequest {
     std::string key;
-    std::string itemId;
-    std::string logoItemId;
-    std::string logoTag;
-
-    [[nodiscard]] JellyfinItem jellyfinItem() const {
-        JellyfinItem item;
-        item.id = itemId;
-        item.logoItemId = logoItemId;
-        item.logoTag = logoTag;
-        return item;
-    }
+    std::string artworkItemId;
+    std::string artworkTag;
 };
 
 inline std::string profileArtworkKey(const JellyfinSession& session) {
@@ -136,26 +93,8 @@ inline std::string logoArtworkKey(const JellyfinSession& session, const Jellyfin
 
 inline std::string homeArtworkKey(
     const JellyfinSession& session,
-    const JellyfinItem& item,
-    bool external
+    const ArtworkReference& artwork
 ) {
-    if (external) {
-        const std::string& source = item.externalBackdropUrl.empty()
-            ? item.externalPosterUrl
-            : item.externalBackdropUrl;
-        return "seerr:home:" + source;
-    }
-
-    const ArtworkReference artwork = homeArtworkReference(
-        item.id,
-        item.imageTag,
-        item.seriesId,
-        item.seriesPrimaryImageTag,
-        preferHomeLandscapeArtwork(item.type),
-        item.thumbTag,
-        item.backdropTag,
-        item.backdropItemId
-    );
     const std::string kind = std::to_string(static_cast<int>(artwork.kind));
     std::string key;
     key.reserve(session.server.size() + session.userId.size() + artwork.itemId.size() + artwork.tag.size() + kind.size() + 31);
@@ -169,6 +108,32 @@ inline std::string homeArtworkKey(
         .push_back(':');
     key.append(artwork.tag);
     return key;
+}
+
+inline std::string homeArtworkKey(
+    const JellyfinSession& session,
+    const JellyfinItem& item,
+    bool external
+) {
+    if (external) {
+        const std::string& source = item.externalBackdropUrl.empty()
+            ? item.externalPosterUrl
+            : item.externalBackdropUrl;
+        return "seerr:home:" + source;
+    }
+    return homeArtworkKey(
+        session,
+        homeArtworkReference(
+            item.id,
+            item.imageTag,
+            item.seriesId,
+            item.seriesPrimaryImageTag,
+            preferHomeLandscapeArtwork(item.type),
+            item.thumbTag,
+            item.backdropTag,
+            item.backdropItemId
+        )
+    );
 }
 
 inline PosterArtworkRequest posterArtworkRequest(
@@ -192,18 +157,16 @@ inline BackdropArtworkRequest backdropArtworkRequest(
 ) {
     return {
         .key = backdropArtworkKey(session, item, backdropMode),
-        .itemId = item.id,
-        .backdropItemId = item.backdropItemId,
-        .backdropTag = item.backdropTag,
+        .artworkItemId = item.backdropItemId.empty() ? item.id : item.backdropItemId,
+        .artworkTag = item.backdropTag,
     };
 }
 
 inline LogoArtworkRequest logoArtworkRequest(const JellyfinSession& session, const JellyfinItem& item) {
     return {
         .key = logoArtworkKey(session, item),
-        .itemId = item.id,
-        .logoItemId = item.logoItemId,
-        .logoTag = item.logoTag,
+        .artworkItemId = item.logoItemId.empty() ? item.id : item.logoItemId,
+        .artworkTag = item.logoTag,
     };
 }
 
@@ -212,16 +175,23 @@ inline HomeArtworkRequest homeArtworkRequest(
     const JellyfinItem& item,
     bool external
 ) {
+    const ArtworkReference artwork = external
+        ? ArtworkReference{}
+        : homeArtworkReference(
+            item.id,
+            item.imageTag,
+            item.seriesId,
+            item.seriesPrimaryImageTag,
+            preferHomeLandscapeArtwork(item.type),
+            item.thumbTag,
+            item.backdropTag,
+            item.backdropItemId
+        );
     return {
-        .key = homeArtworkKey(session, item, external),
+        .key = external ? homeArtworkKey(session, item, true) : homeArtworkKey(session, artwork),
         .itemId = item.id,
         .itemType = item.type,
-        .imageTag = item.imageTag,
-        .seriesId = item.seriesId,
-        .seriesPrimaryImageTag = item.seriesPrimaryImageTag,
-        .thumbTag = item.thumbTag,
-        .backdropTag = item.backdropTag,
-        .backdropItemId = item.backdropItemId,
+        .artwork = artwork,
         .externalUrl = external
             ? (item.externalBackdropUrl.empty() ? item.externalPosterUrl : item.externalBackdropUrl)
             : std::string{},

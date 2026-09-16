@@ -21,7 +21,7 @@ public:
         return ArtworkImageLoader::load(
             [&] {
                 if (request.external) return seerr_.downloadImage(request.externalUrl);
-                return jellyfin_.downloadPrimaryImage(session, request.jellyfinItem(), 384, 576);
+                return jellyfin_.downloadPrimaryImage(session, request.itemId, request.imageTag, 384, 576);
             },
             [this](const std::string& encoded, std::string& error) {
                 return decoder_.decode(encoded, error);
@@ -44,7 +44,7 @@ public:
             request.key,
             [&] {
                 if (request.external) return seerr_.downloadImage(request.externalUrl);
-                return jellyfin_.downloadHomeImage(session, request.jellyfinItem(), 480, 270);
+                return jellyfin_.downloadHomeImage(session, request.itemId, request.artwork, 480, 270);
             },
             [this](const std::string& encoded, std::string& error) {
                 return decoder_.decode(encoded, error);
@@ -54,7 +54,7 @@ public:
 
     ArtworkLoadResult loadBackdrop(const JellyfinSession& session, const BackdropArtworkRequest& request) {
         return ArtworkImageLoader::load(
-            [&] { return jellyfin_.downloadBackdropImage(session, request.jellyfinItem(), 1920, 1080); },
+            [&] { return jellyfin_.downloadBackdropImage(session, request.artworkItemId, request.artworkTag, 1920, 1080); },
             [this](const std::string& encoded, std::string& error) {
                 return decoder_.decode(encoded, error);
             }
@@ -63,7 +63,7 @@ public:
 
     ArtworkLoadResult loadLogo(const JellyfinSession& session, const LogoArtworkRequest& request) {
         return ArtworkImageLoader::load(
-            [&] { return jellyfin_.downloadLogoImage(session, request.jellyfinItem(), 800, 240); },
+            [&] { return jellyfin_.downloadLogoImage(session, request.artworkItemId, request.artworkTag, 800, 240); },
             [this](const std::string& encoded, std::string& error) {
                 return decoder_.decode(encoded, error);
             }

@@ -1380,30 +1380,32 @@ ApiResult JellyfinClient::reportExternalPlaybackStopped(
 
 std::string JellyfinClient::imageUrl(
     const JellyfinSession& session,
-    const JellyfinItem& item,
+    const std::string& itemId,
+    const std::string& imageTag,
     int width,
     int height
 ) const {
-    if (item.id.empty()) return {};
-    std::string url = session.server + "/Items/" + item.id + "/Images/Primary?maxWidth=" + std::to_string(width)
+    if (itemId.empty()) return {};
+    std::string url = session.server + "/Items/" + itemId + "/Images/Primary?maxWidth=" + std::to_string(width)
         + "&maxHeight=" + std::to_string(height) + "&quality=92";
-    if (!item.imageTag.empty()) url += "&tag=" + urlEncode(item.imageTag);
+    if (!imageTag.empty()) url += "&tag=" + urlEncode(imageTag);
     url += "&api_key=" + urlEncode(session.token);
     return url;
 }
 
 ApiValueResult<std::string> JellyfinClient::downloadPrimaryImage(
     const JellyfinSession& session,
-    const JellyfinItem& item,
+    const std::string& itemId,
+    const std::string& imageTag,
     int width,
     int height
 ) const {
     ApiValueResult<std::string> result;
-    if (!session.valid() || item.id.empty()) {
+    if (!session.valid() || itemId.empty()) {
         result.error = "Image request is incomplete";
         return result;
     }
-    const std::string url = imageUrl(session, item, width, height);
+    const std::string url = imageUrl(session, itemId, imageTag, width, height);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
@@ -1448,19 +1450,19 @@ ApiValueResult<std::string> JellyfinClient::downloadUserImage(
 
 ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(
     const JellyfinSession& session,
-    const JellyfinItem& item,
+    const std::string& artworkItemId,
+    const std::string& artworkTag,
     int width,
     int height
 ) const {
     ApiValueResult<std::string> result;
-    const std::string backdropItemId = item.backdropItemId.empty() ? item.id : item.backdropItemId;
-    if (!session.valid() || backdropItemId.empty() || item.backdropTag.empty()) {
+    if (!session.valid() || artworkItemId.empty() || artworkTag.empty()) {
         result.error = "Backdrop request is incomplete";
         return result;
     }
-    std::string url = session.server + "/Items/" + backdropItemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
+    std::string url = session.server + "/Items/" + artworkItemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
         + "&maxHeight=" + std::to_string(height) + "&quality=82"
-        + "&tag=" + urlEncode(item.backdropTag)
+        + "&tag=" + urlEncode(artworkTag)
         + "&api_key=" + urlEncode(session.token);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
@@ -1478,19 +1480,19 @@ ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(
 
 ApiValueResult<std::string> JellyfinClient::downloadLogoImage(
     const JellyfinSession& session,
-    const JellyfinItem& item,
+    const std::string& artworkItemId,
+    const std::string& artworkTag,
     int width,
     int height
 ) const {
     ApiValueResult<std::string> result;
-    const std::string logoItemId = item.logoItemId.empty() ? item.id : item.logoItemId;
-    if (!session.valid() || logoItemId.empty() || item.logoTag.empty()) {
+    if (!session.valid() || artworkItemId.empty() || artworkTag.empty()) {
         result.error = "Logo request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Items/" + logoItemId + "/Images/Logo?maxWidth=" + std::to_string(width)
+    const std::string url = session.server + "/Items/" + artworkItemId + "/Images/Logo?maxWidth=" + std::to_string(width)
         + "&maxHeight=" + std::to_string(height) + "&quality=90"
-        + "&tag=" + urlEncode(item.logoTag)
+        + "&tag=" + urlEncode(artworkTag)
         + "&api_key=" + urlEncode(session.token);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
@@ -1508,27 +1510,18 @@ ApiValueResult<std::string> JellyfinClient::downloadLogoImage(
 
 ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
     const JellyfinSession& session,
-    const JellyfinItem& item,
+    const std::string& sourceItemId,
+    const ArtworkReference& artwork,
     int width,
     int height
 ) const {
     ApiValueResult<std::string> result;
-    if (!session.valid() || item.id.empty()) {
+    if (!session.valid() || sourceItemId.empty()) {
         result.error = "Home image request is incomplete";
         return result;
     }
 
     std::string url;
-    const ArtworkReference artwork = homeArtworkReference(
-        item.id,
-        item.imageTag,
-        item.seriesId,
-        item.seriesPrimaryImageTag,
-        preferHomeLandscapeArtwork(item.type),
-        item.thumbTag,
-        item.backdropTag,
-        item.backdropItemId
-    );
     const ArtworkKind kind = artwork.kind;
     if (kind == ArtworkKind::Primary) {
         url = session.server + "/Items/" + artwork.itemId + "/Images/Primary?maxWidth=" + std::to_string(width)
@@ -1555,7 +1548,7 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
             artwork.itemId.c_str(),
             static_cast<int>(kind),
             artwork.tag.c_str(),
-            item.id.c_str()
+            sourceItemId.c_str()
         );
         result.error = apiError(response);
         return result;

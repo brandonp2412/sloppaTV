@@ -19,15 +19,15 @@ struct FakeJellyfin {
 
     ApiValueResult<std::string> downloadPrimaryImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& itemId,
+        const std::string& imageTag,
         int width,
         int height
     ) {
         ++posterDownloads;
         assert(session.userId == "user-1");
-        assert(item.id == "movie-1");
-        assert(item.imageTag == "primary-tag");
-        assert(item.name.empty());
+        assert(itemId == "movie-1");
+        assert(imageTag == "primary-tag");
         assert(width == 384 && height == 576);
         return bytesResult("poster");
     }
@@ -41,43 +41,47 @@ struct FakeJellyfin {
 
     ApiValueResult<std::string> downloadHomeImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& sourceItemId,
+        const ArtworkReference& artwork,
         int width,
         int height
     ) {
         ++homeDownloads;
         assert(session.userId == "user-1");
-        assert(item.id == "movie-1");
-        assert(item.thumbTag == "thumb-tag");
-        assert(item.name.empty());
+        assert(sourceItemId == "movie-1");
+        assert(artwork.itemId == "movie-1");
+        assert(artwork.tag == "thumb-tag");
+        assert(artwork.kind == ArtworkKind::Thumb);
         assert(width == 480 && height == 270);
         return bytesResult("home");
     }
 
     ApiValueResult<std::string> downloadBackdropImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& artworkItemId,
+        const std::string& artworkTag,
         int width,
         int height
     ) {
         ++backdropDownloads;
         assert(session.userId == "user-1");
-        assert(item.backdropItemId == "backdrop-owner");
-        assert(item.backdropTag == "backdrop-tag");
+        assert(artworkItemId == "backdrop-owner");
+        assert(artworkTag == "backdrop-tag");
         assert(width == 1920 && height == 1080);
         return bytesResult("backdrop");
     }
 
     ApiValueResult<std::string> downloadLogoImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& artworkItemId,
+        const std::string& artworkTag,
         int width,
         int height
     ) {
         ++logoDownloads;
         assert(session.userId == "user-1");
-        assert(item.logoItemId == "logo-owner");
-        assert(item.logoTag == "logo-tag");
+        assert(artworkItemId == "logo-owner");
+        assert(artworkTag == "logo-tag");
         assert(width == 800 && height == 240);
         return bytesResult("logo");
     }

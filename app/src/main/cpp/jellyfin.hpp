@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+struct ArtworkReference;
+
 class JellyfinClient {
 public:
     JellyfinClient(JavaVM* vm, jobject activity);
@@ -129,13 +131,15 @@ public:
 
     [[nodiscard]] std::string imageUrl(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& itemId,
+        const std::string& imageTag,
         int width = 360,
         int height = 540
     ) const;
     ApiValueResult<std::string> downloadPrimaryImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& itemId,
+        const std::string& imageTag,
         int width = 360,
         int height = 540
     ) const;
@@ -146,19 +150,22 @@ public:
     ) const;
     ApiValueResult<std::string> downloadBackdropImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& artworkItemId,
+        const std::string& artworkTag,
         int width = 1280,
         int height = 720
     ) const;
     ApiValueResult<std::string> downloadLogoImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& artworkItemId,
+        const std::string& artworkTag,
         int width = 800,
         int height = 240
     ) const;
     ApiValueResult<std::string> downloadHomeImage(
         const JellyfinSession& session,
-        const JellyfinItem& item,
+        const std::string& sourceItemId,
+        const ArtworkReference& artwork,
         int width = 480,
         int height = 270
     ) const;
