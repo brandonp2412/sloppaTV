@@ -6,8 +6,7 @@
 
 #include "account_screen.hpp"
 #include "app_settings.hpp"
-#include "artwork_image_loader.hpp"
-#include "artwork_pipeline.hpp"
+#include "artwork_coordinator.hpp"
 #include "artwork_request.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
@@ -17,7 +16,6 @@
 #include "display_mode.hpp"
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
-#include "home_image_disk_cache.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "jellyfin.hpp"
@@ -333,10 +331,11 @@ public:
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }
-          ) {
+          ),
+          artwork_(tasks_, stateMutex_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
-        homeDiskCache_.setDataPath(dataPath_);
+        artwork_.setDataPath(dataPath_);
         loadBundledBrandMark();
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
@@ -2748,10 +2747,7 @@ private:
         detail_ = {};
         detailsState_.reset();
 
-        artwork_.clear(renderer_);
-        homeArtwork_.clear(renderer_);
-        backdrops_.clear(renderer_);
-        logos_.clear(renderer_);
+        artwork_.clearSession(renderer_);
         accountState_.clearSessionUi();
         loading_ = false;
         homeLoading_ = false;
@@ -2803,7 +2799,7 @@ private:
         if (!saved) return;
         const JellyfinSession removed = *saved;
         const bool removedCurrent = SessionRegistry::sameIdentity(session_, removed);
-        profileArtwork_.erase(profileArtworkKey(removed), renderer_);
+        artwork_.eraseProfile(profileArtworkKey(removed), renderer_);
         sessionRegistry_.eraseAt(index);
         if (removedCurrent) {
             clearCurrentSessionUi();
@@ -3416,7 +3412,7 @@ private:
                     homeRetryAt_ = {};
                     homeRetryAttempt_ = 0;
                     const JellyfinSession expired = session_;
-                    profileArtwork_.erase(profileArtworkKey(expired), renderer_);
+                    artwork_.eraseProfile(profileArtworkKey(expired), renderer_);
                     sessionRegistry_.removeIdentity(expired);
                     requestEpochs_.invalidateAll();
                     loading_ = false;
@@ -5360,25 +5356,21 @@ private:
     void requestHomeArtwork(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty()) return;
         const HomeArtworkRequest request = homeArtworkRequest(session_, item, isSeerrItem(item));
-        if (!homeArtwork_.beginLoad(request.key, renderer_)) return;
-
         const JellyfinSession session = session_;
-        tasks_.submit([this, session, request] {
-            const JellyfinItem jellyfinItem = request.jellyfinItem();
-            ArtworkLoadResult loaded = ArtworkImageLoader::loadCached(
-                homeDiskCache_,
-                request.key,
-                [this, session, request, jellyfinItem] {
-                    return request.external
-                        ? seerr_.downloadImage(request.externalUrl)
-                        : api_.downloadHomeImage(session, jellyfinItem, 480, 270);
-                },
-                [this](const std::string& encoded, std::string& error) {
-                    return imageDecoder_.decode(encoded, error);
-                }
-            );
-
-            if (!loaded.ok()) {
+        artwork_.loadHome(
+            request.key,
+            renderer_,
+            [this, session, request] {
+                const JellyfinItem jellyfinItem = request.jellyfinItem();
+                return request.external
+                    ? seerr_.downloadImage(request.externalUrl)
+                    : api_.downloadHomeImage(session, jellyfinItem, 480, 270);
+            },
+            [this](const std::string& encoded, std::string& error) {
+                return imageDecoder_.decode(encoded, error);
+            },
+            [request](const ArtworkLoadResult& loaded) {
+                if (loaded.ok()) return;
                 __android_log_print(
                     ANDROID_LOG_WARN,
                     kTag,
@@ -5390,10 +5382,7 @@ private:
                     loaded.error.c_str()
                 );
             }
-
-            std::scoped_lock lock(stateMutex_);
-            homeArtwork_.completeLoad(request.key, std::move(loaded));
-        });
+        );
     }
 
     void drawCoverTexture(
@@ -5437,7 +5426,7 @@ private:
     ) {
         if (item.id.empty()) return false;
         const std::string key = homeArtworkKey(session_, item, isSeerrItem(item));
-        ArtworkEntry* entry = homeArtwork_.readyTexture(key, renderer_, [&] { requestHomeArtwork(item); });
+        ArtworkEntry* entry = artwork_.homeTexture(key, renderer_, [&] { requestHomeArtwork(item); });
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, width, height, alpha, radius);
         return true;
@@ -5475,23 +5464,20 @@ private:
     void requestProfileArtwork(const JellyfinSession& saved) {
         if (!saved.valid()) return;
         const std::string key = profileArtworkKey(saved);
-        if (!profileArtwork_.beginLoad(key, renderer_)) return;
-        tasks_.submit([this, saved, key] {
-            ArtworkLoadResult loaded = ArtworkImageLoader::load(
-                [this, saved] { return api_.downloadUserImage(saved, 180, 180); },
-                [this](const std::string& encoded, std::string& error) {
-                    return imageDecoder_.decode(encoded, error);
-                }
-            );
-            std::scoped_lock lock(stateMutex_);
-            profileArtwork_.completeLoad(key, std::move(loaded));
-        });
+        artwork_.loadProfile(
+            key,
+            renderer_,
+            [this, saved] { return api_.downloadUserImage(saved, 180, 180); },
+            [this](const std::string& encoded, std::string& error) {
+                return imageDecoder_.decode(encoded, error);
+            }
+        );
     }
 
     bool drawProfileArtwork(const JellyfinSession& saved, float x, float y, float size) {
         if (!saved.valid()) return false;
         const std::string key = profileArtworkKey(saved);
-        ArtworkEntry* entry = profileArtwork_.readyTexture(key, renderer_, [&] { requestProfileArtwork(saved); });
+        ArtworkEntry* entry = artwork_.profileTexture(key, renderer_, [&] { requestProfileArtwork(saved); });
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, size, size, 1.0f, size * 0.5f);
         return true;
@@ -5500,24 +5486,20 @@ private:
     void requestArtwork(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty()) return;
         const PosterArtworkRequest request = posterArtworkRequest(session_, item, isSeerrItem(item));
-        if (!artwork_.beginLoad(request.key, renderer_)) return;
-
         const JellyfinSession session = session_;
-        tasks_.submit([this, session, request] {
-            const JellyfinItem jellyfinItem = request.jellyfinItem();
-            ArtworkLoadResult loaded = ArtworkImageLoader::load(
-                [this, session, request, jellyfinItem] {
-                    return request.external
-                        ? seerr_.downloadImage(request.externalUrl)
-                        : api_.downloadPrimaryImage(session, jellyfinItem, 384, 576);
-                },
-                [this](const std::string& encoded, std::string& error) {
-                    return imageDecoder_.decode(encoded, error);
-                }
-            );
-            std::scoped_lock lock(stateMutex_);
-            artwork_.completeLoad(request.key, std::move(loaded));
-        });
+        artwork_.loadPoster(
+            request.key,
+            renderer_,
+            [this, session, request] {
+                const JellyfinItem jellyfinItem = request.jellyfinItem();
+                return request.external
+                    ? seerr_.downloadImage(request.externalUrl)
+                    : api_.downloadPrimaryImage(session, jellyfinItem, 384, 576);
+            },
+            [this](const std::string& encoded, std::string& error) {
+                return imageDecoder_.decode(encoded, error);
+            }
+        );
     }
 
     bool drawArtwork(
@@ -5531,7 +5513,7 @@ private:
     ) {
         if (item.id.empty()) return false;
         const std::string key = posterArtworkKey(session_, item, isSeerrItem(item));
-        ArtworkEntry* entry = artwork_.readyTexture(key, renderer_, [&] { requestArtwork(item); });
+        ArtworkEntry* entry = artwork_.posterTexture(key, renderer_, [&] { requestArtwork(item); });
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, width, height, alpha, radius);
         return true;
@@ -5540,28 +5522,24 @@ private:
     void requestBackdrop(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.backdropTag.empty() || settings_.backdropMode <= 0) return;
         const BackdropArtworkRequest request = backdropArtworkRequest(session_, item, settings_.backdropMode);
-        if (!backdrops_.beginLoad(request.key, renderer_)) return;
-
         const JellyfinSession session = session_;
-        tasks_.submit([this, session, request] {
-            const JellyfinItem jellyfinItem = request.jellyfinItem();
-            ArtworkLoadResult loaded = ArtworkImageLoader::load(
-                [this, session, jellyfinItem] {
-                    return api_.downloadBackdropImage(session, jellyfinItem, 1920, 1080);
-                },
-                [this](const std::string& encoded, std::string& error) {
-                    return imageDecoder_.decode(encoded, error);
-                }
-            );
-            std::scoped_lock lock(stateMutex_);
-            backdrops_.completeLoad(request.key, std::move(loaded));
-        });
+        artwork_.loadBackdrop(
+            request.key,
+            renderer_,
+            [this, session, request] {
+                const JellyfinItem jellyfinItem = request.jellyfinItem();
+                return api_.downloadBackdropImage(session, jellyfinItem, 1920, 1080);
+            },
+            [this](const std::string& encoded, std::string& error) {
+                return imageDecoder_.decode(encoded, error);
+            }
+        );
     }
 
     bool drawBackdrop(const JellyfinItem& item, float alpha = 0.28f) {
         if (settings_.backdropMode <= 0 || item.id.empty() || item.backdropTag.empty()) return false;
         const std::string key = backdropArtworkKey(session_, item, settings_.backdropMode);
-        ArtworkEntry* entry = backdrops_.readyTexture(key, renderer_, [&] { requestBackdrop(item); });
+        ArtworkEntry* entry = artwork_.backdropTexture(key, renderer_, [&] { requestBackdrop(item); });
         if (!entry) return false;
         const float effectiveAlpha = settings_.backdropMode == 1 ? std::max(alpha, 0.34f) : alpha;
         drawCoverTexture(
@@ -5573,28 +5551,24 @@ private:
     void requestLogo(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.logoTag.empty()) return;
         const LogoArtworkRequest request = logoArtworkRequest(session_, item);
-        if (!logos_.beginLoad(request.key, renderer_)) return;
-
         const JellyfinSession session = session_;
-        tasks_.submit([this, session, request] {
-            const JellyfinItem jellyfinItem = request.jellyfinItem();
-            ArtworkLoadResult loaded = ArtworkImageLoader::load(
-                [this, session, jellyfinItem] {
-                    return api_.downloadLogoImage(session, jellyfinItem, 800, 240);
-                },
-                [this](const std::string& encoded, std::string& error) {
-                    return imageDecoder_.decode(encoded, error);
-                }
-            );
-            std::scoped_lock lock(stateMutex_);
-            logos_.completeLoad(request.key, std::move(loaded));
-        });
+        artwork_.loadLogo(
+            request.key,
+            renderer_,
+            [this, session, request] {
+                const JellyfinItem jellyfinItem = request.jellyfinItem();
+                return api_.downloadLogoImage(session, jellyfinItem, 800, 240);
+            },
+            [this](const std::string& encoded, std::string& error) {
+                return imageDecoder_.decode(encoded, error);
+            }
+        );
     }
 
     bool drawLogo(const JellyfinItem& item, float x, float y, float maxWidth, float maxHeight) {
         if (item.id.empty() || item.logoTag.empty()) return false;
         const std::string key = logoArtworkKey(session_, item);
-        ArtworkEntry* entry = logos_.readyTexture(key, renderer_, [&] { requestLogo(item); });
+        ArtworkEntry* entry = artwork_.logoTexture(key, renderer_, [&] { requestLogo(item); });
         if (!entry || entry->sourceWidth <= 0 || entry->sourceHeight <= 0) return false;
         const float aspect = static_cast<float>(entry->sourceWidth) / static_cast<float>(entry->sourceHeight);
         float width = maxWidth;
@@ -8020,7 +7994,7 @@ private:
         hiddenHomeItems_ = std::move(stored.hiddenHomeItems);
         settings_ = std::move(stored.settings);
         if (session_.valid()) {
-            profileArtwork_.erase(profileArtworkKey(session_), renderer_);
+            artwork_.eraseProfile(profileArtworkKey(session_), renderer_);
             sessionRegistry_.remember(session_, deviceId_);
         }
         playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
@@ -8029,7 +8003,7 @@ private:
 
     void saveSession(const JellyfinSession& session) {
         if (session.valid()) {
-            profileArtwork_.erase(profileArtworkKey(session), renderer_);
+            artwork_.eraseProfile(profileArtworkKey(session), renderer_);
             sessionRegistry_.remember(session, deviceId_);
         }
         StoredSessionState stored;
@@ -8058,6 +8032,7 @@ private:
     TaskRunner tasks_;
 
     mutable std::recursive_mutex stateMutex_;
+    ArtworkCoordinator<TaskRunner, std::recursive_mutex> artwork_;
     RequestEpochs requestEpochs_;
     std::string dataPath_;
     std::string deviceId_;
@@ -8106,12 +8081,6 @@ private:
     bool seerrConnectLoading_ = false;
     bool seerrRetrySearchAfterConnect_ = false;
     JellyfinItem queuedSeerrRequestAfterConnect_;
-    ArtworkPipeline artwork_{30};
-    ArtworkPipeline profileArtwork_;
-    ArtworkPipeline homeArtwork_{48};
-    HomeImageDiskCache homeDiskCache_;
-    ArtworkPipeline backdrops_{8};
-    ArtworkPipeline logos_{12};
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;
