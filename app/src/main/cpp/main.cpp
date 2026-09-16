@@ -7165,6 +7165,7 @@ private:
                 const float width = renderer_.textWidth(textScale, lines[i]);
                 const float textX = (Renderer::logicalWidth() - width) * 0.5f;
                 const float textY = boxY + verticalPadding + static_cast<float>(i) * lineHeight;
+                // Each subtitle row is already fitted above; do not let the glyph renderer wrap it again.
                 renderer_.outlinedText(
                     textX,
                     textY,
@@ -7172,7 +7173,7 @@ private:
                     lines[i],
                     kText,
                     Color{0.0f, 0.0f, 0.0f, 0.92f},
-                    widest
+                    0.0f
                 );
             }
         }
