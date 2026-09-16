@@ -59,8 +59,24 @@ int main() {
     assert(settingLabel(SettingId::AdvancedToggle, false) == "ADVANCED SETTINGS");
     assert(settingLabel(SettingId::AdvancedToggle, true) == "BASIC SETTINGS");
     for (size_t i = 0; i < kSettingDescriptors.size(); ++i) {
-        assert(settingIndex(kSettingDescriptors[i].id) == i);
+        const auto& descriptor = kSettingDescriptors[i];
+        assert(settingIndex(descriptor.id) == i);
+        assert((descriptor.adjuster != nullptr) == (descriptor.changeEffects != SettingChangeEffect::None));
     }
+
+    AppSettings adjusted;
+    auto effects = adjustSetting(adjusted, SettingId::MaxStreamingBitrate, -1);
+    assert(adjusted.maxBitrateMbps == 80);
+    assert(hasSettingEffect(effects, SettingChangeEffect::Save));
+    adjusted.refreshRateSwitching = true;
+    effects = adjustSetting(adjusted, SettingId::MatchVideoRefreshRate, 1);
+    assert(!adjusted.refreshRateSwitching);
+    assert(hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode));
+    effects = adjustSetting(adjusted, SettingId::ExternalPlayer, 1);
+    assert(hasSettingEffect(effects, SettingChangeEffect::Save));
+    assert(hasSettingEffect(effects, SettingChangeEffect::CycleExternalPlayer));
+    effects = adjustSetting(adjusted, SettingId::Diagnostics, 1);
+    assert(effects == SettingChangeEffect::None);
 
     const auto common = matchingSettings("", false);
     assert(common.size() == 23);
