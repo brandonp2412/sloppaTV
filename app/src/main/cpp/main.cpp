@@ -36,6 +36,7 @@
 #include "search_screen.hpp"
 #include "seerr.hpp"
 #include "seerr_jellyfin_adapter.hpp"
+#include "seerr_request_state.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
@@ -468,9 +469,9 @@ public:
                 if (!noticePersistent_ && !notice_.empty()) tightenTimeoutUntil(noticeUntil_);
                 if (!presentedError_.empty()) tightenTimeoutUntil(errorUntil_);
                 tightenTimeoutUntil(homeRetryAt_);
-                if (!seerrPendingLoading_
+                if (!seerrRequestState_.pendingLoading()
                     && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
-                    tightenTimeoutUntil(seerrPendingRefreshAt_);
+                    tightenTimeoutUntil(seerrRequestState_.pendingRefreshDeadline());
                 }
                 if (screen_ == Screen::Search && !searchState_.keyboard() && !searchState_.results().empty()) {
                     // Search cards can contain a slow pixel-based marquee. Redraw near display
@@ -3218,9 +3219,7 @@ private:
                 detailsState_.setDeleteConfirmation(false);
                 return;
             }
-            std::erase_if(seerrPending_, [&](const JellyfinItem& pending) {
-                return pending.externalRequestId == item.externalRequestId || pending.id == item.id;
-            });
+            seerrRequestState_.erasePending(item.id, item.externalRequestId);
             searchState_.markSeerrUnrequested(item.id);
             syncSeerrHomeRowLocked();
             detail_ = {};
@@ -3740,11 +3739,15 @@ private:
         std::erase_if(home_.rows, [](const JellyfinHomeRow& row) {
             return row.title == "Seerr requests";
         });
-        if (!seerrPending_.empty()) {
+        const auto& pendingMedia = seerrRequestState_.pending();
+        if (!pendingMedia.empty()) {
+            std::vector<JellyfinItem> pendingItems;
+            pendingItems.reserve(pendingMedia.size());
+            for (const auto& media : pendingMedia) pendingItems.push_back(jellyfinItemFromSeerrMedia(media));
             const auto insertAt = home_.rows.begin() + static_cast<std::ptrdiff_t>(std::min<size_t>(1, home_.rows.size()));
             home_.rows.insert(insertAt, JellyfinHomeRow{
                 .title = "Seerr requests",
-                .items = seerrPending_,
+                .items = std::move(pendingItems),
             });
         }
         HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home_.rows);
@@ -3757,53 +3760,34 @@ private:
         const std::string server = settings_.seerrServer;
         const SeerrAuth auth = seerrAuth();
         if (!SeerrClient::configured(server, auth)) {
-            seerrPendingLoading_ = false;
-            seerrPendingRefreshAt_ = {};
-            seerrPending_.clear();
+            seerrRequestState_.resetPending();
             syncSeerrHomeRowLocked();
             return;
         }
-        if (seerrPendingLoading_) return;
-        seerrPendingLoading_ = true;
+        if (!seerrRequestState_.beginPendingRefresh()) return;
         tasks_.submit([this, server, auth] {
             auto result = seerr_.pendingRequests(server, auth, 20);
             std::scoped_lock lock(stateMutex_);
+            const auto now = std::chrono::steady_clock::now();
             if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) {
-                seerrPendingLoading_ = false;
                 // Startup Quick Connect can rotate the cookie while this request
                 // is in flight. Retry with the refreshed identity on Home.
-                seerrPendingRefreshAt_ = std::chrono::steady_clock::now();
+                seerrRequestState_.invalidatePendingRefresh(now);
                 return;
             }
-            seerrPendingLoading_ = false;
-            seerrPendingRefreshAt_ = std::chrono::steady_clock::now() + 60s;
             if (!result.ok) {
+                seerrRequestState_.failPendingRefresh(now);
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
                 return;
             }
-            std::vector<JellyfinItem> refreshedPending;
-            refreshedPending.reserve(result.value.size());
-            for (const auto& media : result.value) {
-                refreshedPending.push_back(jellyfinItemFromSeerrMedia(media));
-            }
-            const auto pendingNow = std::chrono::steady_clock::now();
-            if (pendingNow < seerrOptimisticPendingUntil_) {
-                for (const auto& local : seerrPending_) {
-                    const auto found = std::find_if(refreshedPending.begin(), refreshedPending.end(), [&](const JellyfinItem& item) {
-                        return item.id == local.id || (local.externalRequestId > 0 && item.externalRequestId == local.externalRequestId);
-                    });
-                    if (found == refreshedPending.end()) refreshedPending.push_back(local);
-                }
-            } else {
-                seerrOptimisticPendingUntil_ = {};
-            }
-            seerrPending_ = std::move(refreshedPending);
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests", seerrPending_.size());
+            seerrRequestState_.finishPendingRefresh(std::move(result.value), now);
+            __android_log_print(
+                ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
+                seerrRequestState_.pending().size());
             if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
-                const auto current = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& item) {
-                    return item.id == detail_.id;
-                });
-                if (current != seerrPending_.end()) detail_ = *current;
+                if (const SeerrMediaItem* current = seerrRequestState_.findPending(detail_.id)) {
+                    detail_ = jellyfinItemFromSeerrMedia(*current);
+                }
             }
             syncSeerrHomeRowLocked();
         });
@@ -3866,24 +3850,11 @@ private:
 
             const std::string status = requestedItem.television() ? "Queued" : "Queued for download";
             searchState_.markSeerrRequested(requestedItem.id, status, result.value);
-            SeerrMediaItem pendingMedia = requestedItem;
-            pendingMedia.requested = true;
-            pendingMedia.requestId = result.value;
-            pendingMedia.mediaStatus = 2;
-            pendingMedia.status = status;
-            JellyfinItem pending = jellyfinItemFromSeerrMedia(pendingMedia);
-            const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& candidate) {
-                return candidate.id == pending.id;
-            });
-            if (existing == seerrPending_.end()) seerrPending_.insert(seerrPending_.begin(), std::move(pending));
-            else *existing = std::move(pending);
-            seerrOptimisticPendingUntil_ = std::chrono::steady_clock::now() + 5min;
+            seerrRequestState_.markRequestSucceeded(
+                requestedItem, result.value, status, std::chrono::steady_clock::now());
             syncSeerrHomeRowLocked();
             showNotice("REQUEST SENT TO SEERR", 4s);
             error_.clear();
-            // Do not let an immediately stale Seerr read erase the successful
-            // request before its backend state is visible.
-            seerrPendingRefreshAt_ = std::chrono::steady_clock::now() + 2s;
             refreshSeerrStorageAsync(true);
         });
     }
@@ -3921,20 +3892,7 @@ private:
                 }
                 return;
             }
-            bool discoveredPending = false;
-            for (const auto& media : result.value) {
-                if (media.requested) {
-                    JellyfinItem item = jellyfinItemFromSeerrMedia(media);
-                    const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& pending) {
-                        return pending.id == item.id || (item.externalRequestId > 0 && pending.externalRequestId == item.externalRequestId);
-                    });
-                    if (existing == seerrPending_.end()) seerrPending_.push_back(item);
-                    else *existing = item;
-                    discoveredPending = true;
-                }
-            }
-            if (discoveredPending) {
-                seerrOptimisticPendingUntil_ = std::chrono::steady_clock::now() + 5min;
+            if (seerrRequestState_.mergeRequestedSearch(result.value, std::chrono::steady_clock::now())) {
                 syncSeerrHomeRowLocked();
             }
             (void) searchState_.finishSeerrSearch(query, std::move(result.value));
@@ -5296,12 +5254,10 @@ private:
                 homeRefreshAfterPlaybackStop_ = false;
                 refreshHomeAfterPlaybackStop = true;
             }
-            if (!seerrPendingLoading_
-                && seerrPendingRefreshAt_ != std::chrono::steady_clock::time_point{}
-                && now >= seerrPendingRefreshAt_
+            if (seerrRequestState_.pendingRefreshDue(now)
                 && SeerrClient::configured(settings_.seerrServer, seerrAuth())
                 && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
-                seerrPendingRefreshAt_ = {};
+                seerrRequestState_.clearPendingRefreshDeadline();
                 refreshSeerr = true;
             }
         }
@@ -8003,11 +7959,8 @@ private:
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
-    std::vector<JellyfinItem> seerrPending_;
+    SeerrRequestState seerrRequestState_;
     bool homeRefreshAfterPlaybackStop_ = false;
-    bool seerrPendingLoading_ = false;
-    std::chrono::steady_clock::time_point seerrPendingRefreshAt_{};
-    std::chrono::steady_clock::time_point seerrOptimisticPendingUntil_{};
     std::vector<SeerrStorageTarget> seerrStorage_;
     bool seerrStorageLoading_ = false;
     std::string seerrStorageError_;
