@@ -6,8 +6,8 @@
 
 #include "account_screen.hpp"
 #include "app_settings.hpp"
-#include "artwork_cache.hpp"
 #include "artwork_request.hpp"
+#include "artwork_texture_cache.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
 #include "details_screen.hpp"
@@ -5355,26 +5355,62 @@ private:
         renderer_.endFrame();
     }
 
-    void releaseArtworkTexture(ArtworkEntry& entry) {
-        if (entry.texture != 0 && entry.textureGeneration == renderer_.generation()) {
-            renderer_.deleteTexture(entry.texture);
+    bool beginArtworkLoad(ArtworkTextureCache& cache, const std::string& key) {
+        return cache.beginLoad(
+            key,
+            renderer_.generation(),
+            [this](uint32_t texture) { renderer_.deleteTexture(texture); }
+        );
+    }
+
+    void clearArtworkCache(ArtworkTextureCache& cache) {
+        cache.clear(
+            renderer_.generation(),
+            [this](uint32_t texture) { renderer_.deleteTexture(texture); }
+        );
+    }
+
+    void eraseArtworkEntry(ArtworkTextureCache& cache, const std::string& key) {
+        cache.erase(
+            key,
+            renderer_.generation(),
+            [this](uint32_t texture) { renderer_.deleteTexture(texture); }
+        );
+    }
+
+    ArtworkTextureResult prepareArtworkTexture(ArtworkTextureCache& cache, const std::string& key) {
+        return cache.prepare(
+            key,
+            renderer_.generation(),
+            [this](int width, int height, const uint8_t* pixels) {
+                return renderer_.createTexture(width, height, pixels);
+            }
+        );
+    }
+
+    template <typename Request>
+    ArtworkEntry* readyArtworkTexture(
+        ArtworkTextureCache& cache,
+        const std::string& key,
+        Request&& request
+    ) {
+        const ArtworkTextureResult prepared = prepareArtworkTexture(cache, key);
+        if (prepared.state == ArtworkTextureState::Missing || prepared.state == ArtworkTextureState::Failed) {
+            request();
+            return nullptr;
         }
-        entry.texture = 0;
-        entry.textureGeneration = 0;
-    }
-
-    void clearArtworkCache(ArtworkCache& cache) {
-        cache.clear([this](ArtworkEntry& entry) { releaseArtworkTexture(entry); });
-    }
-
-    void eraseArtworkEntry(ArtworkCache& cache, const std::string& key) {
-        cache.erase(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); });
+        if (prepared.state == ArtworkTextureState::InvalidDecoded) {
+            eraseArtworkEntry(cache, key);
+            request();
+            return nullptr;
+        }
+        return prepared.state == ArtworkTextureState::Ready ? prepared.entry : nullptr;
     }
 
     void requestHomeArtwork(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty()) return;
         const HomeArtworkRequest request = homeArtworkRequest(session_, item, isSeerrItem(item));
-        if (!homeArtwork_.beginLoad(request.key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
+        if (!beginArtworkLoad(homeArtwork_, request.key)) return;
 
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
@@ -5477,33 +5513,9 @@ private:
     ) {
         if (item.id.empty()) return false;
         const std::string key = homeArtworkKey(session_, item, isSeerrItem(item));
-        auto* cached = homeArtwork_.find(key);
-        if (!cached) {
-            requestHomeArtwork(item);
-            return false;
-        }
-        auto& entry = *cached;
-        if (entry.state == ArtworkState::Failed) {
-            requestHomeArtwork(item);
-            return false;
-        }
-        if (entry.state != ArtworkState::Ready) return false;
-        if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
-            if (!entry.decoded.valid()) {
-                eraseArtworkEntry(homeArtwork_, key);
-                requestHomeArtwork(item);
-                return false;
-            }
-            entry.sourceWidth = entry.decoded.width;
-            entry.sourceHeight = entry.decoded.height;
-            entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
-            entry.textureGeneration = renderer_.generation();
-            if (entry.texture != 0) {
-                std::vector<uint8_t>().swap(entry.decoded.rgba);
-            }
-        }
-        if (entry.texture == 0) return false;
-        drawCoverTexture(entry, x, y, width, height, alpha, radius);
+        ArtworkEntry* entry = readyArtworkTexture(homeArtwork_, key, [&] { requestHomeArtwork(item); });
+        if (!entry) return false;
+        drawCoverTexture(*entry, x, y, width, height, alpha, radius);
         return true;
     }
 
@@ -5539,7 +5551,7 @@ private:
     void requestProfileArtwork(const JellyfinSession& saved) {
         if (!saved.valid()) return;
         const std::string key = profileArtworkKey(saved);
-        if (!profileArtwork_.beginLoad(key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
+        if (!beginArtworkLoad(profileArtwork_, key)) return;
         tasks_.submit([this, saved, key] {
             auto bytes = api_.downloadUserImage(saved, 180, 180);
             if (!bytes.ok) {
@@ -5561,38 +5573,16 @@ private:
     bool drawProfileArtwork(const JellyfinSession& saved, float x, float y, float size) {
         if (!saved.valid()) return false;
         const std::string key = profileArtworkKey(saved);
-        auto* cached = profileArtwork_.find(key);
-        if (!cached) {
-            requestProfileArtwork(saved);
-            return false;
-        }
-        auto& entry = *cached;
-        if (entry.state == ArtworkState::Failed) {
-            requestProfileArtwork(saved);
-            return false;
-        }
-        if (entry.state != ArtworkState::Ready) return false;
-        if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
-            if (!entry.decoded.valid()) {
-                eraseArtworkEntry(profileArtwork_, key);
-                requestProfileArtwork(saved);
-                return false;
-            }
-            entry.sourceWidth = entry.decoded.width;
-            entry.sourceHeight = entry.decoded.height;
-            entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
-            entry.textureGeneration = renderer_.generation();
-            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
-        }
-        if (entry.texture == 0) return false;
-        drawCoverTexture(entry, x, y, size, size, 1.0f, size * 0.5f);
+        ArtworkEntry* entry = readyArtworkTexture(profileArtwork_, key, [&] { requestProfileArtwork(saved); });
+        if (!entry) return false;
+        drawCoverTexture(*entry, x, y, size, size, 1.0f, size * 0.5f);
         return true;
     }
 
     void requestArtwork(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty()) return;
         const PosterArtworkRequest request = posterArtworkRequest(session_, item, isSeerrItem(item));
-        if (!artwork_.beginLoad(request.key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
+        if (!beginArtworkLoad(artwork_, request.key)) return;
 
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
@@ -5628,38 +5618,16 @@ private:
     ) {
         if (item.id.empty()) return false;
         const std::string key = posterArtworkKey(session_, item, isSeerrItem(item));
-        auto* cached = artwork_.find(key);
-        if (!cached) {
-            requestArtwork(item);
-            return false;
-        }
-        auto& entry = *cached;
-        if (entry.state == ArtworkState::Failed) {
-            requestArtwork(item);
-            return false;
-        }
-        if (entry.state != ArtworkState::Ready) return false;
-        if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
-            if (!entry.decoded.valid()) {
-                eraseArtworkEntry(artwork_, key);
-                requestArtwork(item);
-                return false;
-            }
-            entry.sourceWidth = entry.decoded.width;
-            entry.sourceHeight = entry.decoded.height;
-            entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
-            entry.textureGeneration = renderer_.generation();
-            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
-        }
-        if (entry.texture == 0) return false;
-        drawCoverTexture(entry, x, y, width, height, alpha, radius);
+        ArtworkEntry* entry = readyArtworkTexture(artwork_, key, [&] { requestArtwork(item); });
+        if (!entry) return false;
+        drawCoverTexture(*entry, x, y, width, height, alpha, radius);
         return true;
     }
 
     void requestBackdrop(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.backdropTag.empty() || settings_.backdropMode <= 0) return;
         const BackdropArtworkRequest request = backdropArtworkRequest(session_, item, settings_.backdropMode);
-        if (!backdrops_.beginLoad(request.key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
+        if (!beginArtworkLoad(backdrops_, request.key)) return;
 
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
@@ -5684,33 +5652,11 @@ private:
     bool drawBackdrop(const JellyfinItem& item, float alpha = 0.28f) {
         if (settings_.backdropMode <= 0 || item.id.empty() || item.backdropTag.empty()) return false;
         const std::string key = backdropArtworkKey(session_, item, settings_.backdropMode);
-        auto* cached = backdrops_.find(key);
-        if (!cached) {
-            requestBackdrop(item);
-            return false;
-        }
-        auto& entry = *cached;
-        if (entry.state == ArtworkState::Failed) {
-            requestBackdrop(item);
-            return false;
-        }
-        if (entry.state != ArtworkState::Ready) return false;
-        if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
-            if (!entry.decoded.valid()) {
-                eraseArtworkEntry(backdrops_, key);
-                requestBackdrop(item);
-                return false;
-            }
-            entry.sourceWidth = entry.decoded.width;
-            entry.sourceHeight = entry.decoded.height;
-            entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
-            entry.textureGeneration = renderer_.generation();
-            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
-        }
-        if (entry.texture == 0) return false;
+        ArtworkEntry* entry = readyArtworkTexture(backdrops_, key, [&] { requestBackdrop(item); });
+        if (!entry) return false;
         const float effectiveAlpha = settings_.backdropMode == 1 ? std::max(alpha, 0.34f) : alpha;
         drawCoverTexture(
-            entry, 0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), effectiveAlpha, 0.0f);
+            *entry, 0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), effectiveAlpha, 0.0f);
         renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, settings_.backdropMode == 1 ? 0.26f : 0.12f});
         return true;
     }
@@ -5718,7 +5664,7 @@ private:
     void requestLogo(const JellyfinItem& item) {
         if (!session_.valid() || item.id.empty() || item.logoTag.empty()) return;
         const LogoArtworkRequest request = logoArtworkRequest(session_, item);
-        if (!logos_.beginLoad(request.key, [this](ArtworkEntry& entry) { releaseArtworkTexture(entry); })) return;
+        if (!beginArtworkLoad(logos_, request.key)) return;
 
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
@@ -5743,38 +5689,16 @@ private:
     bool drawLogo(const JellyfinItem& item, float x, float y, float maxWidth, float maxHeight) {
         if (item.id.empty() || item.logoTag.empty()) return false;
         const std::string key = logoArtworkKey(session_, item);
-        auto* cached = logos_.find(key);
-        if (!cached) {
-            requestLogo(item);
-            return false;
-        }
-        auto& entry = *cached;
-        if (entry.state == ArtworkState::Failed) {
-            requestLogo(item);
-            return false;
-        }
-        if (entry.state != ArtworkState::Ready) return false;
-        if (entry.textureGeneration != renderer_.generation() || entry.texture == 0) {
-            if (!entry.decoded.valid()) {
-                eraseArtworkEntry(logos_, key);
-                requestLogo(item);
-                return false;
-            }
-            entry.sourceWidth = entry.decoded.width;
-            entry.sourceHeight = entry.decoded.height;
-            entry.texture = renderer_.createTexture(entry.decoded.width, entry.decoded.height, entry.decoded.rgba.data());
-            entry.textureGeneration = renderer_.generation();
-            if (entry.texture != 0) std::vector<uint8_t>().swap(entry.decoded.rgba);
-        }
-        if (entry.texture == 0 || entry.sourceWidth <= 0 || entry.sourceHeight <= 0) return false;
-        const float aspect = static_cast<float>(entry.sourceWidth) / static_cast<float>(entry.sourceHeight);
+        ArtworkEntry* entry = readyArtworkTexture(logos_, key, [&] { requestLogo(item); });
+        if (!entry || entry->sourceWidth <= 0 || entry->sourceHeight <= 0) return false;
+        const float aspect = static_cast<float>(entry->sourceWidth) / static_cast<float>(entry->sourceHeight);
         float width = maxWidth;
         float height = width / aspect;
         if (height > maxHeight) {
             height = maxHeight;
             width = height * aspect;
         }
-        renderer_.image(entry.texture, x, y + (maxHeight - height) * 0.5f, width, height);
+        renderer_.image(entry->texture, x, y + (maxHeight - height) * 0.5f, width, height);
         return true;
     }
 
@@ -8277,12 +8201,12 @@ private:
     bool seerrConnectLoading_ = false;
     bool seerrRetrySearchAfterConnect_ = false;
     JellyfinItem queuedSeerrRequestAfterConnect_;
-    ArtworkCache artwork_{30};
-    ArtworkCache profileArtwork_;
-    ArtworkCache homeArtwork_{48};
+    ArtworkTextureCache artwork_{30};
+    ArtworkTextureCache profileArtwork_;
+    ArtworkTextureCache homeArtwork_{48};
     HomeImageDiskCache homeDiskCache_;
-    ArtworkCache backdrops_{8};
-    ArtworkCache logos_{12};
+    ArtworkTextureCache backdrops_{8};
+    ArtworkTextureCache logos_{12};
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;
