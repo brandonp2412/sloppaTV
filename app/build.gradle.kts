@@ -1,3 +1,5 @@
+import java.security.KeyStore
+import java.security.MessageDigest
 import java.util.Properties
 
 plugins {
@@ -19,6 +21,21 @@ val releaseSigningValues = listOf("storeFile", "storePassword", "keyAlias", "key
 val releaseSigningConfigured = releaseSigningValues.all { !it.isNullOrBlank() }
 require(releaseSigningConfigured) {
     "Signing requires non-empty storeFile, storePassword, keyAlias and keyPassword entries in ${releaseSigningPropertiesFile.path}"
+}
+
+val expectedSigningSha1 = "108F6DFFAD1F2307495808AFF7D89E07B1892DEF"
+val releaseKeystoreFile = rootProject.file(releaseSigningValues[0]!!)
+val releaseKeystore = KeyStore.getInstance(KeyStore.getDefaultType()).apply {
+    releaseKeystoreFile.inputStream().use { load(it, releaseSigningValues[1]!!.toCharArray()) }
+}
+val releaseCertificate = requireNotNull(releaseKeystore.getCertificate(releaseSigningValues[2]!!)) {
+    "Signing key alias ${releaseSigningValues[2]} was not found in ${releaseKeystoreFile.path}"
+}
+val releaseSigningSha1 = MessageDigest.getInstance("SHA-1")
+    .digest(releaseCertificate.encoded)
+    .joinToString("") { "%02X".format(it) }
+require(releaseSigningSha1 == expectedSigningSha1) {
+    "SloppaTV must be signed with the Flexify F-Droid key (SHA-1 $expectedSigningSha1); configured key is $releaseSigningSha1"
 }
 
 android {
@@ -51,7 +68,7 @@ android {
     signingConfigs {
         if (releaseSigningConfigured) {
             create("release") {
-                storeFile = rootProject.file(releaseSigningValues[0]!!)
+                storeFile = releaseKeystoreFile
                 storePassword = releaseSigningValues[1]
                 keyAlias = releaseSigningValues[2]
                 keyPassword = releaseSigningValues[3]
