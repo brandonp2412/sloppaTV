@@ -38,6 +38,15 @@ int main() {
     assert(isActionSetting(SettingId::Diagnostics));
     assert(isActionSetting(SettingId::AdvancedToggle));
     assert(!isActionSetting(SettingId::SeerrDriveSelection));
+    assert(settingActivation(SettingId::MaxStreamingBitrate) == SettingActivation::None);
+    assert(settingActivation(SettingId::Diagnostics) == SettingActivation::OpenDiagnostics);
+    assert(settingActivation(SettingId::SwitchUser) == SettingActivation::SwitchUser);
+    assert(settingActivation(SettingId::SubtitleLanguages) == SettingActivation::OpenSubtitleLanguages);
+    assert(settingActivation(SettingId::SeerrServer) == SettingActivation::EditSeerrServer);
+    assert(settingActivation(SettingId::SeerrConnection) == SettingActivation::ConnectSeerr);
+    assert(settingActivation(SettingId::SeerrDriveSelection) == SettingActivation::ToggleSeerrDriveSelection);
+    assert(settingActivation(SettingId::SeerrApiKey) == SettingActivation::EditSeerrApiKey);
+    assert(settingActivation(SettingId::AdvancedToggle) == SettingActivation::ToggleAdvanced);
     assert(isAdjustableSetting(SettingId::MaxStreamingBitrate));
     assert(isAdjustableSetting(SettingId::Screensaver));
     assert(isAdjustableSetting(SettingId::ExternalPlayer));

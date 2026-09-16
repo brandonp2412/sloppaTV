@@ -1401,25 +1401,35 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const SettingId selection = settingsScreen_.selection();
-            if (selection == SettingId::Diagnostics) {
-                openDiagnostics();
-            } else if (selection == SettingId::SwitchUser) {
-                openProfiles();
-            } else if (selection == SettingId::SubtitleLanguages) {
-                settingsScreen_.openSubtitleLanguagePicker();
-            } else if (selection == SettingId::SeerrServer) {
-                showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
-            } else if (selection == SettingId::SeerrConnection) {
-                connectSeerrAsync();
-            } else if (selection == SettingId::SeerrDriveSelection) {
-                settings_.seerrSelectDrive = !settings_.seerrSelectDrive;
-                saveSession(session_);
-                if (settings_.seerrSelectDrive) refreshSeerrStorageAsync(true);
-            } else if (selection == SettingId::SeerrApiKey) {
-                showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
-            } else if (selection == SettingId::AdvancedToggle) {
-                settingsScreen_.toggleAdvanced();
+            switch (settingActivation(settingsScreen_.selection())) {
+                case SettingActivation::None:
+                    break;
+                case SettingActivation::OpenDiagnostics:
+                    openDiagnostics();
+                    break;
+                case SettingActivation::SwitchUser:
+                    openProfiles();
+                    break;
+                case SettingActivation::OpenSubtitleLanguages:
+                    settingsScreen_.openSubtitleLanguagePicker();
+                    break;
+                case SettingActivation::EditSeerrServer:
+                    showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
+                    break;
+                case SettingActivation::ConnectSeerr:
+                    connectSeerrAsync();
+                    break;
+                case SettingActivation::ToggleSeerrDriveSelection:
+                    settings_.seerrSelectDrive = !settings_.seerrSelectDrive;
+                    saveSession(session_);
+                    if (settings_.seerrSelectDrive) refreshSeerrStorageAsync(true);
+                    break;
+                case SettingActivation::EditSeerrApiKey:
+                    showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
+                    break;
+                case SettingActivation::ToggleAdvanced:
+                    settingsScreen_.toggleAdvanced();
+                    break;
             }
         }
     }

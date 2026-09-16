@@ -121,6 +121,18 @@ enum class SettingChangeEffect : uint8_t {
     CycleExternalPlayer = 1 << 3,
 };
 
+enum class SettingActivation : uint8_t {
+    None = 0,
+    OpenDiagnostics,
+    SwitchUser,
+    OpenSubtitleLanguages,
+    EditSeerrServer,
+    ConnectSeerr,
+    ToggleSeerrDriveSelection,
+    EditSeerrApiKey,
+    ToggleAdvanced,
+};
+
 constexpr SettingChangeEffect operator|(SettingChangeEffect left, SettingChangeEffect right) {
     return static_cast<SettingChangeEffect>(static_cast<uint8_t>(left) | static_cast<uint8_t>(right));
 }
@@ -137,6 +149,7 @@ struct SettingDescriptor {
     bool boolean;
     bool action;
     SettingChangeEffect changeEffects;
+    SettingActivation activation = SettingActivation::None;
 };
 
 inline constexpr int kNoSettingOrder = -1;
@@ -169,18 +182,18 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
     {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, false, false, SettingChangeEffect::Save},
     {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, false, false, SettingChangeEffect::Save | SettingChangeEffect::ResetScreensaver},
     {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, false, false, SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer},
-    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true, SettingChangeEffect::None},
-    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true, SettingChangeEffect::None},
-    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true, SettingChangeEffect::None},
+    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true, SettingChangeEffect::None, SettingActivation::OpenDiagnostics},
+    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true, SettingChangeEffect::None, SettingActivation::SwitchUser},
+    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true, SettingChangeEffect::None, SettingActivation::OpenSubtitleLanguages},
     {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, false, false, SettingChangeEffect::Save},
     {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, true, false, SettingChangeEffect::Save},
     {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, false, false, SettingChangeEffect::Save},
     {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, false, false, SettingChangeEffect::Save},
-    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true, SettingChangeEffect::None},
-    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true, SettingChangeEffect::None},
-    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false, SettingChangeEffect::Save},
-    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true, SettingChangeEffect::None},
-    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true, SettingChangeEffect::None},
+    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true, SettingChangeEffect::None, SettingActivation::EditSeerrServer},
+    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true, SettingChangeEffect::None, SettingActivation::ConnectSeerr},
+    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false, SettingChangeEffect::Save, SettingActivation::ToggleSeerrDriveSelection},
+    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true, SettingChangeEffect::None, SettingActivation::EditSeerrApiKey},
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true, SettingChangeEffect::None, SettingActivation::ToggleAdvanced},
 }};
 
 constexpr const SettingDescriptor& settingDescriptor(SettingId setting) {
@@ -197,6 +210,10 @@ constexpr bool isActionSetting(SettingId setting) {
 
 constexpr SettingChangeEffect settingChangeEffects(SettingId setting) {
     return settingDescriptor(setting).changeEffects;
+}
+
+constexpr SettingActivation settingActivation(SettingId setting) {
+    return settingDescriptor(setting).activation;
 }
 
 constexpr bool isAdjustableSetting(SettingId setting) {
