@@ -138,7 +138,7 @@ void applyDownloadProgress(JellyfinItem& item, const json& downloads) {
         item.externalProgressLabel.clear();
         item.externalProgressEta.clear();
         item.externalStatus = item.externalMediaStatus == 4
-            ? "Partially available • still downloading"
+            ? "Partially available, still downloading"
             : (activeDownloads == 1
                 ? "Series downloading"
                 : std::to_string(activeDownloads) + " downloads active");
