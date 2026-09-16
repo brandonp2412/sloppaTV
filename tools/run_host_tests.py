@@ -42,6 +42,7 @@ CPP_TESTS = [
     "playback_profile_test.cpp",
     "playback_session_test.cpp",
     "playback_telemetry_test.cpp",
+    "playback_track_selection_test.cpp",
     "playback_transition_test.cpp",
     "player_screen_test.cpp",
     "player_tracks_test.cpp",
