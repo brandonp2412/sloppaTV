@@ -16,6 +16,14 @@ struct PlaybackTrackSelectionPolicy {
     std::vector<std::string> allowedSubtitleLanguages;
 };
 
+struct PlaybackAudioCyclePlan {
+    bool available = false;
+    int audioStreamIndex = -1;
+    int audioOrdinal = -1;
+    int subtitleStreamIndex = -1;
+    bool tryEmbeddedSwitch = false;
+};
+
 inline int playbackAudioIndexForItem(
     const JellyfinItem& item,
     const std::optional<std::string>& languagePreference
@@ -84,6 +92,34 @@ inline int playbackAutoSubtitleIndexForItem(
     }
     if (selected == item.subtitles.end()) selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), matchesTarget);
     return selected == item.subtitles.end() ? kSubtitleOffIndex : selected->index;
+}
+
+inline PlaybackAudioCyclePlan planPlaybackAudioTrackCycle(
+    const JellyfinItem& item,
+    int selectedAudioStreamIndex,
+    int selectedSubtitleStreamIndex,
+    PlaybackMethod playbackMethod,
+    const PlaybackTrackSelectionPolicy& policy
+) {
+    PlaybackAudioCyclePlan plan;
+    if (item.audios.size() < 2) return plan;
+
+    const auto selected = std::find_if(item.audios.begin(), item.audios.end(), [&](const JellyfinAudioStream& audio) {
+        return audio.index == selectedAudioStreamIndex;
+    });
+    const size_t next = selected == item.audios.end()
+        ? 0
+        : (static_cast<size_t>(std::distance(item.audios.begin(), selected)) + 1) % item.audios.size();
+
+    plan.available = true;
+    plan.audioStreamIndex = item.audios[next].index;
+    plan.audioOrdinal = static_cast<int>(next);
+    plan.subtitleStreamIndex = policy.autoSubtitles
+        ? playbackAutoSubtitleIndexForItem(item, plan.audioStreamIndex, policy)
+        : selectedSubtitleStreamIndex;
+    plan.tryEmbeddedSwitch = plan.subtitleStreamIndex == selectedSubtitleStreamIndex
+        && playbackMethod == PlaybackMethod::DirectPlay;
+    return plan;
 }
 
 inline int playbackSubtitleIndexForItem(

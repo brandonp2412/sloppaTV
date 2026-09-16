@@ -38,6 +38,61 @@ int main() {
     autoPolicy.autoSubtitles = false;
     assert(playbackAutoSubtitleIndexForItem(item, 1, autoPolicy) == kSubtitleOffIndex);
 
+    auto audioCycle = planPlaybackAudioTrackCycle(
+        item,
+        1,
+        6,
+        PlaybackMethod::DirectPlay,
+        autoPolicy
+    );
+    assert(audioCycle.available);
+    assert(audioCycle.audioStreamIndex == 3);
+    assert(audioCycle.audioOrdinal == 1);
+    assert(audioCycle.subtitleStreamIndex == 6);
+    assert(audioCycle.tryEmbeddedSwitch);
+
+    audioCycle = planPlaybackAudioTrackCycle(
+        item,
+        3,
+        6,
+        PlaybackMethod::DirectStream,
+        autoPolicy
+    );
+    assert(audioCycle.available);
+    assert(audioCycle.audioStreamIndex == 1);
+    assert(audioCycle.audioOrdinal == 0);
+    assert(audioCycle.subtitleStreamIndex == 6);
+    assert(!audioCycle.tryEmbeddedSwitch);
+
+    PlaybackTrackSelectionPolicy audioChangePolicy{
+        .autoSubtitles = true,
+        .autoSubtitleLanguage = "eng",
+        .autoSubtitleSourceLanguage = "different",
+        .allowedSubtitleLanguages = {"eng"},
+    };
+    audioCycle = planPlaybackAudioTrackCycle(
+        item,
+        1,
+        6,
+        PlaybackMethod::DirectPlay,
+        audioChangePolicy
+    );
+    assert(audioCycle.available);
+    assert(audioCycle.audioStreamIndex == 3);
+    assert(audioCycle.subtitleStreamIndex == kSubtitleOffIndex);
+    assert(!audioCycle.tryEmbeddedSwitch);
+
+    audioCycle = planPlaybackAudioTrackCycle(
+        item,
+        99,
+        6,
+        PlaybackMethod::DirectPlay,
+        autoPolicy
+    );
+    assert(audioCycle.available);
+    assert(audioCycle.audioStreamIndex == 1);
+    assert(audioCycle.audioOrdinal == 0);
+
     PlaybackTrackSelectionPolicy carriedPolicy{
         .autoSubtitles = false,
         .autoSubtitleLanguage = {},
@@ -61,6 +116,13 @@ int main() {
         .isDefault = false,
     }};
     assert(playbackAudioLanguage(fallbackAudio, 42) == "fra");
+    assert(!planPlaybackAudioTrackCycle(
+        fallbackAudio,
+        9,
+        kSubtitleOffIndex,
+        PlaybackMethod::DirectPlay,
+        autoPolicy
+    ).available);
 
     return 0;
 }

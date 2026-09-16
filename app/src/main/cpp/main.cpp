@@ -1902,36 +1902,30 @@ private:
     }
 
     void cycleAudioTrack() {
-        const auto& tracks = activePlaybackItem_.audios;
-        if (tracks.size() < 2) {
+        const PlaybackAudioCyclePlan plan = planPlaybackAudioTrackCycle(
+            activePlaybackItem_,
+            trackState_.selectedAudioServerIndex(),
+            trackState_.selectedSubtitleServerIndex(),
+            activeTarget_.playMethod,
+            playbackTrackSelectionPolicy()
+        );
+        if (!plan.available) {
             error_ = "ONLY ONE AUDIO TRACK";
             return;
         }
-        auto selected = std::find_if(tracks.begin(), tracks.end(), [&](const JellyfinAudioStream& audio) {
-            return audio.index == trackState_.selectedAudioServerIndex();
-        });
-        const size_t next = selected == tracks.end()
-            ? 0
-            : (static_cast<size_t>(std::distance(tracks.begin(), selected)) + 1) % tracks.size();
-        rememberPlaybackAudioPreference(tracks[next].index);
+
+        rememberPlaybackAudioPreference(plan.audioStreamIndex);
         refreshPlaybackTelemetry(true);
         const int switchPositionMs = playerScreenState_.positionMs();
-        const int autoSubtitleIndex = settings_.autoSubtitles
-            ? playbackAutoSubtitleIndexForItem(activePlaybackItem_, tracks[next].index, playbackTrackSelectionPolicy())
-            : trackState_.selectedSubtitleServerIndex();
-        if (autoSubtitleIndex != trackState_.selectedSubtitleServerIndex()) {
-            restartPlaybackAt(switchPositionMs, tracks[next].index, autoSubtitleIndex);
-            return;
-        }
-        if (activeTarget_.playMethod == PlaybackMethod::DirectPlay
-            && player_.selectEmbeddedAudioStream(tracks[next].index, static_cast<int>(next))) {
-            trackState_.setSelectedAudioServerIndex(tracks[next].index);
-            activeTarget_.audioStreamIndex = tracks[next].index;
+        if (plan.tryEmbeddedSwitch
+            && player_.selectEmbeddedAudioStream(plan.audioStreamIndex, plan.audioOrdinal)) {
+            trackState_.setSelectedAudioServerIndex(plan.audioStreamIndex);
+            activeTarget_.audioStreamIndex = plan.audioStreamIndex;
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
             return;
         }
-        restartPlaybackAt(switchPositionMs, tracks[next].index, trackState_.selectedSubtitleServerIndex());
+        restartPlaybackAt(switchPositionMs, plan.audioStreamIndex, plan.subtitleStreamIndex);
     }
 
     PlaybackTrackSelectionPolicy playbackTrackSelectionPolicy() const {
