@@ -118,11 +118,12 @@ int main() {
     assert(subtitleBottomY(false, false, 0) == 1025.0f);
     assert(subtitleBottomY(false, false, 1) == 930.0f);
     assert(subtitleBottomY(false, false, 2) == 835.0f);
-    assert(subtitleBottomY(true, false, 0) == 835.0f);
-    assert(subtitleBottomY(true, false, 2) == 645.0f);
+    assert(subtitleBottomY(true, false, 0) == 1025.0f);
+    assert(subtitleBottomY(true, false, 2) == 835.0f);
     assert(subtitleBottomY(true, true, 0) == 735.0f);
     assert(subtitleBottomY(false, true, 2) == 545.0f);
     assert(subtitleBottomY(false, false, 0, true) == 1025.0f);
+    assert(subtitleBottomY(true, false, 0, true) == 1025.0f);
     assert(subtitleBottomY(true, true, 0, true) == 735.0f);
     assert(subtitleBottomY(false, false, 2, true) == 835.0f);
     assert(!shouldShowNextUpCard(true, 30000, false, false));

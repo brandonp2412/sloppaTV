@@ -108,8 +108,9 @@ constexpr float subtitleBottomY(
     bool skipButtonVisible = false
 ) {
     const int clamped = std::clamp(position, 0, 2);
+    (void)playbackOverlayVisible;
     (void)skipButtonVisible;
-    const float base = playbackControlsActive ? 735.0f : (playbackOverlayVisible ? 835.0f : 1025.0f);
+    const float base = playbackControlsActive ? 735.0f : 1025.0f;
     return base - static_cast<float>(clamped) * 95.0f;
 }
 
