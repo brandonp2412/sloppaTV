@@ -20,6 +20,9 @@ constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
     return itemType == "Episode" || itemType == "CollectionFolder" || itemType == "BoxSet" || itemType == "Folder";
 }
 constexpr float searchMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 430.0f : 300.0f; }
+constexpr float browseMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 390.0f : 300.0f; }
+constexpr int browseMediaVisibleRows(bool syntheticPage) { return syntheticPage ? 4 : 2; }
+constexpr int browseMediaTitleLineLimit(bool hasPortraitCards) { return hasPortraitCards ? 1 : 0; }
 constexpr int mediaGridTitleLineLimit(int visibleRow, int uiTextSize, bool hasPortraitCards) {
     (void)uiTextSize;
     // The lower portrait row starts at y=625 on the 1080p canvas. Two title

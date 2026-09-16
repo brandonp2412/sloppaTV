@@ -99,7 +99,9 @@ public:
     }
 
     void moveToolbar(int direction) {
-        navIndex_ = std::clamp(navIndex_ + direction, 0, 3);
+        constexpr int navCount = 4;
+        navIndex_ = (navIndex_ + direction) % navCount;
+        if (navIndex_ < 0) navIndex_ += navCount;
     }
 
     void moveRow(int direction, int totalRows) {

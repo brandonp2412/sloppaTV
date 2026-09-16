@@ -86,6 +86,14 @@ int main() {
     state.focusToolbar(3);
     assert(state.row() == -1);
     assert(state.navIndex() == 3);
+    state.moveToolbar(1);
+    assert(state.navIndex() == 0);
+    state.moveToolbar(1);
+    assert(state.navIndex() == 1);
+    state.moveToolbar(-1);
+    assert(state.navIndex() == 0);
+    state.moveToolbar(-1);
+    assert(state.navIndex() == 3);
     state.moveToolbar(-1);
     assert(state.navIndex() == 2);
     state.beginCenterPress();

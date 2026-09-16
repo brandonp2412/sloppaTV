@@ -22,7 +22,10 @@ int main() {
     assert(keyboardKeyHeight(655.0f, 5, 14.0f) >= 68.0f);
     assert(keyboardKeyHeight(270.0f, 5, 14.0f) == 82.0f);
     assert(keyboardKeyHeight(610.0f, 0, 14.0f) == 0.0f);
-    // Two poster rows, including two title lines and metadata, fit the canvas.
+    // Two poster rows fit the browse canvas below the filter bar, including a large one-line title.
+    assert(285.0f + browseMediaRowHeight(true) + mediaPosterHeight() + 24.0f
+        + 11.0f * 1.8f * uiTextScale(2) <= 1080.0f);
+    // Two poster rows, including two title lines and metadata, fit the generic media grid canvas.
     assert(195.0f + 430.0f + mediaPosterHeight() + 24.0f + 72.0f + 36.0f <= 1080.0f);
     assert(mediaTitleScale() == 2.45f);
     assert(usesLandscapeMediaCard("Episode"));
@@ -33,6 +36,12 @@ int main() {
     assert(!usesLandscapeMediaCard("Series"));
     assert(searchMediaRowHeight(true) == 430.0f);
     assert(searchMediaRowHeight(false) == 300.0f);
+    assert(browseMediaRowHeight(true) == 390.0f);
+    assert(browseMediaRowHeight(false) == 300.0f);
+    assert(browseMediaVisibleRows(false) == 2);
+    assert(browseMediaVisibleRows(true) == 4);
+    assert(browseMediaTitleLineLimit(true) == 1);
+    assert(browseMediaTitleLineLimit(false) == 0);
     assert(mediaGridTitleLineLimit(0, 2, true) == 0);
     assert(mediaGridTitleLineLimit(1, 0, true) == 1);
     assert(mediaGridTitleLineLimit(1, 1, true) == 1);

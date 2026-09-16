@@ -6764,8 +6764,8 @@ private:
         const bool hasPortraitCards = std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) {
             return !usesLandscapeMediaCard(item.type);
         });
-        const float rowStep = syntheticPage ? 190.0f : (hasPortraitCards ? 430.0f : 300.0f);
-        const int visibleRows = syntheticPage ? 4 : (hasPortraitCards ? 1 : 2);
+        const float rowStep = syntheticPage ? 190.0f : browseMediaRowHeight(hasPortraitCards);
+        const int visibleRows = browseMediaVisibleRows(syntheticPage);
         const int firstRow = mediaFirstVisibleRow(browseState_.selection(), visibleRows);
         for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
             const int row = index / columns - firstRow;
@@ -6778,7 +6778,9 @@ private:
             if (syntheticPage) renderTextTile(item, x, y, slotWidth, 160.0f, focused);
             else {
                 const bool showState = item.type != "BoxSet" && item.type != "CollectionFolder";
-                renderMediaArtworkCard(item, x, y, slotWidth, focused, showState, false, hasPortraitCards);
+                renderMediaArtworkCard(
+                    item, x, y, slotWidth, focused, showState, false, hasPortraitCards,
+                    browseMediaTitleLineLimit(hasPortraitCards));
             }
         }
     }
