@@ -26,36 +26,46 @@ int main() {
     assert(subtitleTextScale(0) == 2.55f);
     assert(settingLabelContains("AUDIO OUTPUT", "audio"));
     assert(!settingLabelContains("SUBTITLE SIZE", "audio"));
-    assert(isBooleanSetting(5));
-    assert(isBooleanSetting(7));
-    assert(isBooleanSetting(8));
-    assert(isBooleanSetting(9));
-    assert(isBooleanSetting(12));
-    assert(isBooleanSetting(kAutoSubtitlesSetting));
-    assert(!isBooleanSetting(10));
-    assert(!isBooleanSetting(kTimeFormatSetting));
+    assert(isBooleanSetting(SettingId::AutoplayNextEpisode));
+    assert(isBooleanSetting(SettingId::MatchVideoRefreshRate));
+    assert(isBooleanSetting(SettingId::WatchedIndicators));
+    assert(isBooleanSetting(SettingId::Clock));
+    assert(isBooleanSetting(SettingId::SubtitleBackground));
+    assert(isBooleanSetting(SettingId::AutoSubtitles));
+    assert(isBooleanSetting(SettingId::SeerrDriveSelection));
+    assert(!isBooleanSetting(SettingId::Backdrops));
+    assert(!isBooleanSetting(SettingId::TimeFormat));
+    assert(isActionSetting(SettingId::Diagnostics));
+    assert(isActionSetting(SettingId::AdvancedToggle));
+    assert(!isActionSetting(SettingId::SeerrDriveSelection));
+    assert(settingLabel(SettingId::AdvancedToggle, false) == "ADVANCED SETTINGS");
+    assert(settingLabel(SettingId::AdvancedToggle, true) == "BASIC SETTINGS");
+    for (size_t i = 0; i < kSettingDescriptors.size(); ++i) {
+        assert(settingIndex(kSettingDescriptors[i].id) == i);
+    }
 
     const auto common = matchingSettings("", false);
-    assert(!common.empty());
-    assert(common.front() == 18);
-    assert(common.back() == kAdvancedSettingsToggle);
+    assert(common.size() == 23);
+    assert(common.front() == SettingId::UiTextSize);
+    assert(common.back() == SettingId::AdvancedToggle);
 
     const auto filtered = matchingSettings("subtitle", false);
     assert(filtered.size() == 7);
-    assert(filtered[0] == 11);
-    assert(filtered[1] == 13);
-    assert(filtered[2] == 12);
-    assert(filtered[3] == kSubtitleLanguagesSetting);
-    assert(filtered[4] == kAutoSubtitlesSetting);
-    assert(filtered[5] == kAutoSubtitleLanguageSetting);
-    assert(filtered[6] == kAutoSubtitleSourceSetting);
+    assert(filtered[0] == SettingId::SubtitleSize);
+    assert(filtered[1] == SettingId::SubtitlePosition);
+    assert(filtered[2] == SettingId::SubtitleBackground);
+    assert(filtered[3] == SettingId::SubtitleLanguages);
+    assert(filtered[4] == SettingId::AutoSubtitles);
+    assert(filtered[5] == SettingId::AutoSubtitleLanguage);
+    assert(filtered[6] == SettingId::AutoSubtitleSourceAudio);
 
     const auto timeFiltered = matchingSettings("time format", false);
     assert(timeFiltered.size() == 1);
-    assert(timeFiltered.front() == kTimeFormatSetting);
+    assert(timeFiltered.front() == SettingId::TimeFormat);
 
     const auto advanced = matchingSettings("", true);
-    assert(!advanced.empty());
-    assert(advanced.back() == kAdvancedSettingsToggle);
+    assert(advanced.size() == 13);
+    assert(advanced.front() == SettingId::MaxStreamingBitrate);
+    assert(advanced.back() == SettingId::AdvancedToggle);
     return 0;
 }

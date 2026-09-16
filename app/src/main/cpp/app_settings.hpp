@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -75,25 +76,106 @@ struct AppSettings {
     bool seerrSelectDrive = false;
 };
 
-constexpr int kSubtitleLanguagesSetting = 24;
-constexpr int kTimeFormatSetting = 25;
-constexpr int kAutoSubtitlesSetting = 26;
-constexpr int kAutoSubtitleLanguageSetting = 27;
-constexpr int kAutoSubtitleSourceSetting = 28;
-constexpr int kSeerrServerSetting = 29;
-constexpr int kSeerrConnectionSetting = 30;
-constexpr int kSeerrDriveSelectionSetting = 31;
-constexpr int kSeerrApiKeySetting = 32;
-constexpr int kAdvancedSettingsToggle = 33;
+enum class SettingId : uint8_t {
+    MaxStreamingBitrate = 0,
+    PlaybackBuffer,
+    SkipBack,
+    SkipAhead,
+    DefaultVideoZoom,
+    AutoplayNextEpisode,
+    StillWatchingAfter,
+    MatchVideoRefreshRate,
+    WatchedIndicators,
+    Clock,
+    Backdrops,
+    SubtitleSize,
+    SubtitleBackground,
+    SubtitlePosition,
+    AudioOutput,
+    AvcMaxLevel,
+    HevcMaxLevel,
+    HdrPlayback,
+    UiTextSize,
+    OverscanSafeArea,
+    Screensaver,
+    ExternalPlayer,
+    Diagnostics,
+    SwitchUser,
+    SubtitleLanguages,
+    TimeFormat,
+    AutoSubtitles,
+    AutoSubtitleLanguage,
+    AutoSubtitleSourceAudio,
+    SeerrServer,
+    SeerrConnection,
+    SeerrDriveSelection,
+    SeerrApiKey,
+    AdvancedToggle,
+};
 
-constexpr bool isBooleanSetting(int setting) {
-    return setting == 5
-        || setting == 7
-        || setting == 8
-        || setting == 9
-        || setting == 12
-        || setting == kAutoSubtitlesSetting
-        || setting == kSeerrDriveSelectionSetting;
+struct SettingDescriptor {
+    SettingId id;
+    std::string_view label;
+    int commonOrder;
+    int advancedOrder;
+    bool boolean;
+    bool action;
+};
+
+inline constexpr int kNoSettingOrder = -1;
+inline constexpr size_t kSettingCount = 34;
+
+constexpr size_t settingIndex(SettingId setting) {
+    return static_cast<size_t>(setting);
+}
+
+inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptors{{
+    {SettingId::MaxStreamingBitrate, "MAX STREAMING BITRATE", kNoSettingOrder, 0, false, false},
+    {SettingId::PlaybackBuffer, "PLAYBACK BUFFER", kNoSettingOrder, 1, false, false},
+    {SettingId::SkipBack, "SKIP BACK", 14, kNoSettingOrder, false, false},
+    {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, false, false},
+    {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, false, false},
+    {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, true, false},
+    {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, false, false},
+    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, true, false},
+    {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, true, false},
+    {SettingId::Clock, "CLOCK", 17, kNoSettingOrder, true, false},
+    {SettingId::Backdrops, "BACKDROPS", 1, kNoSettingOrder, false, false},
+    {SettingId::SubtitleSize, "SUBTITLE SIZE", 2, kNoSettingOrder, false, false},
+    {SettingId::SubtitleBackground, "SUBTITLE BACKGROUND", 4, kNoSettingOrder, true, false},
+    {SettingId::SubtitlePosition, "SUBTITLE POSITION", 3, kNoSettingOrder, false, false},
+    {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, false, false},
+    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, false, false},
+    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, false, false},
+    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, false, false},
+    {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, false, false},
+    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, false, false},
+    {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, false, false},
+    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, false, false},
+    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true},
+    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true},
+    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true},
+    {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, false, false},
+    {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, true, false},
+    {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, false, false},
+    {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, false, false},
+    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true},
+    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true},
+    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false},
+    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true},
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true},
+}};
+
+constexpr const SettingDescriptor& settingDescriptor(SettingId setting) {
+    return kSettingDescriptors[settingIndex(setting)];
+}
+
+constexpr bool isBooleanSetting(SettingId setting) {
+    return settingDescriptor(setting).boolean;
+}
+
+constexpr bool isActionSetting(SettingId setting) {
+    return settingDescriptor(setting).action;
 }
 
 inline PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
@@ -213,44 +295,9 @@ inline std::string subtitleLanguageSummary(const AppSettings& settings) {
     return std::to_string(settings.subtitleLanguages.size()) + " SELECTED";
 }
 
-inline const std::array<std::string, 34>& settingsLabels() {
-    static const std::array<std::string, 34> labels{
-        "MAX STREAMING BITRATE",
-        "PLAYBACK BUFFER",
-        "SKIP BACK",
-        "SKIP AHEAD",
-        "DEFAULT VIDEO ZOOM",
-        "AUTOPLAY NEXT EPISODE",
-        "STILL WATCHING AFTER",
-        "MATCH VIDEO REFRESH RATE",
-        "WATCHED INDICATORS",
-        "CLOCK",
-        "BACKDROPS",
-        "SUBTITLE SIZE",
-        "SUBTITLE BACKGROUND",
-        "SUBTITLE POSITION",
-        "AUDIO OUTPUT",
-        "AVC / H.264 MAX LEVEL",
-        "HEVC / H.265 MAX LEVEL",
-        "HDR PLAYBACK",
-        "UI TEXT SIZE",
-        "OVERSCAN SAFE AREA",
-        "IN-APP SCREENSAVER",
-        "EXTERNAL PLAYER",
-        "DIAGNOSTICS",
-        "SWITCH USER",
-        "SUBTITLE LANGUAGES",
-        "TIME FORMAT",
-        "AUTO SUBTITLES",
-        "AUTO SUBTITLE LANGUAGE",
-        "AUTO SUBTITLE SOURCE AUDIO",
-        "SEERR SERVER",
-        "SEERR CONNECTION",
-        "SEERR DRIVE SELECTION",
-        "SEERR API KEY (LEGACY)",
-        "ADVANCED SETTINGS",
-    };
-    return labels;
+inline std::string_view settingLabel(SettingId setting, bool advanced) {
+    if (setting == SettingId::AdvancedToggle && advanced) return "BASIC SETTINGS";
+    return settingDescriptor(setting).label;
 }
 
 inline bool settingLabelContains(std::string_view text, std::string_view query) {
@@ -265,35 +312,34 @@ inline bool settingLabelContains(std::string_view text, std::string_view query) 
     ) != text.end();
 }
 
-inline std::vector<int> matchingSettings(const std::string& query, bool advanced) {
-    static constexpr std::array<int, 23> commonOrder{
-        18, 10, 11, 13, 12, kSubtitleLanguagesSetting,
-        kAutoSubtitlesSetting, kAutoSubtitleLanguageSetting, kAutoSubtitleSourceSetting,
-        kSeerrServerSetting, kSeerrConnectionSetting, kSeerrDriveSelectionSetting,
-        5, 6, 2, 3, 8, 9, kTimeFormatSetting, 14, 20, 23, kAdvancedSettingsToggle,
-    };
-    static constexpr std::array<int, 13> advancedOrder{
-        0, 1, 4, 7, 17, 19, 15, 16, 21, 22, 23, kSeerrApiKeySetting, kAdvancedSettingsToggle,
-    };
-
-    std::vector<int> matches;
-    const auto& labels = settingsLabels();
-    matches.reserve(advanced ? advancedOrder.size() : commonOrder.size());
-    if (!query.empty()) {
-        const auto appendMatches = [&](const auto& candidates) {
-            for (const int i : candidates) {
-                const std::string_view label = advanced && i == kAdvancedSettingsToggle
-                    ? std::string_view{"BASIC SETTINGS"}
-                    : std::string_view{labels[static_cast<size_t>(i)]};
-                if (settingLabelContains(label, query)) matches.push_back(i);
-            }
-        };
-        if (advanced) appendMatches(advancedOrder);
-        else appendMatches(commonOrder);
-        return matches;
+template <size_t N>
+consteval std::array<SettingId, N> makeSettingOrder(bool advanced) {
+    std::array<SettingId, N> result{};
+    size_t count = 0;
+    for (const auto& descriptor : kSettingDescriptors) {
+        const int order = advanced ? descriptor.advancedOrder : descriptor.commonOrder;
+        if (order == kNoSettingOrder) continue;
+        result[static_cast<size_t>(order)] = descriptor.id;
+        ++count;
     }
+    if (count != N) throw "setting order count mismatch";
+    return result;
+}
 
-    if (advanced) matches.assign(advancedOrder.begin(), advancedOrder.end());
-    else matches.assign(commonOrder.begin(), commonOrder.end());
+inline constexpr auto kCommonSettings = makeSettingOrder<23>(false);
+inline constexpr auto kAdvancedSettings = makeSettingOrder<13>(true);
+
+inline std::vector<SettingId> matchingSettings(const std::string& query, bool advanced) {
+    std::vector<SettingId> matches;
+    matches.reserve(advanced ? kAdvancedSettings.size() : kCommonSettings.size());
+    const auto appendMatches = [&](const auto& candidates) {
+        for (const SettingId setting : candidates) {
+            if (query.empty() || settingLabelContains(settingLabel(setting, advanced), query)) {
+                matches.push_back(setting);
+            }
+        }
+    };
+    if (advanced) appendMatches(kAdvancedSettings);
+    else appendMatches(kCommonSettings);
     return matches;
 }

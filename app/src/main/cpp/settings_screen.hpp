@@ -85,9 +85,9 @@ public:
         selectFirstMatch();
     }
 
-    [[nodiscard]] const std::vector<int>& matches() const { return matches_; }
+    [[nodiscard]] const std::vector<SettingId>& matches() const { return matches_; }
 
-    [[nodiscard]] int selection() const { return selection_; }
+    [[nodiscard]] SettingId selection() const { return selection_; }
     [[nodiscard]] int firstVisible() const { return firstVisible_; }
     [[nodiscard]] const std::string& searchQuery() const { return searchQuery_; }
     [[nodiscard]] bool searchFocused() const { return searchFocused_; }
@@ -116,7 +116,7 @@ public:
     }
 
 private:
-    int selectedPosition(const std::vector<int>& current) const {
+    int selectedPosition(const std::vector<SettingId>& current) const {
         const auto selected = std::find(current.begin(), current.end(), selection_);
         return selected == current.end() ? 0 : static_cast<int>(std::distance(current.begin(), selected));
     }
@@ -126,7 +126,7 @@ private:
     }
 
     void selectFirstMatch() {
-        selection_ = matches_.empty() ? 18 : matches_.front();
+        selection_ = matches_.empty() ? SettingId::UiTextSize : matches_.front();
     }
 
     void ensureVisible(int selectedPosition, int itemCount) {
@@ -136,10 +136,10 @@ private:
         firstVisible_ = std::clamp(firstVisible_, 0, std::max(0, itemCount - visibleRows));
     }
 
-    int selection_ = 0;
+    SettingId selection_ = SettingId::MaxStreamingBitrate;
     int firstVisible_ = 0;
     std::string searchQuery_;
-    std::vector<int> matches_;
+    std::vector<SettingId> matches_;
     bool searchFocused_ = false;
     bool advanced_ = false;
     bool subtitleLanguagePicker_ = false;
@@ -155,7 +155,7 @@ inline void stepSettingChoice(int& value, const std::array<int, N>& choices, int
     value = choices[static_cast<size_t>(index)];
 }
 
-inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, int direction) {
+inline SettingChangeEffect adjustSetting(AppSettings& settings, SettingId selection, int direction) {
     direction = direction >= 0 ? 1 : -1;
     const auto stepLanguage = [&](std::string& language) {
         const std::string normalized = normalizeSubtitleLanguage(language);
@@ -169,99 +169,99 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
         language = kSubtitleLanguageOptions[static_cast<size_t>(index)].code;
     };
     switch (selection) {
-        case 0: {
+        case SettingId::MaxStreamingBitrate: {
             static constexpr std::array<int, 6> choices{20, 40, 80, 120, 160, 200};
             stepSettingChoice(settings.maxBitrateMbps, choices, direction, 3);
             return SettingChangeEffect::Save;
         }
-        case 1:
+        case SettingId::PlaybackBuffer:
             settings.playbackBufferPreset = std::clamp(settings.playbackBufferPreset + direction, 0, 2);
             return SettingChangeEffect::Save;
-        case 2:
-        case 3: {
+        case SettingId::SkipBack:
+        case SettingId::SkipAhead: {
             static constexpr std::array<int, 6> choices{5, 10, 15, 20, 30, 60};
-            int& value = selection == 2 ? settings.seekBackSeconds : settings.seekForwardSeconds;
+            int& value = selection == SettingId::SkipBack ? settings.seekBackSeconds : settings.seekForwardSeconds;
             stepSettingChoice(value, choices, direction, 1);
             return SettingChangeEffect::Save;
         }
-        case 4:
+        case SettingId::DefaultVideoZoom:
             settings.zoomMode = std::clamp(settings.zoomMode + direction, 0, 2);
             return SettingChangeEffect::Save;
-        case 5:
+        case SettingId::AutoplayNextEpisode:
             settings.autoplayNext = !settings.autoplayNext;
             return SettingChangeEffect::Save;
-        case 6: {
+        case SettingId::StillWatchingAfter: {
             static constexpr std::array<int, 5> choices{2, 3, 4, 5, 6};
             stepSettingChoice(settings.stillWatchingAfter, choices, direction, 1);
             return SettingChangeEffect::Save;
         }
-        case 7:
+        case SettingId::MatchVideoRefreshRate:
             settings.refreshRateSwitching = !settings.refreshRateSwitching;
             return settings.refreshRateSwitching
                 ? SettingChangeEffect::Save
                 : SettingChangeEffect::Save | SettingChangeEffect::RestoreDisplayMode;
-        case 8:
+        case SettingId::WatchedIndicators:
             settings.showWatchedIndicators = !settings.showWatchedIndicators;
             return SettingChangeEffect::Save;
-        case 9:
+        case SettingId::Clock:
             settings.showClock = !settings.showClock;
             return SettingChangeEffect::Save;
-        case 10:
+        case SettingId::Backdrops:
             settings.backdropMode = std::clamp(settings.backdropMode + direction, 0, 2);
             return SettingChangeEffect::Save;
-        case 11:
+        case SettingId::SubtitleSize:
             settings.subtitleSize = std::clamp(settings.subtitleSize + direction, 0, 2);
             return SettingChangeEffect::Save;
-        case 12:
+        case SettingId::SubtitleBackground:
             settings.subtitleBackground = !settings.subtitleBackground;
             return SettingChangeEffect::Save;
-        case 13:
+        case SettingId::SubtitlePosition:
             settings.subtitlePosition = std::clamp(settings.subtitlePosition + direction, 0, 2);
             return SettingChangeEffect::Save;
-        case 14:
+        case SettingId::AudioOutput:
             settings.maxAudioChannels = settings.maxAudioChannels <= 2 ? 8 : 2;
             return SettingChangeEffect::Save;
-        case 15: {
+        case SettingId::AvcMaxLevel: {
             static constexpr std::array<int, 10> choices{0, 40, 41, 42, 50, 51, 52, 60, 61, 62};
             stepSettingChoice(settings.avcLevelOverride, choices, direction, 0);
             return SettingChangeEffect::Save;
         }
-        case 16: {
+        case SettingId::HevcMaxLevel: {
             static constexpr std::array<int, 9> choices{0, 120, 123, 150, 153, 156, 180, 183, 186};
             stepSettingChoice(settings.hevcLevelOverride, choices, direction, 0);
             return SettingChangeEffect::Save;
         }
-        case 17:
+        case SettingId::HdrPlayback:
             settings.hdrOverride = std::clamp(settings.hdrOverride + direction, 0, 2);
             return SettingChangeEffect::Save;
-        case 18:
+        case SettingId::UiTextSize:
             settings.uiTextSize = std::clamp(settings.uiTextSize + direction, 0, 2);
             return SettingChangeEffect::Save;
-        case 19: {
+        case SettingId::OverscanSafeArea: {
             static constexpr std::array<int, 4> choices{0, 2, 4, 6};
             stepSettingChoice(settings.safeAreaPercent, choices, direction, 0);
             return SettingChangeEffect::Save;
         }
-        case 20: {
+        case SettingId::Screensaver: {
             static constexpr std::array<int, 5> choices{0, 5, 10, 20, 30};
             stepSettingChoice(settings.screensaverMinutes, choices, direction, 0);
             return SettingChangeEffect::Save | SettingChangeEffect::ResetScreensaver;
         }
-        case 21:
+        case SettingId::ExternalPlayer:
             return SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer;
-        case kTimeFormatSetting:
+        case SettingId::TimeFormat:
             settings.clock24Hour = !settings.clock24Hour;
             return SettingChangeEffect::Save;
-        case kSeerrDriveSelectionSetting:
+        case SettingId::SeerrDriveSelection:
             settings.seerrSelectDrive = !settings.seerrSelectDrive;
             return SettingChangeEffect::Save;
-        case kAutoSubtitlesSetting:
+        case SettingId::AutoSubtitles:
             settings.autoSubtitles = !settings.autoSubtitles;
             return SettingChangeEffect::Save;
-        case kAutoSubtitleLanguageSetting:
+        case SettingId::AutoSubtitleLanguage:
             stepLanguage(settings.autoSubtitleLanguage);
             return SettingChangeEffect::Save;
-        case kAutoSubtitleSourceSetting: {
+        case SettingId::AutoSubtitleSourceAudio: {
             std::vector<std::string> choices{"any", "different"};
             for (const auto& option : kSubtitleLanguageOptions) choices.emplace_back(option.code);
             const std::string normalized = settings.autoSubtitleSourceLanguage == "any" || settings.autoSubtitleSourceLanguage == "different"
@@ -278,49 +278,56 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, int selection, i
     }
 }
 
-inline std::array<std::string, 34> settingsValues(
+inline std::string settingValue(
     const AppSettings& settings,
+    SettingId setting,
     int maxAudioOutputChannels,
-    std::string externalPlayer,
-    std::string username,
+    std::string_view externalPlayer,
+    std::string_view username,
     bool advanced
 ) {
-    return {
-        std::to_string(settings.maxBitrateMbps) + " MBIT/S",
-        playbackBufferName(settings.playbackBufferPreset),
-        std::to_string(settings.seekBackSeconds) + " SECONDS",
-        std::to_string(settings.seekForwardSeconds) + " SECONDS",
-        videoZoomName(static_cast<VideoZoomMode>(settings.zoomMode)),
-        settings.autoplayNext ? "ON" : "OFF",
-        std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS",
-        settings.refreshRateSwitching ? "ON" : "OFF",
-        settings.showWatchedIndicators ? "ON" : "OFF",
-        settings.showClock ? "ON" : "OFF",
-        backdropModeName(settings.backdropMode),
-        subtitleSizeName(settings.subtitleSize),
-        settings.subtitleBackground ? "ON" : "OFF",
-        subtitlePositionName(settings.subtitlePosition),
-        settings.maxAudioChannels <= 2
-            ? "DOWNMIX TO STEREO"
-            : "DIRECT / " + std::to_string(std::max(2, maxAudioOutputChannels)) + "CH ROUTE",
-        avcLevelName(settings.avcLevelOverride),
-        hevcLevelName(settings.hevcLevelOverride),
-        hdrOverrideName(settings.hdrOverride),
-        uiTextSizeName(settings.uiTextSize),
-        settings.safeAreaPercent == 0 ? "OFF" : std::to_string(settings.safeAreaPercent) + "% PER EDGE",
-        screensaverName(settings.screensaverMinutes),
-        std::move(externalPlayer),
-        "DEVICE / SERVER / PLAYBACK",
-        username.empty() ? "CURRENT USER" : std::move(username),
-        subtitleLanguageSummary(settings),
-        clockFormatName(settings.clock24Hour),
-        settings.autoSubtitles ? "ON" : "OFF",
-        subtitleLanguageLabel(settings.autoSubtitleLanguage),
-        autoSubtitleSourceName(settings),
-        settings.seerrServer.empty() ? "NOT SET" : settings.seerrServer,
-        !settings.seerrSessionCookie.empty() ? "CONNECTED" : (settings.seerrApiKey.empty() ? "CONNECT WITH JELLYFIN" : "LEGACY API KEY"),
-        settings.seerrSelectDrive ? "ON" : "OFF",
-        settings.seerrApiKey.empty() ? "NOT SET" : "SET",
-        advanced ? "SHOW COMMON" : "SHOW TECHNICAL",
-    };
+    switch (setting) {
+        case SettingId::MaxStreamingBitrate: return std::to_string(settings.maxBitrateMbps) + " MBIT/S";
+        case SettingId::PlaybackBuffer: return playbackBufferName(settings.playbackBufferPreset);
+        case SettingId::SkipBack: return std::to_string(settings.seekBackSeconds) + " SECONDS";
+        case SettingId::SkipAhead: return std::to_string(settings.seekForwardSeconds) + " SECONDS";
+        case SettingId::DefaultVideoZoom: return videoZoomName(static_cast<VideoZoomMode>(settings.zoomMode));
+        case SettingId::AutoplayNextEpisode: return settings.autoplayNext ? "ON" : "OFF";
+        case SettingId::StillWatchingAfter: return std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS";
+        case SettingId::MatchVideoRefreshRate: return settings.refreshRateSwitching ? "ON" : "OFF";
+        case SettingId::WatchedIndicators: return settings.showWatchedIndicators ? "ON" : "OFF";
+        case SettingId::Clock: return settings.showClock ? "ON" : "OFF";
+        case SettingId::Backdrops: return backdropModeName(settings.backdropMode);
+        case SettingId::SubtitleSize: return subtitleSizeName(settings.subtitleSize);
+        case SettingId::SubtitleBackground: return settings.subtitleBackground ? "ON" : "OFF";
+        case SettingId::SubtitlePosition: return subtitlePositionName(settings.subtitlePosition);
+        case SettingId::AudioOutput:
+            return settings.maxAudioChannels <= 2
+                ? "DOWNMIX TO STEREO"
+                : "DIRECT / " + std::to_string(std::max(2, maxAudioOutputChannels)) + "CH ROUTE";
+        case SettingId::AvcMaxLevel: return avcLevelName(settings.avcLevelOverride);
+        case SettingId::HevcMaxLevel: return hevcLevelName(settings.hevcLevelOverride);
+        case SettingId::HdrPlayback: return hdrOverrideName(settings.hdrOverride);
+        case SettingId::UiTextSize: return uiTextSizeName(settings.uiTextSize);
+        case SettingId::OverscanSafeArea:
+            return settings.safeAreaPercent == 0 ? "OFF" : std::to_string(settings.safeAreaPercent) + "% PER EDGE";
+        case SettingId::Screensaver: return screensaverName(settings.screensaverMinutes);
+        case SettingId::ExternalPlayer: return std::string(externalPlayer);
+        case SettingId::Diagnostics: return "DEVICE / SERVER / PLAYBACK";
+        case SettingId::SwitchUser: return username.empty() ? "CURRENT USER" : std::string(username);
+        case SettingId::SubtitleLanguages: return subtitleLanguageSummary(settings);
+        case SettingId::TimeFormat: return clockFormatName(settings.clock24Hour);
+        case SettingId::AutoSubtitles: return settings.autoSubtitles ? "ON" : "OFF";
+        case SettingId::AutoSubtitleLanguage: return subtitleLanguageLabel(settings.autoSubtitleLanguage);
+        case SettingId::AutoSubtitleSourceAudio: return autoSubtitleSourceName(settings);
+        case SettingId::SeerrServer: return settings.seerrServer.empty() ? "NOT SET" : settings.seerrServer;
+        case SettingId::SeerrConnection:
+            return !settings.seerrSessionCookie.empty()
+                ? "CONNECTED"
+                : (settings.seerrApiKey.empty() ? "CONNECT WITH JELLYFIN" : "LEGACY API KEY");
+        case SettingId::SeerrDriveSelection: return settings.seerrSelectDrive ? "ON" : "OFF";
+        case SettingId::SeerrApiKey: return settings.seerrApiKey.empty() ? "NOT SET" : "SET";
+        case SettingId::AdvancedToggle: return advanced ? "SHOW COMMON" : "SHOW TECHNICAL";
+    }
+    return {};
 }

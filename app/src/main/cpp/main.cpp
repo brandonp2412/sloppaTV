@@ -1385,12 +1385,12 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
-            const int selection = settingsScreen_.selection();
-            if (selection == kAdvancedSettingsToggle) return;
+            const SettingId selection = settingsScreen_.selection();
+            if (selection == SettingId::AdvancedToggle) return;
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             const SettingChangeEffect effects = adjustSetting(settings_, selection, direction);
             if (effects == SettingChangeEffect::None) return;
-            if (selection == 4) playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
+            if (selection == SettingId::DefaultVideoZoom) playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
             if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
             if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {
                 lastInteraction_ = std::chrono::steady_clock::now();
@@ -1401,24 +1401,24 @@ private:
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const int selection = settingsScreen_.selection();
-            if (selection == 22) {
+            const SettingId selection = settingsScreen_.selection();
+            if (selection == SettingId::Diagnostics) {
                 openDiagnostics();
-            } else if (selection == 23) {
+            } else if (selection == SettingId::SwitchUser) {
                 openProfiles();
-            } else if (selection == kSubtitleLanguagesSetting) {
+            } else if (selection == SettingId::SubtitleLanguages) {
                 settingsScreen_.openSubtitleLanguagePicker();
-            } else if (selection == kSeerrServerSetting) {
+            } else if (selection == SettingId::SeerrServer) {
                 showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
-            } else if (selection == kSeerrConnectionSetting) {
+            } else if (selection == SettingId::SeerrConnection) {
                 connectSeerrAsync();
-            } else if (selection == kSeerrDriveSelectionSetting) {
+            } else if (selection == SettingId::SeerrDriveSelection) {
                 settings_.seerrSelectDrive = !settings_.seerrSelectDrive;
                 saveSession(session_);
                 if (settings_.seerrSelectDrive) refreshSeerrStorageAsync(true);
-            } else if (selection == kSeerrApiKeySetting) {
+            } else if (selection == SettingId::SeerrApiKey) {
                 showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
-            } else if (selection == kAdvancedSettingsToggle) {
+            } else if (selection == SettingId::AdvancedToggle) {
                 settingsScreen_.toggleAdvanced();
             }
         }
@@ -7509,24 +7509,8 @@ private:
 
     void renderSettings() {
         renderer_.text(80.0f, 58.0f, material_tv::type::headline, "Settings", kText, 560.0f);
-        const auto& labels = settingsLabels();
-        auto values = settingsValues(
-            settings_,
-            api_.deviceCodecSupport().maxAudioOutputChannels,
-            externalPlayerLabel(),
-            session_.username,
-            settingsScreen_.advanced()
-        );
-        if (systemTextInputMode_ == kTextInputSeerrApiKey) {
-            const size_t visibleMask = std::min<size_t>(settings_.seerrApiKey.size(), 24);
-            values[static_cast<size_t>(kSeerrApiKeySetting)] = std::string(visibleMask, '*');
-            if (settings_.seerrApiKey.size() > visibleMask) {
-                values[static_cast<size_t>(kSeerrApiKeySetting)] += "…";
-            }
-            if (values[static_cast<size_t>(kSeerrApiKeySetting)].empty()) {
-                values[static_cast<size_t>(kSeerrApiKeySetting)] = "Typing…";
-            }
-        }
+        const int maxAudioOutputChannels = api_.deviceCodecSupport().maxAudioOutputChannels;
+        const std::string externalPlayer = externalPlayerLabel();
 
         const auto settingsSearchBounds = drawInputSurface(
             1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused(), materialWideInputFocusScale());
@@ -7572,13 +7556,12 @@ private:
         for (int slot = 0; slot < visibleRows; ++slot) {
             const int matchPosition = first + slot;
             if (matchPosition >= static_cast<int>(matches.size())) break;
-            const int i = matches[static_cast<size_t>(matchPosition)];
+            const SettingId setting = matches[static_cast<size_t>(matchPosition)];
             const float y = rowsTop + static_cast<float>(slot) * 112.0f;
             const bool focused = !settingsScreen_.subtitleLanguagePicker()
                 && !settingsScreen_.searchFocused()
-                && i == settingsScreen_.selection();
-            const bool actionRow = i == 22 || i == 23 || i == kSubtitleLanguagesSetting
-                || i == kSeerrServerSetting || i == kSeerrConnectionSetting || i == kSeerrApiKeySetting || i == kAdvancedSettingsToggle;
+                && setting == settingsScreen_.selection();
+            const bool actionRow = isActionSetting(setting);
             // Settings use contained TV list rows, which remain readable at distance.
             constexpr float rowX = 110.0f;
             constexpr float rowWidth = 1700.0f;
@@ -7586,13 +7569,18 @@ private:
                 rowX, y - 8.0f, rowWidth, 88.0f, focused,
                 material_tv::cornerMedium, materialWideListItemFocusScale()
             );
-            const std::string rowLabel = i == kAdvancedSettingsToggle && settingsScreen_.advanced()
-                ? "Basic settings"
-                : labels[static_cast<size_t>(i)];
+            const std::string_view rowLabel = settingLabel(setting, settingsScreen_.advanced());
             renderer_.textVerticallyCentered(rowX + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
-                fitTextLines(materialLabel(rowLabel), 2.20f, 900.0f, 1),
+                fitTextLines(materialLabel(std::string(rowLabel)), 2.20f, 900.0f, 1),
                 focused ? kText : kSecondaryText, 900.0f);
-            const std::string& value = values[static_cast<size_t>(i)];
+            std::string value = settingValue(
+                settings_, setting, maxAudioOutputChannels, externalPlayer, session_.username, settingsScreen_.advanced());
+            if (setting == SettingId::SeerrApiKey && systemTextInputMode_ == kTextInputSeerrApiKey) {
+                const size_t visibleMask = std::min<size_t>(settings_.seerrApiKey.size(), 24);
+                value.assign(visibleMask, '*');
+                if (settings_.seerrApiKey.size() > visibleMask) value += "…";
+                if (value.empty()) value = "Typing…";
+            }
             constexpr float valueRightInset = 45.0f;
             // Keep row content anchored while the focus surface grows around it.
             const float valueRight = std::round(rowX + rowWidth - valueRightInset);
@@ -7602,7 +7590,7 @@ private:
                 const float valueWidth = renderer_.textWidth(valueScale, displayValue);
                 renderer_.textVerticallyCentered(std::max(1190.0f, valueRight - valueWidth), rowBounds[1], rowBounds[3], valueScale,
                     displayValue, focused ? kFocus : kText, 570.0f);
-            } else if (isBooleanSetting(i)) {
+            } else if (isBooleanSetting(setting)) {
                 constexpr float switchWidth = 112.0f;
                 drawSwitch(valueRight - switchWidth, y + 8.0f, value == "ON", focused);
             } else {

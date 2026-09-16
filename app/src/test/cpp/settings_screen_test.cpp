@@ -7,14 +7,14 @@ int main() {
     screen.reset();
     assert(!screen.advanced());
     assert(!screen.searchFocused());
-    assert(screen.selection() == 18);
+    assert(screen.selection() == SettingId::UiTextSize);
     assert(screen.firstVisible() == 0);
 
     screen.moveUp();
     assert(screen.searchFocused());
     screen.moveDown();
     assert(!screen.searchFocused());
-    assert(screen.selection() == 18);
+    assert(screen.selection() == SettingId::UiTextSize);
 
     for (int i = 0; i < 7; ++i) screen.moveDown();
     assert(screen.firstVisible() > 0);
@@ -28,66 +28,68 @@ int main() {
     screen.toggleAdvanced();
     assert(screen.advanced());
     assert(screen.searchQuery().empty());
-    assert(screen.selection() == 0);
+    assert(screen.selection() == SettingId::MaxStreamingBitrate);
 
     AppSettings settings;
-    auto effect = adjustSetting(settings, 0, -1);
+    auto effect = adjustSetting(settings, SettingId::MaxStreamingBitrate, -1);
     assert(settings.maxBitrateMbps == 80);
     assert(hasSettingEffect(effect, SettingChangeEffect::Save));
 
     settings.refreshRateSwitching = true;
-    effect = adjustSetting(settings, 7, 1);
+    effect = adjustSetting(settings, SettingId::MatchVideoRefreshRate, 1);
     assert(!settings.refreshRateSwitching);
     assert(hasSettingEffect(effect, SettingChangeEffect::RestoreDisplayMode));
 
-    effect = adjustSetting(settings, 20, 1);
+    effect = adjustSetting(settings, SettingId::Screensaver, 1);
     assert(settings.screensaverMinutes == 5);
     assert(hasSettingEffect(effect, SettingChangeEffect::ResetScreensaver));
 
-    effect = adjustSetting(settings, 21, 1);
+    effect = adjustSetting(settings, SettingId::ExternalPlayer, 1);
     assert(hasSettingEffect(effect, SettingChangeEffect::CycleExternalPlayer));
     assert(hasSettingEffect(effect, SettingChangeEffect::Save));
 
     assert(!settings.clock24Hour);
-    effect = adjustSetting(settings, kTimeFormatSetting, 1);
+    effect = adjustSetting(settings, SettingId::TimeFormat, 1);
     assert(settings.clock24Hour);
     assert(hasSettingEffect(effect, SettingChangeEffect::Save));
 
-    effect = adjustSetting(settings, kAutoSubtitlesSetting, 1);
+    effect = adjustSetting(settings, SettingId::AutoSubtitles, 1);
     assert(settings.autoSubtitles);
     assert(hasSettingEffect(effect, SettingChangeEffect::Save));
-    effect = adjustSetting(settings, kAutoSubtitleLanguageSetting, 1);
+    effect = adjustSetting(settings, SettingId::AutoSubtitleLanguage, 1);
     assert(settings.autoSubtitleLanguage == "mri");
-    effect = adjustSetting(settings, kAutoSubtitleSourceSetting, 1);
+    effect = adjustSetting(settings, SettingId::AutoSubtitleSourceAudio, 1);
     assert(settings.autoSubtitleSourceLanguage == "different");
 
     settings.seerrServer = "https://seerr.example.nz";
     settings.seerrSessionCookie = "connect.sid=session";
     settings.seerrApiKey = "secret";
     settings.seerrSelectDrive = true;
-    const auto values = settingsValues(settings, 6, "MPV", "viewer", false);
-    assert(values[0] == "80 MBIT/S");
-    assert(values[14] == "DIRECT / 6CH ROUTE");
-    assert(values[21] == "MPV");
-    assert(values[23] == "viewer");
-    assert(values[24] == "ALL LANGUAGES");
-    assert(values[25] == "24 HOUR");
-    assert(values[26] == "ON");
-    assert(values[27] == "MAORI");
-    assert(values[28] == "AUDIO NOT MAORI");
-    assert(values[kSeerrServerSetting] == "https://seerr.example.nz");
-    assert(values[kSeerrConnectionSetting] == "CONNECTED");
-    assert(values[kSeerrDriveSelectionSetting] == "ON");
-    assert(values[kSeerrApiKeySetting] == "SET");
-    assert(values[kAdvancedSettingsToggle] == "SHOW TECHNICAL");
+    const auto valueFor = [&](SettingId setting) {
+        return settingValue(settings, setting, 6, "MPV", "viewer", false);
+    };
+    assert(valueFor(SettingId::MaxStreamingBitrate) == "80 MBIT/S");
+    assert(valueFor(SettingId::AudioOutput) == "DIRECT / 6CH ROUTE");
+    assert(valueFor(SettingId::ExternalPlayer) == "MPV");
+    assert(valueFor(SettingId::SwitchUser) == "viewer");
+    assert(valueFor(SettingId::SubtitleLanguages) == "ALL LANGUAGES");
+    assert(valueFor(SettingId::TimeFormat) == "24 HOUR");
+    assert(valueFor(SettingId::AutoSubtitles) == "ON");
+    assert(valueFor(SettingId::AutoSubtitleLanguage) == "MAORI");
+    assert(valueFor(SettingId::AutoSubtitleSourceAudio) == "AUDIO NOT MAORI");
+    assert(valueFor(SettingId::SeerrServer) == "https://seerr.example.nz");
+    assert(valueFor(SettingId::SeerrConnection) == "CONNECTED");
+    assert(valueFor(SettingId::SeerrDriveSelection) == "ON");
+    assert(valueFor(SettingId::SeerrApiKey) == "SET");
+    assert(valueFor(SettingId::AdvancedToggle) == "SHOW TECHNICAL");
 
     screen.reset();
     screen.setSearchText("seerr");
     const auto seerrMatches = screen.matches();
     assert(seerrMatches.size() == 3);
-    assert(seerrMatches[0] == kSeerrServerSetting);
-    assert(seerrMatches[1] == kSeerrConnectionSetting);
-    assert(seerrMatches[2] == kSeerrDriveSelectionSetting);
+    assert(seerrMatches[0] == SettingId::SeerrServer);
+    assert(seerrMatches[1] == SettingId::SeerrConnection);
+    assert(seerrMatches[2] == SettingId::SeerrDriveSelection);
 
     screen.openSubtitleLanguagePicker();
     assert(screen.subtitleLanguagePicker());
