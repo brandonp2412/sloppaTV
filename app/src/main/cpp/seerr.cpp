@@ -130,6 +130,21 @@ void applyMediaDetails(JellyfinItem& item, const JellyfinItem& details) {
 void applyDownloadProgress(JellyfinItem& item, const json& downloads) {
     if (!downloads.is_array() || downloads.empty()) return;
 
+    if (item.externalMediaType == "tv") {
+        const size_t activeDownloads = static_cast<size_t>(std::count_if(
+            downloads.begin(), downloads.end(), [](const json& download) { return download.is_object(); }));
+        if (activeDownloads == 0) return;
+        item.externalProgressPercent = -1;
+        item.externalProgressLabel.clear();
+        item.externalProgressEta.clear();
+        item.externalStatus = item.externalMediaStatus == 4
+            ? "Partially available • still downloading"
+            : (activeDownloads == 1
+                ? "Series downloading"
+                : std::to_string(activeDownloads) + " downloads active");
+        return;
+    }
+
     const json* selected = nullptr;
     int selectedSeason = -1;
     int selectedEpisode = -1;
@@ -639,6 +654,7 @@ ApiValueResult<std::vector<JellyfinItem>> SeerrClient::pendingRequests(
             item.externalRequested = true;
             const bool is4k = request.value("is4k", false);
             item.externalMediaStatus = integerValue(*media, is4k ? "status4k" : "status");
+            item.externalJellyfinId = stringValue(*media, is4k ? "jellyfinMediaId4k" : "jellyfinMediaId");
             item.externalStatus = mediaStatusLabel(item.externalMediaStatus, mediaType == "tv");
             const auto downloads = media->find(is4k ? "downloadStatus4k" : "downloadStatus");
             if (downloads != media->end()) applyDownloadProgress(item, *downloads);

@@ -1130,7 +1130,12 @@ private:
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             const auto& selected = items[static_cast<size_t>(selection)];
             if (section.title == "My Media") openLibrary(selected);
-            else if (isSeerrItem(selected)) openItemMenuForItem(selected);
+            else if (isSeerrItem(selected) && !selected.externalJellyfinId.empty()) {
+                JellyfinItem available = selected;
+                available.id = selected.externalJellyfinId;
+                available.externalSource.clear();
+                openDetails(available);
+            } else if (isSeerrItem(selected)) openItemMenuForItem(selected);
             else openDetails(selected);
             return;
         }
