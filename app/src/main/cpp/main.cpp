@@ -6,6 +6,7 @@
 
 #include "account_screen.hpp"
 #include "app_settings.hpp"
+#include "artwork_image_loader.hpp"
 #include "artwork_request.hpp"
 #include "artwork_texture_cache.hpp"
 #include "audio_policy.hpp"
@@ -5415,60 +5416,37 @@ private:
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
             const JellyfinItem jellyfinItem = request.jellyfinItem();
-            bool fromDisk = false;
-            std::string encoded;
-            if (auto cached = homeDiskCache_.read(request.key)) {
-                encoded = std::move(*cached);
-                fromDisk = true;
-            } else {
-                auto bytes = request.external
-                    ? seerr_.downloadImage(request.externalUrl)
-                    : api_.downloadHomeImage(session, jellyfinItem, 480, 270);
-                if (!bytes.ok) {
-                    __android_log_print(
-                        ANDROID_LOG_WARN,
-                        kTag,
-                        "Home artwork download failed item=%s type=%s reason=%s",
-                        request.itemId.c_str(),
-                        request.itemType.c_str(),
-                        bytes.error.c_str()
-                    );
-                    std::scoped_lock lock(stateMutex_);
-                    homeArtwork_.markFailed(request.key);
-                    return;
+            ArtworkLoadResult loaded = ArtworkImageLoader::loadCached(
+                homeDiskCache_,
+                request.key,
+                [this, session, request, jellyfinItem] {
+                    return request.external
+                        ? seerr_.downloadImage(request.externalUrl)
+                        : api_.downloadHomeImage(session, jellyfinItem, 480, 270);
+                },
+                [this](const std::string& encoded, std::string& error) {
+                    return imageDecoder_.decode(encoded, error);
                 }
-                encoded = std::move(bytes.value);
-            }
+            );
 
-            std::string decodeError;
-            DecodedImage decoded = imageDecoder_.decode(encoded, decodeError);
-            if (!decoded.valid() && fromDisk) {
-                homeDiskCache_.erase(request.key);
-                auto bytes = request.external
-                    ? seerr_.downloadImage(request.externalUrl)
-                    : api_.downloadHomeImage(session, jellyfinItem, 480, 270);
-                if (bytes.ok) {
-                    encoded = std::move(bytes.value);
-                    decodeError.clear();
-                    decoded = imageDecoder_.decode(encoded, decodeError);
-                    fromDisk = false;
-                }
-            }
-            if (decoded.valid() && !fromDisk) homeDiskCache_.write(request.key, encoded);
-
-            std::scoped_lock lock(stateMutex_);
-            if (!decoded.valid()) {
+            if (!loaded.ok()) {
                 __android_log_print(
                     ANDROID_LOG_WARN,
                     kTag,
-                    "Home artwork decode failed item=%s reason=%s",
+                    loaded.failure == ArtworkLoadFailure::Download
+                        ? "Home artwork download failed item=%s type=%s reason=%s"
+                        : "Home artwork decode failed item=%s type=%s reason=%s",
                     request.itemId.c_str(),
-                    decodeError.c_str()
+                    request.itemType.c_str(),
+                    loaded.error.c_str()
                 );
+                std::scoped_lock lock(stateMutex_);
                 homeArtwork_.markFailed(request.key);
                 return;
             }
-            homeArtwork_.markReady(request.key, std::move(decoded));
+
+            std::scoped_lock lock(stateMutex_);
+            homeArtwork_.markReady(request.key, std::move(loaded.decoded));
         });
     }
 
@@ -5553,20 +5531,18 @@ private:
         const std::string key = profileArtworkKey(saved);
         if (!beginArtworkLoad(profileArtwork_, key)) return;
         tasks_.submit([this, saved, key] {
-            auto bytes = api_.downloadUserImage(saved, 180, 180);
-            if (!bytes.ok) {
-                std::scoped_lock lock(stateMutex_);
-                profileArtwork_.markFailed(key);
-                return;
-            }
-            std::string decodeError;
-            DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
+            ArtworkLoadResult loaded = ArtworkImageLoader::load(
+                [this, saved] { return api_.downloadUserImage(saved, 180, 180); },
+                [this](const std::string& encoded, std::string& error) {
+                    return imageDecoder_.decode(encoded, error);
+                }
+            );
             std::scoped_lock lock(stateMutex_);
-            if (!decoded.valid()) {
+            if (!loaded.ok()) {
                 profileArtwork_.markFailed(key);
                 return;
             }
-            profileArtwork_.markReady(key, std::move(decoded));
+            profileArtwork_.markReady(key, std::move(loaded.decoded));
         });
     }
 
@@ -5587,23 +5563,22 @@ private:
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
             const JellyfinItem jellyfinItem = request.jellyfinItem();
-            auto bytes = request.external
-                ? seerr_.downloadImage(request.externalUrl)
-                : api_.downloadPrimaryImage(session, jellyfinItem, 384, 576);
-            if (!bytes.ok) {
-                std::scoped_lock lock(stateMutex_);
-                artwork_.markFailed(request.key);
-                return;
-            }
-
-            std::string decodeError;
-            DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
+            ArtworkLoadResult loaded = ArtworkImageLoader::load(
+                [this, session, request, jellyfinItem] {
+                    return request.external
+                        ? seerr_.downloadImage(request.externalUrl)
+                        : api_.downloadPrimaryImage(session, jellyfinItem, 384, 576);
+                },
+                [this](const std::string& encoded, std::string& error) {
+                    return imageDecoder_.decode(encoded, error);
+                }
+            );
             std::scoped_lock lock(stateMutex_);
-            if (!decoded.valid()) {
+            if (!loaded.ok()) {
                 artwork_.markFailed(request.key);
                 return;
             }
-            artwork_.markReady(request.key, std::move(decoded));
+            artwork_.markReady(request.key, std::move(loaded.decoded));
         });
     }
 
@@ -5632,20 +5607,20 @@ private:
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
             const JellyfinItem jellyfinItem = request.jellyfinItem();
-            auto bytes = api_.downloadBackdropImage(session, jellyfinItem, 1920, 1080);
-            if (!bytes.ok) {
-                std::scoped_lock lock(stateMutex_);
-                backdrops_.markFailed(request.key);
-                return;
-            }
-            std::string decodeError;
-            DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
+            ArtworkLoadResult loaded = ArtworkImageLoader::load(
+                [this, session, jellyfinItem] {
+                    return api_.downloadBackdropImage(session, jellyfinItem, 1920, 1080);
+                },
+                [this](const std::string& encoded, std::string& error) {
+                    return imageDecoder_.decode(encoded, error);
+                }
+            );
             std::scoped_lock lock(stateMutex_);
-            if (!decoded.valid()) {
+            if (!loaded.ok()) {
                 backdrops_.markFailed(request.key);
                 return;
             }
-            backdrops_.markReady(request.key, std::move(decoded));
+            backdrops_.markReady(request.key, std::move(loaded.decoded));
         });
     }
 
@@ -5669,20 +5644,20 @@ private:
         const JellyfinSession session = session_;
         tasks_.submit([this, session, request] {
             const JellyfinItem jellyfinItem = request.jellyfinItem();
-            auto bytes = api_.downloadLogoImage(session, jellyfinItem, 800, 240);
-            if (!bytes.ok) {
-                std::scoped_lock lock(stateMutex_);
-                logos_.markFailed(request.key);
-                return;
-            }
-            std::string decodeError;
-            DecodedImage decoded = imageDecoder_.decode(bytes.value, decodeError);
+            ArtworkLoadResult loaded = ArtworkImageLoader::load(
+                [this, session, jellyfinItem] {
+                    return api_.downloadLogoImage(session, jellyfinItem, 800, 240);
+                },
+                [this](const std::string& encoded, std::string& error) {
+                    return imageDecoder_.decode(encoded, error);
+                }
+            );
             std::scoped_lock lock(stateMutex_);
-            if (!decoded.valid()) {
+            if (!loaded.ok()) {
                 logos_.markFailed(request.key);
                 return;
             }
-            logos_.markReady(request.key, std::move(decoded));
+            logos_.markReady(request.key, std::move(loaded.decoded));
         });
     }
 
