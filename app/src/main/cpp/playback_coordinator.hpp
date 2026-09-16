@@ -39,6 +39,16 @@ struct PlaybackReleasePlan {
     bool reportStop = false;
 };
 
+struct PlaybackFallbackPlan {
+    int64_t resumeTicks = 0;
+    bool retry = false;
+    bool reportPrevious = false;
+    bool useOfferedTarget = false;
+    bool offeredDirectStream = false;
+    bool forceServerStream = false;
+    bool forceTranscode = false;
+};
+
 inline PlaybackTickPlan planPlaybackTick(
     bool playbackEnded,
     bool playbackPlaying,
@@ -81,6 +91,51 @@ inline PlaybackReleasePlan planPlaybackRelease(
         && !item.id.empty()
         && !target.url.empty();
     return plan;
+}
+
+inline PlaybackFallbackPlan planPlaybackFallback(
+    bool fallbackAttempted,
+    PlaybackMethod currentMethod,
+    bool sessionValid,
+    std::string_view itemId,
+    std::string_view currentUrl,
+    std::string_view fallbackUrl,
+    bool playbackStartReported,
+    int positionMs,
+    bool preferServerStream
+) {
+    PlaybackFallbackPlan plan;
+    if (fallbackAttempted || currentMethod == PlaybackMethod::Transcode || !sessionValid || itemId.empty()) {
+        return plan;
+    }
+
+    plan.retry = true;
+    plan.resumeTicks = playbackTicksFromPositionMs(positionMs);
+    plan.reportPrevious = playbackStartReported && !currentUrl.empty();
+    plan.useOfferedTarget = !fallbackUrl.empty();
+    if (plan.useOfferedTarget) {
+        plan.offeredDirectStream = preferServerStream && transcodingUrlRepresentsDirectStream(fallbackUrl);
+    } else if (preferServerStream) {
+        plan.forceServerStream = true;
+    } else {
+        plan.forceTranscode = true;
+    }
+    return plan;
+}
+
+inline PlaybackTarget offeredPlaybackFallbackTarget(
+    PlaybackTarget target,
+    const PlaybackFallbackPlan& plan
+) {
+    if (!plan.retry || !plan.useOfferedTarget) return target;
+    target.url = target.fallbackTranscodeUrl;
+    target.fallbackTranscodeUrl.clear();
+    target.transcoding = true;
+    target.playMethod = plan.offeredDirectStream
+        ? PlaybackMethod::DirectStream
+        : PlaybackMethod::Transcode;
+    target.startTicks = plan.resumeTicks;
+    return target;
 }
 
 inline PlaybackContinuationPlan planPlaybackContinuation(

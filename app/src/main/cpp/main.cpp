@@ -4636,18 +4636,24 @@ private:
         __android_log_print(ANDROID_LOG_WARN, kTag, "Benchmark build refusing Jellyfin server playback fallback");
         return false;
 #else
-        if (playbackSessionState_.fallbackAttempted()
-            || activeTarget_.playMethod == PlaybackMethod::Transcode
-            || !session_.valid()
-            || activePlaybackItem_.id.empty()) {
-            return false;
-        }
+        const PlaybackFallbackPlan fallbackPlan = planPlaybackFallback(
+            playbackSessionState_.fallbackAttempted(),
+            activeTarget_.playMethod,
+            session_.valid(),
+            activePlaybackItem_.id,
+            activeTarget_.url,
+            activeTarget_.fallbackTranscodeUrl,
+            telemetryState_.playbackStartReported(),
+            playerScreenState_.positionMs(),
+            preferServerStream
+        );
+        if (!fallbackPlan.retry) return false;
 
         const PlaybackTarget failedTarget = activeTarget_;
         JellyfinItem item = activePlaybackItem_;
         const JellyfinSession session = session_;
-        const int64_t resumeTicks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
-        const bool shouldReportPrevious = telemetryState_.playbackStartReported() && !failedTarget.url.empty();
+        const int64_t resumeTicks = fallbackPlan.resumeTicks;
+        const bool shouldReportPrevious = fallbackPlan.reportPrevious;
         item.positionTicks = resumeTicks;
 
         player_.stop();
@@ -4661,7 +4667,7 @@ private:
 
         // Some PlaybackInfo responses include a TranscodingUrl beside DirectPlay. Use
         // that immediately when available; it avoids a second round-trip to Jellyfin.
-        if (!activeTarget_.fallbackTranscodeUrl.empty()) {
+        if (fallbackPlan.useOfferedTarget) {
             if (shouldReportPrevious) {
                 tasks_.submit([this, session, item, failedTarget, resumeTicks] {
                     logPlaybackReportFailure(
@@ -4671,15 +4677,8 @@ private:
                     );
                 });
             }
-            const bool directStreamFallback = preferServerStream
-                && transcodingUrlRepresentsDirectStream(activeTarget_.fallbackTranscodeUrl);
-            activeTarget_.url = std::move(activeTarget_.fallbackTranscodeUrl);
-            activeTarget_.fallbackTranscodeUrl.clear();
-            activeTarget_.transcoding = true;
-            activeTarget_.playMethod = directStreamFallback
-                ? PlaybackMethod::DirectStream
-                : PlaybackMethod::Transcode;
-            activeTarget_.startTicks = resumeTicks;
+            activeTarget_ = offeredPlaybackFallbackTarget(failedTarget, fallbackPlan);
+            const bool directStreamFallback = fallbackPlan.offeredDirectStream;
 
             std::string surfaceError;
             if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
@@ -4701,8 +4700,8 @@ private:
         // SupportsTranscoding=true. Re-negotiate asynchronously with direct paths disabled
         // instead of abandoning playback after an embedded-player prepare failure.
         PlaybackOverrides fallbackOverrides = playbackOverridesFor(settings_);
-        if (preferServerStream) fallbackOverrides.forceServerStream = true;
-        else fallbackOverrides.forceTranscode = true;
+        fallbackOverrides.forceServerStream = fallbackPlan.forceServerStream;
+        fallbackOverrides.forceTranscode = fallbackPlan.forceTranscode;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const int audioStreamIndex = trackState_.selectedAudioServerIndex();
