@@ -4397,15 +4397,19 @@ private:
         const auto session = session_;
         const auto item = activePlaybackItem_;
         const auto target = activeTarget_;
-        const int64_t ticks = completed && item.runtimeTicks > 0
-            ? item.runtimeTicks
-            : playbackTicksFromPositionMs(playerScreenState_.positionMs());
-        const bool shouldReport = reportStop && telemetryState_.playbackStartReported() && session.valid()
-            && !item.id.empty() && !target.url.empty();
+        const PlaybackReleasePlan releasePlan = planPlaybackRelease(
+            reportStop,
+            completed,
+            telemetryState_.playbackStartReported(),
+            session.valid(),
+            item,
+            target,
+            playerScreenState_.positionMs()
+        );
         if (!item.id.empty()) {
             JellyfinItem updated = item;
-            updated.positionTicks = completed ? 0 : ticks;
-            if (completed) updated.played = true;
+            updated.positionTicks = releasePlan.cachedPositionTicks;
+            if (releasePlan.markPlayed) updated.played = true;
             updateCachedUserData(updated);
             if (detail_.id == item.id) {
                 detail_.played = updated.played;
@@ -4427,8 +4431,8 @@ private:
         continuationState_.clearNextEpisode();
         trackState_.resetPlayback();
         playbackSessionState_.resetMediaSegments();
-        if (shouldReport) {
-            tasks_.submit([this, session, item, target, ticks] {
+        if (releasePlan.reportStop) {
+            tasks_.submit([this, session, item, target, ticks = releasePlan.reportTicks] {
                 const ApiResult result = api_.reportPlaybackStopped(session, item, target, ticks);
                 logPlaybackReportFailure("stop", item.id, result);
                 if (!result.ok) return;

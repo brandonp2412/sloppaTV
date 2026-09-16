@@ -32,6 +32,13 @@ struct PlaybackContinuationPlan {
     bool resetAutoplayChain = false;
 };
 
+struct PlaybackReleasePlan {
+    int64_t reportTicks = 0;
+    int64_t cachedPositionTicks = 0;
+    bool markPlayed = false;
+    bool reportStop = false;
+};
+
 inline PlaybackTickPlan planPlaybackTick(
     bool playbackEnded,
     bool playbackPlaying,
@@ -50,6 +57,29 @@ inline PlaybackTickPlan planPlaybackTick(
     plan.requestNextEpisode = !continuationState.nextEpisodeRequested()
         && itemType == "Episode"
         && positionMs >= 30000;
+    return plan;
+}
+
+inline PlaybackReleasePlan planPlaybackRelease(
+    bool requestedStopReport,
+    bool completed,
+    bool playbackStartReported,
+    bool sessionValid,
+    const JellyfinItem& item,
+    const PlaybackTarget& target,
+    int positionMs
+) {
+    PlaybackReleasePlan plan;
+    plan.reportTicks = completed && item.runtimeTicks > 0
+        ? item.runtimeTicks
+        : playbackTicksFromPositionMs(positionMs);
+    plan.cachedPositionTicks = completed ? 0 : plan.reportTicks;
+    plan.markPlayed = completed;
+    plan.reportStop = requestedStopReport
+        && playbackStartReported
+        && sessionValid
+        && !item.id.empty()
+        && !target.url.empty();
     return plan;
 }
 

@@ -49,6 +49,66 @@ int main() {
     assert(!plan.reportProgress);
     assert(!plan.requestNextEpisode);
 
+    JellyfinItem releaseItem;
+    releaseItem.id = "movie-1";
+    releaseItem.runtimeTicks = 900'000'000;
+    PlaybackTarget releaseTarget;
+    releaseTarget.url = "https://media.example/movie-1";
+
+    auto releasePlan = planPlaybackRelease(
+        true,
+        false,
+        true,
+        true,
+        releaseItem,
+        releaseTarget,
+        12345
+    );
+    assert(releasePlan.reportTicks == 123'450'000);
+    assert(releasePlan.cachedPositionTicks == 123'450'000);
+    assert(!releasePlan.markPlayed);
+    assert(releasePlan.reportStop);
+
+    releasePlan = planPlaybackRelease(
+        true,
+        true,
+        true,
+        true,
+        releaseItem,
+        releaseTarget,
+        12345
+    );
+    assert(releasePlan.reportTicks == releaseItem.runtimeTicks);
+    assert(releasePlan.cachedPositionTicks == 0);
+    assert(releasePlan.markPlayed);
+    assert(releasePlan.reportStop);
+
+    releasePlan = planPlaybackRelease(
+        true,
+        false,
+        false,
+        true,
+        releaseItem,
+        releaseTarget,
+        12345
+    );
+    assert(!releasePlan.reportStop);
+
+    releaseItem.runtimeTicks = 0;
+    releasePlan = planPlaybackRelease(
+        false,
+        true,
+        true,
+        true,
+        releaseItem,
+        releaseTarget,
+        54321
+    );
+    assert(releasePlan.reportTicks == 543'210'000);
+    assert(releasePlan.cachedPositionTicks == 0);
+    assert(releasePlan.markPlayed);
+    assert(!releasePlan.reportStop);
+
     JellyfinItem episode1;
     episode1.id = "episode-1";
     JellyfinItem episode2;
