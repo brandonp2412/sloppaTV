@@ -62,6 +62,7 @@ int main() {
         const auto& descriptor = kSettingDescriptors[i];
         assert(settingIndex(descriptor.id) == i);
         assert((descriptor.adjuster != nullptr) == (descriptor.changeEffects != SettingChangeEffect::None));
+        assert(descriptor.valueRenderer != nullptr);
     }
 
     AppSettings adjusted;
