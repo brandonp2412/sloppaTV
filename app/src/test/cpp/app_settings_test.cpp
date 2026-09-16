@@ -38,6 +38,15 @@ int main() {
     assert(isActionSetting(SettingId::Diagnostics));
     assert(isActionSetting(SettingId::AdvancedToggle));
     assert(!isActionSetting(SettingId::SeerrDriveSelection));
+    assert(isAdjustableSetting(SettingId::MaxStreamingBitrate));
+    assert(isAdjustableSetting(SettingId::Screensaver));
+    assert(isAdjustableSetting(SettingId::ExternalPlayer));
+    assert(!isAdjustableSetting(SettingId::Diagnostics));
+    assert(!isAdjustableSetting(SettingId::SeerrConnection));
+    assert(!isAdjustableSetting(SettingId::AdvancedToggle));
+    assert(hasSettingEffect(settingChangeEffects(SettingId::Screensaver), SettingChangeEffect::Save));
+    assert(hasSettingEffect(settingChangeEffects(SettingId::Screensaver), SettingChangeEffect::ResetScreensaver));
+    assert(hasSettingEffect(settingChangeEffects(SettingId::ExternalPlayer), SettingChangeEffect::CycleExternalPlayer));
     assert(settingLabel(SettingId::AdvancedToggle, false) == "ADVANCED SETTINGS");
     assert(settingLabel(SettingId::AdvancedToggle, true) == "BASIC SETTINGS");
     for (size_t i = 0; i < kSettingDescriptors.size(); ++i) {

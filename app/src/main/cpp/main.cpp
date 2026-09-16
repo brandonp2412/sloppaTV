@@ -1386,7 +1386,7 @@ private:
         }
         if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
             const SettingId selection = settingsScreen_.selection();
-            if (selection == SettingId::AdvancedToggle) return;
+            if (!isAdjustableSetting(selection)) return;
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             const SettingChangeEffect effects = adjustSetting(settings_, selection, direction);
             if (effects == SettingChangeEffect::None) return;

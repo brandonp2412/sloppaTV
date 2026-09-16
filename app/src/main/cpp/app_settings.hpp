@@ -113,6 +113,22 @@ enum class SettingId : uint8_t {
     AdvancedToggle,
 };
 
+enum class SettingChangeEffect : uint8_t {
+    None = 0,
+    Save = 1 << 0,
+    RestoreDisplayMode = 1 << 1,
+    ResetScreensaver = 1 << 2,
+    CycleExternalPlayer = 1 << 3,
+};
+
+constexpr SettingChangeEffect operator|(SettingChangeEffect left, SettingChangeEffect right) {
+    return static_cast<SettingChangeEffect>(static_cast<uint8_t>(left) | static_cast<uint8_t>(right));
+}
+
+constexpr bool hasSettingEffect(SettingChangeEffect effects, SettingChangeEffect effect) {
+    return (static_cast<uint8_t>(effects) & static_cast<uint8_t>(effect)) != 0;
+}
+
 struct SettingDescriptor {
     SettingId id;
     std::string_view label;
@@ -120,6 +136,7 @@ struct SettingDescriptor {
     int advancedOrder;
     bool boolean;
     bool action;
+    SettingChangeEffect changeEffects;
 };
 
 inline constexpr int kNoSettingOrder = -1;
@@ -130,40 +147,40 @@ constexpr size_t settingIndex(SettingId setting) {
 }
 
 inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptors{{
-    {SettingId::MaxStreamingBitrate, "MAX STREAMING BITRATE", kNoSettingOrder, 0, false, false},
-    {SettingId::PlaybackBuffer, "PLAYBACK BUFFER", kNoSettingOrder, 1, false, false},
-    {SettingId::SkipBack, "SKIP BACK", 14, kNoSettingOrder, false, false},
-    {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, false, false},
-    {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, false, false},
-    {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, true, false},
-    {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, false, false},
-    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, true, false},
-    {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, true, false},
-    {SettingId::Clock, "CLOCK", 17, kNoSettingOrder, true, false},
-    {SettingId::Backdrops, "BACKDROPS", 1, kNoSettingOrder, false, false},
-    {SettingId::SubtitleSize, "SUBTITLE SIZE", 2, kNoSettingOrder, false, false},
-    {SettingId::SubtitleBackground, "SUBTITLE BACKGROUND", 4, kNoSettingOrder, true, false},
-    {SettingId::SubtitlePosition, "SUBTITLE POSITION", 3, kNoSettingOrder, false, false},
-    {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, false, false},
-    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, false, false},
-    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, false, false},
-    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, false, false},
-    {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, false, false},
-    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, false, false},
-    {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, false, false},
-    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, false, false},
-    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true},
-    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true},
-    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true},
-    {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, false, false},
-    {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, true, false},
-    {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, false, false},
-    {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, false, false},
-    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true},
-    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true},
-    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false},
-    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true},
-    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true},
+    {SettingId::MaxStreamingBitrate, "MAX STREAMING BITRATE", kNoSettingOrder, 0, false, false, SettingChangeEffect::Save},
+    {SettingId::PlaybackBuffer, "PLAYBACK BUFFER", kNoSettingOrder, 1, false, false, SettingChangeEffect::Save},
+    {SettingId::SkipBack, "SKIP BACK", 14, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, false, false, SettingChangeEffect::Save},
+    {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, true, false, SettingChangeEffect::Save},
+    {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, true, false, SettingChangeEffect::Save},
+    {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, true, false, SettingChangeEffect::Save},
+    {SettingId::Clock, "CLOCK", 17, kNoSettingOrder, true, false, SettingChangeEffect::Save},
+    {SettingId::Backdrops, "BACKDROPS", 1, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::SubtitleSize, "SUBTITLE SIZE", 2, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::SubtitleBackground, "SUBTITLE BACKGROUND", 4, kNoSettingOrder, true, false, SettingChangeEffect::Save},
+    {SettingId::SubtitlePosition, "SUBTITLE POSITION", 3, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, false, false, SettingChangeEffect::Save},
+    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, false, false, SettingChangeEffect::Save},
+    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, false, false, SettingChangeEffect::Save},
+    {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, false, false, SettingChangeEffect::Save},
+    {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, false, false, SettingChangeEffect::Save | SettingChangeEffect::ResetScreensaver},
+    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, false, false, SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer},
+    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true, SettingChangeEffect::None},
+    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true, SettingChangeEffect::None},
+    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true, SettingChangeEffect::None},
+    {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, true, false, SettingChangeEffect::Save},
+    {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, false, false, SettingChangeEffect::Save},
+    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true, SettingChangeEffect::None},
+    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true, SettingChangeEffect::None},
+    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false, SettingChangeEffect::Save},
+    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true, SettingChangeEffect::None},
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true, SettingChangeEffect::None},
 }};
 
 constexpr const SettingDescriptor& settingDescriptor(SettingId setting) {
@@ -176,6 +193,14 @@ constexpr bool isBooleanSetting(SettingId setting) {
 
 constexpr bool isActionSetting(SettingId setting) {
     return settingDescriptor(setting).action;
+}
+
+constexpr SettingChangeEffect settingChangeEffects(SettingId setting) {
+    return settingDescriptor(setting).changeEffects;
+}
+
+constexpr bool isAdjustableSetting(SettingId setting) {
+    return settingChangeEffects(setting) != SettingChangeEffect::None;
 }
 
 inline PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
