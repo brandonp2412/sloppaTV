@@ -1,0 +1,95 @@
+#include "artwork_request.hpp"
+
+#include <cassert>
+
+int main() {
+    JellyfinSession session;
+    session.server = "https://jellyfin.example";
+    session.userId = "user-1";
+
+    JellyfinItem item;
+    item.id = "movie-1";
+    item.name = "Large object data should not be copied into artwork requests";
+    item.type = "Movie";
+    item.imageTag = "primary-tag";
+    item.thumbTag = "thumb-tag";
+    item.backdropTag = "backdrop-tag";
+    item.backdropItemId = "backdrop-owner";
+    item.logoTag = "logo-tag";
+    item.logoItemId = "logo-owner";
+
+    assert(profileArtworkKey(session) == "https://jellyfin.example:user:user-1");
+    assert(
+        posterArtworkKey(session, item, false)
+        == "https://jellyfin.example:user:user-1:movie-1:primary:primary-tag"
+    );
+    assert(
+        backdropArtworkKey(session, item, 2)
+        == "https://jellyfin.example:user:user-1:backdrop-owner:backdrop:backdrop-tag:mode:2"
+    );
+    assert(
+        logoArtworkKey(session, item)
+        == "https://jellyfin.example:user:user-1:logo-owner:logo:logo-tag"
+    );
+    assert(
+        homeArtworkKey(session, item, false)
+        == "https://jellyfin.example:user:user-1:movie-1:home:v5-480x270:1:thumb-tag"
+    );
+
+    const PosterArtworkRequest poster = posterArtworkRequest(session, item, false);
+    const JellyfinItem posterItem = poster.jellyfinItem();
+    assert(poster.itemId == item.id);
+    assert(poster.imageTag == item.imageTag);
+    assert(posterItem.id == item.id);
+    assert(posterItem.imageTag == item.imageTag);
+    assert(posterItem.name.empty());
+    assert(posterItem.thumbTag.empty());
+
+    const HomeArtworkRequest home = homeArtworkRequest(session, item, false);
+    const JellyfinItem homeItem = home.jellyfinItem();
+    assert(homeItem.id == item.id);
+    assert(homeItem.type == item.type);
+    assert(homeItem.imageTag == item.imageTag);
+    assert(homeItem.thumbTag == item.thumbTag);
+    assert(homeItem.backdropTag == item.backdropTag);
+    assert(homeItem.backdropItemId == item.backdropItemId);
+    assert(homeItem.name.empty());
+    assert(homeItem.logoTag.empty());
+
+    const BackdropArtworkRequest backdrop = backdropArtworkRequest(session, item, 2);
+    const JellyfinItem backdropItem = backdrop.jellyfinItem();
+    assert(backdropItem.id == item.id);
+    assert(backdropItem.backdropItemId == item.backdropItemId);
+    assert(backdropItem.backdropTag == item.backdropTag);
+    assert(backdropItem.imageTag.empty());
+
+    const LogoArtworkRequest logo = logoArtworkRequest(session, item);
+    const JellyfinItem logoItem = logo.jellyfinItem();
+    assert(logoItem.id == item.id);
+    assert(logoItem.logoItemId == item.logoItemId);
+    assert(logoItem.logoTag == item.logoTag);
+    assert(logoItem.backdropTag.empty());
+
+    item.externalPosterUrl = "https://images.example/poster.jpg";
+    item.externalBackdropUrl = "https://images.example/backdrop.jpg";
+    assert(
+        posterArtworkKey(session, item, true)
+        == "seerr:poster:https://images.example/poster.jpg"
+    );
+    assert(
+        homeArtworkKey(session, item, true)
+        == "seerr:home:https://images.example/backdrop.jpg"
+    );
+    const PosterArtworkRequest externalPoster = posterArtworkRequest(session, item, true);
+    assert(externalPoster.external);
+    assert(externalPoster.externalUrl == item.externalPosterUrl);
+    const HomeArtworkRequest externalHome = homeArtworkRequest(session, item, true);
+    assert(externalHome.external);
+    assert(externalHome.externalUrl == item.externalBackdropUrl);
+
+    item.externalBackdropUrl.clear();
+    const HomeArtworkRequest externalHomeFallback = homeArtworkRequest(session, item, true);
+    assert(externalHomeFallback.externalUrl == item.externalPosterUrl);
+    assert(externalHomeFallback.key == "seerr:home:https://images.example/poster.jpg");
+    return 0;
+}

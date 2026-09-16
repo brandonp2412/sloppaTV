@@ -18,6 +18,7 @@ CPP_TESTS = [
     "app_settings_test.cpp",
     "audio_policy_test.cpp",
     "artwork_cache_test.cpp",
+    "artwork_request_test.cpp",
     "browse_screen_test.cpp",
     "deep_link_test.cpp",
     "details_screen_test.cpp",
