@@ -6,9 +6,7 @@
 
 #include "account_screen.hpp"
 #include "app_settings.hpp"
-#include "artwork_coordinator.hpp"
-#include "artwork_loader.hpp"
-#include "artwork_request.hpp"
+#include "artwork_provider.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
 #include "details_screen.hpp"
@@ -333,11 +331,29 @@ public:
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }
           ),
-          artworkLoader_(api_, seerr_, imageDecoder_),
-          artwork_(tasks_, stateMutex_) {
+          artwork_(
+              api_,
+              seerr_,
+              imageDecoder_,
+              tasks_,
+              stateMutex_,
+              [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
+                  if (loaded.ok()) return;
+                  __android_log_print(
+                      ANDROID_LOG_WARN,
+                      kTag,
+                      loaded.failure == ArtworkLoadFailure::Download
+                          ? "Home artwork download failed item=%s type=%s reason=%s"
+                          : "Home artwork decode failed item=%s type=%s reason=%s",
+                      request.itemId.c_str(),
+                      request.itemType.c_str(),
+                      loaded.error.c_str()
+                  );
+              }
+          ) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
-        artworkLoader_.setDataPath(dataPath_);
+        artwork_.setDataPath(dataPath_);
         loadBundledBrandMark();
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
@@ -2801,7 +2817,7 @@ private:
         if (!saved) return;
         const JellyfinSession removed = *saved;
         const bool removedCurrent = SessionRegistry::sameIdentity(session_, removed);
-        artwork_.eraseProfile(profileArtworkKey(removed), renderer_);
+        artwork_.eraseProfile(removed, renderer_);
         sessionRegistry_.eraseAt(index);
         if (removedCurrent) {
             clearCurrentSessionUi();
@@ -3414,7 +3430,7 @@ private:
                     homeRetryAt_ = {};
                     homeRetryAttempt_ = 0;
                     const JellyfinSession expired = session_;
-                    artwork_.eraseProfile(profileArtworkKey(expired), renderer_);
+                    artwork_.eraseProfile(expired, renderer_);
                     sessionRegistry_.removeIdentity(expired);
                     requestEpochs_.invalidateAll();
                     loading_ = false;
@@ -5355,30 +5371,6 @@ private:
     }
 
 
-    void requestHomeArtwork(const JellyfinItem& item) {
-        if (!session_.valid() || item.id.empty()) return;
-        const HomeArtworkRequest request = homeArtworkRequest(session_, item, isSeerrItem(item));
-        const JellyfinSession session = session_;
-        artwork_.loadHome(
-            request.key,
-            renderer_,
-            [this, session, request] { return artworkLoader_.loadHome(session, request); },
-            [request](const ArtworkLoadResult& loaded) {
-                if (loaded.ok()) return;
-                __android_log_print(
-                    ANDROID_LOG_WARN,
-                    kTag,
-                    loaded.failure == ArtworkLoadFailure::Download
-                        ? "Home artwork download failed item=%s type=%s reason=%s"
-                        : "Home artwork decode failed item=%s type=%s reason=%s",
-                    request.itemId.c_str(),
-                    request.itemType.c_str(),
-                    loaded.error.c_str()
-                );
-            }
-        );
-    }
-
     void drawCoverTexture(
         const ArtworkEntry& entry,
         float x,
@@ -5418,9 +5410,7 @@ private:
         float radius = material_tv::cornerSmall,
         float alpha = 1.0f
     ) {
-        if (item.id.empty()) return false;
-        const std::string key = homeArtworkKey(session_, item, isSeerrItem(item));
-        ArtworkEntry* entry = artwork_.homeTexture(key, renderer_, [&] { requestHomeArtwork(item); });
+        ArtworkEntry* entry = artwork_.homeTexture(session_, item, isSeerrItem(item), renderer_);
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, width, height, alpha, radius);
         return true;
@@ -5432,7 +5422,10 @@ private:
         if (items.empty()) return;
         const int begin = std::max(0, selection - 2);
         const int end = std::min(static_cast<int>(items.size()), selection + 7);
-        for (int index = begin; index < end; ++index) requestHomeArtwork(items[static_cast<size_t>(index)]);
+        for (int index = begin; index < end; ++index) {
+            const auto& item = items[static_cast<size_t>(index)];
+            artwork_.requestHome(session_, item, isSeerrItem(item), renderer_);
+        }
     }
 
     void prefetchBrowseArtworkAhead() {
@@ -5450,40 +5443,22 @@ private:
         );
         for (int index = begin; index < end; ++index) {
             const auto& item = items[static_cast<size_t>(index)];
-            if (usesLandscapeMediaCard(item.type)) requestHomeArtwork(item);
-            else requestArtwork(item);
+            if (usesLandscapeMediaCard(item.type)) {
+                artwork_.requestHome(session_, item, isSeerrItem(item), renderer_);
+            } else {
+                artwork_.requestPoster(session_, item, isSeerrItem(item), renderer_);
+            }
         }
     }
 
-    void requestProfileArtwork(const JellyfinSession& saved) {
-        if (!saved.valid()) return;
-        const std::string key = profileArtworkKey(saved);
-        artwork_.loadProfile(
-            key,
-            renderer_,
-            [this, saved] { return artworkLoader_.loadProfile(saved); }
-        );
-    }
 
     bool drawProfileArtwork(const JellyfinSession& saved, float x, float y, float size) {
-        if (!saved.valid()) return false;
-        const std::string key = profileArtworkKey(saved);
-        ArtworkEntry* entry = artwork_.profileTexture(key, renderer_, [&] { requestProfileArtwork(saved); });
+        ArtworkEntry* entry = artwork_.profileTexture(saved, renderer_);
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, size, size, 1.0f, size * 0.5f);
         return true;
     }
 
-    void requestArtwork(const JellyfinItem& item) {
-        if (!session_.valid() || item.id.empty()) return;
-        const PosterArtworkRequest request = posterArtworkRequest(session_, item, isSeerrItem(item));
-        const JellyfinSession session = session_;
-        artwork_.loadPoster(
-            request.key,
-            renderer_,
-            [this, session, request] { return artworkLoader_.loadPoster(session, request); }
-        );
-    }
 
     bool drawArtwork(
         const JellyfinItem& item,
@@ -5494,29 +5469,15 @@ private:
         float alpha = 1.0f,
         float radius = material_tv::cornerSmall
     ) {
-        if (item.id.empty()) return false;
-        const std::string key = posterArtworkKey(session_, item, isSeerrItem(item));
-        ArtworkEntry* entry = artwork_.posterTexture(key, renderer_, [&] { requestArtwork(item); });
+        ArtworkEntry* entry = artwork_.posterTexture(session_, item, isSeerrItem(item), renderer_);
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, width, height, alpha, radius);
         return true;
     }
 
-    void requestBackdrop(const JellyfinItem& item) {
-        if (!session_.valid() || item.id.empty() || item.backdropTag.empty() || settings_.backdropMode <= 0) return;
-        const BackdropArtworkRequest request = backdropArtworkRequest(session_, item, settings_.backdropMode);
-        const JellyfinSession session = session_;
-        artwork_.loadBackdrop(
-            request.key,
-            renderer_,
-            [this, session, request] { return artworkLoader_.loadBackdrop(session, request); }
-        );
-    }
 
     bool drawBackdrop(const JellyfinItem& item, float alpha = 0.28f) {
-        if (settings_.backdropMode <= 0 || item.id.empty() || item.backdropTag.empty()) return false;
-        const std::string key = backdropArtworkKey(session_, item, settings_.backdropMode);
-        ArtworkEntry* entry = artwork_.backdropTexture(key, renderer_, [&] { requestBackdrop(item); });
+        ArtworkEntry* entry = artwork_.backdropTexture(session_, item, settings_.backdropMode, renderer_);
         if (!entry) return false;
         const float effectiveAlpha = settings_.backdropMode == 1 ? std::max(alpha, 0.34f) : alpha;
         drawCoverTexture(
@@ -5525,21 +5486,9 @@ private:
         return true;
     }
 
-    void requestLogo(const JellyfinItem& item) {
-        if (!session_.valid() || item.id.empty() || item.logoTag.empty()) return;
-        const LogoArtworkRequest request = logoArtworkRequest(session_, item);
-        const JellyfinSession session = session_;
-        artwork_.loadLogo(
-            request.key,
-            renderer_,
-            [this, session, request] { return artworkLoader_.loadLogo(session, request); }
-        );
-    }
 
     bool drawLogo(const JellyfinItem& item, float x, float y, float maxWidth, float maxHeight) {
-        if (item.id.empty() || item.logoTag.empty()) return false;
-        const std::string key = logoArtworkKey(session_, item);
-        ArtworkEntry* entry = artwork_.logoTexture(key, renderer_, [&] { requestLogo(item); });
+        ArtworkEntry* entry = artwork_.logoTexture(session_, item, renderer_);
         if (!entry || entry->sourceWidth <= 0 || entry->sourceHeight <= 0) return false;
         const float aspect = static_cast<float>(entry->sourceWidth) / static_cast<float>(entry->sourceHeight);
         float width = maxWidth;
@@ -7965,7 +7914,7 @@ private:
         hiddenHomeItems_ = std::move(stored.hiddenHomeItems);
         settings_ = std::move(stored.settings);
         if (session_.valid()) {
-            artwork_.eraseProfile(profileArtworkKey(session_), renderer_);
+            artwork_.eraseProfile(session_, renderer_);
             sessionRegistry_.remember(session_, deviceId_);
         }
         playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
@@ -7974,7 +7923,7 @@ private:
 
     void saveSession(const JellyfinSession& session) {
         if (session.valid()) {
-            artwork_.eraseProfile(profileArtworkKey(session), renderer_);
+            artwork_.eraseProfile(session, renderer_);
             sessionRegistry_.remember(session, deviceId_);
         }
         StoredSessionState stored;
@@ -8003,8 +7952,7 @@ private:
     TaskRunner tasks_;
 
     mutable std::recursive_mutex stateMutex_;
-    ArtworkLoader<JellyfinClient, SeerrClient, JniImageDecoder> artworkLoader_;
-    ArtworkCoordinator<TaskRunner, std::recursive_mutex> artwork_;
+    ArtworkProvider<JellyfinClient, SeerrClient, JniImageDecoder, TaskRunner, std::recursive_mutex> artwork_;
     RequestEpochs requestEpochs_;
     std::string dataPath_;
     std::string deviceId_;

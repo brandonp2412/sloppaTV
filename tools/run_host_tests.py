@@ -22,6 +22,7 @@ CPP_TESTS = [
     "artwork_image_loader_test.cpp",
     "artwork_loader_test.cpp",
     "artwork_pipeline_test.cpp",
+    "artwork_provider_test.cpp",
     "artwork_request_test.cpp",
     "artwork_texture_cache_test.cpp",
     "browse_screen_test.cpp",
