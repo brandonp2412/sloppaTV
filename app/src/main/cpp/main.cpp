@@ -35,6 +35,7 @@
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
+#include "seerr_connection_state.hpp"
 #include "seerr_jellyfin_adapter.hpp"
 #include "seerr_request_state.hpp"
 #include "seerr_storage_state.hpp"
@@ -3556,7 +3557,7 @@ private:
     }
 
     void connectSeerrAsync(bool announce = true) {
-        if (seerrConnectLoading_) return;
+        if (seerrConnectionState_.connecting()) return;
         if (settings_.seerrServer.empty()) {
             if (announce) showNotice("SET THE SEERR SERVER FIRST", 4s);
             return;
@@ -3567,7 +3568,7 @@ private:
         }
         const std::string server = settings_.seerrServer;
         const JellyfinSession jellyfin = session_;
-        seerrConnectLoading_ = true;
+        if (!seerrConnectionState_.beginConnect()) return;
         if (announce) {
             error_.clear();
             showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);
@@ -3576,41 +3577,36 @@ private:
             auto initiated = seerr_.initiateQuickConnect(server);
             if (!initiated.ok) {
                 std::scoped_lock lock(stateMutex_);
-                seerrConnectLoading_ = false;
+                seerrConnectionState_.failConnect();
                 if (announce) {
                     notice_.clear();
                     error_ = "SEERR QUICK CONNECT: " + initiated.error;
                 } else {
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s", initiated.error.c_str());
                 }
-                seerrRetrySearchAfterConnect_ = false;
-                queuedSeerrRequestAfterConnect_.reset();
                 return;
             }
             auto authorized = api_.authorizeQuickConnectCode(jellyfin, initiated.value.code);
             if (!authorized.ok || !authorized.value) {
                 std::scoped_lock lock(stateMutex_);
-                seerrConnectLoading_ = false;
+                seerrConnectionState_.failConnect();
                 if (announce) {
                     notice_.clear();
                     error_ = "JELLYFIN QUICK CONNECT: " + authorized.error;
                 } else {
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s", authorized.error.c_str());
                 }
-                seerrRetrySearchAfterConnect_ = false;
-                queuedSeerrRequestAfterConnect_.reset();
                 return;
             }
             auto authenticated = seerr_.authenticateQuickConnect(server, initiated.value);
             std::scoped_lock lock(stateMutex_);
-            seerrConnectLoading_ = false;
+            seerrConnectionState_.endConnect();
             if (announce) notice_.clear();
             if (settings_.seerrServer != server || session_.userId != jellyfin.userId) return;
             if (!authenticated.ok) {
                 if (announce) error_ = "SEERR QUICK CONNECT: " + authenticated.error;
                 else __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s", authenticated.error.c_str());
-                seerrRetrySearchAfterConnect_ = false;
-                queuedSeerrRequestAfterConnect_.reset();
+                seerrConnectionState_.failConnect();
                 return;
             }
             settings_.seerrSessionCookie = std::move(authenticated.value);
@@ -3622,17 +3618,11 @@ private:
             __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
             refreshSeerrPendingAsync();
             refreshSeerrStorageAsync(true);
-            if (queuedSeerrRequestAfterConnect_) {
-                SeerrMediaItem queued = *queuedSeerrRequestAfterConnect_;
-                queuedSeerrRequestAfterConnect_.reset();
-                requestSeerrMediaAsync(queued);
-            }
-            if (seerrRetrySearchAfterConnect_ && screen_ == Screen::Search && !searchState_.query().empty()) {
-                seerrRetrySearchAfterConnect_ = false;
+            auto deferred = seerrConnectionState_.takeDeferredWork();
+            if (deferred.request) requestSeerrMediaAsync(*deferred.request);
+            if (deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
                 (void)searchState_.scheduleSeerrDebounce(std::chrono::steady_clock::now(), false);
                 searchSeerrAsync(true);
-            } else {
-                seerrRetrySearchAfterConnect_ = false;
             }
         });
     }
@@ -3798,8 +3788,8 @@ private:
             showNotice("CONNECT SEERR IN SETTINGS FIRST", 5s);
             return;
         }
-        if (seerrConnectLoading_) {
-            queuedSeerrRequestAfterConnect_ = item;
+        if (seerrConnectionState_.connecting()) {
+            seerrConnectionState_.deferRequest(item);
             showNotice("REFRESHING SEERR SESSION…", 4s);
             return;
         }
@@ -3839,8 +3829,8 @@ private:
     }
 
     void searchSeerrAsync(bool immediate) {
-        if (seerrConnectLoading_) {
-            seerrRetrySearchAfterConnect_ = true;
+        if (seerrConnectionState_.connecting()) {
+            seerrConnectionState_.deferSearchRetry();
             searchState_.setSeerrLoading(false);
             return;
         }
@@ -3852,7 +3842,7 @@ private:
             : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
         if (!shouldStart) return;
 
-        if (!seerrConnectLoading_) refreshSeerrStorageAsync();
+        if (!seerrConnectionState_.connecting()) refreshSeerrStorageAsync();
         const std::string query = searchState_.query();
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
         tasks_.submit([this, seerrServer, auth, query, generation] {
@@ -3866,7 +3856,7 @@ private:
             if (!result.ok) {
                 (void) searchState_.failSeerrSearch(query, result.error);
                 if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
-                    seerrRetrySearchAfterConnect_ = true;
+                    seerrConnectionState_.deferSearchRetry();
                     connectSeerrAsync(false);
                 }
                 return;
@@ -7944,10 +7934,8 @@ private:
     JellyfinHomeData home_;
     SeerrRequestState seerrRequestState_;
     SeerrStorageState seerrStorageState_;
+    SeerrConnectionState seerrConnectionState_;
     bool homeRefreshAfterPlaybackStop_ = false;
-    bool seerrConnectLoading_ = false;
-    bool seerrRetrySearchAfterConnect_ = false;
-    std::optional<SeerrMediaItem> queuedSeerrRequestAfterConnect_;
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

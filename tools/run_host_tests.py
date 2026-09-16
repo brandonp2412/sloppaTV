@@ -50,6 +50,7 @@ CPP_TESTS = [
     "request_epoch_test.cpp",
     "screensaver_policy_test.cpp",
     "search_screen_test.cpp",
+    "seerr_connection_state_test.cpp",
     "seerr_media_test.cpp",
     "seerr_request_state_test.cpp",
     "seerr_storage_state_test.cpp",
