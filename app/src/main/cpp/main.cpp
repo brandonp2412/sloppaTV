@@ -37,6 +37,7 @@
 #include "seerr.hpp"
 #include "seerr_jellyfin_adapter.hpp"
 #include "seerr_request_state.hpp"
+#include "seerr_storage_state.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
@@ -584,7 +585,7 @@ public:
             settings_.seerrServer = text;
             if (changed) {
                 settings_.seerrSessionCookie.clear();
-                seerrStorage_.clear();
+                seerrStorageState_.clearTargets();
             }
             systemTextInputOriginal_.clear();
             saveSession(session_);
@@ -2532,29 +2533,23 @@ private:
 
     void handleSeerrDrivePickerKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            pendingSeerrRequest_.reset();
-            seerrDriveChoices_.clear();
+            seerrStorageState_.cancelPicker();
             popScreen(Screen::Search);
             return;
         }
-        if (seerrDriveChoices_.empty()) return;
-        seerrDriveSelection_ = std::clamp(
-            seerrDriveSelection_, 0, static_cast<int>(seerrDriveChoices_.size()) - 1);
+        if (seerrStorageState_.driveChoices().empty()) return;
         if (key == AKEYCODE_DPAD_UP) {
-            seerrDriveSelection_ = std::max(0, seerrDriveSelection_ - 1);
+            seerrStorageState_.moveSelection(-1);
         } else if (key == AKEYCODE_DPAD_DOWN) {
-            seerrDriveSelection_ = std::min(static_cast<int>(seerrDriveChoices_.size()) - 1, seerrDriveSelection_ + 1);
+            seerrStorageState_.moveSelection(1);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (!pendingSeerrRequest_) return;
-            const SeerrMediaItem item = *pendingSeerrRequest_;
-            const SeerrStorageTarget target = seerrDriveChoices_[static_cast<size_t>(seerrDriveSelection_)];
+            const auto selected = seerrStorageState_.takeSelection();
+            if (!selected) return;
             __android_log_print(
                 ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
-                item.mediaType.c_str(), target.serverId, target.path.c_str());
-            pendingSeerrRequest_.reset();
-            seerrDriveChoices_.clear();
+                selected->item.mediaType.c_str(), selected->target.serverId, selected->target.path.c_str());
             popScreen(Screen::Search);
-            requestSeerrMediaAsync(item, &target, true);
+            requestSeerrMediaAsync(selected->item, &selected->target, true);
         }
     }
 
@@ -2757,8 +2752,8 @@ private:
         }
         session_ = {};
         settings_.seerrSessionCookie.clear();
-        seerrStorage_.clear();
-        seerrStorageRefreshAt_ = {};
+        seerrStorageState_.clearTargets();
+        seerrStorageState_.clearRefreshDeadline();
         serverInfo_ = {};
         serverInfoLoading_ = false;
         home_ = {};
@@ -3440,7 +3435,7 @@ private:
                     session_.token.clear();
                     session_.userId.clear();
                     settings_.seerrSessionCookie.clear();
-                    seerrStorage_.clear();
+                    seerrStorageState_.clearTargets();
                     resetNavigation(Screen::Login);
                     error_ = "SESSION EXPIRED - LOG IN AGAIN";
                     saveSession(session_);
@@ -3646,44 +3641,38 @@ private:
         const std::string server = settings_.seerrServer;
         const SeerrAuth auth = seerrAuth();
         if (!SeerrClient::configured(server, auth)) {
-            seerrStorage_.clear();
-            seerrStorageLoading_ = false;
-            seerrStorageRefreshAt_ = {};
+            seerrStorageState_.resetUnavailable();
             return;
         }
         const auto now = std::chrono::steady_clock::now();
-        if (seerrStorageLoading_ || (!force && seerrStorageRefreshAt_ != std::chrono::steady_clock::time_point{} && now < seerrStorageRefreshAt_)) return;
-        seerrStorageLoading_ = true;
+        if (!seerrStorageState_.beginRefresh(force, now)) return;
         tasks_.submit([this, server, auth] {
             auto result = seerr_.storageTargets(server, auth);
             std::scoped_lock lock(stateMutex_);
             if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) {
-                seerrStorageLoading_ = false;
+                seerrStorageState_.invalidateRefresh();
                 return;
             }
-            seerrStorageLoading_ = false;
             if (!result.ok) {
-                seerrStorageRefreshAt_ = {};
-                seerrStorageError_ = result.error;
+                seerrStorageState_.failRefresh(result.error);
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
                 if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
                     connectSeerrAsync(false);
                     return;
                 }
-                if (pendingSeerrRequest_) {
-                    pendingSeerrRequest_.reset();
+                if (seerrStorageState_.pendingRequest()) {
+                    seerrStorageState_.clearPendingRequest();
                     showNotice("SEERR STORAGE: " + result.error, 5s);
                 }
                 return;
             }
-            seerrStorageRefreshAt_ = std::chrono::steady_clock::now() + 60s;
-            seerrStorageError_.clear();
-            seerrStorage_ = std::move(result.value);
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets", seerrStorage_.size());
-            if (pendingSeerrRequest_ && settings_.seerrSelectDrive) {
-                const SeerrMediaItem item = *pendingSeerrRequest_;
-                pendingSeerrRequest_.reset();
-                openSeerrDrivePicker(item);
+            seerrStorageState_.finishRefresh(std::move(result.value), std::chrono::steady_clock::now());
+            __android_log_print(
+                ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
+                seerrStorageState_.targets().size());
+            if (seerrStorageState_.pendingRequest() && settings_.seerrSelectDrive) {
+                const auto item = seerrStorageState_.takePendingRequest();
+                if (item) openSeerrDrivePicker(*item);
             }
         });
     }
@@ -3704,33 +3693,23 @@ private:
     }
 
     void openSeerrDrivePicker(const SeerrMediaItem& item) {
-        seerrDriveChoices_.clear();
-        for (const auto& target : seerrStorage_) {
-            if (target.mediaType == item.mediaType) seerrDriveChoices_.push_back(target);
-        }
-        if (seerrDriveChoices_.empty()) {
-            if (seerrStorageLoading_) {
-                pendingSeerrRequest_ = item;
-                showNotice("LOADING SEERR STORAGE…", 4s);
-            } else {
-                pendingSeerrRequest_.reset();
-                showNotice(
-                    seerrStorageError_.empty()
-                        ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
-                        : "SEERR STORAGE: " + seerrStorageError_,
-                    5s
-                );
-            }
+        const auto status = seerrStorageState_.preparePicker(item);
+        if (status == SeerrStorageState::PickerStatus::Loading) {
+            showNotice("LOADING SEERR STORAGE…", 4s);
             return;
         }
-        std::stable_sort(seerrDriveChoices_.begin(), seerrDriveChoices_.end(), [](const auto& a, const auto& b) {
-            return a.isDefault > b.isDefault;
-        });
-        pendingSeerrRequest_ = item;
-        seerrDriveSelection_ = 0;
+        if (status == SeerrStorageState::PickerStatus::Unavailable) {
+            showNotice(
+                seerrStorageState_.error().empty()
+                    ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
+                    : "SEERR STORAGE: " + seerrStorageState_.error(),
+                5s
+            );
+            return;
+        }
         __android_log_print(
             ANDROID_LOG_INFO, kTag, "Opening Seerr storage picker media=%s choices=%zu",
-            item.mediaType.c_str(), seerrDriveChoices_.size());
+            item.mediaType.c_str(), seerrStorageState_.driveChoices().size());
         if (screen_ != Screen::SeerrDrivePicker) pushScreen(Screen::SeerrDrivePicker);
     }
 
@@ -3828,7 +3807,7 @@ private:
             // A deliberate request should not be blocked by a cached empty result.
             // Force discovery when there are no known targets and let the pending
             // item automatically open the picker when discovery completes.
-            refreshSeerrStorageAsync(seerrStorage_.empty());
+            refreshSeerrStorageAsync(seerrStorageState_.empty());
             openSeerrDrivePicker(item);
             return;
         }
@@ -6518,7 +6497,8 @@ private:
                 float badgeRight = 1848.0f;
                 int shownDrives = 0;
                 std::unordered_set<std::string> shownStorage;
-                for (auto it = seerrStorage_.rbegin(); it != seerrStorage_.rend() && shownDrives < 5; ++it) {
+                const auto& storageTargets = seerrStorageState_.targets();
+                for (auto it = storageTargets.rbegin(); it != storageTargets.rend() && shownDrives < 5; ++it) {
                     const std::string identity = it->path + ":" + std::to_string(it->totalSpace);
                     if (!shownStorage.insert(identity).second || it->totalSpace <= 0) continue;
                     const int percent = std::clamp(it->usedPercent(), 0, 100);
@@ -6537,7 +6517,7 @@ private:
                     badgeRight = badgeX - 10.0f;
                     ++shownDrives;
                 }
-                if (seerrStorageLoading_ && shownDrives == 0) {
+                if (seerrStorageState_.loading() && shownDrives == 0) {
                     renderer_.text(1635.0f, labelY + 1.0f, 1.30f, "Loading storage…", kMuted, 210.0f);
                 }
 
@@ -6630,22 +6610,25 @@ private:
 
     void renderSeerrDrivePicker() {
         renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
-        const std::string subtitle = !pendingSeerrRequest_ || pendingSeerrRequest_->name.empty()
+        const auto& pendingRequest = seerrStorageState_.pendingRequest();
+        const std::string subtitle = !pendingRequest || pendingRequest->name.empty()
             ? "Choose where Seerr should place this request"
-            : "Choose storage for " + pendingSeerrRequest_->name;
+            : "Choose storage for " + pendingRequest->name;
         renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
 
-        if (seerrDriveChoices_.empty()) {
+        const auto& driveChoices = seerrStorageState_.driveChoices();
+        if (driveChoices.empty()) {
             renderEmptyState("No storage targets", "Back returns to search.");
             return;
         }
 
-        const int first = std::clamp(seerrDriveSelection_ - 2, 0, std::max(0, static_cast<int>(seerrDriveChoices_.size()) - 5));
+        const int driveSelection = seerrStorageState_.driveSelection();
+        const int first = std::clamp(driveSelection - 2, 0, std::max(0, static_cast<int>(driveChoices.size()) - 5));
         for (int slot = 0; slot < 5; ++slot) {
             const int index = first + slot;
-            if (index >= static_cast<int>(seerrDriveChoices_.size())) break;
-            const auto& target = seerrDriveChoices_[static_cast<size_t>(index)];
-            const bool focused = index == seerrDriveSelection_;
+            if (index >= static_cast<int>(driveChoices.size())) break;
+            const auto& target = driveChoices[static_cast<size_t>(index)];
+            const bool focused = index == driveSelection;
             const float x = 120.0f;
             const float y = 220.0f + static_cast<float>(slot) * 145.0f;
             constexpr float width = 1680.0f;
@@ -7960,14 +7943,8 @@ private:
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
     SeerrRequestState seerrRequestState_;
+    SeerrStorageState seerrStorageState_;
     bool homeRefreshAfterPlaybackStop_ = false;
-    std::vector<SeerrStorageTarget> seerrStorage_;
-    bool seerrStorageLoading_ = false;
-    std::string seerrStorageError_;
-    std::chrono::steady_clock::time_point seerrStorageRefreshAt_{};
-    std::optional<SeerrMediaItem> pendingSeerrRequest_;
-    std::vector<SeerrStorageTarget> seerrDriveChoices_;
-    int seerrDriveSelection_ = 0;
     bool seerrConnectLoading_ = false;
     bool seerrRetrySearchAfterConnect_ = false;
     std::optional<SeerrMediaItem> queuedSeerrRequestAfterConnect_;
