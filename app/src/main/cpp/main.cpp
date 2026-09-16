@@ -35,6 +35,7 @@
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
+#include "seerr_jellyfin_adapter.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
@@ -2530,7 +2531,7 @@ private:
 
     void handleSeerrDrivePickerKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            pendingSeerrRequest_ = {};
+            pendingSeerrRequest_.reset();
             seerrDriveChoices_.clear();
             popScreen(Screen::Search);
             return;
@@ -2543,15 +2544,16 @@ private:
         } else if (key == AKEYCODE_DPAD_DOWN) {
             seerrDriveSelection_ = std::min(static_cast<int>(seerrDriveChoices_.size()) - 1, seerrDriveSelection_ + 1);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const JellyfinItem item = pendingSeerrRequest_;
+            if (!pendingSeerrRequest_) return;
+            const SeerrMediaItem item = *pendingSeerrRequest_;
             const SeerrStorageTarget target = seerrDriveChoices_[static_cast<size_t>(seerrDriveSelection_)];
             __android_log_print(
                 ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
-                item.externalMediaType.c_str(), target.serverId, target.path.c_str());
-            pendingSeerrRequest_ = {};
+                item.mediaType.c_str(), target.serverId, target.path.c_str());
+            pendingSeerrRequest_.reset();
             seerrDriveChoices_.clear();
             popScreen(Screen::Search);
-            requestSeerrItemAsync(item, &target, true);
+            requestSeerrMediaAsync(item, &target, true);
         }
     }
 
@@ -3588,7 +3590,7 @@ private:
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s", initiated.error.c_str());
                 }
                 seerrRetrySearchAfterConnect_ = false;
-                queuedSeerrRequestAfterConnect_ = {};
+                queuedSeerrRequestAfterConnect_.reset();
                 return;
             }
             auto authorized = api_.authorizeQuickConnectCode(jellyfin, initiated.value.code);
@@ -3602,7 +3604,7 @@ private:
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s", authorized.error.c_str());
                 }
                 seerrRetrySearchAfterConnect_ = false;
-                queuedSeerrRequestAfterConnect_ = {};
+                queuedSeerrRequestAfterConnect_.reset();
                 return;
             }
             auto authenticated = seerr_.authenticateQuickConnect(server, initiated.value);
@@ -3614,7 +3616,7 @@ private:
                 if (announce) error_ = "SEERR QUICK CONNECT: " + authenticated.error;
                 else __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s", authenticated.error.c_str());
                 seerrRetrySearchAfterConnect_ = false;
-                queuedSeerrRequestAfterConnect_ = {};
+                queuedSeerrRequestAfterConnect_.reset();
                 return;
             }
             settings_.seerrSessionCookie = std::move(authenticated.value);
@@ -3626,10 +3628,10 @@ private:
             __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
             refreshSeerrPendingAsync();
             refreshSeerrStorageAsync(true);
-            if (!queuedSeerrRequestAfterConnect_.id.empty()) {
-                JellyfinItem queued = queuedSeerrRequestAfterConnect_;
-                queuedSeerrRequestAfterConnect_ = {};
-                requestSeerrItemAsync(queued);
+            if (queuedSeerrRequestAfterConnect_) {
+                SeerrMediaItem queued = *queuedSeerrRequestAfterConnect_;
+                queuedSeerrRequestAfterConnect_.reset();
+                requestSeerrMediaAsync(queued);
             }
             if (seerrRetrySearchAfterConnect_ && screen_ == Screen::Search && !searchState_.query().empty()) {
                 seerrRetrySearchAfterConnect_ = false;
@@ -3669,8 +3671,8 @@ private:
                     connectSeerrAsync(false);
                     return;
                 }
-                if (!pendingSeerrRequest_.id.empty()) {
-                    pendingSeerrRequest_ = {};
+                if (pendingSeerrRequest_) {
+                    pendingSeerrRequest_.reset();
                     showNotice("SEERR STORAGE: " + result.error, 5s);
                 }
                 return;
@@ -3679,9 +3681,9 @@ private:
             seerrStorageError_.clear();
             seerrStorage_ = std::move(result.value);
             __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets", seerrStorage_.size());
-            if (!pendingSeerrRequest_.id.empty() && settings_.seerrSelectDrive) {
-                const JellyfinItem item = pendingSeerrRequest_;
-                pendingSeerrRequest_ = {};
+            if (pendingSeerrRequest_ && settings_.seerrSelectDrive) {
+                const SeerrMediaItem item = *pendingSeerrRequest_;
+                pendingSeerrRequest_.reset();
                 openSeerrDrivePicker(item);
             }
         });
@@ -3702,17 +3704,17 @@ private:
         return value.str();
     }
 
-    void openSeerrDrivePicker(const JellyfinItem& item) {
+    void openSeerrDrivePicker(const SeerrMediaItem& item) {
         seerrDriveChoices_.clear();
         for (const auto& target : seerrStorage_) {
-            if (target.mediaType == item.externalMediaType) seerrDriveChoices_.push_back(target);
+            if (target.mediaType == item.mediaType) seerrDriveChoices_.push_back(target);
         }
         if (seerrDriveChoices_.empty()) {
             if (seerrStorageLoading_) {
                 pendingSeerrRequest_ = item;
                 showNotice("LOADING SEERR STORAGE…", 4s);
             } else {
-                pendingSeerrRequest_ = {};
+                pendingSeerrRequest_.reset();
                 showNotice(
                     seerrStorageError_.empty()
                         ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
@@ -3729,7 +3731,7 @@ private:
         seerrDriveSelection_ = 0;
         __android_log_print(
             ANDROID_LOG_INFO, kTag, "Opening Seerr storage picker media=%s choices=%zu",
-            item.externalMediaType.c_str(), seerrDriveChoices_.size());
+            item.mediaType.c_str(), seerrDriveChoices_.size());
         if (screen_ != Screen::SeerrDrivePicker) pushScreen(Screen::SeerrDrivePicker);
     }
 
@@ -3779,7 +3781,11 @@ private:
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
                 return;
             }
-            auto refreshedPending = std::move(result.value);
+            std::vector<JellyfinItem> refreshedPending;
+            refreshedPending.reserve(result.value.size());
+            for (const auto& media : result.value) {
+                refreshedPending.push_back(jellyfinItemFromSeerrMedia(media));
+            }
             const auto pendingNow = std::chrono::steady_clock::now();
             if (pendingNow < seerrOptimisticPendingUntil_) {
                 for (const auto& local : seerrPending_) {
@@ -3808,9 +3814,19 @@ private:
         const SeerrStorageTarget* selectedTarget = nullptr,
         bool skipDrivePrompt = false
     ) {
-        if (!isSeerrItem(item)) return;
-        if (item.externalRequested) {
-            showNotice(item.externalStatus.empty() ? "ALREADY REQUESTED IN SEERR" : item.externalStatus, 5s);
+        const auto media = seerrMediaFromJellyfinItem(item);
+        if (!media) return;
+        requestSeerrMediaAsync(*media, selectedTarget, skipDrivePrompt);
+    }
+
+    void requestSeerrMediaAsync(
+        const SeerrMediaItem& item,
+        const SeerrStorageTarget* selectedTarget = nullptr,
+        bool skipDrivePrompt = false
+    ) {
+        if (!item.valid()) return;
+        if (item.requested) {
+            showNotice(item.status.empty() ? "ALREADY REQUESTED IN SEERR" : item.status, 5s);
             return;
         }
         const std::string server = settings_.seerrServer;
@@ -3833,7 +3849,7 @@ private:
             return;
         }
         mutationLoading_ = true;
-        const JellyfinItem requestedItem = item;
+        const SeerrMediaItem requestedItem = item;
         const std::optional<SeerrStorageTarget> target = selectedTarget
             ? std::optional<SeerrStorageTarget>(*selectedTarget)
             : std::nullopt;
@@ -3848,15 +3864,14 @@ private:
                 return;
             }
 
-            const std::string status = requestedItem.externalMediaType == "tv"
-                ? "Queued"
-                : "Queued for download";
+            const std::string status = requestedItem.television() ? "Queued" : "Queued for download";
             searchState_.markSeerrRequested(requestedItem.id, status, result.value);
-            JellyfinItem pending = requestedItem;
-            pending.externalRequested = true;
-            pending.externalRequestId = result.value;
-            pending.externalMediaStatus = 2;
-            pending.externalStatus = status;
+            SeerrMediaItem pendingMedia = requestedItem;
+            pendingMedia.requested = true;
+            pendingMedia.requestId = result.value;
+            pendingMedia.mediaStatus = 2;
+            pendingMedia.status = status;
+            JellyfinItem pending = jellyfinItemFromSeerrMedia(pendingMedia);
             const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& candidate) {
                 return candidate.id == pending.id;
             });
@@ -3906,21 +3921,26 @@ private:
                 }
                 return;
             }
+            std::vector<JellyfinItem> seerrResults;
+            seerrResults.reserve(result.value.size());
             bool discoveredPending = false;
-            for (const auto& item : result.value) {
-                if (!item.externalRequested) continue;
-                const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& pending) {
-                    return pending.id == item.id || (item.externalRequestId > 0 && pending.externalRequestId == item.externalRequestId);
-                });
-                if (existing == seerrPending_.end()) seerrPending_.push_back(item);
-                else *existing = item;
-                discoveredPending = true;
+            for (const auto& media : result.value) {
+                JellyfinItem item = jellyfinItemFromSeerrMedia(media);
+                if (media.requested) {
+                    const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& pending) {
+                        return pending.id == item.id || (item.externalRequestId > 0 && pending.externalRequestId == item.externalRequestId);
+                    });
+                    if (existing == seerrPending_.end()) seerrPending_.push_back(item);
+                    else *existing = item;
+                    discoveredPending = true;
+                }
+                seerrResults.push_back(std::move(item));
             }
             if (discoveredPending) {
                 seerrOptimisticPendingUntil_ = std::chrono::steady_clock::now() + 5min;
                 syncSeerrHomeRowLocked();
             }
-            (void) searchState_.finishSeerrSearch(query, std::move(result.value));
+            (void) searchState_.finishSeerrSearch(query, std::move(seerrResults));
         });
     }
 
@@ -6657,9 +6677,9 @@ private:
 
     void renderSeerrDrivePicker() {
         renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
-        const std::string subtitle = pendingSeerrRequest_.name.empty()
+        const std::string subtitle = !pendingSeerrRequest_ || pendingSeerrRequest_->name.empty()
             ? "Choose where Seerr should place this request"
-            : "Choose storage for " + pendingSeerrRequest_.name;
+            : "Choose storage for " + pendingSeerrRequest_->name;
         renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
 
         if (seerrDriveChoices_.empty()) {
@@ -7995,12 +8015,12 @@ private:
     bool seerrStorageLoading_ = false;
     std::string seerrStorageError_;
     std::chrono::steady_clock::time_point seerrStorageRefreshAt_{};
-    JellyfinItem pendingSeerrRequest_;
+    std::optional<SeerrMediaItem> pendingSeerrRequest_;
     std::vector<SeerrStorageTarget> seerrDriveChoices_;
     int seerrDriveSelection_ = 0;
     bool seerrConnectLoading_ = false;
     bool seerrRetrySearchAfterConnect_ = false;
-    JellyfinItem queuedSeerrRequestAfterConnect_;
+    std::optional<SeerrMediaItem> queuedSeerrRequestAfterConnect_;
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

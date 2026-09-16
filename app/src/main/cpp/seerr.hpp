@@ -2,6 +2,7 @@
 
 #include "jellyfin_types.hpp"
 #include "jni_http.hpp"
+#include "seerr_media.hpp"
 
 #include <jni.h>
 
@@ -9,10 +10,6 @@
 #include <map>
 #include <string>
 #include <vector>
-
-inline bool isSeerrItem(const JellyfinItem& item) {
-    return item.externalSource == "seerr";
-}
 
 struct SeerrAuth {
     std::string sessionCookie;
@@ -66,12 +63,12 @@ public:
         const SeerrAuth& auth
     ) const;
 
-    ApiValueResult<std::vector<JellyfinItem>> search(
+    ApiValueResult<std::vector<SeerrMediaItem>> search(
         const std::string& server,
         const SeerrAuth& auth,
         const std::string& query
     ) const;
-    ApiValueResult<std::vector<JellyfinItem>> pendingRequests(
+    ApiValueResult<std::vector<SeerrMediaItem>> pendingRequests(
         const std::string& server,
         const SeerrAuth& auth,
         int limit = 20
@@ -79,7 +76,7 @@ public:
     ApiValueResult<int> requestMedia(
         const std::string& server,
         const SeerrAuth& auth,
-        const JellyfinItem& item,
+        const SeerrMediaItem& item,
         const SeerrStorageTarget* target = nullptr
     ) const;
     ApiResult deleteRequest(
@@ -98,7 +95,7 @@ private:
         const std::string& server,
         const SeerrQuickConnectRequest& request
     ) const;
-    ApiValueResult<JellyfinItem> loadMediaDetails(
+    ApiValueResult<SeerrMediaItem> loadMediaDetails(
         const std::string& server,
         const SeerrAuth& auth,
         const std::string& mediaType,

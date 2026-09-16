@@ -50,6 +50,7 @@ CPP_TESTS = [
     "request_epoch_test.cpp",
     "screensaver_policy_test.cpp",
     "search_screen_test.cpp",
+    "seerr_media_test.cpp",
     "session_registry_test.cpp",
     "settings_screen_test.cpp",
     "subtitle_policy_test.cpp",

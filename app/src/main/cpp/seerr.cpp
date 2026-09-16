@@ -78,24 +78,22 @@ std::string mediaStatusLabel(int status, bool television) {
     }
 }
 
-JellyfinItem itemFromSearchResult(const json& value) {
-    JellyfinItem item;
+SeerrMediaItem itemFromSearchResult(const json& value) {
+    SeerrMediaItem item;
     const std::string mediaType = stringValue(value, "mediaType");
     if (mediaType != "movie" && mediaType != "tv") return item;
     const int tmdbId = integerValue(value, "id");
     if (tmdbId <= 0) return item;
 
-    item.externalSource = "seerr";
-    item.externalMediaType = mediaType;
-    item.tmdbId = std::to_string(tmdbId);
-    item.id = "seerr:" + mediaType + ":" + item.tmdbId;
-    item.type = mediaType == "tv" ? "Series" : "Movie";
+    item.mediaType = mediaType;
+    item.tmdbId = tmdbId;
+    item.id = seerrMediaId(mediaType, tmdbId);
     item.name = mediaType == "tv" ? stringValue(value, "name") : stringValue(value, "title");
     if (item.name.empty()) item.name = stringValue(value, "originalName");
     if (item.name.empty()) item.name = stringValue(value, "originalTitle");
     item.overview = stringValue(value, "overview");
-    item.externalPosterUrl = tmdbImageUrl(kTmdbPosterBase, stringValue(value, "posterPath"));
-    item.externalBackdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(value, "backdropPath"));
+    item.posterUrl = tmdbImageUrl(kTmdbPosterBase, stringValue(value, "posterPath"));
+    item.backdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(value, "backdropPath"));
 
     const std::string date = mediaType == "tv"
         ? stringValue(value, "firstAirDate")
@@ -106,38 +104,38 @@ JellyfinItem itemFromSearchResult(const json& value) {
 
     const auto mediaInfo = value.find("mediaInfo");
     if (mediaInfo != value.end() && mediaInfo->is_object()) {
-        item.externalMediaStatus = integerValue(*mediaInfo, "status");
-        item.externalAvailable = item.externalMediaStatus == 5;
-        item.externalRequested = item.externalMediaStatus >= 2 && item.externalMediaStatus <= 4;
-        item.externalStatus = mediaStatusLabel(item.externalMediaStatus, mediaType == "tv");
+        item.mediaStatus = integerValue(*mediaInfo, "status");
+        item.available = item.mediaStatus == 5;
+        item.requested = item.mediaStatus >= 2 && item.mediaStatus <= 4;
+        item.status = mediaStatusLabel(item.mediaStatus, mediaType == "tv");
         const auto requests = mediaInfo->find("requests");
         if (requests != mediaInfo->end() && requests->is_array() && !requests->empty()) {
-            item.externalRequested = true;
-            item.externalRequestId = integerValue(requests->front(), "id");
+            item.requested = true;
+            item.requestId = integerValue(requests->front(), "id");
         }
     }
     return item;
 }
 
-void applyMediaDetails(JellyfinItem& item, const JellyfinItem& details) {
+void applyMediaDetails(SeerrMediaItem& item, const SeerrMediaItem& details) {
     if (!details.name.empty()) item.name = details.name;
     if (!details.overview.empty()) item.overview = details.overview;
-    if (!details.externalPosterUrl.empty()) item.externalPosterUrl = details.externalPosterUrl;
-    if (!details.externalBackdropUrl.empty()) item.externalBackdropUrl = details.externalBackdropUrl;
+    if (!details.posterUrl.empty()) item.posterUrl = details.posterUrl;
+    if (!details.backdropUrl.empty()) item.backdropUrl = details.backdropUrl;
     if (details.productionYear > 0) item.productionYear = details.productionYear;
 }
 
-void applyDownloadProgress(JellyfinItem& item, const json& downloads) {
+void applyDownloadProgress(SeerrMediaItem& item, const json& downloads) {
     if (!downloads.is_array() || downloads.empty()) return;
 
-    if (item.externalMediaType == "tv") {
+    if (item.mediaType == "tv") {
         const size_t activeDownloads = static_cast<size_t>(std::count_if(
             downloads.begin(), downloads.end(), [](const json& download) { return download.is_object(); }));
         if (activeDownloads == 0) return;
-        item.externalProgressPercent = -1;
-        item.externalProgressLabel.clear();
-        item.externalProgressEta.clear();
-        item.externalStatus = item.externalMediaStatus == 4
+        item.progressPercent = -1;
+        item.progressLabel.clear();
+        item.progressEta.clear();
+        item.status = item.mediaStatus == 4
             ? "Partially available, still downloading"
             : (activeDownloads == 1
                 ? "Series downloading"
@@ -152,7 +150,7 @@ void applyDownloadProgress(JellyfinItem& item, const json& downloads) {
     for (const auto& download : downloads) {
         if (!download.is_object()) continue;
         if (!selected) selected = &download;
-        if (item.externalMediaType != "tv") continue;
+        if (item.mediaType != "tv") continue;
         const auto episode = download.find("episode");
         if (episode == download.end() || !episode->is_object()) continue;
         const int season = integerValue(*episode, "seasonNumber", -1);
@@ -174,16 +172,16 @@ void applyDownloadProgress(JellyfinItem& item, const json& downloads) {
     );
     if (percent < 0) return;
     const std::string timeLeft = stringValue(*selected, "timeLeft");
-    item.externalProgressPercent = percent;
-    item.externalProgressLabel = seerrProgressLabel(
-        item.externalMediaType,
+    item.progressPercent = percent;
+    item.progressLabel = seerrProgressLabel(
+        item.mediaType,
         selectedSeason,
         selectedEpisode,
         percent
     );
-    item.externalProgressEta = seerrProgressEta(percent, timeLeft);
-    item.externalStatus = seerrProgressStatus(
-        item.externalMediaType,
+    item.progressEta = seerrProgressEta(percent, timeLeft);
+    item.status = seerrProgressStatus(
+        item.mediaType,
         selectedSeason,
         selectedEpisode,
         percent,
@@ -526,12 +524,12 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> SeerrClient::search(
+ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::search(
     const std::string& server,
     const SeerrAuth& auth,
     const std::string& query
 ) const {
-    ApiValueResult<std::vector<JellyfinItem>> result;
+    ApiValueResult<std::vector<SeerrMediaItem>> result;
     if (!configured(server, auth)) {
         result.error = "Seerr is not connected";
         return result;
@@ -552,8 +550,8 @@ ApiValueResult<std::vector<JellyfinItem>> SeerrClient::search(
             result.value.reserve(values->size());
             for (const auto& value : *values) {
                 if (!value.is_object()) continue;
-                JellyfinItem item = itemFromSearchResult(value);
-                if (item.id.empty() || item.externalAvailable) continue;
+                SeerrMediaItem item = itemFromSearchResult(value);
+                if (item.id.empty() || item.available) continue;
                 result.value.push_back(std::move(item));
                 if (result.value.size() >= 24) break;
             }
@@ -565,13 +563,13 @@ ApiValueResult<std::vector<JellyfinItem>> SeerrClient::search(
     return result;
 }
 
-ApiValueResult<JellyfinItem> SeerrClient::loadMediaDetails(
+ApiValueResult<SeerrMediaItem> SeerrClient::loadMediaDetails(
     const std::string& server,
     const SeerrAuth& auth,
     const std::string& mediaType,
     int tmdbId
 ) const {
-    ApiValueResult<JellyfinItem> result;
+    ApiValueResult<SeerrMediaItem> result;
     if (mediaType != "movie" && mediaType != "tv") {
         result.error = "Unsupported Seerr media type";
         return result;
@@ -584,15 +582,13 @@ ApiValueResult<JellyfinItem> SeerrClient::loadMediaDetails(
     }
     try {
         const auto data = json::parse(response.body);
-        result.value.externalSource = "seerr";
-        result.value.externalMediaType = mediaType;
-        result.value.tmdbId = std::to_string(tmdbId);
-        result.value.id = "seerr:" + mediaType + ":" + result.value.tmdbId;
-        result.value.type = mediaType == "tv" ? "Series" : "Movie";
+        result.value.mediaType = mediaType;
+        result.value.tmdbId = tmdbId;
+        result.value.id = seerrMediaId(mediaType, tmdbId);
         result.value.name = mediaType == "tv" ? stringValue(data, "name") : stringValue(data, "title");
         result.value.overview = stringValue(data, "overview");
-        result.value.externalPosterUrl = tmdbImageUrl(kTmdbPosterBase, stringValue(data, "posterPath"));
-        result.value.externalBackdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(data, "backdropPath"));
+        result.value.posterUrl = tmdbImageUrl(kTmdbPosterBase, stringValue(data, "posterPath"));
+        result.value.backdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(data, "backdropPath"));
         const std::string date = mediaType == "tv" ? stringValue(data, "firstAirDate") : stringValue(data, "releaseDate");
         if (date.size() >= 4) {
             try { result.value.productionYear = std::stoi(date.substr(0, 4)); } catch (...) {}
@@ -604,12 +600,12 @@ ApiValueResult<JellyfinItem> SeerrClient::loadMediaDetails(
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> SeerrClient::pendingRequests(
+ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::pendingRequests(
     const std::string& server,
     const SeerrAuth& auth,
     int limit
 ) const {
-    ApiValueResult<std::vector<JellyfinItem>> result;
+    ApiValueResult<std::vector<SeerrMediaItem>> result;
     if (!configured(server, auth)) {
         result.ok = true;
         return result;
@@ -644,18 +640,16 @@ ApiValueResult<std::vector<JellyfinItem>> SeerrClient::pendingRequests(
             const std::string unique = mediaType + ":" + std::to_string(tmdbId);
             if (!seen.insert(unique).second) continue;
 
-            JellyfinItem item;
-            item.externalSource = "seerr";
-            item.externalMediaType = mediaType;
-            item.tmdbId = std::to_string(tmdbId);
-            item.id = "seerr:" + unique;
-            item.type = mediaType == "tv" ? "Series" : "Movie";
-            item.externalRequestId = integerValue(request, "id");
-            item.externalRequested = true;
+            SeerrMediaItem item;
+            item.mediaType = mediaType;
+            item.tmdbId = tmdbId;
+            item.id = seerrMediaId(mediaType, tmdbId);
+            item.requestId = integerValue(request, "id");
+            item.requested = true;
             const bool is4k = request.value("is4k", false);
-            item.externalMediaStatus = integerValue(*media, is4k ? "status4k" : "status");
-            item.externalJellyfinId = stringValue(*media, is4k ? "jellyfinMediaId4k" : "jellyfinMediaId");
-            item.externalStatus = mediaStatusLabel(item.externalMediaStatus, mediaType == "tv");
+            item.mediaStatus = integerValue(*media, is4k ? "status4k" : "status");
+            item.jellyfinId = stringValue(*media, is4k ? "jellyfinMediaId4k" : "jellyfinMediaId");
+            item.status = mediaStatusLabel(item.mediaStatus, mediaType == "tv");
             const auto downloads = media->find(is4k ? "downloadStatus4k" : "downloadStatus");
             if (downloads != media->end()) applyDownloadProgress(item, *downloads);
 
@@ -674,7 +668,7 @@ ApiValueResult<std::vector<JellyfinItem>> SeerrClient::pendingRequests(
 ApiValueResult<int> SeerrClient::requestMedia(
     const std::string& server,
     const SeerrAuth& auth,
-    const JellyfinItem& item,
+    const SeerrMediaItem& item,
     const SeerrStorageTarget* target
 ) const {
     ApiValueResult<int> result;
@@ -682,23 +676,22 @@ ApiValueResult<int> SeerrClient::requestMedia(
         result.error = "Seerr is not connected";
         return result;
     }
-    if (!isSeerrItem(item) || item.tmdbId.empty()) {
+    if (!item.valid()) {
         result.error = "Invalid Seerr item";
         return result;
     }
-    int mediaId = 0;
-    try { mediaId = std::stoi(item.tmdbId); } catch (...) {}
+    const int mediaId = item.tmdbId;
     if (mediaId <= 0) {
         result.error = "Invalid Seerr media ID";
         return result;
     }
 
     json body{
-        {"mediaType", item.externalMediaType},
+        {"mediaType", item.mediaType},
         {"mediaId", mediaId},
         {"is4k", target ? target->is4k : false},
     };
-    if (item.externalMediaType == "tv") body["seasons"] = "all";
+    if (item.mediaType == "tv") body["seasons"] = "all";
     if (target && target->serverId >= 0 && !target->path.empty()) {
         body["serverId"] = target->serverId;
         body["rootFolder"] = target->path;
