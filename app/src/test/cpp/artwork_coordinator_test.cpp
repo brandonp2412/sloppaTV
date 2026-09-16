@@ -10,12 +10,6 @@
 #include <vector>
 
 namespace {
-struct BytesResult {
-    bool ok = false;
-    std::string error;
-    std::string value;
-};
-
 DecodedImage decodeImage(const std::string& bytes, std::string& error) {
     if (bytes.empty()) {
         error = "empty";
@@ -71,13 +65,15 @@ int main() {
     ArtworkCoordinator<FakeTaskRunner, std::recursive_mutex> artwork(tasks, stateMutex);
     FakeRenderer renderer;
 
-    int posterDownloads = 0;
-    const auto posterDownload = [&] {
-        ++posterDownloads;
-        return BytesResult{true, {}, "poster"};
+    int posterLoads = 0;
+    const auto posterLoad = [&] {
+        ++posterLoads;
+        ArtworkLoadResult result;
+        result.decoded = decodeImage("poster", result.error);
+        return result;
     };
-    assert(artwork.loadPoster("poster", renderer, posterDownload, decodeImage));
-    assert(!artwork.loadPoster("poster", renderer, posterDownload, decodeImage));
+    assert(artwork.loadPoster("poster", renderer, posterLoad));
+    assert(!artwork.loadPoster("poster", renderer, posterLoad));
     assert(tasks.queued.size() == 1);
     int missingRequests = 0;
     assert(artwork.posterTexture("poster", renderer, [&] { ++missingRequests; }) == nullptr);
@@ -86,15 +82,14 @@ int main() {
     tasks.runNext();
     ArtworkEntry* poster = artwork.posterTexture("poster", renderer, [&] { ++missingRequests; });
     assert(poster && poster->texture == 101);
-    assert(posterDownloads == 1);
+    assert(posterLoads == 1);
     assert(renderer.createCalls == 1);
 
-    assert(artwork.loadProfile(
-        "profile",
-        renderer,
-        [] { return BytesResult{true, {}, "profile"}; },
-        decodeImage
-    ));
+    assert(artwork.loadProfile("profile", renderer, [] {
+        ArtworkLoadResult result;
+        result.decoded = decodeImage("profile", result.error);
+        return result;
+    }));
     tasks.runNext();
     ArtworkEntry* profile = artwork.profileTexture("profile", renderer, [&] { ++missingRequests; });
     assert(profile && profile->texture == 102);
@@ -103,8 +98,11 @@ int main() {
     assert(artwork.loadHome(
         "home",
         renderer,
-        [] { return BytesResult{true, {}, "home"}; },
-        decodeImage,
+        [] {
+            ArtworkLoadResult result;
+            result.decoded = decodeImage("home", result.error);
+            return result;
+        },
         [&](const ArtworkLoadResult& loaded) {
             ++homeObserved;
             assert(loaded.ok());

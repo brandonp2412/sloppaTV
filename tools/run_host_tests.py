@@ -20,6 +20,7 @@ CPP_TESTS = [
     "artwork_cache_test.cpp",
     "artwork_coordinator_test.cpp",
     "artwork_image_loader_test.cpp",
+    "artwork_loader_test.cpp",
     "artwork_pipeline_test.cpp",
     "artwork_request_test.cpp",
     "artwork_texture_cache_test.cpp",

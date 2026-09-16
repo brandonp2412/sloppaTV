@@ -7,6 +7,7 @@
 #include "account_screen.hpp"
 #include "app_settings.hpp"
 #include "artwork_coordinator.hpp"
+#include "artwork_loader.hpp"
 #include "artwork_request.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
@@ -332,10 +333,11 @@ public:
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }
           ),
+          artworkLoader_(api_, seerr_, imageDecoder_),
           artwork_(tasks_, stateMutex_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
-        artwork_.setDataPath(dataPath_);
+        artworkLoader_.setDataPath(dataPath_);
         loadBundledBrandMark();
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
@@ -5360,15 +5362,7 @@ private:
         artwork_.loadHome(
             request.key,
             renderer_,
-            [this, session, request] {
-                const JellyfinItem jellyfinItem = request.jellyfinItem();
-                return request.external
-                    ? seerr_.downloadImage(request.externalUrl)
-                    : api_.downloadHomeImage(session, jellyfinItem, 480, 270);
-            },
-            [this](const std::string& encoded, std::string& error) {
-                return imageDecoder_.decode(encoded, error);
-            },
+            [this, session, request] { return artworkLoader_.loadHome(session, request); },
             [request](const ArtworkLoadResult& loaded) {
                 if (loaded.ok()) return;
                 __android_log_print(
@@ -5467,10 +5461,7 @@ private:
         artwork_.loadProfile(
             key,
             renderer_,
-            [this, saved] { return api_.downloadUserImage(saved, 180, 180); },
-            [this](const std::string& encoded, std::string& error) {
-                return imageDecoder_.decode(encoded, error);
-            }
+            [this, saved] { return artworkLoader_.loadProfile(saved); }
         );
     }
 
@@ -5490,15 +5481,7 @@ private:
         artwork_.loadPoster(
             request.key,
             renderer_,
-            [this, session, request] {
-                const JellyfinItem jellyfinItem = request.jellyfinItem();
-                return request.external
-                    ? seerr_.downloadImage(request.externalUrl)
-                    : api_.downloadPrimaryImage(session, jellyfinItem, 384, 576);
-            },
-            [this](const std::string& encoded, std::string& error) {
-                return imageDecoder_.decode(encoded, error);
-            }
+            [this, session, request] { return artworkLoader_.loadPoster(session, request); }
         );
     }
 
@@ -5526,13 +5509,7 @@ private:
         artwork_.loadBackdrop(
             request.key,
             renderer_,
-            [this, session, request] {
-                const JellyfinItem jellyfinItem = request.jellyfinItem();
-                return api_.downloadBackdropImage(session, jellyfinItem, 1920, 1080);
-            },
-            [this](const std::string& encoded, std::string& error) {
-                return imageDecoder_.decode(encoded, error);
-            }
+            [this, session, request] { return artworkLoader_.loadBackdrop(session, request); }
         );
     }
 
@@ -5555,13 +5532,7 @@ private:
         artwork_.loadLogo(
             request.key,
             renderer_,
-            [this, session, request] {
-                const JellyfinItem jellyfinItem = request.jellyfinItem();
-                return api_.downloadLogoImage(session, jellyfinItem, 800, 240);
-            },
-            [this](const std::string& encoded, std::string& error) {
-                return imageDecoder_.decode(encoded, error);
-            }
+            [this, session, request] { return artworkLoader_.loadLogo(session, request); }
         );
     }
 
@@ -8032,6 +8003,7 @@ private:
     TaskRunner tasks_;
 
     mutable std::recursive_mutex stateMutex_;
+    ArtworkLoader<JellyfinClient, SeerrClient, JniImageDecoder> artworkLoader_;
     ArtworkCoordinator<TaskRunner, std::recursive_mutex> artwork_;
     RequestEpochs requestEpochs_;
     std::string dataPath_;
