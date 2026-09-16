@@ -1,0 +1,142 @@
+#include "playback_coordinator.hpp"
+
+#include <cassert>
+#include <chrono>
+
+int main() {
+    using namespace std::chrono_literals;
+
+    PlaybackSessionState session;
+    PlaybackTelemetryState telemetry;
+    PlaybackContinuationState continuation;
+    PlaybackQueueState queue;
+    const auto now = PlaybackTelemetryState::Clock::now();
+    telemetry.beginPlayback(now - 11s);
+
+    auto plan = planPlaybackTick(
+        false,
+        true,
+        35000,
+        "Episode",
+        session,
+        telemetry,
+        continuation,
+        now
+    );
+    assert(plan.refreshTelemetry);
+    assert(plan.requestMediaSegments);
+    assert(plan.reportPlaybackStart);
+    assert(plan.reportProgress);
+    assert(plan.requestNextEpisode);
+
+    assert(telemetry.markPlaybackStartReported());
+    telemetry.markProgressReport(now);
+    assert(session.beginMediaSegmentsRequest(now));
+    assert(continuation.beginNextEpisodeRequest(now));
+    plan = planPlaybackTick(
+        false,
+        false,
+        36000,
+        "Episode",
+        session,
+        telemetry,
+        continuation,
+        now + 1s
+    );
+    assert(plan.refreshTelemetry);
+    assert(!plan.requestMediaSegments);
+    assert(!plan.reportPlaybackStart);
+    assert(!plan.reportProgress);
+    assert(!plan.requestNextEpisode);
+
+    JellyfinItem episode1;
+    episode1.id = "episode-1";
+    JellyfinItem episode2;
+    episode2.id = "episode-2";
+    queue.replace({episode1, episode2}, 0);
+    queue.setRepeatMode(QueueRepeatMode::One);
+    auto continuationPlan = planPlaybackContinuation(
+        true,
+        120000,
+        120000,
+        queue,
+        continuation,
+        true,
+        3
+    );
+    assert(continuationPlan.action == PlaybackContinuationAction::PlayQueueIndex);
+    assert(continuationPlan.queueIndex == 0);
+    assert(continuationPlan.repeatCurrentQueueItem);
+    assert(!continuationPlan.resetAutoplayChain);
+
+    queue.setRepeatMode(QueueRepeatMode::All);
+    queue.setCurrentIndex(1);
+    continuationPlan = planPlaybackContinuation(
+        false,
+        119500,
+        120000,
+        queue,
+        continuation,
+        true,
+        3
+    );
+    assert(continuationPlan.action == PlaybackContinuationAction::PlayQueueIndex);
+    assert(continuationPlan.queueIndex == 0);
+    assert(!continuationPlan.repeatCurrentQueueItem);
+
+    queue.setRepeatMode(QueueRepeatMode::Off);
+    continuation.clearNextEpisodeRequest();
+    continuation.setNextItem(episode2);
+    continuationPlan = planPlaybackContinuation(
+        false,
+        119500,
+        120000,
+        queue,
+        continuation,
+        true,
+        3
+    );
+    assert(continuationPlan.action == PlaybackContinuationAction::AutoplayNext);
+
+    continuation.incrementAutoplayChain();
+    continuation.incrementAutoplayChain();
+    continuation.incrementAutoplayChain();
+    continuationPlan = planPlaybackContinuation(
+        false,
+        119500,
+        120000,
+        queue,
+        continuation,
+        true,
+        3
+    );
+    assert(continuationPlan.action == PlaybackContinuationAction::ShowStillWatching);
+
+    continuation.clearNextItem();
+    continuationPlan = planPlaybackContinuation(
+        true,
+        0,
+        0,
+        queue,
+        continuation,
+        true,
+        3
+    );
+    assert(continuationPlan.action == PlaybackContinuationAction::Stop);
+    assert(continuationPlan.resetAutoplayChain);
+
+    queue.reset();
+    continuationPlan = planPlaybackContinuation(
+        false,
+        0,
+        1000,
+        queue,
+        continuation,
+        true,
+        3
+    );
+    assert(continuationPlan.action == PlaybackContinuationAction::None);
+    assert(!continuationPlan.resetAutoplayChain);
+
+    return 0;
+}

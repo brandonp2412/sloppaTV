@@ -39,6 +39,7 @@ CPP_TESTS = [
     "media_player_policy_test.cpp",
     "media_session_policy_test.cpp",
     "playback_continuation_test.cpp",
+    "playback_coordinator_test.cpp",
     "playback_profile_test.cpp",
     "playback_session_test.cpp",
     "playback_telemetry_test.cpp",

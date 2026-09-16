@@ -25,6 +25,7 @@
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
 #include "playback_continuation.hpp"
+#include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
 #include "playback_session.hpp"
 #include "playback_telemetry.hpp"
@@ -5061,15 +5062,26 @@ private:
             }
         }
 
-        if (!playbackEnded) {
+        const auto now = std::chrono::steady_clock::now();
+        const PlaybackTickPlan plan = planPlaybackTick(
+            playbackEnded,
+            status == PlayerStatus::Playing,
+            playerScreenState_.positionMs(),
+            activePlaybackItem_.type,
+            playbackSessionState_,
+            telemetryState_,
+            continuationState_,
+            now
+        );
+        if (plan.refreshTelemetry) {
             refreshPlaybackTelemetry();
             mediaSession_.updateState(
                 status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
                 playerScreenState_.positionMs()
             );
         }
-        if (!playbackSessionState_.mediaSegmentsRequested()) requestMediaSegmentsAsync();
-        if (telemetryState_.markPlaybackStartReported()) {
+        if (plan.requestMediaSegments) requestMediaSegmentsAsync();
+        if (plan.reportPlaybackStart && telemetryState_.markPlaybackStartReported()) {
             const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
             const auto session = session_;
             const auto itemCopy = activePlaybackItem_;
@@ -5082,34 +5094,41 @@ private:
                 );
             });
         }
-        const auto now = std::chrono::steady_clock::now();
-        if (telemetryState_.progressReportDue(now, status == PlayerStatus::Playing)) {
+        if (plan.reportProgress) {
             telemetryState_.markProgressReport(now);
             reportProgressAsync(false);
         }
-        if (!continuationState_.nextEpisodeRequested() && activePlaybackItem_.type == "Episode"
-            && playerScreenState_.positionMs() >= 30000) {
-            requestNextEpisodeAsync();
-        }
-        if (!playbackEnded
-            && (playerScreenState_.durationMs() <= 1000
-                || playerScreenState_.positionMs() < playerScreenState_.durationMs() - 1000)) {
-            return;
-        }
-        if (queueState_.currentIndex() >= 0 && queueState_.repeatMode() != QueueRepeatMode::Off) {
-            const int next = queueState_.nextIndex(false);
-            if (next >= 0) playQueuedIndexAsync(next, next == queueState_.currentIndex(), true);
-            else stopPlayback(true);
-        } else if (continuationState_.nextItem()) {
-            JellyfinItem next = *continuationState_.nextItem();
-            if (shouldAutoplayNextEpisode(settings_.autoplayNext, continuationState_.autoplayChainCount(), settings_.stillWatchingAfter)) {
-                queueAutoplayNext(std::move(next));
-            } else {
-                showStillWatching(std::move(next));
-            }
-        } else {
-            stopPlayback(true);
-            continuationState_.resetAutoplayChain();
+        if (plan.requestNextEpisode) requestNextEpisodeAsync();
+
+        const PlaybackContinuationPlan continuationPlan = planPlaybackContinuation(
+            playbackEnded,
+            playerScreenState_.positionMs(),
+            playerScreenState_.durationMs(),
+            queueState_,
+            continuationState_,
+            settings_.autoplayNext,
+            settings_.stillWatchingAfter
+        );
+        switch (continuationPlan.action) {
+            case PlaybackContinuationAction::None:
+                return;
+            case PlaybackContinuationAction::PlayQueueIndex:
+                playQueuedIndexAsync(
+                    continuationPlan.queueIndex,
+                    continuationPlan.repeatCurrentQueueItem,
+                    true
+                );
+                return;
+            case PlaybackContinuationAction::AutoplayNext:
+                queueAutoplayNext(*continuationState_.nextItem());
+                return;
+            case PlaybackContinuationAction::ShowStillWatching:
+                showStillWatching(*continuationState_.nextItem());
+                return;
+            case PlaybackContinuationAction::Stop:
+                stopPlayback(true);
+                if (continuationPlan.resetAutoplayChain) continuationState_.resetAutoplayChain();
+                return;
         }
     }
 
