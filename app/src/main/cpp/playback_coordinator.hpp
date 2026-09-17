@@ -73,6 +73,11 @@ struct PlaybackSubtitleFallbackPlan {
     int audioStreamIndex = -1;
 };
 
+struct PlaybackStreamRestartPlan {
+    PlaybackTarget previousTarget;
+    bool reportPrevious = false;
+};
+
 struct PlaybackTransitionPlan {
     int startPositionMs = 0;
     int durationMs = 0;
@@ -661,11 +666,14 @@ public:
         sessionState_.activeTarget().subtitleStreamIndex = streamIndex;
     }
 
-    bool beginStreamRestart() {
-        if (!trackState_.beginSubtitleWork()) return false;
+    [[nodiscard]] std::optional<PlaybackStreamRestartPlan> beginStreamRestart() {
+        if (!trackState_.beginSubtitleWork()) return std::nullopt;
+        PlaybackStreamRestartPlan plan;
+        plan.previousTarget = sessionState_.activeTarget();
+        plan.reportPrevious = telemetryState_.playbackStartReported() && !plan.previousTarget.url.empty();
         transitionState_.setLoading(true);
         telemetryState_.clearPlaybackStartReported();
-        return true;
+        return plan;
     }
 
     void finishStreamRestartRequest() {

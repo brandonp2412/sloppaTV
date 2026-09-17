@@ -2195,12 +2195,13 @@ private:
         const JellyfinSession session = session_;
         JellyfinItem item = playbackSessionState_.activeItem();
         item.positionTicks = playbackTicksFromPositionMs(targetPositionMs);
-        const PlaybackTarget previousTarget = playbackSessionState_.activeTarget();
-        const bool shouldReportPrevious = telemetryState_.playbackStartReported() && !previousTarget.url.empty();
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        if (!playbackCoordinator_.beginStreamRestart()) return;
+        auto restartPlan = playbackCoordinator_.beginStreamRestart();
+        if (!restartPlan) return;
+        const PlaybackTarget previousTarget = std::move(restartPlan->previousTarget);
+        const bool shouldReportPrevious = restartPlan->reportPrevious;
         const uint64_t generation = requestEpochs_.playback.begin();
 
         // A Jellyfin server-stream change is a real playback-session handoff. Resolve the
@@ -7692,7 +7693,6 @@ private:
     PlaybackCoordinator playbackCoordinator_;
     PlaybackContinuationState& continuationState_ = playbackCoordinator_.continuation();
     PlaybackSessionState& playbackSessionState_ = playbackCoordinator_.session();
-    PlaybackTelemetryState& telemetryState_ = playbackCoordinator_.telemetry();
     PlaybackTransitionState& transitionState_ = playbackCoordinator_.transition();
     PlayerTrackState& trackState_ = playbackCoordinator_.tracks();
     PlayerScreenState playerScreenState_;

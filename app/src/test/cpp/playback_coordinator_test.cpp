@@ -101,7 +101,10 @@ int main() {
     PlaybackCoordinator restartCoordinator;
     restartCoordinator.activate(coordinatedItem, coordinatedTarget, now);
     assert(restartCoordinator.telemetry().markPlaybackStartReported());
-    assert(restartCoordinator.beginStreamRestart());
+    auto restartPlan = restartCoordinator.beginStreamRestart();
+    assert(restartPlan);
+    assert(restartPlan->reportPrevious);
+    assert(restartPlan->previousTarget.url == coordinatedTarget.url);
     assert(!restartCoordinator.telemetry().playbackStartReported());
     assert(restartCoordinator.tracks().subtitleBusy());
     assert(restartCoordinator.transition().loading());
@@ -109,6 +112,10 @@ int main() {
     restartCoordinator.finishStreamRestartRequest();
     assert(!restartCoordinator.tracks().subtitleBusy());
     assert(!restartCoordinator.transition().loading());
+    restartPlan = restartCoordinator.beginStreamRestart();
+    assert(restartPlan);
+    assert(!restartPlan->reportPrevious);
+    restartCoordinator.finishStreamRestartRequest();
 
     PlaybackTarget restartTarget;
     restartTarget.url = "https://media.example/restart";
