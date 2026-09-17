@@ -298,6 +298,70 @@ int main() {
     );
     assert(transitionPlan.selectedAudioServerIndex == -1);
 
+    JellyfinItem special;
+    special.id = "special-1";
+    special.name = "Special";
+    special.parentIndexNumber = 0;
+    special.indexNumber = 1;
+    JellyfinItem currentEpisode;
+    currentEpisode.id = "episode-1";
+    currentEpisode.name = "Episode 1";
+    currentEpisode.parentIndexNumber = 1;
+    currentEpisode.indexNumber = 1;
+    JellyfinItem duplicateCurrent;
+    duplicateCurrent.id = "episode-1-alt";
+    duplicateCurrent.name = "Episode 1 alternate";
+    duplicateCurrent.parentIndexNumber = 1;
+    duplicateCurrent.indexNumber = 1;
+    JellyfinItem nextEpisode;
+    nextEpisode.id = "episode-2";
+    nextEpisode.name = "Episode 2";
+    nextEpisode.parentIndexNumber = 1;
+    nextEpisode.indexNumber = 2;
+
+    auto adjacent = selectAdjacentPlaybackEpisode(
+        {nextEpisode, duplicateCurrent, special, currentEpisode},
+        currentEpisode.id,
+        currentEpisode.parentIndexNumber,
+        currentEpisode.indexNumber,
+        1
+    );
+    assert(adjacent);
+    assert(adjacent->id == nextEpisode.id);
+
+    adjacent = selectAdjacentPlaybackEpisode(
+        {nextEpisode, duplicateCurrent, special, currentEpisode},
+        "missing-current-id",
+        currentEpisode.parentIndexNumber,
+        currentEpisode.indexNumber,
+        1
+    );
+    assert(adjacent);
+    assert(adjacent->id == nextEpisode.id);
+
+    adjacent = selectAdjacentPlaybackEpisode(
+        {special, currentEpisode},
+        currentEpisode.id,
+        currentEpisode.parentIndexNumber,
+        currentEpisode.indexNumber,
+        -1
+    );
+    assert(!adjacent);
+    assert(!selectAdjacentPlaybackEpisode(
+        {currentEpisode, nextEpisode},
+        currentEpisode.id,
+        currentEpisode.parentIndexNumber,
+        currentEpisode.indexNumber,
+        0
+    ));
+    assert(!selectAdjacentPlaybackEpisode(
+        {currentEpisode, nextEpisode},
+        "missing",
+        -1,
+        -1,
+        1
+    ));
+
     JellyfinItem episode1;
     episode1.id = "episode-1";
     JellyfinItem episode2;

@@ -4013,45 +4013,15 @@ private:
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
         tasks_.submit([this, session, currentItemId, seriesId, currentSeason, currentEpisode, direction] {
             auto episodes = api_.getSeriesEpisodes(session, seriesId, 1000);
-            std::optional<JellyfinItem> adjacent;
-            if (episodes.ok) {
-                std::sort(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& left, const JellyfinItem& right) {
-                    if (left.parentIndexNumber != right.parentIndexNumber) return left.parentIndexNumber < right.parentIndexNumber;
-                    if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
-                    return left.name < right.name;
-                });
-                auto current = std::find_if(episodes.value.begin(), episodes.value.end(), [&](const JellyfinItem& candidate) {
-                    return candidate.id == currentItemId;
-                });
-                if (current == episodes.value.end() && currentSeason >= 0 && currentEpisode >= 0) {
-                    current = std::find_if(episodes.value.begin(), episodes.value.end(), [&](const JellyfinItem& candidate) {
-                        return sameEpisodeSlot(
-                            candidate.parentIndexNumber,
-                            candidate.indexNumber,
-                            currentSeason,
-                            currentEpisode
-                        );
-                    });
-                }
-                if (current != episodes.value.end()) {
-                    int candidateIndex = static_cast<int>(std::distance(episodes.value.begin(), current)) + direction;
-                    while (candidateIndex >= 0 && candidateIndex < static_cast<int>(episodes.value.size())) {
-                        const auto& candidate = episodes.value[static_cast<size_t>(candidateIndex)];
-                        const bool duplicateSlot = sameEpisodeSlot(
-                            candidate.parentIndexNumber,
-                            candidate.indexNumber,
-                            current->parentIndexNumber,
-                            current->indexNumber
-                        );
-                        const bool specialOutsideRegularRun = current->parentIndexNumber > 0 && candidate.parentIndexNumber <= 0;
-                        if (!duplicateSlot && !specialOutsideRegularRun) {
-                            adjacent = candidate;
-                            break;
-                        }
-                        candidateIndex += direction;
-                    }
-                }
-            }
+            const auto adjacent = episodes.ok
+                ? selectAdjacentPlaybackEpisode(
+                    std::move(episodes.value),
+                    currentItemId,
+                    currentSeason,
+                    currentEpisode,
+                    direction
+                )
+                : std::nullopt;
 
             std::scoped_lock lock(stateMutex_);
             adjacentEpisodeLookup_ = false;
