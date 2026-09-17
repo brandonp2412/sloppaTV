@@ -12,9 +12,7 @@ struct StoredSession {
     std::string userId;
     std::string token;
 
-    [[nodiscard]] bool valid() const {
-        return !server.empty() && !userId.empty() && !token.empty();
-    }
+    [[nodiscard]] bool valid() const { return !server.empty() && !userId.empty() && !token.empty(); }
 };
 
 struct StoredSessionState {

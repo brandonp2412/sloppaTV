@@ -61,27 +61,22 @@ public:
     [[nodiscard]] const std::vector<SeerrMediaItem>& pending() const { return pending_; }
 
     [[nodiscard]] const SeerrMediaItem* findPending(std::string_view id) const {
-        const auto found = std::find_if(pending_.begin(), pending_.end(), [&](const SeerrMediaItem& item) {
-            return item.id == id;
-        });
+        const auto found =
+            std::find_if(pending_.begin(), pending_.end(), [&](const SeerrMediaItem& item) { return item.id == id; });
         return found == pending_.end() ? nullptr : &*found;
     }
 
-    void markRequestSucceeded(
-        SeerrMediaItem item,
-        int requestId,
-        std::string status,
-        TimePoint now
-    ) {
+    void markRequestSucceeded(SeerrMediaItem item, int requestId, std::string status, TimePoint now) {
         item.requested = true;
         item.requestId = requestId;
         item.mediaStatus = 2;
         item.status = std::move(status);
-        const auto found = std::find_if(pending_.begin(), pending_.end(), [&](const SeerrMediaItem& candidate) {
-            return sameRequest(candidate, item);
-        });
-        if (found == pending_.end()) pending_.insert(pending_.begin(), std::move(item));
-        else *found = std::move(item);
+        const auto found = std::find_if(pending_.begin(), pending_.end(),
+                                        [&](const SeerrMediaItem& candidate) { return sameRequest(candidate, item); });
+        if (found == pending_.end())
+            pending_.insert(pending_.begin(), std::move(item));
+        else
+            *found = std::move(item);
         optimisticPendingUntil_ = now + kOptimisticPendingWindow;
         pendingRefreshAt_ = now + kPostRequestRefreshDelay;
     }
@@ -105,17 +100,16 @@ public:
 
 private:
     static bool sameRequest(const SeerrMediaItem& left, const SeerrMediaItem& right) {
-        return left.id == right.id
-            || (left.requestId > 0 && right.requestId > 0 && left.requestId == right.requestId);
+        return left.id == right.id || (left.requestId > 0 && right.requestId > 0 && left.requestId == right.requestId);
     }
 
-    template <typename Item>
-    static void upsert(std::vector<SeerrMediaItem>& items, Item&& item) {
-        const auto found = std::find_if(items.begin(), items.end(), [&](const SeerrMediaItem& candidate) {
-            return sameRequest(candidate, item);
-        });
-        if (found == items.end()) items.push_back(std::forward<Item>(item));
-        else *found = std::forward<Item>(item);
+    template <typename Item> static void upsert(std::vector<SeerrMediaItem>& items, Item&& item) {
+        const auto found = std::find_if(items.begin(), items.end(),
+                                        [&](const SeerrMediaItem& candidate) { return sameRequest(candidate, item); });
+        if (found == items.end())
+            items.push_back(std::forward<Item>(item));
+        else
+            *found = std::forward<Item>(item);
     }
 
     std::vector<SeerrMediaItem> pending_;

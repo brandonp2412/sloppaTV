@@ -22,7 +22,7 @@ std::optional<int64_t> integerValue(const json& value, const char* key) {
         return std::nullopt;
     }
 }
-}
+} // namespace
 
 ApiValueResult<std::vector<JellyfinMediaSegment>> parseJellyfinMediaSegments(std::string_view responseBody) {
     ApiValueResult<std::vector<JellyfinMediaSegment>> result;
@@ -42,9 +42,8 @@ ApiValueResult<std::vector<JellyfinMediaSegment>> parseJellyfinMediaSegments(std
             result.value.push_back(JellyfinMediaSegment{type, *startTicks, *endTicks});
         }
 
-        std::sort(result.value.begin(), result.value.end(), [](const auto& left, const auto& right) {
-            return left.startTicks < right.startTicks;
-        });
+        std::sort(result.value.begin(), result.value.end(),
+                  [](const auto& left, const auto& right) { return left.startTicks < right.startTicks; });
         result.ok = true;
     } catch (const std::exception& e) {
         result.error = std::string("Unable to parse media segments: ") + e.what();

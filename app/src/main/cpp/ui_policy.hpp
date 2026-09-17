@@ -5,24 +5,42 @@
 #include <string>
 #include <string_view>
 
-constexpr int mediaGridColumns() { return 5; }
+constexpr int mediaGridColumns() {
+    return 5;
+}
 constexpr bool isTopMediaGridSelection(int selection) {
     return selection >= 0 && selection < mediaGridColumns();
 }
-constexpr float mediaCardWidth() { return 320.0f; }
-constexpr float mediaPosterWidth() { return 208.0f; }
-constexpr float mediaPosterHeight() { return 312.0f; }
+constexpr float mediaCardWidth() {
+    return 320.0f;
+}
+constexpr float mediaPosterWidth() {
+    return 208.0f;
+}
+constexpr float mediaPosterHeight() {
+    return 312.0f;
+}
 constexpr int mediaFirstVisibleRow(int selection, int visibleRows) {
     return std::max(0, std::max(0, selection) / mediaGridColumns() - std::max(1, visibleRows) + 1);
 }
-constexpr float mediaTitleScale() { return 2.45f; }
+constexpr float mediaTitleScale() {
+    return 2.45f;
+}
 constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
     return itemType == "Episode" || itemType == "CollectionFolder" || itemType == "BoxSet" || itemType == "Folder";
 }
-constexpr float searchMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 430.0f : 300.0f; }
-constexpr float browseMediaRowHeight(bool hasPortraitCard) { return hasPortraitCard ? 390.0f : 300.0f; }
-constexpr int browseMediaVisibleRows(bool syntheticPage) { return syntheticPage ? 4 : 2; }
-constexpr int browseMediaTitleLineLimit(bool hasPortraitCards) { return hasPortraitCards ? 1 : 0; }
+constexpr float searchMediaRowHeight(bool hasPortraitCard) {
+    return hasPortraitCard ? 430.0f : 300.0f;
+}
+constexpr float browseMediaRowHeight(bool hasPortraitCard) {
+    return hasPortraitCard ? 390.0f : 300.0f;
+}
+constexpr int browseMediaVisibleRows(bool syntheticPage) {
+    return syntheticPage ? 4 : 2;
+}
+constexpr int browseMediaTitleLineLimit(bool hasPortraitCards) {
+    return hasPortraitCards ? 1 : 0;
+}
 constexpr int mediaGridTitleLineLimit(int visibleRow, int uiTextSize, bool hasPortraitCards) {
     (void)uiTextSize;
     // The lower portrait row starts at y=625 on the 1080p canvas. Two title
@@ -72,15 +90,29 @@ constexpr float keyboardKeyHeight(float top, int rowCount, float gap) {
     return std::clamp(available / static_cast<float>(rowCount), minKeyHeight, maxKeyHeight);
 }
 
-constexpr float materialButtonFocusScale() { return 1.025f; }
-constexpr float materialCardFocusScale() { return 1.025f; }
-constexpr float materialListItemFocusScale() { return 1.02f; }
+constexpr float materialButtonFocusScale() {
+    return 1.025f;
+}
+constexpr float materialCardFocusScale() {
+    return 1.025f;
+}
+constexpr float materialListItemFocusScale() {
+    return 1.02f;
+}
 // Full-width rows should not inherit the same percentage growth as compact
 // cards: 4% of a 1700 px settings row is a distracting 68 px jump.
-constexpr float materialWideListItemFocusScale() { return 1.015f; }
-constexpr float materialTabFocusScale() { return 1.025f; }
-constexpr float materialInputFocusScale() { return 1.02f; }
-constexpr float materialWideInputFocusScale() { return 1.015f; }
+constexpr float materialWideListItemFocusScale() {
+    return 1.015f;
+}
+constexpr float materialTabFocusScale() {
+    return 1.025f;
+}
+constexpr float materialInputFocusScale() {
+    return 1.02f;
+}
+constexpr float materialWideInputFocusScale() {
+    return 1.015f;
+}
 
 constexpr float playbackProgressThumbCenterX(float trackX, float trackWidth, float progress, float thumbRadius) {
     if (trackWidth <= 0.0f) return trackX;
@@ -101,12 +133,8 @@ constexpr float playbackDurationRightX(bool skipButtonVisible) {
     return skipButtonVisible ? 1430.0f : 1770.0f;
 }
 
-constexpr float subtitleBottomY(
-    bool playbackOverlayVisible,
-    bool playbackControlsActive,
-    int position,
-    bool skipButtonVisible = false
-) {
+constexpr float subtitleBottomY(bool playbackOverlayVisible, bool playbackControlsActive, int position,
+                                bool skipButtonVisible = false) {
     const int clamped = std::clamp(position, 0, 2);
     (void)playbackOverlayVisible;
     (void)skipButtonVisible;
@@ -114,17 +142,9 @@ constexpr float subtitleBottomY(
     return base - static_cast<float>(clamped) * 95.0f;
 }
 
-constexpr bool shouldShowNextUpCard(
-    bool hasNextItem,
-    int remainingMs,
-    bool userOverlayVisible,
-    bool skipButtonVisible
-) {
-    return hasNextItem
-        && remainingMs > 0
-        && remainingMs <= 30000
-        && userOverlayVisible
-        && !skipButtonVisible;
+constexpr bool shouldShowNextUpCard(bool hasNextItem, int remainingMs, bool userOverlayVisible,
+                                    bool skipButtonVisible) {
+    return hasNextItem && remainingMs > 0 && remainingMs <= 30000 && userOverlayVisible && !skipButtonVisible;
 }
 
 constexpr int wrappedIndex(int index, int delta, int count) {

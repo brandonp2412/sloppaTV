@@ -54,9 +54,10 @@ public:
             return;
         }
         const int position = selectedPosition(current);
-        if (position + 1 >= static_cast<int>(current.size())) return;
-        selection_ = current[static_cast<size_t>(position + 1)];
-        ensureVisible(position + 1, static_cast<int>(current.size()));
+        const size_t nextPosition = static_cast<size_t>(position) + 1;
+        if (nextPosition >= current.size()) return;
+        selection_ = current[nextPosition];
+        ensureVisible(static_cast<int>(nextPosition), static_cast<int>(current.size()));
     }
 
     void toggleAdvanced() {
@@ -89,13 +90,16 @@ public:
 
     void moveSubtitleLanguage(int direction) {
         constexpr int itemCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
-        subtitleLanguageSelection_ = std::clamp(subtitleLanguageSelection_ + (direction >= 0 ? 1 : -1), 0, itemCount - 1);
+        subtitleLanguageSelection_ =
+            std::clamp(subtitleLanguageSelection_ + (direction >= 0 ? 1 : -1), 0, itemCount - 1);
         constexpr int visibleRows = 8;
-        if (subtitleLanguageSelection_ < subtitleLanguageFirstVisible_) subtitleLanguageFirstVisible_ = subtitleLanguageSelection_;
+        if (subtitleLanguageSelection_ < subtitleLanguageFirstVisible_)
+            subtitleLanguageFirstVisible_ = subtitleLanguageSelection_;
         if (subtitleLanguageSelection_ >= subtitleLanguageFirstVisible_ + visibleRows) {
             subtitleLanguageFirstVisible_ = subtitleLanguageSelection_ - visibleRows + 1;
         }
-        subtitleLanguageFirstVisible_ = std::clamp(subtitleLanguageFirstVisible_, 0, std::max(0, itemCount - visibleRows));
+        subtitleLanguageFirstVisible_ =
+            std::clamp(subtitleLanguageFirstVisible_, 0, std::max(0, itemCount - visibleRows));
     }
 
 private:
@@ -104,13 +108,9 @@ private:
         return selected == current.end() ? 0 : static_cast<int>(std::distance(current.begin(), selected));
     }
 
-    void refreshMatches() {
-        matches_ = matchingSettings(searchQuery_, advanced_);
-    }
+    void refreshMatches() { matches_ = matchingSettings(searchQuery_, advanced_); }
 
-    void selectFirstMatch() {
-        selection_ = matches_.empty() ? SettingId::UiTextSize : matches_.front();
-    }
+    void selectFirstMatch() { selection_ = matches_.empty() ? SettingId::UiTextSize : matches_.front(); }
 
     void ensureVisible(int selectedPosition, int itemCount) {
         constexpr int visibleRows = 6;

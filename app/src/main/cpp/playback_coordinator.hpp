@@ -129,77 +129,45 @@ inline std::string playbackSummary(const PlaybackTarget& target, const JellyfinI
     return summary;
 }
 
-inline PlaybackTickPlan planPlaybackTick(
-    bool playbackEnded,
-    bool playbackPlaying,
-    int positionMs,
-    std::string_view itemType,
-    const PlaybackSessionState& sessionState,
-    const PlaybackTelemetryState& telemetryState,
-    const PlaybackContinuationState& continuationState,
-    PlaybackTelemetryState::TimePoint now
-) {
+inline PlaybackTickPlan planPlaybackTick(bool playbackEnded, bool playbackPlaying, int positionMs,
+                                         std::string_view itemType, const PlaybackSessionState& sessionState,
+                                         const PlaybackTelemetryState& telemetryState,
+                                         const PlaybackContinuationState& continuationState,
+                                         PlaybackTelemetryState::TimePoint now) {
     PlaybackTickPlan plan;
     plan.refreshTelemetry = !playbackEnded;
     plan.requestMediaSegments = !sessionState.mediaSegmentsRequested();
     plan.reportPlaybackStart = !telemetryState.playbackStartReported();
     plan.reportProgress = telemetryState.progressReportDue(now, playbackPlaying);
-    plan.requestNextEpisode = !continuationState.nextEpisodeRequested()
-        && itemType == "Episode"
-        && positionMs >= 30000;
+    plan.requestNextEpisode = !continuationState.nextEpisodeRequested() && itemType == "Episode" && positionMs >= 30000;
     return plan;
 }
 
-inline PlaybackReleasePlan planPlaybackRelease(
-    bool requestedStopReport,
-    bool completed,
-    bool playbackStartReported,
-    bool sessionValid,
-    const JellyfinItem& item,
-    const PlaybackTarget& target,
-    int positionMs
-) {
+inline PlaybackReleasePlan planPlaybackRelease(bool requestedStopReport, bool completed, bool playbackStartReported,
+                                               bool sessionValid, const JellyfinItem& item,
+                                               const PlaybackTarget& target, int positionMs) {
     PlaybackReleasePlan plan;
-    plan.reportTicks = completed && item.runtimeTicks > 0
-        ? item.runtimeTicks
-        : playbackTicksFromPositionMs(positionMs);
+    plan.reportTicks = completed && item.runtimeTicks > 0 ? item.runtimeTicks : playbackTicksFromPositionMs(positionMs);
     plan.cachedPositionTicks = completed ? 0 : plan.reportTicks;
     plan.markPlayed = completed;
-    plan.reportStop = requestedStopReport
-        && playbackStartReported
-        && sessionValid
-        && !item.id.empty()
-        && !target.url.empty();
+    plan.reportStop =
+        requestedStopReport && playbackStartReported && sessionValid && !item.id.empty() && !target.url.empty();
     return plan;
 }
 
-inline PlaybackProgressPlan planPlaybackProgress(
-    bool playerScreenActive,
-    bool jellyfinSessionValid,
-    bool playbackStartReported,
-    bool targetAvailable,
-    bool immediate,
-    bool preparing,
-    bool paused,
-    int positionMs
-) {
+inline PlaybackProgressPlan planPlaybackProgress(bool playerScreenActive, bool jellyfinSessionValid,
+                                                 bool playbackStartReported, bool targetAvailable, bool immediate,
+                                                 bool preparing, bool paused, int positionMs) {
     PlaybackProgressPlan plan;
-    plan.report = playerScreenActive
-        && jellyfinSessionValid
-        && playbackStartReported
-        && targetAvailable
-        && (immediate || !preparing);
+    plan.report = playerScreenActive && jellyfinSessionValid && playbackStartReported && targetAvailable &&
+                  (immediate || !preparing);
     if (!plan.report) return plan;
     plan.ticks = playbackTicksFromPositionMs(positionMs);
     plan.paused = paused;
     return plan;
 }
 
-inline PlaybackPreparePlan planPlaybackPrepare(
-    bool transcoding,
-    PlaybackMethod method,
-    int64_t elapsedMs
-) {
+inline PlaybackPreparePlan planPlaybackPrepare(bool transcoding, PlaybackMethod method, int64_t elapsedMs) {
     PlaybackPreparePlan plan;
     plan.elapsedMs = elapsedMs;
     plan.transcoding = transcoding;
@@ -208,16 +176,10 @@ inline PlaybackPreparePlan planPlaybackPrepare(
     return plan;
 }
 
-inline PlaybackWindowRestorePlan planPlaybackWindowRestore(
-    bool playerScreenActive,
-    bool windowRestorePending,
-    bool rendererReady,
-    bool targetAvailable,
-    bool rendererContextReused,
-    bool videoSurfaceReady,
-    bool playerReusable,
-    bool resumeRequested
-) {
+inline PlaybackWindowRestorePlan planPlaybackWindowRestore(bool playerScreenActive, bool windowRestorePending,
+                                                           bool rendererReady, bool targetAvailable,
+                                                           bool rendererContextReused, bool videoSurfaceReady,
+                                                           bool playerReusable, bool resumeRequested) {
     PlaybackWindowRestorePlan plan;
     plan.restore = playerScreenActive && windowRestorePending && rendererReady && targetAvailable;
     if (!plan.restore) return plan;
@@ -227,11 +189,8 @@ inline PlaybackWindowRestorePlan planPlaybackWindowRestore(
     return plan;
 }
 
-inline PlaybackWindowSuspendPlan planPlaybackWindowSuspend(
-    bool playerScreenActive,
-    bool targetAvailable,
-    bool playerPlayingOrPreparing
-) {
+inline PlaybackWindowSuspendPlan planPlaybackWindowSuspend(bool playerScreenActive, bool targetAvailable,
+                                                           bool playerPlayingOrPreparing) {
     PlaybackWindowSuspendPlan plan;
     plan.suspend = playerScreenActive && targetAvailable;
     plan.resumePlayback = plan.suspend && playerPlayingOrPreparing;
@@ -242,17 +201,10 @@ inline bool shouldPausePlaybackForFocusLoss(bool playerScreenActive, bool player
     return playerScreenActive && playerPlayingOrPreparing;
 }
 
-inline PlaybackFallbackPlan planPlaybackFallback(
-    bool fallbackAttempted,
-    PlaybackMethod currentMethod,
-    bool sessionValid,
-    std::string_view itemId,
-    std::string_view currentUrl,
-    std::string_view fallbackUrl,
-    bool playbackStartReported,
-    int positionMs,
-    bool preferServerStream
-) {
+inline PlaybackFallbackPlan planPlaybackFallback(bool fallbackAttempted, PlaybackMethod currentMethod,
+                                                 bool sessionValid, std::string_view itemId,
+                                                 std::string_view currentUrl, std::string_view fallbackUrl,
+                                                 bool playbackStartReported, int positionMs, bool preferServerStream) {
     PlaybackFallbackPlan plan;
     if (fallbackAttempted || currentMethod == PlaybackMethod::Transcode || !sessionValid || itemId.empty()) {
         return plan;
@@ -272,66 +224,43 @@ inline PlaybackFallbackPlan planPlaybackFallback(
     return plan;
 }
 
-inline PlaybackSubtitleFallbackPlan planPlaybackSubtitleFallback(
-    const JellyfinItem& item,
-    const PlaybackTarget& target,
-    const PlayerTrackState& trackState
-) {
+inline PlaybackSubtitleFallbackPlan planPlaybackSubtitleFallback(const JellyfinItem& item, const PlaybackTarget& target,
+                                                                 const PlayerTrackState& trackState) {
     PlaybackSubtitleFallbackPlan plan;
     plan.failedSubtitleStreamIndex = trackState.selectedSubtitleServerIndex();
     plan.audioStreamIndex = trackState.selectedAudioServerIndex();
-    const auto selectedSubtitle = std::find_if(
-        item.subtitles.begin(),
-        item.subtitles.end(),
-        [&](const JellyfinSubtitleStream& subtitle) {
+    const auto selectedSubtitle =
+        std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
             return subtitle.index == plan.failedSubtitleStreamIndex;
-        }
-    );
-    const bool subtitleRequiresServerTranscode = selectedSubtitle != item.subtitles.end()
-        && subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ServerTranscode;
-    plan.retry = shouldRetryFailedSubtitleTranscode(
-        target.playMethod == PlaybackMethod::Transcode,
-        plan.failedSubtitleStreamIndex,
-        subtitleRequiresServerTranscode
-    );
+        });
+    const bool subtitleRequiresServerTranscode =
+        selectedSubtitle != item.subtitles.end() &&
+        subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ServerTranscode;
+    plan.retry = shouldRetryFailedSubtitleTranscode(target.playMethod == PlaybackMethod::Transcode,
+                                                    plan.failedSubtitleStreamIndex, subtitleRequiresServerTranscode);
     return plan;
 }
 
-inline PlaybackTarget offeredPlaybackFallbackTarget(
-    PlaybackTarget target,
-    const PlaybackFallbackPlan& plan
-) {
+inline PlaybackTarget offeredPlaybackFallbackTarget(PlaybackTarget target, const PlaybackFallbackPlan& plan) {
     if (!plan.retry || !plan.useOfferedTarget) return target;
     target.url = target.fallbackTranscodeUrl;
     target.fallbackTranscodeUrl.clear();
     target.transcoding = true;
-    target.playMethod = plan.offeredDirectStream
-        ? PlaybackMethod::DirectStream
-        : PlaybackMethod::Transcode;
+    target.playMethod = plan.offeredDirectStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode;
     target.startTicks = plan.resumeTicks;
     return target;
 }
 
-inline PlaybackTransitionPlan planPlaybackTransition(
-    const PlaybackTarget& target,
-    const JellyfinItem& item,
-    bool streamRestart,
-    bool restartPaused,
-    int audioStreamIndex
-) {
+inline PlaybackTransitionPlan planPlaybackTransition(const PlaybackTarget& target, const JellyfinItem& item,
+                                                     bool streamRestart, bool restartPaused, int audioStreamIndex) {
     PlaybackTransitionPlan plan;
     plan.startPositionMs = playbackPositionMsFromTicks(target.startTicks);
     plan.durationMs = playbackPositionMsFromTicks(item.runtimeTicks);
-    plan.selectedAudioServerIndex = audioStreamIndex >= 0
-        ? audioStreamIndex
-        : target.audioStreamIndex;
+    plan.selectedAudioServerIndex = audioStreamIndex >= 0 ? audioStreamIndex : target.audioStreamIndex;
     if (plan.selectedAudioServerIndex < 0 && !item.audios.empty()) {
-        const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
-            return audio.isDefault;
-        });
-        plan.selectedAudioServerIndex = preferred == item.audios.end()
-            ? item.audios.front().index
-            : preferred->index;
+        const auto preferred = std::find_if(item.audios.begin(), item.audios.end(),
+                                            [](const JellyfinAudioStream& audio) { return audio.isDefault; });
+        plan.selectedAudioServerIndex = preferred == item.audios.end() ? item.audios.front().index : preferred->index;
     }
     plan.selectedSubtitleServerIndex = target.subtitleStreamIndex;
     plan.pauseAfterRestart = streamRestart && restartPaused;
@@ -340,13 +269,9 @@ inline PlaybackTransitionPlan planPlaybackTransition(
     return plan;
 }
 
-inline std::optional<JellyfinItem> selectAdjacentPlaybackEpisode(
-    std::vector<JellyfinItem> episodes,
-    const std::string& currentItemId,
-    int currentSeason,
-    int currentEpisode,
-    int direction
-) {
+inline std::optional<JellyfinItem> selectAdjacentPlaybackEpisode(std::vector<JellyfinItem> episodes,
+                                                                 const std::string& currentItemId, int currentSeason,
+                                                                 int currentEpisode, int direction) {
     if (direction == 0) return std::nullopt;
 
     std::sort(episodes.begin(), episodes.end(), [](const JellyfinItem& left, const JellyfinItem& right) {
@@ -354,17 +279,11 @@ inline std::optional<JellyfinItem> selectAdjacentPlaybackEpisode(
         if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
         return left.name < right.name;
     });
-    auto current = std::find_if(episodes.begin(), episodes.end(), [&](const JellyfinItem& candidate) {
-        return candidate.id == currentItemId;
-    });
+    auto current = std::find_if(episodes.begin(), episodes.end(),
+                                [&](const JellyfinItem& candidate) { return candidate.id == currentItemId; });
     if (current == episodes.end() && currentSeason >= 0 && currentEpisode >= 0) {
         current = std::find_if(episodes.begin(), episodes.end(), [&](const JellyfinItem& candidate) {
-            return sameEpisodeSlot(
-                candidate.parentIndexNumber,
-                candidate.indexNumber,
-                currentSeason,
-                currentEpisode
-            );
+            return sameEpisodeSlot(candidate.parentIndexNumber, candidate.indexNumber, currentSeason, currentEpisode);
         });
     }
     if (current == episodes.end()) return std::nullopt;
@@ -372,12 +291,8 @@ inline std::optional<JellyfinItem> selectAdjacentPlaybackEpisode(
     int candidateIndex = static_cast<int>(std::distance(episodes.begin(), current)) + direction;
     while (candidateIndex >= 0 && candidateIndex < static_cast<int>(episodes.size())) {
         const auto& candidate = episodes[static_cast<size_t>(candidateIndex)];
-        const bool duplicateSlot = sameEpisodeSlot(
-            candidate.parentIndexNumber,
-            candidate.indexNumber,
-            current->parentIndexNumber,
-            current->indexNumber
-        );
+        const bool duplicateSlot = sameEpisodeSlot(candidate.parentIndexNumber, candidate.indexNumber,
+                                                   current->parentIndexNumber, current->indexNumber);
         const bool specialOutsideRegularRun = current->parentIndexNumber > 0 && candidate.parentIndexNumber <= 0;
         if (!duplicateSlot && !specialOutsideRegularRun) return candidate;
         candidateIndex += direction;
@@ -385,18 +300,12 @@ inline std::optional<JellyfinItem> selectAdjacentPlaybackEpisode(
     return std::nullopt;
 }
 
-inline PlaybackContinuationPlan planPlaybackContinuation(
-    bool playbackEnded,
-    int positionMs,
-    int durationMs,
-    const PlaybackQueueState& queueState,
-    const PlaybackContinuationState& continuationState,
-    bool autoplayNext,
-    int stillWatchingAfter
-) {
+inline PlaybackContinuationPlan planPlaybackContinuation(bool playbackEnded, int positionMs, int durationMs,
+                                                         const PlaybackQueueState& queueState,
+                                                         const PlaybackContinuationState& continuationState,
+                                                         bool autoplayNext, int stillWatchingAfter) {
     PlaybackContinuationPlan plan;
-    const bool playbackComplete = playbackEnded
-        || (durationMs > 1000 && positionMs >= durationMs - 1000);
+    const bool playbackComplete = playbackEnded || (durationMs > 1000 && positionMs >= durationMs - 1000);
     if (!playbackComplete) return plan;
 
     if (queueState.currentIndex() >= 0 && queueState.repeatMode() != QueueRepeatMode::Off) {
@@ -412,13 +321,10 @@ inline PlaybackContinuationPlan planPlaybackContinuation(
     }
 
     if (continuationState.nextItem()) {
-        plan.action = shouldAutoplayNextEpisode(
-            autoplayNext,
-            continuationState.autoplayChainCount(),
-            stillWatchingAfter
-        )
-            ? PlaybackContinuationAction::AutoplayNext
-            : PlaybackContinuationAction::ShowStillWatching;
+        plan.action =
+            shouldAutoplayNextEpisode(autoplayNext, continuationState.autoplayChainCount(), stillWatchingAfter)
+                ? PlaybackContinuationAction::AutoplayNext
+                : PlaybackContinuationAction::ShowStillWatching;
         return plan;
     }
 
@@ -450,21 +356,11 @@ public:
         telemetryState_.beginPlayback(now);
     }
 
-    [[nodiscard]] PlaybackReleasePlan releasePlan(
-        bool requestedStopReport,
-        bool completed,
-        bool jellyfinSessionValid,
-        int positionMs
-    ) const {
-        return planPlaybackRelease(
-            requestedStopReport,
-            completed,
-            telemetryState_.playbackStartReported(),
-            jellyfinSessionValid,
-            sessionState_.activeItem(),
-            sessionState_.activeTarget(),
-            positionMs
-        );
+    [[nodiscard]] PlaybackReleasePlan releasePlan(bool requestedStopReport, bool completed, bool jellyfinSessionValid,
+                                                  int positionMs) const {
+        return planPlaybackRelease(requestedStopReport, completed, telemetryState_.playbackStartReported(),
+                                   jellyfinSessionValid, sessionState_.activeItem(), sessionState_.activeTarget(),
+                                   positionMs);
     }
 
     void finishRelease() {
@@ -478,13 +374,9 @@ public:
         trackState_.resetPlayback();
     }
 
-    void markPlaybackStopReported() {
-        sessionState_.requestHomeRefresh();
-    }
+    void markPlaybackStopReported() { sessionState_.requestHomeRefresh(); }
 
-    [[nodiscard]] bool consumeHomeRefreshRequest() {
-        return sessionState_.takeHomeRefreshRequest();
-    }
+    [[nodiscard]] bool consumeHomeRefreshRequest() { return sessionState_.takeHomeRefreshRequest(); }
 
     void finishStop() {
         trackState_.clearLanguagePreferences();
@@ -499,13 +391,9 @@ public:
         trackState_.resetSession();
     }
 
-    void dismissStillWatchingPrompt() {
-        continuationState_.setStillWatchingPrompt(false);
-    }
+    void dismissStillWatchingPrompt() { continuationState_.setStillWatchingPrompt(false); }
 
-    void resetAutoplayChain() {
-        continuationState_.resetAutoplayChain();
-    }
+    void resetAutoplayChain() { continuationState_.resetAutoplayChain(); }
 
     void resetContinuationPrompt() {
         resetAutoplayChain();
@@ -532,21 +420,15 @@ public:
         beginPlaybackResolution(true);
     }
 
-    void finishPlaybackResolution() {
-        transitionState_.setLoading(false);
-    }
+    void finishPlaybackResolution() { transitionState_.setLoading(false); }
 
     void stageResolvedPlayback(PlaybackTarget target, JellyfinItem item) {
         transitionState_.stage(std::move(target), std::move(item));
     }
 
-    [[nodiscard]] std::optional<PendingPlaybackTransition> takePendingTransition() {
-        return transitionState_.take();
-    }
+    [[nodiscard]] std::optional<PendingPlaybackTransition> takePendingTransition() { return transitionState_.take(); }
 
-    void setPauseAfterRestart(bool pause) {
-        transitionState_.setPauseAfterRestart(pause);
-    }
+    void setPauseAfterRestart(bool pause) { transitionState_.setPauseAfterRestart(pause); }
 
     [[nodiscard]] bool consumePauseAfterRestart(bool playbackPlaying) {
         if (!playbackPlaying || !transitionState_.pauseAfterRestart()) return false;
@@ -554,30 +436,16 @@ public:
         return true;
     }
 
-    [[nodiscard]] bool transitionLoading() const {
-        return transitionState_.loading();
-    }
+    [[nodiscard]] bool transitionLoading() const { return transitionState_.loading(); }
 
-    [[nodiscard]] bool fallbackResolving() const {
-        return transitionState_.fallbackResolving();
-    }
+    [[nodiscard]] bool fallbackResolving() const { return transitionState_.fallbackResolving(); }
 
-    [[nodiscard]] PlaybackTransitionPlan activateTransition(
-        const JellyfinItem& item,
-        const PlaybackTarget& target,
-        bool streamRestart,
-        bool restartPaused,
-        int audioStreamIndex,
-        VideoZoomMode zoomMode,
-        TimePoint now
-    ) {
-        const PlaybackTransitionPlan plan = planPlaybackTransition(
-            target,
-            item,
-            streamRestart,
-            restartPaused,
-            audioStreamIndex
-        );
+    [[nodiscard]] PlaybackTransitionPlan activateTransition(const JellyfinItem& item, const PlaybackTarget& target,
+                                                            bool streamRestart, bool restartPaused,
+                                                            int audioStreamIndex, VideoZoomMode zoomMode,
+                                                            TimePoint now) {
+        const PlaybackTransitionPlan plan =
+            planPlaybackTransition(target, item, streamRestart, restartPaused, audioStreamIndex);
         transitionState_.setPauseAfterRestart(plan.pauseAfterRestart);
         activate(item, target, now);
         sessionState_.setZoomMode(zoomMode);
@@ -592,8 +460,10 @@ public:
 
     void syncQueueContinuation(const PlaybackQueueState& queueState) {
         const int next = queueState.nextIndex(false);
-        if (const auto* item = queueState.itemAt(next)) continuationState_.setNextItem(*item);
-        else continuationState_.clearNextItem();
+        if (const auto* item = queueState.itemAt(next))
+            continuationState_.setNextItem(*item);
+        else
+            continuationState_.clearNextItem();
     }
 
     bool useQueueContinuation(const PlaybackQueueState& queueState) {
@@ -621,12 +491,11 @@ public:
         return true;
     }
 
-    [[nodiscard]] std::optional<PlaybackNextEpisodeRequest> beginNextEpisodeRequest(
-        PlaybackContinuationState::TimePoint now
-    ) {
+    [[nodiscard]] std::optional<PlaybackNextEpisodeRequest>
+    beginNextEpisodeRequest(PlaybackContinuationState::TimePoint now) {
         const JellyfinItem& item = sessionState_.activeItem();
-        if (item.type != "Episode" || item.seriesId.empty() || item.id.empty()
-            || !continuationState_.beginNextEpisodeRequest(now)) {
+        if (item.type != "Episode" || item.seriesId.empty() || item.id.empty() ||
+            !continuationState_.beginNextEpisodeRequest(now)) {
             return std::nullopt;
         }
         return PlaybackNextEpisodeRequest{
@@ -641,10 +510,7 @@ public:
         return true;
     }
 
-    bool failNextEpisodeRequest(
-        std::string_view expectedItemId,
-        PlaybackContinuationState::TimePoint now
-    ) {
+    bool failNextEpisodeRequest(std::string_view expectedItemId, PlaybackContinuationState::TimePoint now) {
         if (sessionState_.activeItem().id != expectedItemId) return false;
         continuationState_.nextEpisodeRequestFailed(now);
         return true;
@@ -656,8 +522,8 @@ public:
 
     [[nodiscard]] std::optional<PlaybackAdjacentEpisodeRequest> beginAdjacentEpisodeLookup() {
         const JellyfinItem& item = sessionState_.activeItem();
-        if (item.type != "Episode" || item.seriesId.empty() || item.id.empty()
-            || !continuationState_.beginAdjacentEpisodeLookup()) {
+        if (item.type != "Episode" || item.seriesId.empty() || item.id.empty() ||
+            !continuationState_.beginAdjacentEpisodeLookup()) {
             return std::nullopt;
         }
         return PlaybackAdjacentEpisodeRequest{
@@ -673,32 +539,14 @@ public:
         return sessionState_.activeItem().id == expectedItemId;
     }
 
-    [[nodiscard]] PlaybackTickPlan tickPlan(
-        bool playbackEnded,
-        bool playbackPlaying,
-        int positionMs,
-        std::string_view itemType,
-        TimePoint now
-    ) const {
-        return planPlaybackTick(
-            playbackEnded,
-            playbackPlaying,
-            positionMs,
-            itemType,
-            sessionState_,
-            telemetryState_,
-            continuationState_,
-            now
-        );
+    [[nodiscard]] PlaybackTickPlan tickPlan(bool playbackEnded, bool playbackPlaying, int positionMs,
+                                            std::string_view itemType, TimePoint now) const {
+        return planPlaybackTick(playbackEnded, playbackPlaying, positionMs, itemType, sessionState_, telemetryState_,
+                                continuationState_, now);
     }
 
-    [[nodiscard]] PlaybackTickPlan consumeTickPlan(
-        bool playbackEnded,
-        bool playbackPlaying,
-        int positionMs,
-        std::string_view itemType,
-        TimePoint now
-    ) {
+    [[nodiscard]] PlaybackTickPlan consumeTickPlan(bool playbackEnded, bool playbackPlaying, int positionMs,
+                                                   std::string_view itemType, TimePoint now) {
         PlaybackTickPlan plan = tickPlan(playbackEnded, playbackPlaying, positionMs, itemType, now);
         if (plan.reportPlaybackStart && !telemetryState_.markPlaybackStartReported()) {
             plan.reportPlaybackStart = false;
@@ -707,11 +555,7 @@ public:
         return plan;
     }
 
-    [[nodiscard]] PlaybackTelemetryReadPlan consumeTelemetryRead(
-        TimePoint now,
-        bool force,
-        int currentDurationMs
-    ) {
+    [[nodiscard]] PlaybackTelemetryReadPlan consumeTelemetryRead(TimePoint now, bool force, int currentDurationMs) {
         if (!telemetryState_.shouldReadPlayback(now, force)) return {};
         PlaybackTelemetryReadPlan plan{.read = true};
         if (sessionState_.activeItem().runtimeTicks > 0) {
@@ -724,106 +568,52 @@ public:
         return plan;
     }
 
-    [[nodiscard]] PlaybackContinuationPlan continuationPlan(
-        bool playbackEnded,
-        int positionMs,
-        int durationMs,
-        const PlaybackQueueState& queueState,
-        bool autoplayNext,
-        int stillWatchingAfter
-    ) const {
-        return planPlaybackContinuation(
-            playbackEnded,
-            positionMs,
-            durationMs,
-            queueState,
-            continuationState_,
-            autoplayNext,
-            stillWatchingAfter
-        );
+    [[nodiscard]] PlaybackContinuationPlan continuationPlan(bool playbackEnded, int positionMs, int durationMs,
+                                                            const PlaybackQueueState& queueState, bool autoplayNext,
+                                                            int stillWatchingAfter) const {
+        return planPlaybackContinuation(playbackEnded, positionMs, durationMs, queueState, continuationState_,
+                                        autoplayNext, stillWatchingAfter);
     }
 
-    [[nodiscard]] PlaybackProgressPlan progressPlan(
-        bool playerScreenActive,
-        bool jellyfinSessionValid,
-        bool immediate,
-        bool preparing,
-        bool paused,
-        int positionMs
-    ) const {
-        return planPlaybackProgress(
-            playerScreenActive,
-            jellyfinSessionValid,
-            telemetryState_.playbackStartReported(),
-            !sessionState_.activeTarget().url.empty(),
-            immediate,
-            preparing,
-            paused,
-            positionMs
-        );
+    [[nodiscard]] PlaybackProgressPlan progressPlan(bool playerScreenActive, bool jellyfinSessionValid, bool immediate,
+                                                    bool preparing, bool paused, int positionMs) const {
+        return planPlaybackProgress(playerScreenActive, jellyfinSessionValid, telemetryState_.playbackStartReported(),
+                                    !sessionState_.activeTarget().url.empty(), immediate, preparing, paused,
+                                    positionMs);
     }
 
-    void beginPreparing(TimePoint now) {
-        sessionState_.beginPreparing(now);
-    }
+    void beginPreparing(TimePoint now) { sessionState_.beginPreparing(now); }
 
     [[nodiscard]] PlaybackPreparePlan preparePlan(TimePoint now) {
-        return planPlaybackPrepare(
-            sessionState_.activeTarget().transcoding,
-            sessionState_.activeTarget().playMethod,
-            sessionState_.preparingElapsedMs(now)
-        );
+        return planPlaybackPrepare(sessionState_.activeTarget().transcoding, sessionState_.activeTarget().playMethod,
+                                   sessionState_.preparingElapsedMs(now));
     }
 
-    void finishPreparing() {
-        sessionState_.clearPreparing();
+    void finishPreparing() { sessionState_.clearPreparing(); }
+
+    [[nodiscard]] PlaybackWindowRestorePlan windowRestorePlan(bool playerScreenActive, bool windowRestorePending,
+                                                              bool rendererReady, bool rendererContextReused,
+                                                              bool videoSurfaceReady, bool playerReusable,
+                                                              bool resumeRequested) const {
+        return planPlaybackWindowRestore(playerScreenActive, windowRestorePending, rendererReady,
+                                         !sessionState_.activeTarget().url.empty(), rendererContextReused,
+                                         videoSurfaceReady, playerReusable, resumeRequested);
     }
 
-    [[nodiscard]] PlaybackWindowRestorePlan windowRestorePlan(
-        bool playerScreenActive,
-        bool windowRestorePending,
-        bool rendererReady,
-        bool rendererContextReused,
-        bool videoSurfaceReady,
-        bool playerReusable,
-        bool resumeRequested
-    ) const {
-        return planPlaybackWindowRestore(
-            playerScreenActive,
-            windowRestorePending,
-            rendererReady,
-            !sessionState_.activeTarget().url.empty(),
-            rendererContextReused,
-            videoSurfaceReady,
-            playerReusable,
-            resumeRequested
-        );
-    }
-
-    [[nodiscard]] PlaybackWindowSuspendPlan windowSuspendPlan(
-        bool playerScreenActive,
-        bool playerPlayingOrPreparing
-    ) const {
-        return planPlaybackWindowSuspend(
-            playerScreenActive,
-            !sessionState_.activeTarget().url.empty(),
-            playerPlayingOrPreparing
-        );
+    [[nodiscard]] PlaybackWindowSuspendPlan windowSuspendPlan(bool playerScreenActive,
+                                                              bool playerPlayingOrPreparing) const {
+        return planPlaybackWindowSuspend(playerScreenActive, !sessionState_.activeTarget().url.empty(),
+                                         playerPlayingOrPreparing);
     }
 
     [[nodiscard]] PlaybackSubtitleFallbackPlan subtitleFallbackPlan() const {
-        return planPlaybackSubtitleFallback(
-            sessionState_.activeItem(),
-            sessionState_.activeTarget(),
-            trackState_
-        );
+        return planPlaybackSubtitleFallback(sessionState_.activeItem(), sessionState_.activeTarget(), trackState_);
     }
 
     void rememberAudioLanguagePreference(int streamIndex) {
         const auto& audios = sessionState_.activeItem().audios;
-        const auto selected = std::find_if(audios.begin(), audios.end(), [&](const JellyfinAudioStream& audio) {
-            return audio.index == streamIndex;
-        });
+        const auto selected = std::find_if(
+            audios.begin(), audios.end(), [&](const JellyfinAudioStream& audio) { return audio.index == streamIndex; });
         if (selected != audios.end() && !selected->language.empty()) {
             trackState_.setAudioLanguagePreference(normalizeAudioLanguage(selected->language));
         } else {
@@ -837,9 +627,9 @@ public:
             return;
         }
         const auto& subtitles = sessionState_.activeItem().subtitles;
-        const auto selected = std::find_if(subtitles.begin(), subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-            return subtitle.index == streamIndex;
-        });
+        const auto selected =
+            std::find_if(subtitles.begin(), subtitles.end(),
+                         [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == streamIndex; });
         if (selected != subtitles.end() && !selected->language.empty()) {
             trackState_.setSubtitleLanguagePreference(normalizeSubtitleLanguage(selected->language));
         } else {
@@ -867,18 +657,14 @@ public:
         trackState_.setSubtitleEnabled(false);
     }
 
-    [[nodiscard]] bool beginSubtitleLoad() {
-        return trackState_.beginSubtitleWork();
-    }
+    [[nodiscard]] bool beginSubtitleLoad() { return trackState_.beginSubtitleWork(); }
 
     [[nodiscard]] bool subtitleLoadMatches(std::string_view itemId, int requestedStreamIndex) const {
-        return sessionState_.activeItem().id == itemId
-            && trackState_.selectedSubtitleServerIndex() == requestedStreamIndex;
+        return sessionState_.activeItem().id == itemId &&
+               trackState_.selectedSubtitleServerIndex() == requestedStreamIndex;
     }
 
-    void failSubtitleLoad() {
-        trackState_.failSelectedSubtitle();
-    }
+    void failSubtitleLoad() { trackState_.failSelectedSubtitle(); }
 
     void completeSubtitleLoad(int streamIndex, std::string language, std::vector<SubtitleCue> cues) {
         trackState_.endSubtitleWork();
@@ -901,37 +687,16 @@ public:
         transitionState_.setLoading(false);
     }
 
-    void stageStreamRestart(
-        PlaybackTarget target,
-        JellyfinItem item,
-        bool restartPaused,
-        int audioStreamIndex
-    ) {
-        transitionState_.stage(
-            std::move(target),
-            std::move(item),
-            true,
-            restartPaused,
-            audioStreamIndex
-        );
+    void stageStreamRestart(PlaybackTarget target, JellyfinItem item, bool restartPaused, int audioStreamIndex) {
+        transitionState_.stage(std::move(target), std::move(item), true, restartPaused, audioStreamIndex);
     }
 
-    [[nodiscard]] PlaybackFallbackPlan fallbackPlan(
-        bool jellyfinSessionValid,
-        int positionMs,
-        bool preferServerStream
-    ) const {
-        return planPlaybackFallback(
-            sessionState_.fallbackAttempted(),
-            sessionState_.activeTarget().playMethod,
-            jellyfinSessionValid,
-            sessionState_.activeItem().id,
-            sessionState_.activeTarget().url,
-            sessionState_.activeTarget().fallbackTranscodeUrl,
-            telemetryState_.playbackStartReported(),
-            positionMs,
-            preferServerStream
-        );
+    [[nodiscard]] PlaybackFallbackPlan fallbackPlan(bool jellyfinSessionValid, int positionMs,
+                                                    bool preferServerStream) const {
+        return planPlaybackFallback(sessionState_.fallbackAttempted(), sessionState_.activeTarget().playMethod,
+                                    jellyfinSessionValid, sessionState_.activeItem().id,
+                                    sessionState_.activeTarget().url, sessionState_.activeTarget().fallbackTranscodeUrl,
+                                    telemetryState_.playbackStartReported(), positionMs, preferServerStream);
     }
 
     void beginFallback() {
@@ -945,23 +710,13 @@ public:
         sessionState_.activeTarget() = offeredPlaybackFallbackTarget(sessionState_.activeTarget(), plan);
     }
 
-    void beginFallbackResolution() {
-        transitionState_.setFallbackResolving(true);
-    }
+    void beginFallbackResolution() { transitionState_.setFallbackResolving(true); }
 
-    void finishFallbackResolution() {
-        transitionState_.setFallbackResolving(false);
-    }
+    void finishFallbackResolution() { transitionState_.setFallbackResolving(false); }
 
     void stageResolvedFallback(PlaybackTarget target, JellyfinItem item, int audioStreamIndex) {
         transitionState_.setFallbackResolving(false);
-        transitionState_.stage(
-            std::move(target),
-            std::move(item),
-            true,
-            false,
-            audioStreamIndex
-        );
+        transitionState_.stage(std::move(target), std::move(item), true, false, audioStreamIndex);
     }
 
 private:

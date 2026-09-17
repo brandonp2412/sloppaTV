@@ -19,20 +19,10 @@ struct PlaybackInfoOffer {
     bool supportsTranscoding = false;
 };
 
-std::string buildPlaybackInfoRequestBody(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    const PlaybackProfilePlan& plan,
-    PlaybackOverrides overrides,
-    int maxStreamingBitrate,
-    int maxAudioChannels,
-    int audioStreamIndex,
-    int subtitleStreamIndex
-);
+std::string buildPlaybackInfoRequestBody(const JellyfinSession& session, const JellyfinItem& item,
+                                         const PlaybackProfilePlan& plan, PlaybackOverrides overrides,
+                                         int maxStreamingBitrate, int maxAudioChannels, int audioStreamIndex,
+                                         int subtitleStreamIndex);
 
-ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
-    std::string_view responseBody,
-    int audioStreamIndex,
-    int subtitleStreamIndex,
-    PlaybackOverrides overrides = {}
-);
+ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view responseBody, int audioStreamIndex,
+                                                         int subtitleStreamIndex, PlaybackOverrides overrides = {});

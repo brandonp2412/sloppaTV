@@ -37,11 +37,11 @@ bool supportsVideoFormat(JNIEnv* env, jobject codecList, const char* mime, jint 
         if (listClass) env->DeleteLocalRef(listClass);
         return false;
     }
-    jmethodID createVideoFormat = env->GetStaticMethodID(
-        formatClass, "createVideoFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;"
-    );
+    jmethodID createVideoFormat =
+        env->GetStaticMethodID(formatClass, "createVideoFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;");
     jmethodID setInteger = env->GetMethodID(formatClass, "setInteger", "(Ljava/lang/String;I)V");
-    jmethodID findDecoder = env->GetMethodID(listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
+    jmethodID findDecoder =
+        env->GetMethodID(listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
     if (!createVideoFormat || !setInteger || !findDecoder || env->ExceptionCheck()) {
         if (env->ExceptionCheck()) env->ExceptionClear();
         env->DeleteLocalRef(formatClass);
@@ -76,10 +76,10 @@ bool supportsAudioFormat(JNIEnv* env, jobject codecList, const char* mime, int s
         if (listClass) env->DeleteLocalRef(listClass);
         return false;
     }
-    jmethodID createAudioFormat = env->GetStaticMethodID(
-        formatClass, "createAudioFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;"
-    );
-    jmethodID findDecoder = env->GetMethodID(listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
+    jmethodID createAudioFormat =
+        env->GetStaticMethodID(formatClass, "createAudioFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;");
+    jmethodID findDecoder =
+        env->GetMethodID(listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
     if (!createAudioFormat || !findDecoder || env->ExceptionCheck()) {
         if (env->ExceptionCheck()) env->ExceptionClear();
         env->DeleteLocalRef(formatClass);
@@ -102,25 +102,40 @@ bool supportsAudioFormat(JNIEnv* env, jobject codecList, const char* mime, int s
 void queryDisplayHdr(JNIEnv* env, jobject activity, DeviceCodecSupport& result) {
     if (!env || !activity) return;
     jclass activityClass = env->GetObjectClass(activity);
-    jmethodID getWindowManager = activityClass
-        ? env->GetMethodID(activityClass, "getWindowManager", "()Landroid/view/WindowManager;")
-        : nullptr;
+    jmethodID getWindowManager =
+        activityClass ? env->GetMethodID(activityClass, "getWindowManager", "()Landroid/view/WindowManager;") : nullptr;
     jobject windowManager = getWindowManager ? env->CallObjectMethod(activity, getWindowManager) : nullptr;
-    if (env->ExceptionCheck()) { env->ExceptionClear(); windowManager = nullptr; }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        windowManager = nullptr;
+    }
     jclass wmClass = env->FindClass("android/view/WindowManager");
-    jmethodID getDefaultDisplay = wmClass ? env->GetMethodID(wmClass, "getDefaultDisplay", "()Landroid/view/Display;") : nullptr;
-    jobject display = windowManager && getDefaultDisplay ? env->CallObjectMethod(windowManager, getDefaultDisplay) : nullptr;
-    if (env->ExceptionCheck()) { env->ExceptionClear(); display = nullptr; }
+    jmethodID getDefaultDisplay =
+        wmClass ? env->GetMethodID(wmClass, "getDefaultDisplay", "()Landroid/view/Display;") : nullptr;
+    jobject display =
+        windowManager && getDefaultDisplay ? env->CallObjectMethod(windowManager, getDefaultDisplay) : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        display = nullptr;
+    }
     jclass displayClass = env->FindClass("android/view/Display");
-    jmethodID getHdrCapabilities = displayClass
-        ? env->GetMethodID(displayClass, "getHdrCapabilities", "()Landroid/view/Display$HdrCapabilities;")
-        : nullptr;
+    jmethodID getHdrCapabilities =
+        displayClass ? env->GetMethodID(displayClass, "getHdrCapabilities", "()Landroid/view/Display$HdrCapabilities;")
+                     : nullptr;
     jobject hdrCaps = display && getHdrCapabilities ? env->CallObjectMethod(display, getHdrCapabilities) : nullptr;
-    if (env->ExceptionCheck()) { env->ExceptionClear(); hdrCaps = nullptr; }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        hdrCaps = nullptr;
+    }
     jclass hdrClass = env->FindClass("android/view/Display$HdrCapabilities");
     jmethodID getSupportedTypes = hdrClass ? env->GetMethodID(hdrClass, "getSupportedHdrTypes", "()[I") : nullptr;
-    auto types = hdrCaps && getSupportedTypes ? static_cast<jintArray>(env->CallObjectMethod(hdrCaps, getSupportedTypes)) : nullptr;
-    if (env->ExceptionCheck()) { env->ExceptionClear(); types = nullptr; }
+    auto types = hdrCaps && getSupportedTypes
+                     ? static_cast<jintArray>(env->CallObjectMethod(hdrCaps, getSupportedTypes))
+                     : nullptr;
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        types = nullptr;
+    }
     const jint hdr10 = staticInt(env, hdrClass, "HDR_TYPE_HDR10");
     const jint hdr10Plus = staticInt(env, hdrClass, "HDR_TYPE_HDR10_PLUS");
     const jint dolbyVision = staticInt(env, hdrClass, "HDR_TYPE_DOLBY_VISION");
@@ -146,7 +161,7 @@ void queryDisplayHdr(JNIEnv* env, jobject activity, DeviceCodecSupport& result) 
     if (windowManager) env->DeleteLocalRef(windowManager);
     if (activityClass) env->DeleteLocalRef(activityClass);
 }
-}
+} // namespace
 
 std::vector<std::string> DeviceCodecSupport::jellyfinVideoCodecs() const {
     std::vector<std::string> codecs;
@@ -181,8 +196,7 @@ std::vector<std::string> DeviceCodecSupport::jellyfinAudioCodecs(int maxAudioCha
             .directDtsHd = directDtsHd,
             .directTrueHd = directTrueHd,
         },
-        maxAudioChannels
-    );
+        maxAudioChannels);
 }
 
 std::vector<std::string> DeviceCodecSupport::jellyfinTranscodingAudioCodecs(int maxAudioChannels) const {
@@ -205,8 +219,7 @@ std::vector<std::string> DeviceCodecSupport::jellyfinTranscodingAudioCodecs(int 
             .directDtsHd = directDtsHd,
             .directTrueHd = directTrueHd,
         },
-        maxAudioChannels
-    );
+        maxAudioChannels);
 }
 
 DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
@@ -241,7 +254,8 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     if (infos) {
         jclass infoClass = env->FindClass("android/media/MediaCodecInfo");
         jmethodID isEncoder = infoClass ? env->GetMethodID(infoClass, "isEncoder", "()Z") : nullptr;
-        jmethodID getSupportedTypes = infoClass ? env->GetMethodID(infoClass, "getSupportedTypes", "()[Ljava/lang/String;") : nullptr;
+        jmethodID getSupportedTypes =
+            infoClass ? env->GetMethodID(infoClass, "getSupportedTypes", "()[Ljava/lang/String;") : nullptr;
         if (env->ExceptionCheck()) env->ExceptionClear();
 
         const jsize infoCount = env->GetArrayLength(infos);
@@ -261,9 +275,8 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
                     for (jsize typeIndex = 0; typeIndex < count; ++typeIndex) {
                         auto value = static_cast<jstring>(env->GetObjectArrayElement(types, typeIndex));
                         std::string mime = jniString(env, value);
-                        std::transform(mime.begin(), mime.end(), mime.begin(), [](unsigned char c) {
-                            return static_cast<char>(std::tolower(c));
-                        });
+                        std::transform(mime.begin(), mime.end(), mime.begin(),
+                                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                         if (!mime.empty()) decoderTypes.insert(std::move(mime));
                         if (value) env->DeleteLocalRef(value);
                     }
@@ -277,28 +290,37 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     }
 
     jclass profileLevelClass = env->FindClass("android/media/MediaCodecInfo$CodecProfileLevel");
-    if (env->ExceptionCheck()) { env->ExceptionClear(); profileLevelClass = nullptr; }
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        profileLevelClass = nullptr;
+    }
     if (list && profileLevelClass) {
-        result.h264High10 = supportsVideoFormat(
-            env, list, "video/avc", staticInt(env, profileLevelClass, "AVCProfileHigh10"), 1920, 1080
-        );
+        result.h264High10 = supportsVideoFormat(env, list, "video/avc",
+                                                staticInt(env, profileLevelClass, "AVCProfileHigh10"), 1920, 1080);
         const jint hevcMain10 = staticInt(env, profileLevelClass, "HEVCProfileMain10");
         const jint hevcMain10Hdr10 = staticInt(env, profileLevelClass, "HEVCProfileMain10HDR10");
         const jint hevcMain10Hdr10Plus = staticInt(env, profileLevelClass, "HEVCProfileMain10HDR10Plus");
-        result.hevcMain10 = supportsVideoFormat(env, list, "video/hevc", hevcMain10, 1920, 1080)
-            || supportsVideoFormat(env, list, "video/hevc", hevcMain10Hdr10, 1920, 1080)
-            || supportsVideoFormat(env, list, "video/hevc", hevcMain10Hdr10Plus, 1920, 1080);
+        result.hevcMain10 = supportsVideoFormat(env, list, "video/hevc", hevcMain10, 1920, 1080) ||
+                            supportsVideoFormat(env, list, "video/hevc", hevcMain10Hdr10, 1920, 1080) ||
+                            supportsVideoFormat(env, list, "video/hevc", hevcMain10Hdr10Plus, 1920, 1080);
         const jint av1Main10 = staticInt(env, profileLevelClass, "AV1ProfileMain10");
         const jint av1Main10Hdr10 = staticInt(env, profileLevelClass, "AV1ProfileMain10HDR10");
         const jint av1Main10Hdr10Plus = staticInt(env, profileLevelClass, "AV1ProfileMain10HDR10Plus");
-        result.av1Main10 = supportsVideoFormat(env, list, "video/av01", av1Main10, 1920, 1080)
-            || supportsVideoFormat(env, list, "video/av01", av1Main10Hdr10, 1920, 1080)
-            || supportsVideoFormat(env, list, "video/av01", av1Main10Hdr10Plus, 1920, 1080);
+        result.av1Main10 = supportsVideoFormat(env, list, "video/av01", av1Main10, 1920, 1080) ||
+                           supportsVideoFormat(env, list, "video/av01", av1Main10Hdr10, 1920, 1080) ||
+                           supportsVideoFormat(env, list, "video/av01", av1Main10Hdr10Plus, 1920, 1080);
 
         auto maxResolution = [&](const char* mime, int& width, int& height) {
-            if (supportsVideoFormat(env, list, mime, 0, 7680, 4320)) { width = 7680; height = 4320; }
-            else if (supportsVideoFormat(env, list, mime, 0, 3840, 2160)) { width = 3840; height = 2160; }
-            else if (supportsVideoFormat(env, list, mime, 0, 1920, 1080)) { width = 1920; height = 1080; }
+            if (supportsVideoFormat(env, list, mime, 0, 7680, 4320)) {
+                width = 7680;
+                height = 4320;
+            } else if (supportsVideoFormat(env, list, mime, 0, 3840, 2160)) {
+                width = 3840;
+                height = 2160;
+            } else if (supportsVideoFormat(env, list, mime, 0, 1920, 1080)) {
+                width = 1920;
+                height = 1080;
+            }
         };
         maxResolution("video/avc", result.maxH264Width, result.maxH264Height);
         maxResolution("video/hevc", result.maxHevcWidth, result.maxHevcHeight);
@@ -334,12 +356,9 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
 
     if (activity) {
         jclass activityClass = env->GetObjectClass(activity);
-        jmethodID queryAudio = activityClass
-            ? env->GetMethodID(activityClass, "queryAudioOutputCapabilities", "()[I")
-            : nullptr;
-        auto audioCaps = queryAudio
-            ? static_cast<jintArray>(env->CallObjectMethod(activity, queryAudio))
-            : nullptr;
+        jmethodID queryAudio =
+            activityClass ? env->GetMethodID(activityClass, "queryAudioOutputCapabilities", "()[I") : nullptr;
+        auto audioCaps = queryAudio ? static_cast<jintArray>(env->CallObjectMethod(activity, queryAudio)) : nullptr;
         if (env->ExceptionCheck()) {
             env->ExceptionClear();
             audioCaps = nullptr;
@@ -369,19 +388,15 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
 
     const auto videos = result.jellyfinVideoCodecs();
     const auto audios = result.jellyfinAudioCodecs(result.maxAudioOutputChannels);
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Detected %zu video/%zu audio; MPEG4=%d MP2=%d PCM=%d; H264 High10=%d HEVC Main10=%d AV1 Main10=%d; max H264=%dx%d HEVC=%dx%d AV1=%dx%d; HDR10=%d HDR10+=%d DV=%d HLG=%d; audioOut=%dch direct(ac3=%d eac3=%d dts=%d dtshd=%d truehd=%d)",
-        videos.size(), audios.size(),
-        result.mpeg4, result.mp2, result.pcm,
-        result.h264High10, result.hevcMain10, result.av1Main10,
-        result.maxH264Width, result.maxH264Height,
-        result.maxHevcWidth, result.maxHevcHeight,
-        result.maxAv1Width, result.maxAv1Height,
-        result.displayHdr10, result.displayHdr10Plus, result.displayDolbyVision, result.displayHlg,
-        result.maxAudioOutputChannels,
-        result.directAc3, result.directEac3, result.directDts, result.directDtsHd, result.directTrueHd
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "Detected %zu video/%zu audio; MPEG4=%d MP2=%d PCM=%d; H264 High10=%d HEVC Main10=%d AV1 "
+                        "Main10=%d; max H264=%dx%d HEVC=%dx%d AV1=%dx%d; HDR10=%d HDR10+=%d DV=%d HLG=%d; "
+                        "audioOut=%dch direct(ac3=%d eac3=%d dts=%d dtshd=%d truehd=%d)",
+                        videos.size(), audios.size(), result.mpeg4, result.mp2, result.pcm, result.h264High10,
+                        result.hevcMain10, result.av1Main10, result.maxH264Width, result.maxH264Height,
+                        result.maxHevcWidth, result.maxHevcHeight, result.maxAv1Width, result.maxAv1Height,
+                        result.displayHdr10, result.displayHdr10Plus, result.displayDolbyVision, result.displayHlg,
+                        result.maxAudioOutputChannels, result.directAc3, result.directEac3, result.directDts,
+                        result.directDtsHd, result.directTrueHd);
     return result;
 }

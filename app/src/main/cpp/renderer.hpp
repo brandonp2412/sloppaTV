@@ -28,7 +28,9 @@ public:
     bool detachWindow();
     bool attachWindow(ANativeWindow* window);
     void shutdown();
-    [[nodiscard]] bool contextReady() const { return display_ != EGL_NO_DISPLAY && context_ != EGL_NO_CONTEXT && config_ != nullptr; }
+    [[nodiscard]] bool contextReady() const {
+        return display_ != EGL_NO_DISPLAY && context_ != EGL_NO_CONTEXT && config_ != nullptr;
+    }
     [[nodiscard]] bool ready() const { return contextReady() && surface_ != EGL_NO_SURFACE; }
 
     void beginFrame();
@@ -45,55 +47,21 @@ public:
     void horizontalGradient(float x, float y, float w, float h, Color left, Color right);
     void outline(float x, float y, float w, float h, float thickness, Color color);
     void text(float x, float y, float scale, std::string_view value, Color color, float maxWidth = 0.0f);
-    void outlinedText(
-        float x,
-        float y,
-        float scale,
-        std::string_view value,
-        Color fill,
-        Color outline,
-        float maxWidth = 0.0f
-    );
+    void outlinedText(float x, float y, float scale, std::string_view value, Color fill, Color outline,
+                      float maxWidth = 0.0f);
     void textCentered(float x, float y, float w, float h, float scale, std::string_view value, Color color);
-    void textVerticallyCentered(float x, float y, float h, float scale, std::string_view value, Color color, float maxWidth = 0.0f);
+    void textVerticallyCentered(float x, float y, float h, float scale, std::string_view value, Color color,
+                                float maxWidth = 0.0f);
     float textWidth(float scale, std::string_view value) const;
     GLuint createTexture(int width, int height, const uint8_t* rgbaPixels);
     void deleteTexture(GLuint texture);
     void image(GLuint texture, float x, float y, float w, float h, float alpha = 1.0f);
-    void imageRegion(
-        GLuint texture,
-        float x,
-        float y,
-        float w,
-        float h,
-        float u0,
-        float v0,
-        float u1,
-        float v1,
-        float alpha = 1.0f
-    );
-    void roundedImageRegion(
-        GLuint texture,
-        float x,
-        float y,
-        float w,
-        float h,
-        float radius,
-        float u0,
-        float v0,
-        float u1,
-        float v1,
-        float alpha = 1.0f
-    );
-    bool externalImage(
-        GLuint texture,
-        float x,
-        float y,
-        float w,
-        float h,
-        const std::array<float, 16>& transform,
-        float alpha = 1.0f
-    );
+    void imageRegion(GLuint texture, float x, float y, float w, float h, float u0, float v0, float u1, float v1,
+                     float alpha = 1.0f);
+    void roundedImageRegion(GLuint texture, float x, float y, float w, float h, float radius, float u0, float v0,
+                            float u1, float v1, float alpha = 1.0f);
+    bool externalImage(GLuint texture, float x, float y, float w, float h, const std::array<float, 16>& transform,
+                       float alpha = 1.0f);
     [[nodiscard]] uint64_t generation() const { return generation_; }
 
     static constexpr float logicalWidth() { return 1920.0f; }
@@ -126,8 +94,8 @@ private:
         bool advancesReady = false;
 
         [[nodiscard]] bool valid() const {
-            return width > 0 && height > 0
-                && rgba.size() == static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
+            return width > 0 && height > 0 &&
+                   rgba.size() == static_cast<size_t>(width) * static_cast<size_t>(height) * 4;
         }
     };
 
@@ -137,30 +105,11 @@ private:
     bool loadFontOutlineAtlas();
     static PreparedFontAtlas prepareFontAtlas(JavaVM* vm, jobject activity);
     GLuint uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap);
-    void imageRegionTint(
-        GLuint texture,
-        float x,
-        float y,
-        float w,
-        float h,
-        float u0,
-        float v0,
-        float u1,
-        float v1,
-        Color tint,
-        float alpha,
-        float radius = 0.0f
-    );
+    void imageRegionTint(GLuint texture, float x, float y, float w, float h, float u0, float v0, float u1, float v1,
+                         Color tint, float alpha, float radius = 0.0f);
     GLuint compileShader(GLenum type, const char* source);
-    void textWithAtlas(
-        GLuint atlasTexture,
-        float x,
-        float y,
-        float scale,
-        std::string_view value,
-        Color color,
-        float maxWidth
-    );
+    void textWithAtlas(GLuint atlasTexture, float x, float y, float scale, std::string_view value, Color color,
+                       float maxWidth);
     std::array<uint8_t, 7> glyph(char c) const;
 
     EGLDisplay display_ = EGL_NO_DISPLAY;

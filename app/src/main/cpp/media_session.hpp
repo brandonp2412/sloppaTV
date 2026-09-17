@@ -31,11 +31,7 @@ public:
     NativeMediaSession(const NativeMediaSession&) = delete;
     NativeMediaSession& operator=(const NativeMediaSession&) = delete;
 
-    void updateMetadata(
-        const std::string& title,
-        const std::string& subtitle,
-        int64_t durationMs
-    );
+    void updateMetadata(const std::string& title, const std::string& subtitle, int64_t durationMs);
     void updateState(MediaSessionState state, int64_t positionMs);
     void clear();
     [[nodiscard]] std::optional<MediaSessionCommand> takeCommand();

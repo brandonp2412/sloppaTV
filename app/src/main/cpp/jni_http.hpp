@@ -26,12 +26,8 @@ public:
     JniHttpClient(JavaVM* vm, jobject activity);
     ~JniHttpClient();
 
-    HttpResponse request(
-        const std::string& method,
-        const std::string& url,
-        const std::map<std::string, std::string>& headers = {},
-        const std::string& body = {}
-    ) const;
+    HttpResponse request(const std::string& method, const std::string& url,
+                         const std::map<std::string, std::string>& headers = {}, const std::string& body = {}) const;
     void invalidateGetCache() const;
     void cancelPending() const;
 
@@ -48,22 +44,11 @@ private:
         HttpResponse response;
     };
 
-    HttpResponse requestWithRetry(
-        const std::string& method,
-        const std::string& url,
-        const std::map<std::string, std::string>& headers,
-        const std::string& body
-    ) const;
-    std::string getCacheKey(
-        const std::string& url,
-        const std::map<std::string, std::string>& headers
-    ) const;
-    HttpResponse requestOnce(
-        const std::string& method,
-        const std::string& url,
-        const std::map<std::string, std::string>& headers,
-        const std::string& body
-    ) const;
+    HttpResponse requestWithRetry(const std::string& method, const std::string& url,
+                                  const std::map<std::string, std::string>& headers, const std::string& body) const;
+    std::string getCacheKey(const std::string& url, const std::map<std::string, std::string>& headers) const;
+    HttpResponse requestOnce(const std::string& method, const std::string& url,
+                             const std::map<std::string, std::string>& headers, const std::string& body) const;
 
     JavaVM* vm_ = nullptr;
     jobject activity_ = nullptr;

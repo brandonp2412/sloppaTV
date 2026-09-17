@@ -89,20 +89,16 @@ struct PlaybackServerOfferInput {
 };
 
 inline std::string normalizedPlaybackValue(std::string value) {
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return value;
 }
 
-inline PlaybackProfilePlan makePlaybackProfilePlan(
-    const PlaybackDeviceCapabilityInput& device,
-    const PlaybackVideoCapabilityInput& video,
-    const PlaybackAudioCapabilityInput& audio,
-    const PlaybackSubtitleCapabilityInput& subtitle,
-    int requestedAudioChannels,
-    PlaybackOverrides overrides
-) {
+inline PlaybackProfilePlan makePlaybackProfilePlan(const PlaybackDeviceCapabilityInput& device,
+                                                   const PlaybackVideoCapabilityInput& video,
+                                                   const PlaybackAudioCapabilityInput& audio,
+                                                   const PlaybackSubtitleCapabilityInput& subtitle,
+                                                   int requestedAudioChannels, PlaybackOverrides overrides) {
     PlaybackProfilePlan plan;
     plan.maxAudioChannels = effectiveAudioChannels(requestedAudioChannels, device.maxAudioOutputChannels);
     plan.videoCodecs = device.videoCodecs;
@@ -124,28 +120,31 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(
     const bool hdr10Plus = range.find("hdr10plus") != std::string::npos || range.find("hdr10+") != std::string::npos;
     const bool hdr10 = !hdr10Plus && range.find("hdr10") != std::string::npos;
     const bool hlg = range.find("hlg") != std::string::npos;
-    const bool unsupportedHdr = (dolbyVision && !hdrCapabilityAllowed(device.displayDolbyVision, overrides.hdrMode))
-        || (!dolbyVision && hdr10Plus && !hdrCapabilityAllowed(device.displayHdr10Plus, overrides.hdrMode))
-        || (!dolbyVision && hdr10 && !hdrCapabilityAllowed(device.displayHdr10, overrides.hdrMode))
-        || (!dolbyVision && hlg && !hdrCapabilityAllowed(device.displayHlg, overrides.hdrMode));
+    const bool unsupportedHdr =
+        (dolbyVision && !hdrCapabilityAllowed(device.displayDolbyVision, overrides.hdrMode)) ||
+        (!dolbyVision && hdr10Plus && !hdrCapabilityAllowed(device.displayHdr10Plus, overrides.hdrMode)) ||
+        (!dolbyVision && hdr10 && !hdrCapabilityAllowed(device.displayHdr10, overrides.hdrMode)) ||
+        (!dolbyVision && hlg && !hdrCapabilityAllowed(device.displayHlg, overrides.hdrMode));
 
     if (codec == "hevc") {
-        if (!codecLevelAllowed(video.level, overrides.maxHevcLevel)) rejectVideoCodec("hevc", "level exceeds user override");
+        if (!codecLevelAllowed(video.level, overrides.maxHevcLevel))
+            rejectVideoCodec("hevc", "level exceeds user override");
         if ((video.bitDepth > 8 || profile.find("main 10") != std::string::npos) && !device.hevcMain10) {
             rejectVideoCodec("hevc", "HEVC Main10 unsupported");
         }
-        if ((device.maxHevcWidth > 0 && video.width > device.maxHevcWidth)
-            || (device.maxHevcHeight > 0 && video.height > device.maxHevcHeight)) {
+        if ((device.maxHevcWidth > 0 && video.width > device.maxHevcWidth) ||
+            (device.maxHevcHeight > 0 && video.height > device.maxHevcHeight)) {
             rejectVideoCodec("hevc", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) rejectVideoCodec("hevc", "HDR range unsupported by connected display");
     } else if (codec == "h264") {
-        if (!codecLevelAllowed(video.level, overrides.maxAvcLevel)) rejectVideoCodec("h264", "level exceeds user override");
+        if (!codecLevelAllowed(video.level, overrides.maxAvcLevel))
+            rejectVideoCodec("h264", "level exceeds user override");
         if ((video.bitDepth > 8 || profile.find("high 10") != std::string::npos) && !device.h264High10) {
             rejectVideoCodec("h264", "H.264 High10 unsupported");
         }
-        if ((device.maxH264Width > 0 && video.width > device.maxH264Width)
-            || (device.maxH264Height > 0 && video.height > device.maxH264Height)) {
+        if ((device.maxH264Width > 0 && video.width > device.maxH264Width) ||
+            (device.maxH264Height > 0 && video.height > device.maxH264Height)) {
             rejectVideoCodec("h264", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) rejectVideoCodec("h264", "HDR range unsupported by connected display");
@@ -153,8 +152,8 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(
         if ((video.bitDepth > 8 || profile.find("main 10") != std::string::npos) && !device.av1Main10) {
             rejectVideoCodec("av1", "AV1 Main10 unsupported");
         }
-        if ((device.maxAv1Width > 0 && video.width > device.maxAv1Width)
-            || (device.maxAv1Height > 0 && video.height > device.maxAv1Height)) {
+        if ((device.maxAv1Width > 0 && video.width > device.maxAv1Width) ||
+            (device.maxAv1Height > 0 && video.height > device.maxAv1Height)) {
             rejectVideoCodec("av1", "resolution exceeds decoder capability");
         }
         if (unsupportedHdr) rejectVideoCodec("av1", "HDR range unsupported by connected display");
@@ -166,8 +165,8 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(
     if (plan.audioCodecs.empty()) plan.audioCodecs.emplace_back("aac");
     if (plan.transcodeAudioCodecs.empty()) plan.transcodeAudioCodecs.emplace_back("aac");
 
-    plan.allowAudioStreamCopy = audio.selected
-        && audioStreamCopyAllowed(plan.audioCodecs, audio.codec, audio.channels, plan.maxAudioChannels);
+    plan.allowAudioStreamCopy =
+        audio.selected && audioStreamCopyAllowed(plan.audioCodecs, audio.codec, audio.channels, plan.maxAudioChannels);
     const SubtitleStrategy subtitleMode = subtitleStrategy(subtitle.codec);
     // mediacodec_embed renders decoded video directly to the Android Surface and
     // cannot composite libmpv bitmap subtitles. Keep text/styled subtitles on the
@@ -187,10 +186,8 @@ inline PlaybackRequestFlags playbackRequestFlags(const PlaybackProfilePlan& plan
     };
 }
 
-inline PlaybackServerRoute choosePlaybackServerRoute(
-    const PlaybackServerOfferInput& offer,
-    PlaybackOverrides overrides
-) {
+inline PlaybackServerRoute choosePlaybackServerRoute(const PlaybackServerOfferInput& offer,
+                                                     PlaybackOverrides overrides) {
     if (!overrides.forceTranscode && !overrides.forceServerStream && offer.supportsDirectPlay) {
         return PlaybackServerRoute::DirectPlay;
     }

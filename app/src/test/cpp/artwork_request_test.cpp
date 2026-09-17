@@ -19,22 +19,13 @@ int main() {
     item.logoItemId = "logo-owner";
 
     assert(profileArtworkKey(session) == "https://jellyfin.example:user:user-1");
-    assert(
-        posterArtworkKey(session, item, false)
-        == "https://jellyfin.example:user:user-1:movie-1:primary:primary-tag"
-    );
-    assert(
-        backdropArtworkKey(session, item, 2)
-        == "https://jellyfin.example:user:user-1:backdrop-owner:backdrop:backdrop-tag:mode:2"
-    );
-    assert(
-        logoArtworkKey(session, item)
-        == "https://jellyfin.example:user:user-1:logo-owner:logo:logo-tag"
-    );
-    assert(
-        homeArtworkKey(session, item, false)
-        == "https://jellyfin.example:user:user-1:movie-1:home:v5-480x270:1:thumb-tag"
-    );
+    assert(posterArtworkKey(session, item, false) ==
+           "https://jellyfin.example:user:user-1:movie-1:primary:primary-tag");
+    assert(backdropArtworkKey(session, item, 2) ==
+           "https://jellyfin.example:user:user-1:backdrop-owner:backdrop:backdrop-tag:mode:2");
+    assert(logoArtworkKey(session, item) == "https://jellyfin.example:user:user-1:logo-owner:logo:logo-tag");
+    assert(homeArtworkKey(session, item, false) ==
+           "https://jellyfin.example:user:user-1:movie-1:home:v5-480x270:1:thumb-tag");
 
     const PosterArtworkRequest poster = posterArtworkRequest(session, item, false);
     assert(poster.itemId == item.id);
@@ -62,14 +53,8 @@ int main() {
 
     item.externalPosterUrl = "https://images.example/poster.jpg";
     item.externalBackdropUrl = "https://images.example/backdrop.jpg";
-    assert(
-        posterArtworkKey(session, item, true)
-        == "seerr:poster:https://images.example/poster.jpg"
-    );
-    assert(
-        homeArtworkKey(session, item, true)
-        == "seerr:home:https://images.example/backdrop.jpg"
-    );
+    assert(posterArtworkKey(session, item, true) == "seerr:poster:https://images.example/poster.jpg");
+    assert(homeArtworkKey(session, item, true) == "seerr:home:https://images.example/backdrop.jpg");
     const PosterArtworkRequest externalPoster = posterArtworkRequest(session, item, true);
     assert(externalPoster.external);
     assert(externalPoster.externalUrl == item.externalPosterUrl);

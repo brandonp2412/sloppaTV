@@ -17,24 +17,14 @@ constexpr int resolvedSubtitleIndex(int requestedIndex, int serverDefaultIndex) 
     return requestedIndex == kSubtitleServerDefaultIndex ? serverDefaultIndex : requestedIndex;
 }
 
-constexpr bool shouldRetryFailedSubtitleTranscode(
-    bool isTranscode,
-    int selectedSubtitleIndex,
-    bool subtitleRequiresServerTranscode
-) {
+constexpr bool shouldRetryFailedSubtitleTranscode(bool isTranscode, int selectedSubtitleIndex,
+                                                  bool subtitleRequiresServerTranscode) {
     return isTranscode && selectedSubtitleIndex >= 0 && subtitleRequiresServerTranscode;
 }
 
-constexpr bool shouldApplyLoadedSubtitle(
-    std::string_view activeItemId,
-    std::string_view loadedItemId,
-    int selectedSubtitleIndex,
-    int loadedSubtitleIndex,
-    bool loaded
-) {
-    return loaded
-        && activeItemId == loadedItemId
-        && selectedSubtitleIndex == loadedSubtitleIndex;
+constexpr bool shouldApplyLoadedSubtitle(std::string_view activeItemId, std::string_view loadedItemId,
+                                         int selectedSubtitleIndex, int loadedSubtitleIndex, bool loaded) {
+    return loaded && activeItemId == loadedItemId && selectedSubtitleIndex == loadedSubtitleIndex;
 }
 
 inline std::string sanitizeSubtitleText(std::string text) {
@@ -55,9 +45,9 @@ inline std::string sanitizeSubtitleText(std::string text) {
     replaceAll(text, "&#39;", "'");
 
     auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
-        return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
-            return std::tolower(a) == std::tolower(b);
-        });
+        return left.size() == right.size() &&
+               std::equal(left.begin(), left.end(), right.begin(),
+                          [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
     };
     auto isMarkupTag = [&](std::string_view body) {
         while (!body.empty() && std::isspace(static_cast<unsigned char>(body.front()))) body.remove_prefix(1);
@@ -71,12 +61,10 @@ inline std::string sanitizeSubtitleText(std::string text) {
         }
         if (length == 0) return false;
         const std::string_view name = body.substr(0, length);
-        return equalsIgnoreCase(name, "i") || equalsIgnoreCase(name, "b")
-            || equalsIgnoreCase(name, "u") || equalsIgnoreCase(name, "s")
-            || equalsIgnoreCase(name, "font") || equalsIgnoreCase(name, "c")
-            || equalsIgnoreCase(name, "v") || equalsIgnoreCase(name, "lang")
-            || equalsIgnoreCase(name, "ruby") || equalsIgnoreCase(name, "rt")
-            || equalsIgnoreCase(name, "br");
+        return equalsIgnoreCase(name, "i") || equalsIgnoreCase(name, "b") || equalsIgnoreCase(name, "u") ||
+               equalsIgnoreCase(name, "s") || equalsIgnoreCase(name, "font") || equalsIgnoreCase(name, "c") ||
+               equalsIgnoreCase(name, "v") || equalsIgnoreCase(name, "lang") || equalsIgnoreCase(name, "ruby") ||
+               equalsIgnoreCase(name, "rt") || equalsIgnoreCase(name, "br");
     };
 
     std::string clean;
@@ -87,11 +75,11 @@ inline std::string sanitizeSubtitleText(std::string text) {
             if (end != std::string::npos) {
                 const std::string_view body(text.data() + index + 1, end - index - 1);
                 const bool assOverride = !body.empty() && body.front() == '\\';
-                const bool startsWithAn = body.size() >= 2
-                    && std::tolower(static_cast<unsigned char>(body[0])) == 'a'
-                    && std::tolower(static_cast<unsigned char>(body[1])) == 'n';
-                const bool malformedAlignment = startsWithAn
-                    && (body.size() == 2 || (body.size() == 3 && body[2] >= '1' && body[2] <= '9'));
+                const bool startsWithAn = body.size() >= 2 &&
+                                          std::tolower(static_cast<unsigned char>(body[0])) == 'a' &&
+                                          std::tolower(static_cast<unsigned char>(body[1])) == 'n';
+                const bool malformedAlignment =
+                    startsWithAn && (body.size() == 2 || (body.size() == 3 && body[2] >= '1' && body[2] <= '9'));
                 if (assOverride || malformedAlignment) {
                     index = end + 1;
                     continue;
@@ -104,12 +92,13 @@ inline std::string sanitizeSubtitleText(std::string text) {
                 const std::string_view body(text.data() + index + 1, end - index - 1);
                 if (isMarkupTag(body)) {
                     std::string_view normalized = body;
-                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
+                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front())))
+                        normalized.remove_prefix(1);
                     if (!normalized.empty() && normalized.front() == '/') normalized.remove_prefix(1);
-                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front()))) normalized.remove_prefix(1);
-                    if (normalized.size() >= 2
-                        && std::tolower(static_cast<unsigned char>(normalized[0])) == 'b'
-                        && std::tolower(static_cast<unsigned char>(normalized[1])) == 'r') {
+                    while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front())))
+                        normalized.remove_prefix(1);
+                    if (normalized.size() >= 2 && std::tolower(static_cast<unsigned char>(normalized[0])) == 'b' &&
+                        std::tolower(static_cast<unsigned char>(normalized[1])) == 'r') {
                         if (!clean.empty() && clean.back() != ' ') clean.push_back(' ');
                     }
                     index = end + 1;
@@ -131,7 +120,8 @@ inline int parseSubtitleTimestamp(std::string_view input) {
     const size_t firstColon = input.find(':');
     if (firstColon == std::string_view::npos) return -1;
     const size_t secondColon = input.find(':', firstColon + 1);
-    const size_t fraction = input.find_first_of(".,", secondColon == std::string_view::npos ? firstColon + 1 : secondColon + 1);
+    const size_t fraction =
+        input.find_first_of(".,", secondColon == std::string_view::npos ? firstColon + 1 : secondColon + 1);
     if (fraction == std::string_view::npos) return -1;
 
     auto parseUnsigned = [](std::string_view value, int& output) {
@@ -146,14 +136,14 @@ inline int parseSubtitleTimestamp(std::string_view input) {
     int minutes = 0;
     int seconds = 0;
     if (secondColon == std::string_view::npos) {
-        if (!parseUnsigned(input.substr(0, firstColon), minutes)
-            || !parseUnsigned(input.substr(firstColon + 1, fraction - firstColon - 1), seconds)) {
+        if (!parseUnsigned(input.substr(0, firstColon), minutes) ||
+            !parseUnsigned(input.substr(firstColon + 1, fraction - firstColon - 1), seconds)) {
             return -1;
         }
     } else {
-        if (!parseUnsigned(input.substr(0, firstColon), hours)
-            || !parseUnsigned(input.substr(firstColon + 1, secondColon - firstColon - 1), minutes)
-            || !parseUnsigned(input.substr(secondColon + 1, fraction - secondColon - 1), seconds)) {
+        if (!parseUnsigned(input.substr(0, firstColon), hours) ||
+            !parseUnsigned(input.substr(firstColon + 1, secondColon - firstColon - 1), minutes) ||
+            !parseUnsigned(input.substr(secondColon + 1, fraction - secondColon - 1), seconds)) {
             return -1;
         }
     }
@@ -165,8 +155,10 @@ inline int parseSubtitleTimestamp(std::string_view input) {
     const size_t usedDigits = std::min<size_t>(3, fractionDigits.size());
     if (!parseUnsigned(fractionDigits.substr(0, usedDigits), rawFraction)) return -1;
     int milliseconds = rawFraction;
-    if (usedDigits == 1) milliseconds *= 100;
-    else if (usedDigits == 2) milliseconds *= 10;
+    if (usedDigits == 1)
+        milliseconds *= 100;
+    else if (usedDigits == 2)
+        milliseconds *= 10;
     for (size_t index = usedDigits; index < fractionDigits.size(); ++index) {
         if (!std::isdigit(static_cast<unsigned char>(fractionDigits[index]))) return -1;
     }
@@ -190,9 +182,8 @@ inline void sortSubtitleCues(std::vector<SubtitleCue>& cues) {
 }
 
 inline std::string subtitleTextFormat(std::string codec) {
-    std::transform(codec.begin(), codec.end(), codec.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(codec.begin(), codec.end(), codec.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (codec == "subrip") return "srt";
     if (codec == "webvtt") return "vtt";
     if (codec == "ass" || codec == "ssa" || codec == "srt" || codec == "vtt" || codec == "mov_text") {
@@ -272,9 +263,9 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
         return fields;
     };
     auto equalsIgnoreCase = [](std::string_view left, std::string_view right) {
-        return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
-            return std::tolower(a) == std::tolower(b);
-        });
+        return left.size() == right.size() &&
+               std::equal(left.begin(), left.end(), right.begin(),
+                          [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
     };
 
     while (std::getline(stream, line)) {
@@ -294,9 +285,12 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
             startColumn = endColumn = textColumn = -1;
             for (int i = 0; i < fieldCount; ++i) {
                 const std::string_view name = fields[static_cast<size_t>(i)];
-                if (equalsIgnoreCase(name, "start")) startColumn = i;
-                else if (equalsIgnoreCase(name, "end")) endColumn = i;
-                else if (equalsIgnoreCase(name, "text")) textColumn = i;
+                if (equalsIgnoreCase(name, "start"))
+                    startColumn = i;
+                else if (equalsIgnoreCase(name, "end"))
+                    endColumn = i;
+                else if (equalsIgnoreCase(name, "text"))
+                    textColumn = i;
             }
             continue;
         }
@@ -326,9 +320,8 @@ inline std::vector<SubtitleCue> parseAssCues(const std::string& input) {
 }
 
 inline std::vector<SubtitleCue> parseTextSubtitleCues(const std::string& input, std::string codec) {
-    std::transform(codec.begin(), codec.end(), codec.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(codec.begin(), codec.end(), codec.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (codec == "ass" || codec == "ssa") return parseAssCues(input);
     return parseSubRipCues(input);
 }
@@ -339,9 +332,8 @@ struct SubtitlePreferenceCandidate {
 };
 
 inline std::string normalizeSubtitleLanguage(std::string language) {
-    std::transform(language.begin(), language.end(), language.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(language.begin(), language.end(), language.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (language == "en" || language == "english") return "eng";
     if (language == "mi" || language == "mao" || language == "maori" || language == "māori") return "mri";
     if (language == "ja" || language == "japanese") return "jpn";
@@ -368,27 +360,24 @@ inline bool subtitleLanguageAllowed(const std::string& language, const std::vect
 }
 
 inline bool isLikelySignsOnlySubtitle(std::string label) {
-    std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(label.begin(), label.end(), label.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return label.find("sign") != std::string::npos && label.find("song") != std::string::npos;
 }
 
-inline int subtitleIndexForQueuePreference(
-    const std::vector<SubtitlePreferenceCandidate>& subtitles,
-    const std::optional<std::string>& languagePreference
-) {
+inline int subtitleIndexForQueuePreference(const std::vector<SubtitlePreferenceCandidate>& subtitles,
+                                           const std::optional<std::string>& languagePreference) {
     if (!languagePreference.has_value() || languagePreference->empty()) return kSubtitleOffIndex;
 
     const std::string preferred = normalizeSubtitleLanguage(*languagePreference);
-    const auto match = std::find_if(subtitles.begin(), subtitles.end(), [&](const SubtitlePreferenceCandidate& subtitle) {
-        if (subtitle.index < 0) return false;
-        if (subtitle.language.size() == 3 && preferred.size() == 3) {
-            return std::equal(subtitle.language.begin(), subtitle.language.end(), preferred.begin(), [](unsigned char a, unsigned char b) {
-                return std::tolower(a) == std::tolower(b);
-            });
-        }
-        return normalizeSubtitleLanguage(subtitle.language) == preferred;
-    });
+    const auto match =
+        std::find_if(subtitles.begin(), subtitles.end(), [&](const SubtitlePreferenceCandidate& subtitle) {
+            if (subtitle.index < 0) return false;
+            if (subtitle.language.size() == 3 && preferred.size() == 3) {
+                return std::equal(subtitle.language.begin(), subtitle.language.end(), preferred.begin(),
+                                  [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+            }
+            return normalizeSubtitleLanguage(subtitle.language) == preferred;
+        });
     return match == subtitles.end() ? kSubtitleOffIndex : match->index;
 }

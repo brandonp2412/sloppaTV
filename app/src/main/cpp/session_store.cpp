@@ -14,8 +14,7 @@
 using nlohmann::json;
 
 namespace {
-template <typename T>
-T valueOr(const json& data, const char* key, T fallback) {
+template <typename T> T valueOr(const json& data, const char* key, T fallback) {
     const auto value = data.find(key);
     if (value == data.end() || value->is_null()) return fallback;
     try {
@@ -45,7 +44,8 @@ json writeSession(const StoredSession& session) {
 
 void readSettings(const json& saved, AppSettings& settings) {
     settings.maxBitrateMbps = std::clamp(valueOr(saved, "maxBitrateMbps", settings.maxBitrateMbps), 20, 200);
-    settings.playbackBufferPreset = std::clamp(valueOr(saved, "playbackBufferPreset", settings.playbackBufferPreset), 0, 2);
+    settings.playbackBufferPreset =
+        std::clamp(valueOr(saved, "playbackBufferPreset", settings.playbackBufferPreset), 0, 2);
     settings.seekBackSeconds = std::clamp(valueOr(saved, "seekBackSeconds", settings.seekBackSeconds), 5, 60);
     settings.seekForwardSeconds = std::clamp(valueOr(saved, "seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
     settings.zoomMode = std::clamp(valueOr(saved, "zoomMode", settings.zoomMode), 0, 2);
@@ -61,16 +61,16 @@ void readSettings(const json& saved, AppSettings& settings) {
         settings.backdropMode = valueOr(saved, "showBackdrops", true) ? 1 : 0;
     }
     const int subtitleStyleDefaultsVersion = valueOr(saved, "subtitleStyleDefaultsVersion", 0);
-    settings.subtitleSize = subtitleStyleDefaultsVersion < 1
-        ? 1
-        : std::clamp(valueOr(saved, "subtitleSize", settings.subtitleSize), 0, 2);
-    settings.subtitleBackground = subtitleStyleDefaultsVersion < 1
-        ? false
-        : valueOr(saved, "subtitleBackground", settings.subtitleBackground);
+    settings.subtitleSize =
+        subtitleStyleDefaultsVersion < 1 ? 1 : std::clamp(valueOr(saved, "subtitleSize", settings.subtitleSize), 0, 2);
+    settings.subtitleBackground =
+        subtitleStyleDefaultsVersion < 1 ? false : valueOr(saved, "subtitleBackground", settings.subtitleBackground);
     settings.subtitlePosition = std::clamp(valueOr(saved, "subtitlePosition", settings.subtitlePosition), 0, 2);
     settings.autoSubtitles = valueOr(saved, "autoSubtitles", settings.autoSubtitles);
-    settings.autoSubtitleLanguage = normalizeSubtitleLanguage(valueOr(saved, "autoSubtitleLanguage", settings.autoSubtitleLanguage));
-    settings.autoSubtitleSourceLanguage = valueOr(saved, "autoSubtitleSourceLanguage", settings.autoSubtitleSourceLanguage);
+    settings.autoSubtitleLanguage =
+        normalizeSubtitleLanguage(valueOr(saved, "autoSubtitleLanguage", settings.autoSubtitleLanguage));
+    settings.autoSubtitleSourceLanguage =
+        valueOr(saved, "autoSubtitleSourceLanguage", settings.autoSubtitleSourceLanguage);
     if (settings.autoSubtitleSourceLanguage != "any" && settings.autoSubtitleSourceLanguage != "different") {
         settings.autoSubtitleSourceLanguage = normalizeSubtitleLanguage(settings.autoSubtitleSourceLanguage);
     }
@@ -79,7 +79,8 @@ void readSettings(const json& saved, AppSettings& settings) {
         for (const auto& language : saved["subtitleLanguages"]) {
             if (!language.is_string()) continue;
             const std::string normalized = normalizeSubtitleLanguage(language.get<std::string>());
-            if (!normalized.empty() && std::find(settings.subtitleLanguages.begin(), settings.subtitleLanguages.end(), normalized) == settings.subtitleLanguages.end()) {
+            if (!normalized.empty() && std::find(settings.subtitleLanguages.begin(), settings.subtitleLanguages.end(),
+                                                 normalized) == settings.subtitleLanguages.end()) {
                 settings.subtitleLanguages.push_back(normalized);
             }
         }
@@ -92,7 +93,8 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.uiTextSize = std::clamp(valueOr(saved, "uiTextSize", settings.uiTextSize), 0, 2);
     const int savedSafeArea = valueOr(saved, "safeAreaPercent", settings.safeAreaPercent);
     settings.safeAreaPercent = savedSafeArea <= 0 ? 0 : (savedSafeArea <= 2 ? 2 : (savedSafeArea <= 4 ? 4 : 6));
-    settings.screensaverMinutes = normalizedScreensaverMinutes(valueOr(saved, "screensaverMinutes", settings.screensaverMinutes));
+    settings.screensaverMinutes =
+        normalizedScreensaverMinutes(valueOr(saved, "screensaverMinutes", settings.screensaverMinutes));
     settings.externalPlayerComponent = valueOr<std::string>(saved, "externalPlayerComponent", {});
     settings.seerrServer = valueOr<std::string>(saved, "seerrServer", {});
     settings.seerrSessionCookie = valueOr<std::string>(saved, "seerrSessionCookie", {});
@@ -136,14 +138,12 @@ json writeSettings(const AppSettings& settings) {
         {"seerrSelectDrive", settings.seerrSelectDrive},
     };
 }
-}
+} // namespace
 
 std::string generateDeviceId() {
     std::random_device rd;
-    std::mt19937_64 generator(
-        (static_cast<uint64_t>(rd()) << 32u)
-        ^ static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count())
-    );
+    std::mt19937_64 generator((static_cast<uint64_t>(rd()) << 32u) ^
+                              static_cast<uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::ostringstream out;
     out << "sloppatv-" << std::hex << generator();
     return out.str();

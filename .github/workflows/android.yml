@@ -54,6 +54,11 @@ jobs:
             "ndk;29.0.14206865" \
             "cmake;3.22.1"
 
+      - name: Install C++ quality tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y clang-format clang-tidy cppcheck
+
       - name: Configure Play signing identity
         shell: bash
         env:
@@ -117,6 +122,9 @@ jobs:
 
       - name: Build debug, benchmark and release artifacts
         run: ./gradlew --no-daemon test assembleDebug assembleBenchmark assembleRelease bundleRelease
+
+      - name: Run C++ quality gates
+        run: ./tools/cpp_quality.py check
 
       - name: Upload Android build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

@@ -50,8 +50,7 @@ using ScopedEnv = ScopedJniEnv;
 using AvJniSetJavaVm = int (*)(void*, void*);
 using AvJniSetAndroidAppCtx = int (*)(void*, void*);
 
-template <typename T>
-T loadSymbol(void* library, const char* name) {
+template <typename T> T loadSymbol(void* library, const char* name) {
     return reinterpret_cast<T>(dlsym(library, name));
 }
 
@@ -81,7 +80,7 @@ std::string redactSensitiveQuery(std::string text) {
     }
     return text;
 }
-}
+} // namespace
 
 struct MpvSymbols {
     using Create = void* (*)();
@@ -111,8 +110,8 @@ struct MpvSymbols {
     WaitEvent waitEvent = nullptr;
 
     [[nodiscard]] bool complete() const {
-        return create && initialize && terminateDestroy && setOptionString && setOption
-            && setProperty && getProperty && command && errorString && free && requestLogMessages && waitEvent;
+        return create && initialize && terminateDestroy && setOptionString && setOption && setProperty && getProperty &&
+               command && errorString && free && requestLogMessages && waitEvent;
     }
 };
 
@@ -130,19 +129,18 @@ NativeMediaPlayer::NativeMediaPlayer(JavaVM* vm, jobject activity, const char* d
         if (activityClass) env->DeleteLocalRef(activityClass);
         return;
     }
-    jmethodID getApplicationContext = env->GetMethodID(
-        activityClass,
-        "getApplicationContext",
-        "()Landroid/content/Context;"
-    );
+    jmethodID getApplicationContext =
+        env->GetMethodID(activityClass, "getApplicationContext", "()Landroid/content/Context;");
     if (!getApplicationContext || env->ExceptionCheck()) {
         env->ExceptionClear();
         env->DeleteLocalRef(activityClass);
         return;
     }
     jobject context = env->CallObjectMethod(activity, getApplicationContext);
-    if (!env->ExceptionCheck() && context) appContext_ = env->NewGlobalRef(context);
-    else if (env->ExceptionCheck()) env->ExceptionClear();
+    if (!env->ExceptionCheck() && context)
+        appContext_ = env->NewGlobalRef(context);
+    else if (env->ExceptionCheck())
+        env->ExceptionClear();
     if (context) env->DeleteLocalRef(context);
     env->DeleteLocalRef(activityClass);
 }
@@ -269,24 +267,14 @@ bool NativeMediaPlayer::loadLibrariesLocked(std::string& error) {
     return true;
 }
 
-bool NativeMediaPlayer::setOptionLocked(
-    const char* name,
-    const std::string& value,
-    bool required,
-    std::string* error
-) const {
+bool NativeMediaPlayer::setOptionLocked(const char* name, const std::string& value, bool required,
+                                        std::string* error) const {
     if (!symbols_ || !mpv_) return false;
     const int result = symbols_->setOptionString(mpv_, name, value.c_str());
     if (result >= 0) return true;
     const char* message = symbols_->errorString(result);
-    __android_log_print(
-        required ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN,
-        kTag,
-        "mpv option %s=%s failed: %s",
-        name,
-        value.c_str(),
-        message ? message : "unknown"
-    );
+    __android_log_print(required ? ANDROID_LOG_ERROR : ANDROID_LOG_WARN, kTag, "mpv option %s=%s failed: %s", name,
+                        value.c_str(), message ? message : "unknown");
     if (required && error) {
         *error = std::string("mpv rejected required option ") + name + ": " + (message ? message : "unknown");
     }
@@ -321,9 +309,8 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
 
     const PlaybackBufferDurations durations = playbackBufferDurations(bufferPreset);
     const std::string cacheBytes = bufferPreset == 2 ? "128MiB" : (bufferPreset == 1 ? "96MiB" : "64MiB");
-    const std::string cacheSecs = durations.maxBufferMs > 0
-        ? std::to_string(std::max(30, durations.maxBufferMs / 1000))
-        : "120";
+    const std::string cacheSecs =
+        durations.maxBufferMs > 0 ? std::to_string(std::max(30, durations.maxBufferMs / 1000)) : "120";
 
     const struct {
         const char* name;
@@ -357,8 +344,14 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
         {"demuxer-max-bytes", cacheBytes.c_str(), false},
         {"demuxer-max-back-bytes", "16MiB", false},
         {"demuxer-readahead-secs", cacheSecs.c_str(), false},
-        {"demuxer-lavf-o", "http_persistent=0,reconnect=1,reconnect_on_network_error=1,reconnect_streamed=1,reconnect_delay_max=5,reconnect_max_retries=5,reconnect_delay_total_max=20", false},
-        {"stream-lavf-o", "reconnect=1,reconnect_on_network_error=1,reconnect_on_http_error=5xx,reconnect_streamed=1,reconnect_delay_max=5,reconnect_max_retries=5,reconnect_delay_total_max=20", false},
+        {"demuxer-lavf-o",
+         "http_persistent=0,reconnect=1,reconnect_on_network_error=1,reconnect_streamed=1,reconnect_delay_max=5,"
+         "reconnect_max_retries=5,reconnect_delay_total_max=20",
+         false},
+        {"stream-lavf-o",
+         "reconnect=1,reconnect_on_network_error=1,reconnect_on_http_error=5xx,reconnect_streamed=1,reconnect_delay_"
+         "max=5,reconnect_max_retries=5,reconnect_delay_total_max=20",
+         false},
         {"framedrop", "vo", false},
         {"video-sync", "audio", false},
         {"audio-display", "no", false},
@@ -437,16 +430,9 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     lastSnapshotPoll_ = {};
 }
 
-void NativeMediaPlayer::startAsync(
-    const std::string& url,
-    jobject surface,
-    int64_t startPositionMs,
-    int bufferPreset,
-    int embeddedAudioOrdinal,
-    int embeddedSubtitleStreamIndex,
-    int embeddedSubtitleOrdinal,
-    const std::string& externalSubtitleUrl
-) {
+void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset,
+                                   int embeddedAudioOrdinal, int embeddedSubtitleStreamIndex,
+                                   int embeddedSubtitleOrdinal, const std::string& externalSubtitleUrl) {
     stop();
     if (!surface || url.empty()) {
         std::scoped_lock lock(mutex_);
@@ -500,14 +486,10 @@ void NativeMediaPlayer::startAsync(
     serverHttpErrorCount_ = 0;
     cachedStatus_ = PlayerStatus::Preparing;
     lastSnapshotPoll_ = {};
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Embedded playback requested start=%lldms audioOrdinal=%d subtitleStream=%d",
-        static_cast<long long>(std::max<int64_t>(0, startPositionMs)),
-        embeddedAudioOrdinal,
-        embeddedSubtitleStreamIndex
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "Embedded playback requested start=%lldms audioOrdinal=%d subtitleStream=%d",
+                        static_cast<long long>(std::max<int64_t>(0, startPositionMs)), embeddedAudioOrdinal,
+                        embeddedSubtitleStreamIndex);
 }
 
 void NativeMediaPlayer::stop() {
@@ -628,12 +610,8 @@ bool NativeMediaPlayer::selectTrackOrdinalLocked(const char* type, const char* s
     return false;
 }
 
-bool NativeMediaPlayer::selectTrackStreamIndexLocked(
-    const char* type,
-    const char* selectionProperty,
-    int streamIndex,
-    int fallbackOrdinal
-) const {
+bool NativeMediaPlayer::selectTrackStreamIndexLocked(const char* type, const char* selectionProperty, int streamIndex,
+                                                     int fallbackOrdinal) const {
     if (streamIndex < 0) return false;
     int64_t count = 0;
     if (!getIntPropertyLocked("track-list/count", count)) return false;
@@ -667,13 +645,8 @@ bool NativeMediaPlayer::selectEmbeddedAudioStream(int streamIndex, int ordinal) 
     if (!mpv_) return false;
     if (!selectTrackStreamIndexLocked("audio", "aid", streamIndex, ordinal)) return false;
     pendingAudioOrdinal_ = -1;
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Selected embedded audio stream %d (fallback ordinal %d)",
-        streamIndex,
-        ordinal
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Selected embedded audio stream %d (fallback ordinal %d)", streamIndex,
+                        ordinal);
     return true;
 }
 
@@ -720,8 +693,8 @@ void NativeMediaPlayer::applyPendingTracksLocked() const {
     }
     if (pendingSubtitleOff_) {
         if (setStringPropertyLocked("sid", "no")) pendingSubtitleOff_ = false;
-    } else if (pendingSubtitleStreamIndex_ >= 0
-        && selectTrackStreamIndexLocked("sub", "sid", pendingSubtitleStreamIndex_, pendingSubtitleOrdinal_)) {
+    } else if (pendingSubtitleStreamIndex_ >= 0 &&
+               selectTrackStreamIndexLocked("sub", "sid", pendingSubtitleStreamIndex_, pendingSubtitleOrdinal_)) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Applied deferred subtitle stream %d", pendingSubtitleStreamIndex_);
         pendingSubtitleStreamIndex_ = -1;
         pendingSubtitleOrdinal_ = -1;
@@ -738,16 +711,9 @@ void NativeMediaPlayer::logPlaybackTelemetryLocked() const {
     getDoublePropertyLocked("container-fps", fps);
     int64_t dropped = 0;
     getIntPropertyLocked("decoder-frame-drop-count", dropped);
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Playback telemetry hwdec=%s video=%s audio=%s fps=%.3f dropped=%lld",
-        hwdec.empty() ? "none" : hwdec.c_str(),
-        video.c_str(),
-        audio.empty() ? "unknown" : audio.c_str(),
-        fps,
-        static_cast<long long>(dropped)
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Playback telemetry hwdec=%s video=%s audio=%s fps=%.3f dropped=%lld",
+                        hwdec.empty() ? "none" : hwdec.c_str(), video.c_str(),
+                        audio.empty() ? "unknown" : audio.c_str(), fps, static_cast<long long>(dropped));
     telemetryLogged_ = true;
 }
 
@@ -768,14 +734,8 @@ PlayerStatus NativeMediaPlayer::status() const {
         if (event->eventId == kMpvEventLogMessage && event->data) {
             const auto* message = static_cast<const MpvEventLogMessage*>(event->data);
             const std::string safeText = redactSensitiveQuery(message->text ? message->text : "");
-            __android_log_print(
-                ANDROID_LOG_INFO,
-                kTag,
-                "core[%s/%s] %s",
-                message->prefix ? message->prefix : "?",
-                message->level ? message->level : "?",
-                safeText.c_str()
-            );
+            __android_log_print(ANDROID_LOG_INFO, kTag, "core[%s/%s] %s", message->prefix ? message->prefix : "?",
+                                message->level ? message->level : "?", safeText.c_str());
             const int httpStatus = mpvHttpStatus(safeText);
             if (cachedStatus_ == PlayerStatus::Preparing && httpStatus >= 500 && httpStatus <= 599) {
                 ++serverHttpErrorCount_;
@@ -809,8 +769,8 @@ PlayerStatus NativeMediaPlayer::status() const {
         cachedStatus_ = PlayerStatus::Error;
         return cachedStatus_;
     }
-    if (lastSnapshotPoll_ != std::chrono::steady_clock::time_point{}
-        && now - lastSnapshotPoll_ < std::chrono::milliseconds(50)) {
+    if (lastSnapshotPoll_ != std::chrono::steady_clock::time_point{} &&
+        now - lastSnapshotPoll_ < std::chrono::milliseconds(50)) {
         return cachedStatus_;
     }
 
@@ -828,15 +788,17 @@ PlayerStatus NativeMediaPlayer::status() const {
 
     int64_t width = 0;
     int64_t height = 0;
-    if (getIntPropertyLocked("video-params/w", width)) cachedVideoWidth_ = std::max<int64_t>(0, width);
-    if (getIntPropertyLocked("video-params/h", height)) cachedVideoHeight_ = std::max<int64_t>(0, height);
+    if (getIntPropertyLocked("video-params/w", width)) {
+        cachedVideoWidth_ = static_cast<int>(std::clamp<int64_t>(width, 0, std::numeric_limits<int>::max()));
+    }
+    if (getIntPropertyLocked("video-params/h", height)) {
+        cachedVideoHeight_ = static_cast<int>(std::clamp<int64_t>(height, 0, std::numeric_limits<int>::max()));
+    }
     cachedSubtitleText_ = getStringPropertyLocked("sub-text");
 
     if (haveEof && eof) {
         cachedStatus_ = PlayerStatus::Ended;
-    } else if (haveIdle && idle && !haveDuration) {
-        cachedStatus_ = PlayerStatus::Preparing;
-    } else if (!havePosition && !haveDuration) {
+    } else if (!haveDuration && ((haveIdle && idle) || !havePosition)) {
         cachedStatus_ = PlayerStatus::Preparing;
     } else if (havePaused && paused) {
         cachedStatus_ = PlayerStatus::Paused;

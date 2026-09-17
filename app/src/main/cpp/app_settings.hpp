@@ -151,13 +151,12 @@ inline void stepSettingChoice(int& value, const std::array<int, N>& choices, int
     value = choices[static_cast<size_t>(index)];
 }
 
-template <bool AppSettings::*Member>
-inline SettingChangeEffect toggleSetting(AppSettings& settings, int) {
+template <bool AppSettings::* Member> inline SettingChangeEffect toggleSetting(AppSettings& settings, int) {
     settings.*Member = !(settings.*Member);
     return SettingChangeEffect::None;
 }
 
-template <int AppSettings::*Member, int Minimum, int Maximum>
+template <int AppSettings::* Member, int Minimum, int Maximum>
 inline SettingChangeEffect stepClampedSetting(AppSettings& settings, int direction) {
     settings.*Member = std::clamp(settings.*Member + direction, Minimum, Maximum);
     return SettingChangeEffect::None;
@@ -227,12 +226,11 @@ inline SettingChangeEffect adjustExternalPlayer(AppSettings&, int) {
 
 inline SettingChangeEffect adjustAutoSubtitleLanguage(AppSettings& settings, int direction) {
     const std::string normalized = normalizeSubtitleLanguage(settings.autoSubtitleLanguage);
-    auto current = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(), [&](const auto& option) {
-        return normalized == option.code;
-    });
+    auto current = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(),
+                                [&](const auto& option) { return normalized == option.code; });
     int index = current == kSubtitleLanguageOptions.end()
-        ? 0
-        : static_cast<int>(std::distance(kSubtitleLanguageOptions.begin(), current));
+                    ? 0
+                    : static_cast<int>(std::distance(kSubtitleLanguageOptions.begin(), current));
     index = std::clamp(index + direction, 0, static_cast<int>(kSubtitleLanguageOptions.size()) - 1);
     settings.autoSubtitleLanguage = kSubtitleLanguageOptions[static_cast<size_t>(index)].code;
     return SettingChangeEffect::None;
@@ -241,9 +239,10 @@ inline SettingChangeEffect adjustAutoSubtitleLanguage(AppSettings& settings, int
 inline SettingChangeEffect adjustAutoSubtitleSourceAudio(AppSettings& settings, int direction) {
     std::vector<std::string> choices{"any", "different"};
     for (const auto& option : kSubtitleLanguageOptions) choices.emplace_back(option.code);
-    const std::string normalized = settings.autoSubtitleSourceLanguage == "any" || settings.autoSubtitleSourceLanguage == "different"
-        ? settings.autoSubtitleSourceLanguage
-        : normalizeSubtitleLanguage(settings.autoSubtitleSourceLanguage);
+    const std::string normalized =
+        settings.autoSubtitleSourceLanguage == "any" || settings.autoSubtitleSourceLanguage == "different"
+            ? settings.autoSubtitleSourceLanguage
+            : normalizeSubtitleLanguage(settings.autoSubtitleSourceLanguage);
     auto current = std::find(choices.begin(), choices.end(), normalized);
     int index = current == choices.end() ? 0 : static_cast<int>(std::distance(choices.begin(), current));
     index = std::clamp(index + direction, 0, static_cast<int>(choices.size()) - 1);
@@ -275,7 +274,7 @@ struct SettingValueContext {
 
 using SettingValueRenderer = std::string (*)(const AppSettings&, const SettingValueContext&);
 
-template <bool AppSettings::*Member>
+template <bool AppSettings::* Member>
 inline std::string renderBooleanSetting(const AppSettings& settings, const SettingValueContext&) {
     return settings.*Member ? "ON" : "OFF";
 }
@@ -318,8 +317,8 @@ inline std::string renderSubtitlePosition(const AppSettings& settings, const Set
 
 inline std::string renderAudioOutput(const AppSettings& settings, const SettingValueContext& context) {
     return settings.maxAudioChannels <= 2
-        ? "DOWNMIX TO STEREO"
-        : "DIRECT / " + std::to_string(std::max(2, context.maxAudioOutputChannels)) + "CH ROUTE";
+               ? "DOWNMIX TO STEREO"
+               : "DIRECT / " + std::to_string(std::max(2, context.maxAudioOutputChannels)) + "CH ROUTE";
 }
 
 inline std::string renderAvcMaxLevel(const AppSettings& settings, const SettingValueContext&) {
@@ -380,8 +379,8 @@ inline std::string renderSeerrServer(const AppSettings& settings, const SettingV
 
 inline std::string renderSeerrConnection(const AppSettings& settings, const SettingValueContext&) {
     return !settings.seerrSessionCookie.empty()
-        ? "CONNECTED"
-        : (settings.seerrApiKey.empty() ? "CONNECT WITH JELLYFIN" : "LEGACY API KEY");
+               ? "CONNECTED"
+               : (settings.seerrApiKey.empty() ? "CONNECT WITH JELLYFIN" : "LEGACY API KEY");
 }
 
 inline std::string renderSeerrApiKey(const AppSettings& settings, const SettingValueContext&) {
@@ -413,40 +412,76 @@ constexpr size_t settingIndex(SettingId setting) {
 }
 
 inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptors{{
-    {SettingId::MaxStreamingBitrate, "MAX STREAMING BITRATE", kNoSettingOrder, 0, false, false, SettingChangeEffect::Save, adjustMaxStreamingBitrate, renderMaxStreamingBitrate},
-    {SettingId::PlaybackBuffer, "PLAYBACK BUFFER", kNoSettingOrder, 1, false, false, SettingChangeEffect::Save, stepClampedSetting<&AppSettings::playbackBufferPreset, 0, 2>, renderPlaybackBuffer},
-    {SettingId::SkipBack, "SKIP BACK", 14, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustSeekBack, renderSkipBack},
-    {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustSeekForward, renderSkipAhead},
-    {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, false, false, SettingChangeEffect::Save, stepClampedSetting<&AppSettings::zoomMode, 0, 2>, renderDefaultVideoZoom},
-    {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, true, false, SettingChangeEffect::Save, toggleSetting<&AppSettings::autoplayNext>, renderBooleanSetting<&AppSettings::autoplayNext>},
-    {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustStillWatchingAfter, renderStillWatchingAfter},
-    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, true, false, SettingChangeEffect::Save, adjustRefreshRateSwitching, renderBooleanSetting<&AppSettings::refreshRateSwitching>},
-    {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, true, false, SettingChangeEffect::Save, toggleSetting<&AppSettings::showWatchedIndicators>, renderBooleanSetting<&AppSettings::showWatchedIndicators>},
-    {SettingId::Clock, "CLOCK", 17, kNoSettingOrder, true, false, SettingChangeEffect::Save, toggleSetting<&AppSettings::showClock>, renderBooleanSetting<&AppSettings::showClock>},
-    {SettingId::Backdrops, "BACKDROPS", 1, kNoSettingOrder, false, false, SettingChangeEffect::Save, stepClampedSetting<&AppSettings::backdropMode, 0, 2>, renderBackdrops},
-    {SettingId::SubtitleSize, "SUBTITLE SIZE", 2, kNoSettingOrder, false, false, SettingChangeEffect::Save, stepClampedSetting<&AppSettings::subtitleSize, 0, 2>, renderSubtitleSize},
-    {SettingId::SubtitleBackground, "SUBTITLE BACKGROUND", 4, kNoSettingOrder, true, false, SettingChangeEffect::Save, toggleSetting<&AppSettings::subtitleBackground>, renderBooleanSetting<&AppSettings::subtitleBackground>},
-    {SettingId::SubtitlePosition, "SUBTITLE POSITION", 3, kNoSettingOrder, false, false, SettingChangeEffect::Save, stepClampedSetting<&AppSettings::subtitlePosition, 0, 2>, renderSubtitlePosition},
-    {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustAudioOutput, renderAudioOutput},
-    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, false, false, SettingChangeEffect::Save, adjustAvcMaxLevel, renderAvcMaxLevel},
-    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, false, false, SettingChangeEffect::Save, adjustHevcMaxLevel, renderHevcMaxLevel},
-    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, false, false, SettingChangeEffect::Save, stepClampedSetting<&AppSettings::hdrOverride, 0, 2>, renderHdrPlayback},
-    {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, false, false, SettingChangeEffect::Save, stepClampedSetting<&AppSettings::uiTextSize, 0, 2>, renderUiTextSize},
-    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, false, false, SettingChangeEffect::Save, adjustOverscanSafeArea, renderOverscanSafeArea},
-    {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, false, false, SettingChangeEffect::Save | SettingChangeEffect::ResetScreensaver, adjustScreensaver, renderScreensaver},
-    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, false, false, SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer, adjustExternalPlayer, renderExternalPlayer},
-    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true, SettingChangeEffect::None, nullptr, renderDiagnostics, SettingActivation::OpenDiagnostics},
-    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true, SettingChangeEffect::None, nullptr, renderSwitchUser, SettingActivation::SwitchUser},
-    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true, SettingChangeEffect::None, nullptr, renderSubtitleLanguages, SettingActivation::OpenSubtitleLanguages},
-    {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, false, false, SettingChangeEffect::Save, toggleSetting<&AppSettings::clock24Hour>, renderTimeFormat},
-    {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, true, false, SettingChangeEffect::Save, toggleSetting<&AppSettings::autoSubtitles>, renderBooleanSetting<&AppSettings::autoSubtitles>},
-    {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustAutoSubtitleLanguage, renderAutoSubtitleLanguage},
-    {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustAutoSubtitleSourceAudio, renderAutoSubtitleSourceAudio},
-    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true, SettingChangeEffect::None, nullptr, renderSeerrServer, SettingActivation::EditSeerrServer},
-    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true, SettingChangeEffect::None, nullptr, renderSeerrConnection, SettingActivation::ConnectSeerr},
-    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false, SettingChangeEffect::Save, toggleSetting<&AppSettings::seerrSelectDrive>, renderBooleanSetting<&AppSettings::seerrSelectDrive>, SettingActivation::ToggleSeerrDriveSelection},
-    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true, SettingChangeEffect::None, nullptr, renderSeerrApiKey, SettingActivation::EditSeerrApiKey},
-    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true, SettingChangeEffect::None, nullptr, renderAdvancedToggle, SettingActivation::ToggleAdvanced},
+    {SettingId::MaxStreamingBitrate, "MAX STREAMING BITRATE", kNoSettingOrder, 0, false, false,
+     SettingChangeEffect::Save, adjustMaxStreamingBitrate, renderMaxStreamingBitrate},
+    {SettingId::PlaybackBuffer, "PLAYBACK BUFFER", kNoSettingOrder, 1, false, false, SettingChangeEffect::Save,
+     stepClampedSetting<&AppSettings::playbackBufferPreset, 0, 2>, renderPlaybackBuffer},
+    {SettingId::SkipBack, "SKIP BACK", 14, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustSeekBack,
+     renderSkipBack},
+    {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+     adjustSeekForward, renderSkipAhead},
+    {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, false, false, SettingChangeEffect::Save,
+     stepClampedSetting<&AppSettings::zoomMode, 0, 2>, renderDefaultVideoZoom},
+    {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, true, false,
+     SettingChangeEffect::Save, toggleSetting<&AppSettings::autoplayNext>,
+     renderBooleanSetting<&AppSettings::autoplayNext>},
+    {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, false, false,
+     SettingChangeEffect::Save, adjustStillWatchingAfter, renderStillWatchingAfter},
+    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, true, false,
+     SettingChangeEffect::Save, adjustRefreshRateSwitching, renderBooleanSetting<&AppSettings::refreshRateSwitching>},
+    {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, true, false, SettingChangeEffect::Save,
+     toggleSetting<&AppSettings::showWatchedIndicators>, renderBooleanSetting<&AppSettings::showWatchedIndicators>},
+    {SettingId::Clock, "CLOCK", 17, kNoSettingOrder, true, false, SettingChangeEffect::Save,
+     toggleSetting<&AppSettings::showClock>, renderBooleanSetting<&AppSettings::showClock>},
+    {SettingId::Backdrops, "BACKDROPS", 1, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+     stepClampedSetting<&AppSettings::backdropMode, 0, 2>, renderBackdrops},
+    {SettingId::SubtitleSize, "SUBTITLE SIZE", 2, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+     stepClampedSetting<&AppSettings::subtitleSize, 0, 2>, renderSubtitleSize},
+    {SettingId::SubtitleBackground, "SUBTITLE BACKGROUND", 4, kNoSettingOrder, true, false, SettingChangeEffect::Save,
+     toggleSetting<&AppSettings::subtitleBackground>, renderBooleanSetting<&AppSettings::subtitleBackground>},
+    {SettingId::SubtitlePosition, "SUBTITLE POSITION", 3, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+     stepClampedSetting<&AppSettings::subtitlePosition, 0, 2>, renderSubtitlePosition},
+    {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+     adjustAudioOutput, renderAudioOutput},
+    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, false, false, SettingChangeEffect::Save,
+     adjustAvcMaxLevel, renderAvcMaxLevel},
+    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, false, false, SettingChangeEffect::Save,
+     adjustHevcMaxLevel, renderHevcMaxLevel},
+    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, false, false, SettingChangeEffect::Save,
+     stepClampedSetting<&AppSettings::hdrOverride, 0, 2>, renderHdrPlayback},
+    {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+     stepClampedSetting<&AppSettings::uiTextSize, 0, 2>, renderUiTextSize},
+    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, false, false, SettingChangeEffect::Save,
+     adjustOverscanSafeArea, renderOverscanSafeArea},
+    {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, false, false,
+     SettingChangeEffect::Save | SettingChangeEffect::ResetScreensaver, adjustScreensaver, renderScreensaver},
+    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, false, false,
+     SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer, adjustExternalPlayer, renderExternalPlayer},
+    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true, SettingChangeEffect::None, nullptr,
+     renderDiagnostics, SettingActivation::OpenDiagnostics},
+    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true, SettingChangeEffect::None, nullptr, renderSwitchUser,
+     SettingActivation::SwitchUser},
+    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true, SettingChangeEffect::None,
+     nullptr, renderSubtitleLanguages, SettingActivation::OpenSubtitleLanguages},
+    {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+     toggleSetting<&AppSettings::clock24Hour>, renderTimeFormat},
+    {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, true, false, SettingChangeEffect::Save,
+     toggleSetting<&AppSettings::autoSubtitles>, renderBooleanSetting<&AppSettings::autoSubtitles>},
+    {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, false, false,
+     SettingChangeEffect::Save, adjustAutoSubtitleLanguage, renderAutoSubtitleLanguage},
+    {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, false, false,
+     SettingChangeEffect::Save, adjustAutoSubtitleSourceAudio, renderAutoSubtitleSourceAudio},
+    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true, SettingChangeEffect::None, nullptr,
+     renderSeerrServer, SettingActivation::EditSeerrServer},
+    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true, SettingChangeEffect::None,
+     nullptr, renderSeerrConnection, SettingActivation::ConnectSeerr},
+    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false,
+     SettingChangeEffect::Save, toggleSetting<&AppSettings::seerrSelectDrive>,
+     renderBooleanSetting<&AppSettings::seerrSelectDrive>, SettingActivation::ToggleSeerrDriveSelection},
+    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true, SettingChangeEffect::None,
+     nullptr, renderSeerrApiKey, SettingActivation::EditSeerrApiKey},
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true, SettingChangeEffect::None, nullptr,
+     renderAdvancedToggle, SettingActivation::ToggleAdvanced},
 }};
 
 constexpr const SettingDescriptor& settingDescriptor(SettingId setting) {
@@ -480,14 +515,8 @@ inline SettingChangeEffect adjustSetting(AppSettings& settings, SettingId settin
     return descriptor.changeEffects | descriptor.adjuster(settings, direction);
 }
 
-inline std::string settingValue(
-    const AppSettings& settings,
-    SettingId setting,
-    int maxAudioOutputChannels,
-    std::string_view externalPlayer,
-    std::string_view username,
-    bool advanced
-) {
+inline std::string settingValue(const AppSettings& settings, SettingId setting, int maxAudioOutputChannels,
+                                std::string_view externalPlayer, std::string_view username, bool advanced) {
     const SettingValueContext context{
         .maxAudioOutputChannels = maxAudioOutputChannels,
         .externalPlayer = externalPlayer,
@@ -507,9 +536,12 @@ inline PlaybackOverrides playbackOverridesFor(const AppSettings& settings) {
 
 inline std::string videoZoomName(VideoZoomMode mode) {
     switch (mode) {
-        case VideoZoomMode::Fit: return "FIT";
-        case VideoZoomMode::Fill: return "FILL";
-        case VideoZoomMode::Stretch: return "STRETCH";
+    case VideoZoomMode::Fit:
+        return "FIT";
+    case VideoZoomMode::Fill:
+        return "FILL";
+    case VideoZoomMode::Stretch:
+        return "STRETCH";
     }
     return "FIT";
 }
@@ -545,40 +577,58 @@ inline std::string avcLevelName(int level) {
 
 inline std::string hevcLevelName(int level) {
     switch (level) {
-        case 120: return "4.0";
-        case 123: return "4.1";
-        case 150: return "5.0";
-        case 153: return "5.1";
-        case 156: return "5.2";
-        case 180: return "6.0";
-        case 183: return "6.1";
-        case 186: return "6.2";
-        default: return "AUTO";
+    case 120:
+        return "4.0";
+    case 123:
+        return "4.1";
+    case 150:
+        return "5.0";
+    case 153:
+        return "5.1";
+    case 156:
+        return "5.2";
+    case 180:
+        return "6.0";
+    case 183:
+        return "6.1";
+    case 186:
+        return "6.2";
+    default:
+        return "AUTO";
     }
 }
 
 inline std::string hdrOverrideName(int mode) {
     switch (static_cast<HdrOverrideMode>(std::clamp(mode, 0, 2))) {
-        case HdrOverrideMode::ForceSdr: return "SDR ONLY";
-        case HdrOverrideMode::AllowAllHdr: return "ALLOW ALL HDR";
-        case HdrOverrideMode::Auto: return "AUTO";
+    case HdrOverrideMode::ForceSdr:
+        return "SDR ONLY";
+    case HdrOverrideMode::AllowAllHdr:
+        return "ALLOW ALL HDR";
+    case HdrOverrideMode::Auto:
+        return "AUTO";
     }
     return "AUTO";
 }
 
 inline std::string backdropModeName(int mode) {
     switch (std::clamp(mode, 0, 2)) {
-        case 1: return "DIMMED";
-        case 2: return "CLEAR";
-        default: return "OFF";
+    case 1:
+        return "DIMMED";
+    case 2:
+        return "CLEAR";
+    default:
+        return "OFF";
     }
 }
 
 inline std::string playbackBufferName(int preset) {
     switch (std::clamp(preset, 0, 2)) {
-        case 1: return "LARGE";
-        case 2: return "EXTRA LARGE";
-        default: return "AUTO";
+    case 1:
+        return "LARGE";
+    case 2:
+        return "EXTRA LARGE";
+    default:
+        return "AUTO";
     }
 }
 
@@ -589,9 +639,8 @@ inline float subtitleTextScale(int size) {
 
 inline std::string subtitleLanguageLabel(std::string code) {
     code = normalizeSubtitleLanguage(std::move(code));
-    const auto match = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(), [&](const auto& option) {
-        return code == option.code;
-    });
+    const auto match = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(),
+                                    [&](const auto& option) { return code == option.code; });
     return match == kSubtitleLanguageOptions.end() ? code : match->label;
 }
 
@@ -606,9 +655,9 @@ inline std::string autoSubtitleSourceName(const AppSettings& settings) {
 inline std::string subtitleLanguageSummary(const AppSettings& settings) {
     if (settings.subtitleLanguages.empty()) return "ALL LANGUAGES";
     if (settings.subtitleLanguages.size() == 1) {
-        const auto match = std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(), [&](const auto& option) {
-            return settings.subtitleLanguages.front() == option.code;
-        });
+        const auto match =
+            std::find_if(kSubtitleLanguageOptions.begin(), kSubtitleLanguageOptions.end(),
+                         [&](const auto& option) { return settings.subtitleLanguages.front() == option.code; });
         return match == kSubtitleLanguageOptions.end() ? settings.subtitleLanguages.front() : match->label;
     }
     return std::to_string(settings.subtitleLanguages.size()) + " SELECTED";
@@ -622,17 +671,13 @@ inline std::string_view settingLabel(SettingId setting, bool advanced) {
 inline bool settingLabelContains(std::string_view text, std::string_view query) {
     if (query.empty()) return true;
     if (query.size() > text.size()) return false;
-    return std::search(
-        text.begin(), text.end(),
-        query.begin(), query.end(),
-        [](unsigned char left, unsigned char right) {
-            return std::toupper(left) == std::toupper(right);
-        }
-    ) != text.end();
+    return std::search(text.begin(), text.end(), query.begin(), query.end(),
+                       [](unsigned char left, unsigned char right) {
+                           return std::toupper(left) == std::toupper(right);
+                       }) != text.end();
 }
 
-template <size_t N>
-consteval std::array<SettingId, N> makeSettingOrder(bool advanced) {
+template <size_t N> consteval std::array<SettingId, N> makeSettingOrder(bool advanced) {
     std::array<SettingId, N> result{};
     size_t count = 0;
     for (const auto& descriptor : kSettingDescriptors) {
@@ -658,7 +703,9 @@ inline std::vector<SettingId> matchingSettings(const std::string& query, bool ad
             }
         }
     };
-    if (advanced) appendMatches(kAdvancedSettings);
-    else appendMatches(kCommonSettings);
+    if (advanced)
+        appendMatches(kAdvancedSettings);
+    else
+        appendMatches(kCommonSettings);
     return matches;
 }

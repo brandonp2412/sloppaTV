@@ -37,8 +37,7 @@ int integerValue(const json& value, const char* key, int fallback = 0) {
     try {
         if (found->is_number_integer()) return found->get<int>();
         if (found->is_string()) return std::stoi(found->get<std::string>());
-    } catch (...) {
-    }
+    } catch (...) {}
     return fallback;
 }
 
@@ -48,8 +47,7 @@ double doubleValue(const json& value, const char* key, double fallback = 0.0) {
     try {
         if (found->is_number()) return found->get<double>();
         if (found->is_string()) return std::stod(found->get<std::string>());
-    } catch (...) {
-    }
+    } catch (...) {}
     return fallback;
 }
 
@@ -67,14 +65,22 @@ std::string tmdbImageUrl(const std::string& base, const std::string& path) {
 std::string mediaStatusLabel(int status, bool television) {
     (void)television;
     switch (status) {
-        case 1: return "Requested";
-        case 2: return "Queued";
-        case 3: return "Waiting for download";
-        case 4: return "Partially available";
-        case 5: return "Available";
-        case 6: return "Blocklisted";
-        case 7: return "Deleted";
-        default: return "Requested";
+    case 1:
+        return "Requested";
+    case 2:
+        return "Queued";
+    case 3:
+        return "Waiting for download";
+    case 4:
+        return "Partially available";
+    case 5:
+        return "Available";
+    case 6:
+        return "Blocklisted";
+    case 7:
+        return "Deleted";
+    default:
+        return "Requested";
     }
 }
 
@@ -95,11 +101,11 @@ SeerrMediaItem itemFromSearchResult(const json& value) {
     item.posterUrl = tmdbImageUrl(kTmdbPosterBase, stringValue(value, "posterPath"));
     item.backdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(value, "backdropPath"));
 
-    const std::string date = mediaType == "tv"
-        ? stringValue(value, "firstAirDate")
-        : stringValue(value, "releaseDate");
+    const std::string date = mediaType == "tv" ? stringValue(value, "firstAirDate") : stringValue(value, "releaseDate");
     if (date.size() >= 4) {
-        try { item.productionYear = std::stoi(date.substr(0, 4)); } catch (...) {}
+        try {
+            item.productionYear = std::stoi(date.substr(0, 4));
+        } catch (...) {}
     }
 
     const auto mediaInfo = value.find("mediaInfo");
@@ -135,11 +141,10 @@ void applyDownloadProgress(SeerrMediaItem& item, const json& downloads) {
         item.progressPercent = -1;
         item.progressLabel.clear();
         item.progressEta.clear();
-        item.status = item.mediaStatus == 4
-            ? "Partially available, still downloading"
-            : (activeDownloads == 1
-                ? "Series downloading"
-                : std::to_string(activeDownloads) + " downloads active");
+        item.status =
+            item.mediaStatus == 4
+                ? "Partially available, still downloading"
+                : (activeDownloads == 1 ? "Series downloading" : std::to_string(activeDownloads) + " downloads active");
         return;
     }
 
@@ -166,40 +171,25 @@ void applyDownloadProgress(SeerrMediaItem& item, const json& downloads) {
     }
     if (!selected) return;
 
-    const int percent = seerrProgressPercent(
-        doubleValue(*selected, "size"),
-        doubleValue(*selected, "sizeLeft")
-    );
+    const int percent = seerrProgressPercent(doubleValue(*selected, "size"), doubleValue(*selected, "sizeLeft"));
     if (percent < 0) return;
     const std::string timeLeft = stringValue(*selected, "timeLeft");
     item.progressPercent = percent;
-    item.progressLabel = seerrProgressLabel(
-        item.mediaType,
-        selectedSeason,
-        selectedEpisode,
-        percent
-    );
+    item.progressLabel = seerrProgressLabel(item.mediaType, selectedSeason, selectedEpisode, percent);
     item.progressEta = seerrProgressEta(percent, timeLeft);
-    item.status = seerrProgressStatus(
-        item.mediaType,
-        selectedSeason,
-        selectedEpisode,
-        percent,
-        timeLeft
-    );
+    item.status = seerrProgressStatus(item.mediaType, selectedSeason, selectedEpisode, percent, timeLeft);
 }
 
 std::string cookieValue(const std::string& headers, const std::string& wanted) {
     size_t start = 0;
     while (start < headers.size()) {
         const size_t end = headers.find('\n', start);
-        const std::string_view line(headers.data() + start,
-            (end == std::string::npos ? headers.size() : end) - start);
+        const std::string_view line(headers.data() + start, (end == std::string::npos ? headers.size() : end) - start);
         const size_t equals = line.find('=');
         if (equals != std::string_view::npos && line.substr(0, equals) == wanted) {
             const size_t semi = line.find(';', equals + 1);
-            return std::string(line.substr(equals + 1,
-                (semi == std::string_view::npos ? line.size() : semi) - equals - 1));
+            return std::string(
+                line.substr(equals + 1, (semi == std::string_view::npos ? line.size() : semi) - equals - 1));
         }
         if (end == std::string::npos) break;
         start = end + 1;
@@ -213,14 +203,13 @@ std::string sessionCookie(const std::string& setCookies) {
     size_t start = 0;
     while (start < setCookies.size()) {
         const size_t end = setCookies.find('\n', start);
-        std::string_view line(setCookies.data() + start,
-            (end == std::string::npos ? setCookies.size() : end) - start);
+        std::string_view line(setCookies.data() + start, (end == std::string::npos ? setCookies.size() : end) - start);
         const size_t equals = line.find('=');
         if (equals != std::string_view::npos) {
             const std::string_view name = line.substr(0, equals);
             const size_t semi = line.find(';', equals + 1);
-            const std::string_view cookie = line.substr(equals + 1,
-                (semi == std::string_view::npos ? line.size() : semi) - equals - 1);
+            const std::string_view cookie =
+                line.substr(equals + 1, (semi == std::string_view::npos ? line.size() : semi) - equals - 1);
             if (cookie.starts_with("s%3A") || cookie.starts_with("s:")) {
                 return std::string(name) + "=" + std::string(cookie);
             }
@@ -241,7 +230,7 @@ int64_t int64Value(const json& value, const char* key) {
     } catch (...) {}
     return 0;
 }
-}
+} // namespace
 
 std::string SeerrClient::serverBase(std::string server) const {
     while (!server.empty() && std::isspace(static_cast<unsigned char>(server.front()))) server.erase(server.begin());
@@ -268,8 +257,10 @@ std::string SeerrClient::urlEncode(const std::string& value) const {
     std::ostringstream encoded;
     encoded << std::uppercase << std::hex;
     for (unsigned char c : value) {
-        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') encoded << c;
-        else encoded << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
+        if (std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~')
+            encoded << c;
+        else
+            encoded << '%' << std::setw(2) << std::setfill('0') << static_cast<int>(c);
     }
     return encoded.str();
 }
@@ -280,15 +271,15 @@ std::map<std::string, std::string> SeerrClient::headers(const SeerrAuth& auth) c
         {"Content-Type", "application/json"},
         {"User-Agent", "sloppaTV/0.1.0"},
     };
-    if (!auth.sessionCookie.empty()) result["Cookie"] = auth.sessionCookie;
-    else if (!auth.apiKey.empty()) result["X-Api-Key"] = auth.apiKey;
+    if (!auth.sessionCookie.empty())
+        result["Cookie"] = auth.sessionCookie;
+    else if (!auth.apiKey.empty())
+        result["X-Api-Key"] = auth.apiKey;
     return result;
 }
 
-std::map<std::string, std::string> SeerrClient::quickConnectHeaders(
-    const std::string& server,
-    const SeerrQuickConnectRequest& request
-) const {
+std::map<std::string, std::string> SeerrClient::quickConnectHeaders(const std::string& server,
+                                                                    const SeerrQuickConnectRequest& request) const {
     std::map<std::string, std::string> result{
         {"Accept", "application/json"},
         {"Content-Type", "application/json"},
@@ -319,10 +310,11 @@ ApiValueResult<SeerrQuickConnectRequest> SeerrClient::initiateQuickConnect(const
     }
 
     SeerrQuickConnectRequest request;
-    const auto seed = http_.request("GET", apiBase(server) + "/auth/me", {
-        {"Accept", "application/json"},
-        {"User-Agent", "sloppaTV/0.1.0"},
-    });
+    const auto seed = http_.request("GET", apiBase(server) + "/auth/me",
+                                    {
+                                        {"Accept", "application/json"},
+                                        {"User-Agent", "sloppaTV/0.1.0"},
+                                    });
     const std::string xsrf = cookieValue(seed.setCookie, "XSRF-TOKEN");
     const std::string csrf = cookieValue(seed.setCookie, "_csrf");
     if (!xsrf.empty()) {
@@ -331,12 +323,8 @@ ApiValueResult<SeerrQuickConnectRequest> SeerrClient::initiateQuickConnect(const
         if (!csrf.empty()) request.csrfCookie += "; _csrf=" + csrf;
     }
 
-    const auto response = http_.request(
-        "POST",
-        apiBase(server) + "/auth/jellyfin/quickconnect/initiate",
-        quickConnectHeaders(server, request),
-        "{}"
-    );
+    const auto response = http_.request("POST", apiBase(server) + "/auth/jellyfin/quickconnect/initiate",
+                                        quickConnectHeaders(server, request), "{}");
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -357,21 +345,15 @@ ApiValueResult<SeerrQuickConnectRequest> SeerrClient::initiateQuickConnect(const
     return result;
 }
 
-ApiValueResult<std::string> SeerrClient::authenticateQuickConnect(
-    const std::string& server,
-    const SeerrQuickConnectRequest& request
-) const {
+ApiValueResult<std::string> SeerrClient::authenticateQuickConnect(const std::string& server,
+                                                                  const SeerrQuickConnectRequest& request) const {
     ApiValueResult<std::string> result;
     if (request.secret.empty()) {
         result.error = "Seerr Quick Connect request is incomplete";
         return result;
     }
-    const auto response = http_.request(
-        "POST",
-        apiBase(server) + "/auth/jellyfin/quickconnect/authenticate",
-        quickConnectHeaders(server, request),
-        json{{"secret", request.secret}}.dump()
-    );
+    const auto response = http_.request("POST", apiBase(server) + "/auth/jellyfin/quickconnect/authenticate",
+                                        quickConnectHeaders(server, request), json{{"secret", request.secret}}.dump());
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -385,10 +367,8 @@ ApiValueResult<std::string> SeerrClient::authenticateQuickConnect(
     return result;
 }
 
-ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
-    const std::string& server,
-    const SeerrAuth& auth
-) const {
+ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(const std::string& server,
+                                                                            const SeerrAuth& auth) const {
     ApiValueResult<std::vector<SeerrStorageTarget>> result;
     if (!configured(server, auth)) {
         result.error = "Seerr is not connected";
@@ -397,14 +377,8 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
 
     std::unordered_set<std::string> seenTargets;
     std::vector<std::string> failures;
-    auto addTarget = [&](const std::string& mediaType,
-                         const std::string& serviceName,
-                         const std::string& path,
-                         int serverId,
-                         int profileId,
-                         int64_t freeSpace,
-                         int64_t totalSpace,
-                         bool isDefault,
+    auto addTarget = [&](const std::string& mediaType, const std::string& serviceName, const std::string& path,
+                         int serverId, int profileId, int64_t freeSpace, int64_t totalSpace, bool isDefault,
                          bool is4k) {
         if (path.empty() || serverId < 0) return;
         const std::string key = mediaType + ":" + std::to_string(serverId) + ":" + path;
@@ -472,18 +446,12 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
                             for (const auto& folder : *folders) {
                                 if (!folder.is_object()) continue;
                                 const std::string path = stringValue(folder, "path");
-                                const bool anime = mediaType == "tv" && !animeDirectory.empty() && path == animeDirectory;
-                                addTarget(
-                                    mediaType,
-                                    anime ? name + " - Anime" : name,
-                                    path,
-                                    id,
-                                    anime && animeProfileId > 0 ? animeProfileId : profileId,
-                                    int64Value(folder, "freeSpace"),
-                                    int64Value(folder, "totalSpace"),
-                                    isDefault,
-                                    is4k
-                                );
+                                const bool anime =
+                                    mediaType == "tv" && !animeDirectory.empty() && path == animeDirectory;
+                                addTarget(mediaType, anime ? name + " - Anime" : name, path, id,
+                                          anime && animeProfileId > 0 ? animeProfileId : profileId,
+                                          int64Value(folder, "freeSpace"), int64Value(folder, "totalSpace"), isDefault,
+                                          is4k);
                             }
                         }
                     } catch (const std::exception& e) {
@@ -498,17 +466,8 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
                 // capacity/details (common with some remote mounts and permission setups).
                 addTarget(mediaType, name, activeDirectory, id, profileId, 0, 0, isDefault, is4k);
                 if (mediaType == "tv" && !animeDirectory.empty() && animeDirectory != activeDirectory) {
-                    addTarget(
-                        mediaType,
-                        name + " - Anime",
-                        animeDirectory,
-                        id,
-                        animeProfileId > 0 ? animeProfileId : profileId,
-                        0,
-                        0,
-                        isDefault,
-                        is4k
-                    );
+                    addTarget(mediaType, name + " - Anime", animeDirectory, id,
+                              animeProfileId > 0 ? animeProfileId : profileId, 0, 0, isDefault, is4k);
                 }
             }
         } catch (const std::exception& e) {
@@ -524,21 +483,15 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(
     return result;
 }
 
-ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::search(
-    const std::string& server,
-    const SeerrAuth& auth,
-    const std::string& query
-) const {
+ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::search(const std::string& server, const SeerrAuth& auth,
+                                                                const std::string& query) const {
     ApiValueResult<std::vector<SeerrMediaItem>> result;
     if (!configured(server, auth)) {
         result.error = "Seerr is not connected";
         return result;
     }
     const auto response = http_.request(
-        "GET",
-        apiBase(server) + "/search?query=" + urlEncode(query) + "&page=1&language=en",
-        headers(auth)
-    );
+        "GET", apiBase(server) + "/search?query=" + urlEncode(query) + "&page=1&language=en", headers(auth));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -563,12 +516,8 @@ ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::search(
     return result;
 }
 
-ApiValueResult<SeerrMediaItem> SeerrClient::loadMediaDetails(
-    const std::string& server,
-    const SeerrAuth& auth,
-    const std::string& mediaType,
-    int tmdbId
-) const {
+ApiValueResult<SeerrMediaItem> SeerrClient::loadMediaDetails(const std::string& server, const SeerrAuth& auth,
+                                                             const std::string& mediaType, int tmdbId) const {
     ApiValueResult<SeerrMediaItem> result;
     if (mediaType != "movie" && mediaType != "tv") {
         result.error = "Unsupported Seerr media type";
@@ -589,9 +538,12 @@ ApiValueResult<SeerrMediaItem> SeerrClient::loadMediaDetails(
         result.value.overview = stringValue(data, "overview");
         result.value.posterUrl = tmdbImageUrl(kTmdbPosterBase, stringValue(data, "posterPath"));
         result.value.backdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(data, "backdropPath"));
-        const std::string date = mediaType == "tv" ? stringValue(data, "firstAirDate") : stringValue(data, "releaseDate");
+        const std::string date =
+            mediaType == "tv" ? stringValue(data, "firstAirDate") : stringValue(data, "releaseDate");
         if (date.size() >= 4) {
-            try { result.value.productionYear = std::stoi(date.substr(0, 4)); } catch (...) {}
+            try {
+                result.value.productionYear = std::stoi(date.substr(0, 4));
+            } catch (...) {}
         }
         result.ok = true;
     } catch (const std::exception& e) {
@@ -600,23 +552,18 @@ ApiValueResult<SeerrMediaItem> SeerrClient::loadMediaDetails(
     return result;
 }
 
-ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::pendingRequests(
-    const std::string& server,
-    const SeerrAuth& auth,
-    int limit
-) const {
+ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::pendingRequests(const std::string& server,
+                                                                         const SeerrAuth& auth, int limit) const {
     ApiValueResult<std::vector<SeerrMediaItem>> result;
     if (!configured(server, auth)) {
         result.ok = true;
         return result;
     }
     limit = std::clamp(limit, 1, 30);
-    const auto response = http_.request(
-        "GET",
-        apiBase(server) + "/request?take=" + std::to_string(limit)
-            + "&skip=0&filter=unavailable&sort=added&sortDirection=desc",
-        headers(auth)
-    );
+    const auto response = http_.request("GET",
+                                        apiBase(server) + "/request?take=" + std::to_string(limit) +
+                                            "&skip=0&filter=unavailable&sort=added&sortDirection=desc",
+                                        headers(auth));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -665,12 +612,8 @@ ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::pendingRequests(
     return result;
 }
 
-ApiValueResult<int> SeerrClient::requestMedia(
-    const std::string& server,
-    const SeerrAuth& auth,
-    const SeerrMediaItem& item,
-    const SeerrStorageTarget* target
-) const {
+ApiValueResult<int> SeerrClient::requestMedia(const std::string& server, const SeerrAuth& auth,
+                                              const SeerrMediaItem& item, const SeerrStorageTarget* target) const {
     ApiValueResult<int> result;
     if (!configured(server, auth)) {
         result.error = "Seerr is not connected";
@@ -711,11 +654,7 @@ ApiValueResult<int> SeerrClient::requestMedia(
     return result;
 }
 
-ApiResult SeerrClient::deleteRequest(
-    const std::string& server,
-    const SeerrAuth& auth,
-    int requestId
-) const {
+ApiResult SeerrClient::deleteRequest(const std::string& server, const SeerrAuth& auth, int requestId) const {
     ApiResult result;
     if (!configured(server, auth)) {
         result.error = "Seerr is not connected";
@@ -725,11 +664,8 @@ ApiResult SeerrClient::deleteRequest(
         result.error = "Seerr request ID is unavailable";
         return result;
     }
-    const auto response = http_.request(
-        "DELETE",
-        apiBase(server) + "/request/" + std::to_string(requestId),
-        headers(auth)
-    );
+    const auto response =
+        http_.request("DELETE", apiBase(server) + "/request/" + std::to_string(requestId), headers(auth));
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;

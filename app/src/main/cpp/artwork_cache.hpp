@@ -81,16 +81,14 @@ public:
         return true;
     }
 
-    template <typename Release>
-    void erase(const std::string& key, Release&& release) {
+    template <typename Release> void erase(const std::string& key, Release&& release) {
         const auto it = entries_.find(key);
         if (it == entries_.end()) return;
         release(it->second);
         entries_.erase(it);
     }
 
-    template <typename Release>
-    void clear(Release&& release) {
+    template <typename Release> void clear(Release&& release) {
         for (auto& [key, entry] : entries_) {
             (void)key;
             release(entry);
@@ -102,8 +100,7 @@ public:
     [[nodiscard]] size_t size() const { return entries_.size(); }
 
 private:
-    template <typename Release>
-    bool makeRoom(Release&& release) {
+    template <typename Release> bool makeRoom(Release&& release) {
         if (maxEntries_ == 0 || entries_.size() < maxEntries_) return true;
         auto victim = entries_.end();
         for (auto it = entries_.begin(); it != entries_.end(); ++it) {

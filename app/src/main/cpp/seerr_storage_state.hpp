@@ -80,9 +80,8 @@ public:
             pendingRequest_.reset();
             return PickerStatus::Unavailable;
         }
-        std::stable_sort(driveChoices_.begin(), driveChoices_.end(), [](const auto& left, const auto& right) {
-            return left.isDefault > right.isDefault;
-        });
+        std::stable_sort(driveChoices_.begin(), driveChoices_.end(),
+                         [](const auto& left, const auto& right) { return left.isDefault > right.isDefault; });
         pendingRequest_ = item;
         driveSelection_ = 0;
         return PickerStatus::Ready;
@@ -104,16 +103,13 @@ public:
 
     void moveSelection(int delta) {
         if (driveChoices_.empty()) return;
-        driveSelection_ = std::clamp(
-            driveSelection_, 0, static_cast<int>(driveChoices_.size()) - 1);
-        driveSelection_ = std::clamp(
-            driveSelection_ + delta, 0, static_cast<int>(driveChoices_.size()) - 1);
+        driveSelection_ = std::clamp(driveSelection_, 0, static_cast<int>(driveChoices_.size()) - 1);
+        driveSelection_ = std::clamp(driveSelection_ + delta, 0, static_cast<int>(driveChoices_.size()) - 1);
     }
 
     [[nodiscard]] std::optional<Selection> takeSelection() {
         if (!pendingRequest_ || driveChoices_.empty()) return std::nullopt;
-        driveSelection_ = std::clamp(
-            driveSelection_, 0, static_cast<int>(driveChoices_.size()) - 1);
+        driveSelection_ = std::clamp(driveSelection_, 0, static_cast<int>(driveChoices_.size()) - 1);
         Selection selected{
             .item = *pendingRequest_,
             .target = driveChoices_[static_cast<size_t>(driveSelection_)],

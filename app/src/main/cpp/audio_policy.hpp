@@ -34,9 +34,8 @@ constexpr int effectiveAudioChannels(int requestedChannels, int routeChannels) {
 
 inline std::string normalizedAudioCodec(std::string_view codec) {
     std::string value(codec);
-    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return value;
 }
 
@@ -46,22 +45,19 @@ struct AudioPreferenceCandidate {
 };
 
 inline std::string normalizeAudioLanguage(std::string language) {
-    std::transform(language.begin(), language.end(), language.begin(), [](unsigned char c) {
-        return static_cast<char>(std::tolower(c));
-    });
+    std::transform(language.begin(), language.end(), language.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return language;
 }
 
 inline bool audioLanguageEquals(std::string_view left, std::string_view right) {
-    return left.size() == right.size() && std::equal(left.begin(), left.end(), right.begin(), [](unsigned char a, unsigned char b) {
-        return std::tolower(a) == std::tolower(b);
-    });
+    return left.size() == right.size() &&
+           std::equal(left.begin(), left.end(), right.begin(),
+                      [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
 }
 
-inline int audioIndexForQueuePreference(
-    const std::vector<AudioPreferenceCandidate>& audios,
-    const std::optional<std::string>& languagePreference
-) {
+inline int audioIndexForQueuePreference(const std::vector<AudioPreferenceCandidate>& audios,
+                                        const std::optional<std::string>& languagePreference) {
     if (!languagePreference.has_value() || languagePreference->empty()) return -1;
     const auto match = std::find_if(audios.begin(), audios.end(), [&](const AudioPreferenceCandidate& audio) {
         return audio.index >= 0 && audioLanguageEquals(audio.language, *languagePreference);
@@ -69,21 +65,16 @@ inline int audioIndexForQueuePreference(
     return match == audios.end() ? -1 : match->index;
 }
 
-inline bool audioStreamCopyAllowed(
-    const std::vector<std::string>& advertisedCodecs,
-    std::string_view codec,
-    int channels,
-    int maxAudioChannels
-) {
+inline bool audioStreamCopyAllowed(const std::vector<std::string>& advertisedCodecs, std::string_view codec,
+                                   int channels, int maxAudioChannels) {
     const std::string normalized = normalizedAudioCodec(codec);
-    const bool codecAllowed = std::find(advertisedCodecs.begin(), advertisedCodecs.end(), normalized) != advertisedCodecs.end();
+    const bool codecAllowed =
+        std::find(advertisedCodecs.begin(), advertisedCodecs.end(), normalized) != advertisedCodecs.end();
     return codecAllowed && (channels <= 0 || channels <= std::max(2, maxAudioChannels));
 }
 
-inline std::vector<std::string> transcodingAudioCodecs(
-    const AudioCodecCapabilities& capabilities,
-    int maxAudioChannels
-) {
+inline std::vector<std::string> transcodingAudioCodecs(const AudioCodecCapabilities& capabilities,
+                                                       int maxAudioChannels) {
     std::vector<std::string> codecs;
     if (capabilities.aac) codecs.emplace_back("aac");
     if (capabilities.mp3) codecs.emplace_back("mp3");
@@ -95,10 +86,8 @@ inline std::vector<std::string> transcodingAudioCodecs(
     return codecs;
 }
 
-inline std::vector<std::string> advertisedAudioCodecs(
-    const AudioCodecCapabilities& capabilities,
-    int maxAudioChannels
-) {
+inline std::vector<std::string> advertisedAudioCodecs(const AudioCodecCapabilities& capabilities,
+                                                      int maxAudioChannels) {
     std::vector<std::string> codecs;
     if (capabilities.aac) codecs.emplace_back("aac");
     if (capabilities.mp3) codecs.emplace_back("mp3");

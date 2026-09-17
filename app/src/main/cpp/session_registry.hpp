@@ -40,9 +40,9 @@ public:
         for (const auto& persisted : stored) {
             JellyfinSession session = fromStored(persisted, deviceId);
             if (!session.valid()) continue;
-            const auto duplicate = std::find_if(sessions_.begin(), sessions_.end(), [&](const JellyfinSession& candidate) {
-                return sameIdentity(candidate, session);
-            });
+            const auto duplicate =
+                std::find_if(sessions_.begin(), sessions_.end(),
+                             [&](const JellyfinSession& candidate) { return sameIdentity(candidate, session); });
             if (duplicate != sessions_.end()) continue;
             sessions_.push_back(std::move(session));
             if (sessions_.size() >= kMaxSavedSessions) break;
@@ -74,9 +74,7 @@ public:
 
     bool removeIdentity(const JellyfinSession& session) {
         const auto previousSize = sessions_.size();
-        std::erase_if(sessions_, [&](const JellyfinSession& saved) {
-            return sameIdentity(saved, session);
-        });
+        std::erase_if(sessions_, [&](const JellyfinSession& saved) { return sameIdentity(saved, session); });
         return sessions_.size() != previousSize;
     }
 

@@ -17,7 +17,7 @@ bool clearException(JNIEnv* env, const char* where, std::string& error) {
     error = std::string("Video surface failed at ") + where;
     return true;
 }
-}
+} // namespace
 
 VideoSurface::~VideoSurface() {
     release();
@@ -58,7 +58,8 @@ bool VideoSurface::create(std::string& error) {
         jmethodID ctor = env->GetMethodID(localTextureClass, "<init>", "(I)V");
         updateTexImageMethod_ = env->GetMethodID(localTextureClass, "updateTexImage", "()V");
         getTransformMatrixMethod_ = env->GetMethodID(localTextureClass, "getTransformMatrix", "([F)V");
-        if (!ctor || !updateTexImageMethod_ || !getTransformMatrixMethod_ || clearException(env, "SurfaceTexture method lookup", error)) {
+        if (!ctor || !updateTexImageMethod_ || !getTransformMatrixMethod_ ||
+            clearException(env, "SurfaceTexture method lookup", error)) {
             env->DeleteLocalRef(localTextureClass);
             goto fail;
         }

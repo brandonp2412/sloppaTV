@@ -43,11 +43,12 @@ void renderDreamFrame(Renderer& renderer, int positionIndex, bool clock24Hour) {
 
     renderer.beginFrame();
     renderer.setUiTransform(0.0f, 1.0f);
-    renderer.roundedRect(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f,
-        material_tv::cornerLarge, material_tv::surfaceContainer);
+    renderer.roundedRect(position[0] - 42.0f, position[1] - 42.0f, 610.0f, 250.0f, material_tv::cornerLarge,
+                         material_tv::surfaceContainer);
     renderer.text(position[0], position[1], material_tv::type::title, "sloppaTV", material_tv::primary, 520.0f);
     renderer.text(position[0], position[1] + 78.0f, 5.8f, clockText, kText, 520.0f);
-    renderer.text(position[0], position[1] + 170.0f, material_tv::type::supporting, "Your Jellyfin library", kMuted, 520.0f);
+    renderer.text(position[0], position[1] + 170.0f, material_tv::type::supporting, "Your Jellyfin library", kMuted,
+                  520.0f);
     renderer.endFrame();
 }
 
@@ -89,10 +90,11 @@ void stopDreamThread() {
         gStopRequested = false;
     }
 }
-}
+} // namespace
 
-extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobject surface, jboolean clock24Hour) {
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass,
+                                                                                        jobject surface,
+                                                                                        jboolean clock24Hour) {
     if (!env || !surface) return;
     stopDreamThread();
     ANativeWindow* window = ANativeWindow_fromSurface(env, surface);
@@ -107,7 +109,6 @@ Java_app_sloppatv_SloppaDreamService_nativeStartDream(JNIEnv* env, jclass, jobje
     }
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaDreamService_nativeStopDream(JNIEnv*, jclass) {
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaDreamService_nativeStopDream(JNIEnv*, jclass) {
     stopDreamThread();
 }

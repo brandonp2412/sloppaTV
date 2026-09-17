@@ -102,16 +102,16 @@ public:
     }
 
     [[nodiscard]] bool hasFilterBar() const {
-        return stack_.empty() && (activeContainer_.collectionType == "movies"
-            || activeContainer_.collectionType == "tvshows" || activeContainer_.collectionType == "mixed");
+        return stack_.empty() &&
+               (activeContainer_.collectionType == "movies" || activeContainer_.collectionType == "tvshows" ||
+                activeContainer_.collectionType == "mixed");
     }
 
     [[nodiscard]] std::span<const std::string> filterLabels() const {
         static const std::array<std::string, 4> common{"ALL", "FAVORITES", "GENRES", "A-Z"};
         static const std::array<std::string, 5> movies{"ALL", "FAVORITES", "GENRES", "A-Z", "COLLECTIONS"};
-        return activeContainer_.collectionType == "movies"
-            ? std::span<const std::string>(movies)
-            : std::span<const std::string>(common);
+        return activeContainer_.collectionType == "movies" ? std::span<const std::string>(movies)
+                                                           : std::span<const std::string>(common);
     }
 
     void moveFilter(int delta) {
@@ -131,14 +131,22 @@ public:
         letter_.clear();
         clearPage();
         switch (filterSelection_) {
-            case 1: mode_ = BrowseContentMode::Favorites; break;
-            case 2: mode_ = BrowseContentMode::Genres; break;
-            case 3:
-                mode_ = BrowseContentMode::Letters;
-                populateLetters();
-                return false;
-            case 4: mode_ = BrowseContentMode::Collections; break;
-            default: mode_ = BrowseContentMode::All; break;
+        case 1:
+            mode_ = BrowseContentMode::Favorites;
+            break;
+        case 2:
+            mode_ = BrowseContentMode::Genres;
+            break;
+        case 3:
+            mode_ = BrowseContentMode::Letters;
+            populateLetters();
+            return false;
+        case 4:
+            mode_ = BrowseContentMode::Collections;
+            break;
+        default:
+            mode_ = BrowseContentMode::All;
+            break;
         }
         return true;
     }
@@ -164,9 +172,8 @@ public:
         items_ = std::move(items);
         selection_ = 0;
         if (!selectedId.empty()) {
-            const auto selected = std::find_if(items_.begin(), items_.end(), [&](const JellyfinItem& item) {
-                return item.id == selectedId;
-            });
+            const auto selected = std::find_if(items_.begin(), items_.end(),
+                                               [&](const JellyfinItem& item) { return item.id == selectedId; });
             if (selected != items_.end()) {
                 selection_ = static_cast<int>(std::distance(items_.begin(), selected));
             }
@@ -186,21 +193,17 @@ public:
         if (itemId.empty()) return;
         auto remove = [&](std::vector<JellyfinItem>& items, int& nextIndex, int& selection) {
             const size_t previousSize = items.size();
-            const size_t selectedOffset = selection <= 0
-                ? 0
-                : std::min(static_cast<size_t>(selection), items.size());
-            const int removedBeforeSelection = static_cast<int>(std::count_if(
-                items.begin(),
-                items.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
-                [&](const JellyfinItem& item) { return item.id == itemId; }
-            ));
+            const size_t selectedOffset = selection <= 0 ? 0 : std::min(static_cast<size_t>(selection), items.size());
+            const int removedBeforeSelection = static_cast<int>(
+                std::count_if(items.begin(), items.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
+                              [&](const JellyfinItem& item) { return item.id == itemId; }));
             std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
             const int removed = static_cast<int>(previousSize - items.size());
             if (removed == 0) return;
             nextIndex = std::max(0, nextIndex - removed);
             selection = items.empty()
-                ? 0
-                : std::clamp(selection - removedBeforeSelection, 0, static_cast<int>(items.size()) - 1);
+                            ? 0
+                            : std::clamp(selection - removedBeforeSelection, 0, static_cast<int>(items.size()) - 1);
         };
         remove(items_, nextIndex_, selection_);
         for (auto& snapshot : stack_) remove(snapshot.items, snapshot.nextIndex, snapshot.selection);
@@ -208,12 +211,18 @@ public:
 
     [[nodiscard]] std::string heading() const {
         std::string value = activeContainer_.name.empty() ? "LIBRARY" : activeContainer_.name;
-        if (mode_ == BrowseContentMode::Favorites) value += " - FAVORITES";
-        else if (mode_ == BrowseContentMode::Genres) value += " - GENRES";
-        else if (mode_ == BrowseContentMode::GenreItems && !genre_.empty()) value += " - " + genre_;
-        else if (mode_ == BrowseContentMode::Letters) value += " - A-Z";
-        else if (mode_ == BrowseContentMode::LetterItems && !letter_.empty()) value += " - " + letter_;
-        else if (mode_ == BrowseContentMode::Collections) value = "COLLECTIONS";
+        if (mode_ == BrowseContentMode::Favorites)
+            value += " - FAVORITES";
+        else if (mode_ == BrowseContentMode::Genres)
+            value += " - GENRES";
+        else if (mode_ == BrowseContentMode::GenreItems && !genre_.empty())
+            value += " - " + genre_;
+        else if (mode_ == BrowseContentMode::Letters)
+            value += " - A-Z";
+        else if (mode_ == BrowseContentMode::LetterItems && !letter_.empty())
+            value += " - " + letter_;
+        else if (mode_ == BrowseContentMode::Collections)
+            value = "COLLECTIONS";
         return value;
     }
 
@@ -239,13 +248,18 @@ public:
     [[nodiscard]] int filterSelection() const { return filterSelection_; }
     [[nodiscard]] int activeFilterSelection() const {
         switch (mode_) {
-            case BrowseContentMode::Favorites: return 1;
-            case BrowseContentMode::Genres:
-            case BrowseContentMode::GenreItems: return 2;
-            case BrowseContentMode::Letters:
-            case BrowseContentMode::LetterItems: return 3;
-            case BrowseContentMode::Collections: return 4;
-            case BrowseContentMode::All: return 0;
+        case BrowseContentMode::Favorites:
+            return 1;
+        case BrowseContentMode::Genres:
+        case BrowseContentMode::GenreItems:
+            return 2;
+        case BrowseContentMode::Letters:
+        case BrowseContentMode::LetterItems:
+            return 3;
+        case BrowseContentMode::Collections:
+            return 4;
+        case BrowseContentMode::All:
+            return 0;
         }
         return 0;
     }

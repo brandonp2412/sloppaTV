@@ -11,7 +11,7 @@ SeerrMediaItem media(std::string id) {
     item.tmdbId = 10;
     return item;
 }
-}
+} // namespace
 
 int main() {
     SeerrConnectionState state;

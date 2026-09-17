@@ -13,7 +13,7 @@ DecodedImage image(int width, int height) {
     result.rgba.resize(static_cast<size_t>(width * height * 4), 0xff);
     return result;
 }
-}
+} // namespace
 
 int main() {
     ArtworkTextureCache cache(2);
@@ -26,9 +26,7 @@ int main() {
         ++createCalls;
         return static_cast<uint32_t>(100 + createCalls);
     };
-    const auto destroy = [&](uint32_t texture) {
-        deleted.push_back(texture);
-    };
+    const auto destroy = [&](uint32_t texture) { deleted.push_back(texture); };
 
     assert(cache.beginLoad("poster", 7, destroy));
     assert(cache.prepare("poster", 7, create).state == ArtworkTextureState::Loading);

@@ -26,9 +26,9 @@ int main(int argc, char** argv) {
         checksum += state.rowItemCount(iteration & 1);
         checksum += state.firstVisibleInRow(iteration & 1, 6);
     }
-    const double elapsedMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
-    std::cout << std::fixed << std::setprecision(3)
-              << "results=" << resultsCount << " iterations=" << iterations
+    const double elapsedMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    std::cout << std::fixed << std::setprecision(3) << "results=" << resultsCount << " iterations=" << iterations
               << " elapsed_ms=" << elapsedMs << " checksum=" << checksum << '\n';
     return checksum > 0 ? 0 : 1;
 }

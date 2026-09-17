@@ -42,11 +42,9 @@ struct FakeRenderer {
         return static_cast<uint32_t>(100 + createCalls);
     }
 
-    void deleteTexture(uint32_t texture) {
-        deleted.push_back(texture);
-    }
+    void deleteTexture(uint32_t texture) { deleted.push_back(texture); }
 };
-}
+} // namespace
 
 int main() {
     ArtworkPipeline pipeline(2);

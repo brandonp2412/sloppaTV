@@ -28,7 +28,7 @@ void recycleBitmap(JNIEnv* env, jobject bitmap) {
     if (env->ExceptionCheck()) env->ExceptionClear();
     if (bitmapClass) env->DeleteLocalRef(bitmapClass);
 }
-}
+} // namespace
 
 DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::string& error) const {
     DecodedImage result;
@@ -46,11 +46,8 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
 
     jclass factoryClass = env->FindClass("android/graphics/BitmapFactory");
     if (!factoryClass || clearException(env, "FindClass(BitmapFactory)", error)) return result;
-    jmethodID decodeByteArray = env->GetStaticMethodID(
-        factoryClass,
-        "decodeByteArray",
-        "([BII)Landroid/graphics/Bitmap;"
-    );
+    jmethodID decodeByteArray =
+        env->GetStaticMethodID(factoryClass, "decodeByteArray", "([BII)Landroid/graphics/Bitmap;");
     if (!decodeByteArray || clearException(env, "BitmapFactory.decodeByteArray", error)) {
         env->DeleteLocalRef(factoryClass);
         return result;
@@ -62,25 +59,16 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
         error = "Unable to allocate image byte array";
         return result;
     }
-    env->SetByteArrayRegion(
-        bytes,
-        0,
-        static_cast<jsize>(encodedBytes.size()),
-        reinterpret_cast<const jbyte*>(encodedBytes.data())
-    );
+    env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(encodedBytes.size()),
+                            reinterpret_cast<const jbyte*>(encodedBytes.data()));
     if (clearException(env, "SetByteArrayRegion", error)) {
         env->DeleteLocalRef(bytes);
         env->DeleteLocalRef(factoryClass);
         return result;
     }
 
-    jobject bitmap = env->CallStaticObjectMethod(
-        factoryClass,
-        decodeByteArray,
-        bytes,
-        0,
-        static_cast<jint>(encodedBytes.size())
-    );
+    jobject bitmap =
+        env->CallStaticObjectMethod(factoryClass, decodeByteArray, bytes, 0, static_cast<jint>(encodedBytes.size()));
     env->DeleteLocalRef(bytes);
     env->DeleteLocalRef(factoryClass);
     if (!bitmap || clearException(env, "BitmapFactory.decodeByteArray", error)) {
@@ -90,7 +78,8 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
     }
 
     AndroidBitmapInfo info{};
-    if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS || info.width == 0 || info.height == 0) {
+    if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS || info.width == 0 ||
+        info.height == 0) {
         recycleBitmap(env, bitmap);
         env->DeleteLocalRef(bitmap);
         error = "Unable to inspect decoded bitmap";
@@ -117,12 +106,12 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
         }
     } else if (info.format == ANDROID_BITMAP_FORMAT_RGB_565) {
         for (int y = 0; y < result.height; ++y) {
-            const auto* source = reinterpret_cast<const uint16_t*>(
-                static_cast<const uint8_t*>(pixels) + static_cast<size_t>(y) * info.stride
-            );
+            const auto* source = reinterpret_cast<const uint16_t*>(static_cast<const uint8_t*>(pixels) +
+                                                                   static_cast<size_t>(y) * info.stride);
             for (int x = 0; x < result.width; ++x) {
                 const uint16_t packed = source[x];
-                const size_t out = (static_cast<size_t>(y) * static_cast<size_t>(result.width) + static_cast<size_t>(x)) * 4;
+                const size_t out =
+                    (static_cast<size_t>(y) * static_cast<size_t>(result.width) + static_cast<size_t>(x)) * 4;
                 result.rgba[out] = static_cast<uint8_t>(((packed >> 11) & 0x1f) * 255 / 31);
                 result.rgba[out + 1] = static_cast<uint8_t>(((packed >> 5) & 0x3f) * 255 / 63);
                 result.rgba[out + 2] = static_cast<uint8_t>((packed & 0x1f) * 255 / 31);

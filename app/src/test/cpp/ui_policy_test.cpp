@@ -23,8 +23,8 @@ int main() {
     assert(keyboardKeyHeight(270.0f, 5, 14.0f) == 82.0f);
     assert(keyboardKeyHeight(610.0f, 0, 14.0f) == 0.0f);
     // Two poster rows fit the browse canvas below the filter bar, including a large one-line title.
-    assert(285.0f + browseMediaRowHeight(true) + mediaPosterHeight() + 24.0f
-        + 11.0f * 1.8f * uiTextScale(2) <= 1080.0f);
+    assert(285.0f + browseMediaRowHeight(true) + mediaPosterHeight() + 24.0f + 11.0f * 1.8f * uiTextScale(2) <=
+           1080.0f);
     // Two poster rows, including two title lines and metadata, fit the generic media grid canvas.
     assert(195.0f + 430.0f + mediaPosterHeight() + 24.0f + 72.0f + 36.0f <= 1080.0f);
     assert(mediaTitleScale() == 2.45f);
@@ -70,12 +70,12 @@ int main() {
     assert(settingsFooterY(0) == 956.0f);
     assert(settingsFooterY(2) == 968.0f);
     // Keep the second row's episode metadata on-screen at the largest text size.
-    assert(150.0f + homeRowStep(2) + homeRowImageOffset(2) + 202.0f + 22.0f
-        + 11.0f * 2.45f * uiTextScale(2) + 4.0f + 10.0f * 1.58f * uiTextScale(2) < 1080.0f);
+    assert(150.0f + homeRowStep(2) + homeRowImageOffset(2) + 202.0f + 22.0f + 11.0f * 2.45f * uiTextScale(2) + 4.0f +
+               10.0f * 1.58f * uiTextScale(2) <
+           1080.0f);
     // Large cast labels retain breathing room above the next focused artwork row.
     constexpr float castTitleY = 195.0f + 285.0f + 24.0f;
-    constexpr float castRoleBottom = castTitleY + 11.0f * 1.8f * uiTextScale(2)
-        + 4.0f + 10.0f * 1.55f * uiTextScale(2);
+    constexpr float castRoleBottom = castTitleY + 11.0f * 1.8f * uiTextScale(2) + 4.0f + 10.0f * 1.55f * uiTextScale(2);
     constexpr float secondCastFocusHaloTop = 195.0f + castRowStep(2) - (285.0f * 0.05f * 0.5f) - 10.0f;
     assert(castRoleBottom < secondCastFocusHaloTop);
     // The second row's large role label still clears the compact footer at y=1032.
@@ -83,8 +83,8 @@ int main() {
     // Large settings copy clears the first focused row halo and the footer clears the last row halo.
     constexpr float largeSettingsDescriptionBottom = settingsDescriptionY(2) + 10.0f * 1.40f * uiTextScale(2);
     constexpr float firstSettingsHaloTop = settingsRowsTop(2) - 8.0f - (88.0f * 0.04f * 0.5f) - 10.0f;
-    constexpr float lastSettingsHaloBottom = settingsRowsTop(2) + 5.0f * 112.0f - 8.0f
-        + 88.0f + (88.0f * 0.04f * 0.5f) + 10.0f;
+    constexpr float lastSettingsHaloBottom =
+        settingsRowsTop(2) + 5.0f * 112.0f - 8.0f + 88.0f + (88.0f * 0.04f * 0.5f) + 10.0f;
     assert(largeSettingsDescriptionBottom < firstSettingsHaloTop);
     assert(lastSettingsHaloBottom < settingsFooterY(2));
     assert(settingsFooterY(2) + 58.0f < 1080.0f);

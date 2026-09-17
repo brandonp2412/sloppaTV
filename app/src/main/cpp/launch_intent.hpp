@@ -11,11 +11,8 @@ struct LaunchRequest {
     std::string searchQuery;
 };
 
-inline LaunchRequest launchRequestFromIntentParts(
-    const std::string& action,
-    const std::string& data,
-    const std::string& query
-) {
+inline LaunchRequest launchRequestFromIntentParts(const std::string& action, const std::string& data,
+                                                  const std::string& query) {
     LaunchRequest request;
     if (action == "android.intent.action.VIEW") {
         request.itemId = normalizeJellyfinItemId(data);

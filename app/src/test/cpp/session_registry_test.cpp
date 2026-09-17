@@ -14,7 +14,7 @@ JellyfinSession session(std::string server, std::string userId, std::string toke
         .deviceId = "old-device",
     };
 }
-}
+} // namespace
 
 int main() {
     SessionRegistry registry;
@@ -64,11 +64,9 @@ int main() {
         .token = "",
     });
     for (int i = 0; i < 20; ++i) {
-        oversized.push_back(SessionRegistry::toStored(session(
-            "https://server-" + std::to_string(i) + ".test",
-            "user-" + std::to_string(i),
-            "token-" + std::to_string(i)
-        )));
+        oversized.push_back(
+            SessionRegistry::toStored(session("https://server-" + std::to_string(i) + ".test",
+                                              "user-" + std::to_string(i), "token-" + std::to_string(i))));
     }
     SessionRegistry bounded;
     bounded.importStored(oversized, "device-bounded");

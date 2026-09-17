@@ -37,8 +37,10 @@ constexpr int homeFirstVisibleRow(int currentFirst, int focusedRow, int totalRow
     int first = std::clamp(currentFirst, 0, maxFirst);
     if (focusedRow < 0) return first;
     const int focused = std::clamp(focusedRow, 0, totalRows - 1);
-    if (focused < first) first = focused;
-    else if (focused >= first + visibleRows) first = focused - visibleRows + 1;
+    if (focused < first)
+        first = focused;
+    else if (focused >= first + visibleRows)
+        first = focused - visibleRows + 1;
     return std::clamp(first, 0, maxFirst);
 }
 
@@ -57,16 +59,10 @@ inline bool homeRowDropsItemWhenPlayed(const std::string& rowTitle) {
     return rowTitle == "Continue Watching" || rowTitle == "Next Up";
 }
 
-inline ArtworkReference homeArtworkReference(
-    const std::string& itemId,
-    const std::string& primaryTag,
-    const std::string& seriesId,
-    const std::string& seriesPrimaryTag,
-    bool preferSeries,
-    const std::string& thumbTag,
-    const std::string& backdropTag,
-    const std::string& backdropItemId
-) {
+inline ArtworkReference homeArtworkReference(const std::string& itemId, const std::string& primaryTag,
+                                             const std::string& seriesId, const std::string& seriesPrimaryTag,
+                                             bool preferSeries, const std::string& thumbTag,
+                                             const std::string& backdropTag, const std::string& backdropItemId) {
     const std::string backdropOwner = backdropItemId.empty() ? itemId : backdropItemId;
     const bool ownBackdrop = !backdropTag.empty() && backdropOwner == itemId;
     if (preferSeries && !thumbTag.empty()) return {itemId, thumbTag, ArtworkKind::Thumb};
@@ -77,8 +73,8 @@ inline ArtworkReference homeArtworkReference(
         return {seriesId, seriesPrimaryTag, ArtworkKind::Primary};
     }
     const ArtworkKind kind = homeImageKind(!primaryTag.empty(), !thumbTag.empty(), !backdropTag.empty());
-    const std::string& tag = kind == ArtworkKind::Primary ? primaryTag
-        : (kind == ArtworkKind::Thumb ? thumbTag : backdropTag);
+    const std::string& tag =
+        kind == ArtworkKind::Primary ? primaryTag : (kind == ArtworkKind::Thumb ? thumbTag : backdropTag);
     return {kind == ArtworkKind::Backdrop ? backdropOwner : itemId, tag, kind};
 }
 
@@ -106,8 +102,10 @@ public:
 
     void moveRow(int direction, int totalRows) {
         if (row_ < 0 || totalRows <= 0) return;
-        if (direction < 0) row_ = row_ == 0 ? -1 : row_ - 1;
-        else if (direction > 0 && row_ + 1 < totalRows) ++row_;
+        if (direction < 0)
+            row_ = row_ == 0 ? -1 : row_ - 1;
+        else if (direction > 0 && row_ + 1 < totalRows)
+            ++row_;
         updateViewport(totalRows);
     }
 
@@ -157,22 +155,16 @@ public:
         return result;
     }
 
-    [[nodiscard]] static int restoredSelection(
-        const HomeSelectionSnapshot& snapshot,
-        const JellyfinHomeRow& row
-    ) {
+    [[nodiscard]] static int restoredSelection(const HomeSelectionSnapshot& snapshot, const JellyfinHomeRow& row) {
         const auto saved = snapshot.selectedItemByRow.find(row.title);
         if (saved == snapshot.selectedItemByRow.end()) return 0;
-        const auto item = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& candidate) {
-            return candidate.id == saved->second;
-        });
+        const auto item = std::find_if(row.items.begin(), row.items.end(),
+                                       [&](const JellyfinItem& candidate) { return candidate.id == saved->second; });
         return item == row.items.end() ? 0 : static_cast<int>(std::distance(row.items.begin(), item));
     }
 
-    [[nodiscard]] static HomeRestorePlan restorePlan(
-        const HomeSelectionSnapshot& snapshot,
-        const std::vector<JellyfinHomeRow>& rows
-    ) {
+    [[nodiscard]] static HomeRestorePlan restorePlan(const HomeSelectionSnapshot& snapshot,
+                                                     const std::vector<JellyfinHomeRow>& rows) {
         HomeRestorePlan plan;
         plan.focusedRow = snapshot.toolbarFocused ? -1 : 0;
         plan.selections.reserve(rows.size());
@@ -202,17 +194,21 @@ public:
     }
 
     void updateItemViewport(int row, int itemCount, int visibleItems) {
-        if (row < 0 || row >= static_cast<int>(firstVisibleItems_.size()) || itemCount <= 0 || visibleItems <= 0) return;
+        if (row < 0 || row >= static_cast<int>(firstVisibleItems_.size()) || itemCount <= 0 || visibleItems <= 0)
+            return;
         const int maxFirst = std::max(0, itemCount - visibleItems);
         int first = std::clamp(firstVisibleItems_[static_cast<size_t>(row)], 0, maxFirst);
         const int selected = selection(row, itemCount);
-        if (selected < first) first = selected;
-        else if (selected >= first + visibleItems) first = selected - visibleItems + 1;
+        if (selected < first)
+            first = selected;
+        else if (selected >= first + visibleItems)
+            first = selected - visibleItems + 1;
         firstVisibleItems_[static_cast<size_t>(row)] = std::clamp(first, 0, maxFirst);
     }
 
     [[nodiscard]] int firstVisibleItem(int row, int itemCount, int visibleItems) const {
-        if (row < 0 || row >= static_cast<int>(firstVisibleItems_.size()) || itemCount <= 0 || visibleItems <= 0) return 0;
+        if (row < 0 || row >= static_cast<int>(firstVisibleItems_.size()) || itemCount <= 0 || visibleItems <= 0)
+            return 0;
         return std::clamp(firstVisibleItems_[static_cast<size_t>(row)], 0, std::max(0, itemCount - visibleItems));
     }
 

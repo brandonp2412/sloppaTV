@@ -80,9 +80,7 @@ int main() {
     assert(!coordinator.failMediaSegmentsRequest("stale-item", now));
     assert(coordinator.session().mediaSegmentsRequested());
     assert(coordinator.completeMediaSegmentsRequest(
-        coordinatedItem.id,
-        {{.type = "Intro", .startTicks = 10'000'000, .endTicks = 50'000'000}}
-    ));
+        coordinatedItem.id, {{.type = "Intro", .startTicks = 10'000'000, .endTicks = 50'000'000}}));
     assert(coordinator.session().mediaSegments().size() == 1);
     assert(coordinator.session().mediaSegments().front().type == "Intro");
     assert(coordinator.continuation().beginNextEpisodeRequest(now));
@@ -179,8 +177,20 @@ int main() {
         {.index = 3, .channels = 2, .codec = "aac", .language = "", .title = "Unlabelled", .isDefault = false},
     };
     preferenceItem.subtitles = {
-        {.index = 4, .codec = "srt", .language = "English", .title = "English", .forced = false, .isDefault = true, .isExternal = true},
-        {.index = 5, .codec = "srt", .language = "", .title = "Unlabelled", .forced = false, .isDefault = false, .isExternal = true},
+        {.index = 4,
+         .codec = "srt",
+         .language = "English",
+         .title = "English",
+         .forced = false,
+         .isDefault = true,
+         .isExternal = true},
+        {.index = 5,
+         .codec = "srt",
+         .language = "",
+         .title = "Unlabelled",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = true},
     };
     preferenceCoordinator.activate(preferenceItem, coordinatedTarget, now);
     preferenceCoordinator.rememberAudioLanguagePreference(2);
@@ -205,11 +215,7 @@ int main() {
     assert(subtitleLoadCoordinator.subtitleLoadMatches(preferenceItem.id, 4));
     assert(!subtitleLoadCoordinator.subtitleLoadMatches("other-item", 4));
     assert(!subtitleLoadCoordinator.subtitleLoadMatches(preferenceItem.id, 5));
-    subtitleLoadCoordinator.completeSubtitleLoad(
-        5,
-        "English",
-        {{.startMs = 100, .endMs = 500, .text = "Hello"}}
-    );
+    subtitleLoadCoordinator.completeSubtitleLoad(5, "English", {{.startMs = 100, .endMs = 500, .text = "Hello"}});
     assert(!subtitleLoadCoordinator.tracks().subtitleBusy());
     assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == 5);
     assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == 5);
@@ -379,16 +385,7 @@ int main() {
 
     telemetry.beginPlayback(now - 11s);
 
-    auto plan = planPlaybackTick(
-        false,
-        true,
-        35000,
-        "Episode",
-        session,
-        telemetry,
-        continuation,
-        now
-    );
+    auto plan = planPlaybackTick(false, true, 35000, "Episode", session, telemetry, continuation, now);
     assert(plan.refreshTelemetry);
     assert(plan.requestMediaSegments);
     assert(plan.reportPlaybackStart);
@@ -399,16 +396,7 @@ int main() {
     telemetry.markProgressReport(now);
     assert(session.beginMediaSegmentsRequest(now));
     assert(continuation.beginNextEpisodeRequest(now));
-    plan = planPlaybackTick(
-        false,
-        false,
-        36000,
-        "Episode",
-        session,
-        telemetry,
-        continuation,
-        now + 1s
-    );
+    plan = planPlaybackTick(false, false, 36000, "Episode", session, telemetry, continuation, now + 1s);
     assert(plan.refreshTelemetry);
     assert(!plan.requestMediaSegments);
     assert(!plan.reportPlaybackStart);
@@ -431,55 +419,23 @@ int main() {
     summaryItem.videoHeight = 2160;
     assert(playbackSummary(summaryTarget, summaryItem) == "DirectStream / hevc / 3840X2160");
 
-    auto releasePlan = planPlaybackRelease(
-        true,
-        false,
-        true,
-        true,
-        releaseItem,
-        releaseTarget,
-        12345
-    );
+    auto releasePlan = planPlaybackRelease(true, false, true, true, releaseItem, releaseTarget, 12345);
     assert(releasePlan.reportTicks == 123'450'000);
     assert(releasePlan.cachedPositionTicks == 123'450'000);
     assert(!releasePlan.markPlayed);
     assert(releasePlan.reportStop);
 
-    releasePlan = planPlaybackRelease(
-        true,
-        true,
-        true,
-        true,
-        releaseItem,
-        releaseTarget,
-        12345
-    );
+    releasePlan = planPlaybackRelease(true, true, true, true, releaseItem, releaseTarget, 12345);
     assert(releasePlan.reportTicks == releaseItem.runtimeTicks);
     assert(releasePlan.cachedPositionTicks == 0);
     assert(releasePlan.markPlayed);
     assert(releasePlan.reportStop);
 
-    releasePlan = planPlaybackRelease(
-        true,
-        false,
-        false,
-        true,
-        releaseItem,
-        releaseTarget,
-        12345
-    );
+    releasePlan = planPlaybackRelease(true, false, false, true, releaseItem, releaseTarget, 12345);
     assert(!releasePlan.reportStop);
 
     releaseItem.runtimeTicks = 0;
-    releasePlan = planPlaybackRelease(
-        false,
-        true,
-        true,
-        true,
-        releaseItem,
-        releaseTarget,
-        54321
-    );
+    releasePlan = planPlaybackRelease(false, true, true, true, releaseItem, releaseTarget, 54321);
     assert(releasePlan.reportTicks == 543'210'000);
     assert(releasePlan.cachedPositionTicks == 0);
     assert(releasePlan.markPlayed);
@@ -493,17 +449,8 @@ int main() {
     fallbackTarget.audioStreamIndex = 3;
     fallbackTarget.subtitleStreamIndex = 7;
 
-    auto fallbackPlan = planPlaybackFallback(
-        false,
-        PlaybackMethod::DirectPlay,
-        true,
-        "movie-1",
-        fallbackTarget.url,
-        fallbackTarget.fallbackTranscodeUrl,
-        true,
-        43210,
-        true
-    );
+    auto fallbackPlan = planPlaybackFallback(false, PlaybackMethod::DirectPlay, true, "movie-1", fallbackTarget.url,
+                                             fallbackTarget.fallbackTranscodeUrl, true, 43210, true);
     assert(fallbackPlan.retry);
     assert(fallbackPlan.resumeTicks == 432'100'000);
     assert(fallbackPlan.reportPrevious);
@@ -523,17 +470,8 @@ int main() {
     assert(offeredTarget.audioStreamIndex == fallbackTarget.audioStreamIndex);
     assert(offeredTarget.subtitleStreamIndex == fallbackTarget.subtitleStreamIndex);
 
-    fallbackPlan = planPlaybackFallback(
-        false,
-        PlaybackMethod::DirectPlay,
-        true,
-        "movie-1",
-        fallbackTarget.url,
-        {},
-        false,
-        12345,
-        false
-    );
+    fallbackPlan = planPlaybackFallback(false, PlaybackMethod::DirectPlay, true, "movie-1", fallbackTarget.url, {},
+                                        false, 12345, false);
     assert(fallbackPlan.retry);
     assert(!fallbackPlan.reportPrevious);
     assert(!fallbackPlan.useOfferedTarget);
@@ -541,65 +479,23 @@ int main() {
     assert(!fallbackPlan.forceServerStream);
     assert(fallbackPlan.forceTranscode);
 
-    fallbackPlan = planPlaybackFallback(
-        false,
-        PlaybackMethod::DirectStream,
-        true,
-        "movie-1",
-        fallbackTarget.url,
-        {},
-        true,
-        12345,
-        true
-    );
+    fallbackPlan = planPlaybackFallback(false, PlaybackMethod::DirectStream, true, "movie-1", fallbackTarget.url, {},
+                                        true, 12345, true);
     assert(fallbackPlan.retry);
     assert(fallbackPlan.forceServerStream);
     assert(!fallbackPlan.forceTranscode);
 
-    assert(!planPlaybackFallback(
-        true,
-        PlaybackMethod::DirectPlay,
-        true,
-        "movie-1",
-        fallbackTarget.url,
-        fallbackTarget.fallbackTranscodeUrl,
-        true,
-        1000,
-        false
-    ).retry);
-    assert(!planPlaybackFallback(
-        false,
-        PlaybackMethod::Transcode,
-        true,
-        "movie-1",
-        fallbackTarget.url,
-        {},
-        true,
-        1000,
-        false
-    ).retry);
-    assert(!planPlaybackFallback(
-        false,
-        PlaybackMethod::DirectPlay,
-        false,
-        "movie-1",
-        fallbackTarget.url,
-        {},
-        true,
-        1000,
-        false
-    ).retry);
-    assert(!planPlaybackFallback(
-        false,
-        PlaybackMethod::DirectPlay,
-        true,
-        {},
-        fallbackTarget.url,
-        {},
-        true,
-        1000,
-        false
-    ).retry);
+    assert(!planPlaybackFallback(true, PlaybackMethod::DirectPlay, true, "movie-1", fallbackTarget.url,
+                                 fallbackTarget.fallbackTranscodeUrl, true, 1000, false)
+                .retry);
+    assert(!planPlaybackFallback(false, PlaybackMethod::Transcode, true, "movie-1", fallbackTarget.url, {}, true, 1000,
+                                 false)
+                .retry);
+    assert(!planPlaybackFallback(false, PlaybackMethod::DirectPlay, false, "movie-1", fallbackTarget.url, {}, true,
+                                 1000, false)
+                .retry);
+    assert(!planPlaybackFallback(false, PlaybackMethod::DirectPlay, true, {}, fallbackTarget.url, {}, true, 1000, false)
+                .retry);
 
     PlaybackCoordinator fallbackCoordinator;
     fallbackCoordinator.beginFallbackResolution();
@@ -632,13 +528,7 @@ int main() {
     transitionTarget.audioStreamIndex = -1;
     transitionTarget.subtitleStreamIndex = 8;
 
-    auto transitionPlan = planPlaybackTransition(
-        transitionTarget,
-        transitionItem,
-        false,
-        true,
-        -1
-    );
+    auto transitionPlan = planPlaybackTransition(transitionTarget, transitionItem, false, true, -1);
     assert(transitionPlan.startPositionMs == 42000);
     assert(transitionPlan.durationMs == 90000);
     assert(transitionPlan.selectedAudioServerIndex == 3);
@@ -654,15 +544,8 @@ int main() {
     assert(transitionCoordinator.continuation().beginNextEpisodeRequest(now));
     transitionCoordinator.transition().setLoading(true);
     transitionCoordinator.tracks().setSelectedAudioServerIndex(99);
-    auto activatedTransition = transitionCoordinator.activateTransition(
-        transitionItem,
-        transitionTarget,
-        false,
-        true,
-        -1,
-        VideoZoomMode::Fill,
-        now
-    );
+    auto activatedTransition = transitionCoordinator.activateTransition(transitionItem, transitionTarget, false, true,
+                                                                        -1, VideoZoomMode::Fill, now);
     assert(transitionCoordinator.session().activeItem().id == transitionItem.id);
     assert(transitionCoordinator.session().activeTarget().url == transitionTarget.url);
     assert(transitionCoordinator.session().zoomMode() == VideoZoomMode::Fill);
@@ -671,15 +554,10 @@ int main() {
     assert(!transitionCoordinator.transition().loading());
     assert(!transitionCoordinator.transition().pauseAfterRestart());
     assert(transitionCoordinator.tracks().selectedAudioServerIndex() == activatedTransition.selectedAudioServerIndex);
-    assert(transitionCoordinator.tracks().selectedSubtitleServerIndex() == activatedTransition.selectedSubtitleServerIndex);
+    assert(transitionCoordinator.tracks().selectedSubtitleServerIndex() ==
+           activatedTransition.selectedSubtitleServerIndex);
 
-    transitionPlan = planPlaybackTransition(
-        transitionTarget,
-        transitionItem,
-        true,
-        true,
-        7
-    );
+    transitionPlan = planPlaybackTransition(transitionTarget, transitionItem, true, true, 7);
     assert(transitionPlan.selectedAudioServerIndex == 7);
     assert(transitionPlan.pauseAfterRestart);
     assert(!transitionPlan.resetContinuation);
@@ -689,15 +567,8 @@ int main() {
     assert(restartTransitionCoordinator.session().beginMediaSegmentsRequest(now));
     assert(restartTransitionCoordinator.continuation().beginNextEpisodeRequest(now));
     restartTransitionCoordinator.transition().setLoading(true);
-    auto activatedRestart = restartTransitionCoordinator.activateTransition(
-        transitionItem,
-        transitionTarget,
-        true,
-        true,
-        7,
-        VideoZoomMode::Stretch,
-        now
-    );
+    auto activatedRestart = restartTransitionCoordinator.activateTransition(transitionItem, transitionTarget, true,
+                                                                            true, 7, VideoZoomMode::Stretch, now);
     assert(activatedRestart.pauseAfterRestart);
     assert(restartTransitionCoordinator.transition().pauseAfterRestart());
     assert(restartTransitionCoordinator.transition().loading() == false);
@@ -764,13 +635,7 @@ int main() {
     assert(resolvedTransition->item.id == resolvedItem.id);
 
     transitionTarget.audioStreamIndex = 9;
-    transitionPlan = planPlaybackTransition(
-        transitionTarget,
-        transitionItem,
-        true,
-        false,
-        -1
-    );
+    transitionPlan = planPlaybackTransition(transitionTarget, transitionItem, true, false, -1);
     assert(transitionPlan.selectedAudioServerIndex == 9);
     assert(!transitionPlan.pauseAfterRestart);
 
@@ -779,23 +644,11 @@ int main() {
         {.index = 5, .channels = 2, .codec = "aac", .language = "eng", .title = "Track 5", .isDefault = false},
         {.index = 6, .channels = 2, .codec = "aac", .language = "eng", .title = "Track 6", .isDefault = false},
     };
-    transitionPlan = planPlaybackTransition(
-        transitionTarget,
-        transitionItem,
-        false,
-        false,
-        -1
-    );
+    transitionPlan = planPlaybackTransition(transitionTarget, transitionItem, false, false, -1);
     assert(transitionPlan.selectedAudioServerIndex == 5);
 
     transitionItem.audios.clear();
-    transitionPlan = planPlaybackTransition(
-        transitionTarget,
-        transitionItem,
-        false,
-        false,
-        -1
-    );
+    transitionPlan = planPlaybackTransition(transitionTarget, transitionItem, false, false, -1);
     assert(transitionPlan.selectedAudioServerIndex == -1);
 
     JellyfinItem special;
@@ -819,48 +672,24 @@ int main() {
     nextEpisode.parentIndexNumber = 1;
     nextEpisode.indexNumber = 2;
 
-    auto adjacent = selectAdjacentPlaybackEpisode(
-        {nextEpisode, duplicateCurrent, special, currentEpisode},
-        currentEpisode.id,
-        currentEpisode.parentIndexNumber,
-        currentEpisode.indexNumber,
-        1
-    );
+    auto adjacent =
+        selectAdjacentPlaybackEpisode({nextEpisode, duplicateCurrent, special, currentEpisode}, currentEpisode.id,
+                                      currentEpisode.parentIndexNumber, currentEpisode.indexNumber, 1);
     assert(adjacent);
     assert(adjacent->id == nextEpisode.id);
 
-    adjacent = selectAdjacentPlaybackEpisode(
-        {nextEpisode, duplicateCurrent, special, currentEpisode},
-        "missing-current-id",
-        currentEpisode.parentIndexNumber,
-        currentEpisode.indexNumber,
-        1
-    );
+    adjacent =
+        selectAdjacentPlaybackEpisode({nextEpisode, duplicateCurrent, special, currentEpisode}, "missing-current-id",
+                                      currentEpisode.parentIndexNumber, currentEpisode.indexNumber, 1);
     assert(adjacent);
     assert(adjacent->id == nextEpisode.id);
 
-    adjacent = selectAdjacentPlaybackEpisode(
-        {special, currentEpisode},
-        currentEpisode.id,
-        currentEpisode.parentIndexNumber,
-        currentEpisode.indexNumber,
-        -1
-    );
+    adjacent = selectAdjacentPlaybackEpisode({special, currentEpisode}, currentEpisode.id,
+                                             currentEpisode.parentIndexNumber, currentEpisode.indexNumber, -1);
     assert(!adjacent);
-    assert(!selectAdjacentPlaybackEpisode(
-        {currentEpisode, nextEpisode},
-        currentEpisode.id,
-        currentEpisode.parentIndexNumber,
-        currentEpisode.indexNumber,
-        0
-    ));
-    assert(!selectAdjacentPlaybackEpisode(
-        {currentEpisode, nextEpisode},
-        "missing",
-        -1,
-        -1,
-        1
-    ));
+    assert(!selectAdjacentPlaybackEpisode({currentEpisode, nextEpisode}, currentEpisode.id,
+                                          currentEpisode.parentIndexNumber, currentEpisode.indexNumber, 0));
+    assert(!selectAdjacentPlaybackEpisode({currentEpisode, nextEpisode}, "missing", -1, -1, 1));
 
     JellyfinItem episode1;
     episode1.id = "episode-1";
@@ -868,15 +697,7 @@ int main() {
     episode2.id = "episode-2";
     queue.replace({episode1, episode2}, 0);
     queue.setRepeatMode(QueueRepeatMode::One);
-    auto continuationPlan = planPlaybackContinuation(
-        true,
-        120000,
-        120000,
-        queue,
-        continuation,
-        true,
-        3
-    );
+    auto continuationPlan = planPlaybackContinuation(true, 120000, 120000, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::PlayQueueIndex);
     assert(continuationPlan.queueIndex == 0);
     assert(continuationPlan.repeatCurrentQueueItem);
@@ -884,15 +705,7 @@ int main() {
 
     queue.setRepeatMode(QueueRepeatMode::All);
     queue.setCurrentIndex(1);
-    continuationPlan = planPlaybackContinuation(
-        false,
-        119500,
-        120000,
-        queue,
-        continuation,
-        true,
-        3
-    );
+    continuationPlan = planPlaybackContinuation(false, 119500, 120000, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::PlayQueueIndex);
     assert(continuationPlan.queueIndex == 0);
     assert(!continuationPlan.repeatCurrentQueueItem);
@@ -900,66 +713,27 @@ int main() {
     queue.setRepeatMode(QueueRepeatMode::Off);
     continuation.clearNextEpisodeRequest();
     continuation.setNextItem(episode2);
-    continuationPlan = planPlaybackContinuation(
-        false,
-        119500,
-        120000,
-        queue,
-        continuation,
-        true,
-        3
-    );
+    continuationPlan = planPlaybackContinuation(false, 119500, 120000, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::AutoplayNext);
 
     continuation.incrementAutoplayChain();
     continuation.incrementAutoplayChain();
     continuation.incrementAutoplayChain();
-    continuationPlan = planPlaybackContinuation(
-        false,
-        119500,
-        120000,
-        queue,
-        continuation,
-        true,
-        3
-    );
+    continuationPlan = planPlaybackContinuation(false, 119500, 120000, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::ShowStillWatching);
 
     continuation.clearNextItem();
-    continuationPlan = planPlaybackContinuation(
-        true,
-        0,
-        0,
-        queue,
-        continuation,
-        true,
-        3
-    );
+    continuationPlan = planPlaybackContinuation(true, 0, 0, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::Stop);
     assert(continuationPlan.resetAutoplayChain);
 
     queue.reset();
-    continuationPlan = planPlaybackContinuation(
-        false,
-        0,
-        1000,
-        queue,
-        continuation,
-        true,
-        3
-    );
+    continuationPlan = planPlaybackContinuation(false, 0, 1000, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::None);
     assert(!continuationPlan.resetAutoplayChain);
 
     coordinator.continuation().setNextItem(episode2);
-    continuationPlan = coordinator.continuationPlan(
-        true,
-        120000,
-        120000,
-        queue,
-        true,
-        3
-    );
+    continuationPlan = coordinator.continuationPlan(true, 120000, 120000, queue, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::AutoplayNext);
 
     return 0;

@@ -35,11 +35,8 @@ jobject createVideoIntent(JNIEnv* env, const std::string& url) {
 
     jmethodID intentCtor = env->GetMethodID(intentClass, "<init>", "(Ljava/lang/String;)V");
     jmethodID uriParse = env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
-    jmethodID setDataAndType = env->GetMethodID(
-        intentClass,
-        "setDataAndType",
-        "(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/Intent;"
-    );
+    jmethodID setDataAndType = env->GetMethodID(intentClass, "setDataAndType",
+                                                "(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/Intent;");
     if (!intentCtor || !uriParse || !setDataAndType || clearException(env, "intent method lookup")) {
         env->DeleteLocalRef(intentClass);
         env->DeleteLocalRef(uriClass);
@@ -68,9 +65,9 @@ jobject createVideoIntent(JNIEnv* env, const std::string& url) {
 void putStringExtra(JNIEnv* env, jobject intent, const char* key, const std::string& value) {
     if (!env || !intent || !key || value.empty()) return;
     jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass
-        ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;")
-        : nullptr;
+    jmethodID method = intentClass ? env->GetMethodID(intentClass, "putExtra",
+                                                      "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;")
+                                   : nullptr;
     if (method) {
         jstring jKey = env->NewStringUTF(key);
         jstring jValue = env->NewStringUTF(value.c_str());
@@ -87,12 +84,12 @@ void putUriArrayExtra(JNIEnv* env, jobject intent, const char* key, const std::s
     jclass intentClass = env->GetObjectClass(intent);
     jclass uriClass = env->FindClass("android/net/Uri");
     jclass parcelableClass = env->FindClass("android/os/Parcelable");
-    jmethodID parse = uriClass
-        ? env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;")
-        : nullptr;
+    jmethodID parse =
+        uriClass ? env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;") : nullptr;
     jmethodID putExtra = intentClass
-        ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;[Landroid/os/Parcelable;)Landroid/content/Intent;")
-        : nullptr;
+                             ? env->GetMethodID(intentClass, "putExtra",
+                                                "(Ljava/lang/String;[Landroid/os/Parcelable;)Landroid/content/Intent;")
+                             : nullptr;
     jstring jUrl = env->NewStringUTF(url.c_str());
     jobject uri = jUrl && parse ? env->CallStaticObjectMethod(uriClass, parse, jUrl) : nullptr;
     jobjectArray values = parcelableClass ? env->NewObjectArray(1, parcelableClass, nullptr) : nullptr;
@@ -113,8 +110,8 @@ void putByteExtra(JNIEnv* env, jobject intent, const char* key, int value) {
     if (!env || !intent || !key) return;
     jclass intentClass = env->GetObjectClass(intent);
     jmethodID method = intentClass
-        ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;B)Landroid/content/Intent;")
-        : nullptr;
+                           ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;B)Landroid/content/Intent;")
+                           : nullptr;
     if (method) {
         jstring jKey = env->NewStringUTF(key);
         if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jbyte>(value));
@@ -128,8 +125,8 @@ void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
     if (!env || !intent || !key) return;
     jclass intentClass = env->GetObjectClass(intent);
     jmethodID method = intentClass
-        ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;I)Landroid/content/Intent;")
-        : nullptr;
+                           ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;I)Landroid/content/Intent;")
+                           : nullptr;
     if (method) {
         jstring jKey = env->NewStringUTF(key);
         if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jint>(value));
@@ -142,9 +139,7 @@ void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
 bool hasExtra(JNIEnv* env, jobject intent, const char* key) {
     if (!env || !intent || !key) return false;
     jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass
-        ? env->GetMethodID(intentClass, "hasExtra", "(Ljava/lang/String;)Z")
-        : nullptr;
+    jmethodID method = intentClass ? env->GetMethodID(intentClass, "hasExtra", "(Ljava/lang/String;)Z") : nullptr;
     jstring jKey = env->NewStringUTF(key);
     const bool result = method && jKey && env->CallBooleanMethod(intent, method, jKey) == JNI_TRUE;
     if (jKey) env->DeleteLocalRef(jKey);
@@ -156,11 +151,10 @@ bool hasExtra(JNIEnv* env, jobject intent, const char* key) {
 int getIntExtra(JNIEnv* env, jobject intent, const char* key, int fallback = -1) {
     if (!env || !intent || !key) return fallback;
     jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass
-        ? env->GetMethodID(intentClass, "getIntExtra", "(Ljava/lang/String;I)I")
-        : nullptr;
+    jmethodID method = intentClass ? env->GetMethodID(intentClass, "getIntExtra", "(Ljava/lang/String;I)I") : nullptr;
     jstring jKey = env->NewStringUTF(key);
-    const int result = method && jKey ? env->CallIntMethod(intent, method, jKey, static_cast<jint>(fallback)) : fallback;
+    const int result =
+        method && jKey ? env->CallIntMethod(intent, method, jKey, static_cast<jint>(fallback)) : fallback;
     if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
     clearException(env, "integer result extra");
@@ -170,11 +164,10 @@ int getIntExtra(JNIEnv* env, jobject intent, const char* key, int fallback = -1)
 int64_t getLongExtra(JNIEnv* env, jobject intent, const char* key, int64_t fallback = -1) {
     if (!env || !intent || !key) return fallback;
     jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass
-        ? env->GetMethodID(intentClass, "getLongExtra", "(Ljava/lang/String;J)J")
-        : nullptr;
+    jmethodID method = intentClass ? env->GetMethodID(intentClass, "getLongExtra", "(Ljava/lang/String;J)J") : nullptr;
     jstring jKey = env->NewStringUTF(key);
-    const int64_t result = method && jKey ? env->CallLongMethod(intent, method, jKey, static_cast<jlong>(fallback)) : fallback;
+    const int64_t result =
+        method && jKey ? env->CallLongMethod(intent, method, jKey, static_cast<jlong>(fallback)) : fallback;
     if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
     clearException(env, "long result extra");
@@ -185,8 +178,8 @@ void putBoolExtra(JNIEnv* env, jobject intent, const char* key, bool value) {
     if (!env || !intent || !key) return;
     jclass intentClass = env->GetObjectClass(intent);
     jmethodID method = intentClass
-        ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;Z)Landroid/content/Intent;")
-        : nullptr;
+                           ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;Z)Landroid/content/Intent;")
+                           : nullptr;
     if (method) {
         jstring jKey = env->NewStringUTF(key);
         if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jboolean>(value));
@@ -195,7 +188,7 @@ void putBoolExtra(JNIEnv* env, jobject intent, const char* key, bool value) {
     if (intentClass) env->DeleteLocalRef(intentClass);
     clearException(env, "boolean intent extra");
 }
-}
+} // namespace
 
 NativeExternalPlayer::NativeExternalPlayer(JavaVM* vm, jobject activity) : vm_(vm) {
     if (!vm_ || !activity) return;
@@ -230,10 +223,12 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
 
     jclass activityClass = env->GetObjectClass(activity_);
     if (!activityClass) return result;
-    jmethodID getPackageManager = env->GetMethodID(activityClass, "getPackageManager", "()Landroid/content/pm/PackageManager;");
+    jmethodID getPackageManager =
+        env->GetMethodID(activityClass, "getPackageManager", "()Landroid/content/pm/PackageManager;");
     jmethodID getPackageName = env->GetMethodID(activityClass, "getPackageName", "()Ljava/lang/String;");
     jobject packageManager = getPackageManager ? env->CallObjectMethod(activity_, getPackageManager) : nullptr;
-    jstring ownPackageValue = getPackageName ? static_cast<jstring>(env->CallObjectMethod(activity_, getPackageName)) : nullptr;
+    jstring ownPackageValue =
+        getPackageName ? static_cast<jstring>(env->CallObjectMethod(activity_, getPackageName)) : nullptr;
     const std::string ownPackage = jniString(env, ownPackageValue);
     if (ownPackageValue) env->DeleteLocalRef(ownPackageValue);
     if (!packageManager || clearException(env, "package manager lookup")) {
@@ -245,11 +240,12 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
     jobject intent = createVideoIntent(env, kSampleVideoUrl);
     jclass packageManagerClass = env->GetObjectClass(packageManager);
     jmethodID queryIntentActivities = packageManagerClass
-        ? env->GetMethodID(packageManagerClass, "queryIntentActivities", "(Landroid/content/Intent;I)Ljava/util/List;")
-        : nullptr;
+                                          ? env->GetMethodID(packageManagerClass, "queryIntentActivities",
+                                                             "(Landroid/content/Intent;I)Ljava/util/List;")
+                                          : nullptr;
     jobject list = intent && queryIntentActivities
-        ? env->CallObjectMethod(packageManager, queryIntentActivities, intent, static_cast<jint>(0))
-        : nullptr;
+                       ? env->CallObjectMethod(packageManager, queryIntentActivities, intent, static_cast<jint>(0))
+                       : nullptr;
     if (intent) env->DeleteLocalRef(intent);
     if (!list || clearException(env, "external player query")) {
         if (list) env->DeleteLocalRef(list);
@@ -269,17 +265,21 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
         if (!resolveInfo) continue;
         jclass resolveInfoClass = env->GetObjectClass(resolveInfo);
         jfieldID priorityField = resolveInfoClass ? env->GetFieldID(resolveInfoClass, "priority", "I") : nullptr;
-        jfieldID activityInfoField = resolveInfoClass
-            ? env->GetFieldID(resolveInfoClass, "activityInfo", "Landroid/content/pm/ActivityInfo;")
-            : nullptr;
+        jfieldID activityInfoField =
+            resolveInfoClass ? env->GetFieldID(resolveInfoClass, "activityInfo", "Landroid/content/pm/ActivityInfo;")
+                             : nullptr;
         const jint priority = priorityField ? env->GetIntField(resolveInfo, priorityField) : 0;
         jobject activityInfo = activityInfoField ? env->GetObjectField(resolveInfo, activityInfoField) : nullptr;
         if (priority >= 0 && activityInfo) {
             jclass activityInfoClass = env->GetObjectClass(activityInfo);
-            jfieldID packageField = activityInfoClass ? env->GetFieldID(activityInfoClass, "packageName", "Ljava/lang/String;") : nullptr;
-            jfieldID nameField = activityInfoClass ? env->GetFieldID(activityInfoClass, "name", "Ljava/lang/String;") : nullptr;
-            jstring packageValue = packageField ? static_cast<jstring>(env->GetObjectField(activityInfo, packageField)) : nullptr;
-            jstring nameValue = nameField ? static_cast<jstring>(env->GetObjectField(activityInfo, nameField)) : nullptr;
+            jfieldID packageField =
+                activityInfoClass ? env->GetFieldID(activityInfoClass, "packageName", "Ljava/lang/String;") : nullptr;
+            jfieldID nameField =
+                activityInfoClass ? env->GetFieldID(activityInfoClass, "name", "Ljava/lang/String;") : nullptr;
+            jstring packageValue =
+                packageField ? static_cast<jstring>(env->GetObjectField(activityInfo, packageField)) : nullptr;
+            jstring nameValue =
+                nameField ? static_cast<jstring>(env->GetObjectField(activityInfo, nameField)) : nullptr;
             const std::string packageName = jniString(env, packageValue);
             const std::string activityName = jniString(env, nameValue);
             if (packageValue) env->DeleteLocalRef(packageValue);
@@ -289,14 +289,19 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
                 const std::string component = packageName + "/" + activityName;
                 if (seen.insert(component).second) {
                     std::string label = packageName;
-                    jmethodID loadLabel = resolveInfoClass
-                        ? env->GetMethodID(resolveInfoClass, "loadLabel", "(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;")
-                        : nullptr;
-                    jobject labelValue = loadLabel ? env->CallObjectMethod(resolveInfo, loadLabel, packageManager) : nullptr;
+                    jmethodID loadLabel =
+                        resolveInfoClass
+                            ? env->GetMethodID(resolveInfoClass, "loadLabel",
+                                               "(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;")
+                            : nullptr;
+                    jobject labelValue =
+                        loadLabel ? env->CallObjectMethod(resolveInfo, loadLabel, packageManager) : nullptr;
                     if (labelValue && !clearException(env, "external player label")) {
                         jclass labelClass = env->GetObjectClass(labelValue);
-                        jmethodID toString = labelClass ? env->GetMethodID(labelClass, "toString", "()Ljava/lang/String;") : nullptr;
-                        jstring labelString = toString ? static_cast<jstring>(env->CallObjectMethod(labelValue, toString)) : nullptr;
+                        jmethodID toString =
+                            labelClass ? env->GetMethodID(labelClass, "toString", "()Ljava/lang/String;") : nullptr;
+                        jstring labelString =
+                            toString ? static_cast<jstring>(env->CallObjectMethod(labelValue, toString)) : nullptr;
                         const std::string parsedLabel = jniString(env, labelString);
                         if (!parsedLabel.empty()) label = parsedLabel;
                         if (labelString) env->DeleteLocalRef(labelString);
@@ -328,15 +333,9 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
     return result;
 }
 
-bool NativeExternalPlayer::launch(
-    const ExternalPlayerApp& app,
-    const std::string& url,
-    const std::string& title,
-    int positionMs,
-    const std::string& subtitleUrl,
-    const std::string& skipSegmentsJson,
-    std::string& error
-) {
+bool NativeExternalPlayer::launch(const ExternalPlayerApp& app, const std::string& url, const std::string& title,
+                                  int positionMs, const std::string& subtitleUrl, const std::string& skipSegmentsJson,
+                                  std::string& error) {
     if (!activity_ || app.componentName.empty() || app.packageName.empty() || url.empty()) {
         error = "External player launch is incomplete";
         return false;
@@ -356,16 +355,15 @@ bool NativeExternalPlayer::launch(
     }
     jclass intentClass = env->GetObjectClass(intent);
     jclass componentClass = env->FindClass("android/content/ComponentName");
-    jmethodID unflatten = componentClass
-        ? env->GetStaticMethodID(componentClass, "unflattenFromString", "(Ljava/lang/String;)Landroid/content/ComponentName;")
-        : nullptr;
-    jmethodID setComponent = intentClass
-        ? env->GetMethodID(intentClass, "setComponent", "(Landroid/content/ComponentName;)Landroid/content/Intent;")
-        : nullptr;
+    jmethodID unflatten = componentClass ? env->GetStaticMethodID(componentClass, "unflattenFromString",
+                                                                  "(Ljava/lang/String;)Landroid/content/ComponentName;")
+                                         : nullptr;
+    jmethodID setComponent = intentClass ? env->GetMethodID(intentClass, "setComponent",
+                                                            "(Landroid/content/ComponentName;)Landroid/content/Intent;")
+                                         : nullptr;
     jstring componentValue = env->NewStringUTF(app.componentName.c_str());
-    jobject component = componentValue && unflatten
-        ? env->CallStaticObjectMethod(componentClass, unflatten, componentValue)
-        : nullptr;
+    jobject component =
+        componentValue && unflatten ? env->CallStaticObjectMethod(componentClass, unflatten, componentValue) : nullptr;
     if (componentValue) env->DeleteLocalRef(componentValue);
     if (!component || !setComponent || clearException(env, "external player component", &error)) {
         if (component) env->DeleteLocalRef(component);
@@ -381,39 +379,39 @@ bool NativeExternalPlayer::launch(
 
     const int safePosition = std::max(0, positionMs);
     switch (externalPlayerKindForPackage(app.packageName)) {
-        case ExternalPlayerKind::Vlc:
-            putStringExtra(env, intent, "title", title);
-            putIntExtra(env, intent, "position", safePosition);
-            putStringExtra(env, intent, "subtitles_location", subtitleUrl);
-            break;
-        case ExternalPlayerKind::MxPlayer:
-            putStringExtra(env, intent, "title", title);
-            putIntExtra(env, intent, "position", safePosition);
-            putBoolExtra(env, intent, "return_result", true);
-            break;
-        case ExternalPlayerKind::Mpv:
-            putStringExtra(env, intent, "title", title);
-            putIntExtra(env, intent, "position", safePosition);
-            putByteExtra(env, intent, "decode_mode", externalMpvDecodeModeForPackage(app.packageName));
-            putStringExtra(env, intent, "skip_segments", skipSegmentsJson);
-            putUriArrayExtra(env, intent, "subs", subtitleUrl);
-            putUriArrayExtra(env, intent, "subs.enable", subtitleUrl);
-            break;
-        case ExternalPlayerKind::Vimu:
-            putStringExtra(env, intent, "forcename", title);
-            putIntExtra(env, intent, "startfrom", safePosition);
-            putStringExtra(env, intent, "forcedsrt", subtitleUrl);
-            break;
-        case ExternalPlayerKind::Generic:
-            putStringExtra(env, intent, "title", title);
-            putIntExtra(env, intent, "position", safePosition);
-            break;
+    case ExternalPlayerKind::Vlc:
+        putStringExtra(env, intent, "title", title);
+        putIntExtra(env, intent, "position", safePosition);
+        putStringExtra(env, intent, "subtitles_location", subtitleUrl);
+        break;
+    case ExternalPlayerKind::MxPlayer:
+        putStringExtra(env, intent, "title", title);
+        putIntExtra(env, intent, "position", safePosition);
+        putBoolExtra(env, intent, "return_result", true);
+        break;
+    case ExternalPlayerKind::Mpv:
+        putStringExtra(env, intent, "title", title);
+        putIntExtra(env, intent, "position", safePosition);
+        putByteExtra(env, intent, "decode_mode", externalMpvDecodeModeForPackage(app.packageName));
+        putStringExtra(env, intent, "skip_segments", skipSegmentsJson);
+        putUriArrayExtra(env, intent, "subs", subtitleUrl);
+        putUriArrayExtra(env, intent, "subs.enable", subtitleUrl);
+        break;
+    case ExternalPlayerKind::Vimu:
+        putStringExtra(env, intent, "forcename", title);
+        putIntExtra(env, intent, "startfrom", safePosition);
+        putStringExtra(env, intent, "forcedsrt", subtitleUrl);
+        break;
+    case ExternalPlayerKind::Generic:
+        putStringExtra(env, intent, "title", title);
+        putIntExtra(env, intent, "position", safePosition);
+        break;
     }
 
     jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID startActivityForResult = activityClass
-        ? env->GetMethodID(activityClass, "startActivityForResult", "(Landroid/content/Intent;I)V")
-        : nullptr;
+    jmethodID startActivityForResult =
+        activityClass ? env->GetMethodID(activityClass, "startActivityForResult", "(Landroid/content/Intent;I)V")
+                      : nullptr;
     {
         std::scoped_lock lock(resultMutex_);
         activeKind_ = externalPlayerKindForPackage(app.packageName);
@@ -431,13 +429,14 @@ bool NativeExternalPlayer::launch(
         return false;
     }
 
-    __android_log_print(ANDROID_LOG_INFO, kTag, "Launching external player %s at %d ms", app.packageName.c_str(), safePosition);
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Launching external player %s at %d ms", app.packageName.c_str(),
+                        safePosition);
     return true;
 }
 
 std::optional<ExternalPlayerResult> NativeExternalPlayer::takeResult() {
     std::scoped_lock lock(resultMutex_);
-    auto result = std::move(pendingResult_);
+    auto result = pendingResult_;
     pendingResult_.reset();
     return result;
 }
@@ -460,35 +459,24 @@ void NativeExternalPlayer::handleActivityResult(JNIEnv* env, int requestCode, in
         .completed = outcome.completed,
     };
     if (result.success && hasPosition) {
-        result.positionMs = kind == ExternalPlayerKind::Vlc
-            ? getLongExtra(env, dataIntent, positionKey)
-            : getIntExtra(env, dataIntent, positionKey);
+        result.positionMs = kind == ExternalPlayerKind::Vlc ? getLongExtra(env, dataIntent, positionKey)
+                                                            : getIntExtra(env, dataIntent, positionKey);
     }
 
     {
         std::scoped_lock lock(resultMutex_);
         pendingResult_ = result;
     }
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "External playback result code=%d success=%d completedKnown=%d completed=%d positionMs=%lld",
-        resultCode,
-        result.success ? 1 : 0,
-        result.completionKnown ? 1 : 0,
-        result.completed ? 1 : 0,
-        static_cast<long long>(result.positionMs)
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "External playback result code=%d success=%d completedKnown=%d completed=%d positionMs=%lld",
+                        resultCode, result.success ? 1 : 0, result.completionKnown ? 1 : 0, result.completed ? 1 : 0,
+                        static_cast<long long>(result.positionMs));
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaNativeActivity_nativeOnActivityResult(
-    JNIEnv* env,
-    jclass,
-    jint requestCode,
-    jint resultCode,
-    jobject dataIntent
-) {
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeOnActivityResult(JNIEnv* env, jclass,
+                                                                                                jint requestCode,
+                                                                                                jint resultCode,
+                                                                                                jobject dataIntent) {
     std::scoped_lock lock(gInstanceMutex);
     if (gInstance) gInstance->handleActivityResult(env, requestCode, resultCode, dataIntent);
 }

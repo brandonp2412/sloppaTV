@@ -65,11 +65,8 @@ public:
     }
 
     [[nodiscard]] bool visible(TimePoint now, std::string_view itemId) const {
-        return now < visibleUntil_
-            && positionMs_ >= 0
-            && state_ == TrickplayPreviewLoadState::Ready
-            && itemId_ == itemId
-            && decoded_.valid();
+        return now < visibleUntil_ && positionMs_ >= 0 && state_ == TrickplayPreviewLoadState::Ready &&
+               itemId_ == itemId && decoded_.valid();
     }
 
     [[nodiscard]] int positionMs() const { return positionMs_; }

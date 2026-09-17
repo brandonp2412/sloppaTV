@@ -83,9 +83,7 @@ public:
         return kLibraryRow;
     }
 
-    [[nodiscard]] bool selectionOnFirstResultRow() const {
-        return selectedRow() == firstPopulatedRow();
-    }
+    [[nodiscard]] bool selectionOnFirstResultRow() const { return selectedRow() == firstPopulatedRow(); }
 
     [[nodiscard]] int firstVisibleInRow(int row, int columns) const {
         if (row < 0 || row >= kRowCount || columns <= 0) return 0;
@@ -115,9 +113,7 @@ public:
     void setLoading(bool loading) { loading_ = loading; }
     void setSeerrLoading(bool loading) { seerrLoading_ = loading; }
     void setSelection(int selection) {
-        selection_ = results_.empty()
-            ? 0
-            : std::clamp(selection, 0, static_cast<int>(results_.size()) - 1);
+        selection_ = results_.empty() ? 0 : std::clamp(selection, 0, static_cast<int>(results_.size()) - 1);
     }
 
     [[nodiscard]] bool scheduleDebounce(Clock::time_point now) {
@@ -146,15 +142,13 @@ public:
         seerrLoading_ = false;
     }
 
-    [[nodiscard]] bool debounceDue(Clock::time_point now) const {
-        return debouncePending_ && now >= debounceDeadline_;
-    }
+    [[nodiscard]] bool debounceDue(Clock::time_point now) const { return debouncePending_ && now >= debounceDeadline_; }
 
     [[nodiscard]] bool scheduleSeerrDebounce(Clock::time_point now, bool configured) {
         const bool eligible = configured && query_.size() >= kSeerrMinQueryBytes;
         if (!eligible) {
-            const bool changed = seerrDebouncePending_ || seerrLoading_ || !seerrQuery_.empty()
-                || !seerrResults_.empty() || !seerrError_.empty();
+            const bool changed = seerrDebouncePending_ || seerrLoading_ || !seerrQuery_.empty() ||
+                                 !seerrResults_.empty() || !seerrError_.empty();
             seerrDebouncePending_ = false;
             seerrLoading_ = false;
             seerrDebounceDeadline_ = {};
@@ -234,9 +228,8 @@ public:
     [[nodiscard]] bool finishLibrarySearch(const std::string& query, std::vector<JellyfinItem> results) {
         if (query_ != query) return false;
         loading_ = false;
-        const auto firstEpisode = std::stable_partition(results.begin(), results.end(), [](const JellyfinItem& item) {
-            return item.type != "Episode";
-        });
+        const auto firstEpisode = std::stable_partition(
+            results.begin(), results.end(), [](const JellyfinItem& item) { return item.type != "Episode"; });
         libraryTitles_.assign(results.begin(), firstEpisode);
         episodes_.assign(firstEpisode, results.end());
         rebuildResults();
@@ -342,8 +335,10 @@ public:
         const int selectedLocal = selection_ - rowStart(row);
         const int maxFirst = std::max(0, rowItemCount(row) - columns);
         int first = std::clamp(firstVisible_[static_cast<size_t>(row)], 0, maxFirst);
-        if (selectedLocal < first) first = selectedLocal;
-        else if (selectedLocal >= first + columns) first = selectedLocal - columns + 1;
+        if (selectedLocal < first)
+            first = selectedLocal;
+        else if (selectedLocal >= first + columns)
+            first = selectedLocal - columns + 1;
         firstVisible_[static_cast<size_t>(row)] = std::clamp(first, 0, maxFirst);
     }
 
@@ -351,15 +346,14 @@ private:
     [[nodiscard]] bool duplicatesLocalLibrary(const SeerrMediaItem& candidate) const {
         if (candidate.tmdbId <= 0) return false;
         const std::string tmdbId = std::to_string(candidate.tmdbId);
-        return std::any_of(libraryTitles_.begin(), libraryTitles_.end(), [&](const JellyfinItem& local) {
-            return !local.tmdbId.empty() && local.tmdbId == tmdbId;
-        });
+        return std::any_of(libraryTitles_.begin(), libraryTitles_.end(),
+                           [&](const JellyfinItem& local) { return !local.tmdbId.empty() && local.tmdbId == tmdbId; });
     }
 
     [[nodiscard]] size_t visibleSeerrCount() const {
-        return static_cast<size_t>(std::count_if(seerrResults_.begin(), seerrResults_.end(), [&](const SeerrMediaItem& item) {
-            return !duplicatesLocalLibrary(item);
-        }));
+        return static_cast<size_t>(
+            std::count_if(seerrResults_.begin(), seerrResults_.end(),
+                          [&](const SeerrMediaItem& item) { return !duplicatesLocalLibrary(item); }));
     }
 
     void rebuildResults() {
@@ -377,16 +371,17 @@ private:
         results_.insert(results_.end(), episodes_.begin(), episodes_.end());
 
         if (!selectedId.empty()) {
-            const auto selected = std::find_if(results_.begin(), results_.end(), [&](const JellyfinItem& item) {
-                return item.id == selectedId;
-            });
+            const auto selected = std::find_if(results_.begin(), results_.end(),
+                                               [&](const JellyfinItem& item) { return item.id == selectedId; });
             if (selected != results_.end()) selection_ = static_cast<int>(std::distance(results_.begin(), selected));
         }
-        if (results_.empty()) selection_ = 0;
-        else selection_ = std::clamp(selection_, 0, static_cast<int>(results_.size()) - 1);
+        if (results_.empty())
+            selection_ = 0;
+        else
+            selection_ = std::clamp(selection_, 0, static_cast<int>(results_.size()) - 1);
         for (int row = 0; row < kRowCount; ++row) {
-            firstVisible_[static_cast<size_t>(row)] = std::clamp(
-                firstVisible_[static_cast<size_t>(row)], 0, std::max(0, rowItemCount(row) - 1));
+            firstVisible_[static_cast<size_t>(row)] =
+                std::clamp(firstVisible_[static_cast<size_t>(row)], 0, std::max(0, rowItemCount(row) - 1));
         }
     }
 

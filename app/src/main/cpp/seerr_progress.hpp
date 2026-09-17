@@ -18,7 +18,11 @@ inline std::string seerrCompactTimeLeft(std::string value) {
     const auto firstColon = value.find(':');
     const auto dayDot = value.find('.');
     if (dayDot != std::string::npos && firstColon != std::string::npos && dayDot < firstColon) {
-        try { days = std::max(0, std::stoi(value.substr(0, dayDot))); } catch (...) { return {}; }
+        try {
+            days = std::max(0, std::stoi(value.substr(0, dayDot)));
+        } catch (...) {
+            return {};
+        }
         value.erase(0, dayDot + 1);
     }
 
@@ -28,7 +32,11 @@ inline std::string seerrCompactTimeLeft(std::string value) {
     while (std::getline(stream, token, ':')) {
         const auto fraction = token.find('.');
         if (fraction != std::string::npos) token.resize(fraction);
-        try { parts.push_back(std::max(0, std::stoi(token))); } catch (...) { return {}; }
+        try {
+            parts.push_back(std::max(0, std::stoi(token)));
+        } catch (...) {
+            return {};
+        }
     }
     if (parts.size() != 3) return {};
     const int totalSeconds = days * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2];
@@ -47,18 +55,13 @@ inline std::string seerrCompactTimeLeft(std::string value) {
     return "<1m left";
 }
 
-inline std::string seerrProgressLabel(
-    const std::string& mediaType,
-    int seasonNumber,
-    int episodeNumber,
-    int percent
-) {
+inline std::string seerrProgressLabel(const std::string& mediaType, int seasonNumber, int episodeNumber, int percent) {
     if (percent < 0) return {};
     const bool complete = percent >= 100;
     if (mediaType == "movie") return complete ? "Downloaded" : "Downloading";
     if (seasonNumber >= 0 && episodeNumber >= 0) {
-        return "S" + std::to_string(seasonNumber) + "E" + std::to_string(episodeNumber)
-            + (complete ? " downloaded" : " downloading");
+        return "S" + std::to_string(seasonNumber) + "E" + std::to_string(episodeNumber) +
+               (complete ? " downloaded" : " downloading");
     }
     return complete ? "Season pack downloaded" : "Season pack downloading";
 }
@@ -69,16 +72,11 @@ inline std::string seerrProgressEta(int percent, const std::string& timeLeft) {
     return seerrCompactTimeLeft(timeLeft);
 }
 
-inline std::string seerrProgressStatus(
-    const std::string& mediaType,
-    int seasonNumber,
-    int episodeNumber,
-    int percent,
-    const std::string& timeLeft
-) {
+inline std::string seerrProgressStatus(const std::string& mediaType, int seasonNumber, int episodeNumber, int percent,
+                                       const std::string& timeLeft) {
     if (percent < 0) return {};
-    std::string result = seerrProgressLabel(mediaType, seasonNumber, episodeNumber, percent)
-        + " " + std::to_string(percent) + "%";
+    std::string result =
+        seerrProgressLabel(mediaType, seasonNumber, episodeNumber, percent) + " " + std::to_string(percent) + "%";
     const std::string eta = seerrProgressEta(percent, timeLeft);
     if (!eta.empty()) result += "  " + eta;
     return result;

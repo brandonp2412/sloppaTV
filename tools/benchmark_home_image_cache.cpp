@@ -27,23 +27,19 @@ int main(int argc, char** argv) {
         if (!value || value->size() != payload.size()) return 1;
         totalBytes += value->size();
     }
-    const double elapsedMs = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - started
-    ).count();
+    const double elapsedMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
     const auto writeStarted = std::chrono::steady_clock::now();
     for (int iteration = 0; iteration < iterations; ++iteration) {
         cache.write("benchmark-write-" + std::to_string(iteration), payload);
     }
-    const double writeElapsedMs = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - writeStarted
-    ).count();
+    const double writeElapsedMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - writeStarted).count();
     fs::remove_all(root, ec);
 
-    std::cout << std::fixed << std::setprecision(3)
-              << "iterations=" << iterations << " kib=" << kib
+    std::cout << std::fixed << std::setprecision(3) << "iterations=" << iterations << " kib=" << kib
               << " read_ms=" << elapsedMs
               << " read_mib_per_s=" << (static_cast<double>(totalBytes) / (1024.0 * 1024.0)) / (elapsedMs / 1000.0)
-              << " write_ms=" << writeElapsedMs
-              << '\n';
+              << " write_ms=" << writeElapsedMs << '\n';
     return 0;
 }

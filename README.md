@@ -26,6 +26,18 @@ cp key.properties.example key.properties  # fill in signing values
 
 All Android variants use the single package `app.sloppatv` and the signing identity configured in `key.properties`.
 
+### C++ quality
+
+The native code uses clang-format for formatting, clang-tidy plus Clang Static Analyzer for lint/static analysis, and cppcheck as an independent second analyzer.
+
+```sh
+./tools/cpp_quality.py format
+./gradlew assembleDebug
+./tools/cpp_quality.py check
+```
+
+CI enforces clang-format across all SloppaTV-owned C++ and analyzes the full native app. Vendored code under `app/src/main/cpp/third_party` is excluded from project style checks.
+
 ## License
 
 GPL-3.0-or-later. See [LICENSE.md](LICENSE.md).

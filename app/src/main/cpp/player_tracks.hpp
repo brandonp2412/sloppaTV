@@ -47,7 +47,9 @@ public:
         audioLanguagePreference_ = std::move(preference);
     }
 
-    [[nodiscard]] const std::optional<std::string>& subtitleLanguagePreference() const { return subtitleLanguagePreference_; }
+    [[nodiscard]] const std::optional<std::string>& subtitleLanguagePreference() const {
+        return subtitleLanguagePreference_;
+    }
     void setSubtitleLanguagePreference(std::optional<std::string> preference) {
         subtitleLanguagePreference_ = std::move(preference);
     }
@@ -92,19 +94,15 @@ public:
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {
         if (!activeSubtitleEnabled_ || activeSubtitleCues_.empty()) return nullptr;
 
-        if (subtitleCueHint_ < activeSubtitleCues_.size()
-            && activeSubtitleCues_[subtitleCueHint_].startMs <= positionMs) {
-            while (subtitleCueHint_ + 1 < activeSubtitleCues_.size()
-                && activeSubtitleCues_[subtitleCueHint_ + 1].startMs <= positionMs) {
+        if (subtitleCueHint_ < activeSubtitleCues_.size() &&
+            activeSubtitleCues_[subtitleCueHint_].startMs <= positionMs) {
+            while (subtitleCueHint_ + 1 < activeSubtitleCues_.size() &&
+                   activeSubtitleCues_[subtitleCueHint_ + 1].startMs <= positionMs) {
                 ++subtitleCueHint_;
             }
         } else {
-            const auto it = std::upper_bound(
-                activeSubtitleCues_.begin(),
-                activeSubtitleCues_.end(),
-                positionMs,
-                [](int value, const SubtitleCue& cue) { return value < cue.startMs; }
-            );
+            const auto it = std::upper_bound(activeSubtitleCues_.begin(), activeSubtitleCues_.end(), positionMs,
+                                             [](int value, const SubtitleCue& cue) { return value < cue.startMs; });
             if (it == activeSubtitleCues_.begin()) {
                 subtitleCueHint_ = 0;
                 return nullptr;
@@ -116,9 +114,8 @@ public:
         while (true) {
             const auto& cue = activeSubtitleCues_[candidate];
             if (positionMs >= cue.startMs && positionMs < cue.endMs) return &cue;
-            if (candidate == 0
-                || subtitleCueMaxEndMs_.size() != activeSubtitleCues_.size()
-                || subtitleCueMaxEndMs_[candidate - 1] <= positionMs) {
+            if (candidate == 0 || subtitleCueMaxEndMs_.size() != activeSubtitleCues_.size() ||
+                subtitleCueMaxEndMs_[candidate - 1] <= positionMs) {
                 return nullptr;
             }
             --candidate;

@@ -18,11 +18,7 @@ constexpr bool transientHttpStatus(int status) {
     return status == 500 || status == 502 || status == 503 || status == 504;
 }
 
-constexpr bool shouldRetryTransientHttpResponse(
-    std::string_view method,
-    int status,
-    bool hasTransportError
-) {
+constexpr bool shouldRetryTransientHttpResponse(std::string_view method, int status, bool hasTransportError) {
     if (transientHttpRetryCount(method) == 0) return false;
     return (status == 0 && hasTransportError) || transientHttpStatus(status);
 }

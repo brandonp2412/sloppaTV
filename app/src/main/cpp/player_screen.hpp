@@ -48,9 +48,7 @@ public:
         lastSeekIssued_ = {};
     }
 
-    [[nodiscard]] bool controlsActive(TimePoint now) const {
-        return controlsActive_ && now < controlsUntil_;
-    }
+    [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
     [[nodiscard]] int controlSelection() const { return controlSelection_; }
 
     void showControls(TimePoint now) {
@@ -72,11 +70,7 @@ public:
     }
 
     void moveControl(int delta) {
-        controlSelection_ = std::clamp(
-            controlSelection_ + delta,
-            0,
-            static_cast<int>(controlCount()) - 1
-        );
+        controlSelection_ = std::clamp(controlSelection_ + delta, 0, static_cast<int>(controlCount()) - 1);
     }
 
     [[nodiscard]] bool overlayVisible(TimePoint now) const { return now < overlayUntil_; }
@@ -101,8 +95,7 @@ public:
         return std::clamp(fade, 0.0f, 1.0f);
     }
 
-    template <typename Duration>
-    void showOverlayFor(TimePoint now, Duration duration) {
+    template <typename Duration> void showOverlayFor(TimePoint now, Duration duration) {
         overlayUntil_ = now + std::chrono::duration_cast<Clock::duration>(duration);
     }
 
@@ -111,9 +104,7 @@ public:
         overlayUntil_ = now;
     }
 
-    [[nodiscard]] bool shouldDismissOnBack(TimePoint now) const {
-        return overlayVisible(now);
-    }
+    [[nodiscard]] bool shouldDismissOnBack(TimePoint now) const { return overlayVisible(now); }
 
     [[nodiscard]] int positionMs() const { return positionMs_; }
     [[nodiscard]] int durationMs() const { return durationMs_; }
@@ -135,9 +126,8 @@ public:
             positionMs_ = observed;
             return;
         }
-        const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - lastSeekIssued_
-        ).count();
+        const int64_t elapsedSinceSeekMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSeekIssued_).count();
         if (postSeekPositionMatchesTarget(observed, pendingSeekTargetMs_)) {
             positionMs_ = observed;
             if (elapsedSinceSeekMs >= 500) pendingSeekTargetMs_ = -1;
@@ -153,19 +143,16 @@ public:
     [[nodiscard]] int recentSeekTargetMs() const { return lastSeekTargetMs_; }
     [[nodiscard]] bool pendingSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
         if (pendingSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
-        const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - lastSeekIssued_
-        ).count();
+        const int64_t elapsedSinceSeekMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSeekIssued_).count();
         return postSeekPositionFailed(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs);
     }
     [[nodiscard]] bool recentSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
         if (lastSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
-        const int64_t elapsedSinceSeekMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - lastSeekIssued_
-        ).count();
-        return elapsedSinceSeekMs >= 500
-            && elapsedSinceSeekMs <= 3000
-            && !postSeekPositionMatchesTarget(observedPositionMs, lastSeekTargetMs_, 3000);
+        const int64_t elapsedSinceSeekMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSeekIssued_).count();
+        return elapsedSinceSeekMs >= 500 && elapsedSinceSeekMs <= 3000 &&
+               !postSeekPositionMatchesTarget(observedPositionMs, lastSeekTargetMs_, 3000);
     }
 
     void beginWindowRestore(bool resumePlayback) {

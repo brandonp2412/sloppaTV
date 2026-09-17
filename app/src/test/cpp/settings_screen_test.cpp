@@ -65,9 +65,7 @@ int main() {
     settings.seerrSessionCookie = "connect.sid=session";
     settings.seerrApiKey = "secret";
     settings.seerrSelectDrive = true;
-    const auto valueFor = [&](SettingId setting) {
-        return settingValue(settings, setting, 6, "MPV", "viewer", false);
-    };
+    const auto valueFor = [&](SettingId setting) { return settingValue(settings, setting, 6, "MPV", "viewer", false); };
     assert(valueFor(SettingId::MaxStreamingBitrate) == "80 MBIT/S");
     assert(valueFor(SettingId::AudioOutput) == "DIRECT / 6CH ROUTE");
     assert(valueFor(SettingId::ExternalPlayer) == "MPV");

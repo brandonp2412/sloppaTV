@@ -21,11 +21,9 @@ int main(int argc, char** argv) {
         checksum += state.actions(item, false).size();
         checksum += state.itemMenuActions(item, true, true, false).size();
     }
-    const double elapsedMs = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - started
-    ).count();
-    std::cout << std::fixed << std::setprecision(3)
-              << "iterations=" << iterations << " elapsed_ms=" << elapsedMs
+    const double elapsedMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    std::cout << std::fixed << std::setprecision(3) << "iterations=" << iterations << " elapsed_ms=" << elapsedMs
               << " checksum=" << checksum << '\n';
     return checksum == static_cast<size_t>(iterations) * 16 ? 0 : 1;
 }

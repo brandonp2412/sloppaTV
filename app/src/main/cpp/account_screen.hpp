@@ -38,17 +38,22 @@ public:
     [[nodiscard]] int loginFocus() const { return loginFocus_; }
     void setLoginFocus(int focus) { loginFocus_ = std::clamp(focus, kServerField, kSavedUsersAction); }
     void moveLoginVertical(int direction) {
-        if (direction < 0) loginFocus_ = loginFocus_ >= kLoginAction ? kPasswordField : std::max(kServerField, loginFocus_ - 1);
+        if (direction < 0)
+            loginFocus_ = loginFocus_ >= kLoginAction ? kPasswordField : std::max(kServerField, loginFocus_ - 1);
         else if (direction > 0) {
-            if (loginFocus_ < kPasswordField) ++loginFocus_;
-            else if (loginFocus_ == kPasswordField) loginFocus_ = kLoginAction;
+            if (loginFocus_ < kPasswordField)
+                ++loginFocus_;
+            else if (loginFocus_ == kPasswordField)
+                loginFocus_ = kLoginAction;
         }
     }
     void moveLoginAction(int direction, bool hasSavedUsers) {
         if (loginFocus_ < kLoginAction || direction == 0) return;
         const int maximum = hasSavedUsers ? kSavedUsersAction : kDiscoverAction;
-        if (direction < 0) loginFocus_ = loginFocus_ <= kLoginAction ? maximum : loginFocus_ - 1;
-        else loginFocus_ = loginFocus_ >= maximum ? kLoginAction : loginFocus_ + 1;
+        if (direction < 0)
+            loginFocus_ = loginFocus_ <= kLoginAction ? maximum : loginFocus_ - 1;
+        else
+            loginFocus_ = loginFocus_ >= maximum ? kLoginAction : loginFocus_ + 1;
     }
     void finishTextField(int field, std::string value) {
         setField(field, std::move(value));
@@ -100,8 +105,10 @@ public:
         profileAction_ = 0;
     }
     void moveProfile(int direction, int savedCount) {
-        if (direction < 0) profileSelection_ = std::max(0, profileSelection_ - 1);
-        else if (direction > 0) profileSelection_ = std::min(std::max(0, savedCount), profileSelection_ + 1);
+        if (direction < 0)
+            profileSelection_ = std::max(0, profileSelection_ - 1);
+        else if (direction > 0)
+            profileSelection_ = std::min(std::max(0, savedCount), profileSelection_ + 1);
         profileAction_ = 0;
     }
     void toggleProfileAction(int savedCount) {

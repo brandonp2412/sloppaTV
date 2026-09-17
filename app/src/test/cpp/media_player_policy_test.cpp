@@ -21,8 +21,7 @@ int main() {
     assert(heldSeekDeltaMs(15, 0) == 15'000);
     assert(heldSeekDeltaMs(15, 14) == 120'000);
     assert(heldSeekDeltaMs(15, 40) == 480'000);
-    assert(relativeSeekPositionMs(std::numeric_limits<int>::max() - 100, 60'000, 0)
-        == std::numeric_limits<int>::max());
+    assert(relativeSeekPositionMs(std::numeric_limits<int>::max() - 100, 60'000, 0) == std::numeric_limits<int>::max());
     assert(playbackTicksFromPositionMs(-1) == 0);
     assert(playbackTicksFromPositionMs(1234) == 12'340'000);
     assert(playbackPositionMsFromTicks(-1) == 0);
@@ -97,14 +96,18 @@ int main() {
     assert(!repeatedPlaybackServerError(404, 10));
 
     assert(transcodingReasonsFromUrl("/master.m3u8?TranscodeReasons=ContainerNotSupported") == "ContainerNotSupported");
-    assert(transcodingReasonsFromUrl("/master.m3u8?x=1&TranscodeReasons=ContainerNotSupported%2CAudioCodecNotSupported&y=2")
-        == "ContainerNotSupported,AudioCodecNotSupported");
+    assert(transcodingReasonsFromUrl(
+               "/master.m3u8?x=1&TranscodeReasons=ContainerNotSupported%2CAudioCodecNotSupported&y=2") ==
+           "ContainerNotSupported,AudioCodecNotSupported");
     assert(transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported"));
-    assert(transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported,AudioChannelsNotSupported"));
-    assert(transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=AudioCodecNotSupported%2CVideoCodecTagNotSupported"));
+    assert(transcodingUrlRepresentsDirectStream(
+        "/master.m3u8?TranscodeReasons=ContainerNotSupported,AudioChannelsNotSupported"));
+    assert(transcodingUrlRepresentsDirectStream(
+        "/master.m3u8?TranscodeReasons=AudioCodecNotSupported%2CVideoCodecTagNotSupported"));
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=SubtitleCodecNotSupported"));
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=VideoBitDepthNotSupported"));
-    assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?TranscodeReasons=ContainerNotSupported,SubtitleCodecNotSupported"));
+    assert(!transcodingUrlRepresentsDirectStream(
+        "/master.m3u8?TranscodeReasons=ContainerNotSupported,SubtitleCodecNotSupported"));
     assert(!transcodingUrlRepresentsDirectStream("/master.m3u8?foo=bar"));
     assert(serverStreamVideoCodecList({"h264"}) == "h264");
     assert(serverStreamVideoCodecList({"vp9", "hevc", "h264", "av1"}) == "hevc,h264");

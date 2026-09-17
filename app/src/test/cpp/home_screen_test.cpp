@@ -19,30 +19,26 @@ int main() {
     assert(!preferHomeLandscapeArtwork("CollectionFolder"));
     assert(!preferHomeLandscapeArtwork("Folder"));
 
-    const ArtworkReference episodeArtwork = homeArtworkReference(
-        "episode-id", "episode-tag", "series-id", "series-tag", true, "thumb-tag", "backdrop-tag", "episode-id"
-    );
+    const ArtworkReference episodeArtwork = homeArtworkReference("episode-id", "episode-tag", "series-id", "series-tag",
+                                                                 true, "thumb-tag", "backdrop-tag", "episode-id");
     assert(episodeArtwork.itemId == "episode-id");
     assert(episodeArtwork.tag == "thumb-tag");
     assert(episodeArtwork.kind == ArtworkKind::Thumb);
 
-    const ArtworkReference episodePrimaryArtwork = homeArtworkReference(
-        "episode-id", "episode-primary", "series-id", "series-tag", true, "", "", "series-id"
-    );
+    const ArtworkReference episodePrimaryArtwork =
+        homeArtworkReference("episode-id", "episode-primary", "series-id", "series-tag", true, "", "", "series-id");
     assert(episodePrimaryArtwork.itemId == "episode-id");
     assert(episodePrimaryArtwork.tag == "episode-primary");
     assert(episodePrimaryArtwork.kind == ArtworkKind::Primary);
 
-    const ArtworkReference parentBackdropArtwork = homeArtworkReference(
-        "episode-id", "", "series-id", "series-tag", true, "", "backdrop-tag", "series-id"
-    );
+    const ArtworkReference parentBackdropArtwork =
+        homeArtworkReference("episode-id", "", "series-id", "series-tag", true, "", "backdrop-tag", "series-id");
     assert(parentBackdropArtwork.itemId == "series-id");
     assert(parentBackdropArtwork.tag == "backdrop-tag");
     assert(parentBackdropArtwork.kind == ArtworkKind::Backdrop);
 
-    const ArtworkReference thumbArtwork = homeArtworkReference(
-        "movie-id", "", "", "", false, "thumb-tag", "backdrop-tag", "movie-id"
-    );
+    const ArtworkReference thumbArtwork =
+        homeArtworkReference("movie-id", "", "", "", false, "thumb-tag", "backdrop-tag", "movie-id");
     assert(thumbArtwork.itemId == "movie-id");
     assert(thumbArtwork.tag == "thumb-tag");
     assert(thumbArtwork.kind == ArtworkKind::Thumb);

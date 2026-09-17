@@ -28,10 +28,8 @@ int main() {
     assert(parseSubtitleTimestamp("00:60.000") == -1);
     assert(parseSubtitleTimestamp("not-a-timestamp") == -1);
 
-    const auto cues = parseSubRipCues(
-        "1\n00:00:01,000 --> 00:00:02,500\nHello\nworld\n\n"
-        "2\n00:00:03.000 --> 00:00:04.000\nAgain\n"
-    );
+    const auto cues = parseSubRipCues("1\n00:00:01,000 --> 00:00:02,500\nHello\nworld\n\n"
+                                      "2\n00:00:03.000 --> 00:00:04.000\nAgain\n");
     assert(cues.size() == 2);
     assert(cues[0].startMs == 1000);
     assert(cues[0].endMs == 2500);
@@ -58,8 +56,7 @@ int main() {
         "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
         "Dialogue: 0,0:00:01.25,0:00:03.50,Default,,0,0,0,,{\\an8}<i>Hello</i>\\Nworld, with comma\n"
         "Dialogue: 0,0:00:04.00,0:00:05.10,Default,,0,0,0,,Again\n",
-        "ass"
-    );
+        "ass");
     assert(assCues.size() == 2);
     assert(assCues[0].startMs == 1250);
     assert(assCues[0].endMs == 3500);
@@ -67,20 +64,17 @@ int main() {
     assert(assCues[1].startMs == 4000);
     assert(assCues[1].text == "Again");
 
-    const auto ssaCues = parseTextSubtitleCues(
-        "[Events]\n"
-        "Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
-        "Dialogue: Marked=0,0:00:02.00,0:00:03.00,Default,,0000,0000,0000,,SSA text\n",
-        "SSA"
-    );
+    const auto ssaCues =
+        parseTextSubtitleCues("[Events]\n"
+                              "Format: Marked, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+                              "Dialogue: Marked=0,0:00:02.00,0:00:03.00,Default,,0000,0000,0000,,SSA text\n",
+                              "SSA");
     assert(ssaCues.size() == 1);
     assert(ssaCues[0].startMs == 2000);
     assert(ssaCues[0].text == "SSA text");
 
-    const auto unsortedCues = parseSubRipCues(
-        "1\n00:00:05,000 --> 00:00:06,000\nLater\n\n"
-        "2\n00:00:01,000 --> 00:00:02,000\nEarlier\n"
-    );
+    const auto unsortedCues = parseSubRipCues("1\n00:00:05,000 --> 00:00:06,000\nLater\n\n"
+                                              "2\n00:00:01,000 --> 00:00:02,000\nEarlier\n");
     assert(unsortedCues.size() == 2);
     assert(unsortedCues[0].startMs == 1000);
     assert(unsortedCues[0].text == "Earlier");

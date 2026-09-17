@@ -1,0 +1,7 @@
+missingIncludeSystem
+missingReturn
+throwInEntryPoint
+passedByValue
+uninitMemberVarNoCtor:app/src/main/cpp/app_settings.hpp
+danglingLifetime:app/src/main/cpp/search_screen.hpp
+*:app/src/main/cpp/third_party/*

@@ -81,9 +81,8 @@ public:
         const auto path = pathForKey(key);
         if (path.empty()) return;
         std::error_code ec;
-        const uintmax_t size = usageKnown_ && std::filesystem::is_regular_file(path, ec)
-            ? std::filesystem::file_size(path, ec)
-            : 0;
+        const uintmax_t size =
+            usageKnown_ && std::filesystem::is_regular_file(path, ec) ? std::filesystem::file_size(path, ec) : 0;
         ec.clear();
         if (std::filesystem::remove(path, ec) && usageKnown_) {
             totalBytes_ = size > totalBytes_ ? 0 : totalBytes_ - size;
@@ -168,9 +167,8 @@ private:
         totalBytes_ = scannedBytes;
         fileCount_ = files.size();
         if (totalBytes_ <= kMaxDiskBytes && fileCount_ <= kMaxDiskFiles) return;
-        std::sort(files.begin(), files.end(), [](const CachedFile& left, const CachedFile& right) {
-            return left.modified < right.modified;
-        });
+        std::sort(files.begin(), files.end(),
+                  [](const CachedFile& left, const CachedFile& right) { return left.modified < right.modified; });
         size_t index = 0;
         while (index < files.size() && (totalBytes_ > kMaxDiskBytes || fileCount_ > kMaxDiskFiles)) {
             if (fs::remove(files[index].path, ec)) {

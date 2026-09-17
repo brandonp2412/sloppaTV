@@ -5,8 +5,7 @@
 using nlohmann::json;
 
 namespace {
-template <typename T>
-T scalarValueOr(const json& value, const char* key, T fallback) {
+template <typename T> T scalarValueOr(const json& value, const char* key, T fallback) {
     const auto match = value.find(key);
     if (match == value.end() || match->is_null()) return fallback;
     try {
@@ -38,7 +37,7 @@ const json* firstObjectValue(const json& values) {
     }
     return nullptr;
 }
-}
+} // namespace
 
 JellyfinItem parseJellyfinItem(const json& value) {
     JellyfinItem item;
@@ -111,7 +110,8 @@ JellyfinItem parseJellyfinItem(const json& value) {
         const auto backdrops = value.find("ParentBackdropImageTags");
         if (backdrops != value.end() && backdrops->is_array()) {
             item.backdropTag = firstStringValue(*backdrops);
-            if (!item.backdropTag.empty()) item.backdropItemId = scalarValueOr(value, "ParentBackdropItemId", std::string{});
+            if (!item.backdropTag.empty())
+                item.backdropItemId = scalarValueOr(value, "ParentBackdropItemId", std::string{});
         }
     }
     if (const auto mediaSources = value.find("MediaSources"); mediaSources != value.end() && mediaSources->is_array()) {
@@ -133,9 +133,11 @@ JellyfinItem parseJellyfinItem(const json& value) {
                         item.videoHeight = scalarValueOr(stream, "Height", 0);
                         item.videoBitDepth = scalarValueOr(stream, "BitDepth", 0);
                         item.videoLevel = scalarValueOr(stream, "Level", 0);
-                        if (const auto frameRate = stream.find("RealFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
+                        if (const auto frameRate = stream.find("RealFrameRate");
+                            frameRate != stream.end() && frameRate->is_number()) {
                             item.videoFrameRate = scalarValueOr(stream, "RealFrameRate", 0.0f);
-                        } else if (const auto frameRate = stream.find("AverageFrameRate"); frameRate != stream.end() && frameRate->is_number()) {
+                        } else if (const auto frameRate = stream.find("AverageFrameRate");
+                                   frameRate != stream.end() && frameRate->is_number()) {
                             item.videoFrameRate = scalarValueOr(stream, "AverageFrameRate", 0.0f);
                         }
                     } else if (streamType == "Audio") {
@@ -166,7 +168,8 @@ JellyfinItem parseJellyfinItem(const json& value) {
         const auto& trickplay = *trickplayIt;
         const json* resolutions = nullptr;
         std::string trickplaySourceId = item.mediaSourceId;
-        if (!trickplaySourceId.empty() && trickplay.contains(trickplaySourceId) && trickplay[trickplaySourceId].is_object()) {
+        if (!trickplaySourceId.empty() && trickplay.contains(trickplaySourceId) &&
+            trickplay[trickplaySourceId].is_object()) {
             resolutions = &trickplay[trickplaySourceId];
         } else {
             for (const auto& [sourceId, candidate] : trickplay.items()) {
@@ -207,8 +210,7 @@ std::vector<JellyfinItem> parseJellyfinItems(const json& values) {
         try {
             JellyfinItem item = parseJellyfinItem(value);
             if (!item.id.empty()) items.push_back(std::move(item));
-        } catch (const json::exception&) {
-        }
+        } catch (const json::exception&) {}
     }
     return items;
 }

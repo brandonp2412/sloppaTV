@@ -108,24 +108,16 @@ constexpr Color kError = material_tv::error;
 
 void logPlaybackReportFailure(const char* stage, const std::string& itemId, const ApiResult& result) {
     if (result.ok) return;
-    __android_log_print(
-        ANDROID_LOG_WARN,
-        kTag,
-        "Playback %s report failed for %s: %s",
-        stage,
-        itemId.c_str(),
-        result.error.c_str()
-    );
+    __android_log_print(ANDROID_LOG_WARN, kTag, "Playback %s report failed for %s: %s", stage, itemId.c_str(),
+                        result.error.c_str());
 }
 
 bool isTransientHomeLoadError(std::string_view error) {
-    return error.find("Server hostname could not be resolved") != std::string_view::npos
-        || error.find("Server connection timed out") != std::string_view::npos
-        || error.find("Unable to connect to server") != std::string_view::npos
-        || error.find("HTTP 408") != std::string_view::npos
-        || error.find("HTTP 425") != std::string_view::npos
-        || error.find("HTTP 429") != std::string_view::npos
-        || error.find("HTTP 5") != std::string_view::npos;
+    return error.find("Server hostname could not be resolved") != std::string_view::npos ||
+           error.find("Server connection timed out") != std::string_view::npos ||
+           error.find("Unable to connect to server") != std::string_view::npos ||
+           error.find("HTTP 408") != std::string_view::npos || error.find("HTTP 425") != std::string_view::npos ||
+           error.find("HTTP 429") != std::string_view::npos || error.find("HTTP 5") != std::string_view::npos;
 }
 
 std::string externalSkipSegmentsJson(const std::vector<JellyfinMediaSegment>& segments) {
@@ -135,16 +127,18 @@ std::string externalSkipSegmentsJson(const std::vector<JellyfinMediaSegment>& se
     for (const auto& segment : segments) {
         if (segment.endTicks - segment.startTicks < 30000000) continue;
         std::string type;
-        if (segment.type == "Intro") type = "intro";
-        else if (segment.type == "Outro") type = "outro";
-        else if (segment.type == "Recap") type = "recap";
-        else continue;
+        if (segment.type == "Intro")
+            type = "intro";
+        else if (segment.type == "Outro")
+            type = "outro";
+        else if (segment.type == "Recap")
+            type = "recap";
+        else
+            continue;
         if (!first) json << ',';
         first = false;
-        json << "{\"type\":\"" << type
-             << "\",\"start\":" << (static_cast<double>(segment.startTicks) / 10000000.0)
-             << ",\"end\":" << (static_cast<double>(segment.endTicks) / 10000000.0)
-             << '}';
+        json << "{\"type\":\"" << type << "\",\"start\":" << (static_cast<double>(segment.startTicks) / 10000000.0)
+             << ",\"end\":" << (static_cast<double>(segment.endTicks) / 10000000.0) << '}';
     }
     json << ']';
     return json.str();
@@ -156,11 +150,19 @@ std::string normalizeSubtitleDisplayText(const std::string& input) {
         if (token.empty()) return false;
         return std::all_of(token.begin(), token.end(), [](unsigned char c) {
             switch (c) {
-                case '!': case '?': case '.': case ',': case ';': case ':':
-                case '%': case ')': case ']': case '}':
-                    return true;
-                default:
-                    return false;
+            case '!':
+            case '?':
+            case '.':
+            case ',':
+            case ';':
+            case ':':
+            case '%':
+            case ')':
+            case ']':
+            case '}':
+                return true;
+            default:
+                return false;
             }
         });
     };
@@ -169,8 +171,10 @@ std::string normalizeSubtitleDisplayText(const std::string& input) {
     std::vector<std::string> tokens;
     std::string word;
     while (words >> word) {
-        if (!tokens.empty() && attachesToPrevious(word)) tokens.back() += word;
-        else tokens.push_back(std::move(word));
+        if (!tokens.empty() && attachesToPrevious(word))
+            tokens.back() += word;
+        else
+            tokens.push_back(std::move(word));
     }
 
     std::string output;
@@ -215,8 +219,10 @@ std::string formatPlaybackTime(int milliseconds) {
     const int minutes = (totalSeconds / 60) % 60;
     const int seconds = totalSeconds % 60;
     std::ostringstream out;
-    if (hours > 0) out << hours << ':' << std::setw(2) << std::setfill('0') << minutes;
-    else out << minutes;
+    if (hours > 0)
+        out << hours << ':' << std::setw(2) << std::setfill('0') << minutes;
+    else
+        out << minutes;
     out << ':' << std::setw(2) << std::setfill('0') << seconds;
     return out.str();
 }
@@ -269,11 +275,47 @@ constexpr int kTextInputSeerrApiKey = 21;
 
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
     static const std::vector<std::vector<VirtualKey>> rows = {
-        {{"A","A"},{"B","B"},{"C","C"},{"D","D"},{"E","E"},{"F","F"},{"G","G"},{"H","H"},{"I","I"},{"J","J"}},
-        {{"K","K"},{"L","L"},{"M","M"},{"N","N"},{"O","O"},{"P","P"},{"Q","Q"},{"R","R"},{"S","S"},{"T","T"}},
-        {{"U","U"},{"V","V"},{"W","W"},{"X","X"},{"Y","Y"},{"Z","Z"},{"0","0"},{"1","1"},{"2","2"},{"3","3"}},
-        {{"4","4"},{"5","5"},{"6","6"},{"7","7"},{"8","8"},{"9","9"},{".","."},{"-","-"},{"_","_"},{"/","/"}},
-        {{":",":"},{"@","@"},{"SPACE"," "},{"BACK","",KeyAction::Backspace},{"DONE","",KeyAction::Done}},
+        {{"A", "A"},
+         {"B", "B"},
+         {"C", "C"},
+         {"D", "D"},
+         {"E", "E"},
+         {"F", "F"},
+         {"G", "G"},
+         {"H", "H"},
+         {"I", "I"},
+         {"J", "J"}},
+        {{"K", "K"},
+         {"L", "L"},
+         {"M", "M"},
+         {"N", "N"},
+         {"O", "O"},
+         {"P", "P"},
+         {"Q", "Q"},
+         {"R", "R"},
+         {"S", "S"},
+         {"T", "T"}},
+        {{"U", "U"},
+         {"V", "V"},
+         {"W", "W"},
+         {"X", "X"},
+         {"Y", "Y"},
+         {"Z", "Z"},
+         {"0", "0"},
+         {"1", "1"},
+         {"2", "2"},
+         {"3", "3"}},
+        {{"4", "4"},
+         {"5", "5"},
+         {"6", "6"},
+         {"7", "7"},
+         {"8", "8"},
+         {"9", "9"},
+         {".", "."},
+         {"-", "-"},
+         {"_", "_"},
+         {"/", "/"}},
+        {{":", ":"}, {"@", "@"}, {"SPACE", " "}, {"BACK", "", KeyAction::Backspace}, {"DONE", "", KeyAction::Done}},
     };
     return rows;
 }
@@ -290,17 +332,28 @@ char keyCodeToChar(int32_t keyCode, int32_t metaState) {
         return shift ? shifted[index] : static_cast<char>('0' + index);
     }
     switch (keyCode) {
-        case AKEYCODE_SPACE: return ' ';
-        case AKEYCODE_PERIOD: return shift ? '>' : '.';
-        case AKEYCODE_COMMA: return shift ? '<' : ',';
-        case AKEYCODE_SLASH: return shift ? '?' : '/';
-        case AKEYCODE_BACKSLASH: return shift ? '|' : '\\';
-        case AKEYCODE_MINUS: return shift ? '_' : '-';
-        case AKEYCODE_EQUALS: return shift ? '+' : '=';
-        case AKEYCODE_SEMICOLON: return shift ? ':' : ';';
-        case AKEYCODE_APOSTROPHE: return shift ? '"' : '\'';
-        case AKEYCODE_AT: return '@';
-        default: return 0;
+    case AKEYCODE_SPACE:
+        return ' ';
+    case AKEYCODE_PERIOD:
+        return shift ? '>' : '.';
+    case AKEYCODE_COMMA:
+        return shift ? '<' : ',';
+    case AKEYCODE_SLASH:
+        return shift ? '?' : '/';
+    case AKEYCODE_BACKSLASH:
+        return shift ? '|' : '\\';
+    case AKEYCODE_MINUS:
+        return shift ? '_' : '-';
+    case AKEYCODE_EQUALS:
+        return shift ? '+' : '=';
+    case AKEYCODE_SEMICOLON:
+        return shift ? ':' : ';';
+    case AKEYCODE_APOSTROPHE:
+        return shift ? '"' : '\'';
+    case AKEYCODE_AT:
+        return '@';
+    default:
+        return 0;
     }
 }
 
@@ -318,15 +371,11 @@ std::mutex gActiveAppMutex;
 class SloppaApp {
 public:
     explicit SloppaApp(android_app* app)
-        : app_(app),
-          renderer_(app->activity->vm, app->activity->clazz),
-          api_(app->activity->vm, app->activity->clazz),
-          seerr_(app->activity->vm, app->activity->clazz),
-          seerrSearch_(app->activity->vm, app->activity->clazz),
+        : app_(app), renderer_(app->activity->vm, app->activity->clazz), api_(app->activity->vm, app->activity->clazz),
+          seerr_(app->activity->vm, app->activity->clazz), seerrSearch_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
-          externalPlayer_(app->activity->vm, app->activity->clazz),
-          imageDecoder_(app->activity->vm),
+          externalPlayer_(app->activity->vm, app->activity->clazz), imageDecoder_(app->activity->vm),
           videoSurface_(app->activity->vm),
           tasks_(
               4,
@@ -335,28 +384,16 @@ public:
               },
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
-              }
-          ),
-          artwork_(
-              api_,
-              seerr_,
-              imageDecoder_,
-              tasks_,
-              stateMutex_,
-              [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
-                  if (loaded.ok()) return;
-                  __android_log_print(
-                      ANDROID_LOG_WARN,
-                      kTag,
-                      loaded.failure == ArtworkLoadFailure::Download
-                          ? "Home artwork download failed item=%s type=%s reason=%s"
-                          : "Home artwork decode failed item=%s type=%s reason=%s",
-                      request.itemId.c_str(),
-                      request.itemType.c_str(),
-                      loaded.error.c_str()
-                  );
-              }
-          ) {
+              }),
+          artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
+                   [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
+                       if (loaded.ok()) return;
+                       __android_log_print(ANDROID_LOG_WARN, kTag,
+                                           loaded.failure == ArtworkLoadFailure::Download
+                                               ? "Home artwork download failed item=%s type=%s reason=%s"
+                                               : "Home artwork decode failed item=%s type=%s reason=%s",
+                                           request.itemId.c_str(), request.itemType.c_str(), loaded.error.c_str());
+                   }) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         artwork_.setDataPath(dataPath_);
@@ -367,11 +404,9 @@ public:
         loadSession();
         if (!settings_.externalPlayerComponent.empty()) refreshExternalPlayers();
         __android_log_print(ANDROID_LOG_INFO, kTag,
-            "Startup init: session loaded valid=%d seerrConfigured=%d seerrSession=%d drivePicker=%d",
-            session_.valid() ? 1 : 0,
-            !settings_.seerrServer.empty() ? 1 : 0,
-            !settings_.seerrSessionCookie.empty() ? 1 : 0,
-            settings_.seerrSelectDrive ? 1 : 0);
+                            "Startup init: session loaded valid=%d seerrConfigured=%d seerrSession=%d drivePicker=%d",
+                            session_.valid() ? 1 : 0, !settings_.seerrServer.empty() ? 1 : 0,
+                            !settings_.seerrSessionCookie.empty() ? 1 : 0, settings_.seerrSelectDrive ? 1 : 0);
         if (session_.valid()) {
             resetNavigation(Screen::Home);
             loadHomeAsync();
@@ -401,8 +436,7 @@ public:
 
     void popScreen(Screen fallback = Screen::Home) {
         screen_ = navigation_.popOr(fallback);
-        if (screen_ == Screen::Browse && session_.valid() && !loading_
-            && !browseState_.activeContainer().id.empty()) {
+        if (screen_ == Screen::Browse && session_.valid() && !loading_ && !browseState_.activeContainer().id.empty()) {
             loadBrowsePageAsync(false);
         }
     }
@@ -439,28 +473,32 @@ public:
             bool burstActive = pollNow < renderBurstUntil_;
             {
                 std::scoped_lock lock(stateMutex_);
-                if (screen_ == Screen::Player || burstActive) timeoutMs = 0;
-                else if (screensaverActive_) timeoutMs = 30000;
-                else if (loading_ || homeLoading_ || mutationLoading_ || searchState_.loading()
-                    || searchState_.seerrLoading() || accountState_.quickConnectActive()) timeoutMs = 100;
+                if (screen_ == Screen::Player || burstActive)
+                    timeoutMs = 0;
+                else if (screensaverActive_)
+                    timeoutMs = 30000;
+                else if (loading_ || homeLoading_ || mutationLoading_ || searchState_.loading() ||
+                         searchState_.seerrLoading() || accountState_.quickConnectActive())
+                    timeoutMs = 100;
                 else {
                     const int64_t delayMs = screensaverDelayMs(settings_.screensaverMinutes);
                     if (delayMs > 0) {
-                        const int64_t idleMs = std::chrono::duration_cast<std::chrono::milliseconds>(pollNow - lastInteraction_).count();
+                        const int64_t idleMs =
+                            std::chrono::duration_cast<std::chrono::milliseconds>(pollNow - lastInteraction_).count();
                         timeoutMs = static_cast<int>(std::clamp<int64_t>(delayMs - idleMs, 0, delayMs));
                     }
                 }
                 if (searchState_.debouncePending()) {
-                    const int64_t searchDelayMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        searchState_.debounceDeadline() - pollNow
-                    ).count();
+                    const int64_t searchDelayMs =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(searchState_.debounceDeadline() - pollNow)
+                            .count();
                     const int searchTimeoutMs = static_cast<int>(std::max<int64_t>(0, searchDelayMs));
                     timeoutMs = timeoutMs < 0 ? searchTimeoutMs : std::min(timeoutMs, searchTimeoutMs);
                 }
                 if (searchState_.seerrDebouncePending()) {
                     const int64_t seerrDelayMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        searchState_.seerrDebounceDeadline() - pollNow
-                    ).count();
+                                                     searchState_.seerrDebounceDeadline() - pollNow)
+                                                     .count();
                     const int seerrTimeoutMs = static_cast<int>(std::max<int64_t>(0, seerrDelayMs));
                     timeoutMs = timeoutMs < 0 ? seerrTimeoutMs : std::min(timeoutMs, seerrTimeoutMs);
                 }
@@ -470,15 +508,16 @@ public:
                         timeoutMs = 0;
                         return;
                     }
-                    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - pollNow).count();
+                    const auto remaining =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(deadline - pollNow).count();
                     const int statusTimeoutMs = static_cast<int>(std::max<int64_t>(1, remaining));
                     timeoutMs = timeoutMs < 0 ? statusTimeoutMs : std::min(timeoutMs, statusTimeoutMs);
                 };
                 if (!noticePersistent_ && !notice_.empty()) tightenTimeoutUntil(noticeUntil_);
                 if (!presentedError_.empty()) tightenTimeoutUntil(errorUntil_);
                 tightenTimeoutUntil(homeRetryAt_);
-                if (!seerrRequestState_.pendingLoading()
-                    && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
+                if (!seerrRequestState_.pendingLoading() &&
+                    (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
                     tightenTimeoutUntil(seerrRequestState_.pendingRefreshDeadline());
                 }
                 if (screen_ == Screen::Search && !searchState_.keyboard() && !searchState_.results().empty()) {
@@ -491,8 +530,8 @@ public:
             int events = 0;
             android_poll_source* source = nullptr;
             int pollResult = ALooper_pollOnce(timeoutMs, nullptr, &events, reinterpret_cast<void**>(&source));
-            bool shouldRender = pollResult == ALOOPER_POLL_WAKE
-                || (pollResult == ALOOPER_POLL_TIMEOUT && timeoutMs >= 0);
+            bool shouldRender =
+                pollResult == ALOOPER_POLL_WAKE || (pollResult == ALOOPER_POLL_TIMEOUT && timeoutMs >= 0);
 
             while (pollResult >= 0) {
                 if (source) {
@@ -516,14 +555,12 @@ public:
                     screensaverActive_ = false;
                 } else if (!screensaverActive_) {
                     const auto now = std::chrono::steady_clock::now();
-                    const int64_t idleMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInteraction_).count();
+                    const int64_t idleMs =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInteraction_).count();
                     screensaverActive_ = shouldActivateScreensaver(
-                        settings_.screensaverMinutes,
-                        idleMs,
-                        false,
-                        loading_ || homeLoading_ || mutationLoading_ || searchState_.loading()
-                            || searchState_.seerrLoading() || accountState_.quickConnectActive()
-                    );
+                        settings_.screensaverMinutes, idleMs, false,
+                        loading_ || homeLoading_ || mutationLoading_ || searchState_.loading() ||
+                            searchState_.seerrLoading() || accountState_.quickConnectActive());
                 }
                 screensaver = screensaverActive_;
             }
@@ -640,21 +677,50 @@ public:
                 handlePlayerKey(AKEYCODE_BACK);
             } else {
                 switch (screen_) {
-                    case Screen::Login: handleLoginKey(AKEYCODE_BACK); break;
-                    case Screen::Profiles: handleProfilesKey(AKEYCODE_BACK); break;
-                    case Screen::Home: handleHomeKey(AKEYCODE_BACK); break;
-                    case Screen::Browse: handleBrowseKey(AKEYCODE_BACK); break;
-                    case Screen::Search: handleSearchKey(AKEYCODE_BACK); break;
-                    case Screen::Settings: handleSettingsKey(AKEYCODE_BACK); break;
-                    case Screen::Diagnostics: handleDiagnosticsKey(AKEYCODE_BACK); break;
-                    case Screen::Details: handleDetailsKey(AKEYCODE_BACK); break;
-                    case Screen::Cast: handleCastKey(AKEYCODE_BACK); break;
-                    case Screen::PersonItems: handlePersonItemsKey(AKEYCODE_BACK); break;
-                    case Screen::ItemMenu: handleItemMenuKey(AKEYCODE_BACK); break;
-                    case Screen::Seasons: handleSeasonsKey(AKEYCODE_BACK); break;
-                    case Screen::Episodes: handleEpisodesKey(AKEYCODE_BACK); break;
-                    case Screen::SeerrDrivePicker: handleSeerrDrivePickerKey(AKEYCODE_BACK); break;
-                    case Screen::Player: break;
+                case Screen::Login:
+                    handleLoginKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Profiles:
+                    handleProfilesKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Home:
+                    handleHomeKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Browse:
+                    handleBrowseKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Search:
+                    handleSearchKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Settings:
+                    handleSettingsKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Diagnostics:
+                    handleDiagnosticsKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Details:
+                    handleDetailsKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Cast:
+                    handleCastKey(AKEYCODE_BACK);
+                    break;
+                case Screen::PersonItems:
+                    handlePersonItemsKey(AKEYCODE_BACK);
+                    break;
+                case Screen::ItemMenu:
+                    handleItemMenuKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Seasons:
+                    handleSeasonsKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Episodes:
+                    handleEpisodesKey(AKEYCODE_BACK);
+                    break;
+                case Screen::SeerrDrivePicker:
+                    handleSeerrDrivePickerKey(AKEYCODE_BACK);
+                    break;
+                case Screen::Player:
+                    break;
                 }
             }
         }
@@ -665,120 +731,111 @@ private:
     void onAppCommand(int32_t command) {
         std::scoped_lock lock(stateMutex_);
         switch (command) {
-            case APP_CMD_INIT_WINDOW: {
-                bool reusedRendererContext = false;
-                if (app_->window) {
-                    if (renderer_.contextReady() && !renderer_.ready()) {
-                        reusedRendererContext = renderer_.attachWindow(app_->window);
-                    }
-                    if (!renderer_.ready()) renderer_.init(app_->window);
+        case APP_CMD_INIT_WINDOW: {
+            bool reusedRendererContext = false;
+            if (app_->window) {
+                if (renderer_.contextReady() && !renderer_.ready()) {
+                    reusedRendererContext = renderer_.attachWindow(app_->window);
                 }
-                lastInteraction_ = std::chrono::steady_clock::now();
-                screensaverActive_ = false;
-                const bool restoreCandidate = screen_ == Screen::Player
-                    && playerScreenState_.windowRestorePending()
-                    && renderer_.ready()
-                    && !playbackSessionState_.activeTarget().url.empty();
-                const PlayerStatus restoreStatus = restoreCandidate ? player_.status() : PlayerStatus::Idle;
-                const PlaybackWindowRestorePlan restorePlan = playbackCoordinator_.windowRestorePlan(
-                    screen_ == Screen::Player,
-                    playerScreenState_.windowRestorePending(),
-                    renderer_.ready(),
-                    reusedRendererContext,
-                    videoSurface_.ready(),
-                    restoreStatus != PlayerStatus::Idle
-                        && restoreStatus != PlayerStatus::Ended
-                        && restoreStatus != PlayerStatus::Error,
-                    playerScreenState_.resumeOnFocusRequested()
-                );
-                if (restorePlan.restore) {
-                    if (settings_.refreshRateSwitching && playbackSessionState_.activeItem().videoFrameRate > 0.0f) {
-                        displayMode_.matchVideo(app_->window, playbackSessionState_.activeItem().videoFrameRate);
-                    }
-                    if (restorePlan.preservePlayer) {
-                        if (restorePlan.resumePlayback) player_.play();
-                        mediaSession_.updateState(
-                            restorePlan.resumePlayback ? MediaSessionState::Playing : MediaSessionState::Paused,
-                            playerScreenState_.positionMs()
-                        );
-                        __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved libmpv and GLES context");
-                    } else {
-                        // libmpv must release MediaCodec before its Android Surface is destroyed.
-                        // Releasing VideoSurface first can make mediacodec_embed observe wid=0 while
-                        // the decoder is still active and abort inside vo_mediacodec_embed.
-                        player_.stop();
-                        videoSurface_.release();
-                        std::string surfaceError;
-                        if (!videoSurface_.create(surfaceError)) {
-                            error_ = surfaceError.empty() ? "VIDEO SURFACE COULD NOT BE RESTORED" : surfaceError;
-                            break;
-                        }
-                        player_.startAsync(
-                            playbackSessionState_.activeTarget().url,
-                            videoSurface_.surface(),
-                            playerScreenState_.positionMs(),
-                            settings_.playbackBufferPreset,
-                            playerAudioOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
-                            playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay ? playbackSessionState_.activeTarget().subtitleStreamIndex : kSubtitleOffIndex,
-                            playerSubtitleOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
-                            directExternalSubtitleUrl(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem())
-                        );
-                        playbackCoordinator_.setPauseAfterRestart(restorePlan.pauseAfterRestart);
-                        mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
-                        __android_log_print(ANDROID_LOG_WARN, kTag, "GLES context was not reusable during window restore; recreated playback surface");
-                    }
-                    playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                    playerScreenState_.completeWindowRestore();
-                }
-                break;
+                if (!renderer_.ready()) renderer_.init(app_->window);
             }
-            case APP_CMD_TERM_WINDOW: {
-                const bool suspendCandidate = screen_ == Screen::Player
-                    && !playbackSessionState_.activeTarget().url.empty();
-                const PlayerStatus status = suspendCandidate ? player_.status() : PlayerStatus::Idle;
-                const PlaybackWindowSuspendPlan suspendPlan = playbackCoordinator_.windowSuspendPlan(
-                    screen_ == Screen::Player,
-                    status == PlayerStatus::Playing || status == PlayerStatus::Preparing
-                );
-                if (suspendPlan.suspend) {
-                    refreshPlaybackTelemetry(true);
-                    playerScreenState_.beginWindowRestore(suspendPlan.resumePlayback);
-                    if (suspendPlan.resumePlayback) player_.pause();
-                    reportProgressAsync(true);
-                    displayMode_.restore();
-                    mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
+            lastInteraction_ = std::chrono::steady_clock::now();
+            screensaverActive_ = false;
+            const bool restoreCandidate = screen_ == Screen::Player && playerScreenState_.windowRestorePending() &&
+                                          renderer_.ready() && !playbackSessionState_.activeTarget().url.empty();
+            const PlayerStatus restoreStatus = restoreCandidate ? player_.status() : PlayerStatus::Idle;
+            const PlaybackWindowRestorePlan restorePlan = playbackCoordinator_.windowRestorePlan(
+                screen_ == Screen::Player, playerScreenState_.windowRestorePending(), renderer_.ready(),
+                reusedRendererContext, videoSurface_.ready(),
+                restoreStatus != PlayerStatus::Idle && restoreStatus != PlayerStatus::Ended &&
+                    restoreStatus != PlayerStatus::Error,
+                playerScreenState_.resumeOnFocusRequested());
+            if (restorePlan.restore) {
+                if (settings_.refreshRateSwitching && playbackSessionState_.activeItem().videoFrameRate > 0.0f) {
+                    displayMode_.matchVideo(app_->window, playbackSessionState_.activeItem().videoFrameRate);
                 }
-                if (!renderer_.detachWindow()) renderer_.shutdown();
-                break;
+                if (restorePlan.preservePlayer) {
+                    if (restorePlan.resumePlayback) player_.play();
+                    mediaSession_.updateState(restorePlan.resumePlayback ? MediaSessionState::Playing
+                                                                         : MediaSessionState::Paused,
+                                              playerScreenState_.positionMs());
+                    __android_log_print(ANDROID_LOG_INFO, kTag,
+                                        "Restored playback with preserved libmpv and GLES context");
+                } else {
+                    // libmpv must release MediaCodec before its Android Surface is destroyed.
+                    // Releasing VideoSurface first can make mediacodec_embed observe wid=0 while
+                    // the decoder is still active and abort inside vo_mediacodec_embed.
+                    player_.stop();
+                    videoSurface_.release();
+                    std::string surfaceError;
+                    if (!videoSurface_.create(surfaceError)) {
+                        error_ = surfaceError.empty() ? "VIDEO SURFACE COULD NOT BE RESTORED" : surfaceError;
+                        break;
+                    }
+                    player_.startAsync(
+                        playbackSessionState_.activeTarget().url, videoSurface_.surface(),
+                        playerScreenState_.positionMs(), settings_.playbackBufferPreset,
+                        playerAudioOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
+                        playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay
+                            ? playbackSessionState_.activeTarget().subtitleStreamIndex
+                            : kSubtitleOffIndex,
+                        playerSubtitleOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
+                        directExternalSubtitleUrl(playbackSessionState_.activeTarget(),
+                                                  playbackSessionState_.activeItem()));
+                    playbackCoordinator_.setPauseAfterRestart(restorePlan.pauseAfterRestart);
+                    mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
+                    __android_log_print(
+                        ANDROID_LOG_WARN, kTag,
+                        "GLES context was not reusable during window restore; recreated playback surface");
+                }
+                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+                playerScreenState_.completeWindowRestore();
             }
-            case APP_CMD_GAINED_FOCUS:
-                lastInteraction_ = std::chrono::steady_clock::now();
-                screensaverActive_ = false;
-                if (screen_ == Screen::Player && playerScreenState_.takeResumeOnFocus()) {
-                    player_.play();
-                    mediaSession_.updateState(MediaSessionState::Playing, playerScreenState_.positionMs());
-                    __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
-                } else if (screen_ == Screen::Browse && session_.valid() && !loading_
-                    && !browseState_.activeContainer().id.empty()) {
-                    loadBrowsePageAsync(false);
-                }
-                break;
-            case APP_CMD_LOST_FOCUS: {
-                screensaverActive_ = false;
-                const bool playerScreenActive = screen_ == Screen::Player;
-                const PlayerStatus status = playerScreenActive ? player_.status() : PlayerStatus::Idle;
-                if (shouldPausePlaybackForFocusLoss(
-                        playerScreenActive,
-                        status == PlayerStatus::Playing || status == PlayerStatus::Preparing
-                    )) {
-                    playerScreenState_.requestResumeOnFocus();
-                    player_.pause();
-                    mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
-                }
-                break;
+            break;
+        }
+        case APP_CMD_TERM_WINDOW: {
+            const bool suspendCandidate =
+                screen_ == Screen::Player && !playbackSessionState_.activeTarget().url.empty();
+            const PlayerStatus status = suspendCandidate ? player_.status() : PlayerStatus::Idle;
+            const PlaybackWindowSuspendPlan suspendPlan = playbackCoordinator_.windowSuspendPlan(
+                screen_ == Screen::Player, status == PlayerStatus::Playing || status == PlayerStatus::Preparing);
+            if (suspendPlan.suspend) {
+                refreshPlaybackTelemetry(true);
+                playerScreenState_.beginWindowRestore(suspendPlan.resumePlayback);
+                if (suspendPlan.resumePlayback) player_.pause();
+                reportProgressAsync(true);
+                displayMode_.restore();
+                mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
             }
-            default:
-                break;
+            if (!renderer_.detachWindow()) renderer_.shutdown();
+            break;
+        }
+        case APP_CMD_GAINED_FOCUS:
+            lastInteraction_ = std::chrono::steady_clock::now();
+            screensaverActive_ = false;
+            if (screen_ == Screen::Player && playerScreenState_.takeResumeOnFocus()) {
+                player_.play();
+                mediaSession_.updateState(MediaSessionState::Playing, playerScreenState_.positionMs());
+                __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
+            } else if (screen_ == Screen::Browse && session_.valid() && !loading_ &&
+                       !browseState_.activeContainer().id.empty()) {
+                loadBrowsePageAsync(false);
+            }
+            break;
+        case APP_CMD_LOST_FOCUS: {
+            screensaverActive_ = false;
+            const bool playerScreenActive = screen_ == Screen::Player;
+            const PlayerStatus status = playerScreenActive ? player_.status() : PlayerStatus::Idle;
+            if (shouldPausePlaybackForFocusLoss(playerScreenActive,
+                                                status == PlayerStatus::Playing || status == PlayerStatus::Preparing)) {
+                playerScreenState_.requestResumeOnFocus();
+                player_.pause();
+                mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
+            }
+            break;
+        }
+        default:
+            break;
         }
     }
 
@@ -808,8 +865,8 @@ private:
             }
             return 0;
         }
-        if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            && homeState_.centerPending() && homeState_.centerLongPressed()) {
+        if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending() &&
+            homeState_.centerLongPressed()) {
             return 1;
         }
 
@@ -829,18 +886,18 @@ private:
             return 1;
         }
 
-        if (screen_ == Screen::Home
-            && homeState_.row() >= 0
-            && (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)) {
+        if (screen_ == Screen::Home && homeState_.row() >= 0 &&
+            (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)) {
             if (repeatCount == 0) {
                 homeState_.beginCenterPress();
                 return 1;
             }
-            if (homeState_.centerPending() && !homeState_.centerLongPressed()
-                && homeState_.row() < static_cast<int>(home_.rows.size())) {
+            if (homeState_.centerPending() && !homeState_.centerLongPressed() &&
+                homeState_.row() < static_cast<int>(home_.rows.size())) {
                 auto& section = home_.rows[static_cast<size_t>(homeState_.row())];
                 if (section.title != "My Media" && !section.items.empty()) {
-                    const int selection = homeState_.selection(homeState_.row(), static_cast<int>(section.items.size()));
+                    const int selection =
+                        homeState_.selection(homeState_.row(), static_cast<int>(section.items.size()));
                     openItemMenuForItem(section.items[static_cast<size_t>(selection)]);
                     homeState_.markCenterLongPressed();
                 }
@@ -853,21 +910,50 @@ private:
         if (key == AKEYCODE_DEL && handleBackspace()) return 1;
 
         switch (screen_) {
-            case Screen::Login: handleLoginKey(key); break;
-            case Screen::Profiles: handleProfilesKey(key); break;
-            case Screen::Home: handleHomeKey(key); break;
-            case Screen::Browse: handleBrowseKey(key); break;
-            case Screen::Search: handleSearchKey(key); break;
-            case Screen::Settings: handleSettingsKey(key); break;
-            case Screen::Diagnostics: handleDiagnosticsKey(key); break;
-            case Screen::Details: handleDetailsKey(key); break;
-            case Screen::Cast: handleCastKey(key); break;
-            case Screen::PersonItems: handlePersonItemsKey(key); break;
-            case Screen::ItemMenu: handleItemMenuKey(key); break;
-            case Screen::Seasons: handleSeasonsKey(key); break;
-            case Screen::Episodes: handleEpisodesKey(key); break;
-            case Screen::SeerrDrivePicker: handleSeerrDrivePickerKey(key); break;
-            case Screen::Player: break;
+        case Screen::Login:
+            handleLoginKey(key);
+            break;
+        case Screen::Profiles:
+            handleProfilesKey(key);
+            break;
+        case Screen::Home:
+            handleHomeKey(key);
+            break;
+        case Screen::Browse:
+            handleBrowseKey(key);
+            break;
+        case Screen::Search:
+            handleSearchKey(key);
+            break;
+        case Screen::Settings:
+            handleSettingsKey(key);
+            break;
+        case Screen::Diagnostics:
+            handleDiagnosticsKey(key);
+            break;
+        case Screen::Details:
+            handleDetailsKey(key);
+            break;
+        case Screen::Cast:
+            handleCastKey(key);
+            break;
+        case Screen::PersonItems:
+            handlePersonItemsKey(key);
+            break;
+        case Screen::ItemMenu:
+            handleItemMenuKey(key);
+            break;
+        case Screen::Seasons:
+            handleSeasonsKey(key);
+            break;
+        case Screen::Episodes:
+            handleEpisodesKey(key);
+            break;
+        case Screen::SeerrDrivePicker:
+            handleSeerrDrivePickerKey(key);
+            break;
+        case Screen::Player:
+            break;
         }
         return 1;
     }
@@ -927,18 +1013,15 @@ private:
         if (!env) return false;
         jobject activity = app_->activity->clazz;
         jclass activityClass = env->GetObjectClass(activity);
-        jmethodID method = activityClass
-            ? env->GetMethodID(
-                activityClass,
-                "showTextInput",
-                "(Ljava/lang/String;Ljava/lang/String;IZ)Z"
-            )
-            : nullptr;
+        jmethodID method = activityClass ? env->GetMethodID(activityClass, "showTextInput",
+                                                            "(Ljava/lang/String;Ljava/lang/String;IZ)Z")
+                                         : nullptr;
         jstring jInitial = env->NewStringUTF(initial.c_str());
         jstring jHint = env->NewStringUTF(hint.c_str());
         jboolean shown = JNI_FALSE;
         if (method && jInitial && jHint) {
-            shown = env->CallBooleanMethod(activity, method, jInitial, jHint, static_cast<jint>(mode), password ? JNI_TRUE : JNI_FALSE);
+            shown = env->CallBooleanMethod(activity, method, jInitial, jHint, static_cast<jint>(mode),
+                                           password ? JNI_TRUE : JNI_FALSE);
         }
         if (env->ExceptionCheck()) {
             env->ExceptionClear();
@@ -974,11 +1057,8 @@ private:
         const auto& rows = keyboardRows();
         if (dy != 0) {
             keyboardRow_ = std::clamp(keyboardRow_ + dy, 0, static_cast<int>(rows.size()) - 1);
-            keyboardCol_ = std::clamp(
-                keyboardCol_,
-                0,
-                static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size()) - 1
-            );
+            keyboardCol_ =
+                std::clamp(keyboardCol_, 0, static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size()) - 1);
         }
         if (dx != 0) {
             const int columns = static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size());
@@ -991,27 +1071,31 @@ private:
         const auto& key = rows[static_cast<size_t>(keyboardRow_)][static_cast<size_t>(keyboardCol_)];
         if (forSearch) {
             switch (key.action) {
-                case KeyAction::Insert:
-                    for (char value : key.value) searchState_.append(value);
-                    scheduleLiveSearch();
-                    break;
-                case KeyAction::Backspace:
-                    if (searchState_.backspace()) scheduleLiveSearch();
-                    break;
-                case KeyAction::Done:
-                    searchState_.setKeyboard(false);
-                    searchAsync();
-                    break;
+            case KeyAction::Insert:
+                for (char value : key.value) searchState_.append(value);
+                scheduleLiveSearch();
+                break;
+            case KeyAction::Backspace:
+                if (searchState_.backspace()) scheduleLiveSearch();
+                break;
+            case KeyAction::Done:
+                searchState_.setKeyboard(false);
+                searchAsync();
+                break;
             }
             return;
         }
         if (accountState_.loginFocus() < 0 || accountState_.loginFocus() >= 3) return;
         switch (key.action) {
-            case KeyAction::Insert:
-                for (char value : key.value) accountState_.appendToFocusedField(value);
-                break;
-            case KeyAction::Backspace: accountState_.backspaceFocusedField(); break;
-            case KeyAction::Done: accountState_.setKeyboardActive(false); break;
+        case KeyAction::Insert:
+            for (char value : key.value) accountState_.appendToFocusedField(value);
+            break;
+        case KeyAction::Backspace:
+            accountState_.backspaceFocusedField();
+            break;
+        case KeyAction::Done:
+            accountState_.setKeyboardActive(false);
+            break;
         }
     }
 
@@ -1027,16 +1111,23 @@ private:
             return;
         }
         if (key == AKEYCODE_BACK) {
-            if (accountState_.keyboardActive()) accountState_.setKeyboardActive(false);
-            else ANativeActivity_finish(app_->activity);
+            if (accountState_.keyboardActive())
+                accountState_.setKeyboardActive(false);
+            else
+                ANativeActivity_finish(app_->activity);
             return;
         }
         if (accountState_.keyboardActive()) {
-            if (key == AKEYCODE_DPAD_LEFT) moveKeyboard(-1, 0);
-            else if (key == AKEYCODE_DPAD_RIGHT) moveKeyboard(1, 0);
-            else if (key == AKEYCODE_DPAD_UP) moveKeyboard(0, -1);
-            else if (key == AKEYCODE_DPAD_DOWN) moveKeyboard(0, 1);
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) activateKeyboardKey(false);
+            if (key == AKEYCODE_DPAD_LEFT)
+                moveKeyboard(-1, 0);
+            else if (key == AKEYCODE_DPAD_RIGHT)
+                moveKeyboard(1, 0);
+            else if (key == AKEYCODE_DPAD_UP)
+                moveKeyboard(0, -1);
+            else if (key == AKEYCODE_DPAD_DOWN)
+                moveKeyboard(0, 1);
+            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+                activateKeyboardKey(false);
             return;
         }
 
@@ -1050,15 +1141,11 @@ private:
             const int focus = accountState_.loginFocus();
             if (focus < AccountScreenState::kLoginAction) {
                 const int mode = kTextInputLoginServer + focus;
-                static constexpr std::array<const char*, 3> hints{
-                    "Jellyfin server URL", "Jellyfin username", "Jellyfin password"
-                };
-                accountState_.setKeyboardActive(!showSystemTextInput(
-                    accountState_.field(focus),
-                    hints[static_cast<size_t>(focus)],
-                    mode,
-                    focus == AccountScreenState::kPasswordField
-                ));
+                static constexpr std::array<const char*, 3> hints{"Jellyfin server URL", "Jellyfin username",
+                                                                  "Jellyfin password"};
+                accountState_.setKeyboardActive(!showSystemTextInput(accountState_.field(focus),
+                                                                     hints[static_cast<size_t>(focus)], mode,
+                                                                     focus == AccountScreenState::kPasswordField));
                 if (accountState_.keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
             } else if (focus == AccountScreenState::kLoginAction) {
                 loginAsync();
@@ -1088,15 +1175,15 @@ private:
             if (accountState_.profileSelection() == addIndex) {
                 startAddAccount();
             } else if (accountState_.profileSelection() >= 0 && accountState_.profileSelection() < addIndex) {
-                if (accountState_.profileAction() == 0) switchSavedSession(static_cast<size_t>(accountState_.profileSelection()));
-                else forgetSavedSession(static_cast<size_t>(accountState_.profileSelection()));
+                if (accountState_.profileAction() == 0)
+                    switchSavedSession(static_cast<size_t>(accountState_.profileSelection()));
+                else
+                    forgetSavedSession(static_cast<size_t>(accountState_.profileSelection()));
             }
         }
     }
 
-    bool isItemContextKey(int32_t key) const {
-        return key == AKEYCODE_MENU || key == AKEYCODE_INFO;
-    }
+    bool isItemContextKey(int32_t key) const { return key == AKEYCODE_MENU || key == AKEYCODE_INFO; }
 
     bool supportsItemContextMenu(const JellyfinItem& item) const {
         return item.type == "Movie" || item.type == "Series" || item.type == "Episode" || item.type == "BoxSet";
@@ -1120,9 +1207,7 @@ private:
         });
     }
 
-    int homeVisibleItemCount(const JellyfinHomeRow& row) const {
-        return row.title == "My Media" ? 4 : 5;
-    }
+    int homeVisibleItemCount(const JellyfinHomeRow& row) const { return row.title == "My Media" ? 4 : 5; }
 
     void beginHomeRowSlide(int fromFirst, int toFirst) {
         if (fromFirst == toFirst) return;
@@ -1143,13 +1228,19 @@ private:
             return;
         }
         if (homeState_.row() < 0) {
-            if (key == AKEYCODE_DPAD_LEFT) homeState_.moveToolbar(-1);
-            else if (key == AKEYCODE_DPAD_RIGHT) homeState_.moveToolbar(1);
-            else if (key == AKEYCODE_DPAD_DOWN && !home_.rows.empty()) homeState_.setRow(0);
+            if (key == AKEYCODE_DPAD_LEFT)
+                homeState_.moveToolbar(-1);
+            else if (key == AKEYCODE_DPAD_RIGHT)
+                homeState_.moveToolbar(1);
+            else if (key == AKEYCODE_DPAD_DOWN && !home_.rows.empty())
+                homeState_.setRow(0);
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (homeState_.navIndex() == 0) openProfiles();
-                else if (homeState_.navIndex() == 2) openSearch();
-                else if (homeState_.navIndex() == 3) openSettings();
+                if (homeState_.navIndex() == 0)
+                    openProfiles();
+                else if (homeState_.navIndex() == 2)
+                    openSearch();
+                else if (homeState_.navIndex() == 3)
+                    openSettings();
             }
             homeState_.updateViewport(static_cast<int>(home_.rows.size()));
             return;
@@ -1179,26 +1270,27 @@ private:
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             const auto& selected = items[static_cast<size_t>(selection)];
-            if (section.title == "My Media") openLibrary(selected);
+            if (section.title == "My Media")
+                openLibrary(selected);
             else if (isSeerrItem(selected) && !selected.externalJellyfinId.empty()) {
                 JellyfinItem available = selected;
                 available.id = selected.externalJellyfinId;
                 available.externalSource.clear();
                 openDetails(available);
-            } else if (isSeerrItem(selected)) openItemMenuForItem(selected);
-            else openDetails(selected);
+            } else if (isSeerrItem(selected))
+                openItemMenuForItem(selected);
+            else
+                openDetails(selected);
             return;
         }
         homeState_.updateViewport(static_cast<int>(home_.rows.size()));
         beginHomeRowSlide(previousFirstVisibleRow, homeState_.firstVisibleRow());
         if (homeState_.row() >= 0 && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
             const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-            homeState_.updateItemViewport(
-                homeState_.row(),
-                static_cast<int>(row.items.size()),
-                homeVisibleItemCount(row)
-            );
-            prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+            homeState_.updateItemViewport(homeState_.row(), static_cast<int>(row.items.size()),
+                                          homeVisibleItemCount(row));
+            prefetchHomeWindow(homeState_.row(),
+                               homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
         }
     }
 
@@ -1229,9 +1321,12 @@ private:
         }
 
         if (browseState_.filterFocused() && browseState_.hasFilterBar()) {
-            if (key == AKEYCODE_DPAD_LEFT) browseState_.moveFilter(-1);
-            else if (key == AKEYCODE_DPAD_RIGHT) browseState_.moveFilter(1);
-            else if (key == AKEYCODE_DPAD_DOWN) browseState_.setFilterFocused(false);
+            if (key == AKEYCODE_DPAD_LEFT)
+                browseState_.moveFilter(-1);
+            else if (key == AKEYCODE_DPAD_RIGHT)
+                browseState_.moveFilter(1);
+            else if (key == AKEYCODE_DPAD_DOWN)
+                browseState_.setFilterFocused(false);
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
                 browseState_.setFilterFocused(false);
                 applyBrowseFilter(browseState_.filterSelection());
@@ -1239,7 +1334,8 @@ private:
             return;
         }
 
-        if (key == AKEYCODE_DPAD_UP && browseState_.hasFilterBar() && isTopMediaGridSelection(browseState_.selection())) {
+        if (key == AKEYCODE_DPAD_UP && browseState_.hasFilterBar() &&
+            isTopMediaGridSelection(browseState_.selection())) {
             browseState_.setFilterFocused(true);
             return;
         }
@@ -1269,8 +1365,7 @@ private:
         moveGridSelection(key, items, selection);
         browseState_.setSelection(selection);
         prefetchBrowseArtworkAhead();
-        if (browseState_.hasMore() && !loading_
-            && browseState_.selection() >= static_cast<int>(items.size()) - 12) {
+        if (browseState_.hasMore() && !loading_ && browseState_.selection() >= static_cast<int>(items.size()) - 12) {
             loadMoreBrowseAsync();
         }
     }
@@ -1297,19 +1392,25 @@ private:
             if (key == AKEYCODE_ENTER) {
                 searchState_.setKeyboard(false);
                 searchAsync();
-            } else if (key == AKEYCODE_DPAD_LEFT) moveKeyboard(-1, 0);
-            else if (key == AKEYCODE_DPAD_RIGHT) moveKeyboard(1, 0);
-            else if (key == AKEYCODE_DPAD_UP) moveKeyboard(0, -1);
-            else if (key == AKEYCODE_DPAD_DOWN) moveKeyboard(0, 1);
-            else if (key == AKEYCODE_DPAD_CENTER) activateKeyboardKey(true);
+            } else if (key == AKEYCODE_DPAD_LEFT)
+                moveKeyboard(-1, 0);
+            else if (key == AKEYCODE_DPAD_RIGHT)
+                moveKeyboard(1, 0);
+            else if (key == AKEYCODE_DPAD_UP)
+                moveKeyboard(0, -1);
+            else if (key == AKEYCODE_DPAD_DOWN)
+                moveKeyboard(0, 1);
+            else if (key == AKEYCODE_DPAD_CENTER)
+                activateKeyboardKey(true);
             return;
         }
 
         const auto& results = searchState_.results();
-        if (key == AKEYCODE_SEARCH
-            || (key == AKEYCODE_DPAD_UP && (results.empty() || searchState_.selectionOnFirstResultRow()))
-            || ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && results.empty())) {
-            searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
+        if (key == AKEYCODE_SEARCH ||
+            (key == AKEYCODE_DPAD_UP && (results.empty() || searchState_.selectionOnFirstResultRow())) ||
+            ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && results.empty())) {
+            searchState_.setKeyboard(
+                !showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
             if (searchState_.keyboard()) keyboardRow_ = keyboardCol_ = 0;
             return;
         }
@@ -1321,15 +1422,21 @@ private:
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const auto selected = results[static_cast<size_t>(searchState_.selection())];
-            if (isSeerrItem(selected)) requestSeerrItemAsync(selected);
-            else openDetails(selected);
+            if (isSeerrItem(selected))
+                requestSeerrItemAsync(selected);
+            else
+                openDetails(selected);
             return;
         }
         constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT) searchState_.moveSelection(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT) searchState_.moveSelection(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP) searchState_.moveSelection(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN) searchState_.moveSelection(0, 1, columns);
+        if (key == AKEYCODE_DPAD_LEFT)
+            searchState_.moveSelection(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            searchState_.moveSelection(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP)
+            searchState_.moveSelection(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN)
+            searchState_.moveSelection(0, 1, columns);
     }
 
     std::vector<std::string> detailActions() const {
@@ -1339,25 +1446,28 @@ private:
     void refreshExternalPlayers() {
         externalPlayers_ = externalPlayer_.availablePlayers();
         if (settings_.externalPlayerComponent.empty()) return;
-        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-            return player.componentName == settings_.externalPlayerComponent;
-        });
+        const auto selected =
+            std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+                return player.componentName == settings_.externalPlayerComponent;
+            });
         if (selected == externalPlayers_.end()) settings_.externalPlayerComponent.clear();
     }
 
     std::string externalPlayerLabel() const {
         if (settings_.externalPlayerComponent.empty()) return "INTERNAL";
-        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-            return player.componentName == settings_.externalPlayerComponent;
-        });
+        const auto selected =
+            std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+                return player.componentName == settings_.externalPlayerComponent;
+            });
         return selected == externalPlayers_.end() ? "INTERNAL" : selected->label;
     }
 
     std::optional<ExternalPlayerApp> selectedExternalPlayer() const {
         if (settings_.externalPlayerComponent.empty()) return std::nullopt;
-        const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-            return player.componentName == settings_.externalPlayerComponent;
-        });
+        const auto selected =
+            std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+                return player.componentName == settings_.externalPlayerComponent;
+            });
         if (selected == externalPlayers_.end()) return std::nullopt;
         return *selected;
     }
@@ -1369,15 +1479,16 @@ private:
         }
         int index = 0;
         if (!settings_.externalPlayerComponent.empty()) {
-            const auto selected = std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-                return player.componentName == settings_.externalPlayerComponent;
-            });
-            if (selected != externalPlayers_.end()) index = static_cast<int>(std::distance(externalPlayers_.begin(), selected)) + 1;
+            const auto selected =
+                std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
+                    return player.componentName == settings_.externalPlayerComponent;
+                });
+            if (selected != externalPlayers_.end())
+                index = static_cast<int>(std::distance(externalPlayers_.begin(), selected)) + 1;
         }
         index = std::clamp(index + direction, 0, static_cast<int>(externalPlayers_.size()));
-        settings_.externalPlayerComponent = index == 0
-            ? std::string{}
-            : externalPlayers_[static_cast<size_t>(index - 1)].componentName;
+        settings_.externalPlayerComponent =
+            index == 0 ? std::string{} : externalPlayers_[static_cast<size_t>(index - 1)].componentName;
     }
 
     void toggleSubtitleLanguageSetting() {
@@ -1389,9 +1500,7 @@ private:
         }
         const std::string code = kSubtitleLanguageOptions[static_cast<size_t>(selection - 1)].code;
         auto current = std::find(settings_.subtitleLanguages.begin(), settings_.subtitleLanguages.end(), code);
-        if (settings_.subtitleLanguages.empty()) {
-            settings_.subtitleLanguages.push_back(code);
-        } else if (current == settings_.subtitleLanguages.end()) {
+        if (settings_.subtitleLanguages.empty() || current == settings_.subtitleLanguages.end()) {
             settings_.subtitleLanguages.push_back(code);
         } else {
             settings_.subtitleLanguages.erase(current);
@@ -1401,10 +1510,14 @@ private:
 
     void handleSettingsKey(int32_t key) {
         if (settingsScreen_.subtitleLanguagePicker()) {
-            if (key == AKEYCODE_BACK) settingsScreen_.closeSubtitleLanguagePicker();
-            else if (key == AKEYCODE_DPAD_UP) settingsScreen_.moveSubtitleLanguage(-1);
-            else if (key == AKEYCODE_DPAD_DOWN) settingsScreen_.moveSubtitleLanguage(1);
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) toggleSubtitleLanguageSetting();
+            if (key == AKEYCODE_BACK)
+                settingsScreen_.closeSubtitleLanguagePicker();
+            else if (key == AKEYCODE_DPAD_UP)
+                settingsScreen_.moveSubtitleLanguage(-1);
+            else if (key == AKEYCODE_DPAD_DOWN)
+                settingsScreen_.moveSubtitleLanguage(1);
+            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+                toggleSubtitleLanguageSetting();
             return;
         }
         if (key == AKEYCODE_BACK) {
@@ -1440,7 +1553,8 @@ private:
             const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
             const SettingChangeEffect effects = adjustSetting(settings_, selection, direction);
             if (effects == SettingChangeEffect::None) return;
-            if (selection == SettingId::DefaultVideoZoom) playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
+            if (selection == SettingId::DefaultVideoZoom)
+                playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
             if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
             if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {
                 lastInteraction_ = std::chrono::steady_clock::now();
@@ -1452,34 +1566,34 @@ private:
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             switch (settingActivation(settingsScreen_.selection())) {
-                case SettingActivation::None:
-                    break;
-                case SettingActivation::OpenDiagnostics:
-                    openDiagnostics();
-                    break;
-                case SettingActivation::SwitchUser:
-                    openProfiles();
-                    break;
-                case SettingActivation::OpenSubtitleLanguages:
-                    settingsScreen_.openSubtitleLanguagePicker();
-                    break;
-                case SettingActivation::EditSeerrServer:
-                    showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
-                    break;
-                case SettingActivation::ConnectSeerr:
-                    connectSeerrAsync();
-                    break;
-                case SettingActivation::ToggleSeerrDriveSelection:
-                    settings_.seerrSelectDrive = !settings_.seerrSelectDrive;
-                    saveSession(session_);
-                    if (settings_.seerrSelectDrive) refreshSeerrStorageAsync(true);
-                    break;
-                case SettingActivation::EditSeerrApiKey:
-                    showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
-                    break;
-                case SettingActivation::ToggleAdvanced:
-                    settingsScreen_.toggleAdvanced();
-                    break;
+            case SettingActivation::None:
+                break;
+            case SettingActivation::OpenDiagnostics:
+                openDiagnostics();
+                break;
+            case SettingActivation::SwitchUser:
+                openProfiles();
+                break;
+            case SettingActivation::OpenSubtitleLanguages:
+                settingsScreen_.openSubtitleLanguagePicker();
+                break;
+            case SettingActivation::EditSeerrServer:
+                showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
+                break;
+            case SettingActivation::ConnectSeerr:
+                connectSeerrAsync();
+                break;
+            case SettingActivation::ToggleSeerrDriveSelection:
+                settings_.seerrSelectDrive = !settings_.seerrSelectDrive;
+                saveSession(session_);
+                if (settings_.seerrSelectDrive) refreshSeerrStorageAsync(true);
+                break;
+            case SettingActivation::EditSeerrApiKey:
+                showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
+                break;
+            case SettingActivation::ToggleAdvanced:
+                settingsScreen_.toggleAdvanced();
+                break;
             }
         }
     }
@@ -1546,13 +1660,20 @@ private:
             detailsState_.setSimilarFocused(true);
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const std::string& action = actions[static_cast<size_t>(detailsState_.actionSelection())];
-            if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING") beginPlayback();
-            else if (action == "EPISODES") openSeasons();
-            else if (action == "PLAY ALL") beginSeriesPlayAll();
-            else if (action == "FAVORITE" || action == "UNFAVORITE") toggleFavoriteAsync();
-            else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") togglePlayedAsync();
-            else if (action == "CAST") openCast();
-            else if (action == "MORE") openItemMenu();
+            if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING")
+                beginPlayback();
+            else if (action == "EPISODES")
+                openSeasons();
+            else if (action == "PLAY ALL")
+                beginSeriesPlayAll();
+            else if (action == "FAVORITE" || action == "UNFAVORITE")
+                toggleFavoriteAsync();
+            else if (action == "MARK WATCHED" || action == "MARK UNWATCHED")
+                togglePlayedAsync();
+            else if (action == "CAST")
+                openCast();
+            else if (action == "MORE")
+                openItemMenu();
             else if (action == "BACK") {
                 playbackCoordinator_.resetContinuationPrompt();
                 popScreen(Screen::Home);
@@ -1577,10 +1698,14 @@ private:
             return;
         }
         constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT) detailsState_.moveCastSelection(detail_.people, -1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.moveCastSelection(detail_.people, 1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP) detailsState_.moveCastSelection(detail_.people, 0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveCastSelection(detail_.people, 0, 1, columns);
+        if (key == AKEYCODE_DPAD_LEFT)
+            detailsState_.moveCastSelection(detail_.people, -1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            detailsState_.moveCastSelection(detail_.people, 1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP)
+            detailsState_.moveCastSelection(detail_.people, 0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN)
+            detailsState_.moveCastSelection(detail_.people, 0, 1, columns);
     }
 
     void openPersonItems(const JellyfinPerson& person) {
@@ -1621,20 +1746,20 @@ private:
             return;
         }
         constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT) detailsState_.movePersonItem(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.movePersonItem(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP) detailsState_.movePersonItem(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.movePersonItem(0, 1, columns);
+        if (key == AKEYCODE_DPAD_LEFT)
+            detailsState_.movePersonItem(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            detailsState_.movePersonItem(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP)
+            detailsState_.movePersonItem(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN)
+            detailsState_.movePersonItem(0, 1, columns);
     }
 
     std::vector<std::string> itemMenuActions() const {
         if (isSeerrItem(detail_)) return {"DELETE REQUEST", "BACK"};
-        return detailsState_.itemMenuActions(
-            detail_,
-            selectedExternalPlayer().has_value(),
-            !queueState_.empty(),
-            isHiddenFromHome(detail_)
-        );
+        return detailsState_.itemMenuActions(detail_, selectedExternalPlayer().has_value(), !queueState_.empty(),
+                                             isHiddenFromHome(detail_));
     }
 
     void openItemMenu() {
@@ -1646,25 +1771,34 @@ private:
 
     void handleItemMenuKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
-            if (detailsState_.deleteConfirmation()) detailsState_.setDeleteConfirmation(false);
-            else popScreen(Screen::Details);
+            if (detailsState_.deleteConfirmation())
+                detailsState_.setDeleteConfirmation(false);
+            else
+                popScreen(Screen::Details);
             return;
         }
         if (detailsState_.deleteConfirmation()) {
-            if (key == AKEYCODE_DPAD_UP || key == AKEYCODE_DPAD_LEFT) detailsState_.setDeleteConfirmationSelection(0);
-            else if (key == AKEYCODE_DPAD_DOWN || key == AKEYCODE_DPAD_RIGHT) detailsState_.setDeleteConfirmationSelection(1);
+            if (key == AKEYCODE_DPAD_UP || key == AKEYCODE_DPAD_LEFT)
+                detailsState_.setDeleteConfirmationSelection(0);
+            else if (key == AKEYCODE_DPAD_DOWN || key == AKEYCODE_DPAD_RIGHT)
+                detailsState_.setDeleteConfirmationSelection(1);
             else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
                 if (detailsState_.deleteConfirmationSelection() == 0) {
-                    if (isSeerrItem(detail_)) deleteSeerrRequestAsync();
-                    else deleteCurrentItemAsync();
-                } else detailsState_.setDeleteConfirmation(false);
+                    if (isSeerrItem(detail_))
+                        deleteSeerrRequestAsync();
+                    else
+                        deleteCurrentItemAsync();
+                } else
+                    detailsState_.setDeleteConfirmation(false);
             }
             return;
         }
 
         const auto actions = itemMenuActions();
-        if (key == AKEYCODE_DPAD_UP) detailsState_.moveItemMenu(-1, static_cast<int>(actions.size()));
-        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveItemMenu(1, static_cast<int>(actions.size()));
+        if (key == AKEYCODE_DPAD_UP)
+            detailsState_.moveItemMenu(-1, static_cast<int>(actions.size()));
+        else if (key == AKEYCODE_DPAD_DOWN)
+            detailsState_.moveItemMenu(1, static_cast<int>(actions.size()));
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const std::string& action = actions[static_cast<size_t>(detailsState_.itemMenuSelection())];
             if (action == "PLAY ALL") {
@@ -1690,8 +1824,7 @@ private:
             } else if (action == "REFRESH METADATA") {
                 popScreen(Screen::Details);
                 refreshCurrentItemMetadataAsync();
-            }
-            else if (action == "DELETE MEDIA" || action == "DELETE REQUEST") {
+            } else if (action == "DELETE MEDIA" || action == "DELETE REQUEST") {
                 detailsState_.setDeleteConfirmation(true);
             } else {
                 popScreen(Screen::Details);
@@ -1714,73 +1847,68 @@ private:
         const auto subtitlePreference = trackState_.subtitleLanguagePreference();
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
-        if (!tasks_.submit([this, session, selected, player = *player, subtitlePreference, trackPolicy, generation]() mutable {
-            JellyfinItem playable = selected;
-            if (playable.type == "Series") {
-                auto next = api_.getNextUpForSeries(session, playable.id);
-                if (!next.ok) {
-                    if (!requestEpochs_.playback.active(generation)) return;
-                    std::scoped_lock lock(stateMutex_);
-                    loading_ = false;
-                    if (screen_ != Screen::Details || detail_.id != selected.id) return;
-                    error_ = "EXTERNAL PLAYER: " + next.error;
+        if (!tasks_.submit([this, session, selected, player = *player, subtitlePreference, trackPolicy,
+                            generation]() mutable {
+                JellyfinItem playable = selected;
+                if (playable.type == "Series") {
+                    auto next = api_.getNextUpForSeries(session, playable.id);
+                    if (!next.ok) {
+                        if (!requestEpochs_.playback.active(generation)) return;
+                        std::scoped_lock lock(stateMutex_);
+                        loading_ = false;
+                        if (screen_ != Screen::Details || detail_.id != selected.id) return;
+                        error_ = "EXTERNAL PLAYER: " + next.error;
+                        return;
+                    }
+                    playable = std::move(next.value);
+                }
+                auto detailed = api_.getItem(session, playable.id);
+                if (detailed.ok) playable = std::move(detailed.value);
+
+                std::string skipSegmentsJson;
+                if (player.packageName == "app.mpvnova.player") {
+                    auto segments = api_.getMediaSegments(session, playable.id);
+                    if (segments.ok) {
+                        skipSegmentsJson = externalSkipSegmentsJson(segments.value);
+                    } else {
+                        __android_log_print(ANDROID_LOG_WARN, kTag, "External playback media segments unavailable: %s",
+                                            segments.error.c_str());
+                    }
+                }
+
+                const std::string videoUrl = api_.staticVideoUrl(session, playable);
+                std::string subtitleUrl;
+                const auto tracks = selectPlaybackTracks(playable, std::nullopt, subtitlePreference, trackPolicy);
+                const int subtitleIndex = tracks.subtitleStreamIndex;
+                if (subtitleIndex >= 0) {
+                    const auto subtitle = std::find_if(
+                        playable.subtitles.begin(), playable.subtitles.end(),
+                        [&](const JellyfinSubtitleStream& candidate) { return candidate.index == subtitleIndex; });
+                    if (subtitle != playable.subtitles.end()) {
+                        // External players cannot reliably address Jellyfin's embedded stream index.
+                        // Hand them Jellyfin's SRT delivery URL for the selected stream instead.
+                        subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
+                    }
+                }
+
+                if (!requestEpochs_.playback.active(generation)) return;
+                std::scoped_lock lock(stateMutex_);
+                loading_ = false;
+                if (screen_ != Screen::Details || detail_.id != selected.id) return;
+                if (videoUrl.empty()) {
+                    error_ = "EXTERNAL PLAYER: NO STATIC STREAM";
                     return;
                 }
-                playable = std::move(next.value);
-            }
-            auto detailed = api_.getItem(session, playable.id);
-            if (detailed.ok) playable = std::move(detailed.value);
-
-            std::string skipSegmentsJson;
-            if (player.packageName == "app.mpvnova.player") {
-                auto segments = api_.getMediaSegments(session, playable.id);
-                if (segments.ok) {
-                    skipSegmentsJson = externalSkipSegmentsJson(segments.value);
-                } else {
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "External playback media segments unavailable: %s", segments.error.c_str());
-                }
-            }
-
-            const std::string videoUrl = api_.staticVideoUrl(session, playable);
-            std::string subtitleUrl;
-            const auto tracks = selectPlaybackTracks(
-                playable,
-                std::nullopt,
-                subtitlePreference,
-                trackPolicy
-            );
-            const int subtitleIndex = tracks.subtitleStreamIndex;
-            if (subtitleIndex >= 0) {
-                const auto subtitle = std::find_if(
-                    playable.subtitles.begin(),
-                    playable.subtitles.end(),
-                    [&](const JellyfinSubtitleStream& candidate) { return candidate.index == subtitleIndex; }
-                );
-                if (subtitle != playable.subtitles.end()) {
-                    // External players cannot reliably address Jellyfin's embedded stream index.
-                    // Hand them Jellyfin's SRT delivery URL for the selected stream instead.
-                    subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
-                }
-            }
-
-            if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::Details || detail_.id != selected.id) return;
-            if (videoUrl.empty()) {
-                error_ = "EXTERNAL PLAYER: NO STATIC STREAM";
-                return;
-            }
-            restoreHomeVisibilityForPlayback(selected);
-            restoreHomeVisibilityForPlayback(playable);
-            externalPlaybackState_.stage(ExternalPlaybackLaunch{
-                .item = std::move(playable),
-                .player = std::move(player),
-                .url = videoUrl,
-                .subtitleUrl = std::move(subtitleUrl),
-                .skipSegmentsJson = std::move(skipSegmentsJson),
-            });
-        })) {
+                restoreHomeVisibilityForPlayback(selected);
+                restoreHomeVisibilityForPlayback(playable);
+                externalPlaybackState_.stage(ExternalPlaybackLaunch{
+                    .item = std::move(playable),
+                    .player = std::move(player),
+                    .url = videoUrl,
+                    .subtitleUrl = std::move(subtitleUrl),
+                    .skipSegmentsJson = std::move(skipSegmentsJson),
+                });
+            })) {
             loading_ = false;
             error_ = "EXTERNAL PLAYER COULD NOT BE STARTED";
         }
@@ -1789,11 +1917,16 @@ private:
     void moveGridSelectionByCount(int32_t key, int itemCount, int& selection) {
         int dx = 0;
         int dy = 0;
-        if (key == AKEYCODE_DPAD_LEFT) dx = -1;
-        else if (key == AKEYCODE_DPAD_RIGHT) dx = 1;
-        else if (key == AKEYCODE_DPAD_UP) dy = -1;
-        else if (key == AKEYCODE_DPAD_DOWN) dy = 1;
-        else return;
+        if (key == AKEYCODE_DPAD_LEFT)
+            dx = -1;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            dx = 1;
+        else if (key == AKEYCODE_DPAD_UP)
+            dy = -1;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            dy = 1;
+        else
+            return;
         selection = gridSelectionAfterMove(selection, itemCount, dx, dy, mediaGridColumns());
     }
 
@@ -1813,10 +1946,14 @@ private:
             return;
         }
         constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT) detailsState_.moveSeason(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.moveSeason(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP) detailsState_.moveSeason(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveSeason(0, 1, columns);
+        if (key == AKEYCODE_DPAD_LEFT)
+            detailsState_.moveSeason(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            detailsState_.moveSeason(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP)
+            detailsState_.moveSeason(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN)
+            detailsState_.moveSeason(0, 1, columns);
     }
 
     void handleEpisodesKey(int32_t key) {
@@ -1834,19 +1971,20 @@ private:
             return;
         }
         constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT) detailsState_.moveEpisode(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT) detailsState_.moveEpisode(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP) detailsState_.moveEpisode(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN) detailsState_.moveEpisode(0, 1, columns);
+        if (key == AKEYCODE_DPAD_LEFT)
+            detailsState_.moveEpisode(-1, 0, columns);
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            detailsState_.moveEpisode(1, 0, columns);
+        else if (key == AKEYCODE_DPAD_UP)
+            detailsState_.moveEpisode(0, -1, columns);
+        else if (key == AKEYCODE_DPAD_DOWN)
+            detailsState_.moveEpisode(0, 1, columns);
     }
 
     void refreshPlaybackTelemetry(bool force = false) {
         const auto now = std::chrono::steady_clock::now();
-        const PlaybackTelemetryReadPlan plan = playbackCoordinator_.consumeTelemetryRead(
-            now,
-            force,
-            playerScreenState_.durationMs()
-        );
+        const PlaybackTelemetryReadPlan plan =
+            playbackCoordinator_.consumeTelemetryRead(now, force, playerScreenState_.durationMs());
         if (!plan.read) return;
         playerScreenState_.applyObservedPosition(player_.positionMs(), now);
         if (plan.knownDurationMs > 0) {
@@ -1859,54 +1997,58 @@ private:
 
     std::string playerTrackLabel(int type) const {
         if (type == 2 && !playbackSessionState_.activeItem().audios.empty()) {
-            const auto selected = std::find_if(
-                playbackSessionState_.activeItem().audios.begin(),
-                playbackSessionState_.activeItem().audios.end(),
-                [&](const JellyfinAudioStream& audio) { return audio.index == trackState_.selectedAudioServerIndex(); }
-            );
+            const auto selected =
+                std::find_if(playbackSessionState_.activeItem().audios.begin(),
+                             playbackSessionState_.activeItem().audios.end(), [&](const JellyfinAudioStream& audio) {
+                                 return audio.index == trackState_.selectedAudioServerIndex();
+                             });
             const auto& audio = selected == playbackSessionState_.activeItem().audios.end()
-                ? playbackSessionState_.activeItem().audios.front()
-                : *selected;
+                                    ? playbackSessionState_.activeItem().audios.front()
+                                    : *selected;
             std::string label = audio.language.empty() ? "AUDIO" : audio.language;
-            std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-                return static_cast<char>(std::toupper(c));
-            });
+            std::transform(label.begin(), label.end(), label.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
             if (playbackSessionState_.activeItem().audios.size() > 1) {
-                label += " " + std::to_string(std::distance(playbackSessionState_.activeItem().audios.begin(),
-                    selected == playbackSessionState_.activeItem().audios.end() ? playbackSessionState_.activeItem().audios.begin() : selected) + 1)
-                    + "/" + std::to_string(playbackSessionState_.activeItem().audios.size());
+                label += " " +
+                         std::to_string(std::distance(playbackSessionState_.activeItem().audios.begin(),
+                                                      selected == playbackSessionState_.activeItem().audios.end()
+                                                          ? playbackSessionState_.activeItem().audios.begin()
+                                                          : selected) +
+                                        1) +
+                         "/" + std::to_string(playbackSessionState_.activeItem().audios.size());
             }
             return label;
         }
         if (type == 4 && trackState_.subtitleBusy()) return "LOADING";
         if (type == 4 && trackState_.selectedSubtitleServerIndex() >= 0) {
-            const auto selected = std::find_if(
-                playbackSessionState_.activeItem().subtitles.begin(),
-                playbackSessionState_.activeItem().subtitles.end(),
-                [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == trackState_.selectedSubtitleServerIndex(); }
-            );
+            const auto selected = std::find_if(playbackSessionState_.activeItem().subtitles.begin(),
+                                               playbackSessionState_.activeItem().subtitles.end(),
+                                               [&](const JellyfinSubtitleStream& subtitle) {
+                                                   return subtitle.index == trackState_.selectedSubtitleServerIndex();
+                                               });
             if (selected != playbackSessionState_.activeItem().subtitles.end()) {
                 std::string label = selected->language.empty() ? "ON" : selected->language;
-                std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-                    return static_cast<char>(std::toupper(c));
-                });
+                std::transform(label.begin(), label.end(), label.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
                 return label;
             }
         }
         if (type == 4 && !trackState_.subtitleCues().empty()) {
             if (!trackState_.subtitleEnabled()) return "OFF";
             std::string label = trackState_.subtitleLanguage().empty() ? "ON" : trackState_.subtitleLanguage();
-            std::transform(label.begin(), label.end(), label.begin(), [](unsigned char c) {
-                return static_cast<char>(std::toupper(c));
-            });
-            const auto subtitle = std::find_if(
-                playbackSessionState_.activeItem().subtitles.begin(),
-                playbackSessionState_.activeItem().subtitles.end(),
-                [&](const JellyfinSubtitleStream& candidate) { return candidate.index == trackState_.activeSubtitleServerIndex(); }
-            );
-            if (subtitle != playbackSessionState_.activeItem().subtitles.end() && playbackSessionState_.activeItem().subtitles.size() > 1) {
-                label += " " + std::to_string(std::distance(playbackSessionState_.activeItem().subtitles.begin(), subtitle) + 1)
-                    + "/" + std::to_string(playbackSessionState_.activeItem().subtitles.size());
+            std::transform(label.begin(), label.end(), label.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+            const auto subtitle = std::find_if(playbackSessionState_.activeItem().subtitles.begin(),
+                                               playbackSessionState_.activeItem().subtitles.end(),
+                                               [&](const JellyfinSubtitleStream& candidate) {
+                                                   return candidate.index == trackState_.activeSubtitleServerIndex();
+                                               });
+            if (subtitle != playbackSessionState_.activeItem().subtitles.end() &&
+                playbackSessionState_.activeItem().subtitles.size() > 1) {
+                label +=
+                    " " +
+                    std::to_string(std::distance(playbackSessionState_.activeItem().subtitles.begin(), subtitle) + 1) +
+                    "/" + std::to_string(playbackSessionState_.activeItem().subtitles.size());
             }
             return label;
         }
@@ -1915,12 +2057,9 @@ private:
 
     void cycleAudioTrack() {
         const PlaybackAudioCyclePlan plan = planPlaybackAudioTrackCycle(
-            playbackSessionState_.activeItem(),
-            trackState_.selectedAudioServerIndex(),
-            trackState_.selectedSubtitleServerIndex(),
-            playbackSessionState_.activeTarget().playMethod,
-            playbackTrackSelectionPolicy()
-        );
+            playbackSessionState_.activeItem(), trackState_.selectedAudioServerIndex(),
+            trackState_.selectedSubtitleServerIndex(), playbackSessionState_.activeTarget().playMethod,
+            playbackTrackSelectionPolicy());
         if (!plan.available) {
             error_ = "ONLY ONE AUDIO TRACK";
             return;
@@ -1929,8 +2068,7 @@ private:
         playbackCoordinator_.rememberAudioLanguagePreference(plan.audioStreamIndex);
         refreshPlaybackTelemetry(true);
         const int switchPositionMs = playerScreenState_.positionMs();
-        if (plan.tryEmbeddedSwitch
-            && player_.selectEmbeddedAudioStream(plan.audioStreamIndex, plan.audioOrdinal)) {
+        if (plan.tryEmbeddedSwitch && player_.selectEmbeddedAudioStream(plan.audioStreamIndex, plan.audioOrdinal)) {
             playbackCoordinator_.selectAudioStream(plan.audioStreamIndex);
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
@@ -1963,141 +2101,128 @@ private:
         std::vector<JellyfinSubtitleStream> candidates;
         candidates.push_back(subtitle);
         const std::string requestedLanguage = normalizeSubtitleLanguage(subtitle.language);
-        const auto requested = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& candidate) {
-            return candidate.index == requestedSubtitleIndex;
-        });
+        const auto requested =
+            std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& candidate) {
+                return candidate.index == requestedSubtitleIndex;
+            });
         if (requested != item.subtitles.end()) {
             for (auto candidate = std::next(requested); candidate != item.subtitles.end(); ++candidate) {
-                if (!subtitleAllowed(*candidate)
-                    || !useNativeSubtitleRenderer(subtitleStrategy(candidate->codec), true)) {
+                if (!subtitleAllowed(*candidate) ||
+                    !useNativeSubtitleRenderer(subtitleStrategy(candidate->codec), true)) {
                     continue;
                 }
-                if (!requestedLanguage.empty()
-                    && normalizeSubtitleLanguage(candidate->language) != requestedLanguage) {
+                if (!requestedLanguage.empty() && normalizeSubtitleLanguage(candidate->language) != requestedLanguage) {
                     continue;
                 }
                 candidates.push_back(*candidate);
             }
         }
 
-        if (!tasks_.submit([this, session, item, candidates = std::move(candidates), deliveryUrl, dataPath, generation, requestedSubtitleIndex] {
-            JellyfinSubtitleStream loadedSubtitle;
-            std::vector<SubtitleCue> loadedCues;
+        if (!tasks_.submit([this, session, item, candidates = std::move(candidates), deliveryUrl, dataPath, generation,
+                            requestedSubtitleIndex] {
+                JellyfinSubtitleStream loadedSubtitle;
+                std::vector<SubtitleCue> loadedCues;
 
-            for (size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex) {
-                const JellyfinSubtitleStream& candidate = candidates[candidateIndex];
-                std::string subtitleBody;
-                std::filesystem::path cacheFile;
-                bool fromCache = false;
-                if (!dataPath.empty()) {
-                    const std::filesystem::path directory = std::filesystem::path(dataPath) / "subtitles";
-                    const std::string format = subtitleTextFormat(candidate.codec);
-                    cacheFile = directory / (item.id + "-" + std::to_string(candidate.index) + "." + (format.empty() ? "txt" : format));
-                    std::ifstream cached(cacheFile, std::ios::binary);
-                    if (cached) {
-                        subtitleBody.assign(std::istreambuf_iterator<char>(cached), std::istreambuf_iterator<char>());
-                        fromCache = !subtitleBody.empty();
-                    }
-                }
-
-                const auto fetchSubtitle = [&] {
-                    auto response = api_.downloadSubtitleText(session, item, candidate.index, candidate.codec);
-                    if ((!response.ok || response.value.empty()) && candidateIndex == 0 && !deliveryUrl.empty()) {
-                        response = api_.downloadSubtitleUrl(session, deliveryUrl);
-                    }
-                    if ((!response.ok || response.value.empty()) && subtitleMayFallbackToSrt(candidate.codec)) {
-                        response = api_.downloadSubtitleSrt(session, item, candidate.index);
-                    }
-                    return response;
-                };
-
-                std::string subtitleFailure;
-                if (subtitleBody.empty()) {
-                    auto response = fetchSubtitle();
-                    if (response.ok && !response.value.empty()) {
-                        subtitleBody = std::move(response.value);
-                        if (!cacheFile.empty()) {
-                            std::error_code ec;
-                            std::filesystem::create_directories(cacheFile.parent_path(), ec);
-                            if (!ec) {
-                                std::ofstream output(cacheFile, std::ios::binary | std::ios::trunc);
-                                if (output) output.write(subtitleBody.data(), static_cast<std::streamsize>(subtitleBody.size()));
-                            }
+                for (size_t candidateIndex = 0; candidateIndex < candidates.size(); ++candidateIndex) {
+                    const JellyfinSubtitleStream& candidate = candidates[candidateIndex];
+                    std::string subtitleBody;
+                    std::filesystem::path cacheFile;
+                    bool fromCache = false;
+                    if (!dataPath.empty()) {
+                        const std::filesystem::path directory = std::filesystem::path(dataPath) / "subtitles";
+                        const std::string format = subtitleTextFormat(candidate.codec);
+                        cacheFile = directory / (item.id + "-" + std::to_string(candidate.index) + "." +
+                                                 (format.empty() ? "txt" : format));
+                        std::ifstream cached(cacheFile, std::ios::binary);
+                        if (cached) {
+                            subtitleBody.assign(std::istreambuf_iterator<char>(cached),
+                                                std::istreambuf_iterator<char>());
+                            fromCache = !subtitleBody.empty();
                         }
-                    } else {
-                        subtitleFailure = response.error.empty() ? "empty subtitle response" : response.error;
                     }
-                }
 
-                std::vector<SubtitleCue> cues = parseTextSubtitleCues(subtitleBody, candidate.codec);
-                if (cues.empty() && fromCache) {
-                    std::error_code ec;
-                    std::filesystem::remove(cacheFile, ec);
-                    auto response = fetchSubtitle();
-                    if (response.ok) {
-                        subtitleBody = std::move(response.value);
-                        cues = parseTextSubtitleCues(subtitleBody, candidate.codec);
-                    } else {
-                        subtitleFailure = response.error.empty() ? "subtitle cache refresh failed" : response.error;
+                    const auto fetchSubtitle = [&] {
+                        auto response = api_.downloadSubtitleText(session, item, candidate.index, candidate.codec);
+                        if ((!response.ok || response.value.empty()) && candidateIndex == 0 && !deliveryUrl.empty()) {
+                            response = api_.downloadSubtitleUrl(session, deliveryUrl);
+                        }
+                        if ((!response.ok || response.value.empty()) && subtitleMayFallbackToSrt(candidate.codec)) {
+                            response = api_.downloadSubtitleSrt(session, item, candidate.index);
+                        }
+                        return response;
+                    };
+
+                    std::string subtitleFailure;
+                    if (subtitleBody.empty()) {
+                        auto response = fetchSubtitle();
+                        if (response.ok && !response.value.empty()) {
+                            subtitleBody = std::move(response.value);
+                            if (!cacheFile.empty()) {
+                                std::error_code ec;
+                                std::filesystem::create_directories(cacheFile.parent_path(), ec);
+                                if (!ec) {
+                                    std::ofstream output(cacheFile, std::ios::binary | std::ios::trunc);
+                                    if (output)
+                                        output.write(subtitleBody.data(),
+                                                     static_cast<std::streamsize>(subtitleBody.size()));
+                                }
+                            }
+                        } else {
+                            subtitleFailure = response.error.empty() ? "empty subtitle response" : response.error;
+                        }
                     }
-                }
 
-                if (!cues.empty()) {
-                    loadedSubtitle = candidate;
-                    loadedCues = std::move(cues);
-                    if (candidate.index != requestedSubtitleIndex) {
-                        __android_log_print(
-                            ANDROID_LOG_INFO,
-                            kTag,
-                            "Subtitle stream %d unavailable; using fallback stream %d",
-                            requestedSubtitleIndex,
-                            candidate.index
-                        );
+                    std::vector<SubtitleCue> cues = parseTextSubtitleCues(subtitleBody, candidate.codec);
+                    if (cues.empty() && fromCache) {
+                        std::error_code ec;
+                        std::filesystem::remove(cacheFile, ec);
+                        auto response = fetchSubtitle();
+                        if (response.ok) {
+                            subtitleBody = std::move(response.value);
+                            cues = parseTextSubtitleCues(subtitleBody, candidate.codec);
+                        } else {
+                            subtitleFailure = response.error.empty() ? "subtitle cache refresh failed" : response.error;
+                        }
                     }
-                    break;
+
+                    if (!cues.empty()) {
+                        loadedSubtitle = candidate;
+                        loadedCues = std::move(cues);
+                        if (candidate.index != requestedSubtitleIndex) {
+                            __android_log_print(ANDROID_LOG_INFO, kTag,
+                                                "Subtitle stream %d unavailable; using fallback stream %d",
+                                                requestedSubtitleIndex, candidate.index);
+                        }
+                        break;
+                    }
+
+                    if (subtitleFailure.empty()) {
+                        subtitleFailure = subtitleBody.empty() ? "subtitle body was empty"
+                                                               : "subtitle contained no parseable text cues";
+                    }
+                    __android_log_print(ANDROID_LOG_WARN, kTag,
+                                        "Subtitle load failed item=%s stream=%d codec=%s reason=%s", item.id.c_str(),
+                                        candidate.index, candidate.codec.c_str(), subtitleFailure.c_str());
                 }
 
-                if (subtitleFailure.empty()) {
-                    subtitleFailure = subtitleBody.empty() ? "subtitle body was empty" : "subtitle contained no parseable text cues";
+                if (!requestEpochs_.playback.active(generation)) return;
+                std::scoped_lock lock(stateMutex_);
+                if (!playbackCoordinator_.subtitleLoadMatches(item.id, requestedSubtitleIndex)) return;
+
+                if (loadedCues.empty()) {
+                    playbackCoordinator_.failSubtitleLoad();
+                    showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
+                    return;
                 }
-                __android_log_print(
-                    ANDROID_LOG_WARN,
-                    kTag,
-                    "Subtitle load failed item=%s stream=%d codec=%s reason=%s",
-                    item.id.c_str(),
-                    candidate.index,
-                    candidate.codec.c_str(),
-                    subtitleFailure.c_str()
-                );
-            }
 
-            if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            if (!playbackCoordinator_.subtitleLoadMatches(item.id, requestedSubtitleIndex)) return;
-
-            if (loadedCues.empty()) {
-                playbackCoordinator_.failSubtitleLoad();
-                showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
-                return;
-            }
-
-            __android_log_print(
-                ANDROID_LOG_INFO,
-                kTag,
-                "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
-                item.id.c_str(),
-                loadedSubtitle.index,
-                loadedSubtitle.codec.c_str(),
-                loadedCues.size()
-            );
-            playbackCoordinator_.completeSubtitleLoad(
-                loadedSubtitle.index,
-                loadedSubtitle.language,
-                std::move(loadedCues)
-            );
-            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-            reportProgressAsync(false);
-        })) {
+                __android_log_print(ANDROID_LOG_INFO, kTag, "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
+                                    item.id.c_str(), loadedSubtitle.index, loadedSubtitle.codec.c_str(),
+                                    loadedCues.size());
+                playbackCoordinator_.completeSubtitleLoad(loadedSubtitle.index, loadedSubtitle.language,
+                                                          std::move(loadedCues));
+                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+                reportProgressAsync(false);
+            })) {
             playbackCoordinator_.failSubtitleLoad();
             showNotice("SUBTITLES COULD NOT BE STARTED");
         }
@@ -2110,11 +2235,8 @@ private:
         }
 
         const PlaybackSubtitleCyclePlan plan = planPlaybackSubtitleTrackCycle(
-            playbackSessionState_.activeItem(),
-            trackState_.selectedSubtitleServerIndex(),
-            playbackSessionState_.activeTarget().playMethod,
-            settings_.subtitleLanguages
-        );
+            playbackSessionState_.activeItem(), trackState_.selectedSubtitleServerIndex(),
+            playbackSessionState_.activeTarget().playMethod, settings_.subtitleLanguages);
         if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) {
             error_ = "NO SUBTITLE TRACKS";
             return;
@@ -2125,32 +2247,24 @@ private:
         }
 
         playbackCoordinator_.rememberSubtitleLanguagePreference(plan.subtitleStreamIndex);
-        if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer
-            && player_.disableSubtitles()) {
+        if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer && player_.disableSubtitles()) {
             playbackCoordinator_.disableSubtitleRendering();
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
             return;
         }
 
-        if (plan.subtitleStreamIndex >= 0 && playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay) {
+        if (plan.subtitleStreamIndex >= 0 &&
+            playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay) {
             const auto selected = std::find_if(
                 playbackSessionState_.activeItem().subtitles.begin(),
                 playbackSessionState_.activeItem().subtitles.end(),
-                [&](const JellyfinSubtitleStream& subtitle) {
-                    return subtitle.index == plan.subtitleStreamIndex;
-                }
-            );
+                [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == plan.subtitleStreamIndex; });
             if (selected != playbackSessionState_.activeItem().subtitles.end()) {
-                __android_log_print(
-                    ANDROID_LOG_INFO,
-                    kTag,
-                    "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
-                    plan.subtitleStreamIndex,
-                    selected->codec.c_str(),
-                    selected->isExternal ? 1 : 0,
-                    static_cast<int>(plan.strategy)
-                );
+                __android_log_print(ANDROID_LOG_INFO, kTag,
+                                    "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
+                                    plan.subtitleStreamIndex, selected->codec.c_str(), selected->isExternal ? 1 : 0,
+                                    static_cast<int>(plan.strategy));
                 if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
                     player_.disableSubtitles();
                     playbackCoordinator_.prepareNativeSubtitleLoad(plan.subtitleStreamIndex);
@@ -2160,22 +2274,16 @@ private:
                     return;
                 }
                 if (plan.strategy == SubtitleStrategy::ClientEmbedded) {
-                    __android_log_print(
-                        ANDROID_LOG_INFO,
-                        kTag,
-                        "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
-                        plan.subtitleStreamIndex
-                    );
+                    __android_log_print(ANDROID_LOG_INFO, kTag,
+                                        "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
+                                        plan.subtitleStreamIndex);
                 }
             }
         }
 
         refreshPlaybackTelemetry(true);
-        restartPlaybackAt(
-            playerScreenState_.positionMs(),
-            trackState_.selectedAudioServerIndex(),
-            plan.subtitleStreamIndex
-        );
+        restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(),
+                          plan.subtitleStreamIndex);
     }
 
     void restartPlaybackAt(int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
@@ -2203,36 +2311,14 @@ private:
         player_.stop();
         videoSurface_.release();
 
-        tasks_.submit([
-            this,
-            session,
-            item,
-            previousTarget,
-            shouldReportPrevious,
-            maxStreamingBitrate,
-            maxAudioChannels,
-            playbackOverrides,
-            audioStreamIndex,
-            subtitleStreamIndex,
-            wasPaused,
-            generation
-        ] {
+        tasks_.submit([this, session, item, previousTarget, shouldReportPrevious, maxStreamingBitrate, maxAudioChannels,
+                       playbackOverrides, audioStreamIndex, subtitleStreamIndex, wasPaused, generation] {
             if (shouldReportPrevious) {
-                logPlaybackReportFailure(
-                    "stop",
-                    item.id,
-                    api_.reportPlaybackStopped(session, item, previousTarget, item.positionTicks)
-                );
+                logPlaybackReportFailure("stop", item.id,
+                                         api_.reportPlaybackStopped(session, item, previousTarget, item.positionTicks));
             }
-            auto target = api_.resolvePlayback(
-                session,
-                item,
-                maxStreamingBitrate,
-                maxAudioChannels,
-                playbackOverrides,
-                audioStreamIndex,
-                subtitleStreamIndex
-            );
+            auto target = api_.resolvePlayback(session, item, maxStreamingBitrate, maxAudioChannels, playbackOverrides,
+                                               audioStreamIndex, subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             playbackCoordinator_.finishStreamRestartRequest();
@@ -2255,17 +2341,14 @@ private:
     void requestTrickplayPreview(int positionMs) {
         const auto& info = playbackSessionState_.activeItem().trickplay;
         if (!session_.valid() || playbackSessionState_.activeItem().id.empty() || !info.valid()) return;
-        const TrickplayFrame frame = trickplayFrameForPosition(
-            positionMs,
-            info.intervalMs,
-            info.thumbnailCount,
-            info.tileWidth,
-            info.tileHeight
-        );
+        const TrickplayFrame frame = trickplayFrameForPosition(positionMs, info.intervalMs, info.thumbnailCount,
+                                                               info.tileWidth, info.tileHeight);
         if (!frame.valid()) return;
 
         trickplayState_.showAt(positionMs, std::chrono::steady_clock::now());
-        if (trickplayState_.matchesTile(playbackSessionState_.activeItem().id, frame.tileIndex) && !trickplayState_.failed()) return;
+        if (trickplayState_.matchesTile(playbackSessionState_.activeItem().id, frame.tileIndex) &&
+            !trickplayState_.failed())
+            return;
 
         if (trickplayState_.texture() != 0 && trickplayState_.textureGeneration() == renderer_.generation()) {
             renderer_.deleteTexture(trickplayState_.texture());
@@ -2275,87 +2358,65 @@ private:
         const JellyfinItem item = playbackSessionState_.activeItem();
         const int tileIndex = frame.tileIndex;
         if (!tasks_.submit([this, session, item, tileIndex] {
-            auto image = api_.downloadTrickplayTile(session, item, tileIndex);
-            DecodedImage decoded;
-            std::string decodeError;
-            if (image.ok) decoded = imageDecoder_.decode(image.value, decodeError);
-            std::scoped_lock lock(stateMutex_);
-            if (!trickplayState_.matchesTile(item.id, tileIndex)) return;
-            if (!image.ok || !decoded.valid()) {
-                trickplayState_.markFailed();
-                __android_log_print(
-                    ANDROID_LOG_WARN,
-                    kTag,
-                    "Trickplay tile %d unavailable: %s",
-                    tileIndex,
-                    image.ok ? decodeError.c_str() : image.error.c_str()
-                );
-                return;
-            }
-            trickplayState_.applyDecoded(std::move(decoded));
-        })) {
+                auto image = api_.downloadTrickplayTile(session, item, tileIndex);
+                DecodedImage decoded;
+                std::string decodeError;
+                if (image.ok) decoded = imageDecoder_.decode(image.value, decodeError);
+                std::scoped_lock lock(stateMutex_);
+                if (!trickplayState_.matchesTile(item.id, tileIndex)) return;
+                if (!image.ok || !decoded.valid()) {
+                    trickplayState_.markFailed();
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Trickplay tile %d unavailable: %s", tileIndex,
+                                        image.ok ? decodeError.c_str() : image.error.c_str());
+                    return;
+                }
+                trickplayState_.applyDecoded(std::move(decoded));
+            })) {
             trickplayState_.markFailed();
         }
     }
 
     bool drawTrickplayPreview() {
-        if (!trickplayState_.visible(std::chrono::steady_clock::now(), playbackSessionState_.activeItem().id)
-            || !playbackSessionState_.activeItem().trickplay.valid()) {
+        if (!trickplayState_.visible(std::chrono::steady_clock::now(), playbackSessionState_.activeItem().id) ||
+            !playbackSessionState_.activeItem().trickplay.valid()) {
             return false;
         }
         const auto& info = playbackSessionState_.activeItem().trickplay;
-        const TrickplayFrame frame = trickplayFrameForPosition(
-            trickplayState_.positionMs(),
-            info.intervalMs,
-            info.thumbnailCount,
-            info.tileWidth,
-            info.tileHeight
-        );
+        const TrickplayFrame frame = trickplayFrameForPosition(trickplayState_.positionMs(), info.intervalMs,
+                                                               info.thumbnailCount, info.tileWidth, info.tileHeight);
         if (!frame.valid() || frame.tileIndex != trickplayState_.tileIndex()) return false;
         if (trickplayState_.texture() == 0 || trickplayState_.textureGeneration() != renderer_.generation()) {
             const auto& decoded = trickplayState_.decoded();
-            trickplayState_.setTexture(
-                renderer_.createTexture(decoded.width, decoded.height, decoded.rgba.data()),
-                renderer_.generation()
-            );
+            trickplayState_.setTexture(renderer_.createTexture(decoded.width, decoded.height, decoded.rgba.data()),
+                                       renderer_.generation());
         }
         if (trickplayState_.texture() == 0) return false;
 
         constexpr float previewWidth = 420.0f;
-        const float previewHeight = std::clamp(
-            previewWidth * static_cast<float>(info.height) / static_cast<float>(info.width),
-            180.0f,
-            270.0f
-        );
-        const double progress = playerScreenState_.durationMs() > 0
-            ? std::clamp(static_cast<double>(trickplayState_.positionMs()) / playerScreenState_.durationMs(), 0.0, 1.0)
-            : 0.5;
+        const float previewHeight =
+            std::clamp(previewWidth * static_cast<float>(info.height) / static_cast<float>(info.width), 180.0f, 270.0f);
+        const double progress =
+            playerScreenState_.durationMs() > 0
+                ? std::clamp(static_cast<double>(trickplayState_.positionMs()) / playerScreenState_.durationMs(), 0.0,
+                             1.0)
+                : 0.5;
         const float centerX = 155.0f + static_cast<float>(1610.0 * progress);
-        const float x = std::clamp(centerX - previewWidth * 0.5f, 80.0f, Renderer::logicalWidth() - 80.0f - previewWidth);
+        const float x =
+            std::clamp(centerX - previewWidth * 0.5f, 80.0f, Renderer::logicalWidth() - 80.0f - previewWidth);
         constexpr float y = 555.0f;
         const auto& decoded = trickplayState_.decoded();
-        const TrickplayUvRegion uv = trickplayUvRegion(
-            frame,
-            info.width,
-            info.height,
-            decoded.width,
-            decoded.height
-        );
+        const TrickplayUvRegion uv = trickplayUvRegion(frame, info.width, info.height, decoded.width, decoded.height);
         if (!uv.valid()) return false;
 
         constexpr float previewRadius = material_tv::cornerSmall;
-        renderer_.roundedRect(
-            x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f,
-            previewRadius + 7.0f, Color{0.0f, 0.0f, 0.0f, 0.90f});
-        renderer_.roundedOutline(
-            x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f,
-            previewRadius + 7.0f, 4.0f, kFocus);
-        renderer_.roundedImageRegion(
-            trickplayState_.texture(), x, y, previewWidth, previewHeight, previewRadius,
-            uv.u0, uv.v0, uv.u1, uv.v1);
-        drawLeftAlignedSingleLineFit(
-            x + 14.0f, y + previewHeight + 7.0f, previewWidth - 28.0f, 44.0f, 1.65f,
-            formatPlaybackTime(trickplayState_.positionMs()), kText);
+        renderer_.roundedRect(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, previewRadius + 7.0f,
+                              Color{0.0f, 0.0f, 0.0f, 0.90f});
+        renderer_.roundedOutline(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, previewRadius + 7.0f,
+                                 4.0f, kFocus);
+        renderer_.roundedImageRegion(trickplayState_.texture(), x, y, previewWidth, previewHeight, previewRadius, uv.u0,
+                                     uv.v0, uv.u1, uv.v1);
+        drawLeftAlignedSingleLineFit(x + 14.0f, y + previewHeight + 7.0f, previewWidth - 28.0f, 44.0f, 1.65f,
+                                     formatPlaybackTime(trickplayState_.positionMs()), kText);
         return true;
     }
 
@@ -2394,15 +2455,24 @@ private:
 
     void activatePlayerControl() {
         switch (playerScreenState_.controlSelection()) {
-            case 0: playAdjacentEpisode(-1); break;
-            case 1:
-                player_.togglePause();
-                reportProgressAsync(true);
-                break;
-            case 2: playAdjacentEpisode(1); break;
-            case 3: cycleAudioTrack(); break;
-            case 4: cycleSubtitleTrack(); break;
-            default: break;
+        case 0:
+            playAdjacentEpisode(-1);
+            break;
+        case 1:
+            player_.togglePause();
+            reportProgressAsync(true);
+            break;
+        case 2:
+            playAdjacentEpisode(1);
+            break;
+        case 3:
+            cycleAudioTrack();
+            break;
+        case 4:
+            cycleSubtitleTrack();
+            break;
+        default:
+            break;
         }
     }
 
@@ -2420,9 +2490,9 @@ private:
         } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const auto selected = seerrStorageState_.takeSelection();
             if (!selected) return;
-            __android_log_print(
-                ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
-                selected->item.mediaType.c_str(), selected->target.serverId, selected->target.path.c_str());
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
+                                selected->item.mediaType.c_str(), selected->target.serverId,
+                                selected->target.path.c_str());
             popScreen(Screen::Search);
             requestSeerrMediaAsync(selected->item, &selected->target, true);
         }
@@ -2431,16 +2501,20 @@ private:
     void handlePlayerKey(int32_t key, int repeatCount = 0) {
         const auto now = std::chrono::steady_clock::now();
         if (key == AKEYCODE_BACK) {
-            if (playerScreenState_.shouldDismissOnBack(now)) playerScreenState_.dismissOverlay(now);
-            else stopPlayback();
+            if (playerScreenState_.shouldDismissOnBack(now))
+                playerScreenState_.dismissOverlay(now);
+            else
+                stopPlayback();
             return;
         }
         if (key == AKEYCODE_DPAD_UP && !playerScreenState_.controlsActive(now)) {
             playerScreenState_.showControls(now);
             return;
         }
-        if (playerScreenState_.controlsActive(now)) playerScreenState_.refreshControls(now);
-        else playerScreenState_.showOverlayFor(now, 5s);
+        if (playerScreenState_.controlsActive(now))
+            playerScreenState_.refreshControls(now);
+        else
+            playerScreenState_.showOverlayFor(now, 5s);
         if (playerScreenState_.controlsActive(now)) {
             if (key == AKEYCODE_DPAD_DOWN) {
                 playerScreenState_.hideControls();
@@ -2465,22 +2539,16 @@ private:
             reportProgressAsync(true);
         } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_MEDIA_REWIND) {
             const int64_t deltaMs = heldSeekDeltaMs(settings_.seekBackSeconds, repeatCount);
-            const int targetMs = relativeSeekPositionMs(
-                playerScreenState_.positionMs(),
-                -deltaMs,
-                playerScreenState_.durationMs()
-            );
+            const int targetMs =
+                relativeSeekPositionMs(playerScreenState_.positionMs(), -deltaMs, playerScreenState_.durationMs());
             playerScreenState_.showSeekFeedback(-static_cast<int>(deltaMs / 1000), now);
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
         } else if (key == AKEYCODE_DPAD_RIGHT || key == AKEYCODE_MEDIA_FAST_FORWARD) {
             const int64_t deltaMs = heldSeekDeltaMs(settings_.seekForwardSeconds, repeatCount);
-            const int targetMs = relativeSeekPositionMs(
-                playerScreenState_.positionMs(),
-                deltaMs,
-                playerScreenState_.durationMs()
-            );
+            const int targetMs =
+                relativeSeekPositionMs(playerScreenState_.positionMs(), deltaMs, playerScreenState_.durationMs());
             playerScreenState_.showSeekFeedback(static_cast<int>(deltaMs / 1000), now);
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
@@ -2491,42 +2559,42 @@ private:
     void handleMediaSessionCommand(const MediaSessionCommand& command) {
         if (screen_ != Screen::Player) return;
         switch (command.type) {
-            case MediaSessionCommandType::Play:
-                player_.play();
-                reportProgressAsync(true);
-                break;
-            case MediaSessionCommandType::Pause:
-                player_.pause();
-                reportProgressAsync(true);
-                break;
-            case MediaSessionCommandType::Stop:
-                stopPlayback();
-                break;
-            case MediaSessionCommandType::SeekTo: {
-                const int64_t maxPosition = playerScreenState_.durationMs() > 0
-                    ? playerScreenState_.durationMs()
-                    : static_cast<int64_t>(std::numeric_limits<int>::max());
-                const int positionMs = static_cast<int>(std::clamp<int64_t>(command.positionMs, 0, maxPosition));
-                requestTrickplayPreview(positionMs);
-                seekPlaybackTo(positionMs);
-                reportProgressAsync(false);
-                break;
+        case MediaSessionCommandType::Play:
+            player_.play();
+            reportProgressAsync(true);
+            break;
+        case MediaSessionCommandType::Pause:
+            player_.pause();
+            reportProgressAsync(true);
+            break;
+        case MediaSessionCommandType::Stop:
+            stopPlayback();
+            break;
+        case MediaSessionCommandType::SeekTo: {
+            const int64_t maxPosition = playerScreenState_.durationMs() > 0
+                                            ? playerScreenState_.durationMs()
+                                            : static_cast<int64_t>(std::numeric_limits<int>::max());
+            const int positionMs = static_cast<int>(std::clamp<int64_t>(command.positionMs, 0, maxPosition));
+            requestTrickplayPreview(positionMs);
+            seekPlaybackTo(positionMs);
+            reportProgressAsync(false);
+            break;
+        }
+        case MediaSessionCommandType::Next:
+            if (queueState_.currentIndex() >= 0) {
+                const int next = queueState_.nextIndex(true);
+                if (next >= 0) playQueuedIndexAsync(next);
             }
-            case MediaSessionCommandType::Next:
-                if (queueState_.currentIndex() >= 0) {
-                    const int next = queueState_.nextIndex(true);
-                    if (next >= 0) playQueuedIndexAsync(next);
-                }
-                break;
-            case MediaSessionCommandType::Previous:
-                if (queueState_.currentIndex() > 0) {
-                    playQueuedIndexAsync(queueState_.currentIndex() - 1);
-                } else {
-                    requestTrickplayPreview(0);
-                    seekPlaybackTo(0);
-                    reportProgressAsync(false);
-                }
-                break;
+            break;
+        case MediaSessionCommandType::Previous:
+            if (queueState_.currentIndex() > 0) {
+                playQueuedIndexAsync(queueState_.currentIndex() - 1);
+            } else {
+                requestTrickplayPreview(0);
+                seekPlaybackTo(0);
+                reportProgressAsync(false);
+            }
+            break;
         }
     }
 
@@ -2552,13 +2620,12 @@ private:
             serverInfo_ = std::move(result.value);
             const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
             if (compatibility == ServerCompatibility::TooOld) {
-                showNotice(
-                    "JELLYFIN " + serverInfo_.version + " IS BELOW THE TESTED 10.10+ BASELINE - SERVER UPGRADE RECOMMENDED",
-                    6s,
-                    true
-                );
+                showNotice("JELLYFIN " + serverInfo_.version +
+                               " IS BELOW THE TESTED 10.10+ BASELINE - SERVER UPGRADE RECOMMENDED",
+                           6s, true);
             } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
-                showNotice("UNRECOGNIZED JELLYFIN VERSION " + serverInfo_.version + " - PLAYBACK COMPATIBILITY MAY VARY", 10s);
+                showNotice(
+                    "UNRECOGNIZED JELLYFIN VERSION " + serverInfo_.version + " - PLAYBACK COMPATIBILITY MAY VARY", 10s);
             }
         });
     }
@@ -2602,7 +2669,8 @@ private:
         const bool hadAuthenticatedSession = session_.valid();
         api_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
-        if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle || !playbackSessionState_.activeItem().id.empty()) {
+        if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle ||
+            !playbackSessionState_.activeItem().id.empty()) {
             releaseActivePlayback(true);
         }
 
@@ -2765,8 +2833,10 @@ private:
                 error_ = result.error;
                 return;
             }
-            if (append) browseState_.appendPage(std::move(result.value), startIndex, kBrowsePageSize);
-            else browseState_.replacePage(std::move(result.value), kBrowsePageSize);
+            if (append)
+                browseState_.appendPage(std::move(result.value), startIndex, kBrowsePageSize);
+            else
+                browseState_.replacePage(std::move(result.value), kBrowsePageSize);
             prefetchBrowseArtworkAhead();
             error_.clear();
         });
@@ -2810,9 +2880,8 @@ private:
             if (!requestEpochs_.content.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            if (screen_ != Screen::Episodes
-                || detailsState_.seriesDetail().id != seriesId
-                || detailsState_.selectedSeason().id != seasonId) {
+            if (screen_ != Screen::Episodes || detailsState_.seriesDetail().id != seriesId ||
+                detailsState_.selectedSeason().id != seasonId) {
                 return;
             }
             if (!result.ok) {
@@ -2849,8 +2918,10 @@ private:
         if (detail_.id.empty()) return;
         const std::string key = hiddenHomeKey(detail_.id);
         const bool hiding = !hiddenHomeItems_.contains(key);
-        if (hiding) hiddenHomeItems_.insert(key);
-        else hiddenHomeItems_.erase(key);
+        if (hiding)
+            hiddenHomeItems_.insert(key);
+        else
+            hiddenHomeItems_.erase(key);
         filterHiddenHomeItems(home_);
         clampHomeSelections();
         saveSession(session_);
@@ -2874,7 +2945,8 @@ private:
             item.played = updated.played;
             item.positionTicks = updated.positionTicks;
         };
-        for (auto& row : home_.rows) for (auto& item : row.items) apply(item);
+        for (auto& row : home_.rows)
+            for (auto& item : row.items) apply(item);
         for (auto& item : browseState_.items()) apply(item);
         for (auto& item : searchState_.results()) apply(item);
         detailsState_.updateCachedUserData(updated);
@@ -2882,11 +2954,12 @@ private:
 
         for (auto& row : home_.rows) {
             if (row.title == "Favorites") {
-                const auto existing = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& item) {
-                    return item.id == updated.id;
-                });
-                if (updated.favorite && existing == row.items.end() && !isHiddenFromHome(updated)) row.items.push_back(updated);
-                else if (!updated.favorite && existing != row.items.end()) row.items.erase(existing);
+                const auto existing = std::find_if(row.items.begin(), row.items.end(),
+                                                   [&](const JellyfinItem& item) { return item.id == updated.id; });
+                if (updated.favorite && existing == row.items.end() && !isHiddenFromHome(updated))
+                    row.items.push_back(updated);
+                else if (!updated.favorite && existing != row.items.end())
+                    row.items.erase(existing);
             } else if (row.title == "Continue Watching" && updated.played) {
                 std::erase_if(row.items, [&](const JellyfinItem& item) { return item.id == updated.id; });
             }
@@ -2932,9 +3005,8 @@ private:
         int nextUpReplacementIndex = -1;
         for (const auto& row : home_.rows) {
             if (row.title != "Next Up") continue;
-            const auto current = std::find_if(row.items.begin(), row.items.end(), [&](const JellyfinItem& homeItem) {
-                return homeItem.id == item.id;
-            });
+            const auto current = std::find_if(row.items.begin(), row.items.end(),
+                                              [&](const JellyfinItem& homeItem) { return homeItem.id == item.id; });
             if (current != row.items.end()) {
                 nextUpReplacementIndex = static_cast<int>(std::distance(row.items.begin(), current));
             }
@@ -2959,20 +3031,13 @@ private:
             clampHomeSelections();
         }
 
-        tasks_.submit([
-            this,
-            session,
-            item,
-            desired,
-            sessionEpoch,
-            nextUpReplacementIndex,
-            previousHome = std::move(previousHome),
-            previousHomeSelection = std::move(previousHomeSelection)
-        ]() mutable {
+        tasks_.submit([this, session, item, desired, sessionEpoch, nextUpReplacementIndex,
+                       previousHome = std::move(previousHome),
+                       previousHomeSelection = std::move(previousHomeSelection)]() mutable {
             auto result = api_.setPlayed(session, item, desired);
             std::optional<JellyfinItem> nextUpReplacement;
-            if (result.ok && desired && nextUpReplacementIndex >= 0
-                && item.type == "Episode" && !item.seriesId.empty()) {
+            if (result.ok && desired && nextUpReplacementIndex >= 0 && item.type == "Episode" &&
+                !item.seriesId.empty()) {
                 auto next = api_.getNextUpForSeries(session, item.seriesId);
                 if (next.ok && !next.value.id.empty() && next.value.id != item.id) {
                     auto detailed = api_.getItem(session, next.value.id);
@@ -2990,17 +3055,18 @@ private:
                 homeState_.setSelections(std::move(rollbackPlan.selections));
                 homeState_.setRow(rollbackPlan.focusedRow);
                 homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-                if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) detail_ = item;
+                if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id)
+                    detail_ = item;
                 error_ = result.error;
                 return;
             }
-            const auto nextUpRow = std::find_if(home_.rows.begin(), home_.rows.end(), [](const JellyfinHomeRow& candidate) {
-                return candidate.title == "Next Up";
-            });
+            const auto nextUpRow =
+                std::find_if(home_.rows.begin(), home_.rows.end(),
+                             [](const JellyfinHomeRow& candidate) { return candidate.title == "Next Up"; });
             if (nextUpReplacementIndex >= 0 && nextUpRow != home_.rows.end()) {
                 const size_t replacementIndex = static_cast<size_t>(nextUpReplacementIndex);
-                const bool slotStillMatches = replacementIndex < nextUpRow->items.size()
-                    && nextUpRow->items[replacementIndex].id == item.id;
+                const bool slotStillMatches =
+                    replacementIndex < nextUpRow->items.size() && nextUpRow->items[replacementIndex].id == item.id;
                 if (nextUpReplacement && slotStillMatches && !isHiddenFromHome(*nextUpReplacement)) {
                     const std::string replacementId = nextUpReplacement->id;
                     nextUpRow->items[replacementIndex] = std::move(*nextUpReplacement);
@@ -3074,7 +3140,9 @@ private:
             const ApiResult result = seerr_.deleteRequest(server, auth, item.externalRequestId);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) return;
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
+                seerrAuth().apiKey != auth.apiKey)
+                return;
             if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = "SEERR DELETE: " + result.error;
@@ -3122,7 +3190,8 @@ private:
 
     void openSearch() {
         pushScreen(Screen::Search);
-        searchState_.setKeyboard(!showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
+        searchState_.setKeyboard(
+            !showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
         keyboardRow_ = keyboardCol_ = 0;
         error_.clear();
     }
@@ -3144,7 +3213,8 @@ private:
                 return;
             }
             accountState_.setField(AccountScreenState::kServerField, servers.front().address);
-            std::string discoveryStatus = "FOUND " + (servers.front().name.empty() ? std::string("JELLYFIN") : servers.front().name);
+            std::string discoveryStatus =
+                "FOUND " + (servers.front().name.empty() ? std::string("JELLYFIN") : servers.front().name);
             if (servers.size() > 1) discoveryStatus += " + " + std::to_string(servers.size() - 1) + " MORE";
             accountState_.setDiscoveryStatus(std::move(discoveryStatus));
             accountState_.setLoginFocus(AccountScreenState::kUsernameField);
@@ -3312,13 +3382,9 @@ private:
                     const int delaySeconds = std::min(30, 1 << std::min(homeRetryAttempt_, 5));
                     ++homeRetryAttempt_;
                     homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(delaySeconds);
-                    __android_log_print(
-                        ANDROID_LOG_WARN,
-                        kTag,
-                        "Home load failed transiently; retrying in %d seconds: %s",
-                        delaySeconds,
-                        core.error.c_str()
-                    );
+                    __android_log_print(ANDROID_LOG_WARN, kTag,
+                                        "Home load failed transiently; retrying in %d seconds: %s", delaySeconds,
+                                        core.error.c_str());
                 } else {
                     homeRetryAt_ = {};
                     homeRetryAttempt_ = 0;
@@ -3346,15 +3412,20 @@ private:
                 if (screen_ == Screen::Home) error_ = home_.warning;
                 if (homeState_.row() >= 0) {
                     const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-                    prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+                    prefetchHomeWindow(homeState_.row(),
+                                       homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
                 }
-                const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - homeLoadStarted).count();
-                __android_log_print(ANDROID_LOG_INFO, kTag, "Home primary rows ready in %lld ms", static_cast<long long>(coreMs));
+                const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                        std::chrono::steady_clock::now() - homeLoadStarted)
+                                        .count();
+                __android_log_print(ANDROID_LOG_INFO, kTag, "Home primary rows ready in %lld ms",
+                                    static_cast<long long>(coreMs));
                 if (!pendingDeepLinkItemId_.empty()) {
                     JellyfinItem linked;
                     linked.id = std::move(pendingDeepLinkItemId_);
                     pendingDeepLinkItemId_.clear();
-                    __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_VIEW Jellyfin item %s", linked.id.c_str());
+                    __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_VIEW Jellyfin item %s",
+                                        linked.id.c_str());
                     openDetails(linked);
                     return;
                 }
@@ -3371,42 +3442,47 @@ private:
 
             refreshSeerrPendingAsync();
 
-            tasks_.submit([this, session, generation, views = std::move(views), homeSnapshot, coreRestoredRow, homeLoadStarted] {
-                auto secondary = api_.loadHomeSecondary(session, views);
-                if (!requestEpochs_.home.active(generation)) return;
-                std::scoped_lock lock(stateMutex_);
-                if (!secondary.ok) {
-                    if (!home_.warning.empty()) home_.warning += " | ";
-                    home_.warning += "SECONDARY HOME ROWS UNAVAILABLE";
-                    if (screen_ == Screen::Home) error_ = home_.warning;
-                    return;
-                }
+            tasks_.submit(
+                [this, session, generation, views = std::move(views), homeSnapshot, coreRestoredRow, homeLoadStarted] {
+                    auto secondary = api_.loadHomeSecondary(session, views);
+                    if (!requestEpochs_.home.active(generation)) return;
+                    std::scoped_lock lock(stateMutex_);
+                    if (!secondary.ok) {
+                        if (!home_.warning.empty()) home_.warning += " | ";
+                        home_.warning += "SECONDARY HOME ROWS UNAVAILABLE";
+                        if (screen_ == Screen::Home) error_ = home_.warning;
+                        return;
+                    }
 
-                filterHiddenHomeItems(secondary.value);
-                const size_t baseRowCount = home_.rows.size();
-                for (auto& section : secondary.value.rows) {
-                    const int restoredSelection = HomeScreenState::restoredSelection(homeSnapshot, section);
-                    const bool focusAppended = !homeSnapshot.toolbarFocused
-                        && section.title == homeSnapshot.focusedRowTitle
-                        && homeState_.row() == coreRestoredRow;
-                    home_.rows.push_back(std::move(section));
-                    homeState_.appendSelection(restoredSelection);
-                    if (focusAppended) homeState_.setRow(static_cast<int>(home_.rows.size()) - 1);
-                }
-                if (!secondary.value.warning.empty()) {
-                    if (!home_.warning.empty()) home_.warning += " | ";
-                    home_.warning += secondary.value.warning;
-                    if (screen_ == Screen::Home) error_ = home_.warning;
-                }
-                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-                if (homeState_.row() >= static_cast<int>(baseRowCount)
-                    && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
-                    const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-                    prefetchHomeWindow(homeState_.row(), homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
-                }
-                const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - homeLoadStarted).count();
-                __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms", static_cast<long long>(fullMs));
-            });
+                    filterHiddenHomeItems(secondary.value);
+                    const size_t baseRowCount = home_.rows.size();
+                    for (auto& section : secondary.value.rows) {
+                        const int restoredSelection = HomeScreenState::restoredSelection(homeSnapshot, section);
+                        const bool focusAppended = !homeSnapshot.toolbarFocused &&
+                                                   section.title == homeSnapshot.focusedRowTitle &&
+                                                   homeState_.row() == coreRestoredRow;
+                        home_.rows.push_back(std::move(section));
+                        homeState_.appendSelection(restoredSelection);
+                        if (focusAppended) homeState_.setRow(static_cast<int>(home_.rows.size()) - 1);
+                    }
+                    if (!secondary.value.warning.empty()) {
+                        if (!home_.warning.empty()) home_.warning += " | ";
+                        home_.warning += secondary.value.warning;
+                        if (screen_ == Screen::Home) error_ = home_.warning;
+                    }
+                    homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+                    if (homeState_.row() >= static_cast<int>(baseRowCount) &&
+                        homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
+                        const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+                        prefetchHomeWindow(homeState_.row(),
+                                           homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+                    }
+                    const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                            std::chrono::steady_clock::now() - homeLoadStarted)
+                                            .count();
+                    __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms",
+                                        static_cast<long long>(fullMs));
+                });
         });
     }
 
@@ -3418,8 +3494,7 @@ private:
     }
 
     static bool isSeerrAuthError(std::string_view error) {
-        return error.find("HTTP 401") != std::string_view::npos
-            || error.find("HTTP 403") != std::string_view::npos;
+        return error.find("HTTP 401") != std::string_view::npos || error.find("HTTP 403") != std::string_view::npos;
     }
 
     void connectSeerrAsync(bool announce = true) {
@@ -3448,7 +3523,8 @@ private:
                     notice_.clear();
                     error_ = "SEERR QUICK CONNECT: " + initiated.error;
                 } else {
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s", initiated.error.c_str());
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s",
+                                        initiated.error.c_str());
                 }
                 return;
             }
@@ -3460,7 +3536,9 @@ private:
                     notice_.clear();
                     error_ = "JELLYFIN QUICK CONNECT: " + authorized.error;
                 } else {
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s", authorized.error.c_str());
+                    __android_log_print(ANDROID_LOG_WARN, kTag,
+                                        "Silent Jellyfin Quick Connect authorization failed: %s",
+                                        authorized.error.c_str());
                 }
                 return;
             }
@@ -3470,8 +3548,11 @@ private:
             if (announce) notice_.clear();
             if (settings_.seerrServer != server || session_.userId != jellyfin.userId) return;
             if (!authenticated.ok) {
-                if (announce) error_ = "SEERR QUICK CONNECT: " + authenticated.error;
-                else __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s", authenticated.error.c_str());
+                if (announce)
+                    error_ = "SEERR QUICK CONNECT: " + authenticated.error;
+                else
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s",
+                                        authenticated.error.c_str());
                 seerrConnectionState_.failConnect();
                 return;
             }
@@ -3505,7 +3586,8 @@ private:
         tasks_.submit([this, server, auth] {
             auto result = seerr_.storageTargets(server, auth);
             std::scoped_lock lock(stateMutex_);
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) {
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
+                seerrAuth().apiKey != auth.apiKey) {
                 seerrStorageState_.invalidateRefresh();
                 return;
             }
@@ -3523,9 +3605,8 @@ private:
                 return;
             }
             seerrStorageState_.finishRefresh(std::move(result.value), std::chrono::steady_clock::now());
-            __android_log_print(
-                ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
-                seerrStorageState_.targets().size());
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
+                                seerrStorageState_.targets().size());
             if (seerrStorageState_.pendingRequest() && settings_.seerrSelectDrive) {
                 const auto item = seerrStorageState_.takePendingRequest();
                 if (item) openSeerrDrivePicker(*item);
@@ -3533,9 +3614,7 @@ private:
         });
     }
 
-    static double bytesToGb(int64_t bytes) {
-        return static_cast<double>(std::max<int64_t>(0, bytes)) / 1000000000.0;
-    }
+    static double bytesToGb(int64_t bytes) { return static_cast<double>(std::max<int64_t>(0, bytes)) / 1000000000.0; }
 
     static std::string formatStorageBytes(int64_t bytes) {
         const double gb = bytesToGb(bytes);
@@ -3555,35 +3634,30 @@ private:
             return;
         }
         if (status == SeerrStorageState::PickerStatus::Unavailable) {
-            showNotice(
-                seerrStorageState_.error().empty()
-                    ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
-                    : "SEERR STORAGE: " + seerrStorageState_.error(),
-                5s
-            );
+            showNotice(seerrStorageState_.error().empty() ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
+                                                          : "SEERR STORAGE: " + seerrStorageState_.error(),
+                       5s);
             return;
         }
-        __android_log_print(
-            ANDROID_LOG_INFO, kTag, "Opening Seerr storage picker media=%s choices=%zu",
-            item.mediaType.c_str(), seerrStorageState_.driveChoices().size());
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Opening Seerr storage picker media=%s choices=%zu",
+                            item.mediaType.c_str(), seerrStorageState_.driveChoices().size());
         if (screen_ != Screen::SeerrDrivePicker) pushScreen(Screen::SeerrDrivePicker);
     }
 
     void syncSeerrHomeRowLocked() {
         const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
-        std::erase_if(home_.rows, [](const JellyfinHomeRow& row) {
-            return row.title == "Seerr requests";
-        });
+        std::erase_if(home_.rows, [](const JellyfinHomeRow& row) { return row.title == "Seerr requests"; });
         const auto& pendingMedia = seerrRequestState_.pending();
         if (!pendingMedia.empty()) {
             std::vector<JellyfinItem> pendingItems;
             pendingItems.reserve(pendingMedia.size());
             for (const auto& media : pendingMedia) pendingItems.push_back(jellyfinItemFromSeerrMedia(media));
-            const auto insertAt = home_.rows.begin() + static_cast<std::ptrdiff_t>(std::min<size_t>(1, home_.rows.size()));
+            const auto insertAt =
+                home_.rows.begin() + static_cast<std::ptrdiff_t>(std::min<size_t>(1, home_.rows.size()));
             home_.rows.insert(insertAt, JellyfinHomeRow{
-                .title = "Seerr requests",
-                .items = std::move(pendingItems),
-            });
+                                            .title = "Seerr requests",
+                                            .items = std::move(pendingItems),
+                                        });
         }
         HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home_.rows);
         homeState_.setSelections(std::move(restore.selections));
@@ -3604,7 +3678,8 @@ private:
             auto result = seerr_.pendingRequests(server, auth, 20);
             std::scoped_lock lock(stateMutex_);
             const auto now = std::chrono::steady_clock::now();
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) {
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
+                seerrAuth().apiKey != auth.apiKey) {
                 // Startup Quick Connect can rotate the cookie while this request
                 // is in flight. Retry with the refreshed identity on Home.
                 seerrRequestState_.invalidatePendingRefresh(now);
@@ -3612,13 +3687,13 @@ private:
             }
             if (!result.ok) {
                 seerrRequestState_.failPendingRefresh(now);
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s",
+                                    result.error.c_str());
                 return;
             }
             seerrRequestState_.finishPendingRefresh(std::move(result.value), now);
-            __android_log_print(
-                ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
-                seerrRequestState_.pending().size());
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
+                                seerrRequestState_.pending().size());
             if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
                 if (const SeerrMediaItem* current = seerrRequestState_.findPending(detail_.id)) {
                     detail_ = jellyfinItemFromSeerrMedia(*current);
@@ -3628,21 +3703,15 @@ private:
         });
     }
 
-    void requestSeerrItemAsync(
-        const JellyfinItem& item,
-        const SeerrStorageTarget* selectedTarget = nullptr,
-        bool skipDrivePrompt = false
-    ) {
+    void requestSeerrItemAsync(const JellyfinItem& item, const SeerrStorageTarget* selectedTarget = nullptr,
+                               bool skipDrivePrompt = false) {
         const auto media = seerrMediaFromJellyfinItem(item);
         if (!media) return;
         requestSeerrMediaAsync(*media, selectedTarget, skipDrivePrompt);
     }
 
-    void requestSeerrMediaAsync(
-        const SeerrMediaItem& item,
-        const SeerrStorageTarget* selectedTarget = nullptr,
-        bool skipDrivePrompt = false
-    ) {
+    void requestSeerrMediaAsync(const SeerrMediaItem& item, const SeerrStorageTarget* selectedTarget = nullptr,
+                                bool skipDrivePrompt = false) {
         if (!item.valid()) return;
         if (item.requested) {
             showNotice(item.status.empty() ? "ALREADY REQUESTED IN SEERR" : item.status, 5s);
@@ -3669,15 +3738,16 @@ private:
         }
         mutationLoading_ = true;
         const SeerrMediaItem requestedItem = item;
-        const std::optional<SeerrStorageTarget> target = selectedTarget
-            ? std::optional<SeerrStorageTarget>(*selectedTarget)
-            : std::nullopt;
+        const std::optional<SeerrStorageTarget> target =
+            selectedTarget ? std::optional<SeerrStorageTarget>(*selectedTarget) : std::nullopt;
         tasks_.submit([this, server, auth, requestedItem, target] {
-            const ApiValueResult<int> result = seerr_.requestMedia(
-                server, auth, requestedItem, target ? &*target : nullptr);
+            const ApiValueResult<int> result =
+                seerr_.requestMedia(server, auth, requestedItem, target ? &*target : nullptr);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) return;
+            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
+                seerrAuth().apiKey != auth.apiKey)
+                return;
             if (!result.ok) {
                 error_ = "SEERR REQUEST: " + result.error;
                 return;
@@ -3685,8 +3755,8 @@ private:
 
             const std::string status = requestedItem.television() ? "Queued" : "Queued for download";
             searchState_.markSeerrRequested(requestedItem.id, status, result.value);
-            seerrRequestState_.markRequestSucceeded(
-                requestedItem, result.value, status, std::chrono::steady_clock::now());
+            seerrRequestState_.markRequestSucceeded(requestedItem, result.value, status,
+                                                    std::chrono::steady_clock::now());
             syncSeerrHomeRowLocked();
             showNotice("REQUEST SENT TO SEERR", 4s);
             error_.clear();
@@ -3703,9 +3773,8 @@ private:
         const std::string seerrServer = settings_.seerrServer;
         const SeerrAuth auth = seerrAuth();
         const bool configured = SeerrClient::configured(seerrServer, auth);
-        const bool shouldStart = immediate
-            ? searchState_.beginImmediateSeerrSearch(configured)
-            : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
+        const bool shouldStart = immediate ? searchState_.beginImmediateSeerrSearch(configured)
+                                           : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
         if (!shouldStart) return;
 
         if (!seerrConnectionState_.connecting()) refreshSeerrStorageAsync();
@@ -3720,7 +3789,7 @@ private:
                 return;
             }
             if (!result.ok) {
-                (void) searchState_.failSeerrSearch(query, result.error);
+                (void)searchState_.failSeerrSearch(query, result.error);
                 if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
                     seerrConnectionState_.deferSearchRetry();
                     connectSeerrAsync(false);
@@ -3730,7 +3799,7 @@ private:
             if (seerrRequestState_.mergeRequestedSearch(result.value, std::chrono::steady_clock::now())) {
                 syncSeerrHomeRowLocked();
             }
-            (void) searchState_.finishSeerrSearch(query, std::move(result.value));
+            (void)searchState_.finishSeerrSearch(query, std::move(result.value));
         });
     }
 
@@ -3759,8 +3828,10 @@ private:
     }
 
     void openDetails(const JellyfinItem& item, bool replaceCurrent = false) {
-        if (replaceCurrent) replaceScreen(Screen::Details);
-        else pushScreen(Screen::Details);
+        if (replaceCurrent)
+            replaceScreen(Screen::Details);
+        else
+            pushScreen(Screen::Details);
         playbackCoordinator_.dismissStillWatchingPrompt();
         detail_ = item;
         detailsState_.beginDetails();
@@ -3852,26 +3923,20 @@ private:
         const auto subtitlePreference = trackState_.subtitleLanguagePreference();
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, queued = std::move(queued), index, previousQueueIndex, originScreen, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, trackPolicy, generation]() mutable {
+        tasks_.submit([this, session, queued = std::move(queued), index, previousQueueIndex, originScreen,
+                       replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference,
+                       subtitlePreference, trackPolicy, generation]() mutable {
             auto detailed = api_.getItem(session, queued.id);
             if (detailed.ok) queued = std::move(detailed.value);
             const auto tracks = selectPlaybackTracks(queued, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(
-                session,
-                queued,
-                maxStreamingBitrate,
-                maxAudioChannels,
-                playbackOverrides,
-                tracks.audioStreamIndex,
-                tracks.subtitleStreamIndex
-            );
+            auto target = api_.resolvePlayback(session, queued, maxStreamingBitrate, maxAudioChannels,
+                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
             playbackCoordinator_.finishPlaybackResolution();
-            if (screen_ != originScreen
-                || queueState_.currentIndex() != previousQueueIndex
-                || !queueState_.itemMatches(index, queued.id)) {
+            if (screen_ != originScreen || queueState_.currentIndex() != previousQueueIndex ||
+                !queueState_.itemMatches(index, queued.id)) {
                 return;
             }
             if (!target.ok) {
@@ -3901,30 +3966,13 @@ private:
         playbackCoordinator_.beginPlaybackResolution(true);
         error_.clear();
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([
-            this,
-            session,
-            selected = std::move(selected),
-            audioPreference,
-            subtitlePreference,
-            trackPolicy,
-            maxStreamingBitrate,
-            maxAudioChannels,
-            playbackOverrides,
-            generation
-        ]() mutable {
+        tasks_.submit([this, session, selected = std::move(selected), audioPreference, subtitlePreference, trackPolicy,
+                       maxStreamingBitrate, maxAudioChannels, playbackOverrides, generation]() mutable {
             auto detailed = api_.getItem(session, selected.id);
             if (detailed.ok) selected = std::move(detailed.value);
             const auto tracks = selectPlaybackTracks(selected, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(
-                session,
-                selected,
-                maxStreamingBitrate,
-                maxAudioChannels,
-                playbackOverrides,
-                tracks.audioStreamIndex,
-                tracks.subtitleStreamIndex
-            );
+            auto target = api_.resolvePlayback(session, selected, maxStreamingBitrate, maxAudioChannels,
+                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
@@ -3943,9 +3991,7 @@ private:
         if (direction == 0 || loading_ || screen_ != Screen::Player) return;
         const int currentQueueIndex = queueState_.currentIndex();
         if (currentQueueIndex >= 0) {
-            const int targetIndex = direction > 0
-                ? queueState_.nextIndex(true)
-                : currentQueueIndex - 1;
+            const int targetIndex = direction > 0 ? queueState_.nextIndex(true) : currentQueueIndex - 1;
             if (targetIndex >= 0 && targetIndex < queueState_.size()) {
                 playQueuedIndexAsync(targetIndex);
                 return;
@@ -3966,15 +4012,9 @@ private:
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
         tasks_.submit([this, session, currentItemId, seriesId, currentSeason, currentEpisode, direction] {
             auto episodes = api_.getSeriesEpisodes(session, seriesId, 1000);
-            const auto adjacent = episodes.ok
-                ? selectAdjacentPlaybackEpisode(
-                    std::move(episodes.value),
-                    currentItemId,
-                    currentSeason,
-                    currentEpisode,
-                    direction
-                )
-                : std::nullopt;
+            const auto adjacent = episodes.ok ? selectAdjacentPlaybackEpisode(std::move(episodes.value), currentItemId,
+                                                                              currentSeason, currentEpisode, direction)
+                                              : std::nullopt;
 
             std::scoped_lock lock(stateMutex_);
             const bool sameItem = playbackCoordinator_.finishAdjacentEpisodeLookup(currentItemId);
@@ -3987,7 +4027,7 @@ private:
                 showNotice(direction < 0 ? "NO PREVIOUS EPISODE" : "NO NEXT EPISODE", 2s);
                 return;
             }
-            playPlayerItemAsync(std::move(*adjacent));
+            playPlayerItemAsync(*adjacent);
         });
     }
 
@@ -4061,30 +4101,30 @@ private:
                 return;
             }
 
-            const bool hasRegularEpisodes = std::any_of(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& item) {
-                return item.parentIndexNumber > 0;
-            });
+            const bool hasRegularEpisodes =
+                std::any_of(episodes.value.begin(), episodes.value.end(),
+                            [](const JellyfinItem& item) { return item.parentIndexNumber > 0; });
             if (hasRegularEpisodes) {
-                episodes.value.erase(std::remove_if(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& item) {
-                    return item.parentIndexNumber <= 0;
-                }), episodes.value.end());
+                episodes.value.erase(
+                    std::remove_if(episodes.value.begin(), episodes.value.end(),
+                                   [](const JellyfinItem& item) { return item.parentIndexNumber <= 0; }),
+                    episodes.value.end());
             }
-            std::sort(episodes.value.begin(), episodes.value.end(), [](const JellyfinItem& left, const JellyfinItem& right) {
-                if (left.parentIndexNumber != right.parentIndexNumber) return left.parentIndexNumber < right.parentIndexNumber;
-                if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
-                return left.name < right.name;
-            });
+            std::sort(episodes.value.begin(), episodes.value.end(),
+                      [](const JellyfinItem& left, const JellyfinItem& right) {
+                          if (left.parentIndexNumber != right.parentIndexNumber)
+                              return left.parentIndexNumber < right.parentIndexNumber;
+                          if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
+                          return left.name < right.name;
+                      });
 
             std::vector<JellyfinItem> deduplicated;
             deduplicated.reserve(episodes.value.size());
             for (size_t begin = 0; begin < episodes.value.size();) {
                 size_t end = begin + 1;
-                while (end < episodes.value.size() && sameEpisodeSlot(
-                    episodes.value[begin].parentIndexNumber,
-                    episodes.value[begin].indexNumber,
-                    episodes.value[end].parentIndexNumber,
-                    episodes.value[end].indexNumber
-                )) {
+                while (end < episodes.value.size() &&
+                       sameEpisodeSlot(episodes.value[begin].parentIndexNumber, episodes.value[begin].indexNumber,
+                                       episodes.value[end].parentIndexNumber, episodes.value[end].indexNumber)) {
                     ++end;
                 }
 
@@ -4109,12 +4149,9 @@ private:
                     }
                     if (!selectedAvailable) {
                         __android_log_print(
-                            ANDROID_LOG_WARN,
-                            kTag,
+                            ANDROID_LOG_WARN, kTag,
                             "No available source found for duplicate S%02dE%02d slot; retaining first server result",
-                            episodes.value[begin].parentIndexNumber,
-                            episodes.value[begin].indexNumber
-                        );
+                            episodes.value[begin].parentIndexNumber, episodes.value[begin].indexNumber);
                     }
                 }
                 deduplicated.push_back(std::move(episodes.value[selected]));
@@ -4133,13 +4170,8 @@ private:
             JellyfinItem first = episodes.value.front();
             auto detailed = api_.getItem(session, first.id);
             if (detailed.ok) first = std::move(detailed.value);
-            auto target = api_.resolvePlayback(
-                session,
-                first,
-                maxStreamingBitrate,
-                maxAudioChannels,
-                playbackOverrides
-            );
+            auto target =
+                api_.resolvePlayback(session, first, maxStreamingBitrate, maxAudioChannels, playbackOverrides);
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
@@ -4184,7 +4216,8 @@ private:
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
 
-        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, trackPolicy, queuedPlaybackIndex, generation] {
+        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides,
+                       audioPreference, subtitlePreference, trackPolicy, queuedPlaybackIndex, generation] {
             JellyfinItem playable = selected;
             if (selected.type == "Series") {
                 auto next = api_.getNextUpForSeries(session, selected.id);
@@ -4202,15 +4235,8 @@ private:
             }
 
             const auto tracks = selectPlaybackTracks(playable, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(
-                session,
-                playable,
-                maxStreamingBitrate,
-                maxAudioChannels,
-                playbackOverrides,
-                tracks.audioStreamIndex,
-                tracks.subtitleStreamIndex
-            );
+            auto target = api_.resolvePlayback(session, playable, maxStreamingBitrate, maxAudioChannels,
+                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
@@ -4236,19 +4262,20 @@ private:
         const JellyfinSession session = session_;
         const std::string itemId = *request;
         if (!tasks_.submit([this, session, itemId] {
-            auto result = api_.getMediaSegments(session, itemId);
-            std::scoped_lock lock(stateMutex_);
-            if (screen_ != Screen::Player) return;
-            if (!result.ok) {
-                if (playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now())) {
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s", result.error.c_str());
+                auto result = api_.getMediaSegments(session, itemId);
+                std::scoped_lock lock(stateMutex_);
+                if (screen_ != Screen::Player) return;
+                if (!result.ok) {
+                    if (playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now())) {
+                        __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s",
+                                            result.error.c_str());
+                    }
+                    return;
                 }
-                return;
-            }
-            const size_t segmentCount = result.value.size();
-            if (!playbackCoordinator_.completeMediaSegmentsRequest(itemId, std::move(result.value))) return;
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
-        })) {
+                const size_t segmentCount = result.value.size();
+                if (!playbackCoordinator_.completeMediaSegmentsRequest(itemId, std::move(result.value))) return;
+                __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
+            })) {
             playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now());
         }
     }
@@ -4262,22 +4289,24 @@ private:
         const std::string seriesId = request->seriesId;
         const std::string currentItemId = request->currentItemId;
         if (!tasks_.submit([this, session, seriesId, currentItemId] {
-            auto next = api_.getFollowingEpisodeForSeries(session, seriesId, currentItemId);
-            if (!next.ok) {
-                std::scoped_lock lock(stateMutex_);
-                if (screen_ == Screen::Player
-                    && playbackCoordinator_.failNextEpisodeRequest(currentItemId, std::chrono::steady_clock::now())) {
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s", next.error.c_str());
+                auto next = api_.getFollowingEpisodeForSeries(session, seriesId, currentItemId);
+                if (!next.ok) {
+                    std::scoped_lock lock(stateMutex_);
+                    if (screen_ == Screen::Player &&
+                        playbackCoordinator_.failNextEpisodeRequest(currentItemId, std::chrono::steady_clock::now())) {
+                        __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s",
+                                            next.error.c_str());
+                    }
+                    return;
                 }
-                return;
-            }
-            if (next.value.id.empty() || next.value.id == currentItemId) return;
-            auto detailed = api_.getItem(session, next.value.id);
-            JellyfinItem item = detailed.ok ? std::move(detailed.value) : std::move(next.value);
-            std::scoped_lock lock(stateMutex_);
-            if (screen_ != Screen::Player
-                || !playbackCoordinator_.completeNextEpisodeRequest(currentItemId, std::move(item))) return;
-        })) {
+                if (next.value.id.empty() || next.value.id == currentItemId) return;
+                auto detailed = api_.getItem(session, next.value.id);
+                JellyfinItem item = detailed.ok ? std::move(detailed.value) : std::move(next.value);
+                std::scoped_lock lock(stateMutex_);
+                if (screen_ != Screen::Player ||
+                    !playbackCoordinator_.completeNextEpisodeRequest(currentItemId, std::move(item)))
+                    return;
+            })) {
             playbackCoordinator_.failNextEpisodeSubmission(std::chrono::steady_clock::now());
         }
     }
@@ -4290,12 +4319,8 @@ private:
         const auto session = session_;
         const auto item = playbackSessionState_.activeItem();
         const auto target = playbackSessionState_.activeTarget();
-        const PlaybackReleasePlan releasePlan = playbackCoordinator_.releasePlan(
-            reportStop,
-            completed,
-            session.valid(),
-            playerScreenState_.positionMs()
-        );
+        const PlaybackReleasePlan releasePlan =
+            playbackCoordinator_.releasePlan(reportStop, completed, session.valid(), playerScreenState_.positionMs());
         if (!item.id.empty()) {
             JellyfinItem updated = item;
             updated.positionTicks = releasePlan.cachedPositionTicks;
@@ -4319,7 +4344,8 @@ private:
                 logPlaybackReportFailure("stop", item.id, result);
                 if (!result.ok) return;
                 std::scoped_lock lock(stateMutex_);
-                if (session_.server != session.server || session_.userId != session.userId || screen_ == Screen::Player) return;
+                if (session_.server != session.server || session_.userId != session.userId || screen_ == Screen::Player)
+                    return;
                 playbackCoordinator_.markPlaybackStopReported();
                 if (app_ && app_->looper) ALooper_wake(app_->looper);
             });
@@ -4341,19 +4367,14 @@ private:
         const auto subtitlePreference = trackState_.subtitleLanguagePreference();
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, trackPolicy, nextItem = std::move(nextItem), queuedNextIndex, generation]() mutable {
+        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference,
+                       subtitlePreference, trackPolicy, nextItem = std::move(nextItem), queuedNextIndex,
+                       generation]() mutable {
             auto detailed = api_.getItem(session, nextItem.id);
             if (detailed.ok) nextItem = std::move(detailed.value);
             const auto tracks = selectPlaybackTracks(nextItem, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(
-                session,
-                nextItem,
-                maxStreamingBitrate,
-                maxAudioChannels,
-                playbackOverrides,
-                tracks.audioStreamIndex,
-                tracks.subtitleStreamIndex
-            );
+            auto target = api_.resolvePlayback(session, nextItem, maxStreamingBitrate, maxAudioChannels,
+                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
@@ -4363,9 +4384,8 @@ private:
                 error_ = "NEXT EPISODE: " + target.error;
                 return;
             }
-            if (queuedNextIndex >= 0
-                && queueState_.currentIndex() + 1 == queuedNextIndex
-                && queueState_.itemMatches(queuedNextIndex, nextItem.id)) {
+            if (queuedNextIndex >= 0 && queueState_.currentIndex() + 1 == queuedNextIndex &&
+                queueState_.itemMatches(queuedNextIndex, nextItem.id)) {
                 queueState_.setCurrentIndex(queuedNextIndex);
                 queueState_.setItemAt(queuedNextIndex, nextItem);
             }
@@ -4388,28 +4408,20 @@ private:
         const auto now = std::chrono::steady_clock::now();
         const int startPositionMs = initialPlayerSeekMs(target.startTicks);
         playbackCoordinator_.beginPreparing(now);
-        player_.startAsync(
-            target.url,
-            videoSurface_.surface(),
-            startPositionMs,
-            settings_.playbackBufferPreset,
-            playerAudioOrdinal(target, playbackSessionState_.activeItem()),
-            playerSubtitleStreamIndex(target, playbackSessionState_.activeItem()),
-            playerSubtitleOrdinal(target, playbackSessionState_.activeItem()),
-            directExternalSubtitleUrl(target, playbackSessionState_.activeItem())
-        );
+        player_.startAsync(target.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
+                           playerAudioOrdinal(target, playbackSessionState_.activeItem()),
+                           playerSubtitleStreamIndex(target, playbackSessionState_.activeItem()),
+                           playerSubtitleOrdinal(target, playbackSessionState_.activeItem()),
+                           directExternalSubtitleUrl(target, playbackSessionState_.activeItem()));
         if (startPositionMs > 0) playerScreenState_.beginSeek(startPositionMs, now);
     }
 
     bool retryPlaybackWithoutSubtitle() {
         const PlaybackSubtitleFallbackPlan plan = playbackCoordinator_.subtitleFallbackPlan();
         if (!plan.retry) return false;
-        __android_log_print(
-            ANDROID_LOG_WARN,
-            kTag,
-            "Subtitle-selected transcode failed; retrying item without subtitles (stream %d)",
-            plan.failedSubtitleStreamIndex
-        );
+        __android_log_print(ANDROID_LOG_WARN, kTag,
+                            "Subtitle-selected transcode failed; retrying item without subtitles (stream %d)",
+                            plan.failedSubtitleStreamIndex);
         restartPlaybackAt(playerScreenState_.positionMs(), plan.audioStreamIndex, kSubtitleOffIndex);
         return true;
     }
@@ -4441,7 +4453,8 @@ private:
         if (!request.itemId.empty()) {
             JellyfinItem linked;
             linked.id = request.itemId;
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_VIEW Jellyfin item %s", linked.id.c_str());
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_VIEW Jellyfin item %s",
+                                linked.id.c_str());
             openDetails(linked);
         } else if (!request.searchQuery.empty()) {
             searchState_.setQuery(request.searchQuery);
@@ -4458,11 +4471,8 @@ private:
         __android_log_print(ANDROID_LOG_WARN, kTag, "Benchmark build refusing Jellyfin server playback fallback");
         return false;
 #else
-        const PlaybackFallbackPlan fallbackPlan = playbackCoordinator_.fallbackPlan(
-            session_.valid(),
-            playerScreenState_.positionMs(),
-            preferServerStream
-        );
+        const PlaybackFallbackPlan fallbackPlan =
+            playbackCoordinator_.fallbackPlan(session_.valid(), playerScreenState_.positionMs(), preferServerStream);
         if (!fallbackPlan.retry) return false;
 
         const PlaybackTarget failedTarget = playbackSessionState_.activeTarget();
@@ -4483,11 +4493,8 @@ private:
         if (fallbackPlan.useOfferedTarget) {
             if (shouldReportPrevious) {
                 tasks_.submit([this, session, item, failedTarget, resumeTicks] {
-                    logPlaybackReportFailure(
-                        "stop-after-failure",
-                        item.id,
-                        api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks)
-                    );
+                    logPlaybackReportFailure("stop-after-failure", item.id,
+                                             api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks));
                 });
             }
             playbackCoordinator_.useOfferedFallback(fallbackPlan);
@@ -4498,12 +4505,8 @@ private:
                 error_ = surfaceError.empty() ? "VIDEO FALLBACK SURFACE IS NOT AVAILABLE" : surfaceError;
                 return false;
             }
-            __android_log_print(
-                ANDROID_LOG_WARN,
-                kTag,
-                "Direct play failed; using offered Jellyfin %s fallback",
-                directStreamFallback ? "direct-stream" : "transcode"
-            );
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; using offered Jellyfin %s fallback",
+                                directStreamFallback ? "direct-stream" : "transcode");
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
             startResolvedPlaybackTarget(playbackSessionState_.activeTarget());
             return true;
@@ -4523,43 +4526,19 @@ private:
         loading_ = true;
         playbackCoordinator_.beginFallbackResolution();
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
-        __android_log_print(
-            ANDROID_LOG_WARN,
-            kTag,
-            "Direct play failed without fallback URL; forcing Jellyfin %s negotiation",
-            preferServerStream ? "server-stream" : "transcode"
-        );
+        __android_log_print(ANDROID_LOG_WARN, kTag,
+                            "Direct play failed without fallback URL; forcing Jellyfin %s negotiation",
+                            preferServerStream ? "server-stream" : "transcode");
 
-        const bool submitted = tasks_.submit([
-            this,
-            session,
-            item,
-            failedTarget,
-            shouldReportPrevious,
-            resumeTicks,
-            maxStreamingBitrate,
-            maxAudioChannels,
-            fallbackOverrides,
-            audioStreamIndex,
-            subtitleStreamIndex,
-            generation
-        ]() mutable {
+        const bool submitted = tasks_.submit([this, session, item, failedTarget, shouldReportPrevious, resumeTicks,
+                                              maxStreamingBitrate, maxAudioChannels, fallbackOverrides,
+                                              audioStreamIndex, subtitleStreamIndex, generation]() mutable {
             if (shouldReportPrevious) {
-                logPlaybackReportFailure(
-                    "stop-after-failure",
-                    item.id,
-                    api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks)
-                );
+                logPlaybackReportFailure("stop-after-failure", item.id,
+                                         api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks));
             }
-            auto target = api_.resolvePlayback(
-                session,
-                item,
-                maxStreamingBitrate,
-                maxAudioChannels,
-                fallbackOverrides,
-                audioStreamIndex,
-                subtitleStreamIndex
-            );
+            auto target = api_.resolvePlayback(session, item, maxStreamingBitrate, maxAudioChannels, fallbackOverrides,
+                                               audioStreamIndex, subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
@@ -4613,37 +4592,28 @@ private:
         auto& item = transition.item;
         const bool streamRestart = transition.streamRestart;
         const PlaybackTransitionPlan playbackPlan = playbackCoordinator_.activateTransition(
-            item,
-            target,
-            streamRestart,
-            transition.restartPaused,
-            transition.audioStreamIndex,
-            static_cast<VideoZoomMode>(settings_.zoomMode),
-            std::chrono::steady_clock::now()
-        );
+            item, target, streamRestart, transition.restartPaused, transition.audioStreamIndex,
+            static_cast<VideoZoomMode>(settings_.zoomMode), std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
         if (playbackPlan.resetContinuation) playbackCoordinator_.syncQueueContinuation(queueState_);
         if (trackState_.selectedSubtitleServerIndex() >= 0) {
-            const auto selectedSubtitle = std::find_if(
-                item.subtitles.begin(),
-                item.subtitles.end(),
-                [&](const JellyfinSubtitleStream& subtitle) {
+            const auto selectedSubtitle =
+                std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
                     return subtitle.index == trackState_.selectedSubtitleServerIndex();
-                }
-            );
+                });
             if (selectedSubtitle != item.subtitles.end()) {
                 const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
                 if (useNativeSubtitleRenderer(strategy, true)) {
-                    loadSubtitleAsync(
-                        *selectedSubtitle,
-                        strategy == SubtitleStrategy::ClientText ? target.subtitleUrl : std::string{}
-                    );
+                    loadSubtitleAsync(*selectedSubtitle,
+                                      strategy == SubtitleStrategy::ClientText ? target.subtitleUrl : std::string{});
                 }
             }
         }
         if (!streamRestart) {
-            if (screen_ == Screen::Player) replaceScreen(Screen::Player);
-            else pushScreen(Screen::Player);
+            if (screen_ == Screen::Player)
+                replaceScreen(Screen::Player);
+            else
+                pushScreen(Screen::Player);
         } else {
             replaceScreen(Screen::Player);
         }
@@ -4671,8 +4641,8 @@ private:
             JellyfinItem updated = completed.item;
             if (positionTicks) {
                 const int64_t boundedTicks = completed.item.runtimeTicks > 0
-                    ? std::clamp<int64_t>(*positionTicks, 0, completed.item.runtimeTicks)
-                    : std::max<int64_t>(0, *positionTicks);
+                                                 ? std::clamp<int64_t>(*positionTicks, 0, completed.item.runtimeTicks)
+                                                 : std::max<int64_t>(0, *positionTicks);
                 positionTicks = boundedTicks;
                 updated.positionTicks = boundedTicks;
             }
@@ -4692,7 +4662,8 @@ private:
         tasks_.submit([this, reportSession, reportItem, positionTicks] {
             const auto reported = api_.reportExternalPlaybackStopped(reportSession, reportItem, positionTicks);
             if (!reported.ok) {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "External playback stop report failed: %s", reported.error.c_str());
+                __android_log_print(ANDROID_LOG_WARN, kTag, "External playback stop report failed: %s",
+                                    reported.error.c_str());
             }
         });
         std::scoped_lock lock(stateMutex_);
@@ -4703,19 +4674,11 @@ private:
         if (!work.externalLaunch) return false;
         auto launch = std::move(*work.externalLaunch);
         std::string launchError;
-        const std::string title = launch.item.seriesName.empty()
-            ? launch.item.name
-            : launch.item.seriesName + " - " + launch.item.name;
+        const std::string title =
+            launch.item.seriesName.empty() ? launch.item.name : launch.item.seriesName + " - " + launch.item.name;
         const int positionMs = playbackPositionMsFromTicks(launch.item.positionTicks);
-        if (!externalPlayer_.launch(
-                launch.player,
-                launch.url,
-                title,
-                positionMs,
-                launch.subtitleUrl,
-                launch.skipSegmentsJson,
-                launchError
-            )) {
+        if (!externalPlayer_.launch(launch.player, launch.url, title, positionMs, launch.subtitleUrl,
+                                    launch.skipSegmentsJson, launchError)) {
             std::scoped_lock lock(stateMutex_);
             error_ = launchError.empty() ? "EXTERNAL PLAYER COULD NOT BE LAUNCHED" : launchError;
         } else {
@@ -4748,15 +4711,8 @@ private:
         if (settings_.refreshRateSwitching && item.videoFrameRate > 0.0f) {
             displayMode_.matchVideo(app_->window, item.videoFrameRate);
         }
-        mediaSession_.updateMetadata(
-            item.name,
-            episodeLabel(item),
-            playbackPositionMsFromTicks(item.runtimeTicks)
-        );
-        mediaSession_.updateState(
-            MediaSessionState::Buffering,
-            playbackPositionMsFromTicks(target.startTicks)
-        );
+        mediaSession_.updateMetadata(item.name, episodeLabel(item), playbackPositionMsFromTicks(item.runtimeTicks));
+        mediaSession_.updateState(MediaSessionState::Buffering, playbackPositionMsFromTicks(target.startTicks));
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
         startResolvedPlaybackTarget(target);
         return true;
@@ -4771,13 +4727,9 @@ private:
             const PlaybackPreparePlan preparePlan = playbackCoordinator_.preparePlan(now);
             if (preparePlan.timedOut) {
                 std::scoped_lock lock(stateMutex_);
-                __android_log_print(
-                    ANDROID_LOG_WARN,
-                    kTag,
-                    "Playback prepare timed out after %lld ms (%s)",
-                    static_cast<long long>(preparePlan.elapsedMs),
-                    preparePlan.transcoding ? "transcode" : "direct"
-                );
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Playback prepare timed out after %lld ms (%s)",
+                                    static_cast<long long>(preparePlan.elapsedMs),
+                                    preparePlan.transcoding ? "transcode" : "direct");
                 if (preparePlan.retryWithTranscodeFallback && retryPlaybackWithTranscodeFallback()) {
                     error_.clear();
                     return;
@@ -4816,33 +4768,24 @@ private:
 
         if (!playbackEnded && playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay) {
             const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
-            const int recoveryTargetMs = pendingSeekTargetMs >= 0
-                ? pendingSeekTargetMs
-                : playerScreenState_.recentSeekTargetMs();
+            const int recoveryTargetMs =
+                pendingSeekTargetMs >= 0 ? pendingSeekTargetMs : playerScreenState_.recentSeekTargetMs();
             if (recoveryTargetMs >= 0) {
                 const auto now = std::chrono::steady_clock::now();
                 const int observedPositionMs = player_.positionMs();
                 const bool mediaSeekable = player_.seekable();
-                const bool seekFailureMatured = pendingSeekTargetMs >= 0
-                    ? playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
-                    : playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now);
-                const bool failedSeek = shouldFallbackAfterUnseekableSeek(
-                    mediaSeekable,
-                    observedPositionMs,
-                    recoveryTargetMs,
-                    seekFailureMatured
-                );
+                const bool seekFailureMatured =
+                    pendingSeekTargetMs >= 0 ? playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
+                                             : playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now);
+                const bool failedSeek = shouldFallbackAfterUnseekableSeek(mediaSeekable, observedPositionMs,
+                                                                          recoveryTargetMs, seekFailureMatured);
                 if (failedSeek) {
                     std::scoped_lock lock(stateMutex_);
                     playerScreenState_.setPositionMs(recoveryTargetMs);
                     __android_log_print(
-                        ANDROID_LOG_WARN,
-                        kTag,
+                        ANDROID_LOG_WARN, kTag,
                         "Direct-play seek failed target=%d observed=%d seekable=%d; using Jellyfin stream fallback",
-                        recoveryTargetMs,
-                        observedPositionMs,
-                        mediaSeekable
-                    );
+                        recoveryTargetMs, observedPositionMs, mediaSeekable);
                     if (retryPlaybackWithTranscodeFallback(true)) {
                         error_.clear();
                         return;
@@ -4853,18 +4796,13 @@ private:
 
         const auto now = std::chrono::steady_clock::now();
         const PlaybackTickPlan plan = playbackCoordinator_.consumeTickPlan(
-            playbackEnded,
-            status == PlayerStatus::Playing,
-            playerScreenState_.positionMs(),
-            playbackSessionState_.activeItem().type,
-            now
-        );
+            playbackEnded, status == PlayerStatus::Playing, playerScreenState_.positionMs(),
+            playbackSessionState_.activeItem().type, now);
         if (plan.refreshTelemetry) {
             refreshPlaybackTelemetry();
-            mediaSession_.updateState(
-                status == PlayerStatus::Playing ? MediaSessionState::Playing : MediaSessionState::Paused,
-                playerScreenState_.positionMs()
-            );
+            mediaSession_.updateState(status == PlayerStatus::Playing ? MediaSessionState::Playing
+                                                                      : MediaSessionState::Paused,
+                                      playerScreenState_.positionMs());
         }
         if (plan.requestMediaSegments) requestMediaSegmentsAsync();
         if (plan.reportPlaybackStart) {
@@ -4873,44 +4811,36 @@ private:
             const auto itemCopy = playbackSessionState_.activeItem();
             const auto targetCopy = playbackSessionState_.activeTarget();
             tasks_.submit([this, session, itemCopy, targetCopy, ticks] {
-                logPlaybackReportFailure(
-                    "start",
-                    itemCopy.id,
-                    api_.reportPlaybackStart(session, itemCopy, targetCopy, ticks)
-                );
+                logPlaybackReportFailure("start", itemCopy.id,
+                                         api_.reportPlaybackStart(session, itemCopy, targetCopy, ticks));
             });
         }
         if (plan.reportProgress) reportProgressAsync(false);
         if (plan.requestNextEpisode) requestNextEpisodeAsync();
 
         const PlaybackContinuationPlan continuationPlan = playbackCoordinator_.continuationPlan(
-            playbackEnded,
-            playerScreenState_.positionMs(),
-            playerScreenState_.durationMs(),
-            queueState_,
-            settings_.autoplayNext,
-            settings_.stillWatchingAfter
-        );
+            playbackEnded, playerScreenState_.positionMs(), playerScreenState_.durationMs(), queueState_,
+            settings_.autoplayNext, settings_.stillWatchingAfter);
         switch (continuationPlan.action) {
-            case PlaybackContinuationAction::None:
-                return;
-            case PlaybackContinuationAction::PlayQueueIndex:
-                playQueuedIndexAsync(
-                    continuationPlan.queueIndex,
-                    continuationPlan.repeatCurrentQueueItem,
-                    true
-                );
-                return;
-            case PlaybackContinuationAction::AutoplayNext:
-                queueAutoplayNext(*continuationState_.nextItem());
-                return;
-            case PlaybackContinuationAction::ShowStillWatching:
-                showStillWatching(*continuationState_.nextItem());
-                return;
-            case PlaybackContinuationAction::Stop:
-                stopPlayback(true);
-                if (continuationPlan.resetAutoplayChain) playbackCoordinator_.resetAutoplayChain();
-                return;
+        case PlaybackContinuationAction::None:
+            return;
+        case PlaybackContinuationAction::PlayQueueIndex:
+            playQueuedIndexAsync(continuationPlan.queueIndex, continuationPlan.repeatCurrentQueueItem, true);
+            return;
+        case PlaybackContinuationAction::AutoplayNext: {
+            const auto& nextItem = continuationState_.nextItem();
+            if (nextItem) queueAutoplayNext(*nextItem);
+            return;
+        }
+        case PlaybackContinuationAction::ShowStillWatching: {
+            const auto& nextItem = continuationState_.nextItem();
+            if (nextItem) showStillWatching(*nextItem);
+            return;
+        }
+        case PlaybackContinuationAction::Stop:
+            stopPlayback(true);
+            if (continuationPlan.resetAutoplayChain) playbackCoordinator_.resetAutoplayChain();
+            return;
         }
     }
 
@@ -4925,20 +4855,18 @@ private:
         {
             std::scoped_lock lock(stateMutex_);
             const auto now = std::chrono::steady_clock::now();
-            if (!homeLoading_
-                && homeRetryAt_ != std::chrono::steady_clock::time_point{}
-                && now >= homeRetryAt_
-                && session_.valid()) {
+            if (!homeLoading_ && homeRetryAt_ != std::chrono::steady_clock::time_point{} && now >= homeRetryAt_ &&
+                session_.valid()) {
                 homeRetryAt_ = {};
                 retryHome = true;
             }
-            if (!homeLoading_ && session_.valid() && screen_ != Screen::Player
-                && playbackCoordinator_.consumeHomeRefreshRequest()) {
+            if (!homeLoading_ && session_.valid() && screen_ != Screen::Player &&
+                playbackCoordinator_.consumeHomeRefreshRequest()) {
                 refreshHomeAfterPlaybackStop = true;
             }
-            if (seerrRequestState_.pendingRefreshDue(now)
-                && SeerrClient::configured(settings_.seerrServer, seerrAuth())
-                && (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
+            if (seerrRequestState_.pendingRefreshDue(now) &&
+                SeerrClient::configured(settings_.seerrServer, seerrAuth()) &&
+                (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
                 seerrRequestState_.clearPendingRefreshDeadline();
                 refreshSeerr = true;
             }
@@ -4956,23 +4884,15 @@ private:
     void reportProgressAsync(bool immediate) {
         const PlayerStatus status = player_.status();
         const PlaybackProgressPlan plan = playbackCoordinator_.progressPlan(
-            screen_ == Screen::Player,
-            session_.valid(),
-            immediate,
-            status == PlayerStatus::Preparing,
-            status == PlayerStatus::Paused,
-            playerScreenState_.positionMs()
-        );
+            screen_ == Screen::Player, session_.valid(), immediate, status == PlayerStatus::Preparing,
+            status == PlayerStatus::Paused, playerScreenState_.positionMs());
         if (!plan.report) return;
         const auto session = session_;
         const auto item = playbackSessionState_.activeItem();
         const auto target = playbackSessionState_.activeTarget();
         tasks_.submit([this, session, item, target, plan] {
-            logPlaybackReportFailure(
-                plan.paused ? "paused-progress" : "progress",
-                item.id,
-                api_.reportPlaybackProgress(session, item, target, plan.ticks, plan.paused)
-            );
+            logPlaybackReportFailure(plan.paused ? "paused-progress" : "progress", item.id,
+                                     api_.reportPlaybackProgress(session, item, target, plan.ticks, plan.paused));
         });
     }
 
@@ -4996,27 +4916,54 @@ private:
             renderer_.endFrame();
             return;
         }
-        renderer_.setUiTransform(
-            uiSafeAreaFraction(settings_.safeAreaPercent),
-            uiTextScale(settings_.uiTextSize)
-        );
+        renderer_.setUiTransform(uiSafeAreaFraction(settings_.safeAreaPercent), uiTextScale(settings_.uiTextSize));
         auto renderScreen = [&](Screen target) {
             switch (target) {
-                case Screen::Login: renderLogin(); break;
-                case Screen::Profiles: renderProfiles(); break;
-                case Screen::Home: renderHome(); break;
-                case Screen::Browse: renderBrowse(); break;
-                case Screen::Search: renderSearch(); break;
-                case Screen::Settings: renderSettings(); break;
-                case Screen::Diagnostics: renderDiagnostics(); break;
-                case Screen::Details: renderDetails(); break;
-                case Screen::Cast: renderCast(); break;
-                case Screen::PersonItems: renderPersonItems(); break;
-                case Screen::ItemMenu: renderDetails(); break;
-                case Screen::Seasons: renderSeasons(); break;
-                case Screen::Episodes: renderEpisodes(); break;
-                case Screen::SeerrDrivePicker: renderSeerrDrivePicker(); break;
-                case Screen::Player: renderPlayer(); break;
+            case Screen::Login:
+                renderLogin();
+                break;
+            case Screen::Profiles:
+                renderProfiles();
+                break;
+            case Screen::Home:
+                renderHome();
+                break;
+            case Screen::Browse:
+                renderBrowse();
+                break;
+            case Screen::Search:
+                renderSearch();
+                break;
+            case Screen::Settings:
+                renderSettings();
+                break;
+            case Screen::Diagnostics:
+                renderDiagnostics();
+                break;
+            case Screen::Details:
+                renderDetails();
+                break;
+            case Screen::Cast:
+                renderCast();
+                break;
+            case Screen::PersonItems:
+                renderPersonItems();
+                break;
+            case Screen::ItemMenu:
+                renderDetails();
+                break;
+            case Screen::Seasons:
+                renderSeasons();
+                break;
+            case Screen::Episodes:
+                renderEpisodes();
+                break;
+            case Screen::SeerrDrivePicker:
+                renderSeerrDrivePicker();
+                break;
+            case Screen::Player:
+                renderPlayer();
+                break;
             }
         };
         if (screen_ == Screen::ItemMenu) {
@@ -5030,16 +4977,8 @@ private:
         renderer_.endFrame();
     }
 
-
-    void drawCoverTexture(
-        const ArtworkEntry& entry,
-        float x,
-        float y,
-        float width,
-        float height,
-        float alpha = 1.0f,
-        float radius = material_tv::cornerSmall
-    ) {
+    void drawCoverTexture(const ArtworkEntry& entry, float x, float y, float width, float height, float alpha = 1.0f,
+                          float radius = material_tv::cornerSmall) {
         const int sourceWidth = entry.sourceWidth > 0 ? entry.sourceWidth : entry.decoded.width;
         const int sourceHeight = entry.sourceHeight > 0 ? entry.sourceHeight : entry.decoded.height;
         if (entry.texture == 0 || sourceWidth <= 0 || sourceHeight <= 0 || width <= 0.0f || height <= 0.0f) return;
@@ -5061,15 +5000,8 @@ private:
         renderer_.roundedImageRegion(entry.texture, x, y, width, height, radius, u0, v0, u1, v1, alpha);
     }
 
-    bool drawHomeArtwork(
-        const JellyfinItem& item,
-        float x,
-        float y,
-        float width,
-        float height,
-        float radius = material_tv::cornerSmall,
-        float alpha = 1.0f
-    ) {
+    bool drawHomeArtwork(const JellyfinItem& item, float x, float y, float width, float height,
+                         float radius = material_tv::cornerSmall, float alpha = 1.0f) {
         ArtworkEntry* entry = artwork_.homeTexture(session_, item, isSeerrItem(item), renderer_);
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, width, height, alpha, radius);
@@ -5097,10 +5029,8 @@ private:
         const int selectedRow = std::max(0, browseState_.selection() / columns);
         const int firstVisibleRow = std::max(0, selectedRow - 1);
         const int begin = firstVisibleRow * columns;
-        const int end = std::min(
-            static_cast<int>(items.size()),
-            (firstVisibleRow + visibleRows + warmRowsAhead) * columns
-        );
+        const int end =
+            std::min(static_cast<int>(items.size()), (firstVisibleRow + visibleRows + warmRowsAhead) * columns);
         for (int index = begin; index < end; ++index) {
             const auto& item = items[static_cast<size_t>(index)];
             if (usesLandscapeMediaCard(item.type)) {
@@ -5111,7 +5041,6 @@ private:
         }
     }
 
-
     bool drawProfileArtwork(const JellyfinSession& saved, float x, float y, float size) {
         ArtworkEntry* entry = artwork_.profileTexture(saved, renderer_);
         if (!entry) return false;
@@ -5119,33 +5048,23 @@ private:
         return true;
     }
 
-
-    bool drawArtwork(
-        const JellyfinItem& item,
-        float x,
-        float y,
-        float width,
-        float height,
-        float alpha = 1.0f,
-        float radius = material_tv::cornerSmall
-    ) {
+    bool drawArtwork(const JellyfinItem& item, float x, float y, float width, float height, float alpha = 1.0f,
+                     float radius = material_tv::cornerSmall) {
         ArtworkEntry* entry = artwork_.posterTexture(session_, item, isSeerrItem(item), renderer_);
         if (!entry) return false;
         drawCoverTexture(*entry, x, y, width, height, alpha, radius);
         return true;
     }
 
-
     bool drawBackdrop(const JellyfinItem& item, float alpha = 0.28f) {
         ArtworkEntry* entry = artwork_.backdropTexture(session_, item, settings_.backdropMode, renderer_);
         if (!entry) return false;
         const float effectiveAlpha = settings_.backdropMode == 1 ? std::max(alpha, 0.34f) : alpha;
-        drawCoverTexture(
-            *entry, 0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), effectiveAlpha, 0.0f);
-        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, settings_.backdropMode == 1 ? 0.26f : 0.12f});
+        drawCoverTexture(*entry, 0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), effectiveAlpha, 0.0f);
+        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(),
+                       Color{0.0f, 0.0f, 0.0f, settings_.backdropMode == 1 ? 0.26f : 0.12f});
         return true;
     }
-
 
     bool drawLogo(const JellyfinItem& item, float x, float y, float maxWidth, float maxHeight) {
         ArtworkEntry* entry = artwork_.logoTexture(session_, item, renderer_);
@@ -5165,18 +5084,12 @@ private:
         material_tv::focusRing(renderer_, x, y, width, height, radius, accent);
     }
 
-    std::array<float, 4> focusedBounds(
-        float x,
-        float y,
-        float width,
-        float height,
-        bool focused,
-        float scale = materialCardFocusScale()
-    ) const {
+    std::array<float, 4> focusedBounds(float x, float y, float width, float height, bool focused,
+                                       float scale = materialCardFocusScale()) const {
         if (!focused) return {x, y, width, height};
-        const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - lastInteraction_
-        ).count();
+        const auto elapsedMs =
+            std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - lastInteraction_)
+                .count();
         float animatedScale = scale;
         const bool homeSelectionPress = screen_ == Screen::Home && homeState_.centerPending();
         if (!homeSelectionPress && elapsedMs >= 0 && elapsedMs < 150) {
@@ -5195,18 +5108,9 @@ private:
         };
     }
 
-    std::array<float, 4> drawFocusedSurface(
-        float x,
-        float y,
-        float width,
-        float height,
-        bool focused,
-        bool primary = false,
-        bool destructive = false,
-        float focusScale = 1.035f,
-        float radius = material_tv::cornerMedium,
-        bool outlinedWhenIdle = false
-    ) {
+    std::array<float, 4> drawFocusedSurface(float x, float y, float width, float height, bool focused,
+                                            bool primary = false, bool destructive = false, float focusScale = 1.035f,
+                                            float radius = material_tv::cornerMedium, bool outlinedWhenIdle = false) {
         auto bounds = focusedBounds(x, y, width, height, focused, focusScale);
         // Idle outlined pills need stable pixel-aligned geometry. Focused surfaces
         // deliberately keep their fractional animated bounds for smooth scaling.
@@ -5219,9 +5123,11 @@ private:
         const float radiusScale = height > 0.0f ? bounds[3] / height : 1.0f;
         const float renderedRadius = radius * radiusScale;
         const Color accent = destructive ? kError : kFocus;
-        const Color surface = destructive
-            ? (focused ? material_tv::errorContainer : Color{material_tv::errorContainer.r, material_tv::errorContainer.g, material_tv::errorContainer.b, 0.72f})
-            : (primary ? kFocusSoft : (focused ? material_tv::surfaceContainerHighest : kPanelAlt));
+        const Color surface =
+            destructive ? (focused ? material_tv::errorContainer
+                                   : Color{material_tv::errorContainer.r, material_tv::errorContainer.g,
+                                           material_tv::errorContainer.b, 0.72f})
+                        : (primary ? kFocusSoft : (focused ? material_tv::surfaceContainerHighest : kPanelAlt));
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius, surface);
         if (!focused && outlinedWhenIdle) {
             renderer_.roundedOutline(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius, 1.5f, kOutline);
@@ -5230,29 +5136,18 @@ private:
         return bounds;
     }
 
-    void drawModalSurface(
-        float x,
-        float y,
-        float width,
-        float height,
-        float radius = material_tv::cornerLarge
-    ) {
+    void drawModalSurface(float x, float y, float width, float height, float radius = material_tv::cornerLarge) {
         material_tv::dialog(renderer_, x, y, width, height, radius);
     }
 
-    std::array<float, 4> drawListItemSurface(
-        float x,
-        float y,
-        float width,
-        float height,
-        bool focused,
-        float radius = material_tv::cornerMedium,
-        float focusScale = materialListItemFocusScale()
-    ) {
+    std::array<float, 4> drawListItemSurface(float x, float y, float width, float height, bool focused,
+                                             float radius = material_tv::cornerMedium,
+                                             float focusScale = materialListItemFocusScale()) {
         const auto bounds = focusedBounds(x, y, width, height, focused, focusScale);
         const float radiusScale = height > 0.0f ? bounds[3] / height : 1.0f;
         const float renderedRadius = radius * radiusScale;
-        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius, focused ? kPanelElevated : kPanel);
+        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius,
+                              focused ? kPanelElevated : kPanel);
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, renderedRadius);
         return bounds;
     }
@@ -5267,63 +5162,27 @@ private:
         renderer_.roundedOutline(x, y, width, height, radius, 1.0f, kDivider);
     }
 
-    std::array<float, 4> drawButtonSurface(
-        float x,
-        float y,
-        float width,
-        float height,
-        bool focused,
-        bool primary = false,
-        bool destructive = false
-    ) {
-        return drawFocusedSurface(
-            x,
-            y,
-            width,
-            height,
-            focused,
-            primary,
-            destructive,
-            materialButtonFocusScale(),
-            std::min(material_tv::cornerLarge, height * 0.5f),
-            !primary
-        );
+    std::array<float, 4> drawButtonSurface(float x, float y, float width, float height, bool focused,
+                                           bool primary = false, bool destructive = false) {
+        return drawFocusedSurface(x, y, width, height, focused, primary, destructive, materialButtonFocusScale(),
+                                  std::min(material_tv::cornerLarge, height * 0.5f), !primary);
     }
 
-    std::array<float, 4> drawTabSurface(
-        float x,
-        float y,
-        float width,
-        float height,
-        bool focused,
-        bool selected
-    ) {
-        return drawFocusedSurface(x, y, width, height, focused, selected, false,
-            materialTabFocusScale(), material_tv::cornerLarge, !selected);
+    std::array<float, 4> drawTabSurface(float x, float y, float width, float height, bool focused, bool selected) {
+        return drawFocusedSurface(x, y, width, height, focused, selected, false, materialTabFocusScale(),
+                                  material_tv::cornerLarge, !selected);
     }
 
-    std::array<float, 4> drawInputSurface(
-        float x,
-        float y,
-        float width,
-        float height,
-        bool focused,
-        float focusScale = materialInputFocusScale()
-    ) {
+    std::array<float, 4> drawInputSurface(float x, float y, float width, float height, bool focused,
+                                          float focusScale = materialInputFocusScale()) {
         const auto bounds = focusedBounds(x, y, width, height, focused, focusScale);
         constexpr float radius = material_tv::cornerMedium;
         const float radiusScale = height > 0.0f ? bounds[3] / height : 1.0f;
         const float renderedRadius = radius * radiusScale;
-        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius, focused ? kPanelElevated : kPanel);
-        renderer_.roundedOutline(
-            bounds[0],
-            bounds[1],
-            bounds[2],
-            bounds[3],
-            renderedRadius,
-            focused ? 3.0f : 1.5f,
-            focused ? kFocus : kOutline
-        );
+        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius,
+                              focused ? kPanelElevated : kPanel);
+        renderer_.roundedOutline(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius, focused ? 3.0f : 1.5f,
+                                 focused ? kFocus : kOutline);
         return bounds;
     }
 
@@ -5334,20 +5193,16 @@ private:
         constexpr float inset = 10.0f;
         const Color track = on ? kFocusSoft : (focused ? material_tv::surfaceContainerHighest : kPanelAlt);
         renderer_.roundedRect(x, y, width, height, height * 0.5f, track);
-        if (!on) renderer_.roundedOutline(x, y, width, height, height * 0.5f, focused ? 2.0f : 1.5f, focused ? kFocus : kOutline);
+        if (!on)
+            renderer_.roundedOutline(x, y, width, height, height * 0.5f, focused ? 2.0f : 1.5f,
+                                     focused ? kFocus : kOutline);
         const float thumbX = on ? x + width - thumbSize - inset : x + inset;
         renderer_.roundedRect(thumbX, y + inset, thumbSize, thumbSize, thumbSize * 0.5f,
-            on ? material_tv::onPrimaryContainer : kSecondaryText);
+                              on ? material_tv::onPrimaryContainer : kSecondaryText);
     }
 
-    void drawRightAlignedSingleLine(
-        float right,
-        float y,
-        float scale,
-        std::string_view value,
-        Color color,
-        float maxWidth
-    ) {
+    void drawRightAlignedSingleLine(float right, float y, float scale, std::string_view value, Color color,
+                                    float maxWidth) {
         float fittedScale = scale;
         float width = renderer_.textWidth(fittedScale, value);
         if (maxWidth > 0.0f && width > maxWidth && width > 0.0f) {
@@ -5367,82 +5222,37 @@ private:
         return fittedScale * fit;
     }
 
-    void drawCenteredSingleLineFit(
-        float x,
-        float y,
-        float width,
-        float height,
-        float scale,
-        std::string_view value,
-        Color color,
-        float horizontalPadding = 0.0f,
-        float verticalPadding = 0.0f
-    ) {
+    void drawCenteredSingleLineFit(float x, float y, float width, float height, float scale, std::string_view value,
+                                   Color color, float horizontalPadding = 0.0f, float verticalPadding = 0.0f) {
         const float availableWidth = std::max(1.0f, width - horizontalPadding * 2.0f);
         const float availableHeight = std::max(1.0f, height - verticalPadding * 2.0f);
         const float fittedScale = fittedSingleLineScale(scale, value, availableWidth, availableHeight);
-        renderer_.textCentered(
-            x + horizontalPadding,
-            y + verticalPadding,
-            availableWidth,
-            availableHeight,
-            fittedScale,
-            value,
-            color
-        );
+        renderer_.textCentered(x + horizontalPadding, y + verticalPadding, availableWidth, availableHeight, fittedScale,
+                               value, color);
     }
 
-    void drawLeftAlignedSingleLineFit(
-        float x,
-        float y,
-        float width,
-        float height,
-        float scale,
-        std::string_view value,
-        Color color
-    ) {
+    void drawLeftAlignedSingleLineFit(float x, float y, float width, float height, float scale, std::string_view value,
+                                      Color color) {
         const float fittedScale = fittedSingleLineScale(scale, value, width, height);
-        renderer_.textVerticallyCentered(
-            x,
-            y,
-            height,
-            fittedScale,
-            fitTextLines(value, fittedScale, width, 1),
-            color,
-            width
-        );
+        renderer_.textVerticallyCentered(x, y, height, fittedScale, fitTextLines(value, fittedScale, width, 1), color,
+                                         width);
     }
 
-    float drawChip(
-        float x,
-        float y,
-        const std::string& label,
-        bool selected = false,
-        float scale = 1.45f,
-        float height = 42.0f,
-        float maxWidth = 360.0f
-    ) {
+    float drawChip(float x, float y, const std::string& label, bool selected = false, float scale = 1.45f,
+                   float height = 42.0f, float maxWidth = 360.0f) {
         const std::string_view displayLabel = materialLabel(label);
         const float width = std::round(std::clamp(renderer_.textWidth(scale, displayLabel) + 34.0f, 72.0f, maxWidth));
         x = std::round(x);
         y = std::round(y);
         renderer_.roundedRect(x, y, width, height, height * 0.5f, selected ? kFocusSoft : kPanelAlt);
         if (!selected) renderer_.roundedOutline(x, y, width, height, height * 0.5f, 1.0f, kOutline);
-        drawCenteredSingleLineFit(
-            x, y, width, height, scale, displayLabel,
-            selected ? kText : kSecondaryText, 14.0f, 4.0f);
+        drawCenteredSingleLineFit(x, y, width, height, scale, displayLabel, selected ? kText : kSecondaryText, 14.0f,
+                                  4.0f);
         return width;
     }
 
-    void drawArtworkPlaceholder(
-        const JellyfinItem& item,
-        float x,
-        float y,
-        float width,
-        float height,
-        float radius = material_tv::cornerSmall,
-        float alpha = 1.0f
-    ) {
+    void drawArtworkPlaceholder(const JellyfinItem& item, float x, float y, float width, float height,
+                                float radius = material_tv::cornerSmall, float alpha = 1.0f) {
         const auto faded = [alpha](Color color) {
             color.a *= alpha;
             return color;
@@ -5451,60 +5261,52 @@ private:
         renderer_.roundedOutline(x, y, width, height, radius, 1.0f, faded(kOutline));
         const std::string& source = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
         std::string initial = "?";
-        const auto first = std::find_if(source.begin(), source.end(), [](unsigned char c) { return std::isalnum(c) != 0; });
-        if (first != source.end()) initial.assign(1, static_cast<char>(std::toupper(static_cast<unsigned char>(*first))));
+        const auto first =
+            std::find_if(source.begin(), source.end(), [](unsigned char c) { return std::isalnum(c) != 0; });
+        if (first != source.end())
+            initial.assign(1, static_cast<char>(std::toupper(static_cast<unsigned char>(*first))));
         const float scale = height < 100.0f ? 2.0f : (height < 200.0f ? 3.0f : 4.2f);
         renderer_.textCentered(x, y, width, height, scale, initial, faded(kMuted));
     }
 
     void renderHeader(const std::string& title) {
-        renderer_.text(material_tv::layout::pageInset, 28.0f,
-            material_tv::type::supporting, "sloppaTV", kMuted);
-        renderer_.text(material_tv::layout::pageInset, 76.0f,
-            material_tv::type::headline,
-            fitTextLines(title, material_tv::type::headline, 1480.0f, 1), kText, 1480.0f);
+        renderer_.text(material_tv::layout::pageInset, 28.0f, material_tv::type::supporting, "sloppaTV", kMuted);
+        renderer_.text(material_tv::layout::pageInset, 76.0f, material_tv::type::headline,
+                       fitTextLines(title, material_tv::type::headline, 1480.0f, 1), kText, 1480.0f);
         if (settings_.showClock) {
-            drawRightAlignedSingleLine(
-                1840.0f, 52.0f, 2.05f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
+            drawRightAlignedSingleLine(1840.0f, 52.0f, 2.05f,
+                                       formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
         }
     }
 
     void renderEmptyState(const std::string& title, const std::string& message) {
         constexpr float x = 440.0f;
         constexpr float width = 1040.0f;
-        renderer_.roundedRect(x, 350.0f, width, 250.0f,
-            material_tv::cornerLarge, kPanelAlt);
-        drawCenteredSingleLineFit(
-            x + 48.0f, 386.0f, width - 96.0f, 80.0f,
-            material_tv::type::title, title, kText, 10.0f, 6.0f);
-        drawCenteredSingleLineFit(
-            x + 48.0f, 480.0f, width - 96.0f, 64.0f,
-            material_tv::type::label, message, kMuted, 10.0f, 5.0f);
+        renderer_.roundedRect(x, 350.0f, width, 250.0f, material_tv::cornerLarge, kPanelAlt);
+        drawCenteredSingleLineFit(x + 48.0f, 386.0f, width - 96.0f, 80.0f, material_tv::type::title, title, kText,
+                                  10.0f, 6.0f);
+        drawCenteredSingleLineFit(x + 48.0f, 480.0f, width - 96.0f, 64.0f, material_tv::type::label, message, kMuted,
+                                  10.0f, 5.0f);
     }
 
     void renderLogin() {
         renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
-        renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f,
-            material_tv::surfaceContainerHigh, material_tv::background);
-        drawCenteredSingleLineFit(
-            410.0f, 15.0f, 1100.0f, 145.0f,
-            material_tv::type::display, "sloppaTV", kText, 20.0f, 8.0f);
-        drawCenteredSingleLineFit(
-            410.0f, 165.0f, 1100.0f, 50.0f,
-            material_tv::type::body, "Connect to your Jellyfin server", kMuted, 20.0f, 4.0f);
+        renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f, material_tv::surfaceContainerHigh,
+                                   material_tv::background);
+        drawCenteredSingleLineFit(410.0f, 15.0f, 1100.0f, 145.0f, material_tv::type::display, "sloppaTV", kText, 20.0f,
+                                  8.0f);
+        drawCenteredSingleLineFit(410.0f, 165.0f, 1100.0f, 50.0f, material_tv::type::body,
+                                  "Connect to your Jellyfin server", kMuted, 20.0f, 4.0f);
 
         if (accountState_.quickConnectActive()) {
             drawModalSurface(465.0f, 230.0f, 990.0f, 610.0f);
-            drawCenteredSingleLineFit(
-                610.0f, 266.0f, 700.0f, 62.0f, 2.5f,
-                "Quick Connect", kSecondaryText, 12.0f, 4.0f);
+            drawCenteredSingleLineFit(610.0f, 266.0f, 700.0f, 62.0f, 2.5f, "Quick Connect", kSecondaryText, 12.0f,
+                                      4.0f);
 
             renderer_.roundedRect(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, kPanelElevated);
             renderer_.roundedOutline(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, 1.0f, kOutline);
-            drawCenteredSingleLineFit(
-                610.0f, 345.0f, 700.0f, 150.0f, 7.6f,
-                accountState_.quickConnectCode(), kText, 24.0f, 10.0f);
+            drawCenteredSingleLineFit(610.0f, 345.0f, 700.0f, 150.0f, 7.6f, accountState_.quickConnectCode(), kText,
+                                      24.0f, 10.0f);
 
             const std::array<std::string, 2> steps{
                 "Open Jellyfin on another device",
@@ -5514,21 +5316,20 @@ private:
                 const float rowY = 535.0f + static_cast<float>(i) * 74.0f;
                 renderer_.roundedRect(510.0f, rowY, 900.0f, 58.0f, material_tv::cornerMedium, kPanelAlt);
                 renderer_.roundedRect(528.0f, rowY + 9.0f, 40.0f, 40.0f, 20.0f, kFocusSoft);
-                drawCenteredSingleLineFit(
-                    528.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f,
-                    std::to_string(i + 1), kText, 4.0f, 3.0f);
-                renderer_.textVerticallyCentered(595.0f, rowY, 58.0f, 1.45f,
-                    fitTextLines(steps[i], 1.45f, 790.0f, 1), kSecondaryText, 790.0f);
+                drawCenteredSingleLineFit(528.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f, std::to_string(i + 1), kText, 4.0f,
+                                          3.0f);
+                renderer_.textVerticallyCentered(595.0f, rowY, 58.0f, 1.45f, fitTextLines(steps[i], 1.45f, 790.0f, 1),
+                                                 kSecondaryText, 790.0f);
             }
 
             const std::string status = loading_ ? "Starting…" : "Waiting for authorization…";
-            const float statusWidth = std::round(std::clamp(renderer_.textWidth(1.55f, status) + 54.0f, 260.0f, 560.0f));
+            const float statusWidth =
+                std::round(std::clamp(renderer_.textWidth(1.55f, status) + 54.0f, 260.0f, 560.0f));
             const float statusX = std::round(960.0f - statusWidth * 0.5f);
             renderer_.roundedRect(statusX, 706.0f, statusWidth, 48.0f, 24.0f, kFocusSoft);
             drawCenteredSingleLineFit(statusX, 706.0f, statusWidth, 48.0f, 1.55f, status, kText, 16.0f, 4.0f);
-            drawCenteredSingleLineFit(
-                610.0f, 776.0f, 700.0f, 48.0f, 1.55f,
-                "Press Back to cancel", kMuted, 12.0f, 4.0f);
+            drawCenteredSingleLineFit(610.0f, 776.0f, 700.0f, 48.0f, 1.55f, "Press Back to cancel", kMuted, 12.0f,
+                                      4.0f);
             return;
         }
 
@@ -5537,52 +5338,54 @@ private:
         static constexpr std::array<const char*, 3> labels{"Server", "Username", "Password"};
         for (int i = 0; i < 3; ++i) {
             const float y = 290.0f + static_cast<float>(i) * 128.0f;
-            drawLeftAlignedSingleLineFit(
-                495.0f, y - 45.0f, 420.0f, 32.0f, 1.35f,
-                labels[static_cast<size_t>(i)], kMuted);
+            drawLeftAlignedSingleLineFit(495.0f, y - 45.0f, 420.0f, 32.0f, 1.35f, labels[static_cast<size_t>(i)],
+                                         kMuted);
             const bool focused = !accountState_.keyboardActive() && accountState_.loginFocus() == i;
             const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused, materialWideInputFocusScale());
             std::string value = accountState_.field(i);
             if (i == 2 && !value.empty()) value.assign(value.size(), '*');
             const bool placeholder = value.empty() && i == 0;
             if (placeholder) value = "https://your-jellyfin-server";
-            renderer_.textVerticallyCentered(520.0f, bounds[1], bounds[3], 2.35f,
-                fitTextLines(value, 2.35f, 880.0f, 1), placeholder ? kTertiary : kText, 880.0f);
+            renderer_.textVerticallyCentered(520.0f, bounds[1], bounds[3], 2.35f, fitTextLines(value, 2.35f, 880.0f, 1),
+                                             placeholder ? kTertiary : kText, 880.0f);
         }
 
-        const bool loginFocused = accountState_.loginFocus() == AccountScreenState::kLoginAction && !accountState_.keyboardActive();
+        const bool loginFocused =
+            accountState_.loginFocus() == AccountScreenState::kLoginAction && !accountState_.keyboardActive();
         const auto loginBounds = drawButtonSurface(490.0f, 690.0f, 330.0f, 72.0f, loginFocused, true);
-        drawCenteredSingleLineFit(loginBounds[0], loginBounds[1], loginBounds[2], loginBounds[3], 2.15f, "Log in", kText, 18.0f, 6.0f);
-        const bool quickFocused = accountState_.loginFocus() == AccountScreenState::kQuickConnectAction && !accountState_.keyboardActive();
+        drawCenteredSingleLineFit(loginBounds[0], loginBounds[1], loginBounds[2], loginBounds[3], 2.15f, "Log in",
+                                  kText, 18.0f, 6.0f);
+        const bool quickFocused =
+            accountState_.loginFocus() == AccountScreenState::kQuickConnectAction && !accountState_.keyboardActive();
         const auto quickBounds = drawButtonSurface(840.0f, 690.0f, 310.0f, 72.0f, quickFocused);
-        drawCenteredSingleLineFit(quickBounds[0], quickBounds[1], quickBounds[2], quickBounds[3], 1.65f, "Quick Connect", kText, 18.0f, 6.0f);
-        const bool discoverFocused = accountState_.loginFocus() == AccountScreenState::kDiscoverAction && !accountState_.keyboardActive();
+        drawCenteredSingleLineFit(quickBounds[0], quickBounds[1], quickBounds[2], quickBounds[3], 1.65f,
+                                  "Quick Connect", kText, 18.0f, 6.0f);
+        const bool discoverFocused =
+            accountState_.loginFocus() == AccountScreenState::kDiscoverAction && !accountState_.keyboardActive();
         const auto discoverBounds = drawButtonSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
-        drawCenteredSingleLineFit(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f, "Discover", kText, 18.0f, 6.0f);
+        drawCenteredSingleLineFit(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f,
+                                  "Discover", kText, 18.0f, 6.0f);
 
         if (hasSavedUsers) {
-            const bool savedFocused = accountState_.loginFocus() == AccountScreenState::kSavedUsersAction && !accountState_.keyboardActive();
+            const bool savedFocused =
+                accountState_.loginFocus() == AccountScreenState::kSavedUsersAction && !accountState_.keyboardActive();
             const auto savedBounds = drawFocusedSurface(650.0f, 785.0f, 620.0f, 58.0f, savedFocused);
-            drawCenteredSingleLineFit(
-                savedBounds[0], savedBounds[1], savedBounds[2], savedBounds[3], 1.65f,
-                "Saved users (" + std::to_string(sessionRegistry_.size()) + ")",
-                savedFocused ? kText : kMuted, 16.0f, 5.0f);
+            drawCenteredSingleLineFit(savedBounds[0], savedBounds[1], savedBounds[2], savedBounds[3], 1.65f,
+                                      "Saved users (" + std::to_string(sessionRegistry_.size()) + ")",
+                                      savedFocused ? kText : kMuted, 16.0f, 5.0f);
         }
         if (!accountState_.keyboardActive()) {
-            const std::string hint = !accountState_.discoveryStatus().empty()
-                ? accountState_.discoveryStatus()
-                : "Discover searches your local network";
-            renderer_.text(555.0f, 870.0f, 1.65f,
-                fitTextLines(hint, 1.65f, 810.0f, 1), accountState_.discoveryStatus().empty() ? kTertiary : kFocus, 810.0f);
+            const std::string hint = !accountState_.discoveryStatus().empty() ? accountState_.discoveryStatus()
+                                                                              : "Discover searches your local network";
+            renderer_.text(555.0f, 870.0f, 1.65f, fitTextLines(hint, 1.65f, 810.0f, 1),
+                           accountState_.discoveryStatus().empty() ? kTertiary : kFocus, 810.0f);
         }
         if (accountState_.keyboardActive()) renderKeyboard(655.0f);
     }
 
     void renderProfiles() {
         renderHeader("Users & servers");
-        drawLeftAlignedSingleLineFit(
-            105.0f, 176.0f, 640.0f, 50.0f, 2.15f,
-            "Choose who is watching", kMuted);
+        drawLeftAlignedSingleLineFit(105.0f, 176.0f, 640.0f, 50.0f, 2.15f, "Choose who is watching", kMuted);
         const int totalRows = static_cast<int>(sessionRegistry_.size()) + 1;
         constexpr int visibleRows = 5;
         const int maxFirst = std::max(0, totalRows - visibleRows);
@@ -5594,47 +5397,47 @@ private:
             const bool focused = index == accountState_.profileSelection();
             if (index == static_cast<int>(sessionRegistry_.size())) {
                 const auto bounds = drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false);
-                drawCenteredSingleLineFit(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", kFocus, 8.0f, 8.0f);
-                renderer_.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f,
-                    "Add another account", kText, bounds[2] - 160.0f);
+                drawCenteredSingleLineFit(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", kFocus, 8.0f,
+                                          8.0f);
+                renderer_.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f, "Add another account",
+                                                 kText, bounds[2] - 160.0f);
                 continue;
             }
             // Focus belongs to the action, not simultaneously to its parent row.
-            renderer_.roundedRect(250.0f, y, 1420.0f, 108.0f,
-                material_tv::cornerMedium, focused ? kPanelElevated : kPanelAlt);
+            renderer_.roundedRect(250.0f, y, 1420.0f, 108.0f, material_tv::cornerMedium,
+                                  focused ? kPanelElevated : kPanelAlt);
             const auto* savedSession = sessionRegistry_.at(static_cast<size_t>(index));
             if (!savedSession) continue;
             const auto& saved = *savedSession;
             if (!drawProfileArtwork(saved, 280.0f, y + 12.0f, 84.0f)) {
                 renderer_.roundedRect(280.0f, y + 12.0f, 84.0f, 84.0f, material_tv::cornerMedium, kPanelAlt);
-                std::string initial = saved.username.empty() ? "?" : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
+                std::string initial =
+                    saved.username.empty()
+                        ? "?"
+                        : std::string(
+                              1, static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
                 drawCenteredSingleLineFit(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, kText, 8.0f, 8.0f);
             }
             const std::string profileName = saved.username.empty() ? "User" : saved.username;
-            drawLeftAlignedSingleLineFit(
-                395.0f, y + 6.0f, 650.0f, 54.0f, 2.35f,
-                profileName, kText);
-            drawLeftAlignedSingleLineFit(
-                395.0f, y + 64.0f, 650.0f, 34.0f, 1.35f,
-                saved.server, kMuted);
+            drawLeftAlignedSingleLineFit(395.0f, y + 6.0f, 650.0f, 54.0f, 2.35f, profileName, kText);
+            drawLeftAlignedSingleLineFit(395.0f, y + 64.0f, 650.0f, 34.0f, 1.35f, saved.server, kMuted);
             const bool useFocused = focused && accountState_.profileAction() == 0;
             const bool forgetFocused = focused && accountState_.profileAction() == 1;
             const auto useBounds = drawButtonSurface(1110.0f, y + 18.0f, 210.0f, 72.0f, useFocused, true);
-            drawCenteredSingleLineFit(useBounds[0], useBounds[1], useBounds[2], useBounds[3], 1.85f, "Use", kText, 16.0f, 6.0f);
+            drawCenteredSingleLineFit(useBounds[0], useBounds[1], useBounds[2], useBounds[3], 1.85f, "Use", kText,
+                                      16.0f, 6.0f);
             const auto forgetBounds = drawButtonSurface(1340.0f, y + 18.0f, 270.0f, 72.0f, forgetFocused, false, true);
-            drawCenteredSingleLineFit(forgetBounds[0], forgetBounds[1], forgetBounds[2], forgetBounds[3], 1.75f, "Forget",
-                forgetFocused ? kText : kMuted, 16.0f, 6.0f);
+            drawCenteredSingleLineFit(forgetBounds[0], forgetBounds[1], forgetBounds[2], forgetBounds[3], 1.75f,
+                                      "Forget", forgetFocused ? kText : kMuted, 16.0f, 6.0f);
         }
-        drawCenteredSingleLineFit(
-            270.0f, 950.0f, 1380.0f, 58.0f, 1.72f,
-            "Up / Down chooses account   |   Left / Right chooses action", kMuted, 18.0f, 5.0f);
+        drawCenteredSingleLineFit(270.0f, 950.0f, 1380.0f, 58.0f, 1.72f,
+                                  "Up / Down chooses account   |   Left / Right chooses action", kMuted, 18.0f, 5.0f);
     }
 
     void renderKeyboard(float top) {
         const auto& rows = keyboardRows();
-        renderer_.roundedRect(110.0f, top - 24.0f, 1700.0f,
-            Renderer::logicalHeight() - top + 24.0f,
-            material_tv::cornerLarge, material_tv::surfaceContainerHigh);
+        renderer_.roundedRect(110.0f, top - 24.0f, 1700.0f, Renderer::logicalHeight() - top + 24.0f,
+                              material_tv::cornerLarge, material_tv::surfaceContainerHigh);
         constexpr float startX = 150.0f;
         constexpr float gap = 14.0f;
         const float keyH = keyboardKeyHeight(top, static_cast<int>(rows.size()), gap);
@@ -5648,9 +5451,8 @@ private:
                 const auto bounds = drawButtonSurface(x, y, keyW, keyH, selected, selected);
                 const auto& label = keys[col].label;
                 const float scale = label.size() > 4 ? 2.15f : 2.65f;
-                drawCenteredSingleLineFit(
-                    bounds[0], bounds[1], bounds[2], bounds[3], scale,
-                    materialLabel(label), kText, 12.0f, 5.0f);
+                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], scale, materialLabel(label),
+                                          kText, 12.0f, 5.0f);
             }
         }
     }
@@ -5689,11 +5491,8 @@ private:
             brandMarkTextureGeneration_ = renderer_.generation();
         }
         if (brandMarkTexture_ == 0) {
-            brandMarkTexture_ = renderer_.createTexture(
-                brandMarkDecoded_.width,
-                brandMarkDecoded_.height,
-                brandMarkDecoded_.rgba.data()
-            );
+            brandMarkTexture_ = renderer_.createTexture(brandMarkDecoded_.width, brandMarkDecoded_.height,
+                                                        brandMarkDecoded_.rgba.data());
         }
         if (brandMarkTexture_ == 0) return false;
         renderer_.image(brandMarkTexture_, x, y, size, size);
@@ -5703,11 +5502,8 @@ private:
     void renderHome() {
         bool backdropVisible = false;
         if (settings_.backdropMode > 0 && !home_.rows.empty()) {
-            const int backdropRow = std::clamp(
-                homeState_.row() >= 0 ? homeState_.row() : homeState_.firstVisibleRow(),
-                0,
-                static_cast<int>(home_.rows.size()) - 1
-            );
+            const int backdropRow = std::clamp(homeState_.row() >= 0 ? homeState_.row() : homeState_.firstVisibleRow(),
+                                               0, static_cast<int>(home_.rows.size()) - 1);
             const auto& row = home_.rows[static_cast<size_t>(backdropRow)];
             if (!row.items.empty() && backdropRow < static_cast<int>(homeState_.selectionCount())) {
                 const int selection = homeState_.selection(backdropRow, static_cast<int>(row.items.size()));
@@ -5717,7 +5513,8 @@ private:
         if (!backdropVisible) {
             renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
         } else {
-            renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.01f, 0.012f, 0.018f, 0.34f});
+            renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(),
+                           Color{0.01f, 0.012f, 0.018f, 0.34f});
         }
 
         const bool toolbarFocused = homeState_.row() < 0;
@@ -5732,17 +5529,16 @@ private:
         for (size_t i = 0; i < navLabels.size(); ++i) {
             const bool focused = toolbarFocused && homeState_.navIndex() == navIndices[i];
             const bool active = navIndices[i] == 1;
-            const float navWidth = std::round(std::max(navMinWidths[i], renderer_.textWidth(2.0f, navLabels[i]) + 44.0f));
+            const float navWidth =
+                std::round(std::max(navMinWidths[i], renderer_.textWidth(2.0f, navLabels[i]) + 44.0f));
             if (focused) {
                 const auto bounds = drawTabSurface(navX, 40.0f, navWidth, 54.0f, true, active);
-                drawCenteredSingleLineFit(
-                    bounds[0], bounds[1], bounds[2], bounds[3], 2.0f,
-                    navLabels[i], kText, 12.0f, 4.0f);
+                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 2.0f, navLabels[i], kText, 12.0f,
+                                          4.0f);
             } else {
                 if (active) renderer_.roundedRect(navX, 40.0f, navWidth, 54.0f, material_tv::cornerLarge, kFocusSoft);
-                drawCenteredSingleLineFit(
-                    navX, 40.0f, navWidth, 54.0f, 2.0f,
-                    navLabels[i], active ? kText : kMuted, 12.0f, 4.0f);
+                drawCenteredSingleLineFit(navX, 40.0f, navWidth, 54.0f, 2.0f, navLabels[i], active ? kText : kMuted,
+                                          12.0f, 4.0f);
             }
             navX += navWidth + 12.0f;
         }
@@ -5751,51 +5547,49 @@ private:
         const float profileY = 36.0f;
         const float profileSize = 62.0f;
         const bool profileFocused = toolbarFocused && homeState_.navIndex() == 0;
-        const auto profileBounds = focusedBounds(
-            profileX, profileY, profileSize, profileSize, profileFocused, materialButtonFocusScale());
+        const auto profileBounds =
+            focusedBounds(profileX, profileY, profileSize, profileSize, profileFocused, materialButtonFocusScale());
         const float profileRadius = profileBounds[3] * 0.5f;
         renderer_.roundedRect(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], profileRadius,
-            profileFocused ? kPanelElevated : kPanelAlt);
+                              profileFocused ? kPanelElevated : kPanelAlt);
         if (!drawProfileArtwork(session_, profileBounds[0], profileBounds[1], profileBounds[2])) {
-            const std::string initial = session_.username.empty()
-                ? "U"
-                : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(session_.username.front()))));
-            drawCenteredSingleLineFit(
-                profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3],
-                2.35f, initial, kText, 6.0f, 6.0f);
+            const std::string initial =
+                session_.username.empty()
+                    ? "U"
+                    : std::string(
+                          1, static_cast<char>(std::toupper(static_cast<unsigned char>(session_.username.front()))));
+            drawCenteredSingleLineFit(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], 2.35f,
+                                      initial, kText, 6.0f, 6.0f);
         }
-        if (profileFocused) drawFocusHalo(
-            profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], kFocus, profileRadius);
+        if (profileFocused)
+            drawFocusHalo(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], kFocus,
+                          profileRadius);
 
         if (settings_.showClock) {
-            drawRightAlignedSingleLine(
-                1900.0f, 53.0f, 2.10f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour),
-                Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 150.0f);
+            drawRightAlignedSingleLine(1900.0f, 53.0f, 2.10f,
+                                       formatLocalClock(std::time(nullptr), settings_.clock24Hour),
+                                       Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 150.0f);
         }
 
         if (home_.rows.empty()) {
             renderEmptyState(homeLoading_ ? "Loading your library" : "Your library is empty",
-                homeLoading_ ? "Connecting to your Jellyfin server" : "Check your server connection and available libraries.");
+                             homeLoading_ ? "Connecting to your Jellyfin server"
+                                          : "Check your server connection and available libraries.");
             return;
         }
 
-        const int firstVisibleRow = homeFirstVisibleRow(
-            homeState_.firstVisibleRow(),
-            homeState_.row(),
-            static_cast<int>(home_.rows.size()),
-            2
-        );
+        const int firstVisibleRow =
+            homeFirstVisibleRow(homeState_.firstVisibleRow(), homeState_.row(), static_cast<int>(home_.rows.size()), 2);
         int renderFirstRow = firstVisibleRow;
         float slideOffset = 0.0f;
         int renderRowCount = 2;
         const auto now = std::chrono::steady_clock::now();
         constexpr auto slideDuration = 220ms;
         const float rowStep = homeRowStep(settings_.uiTextSize);
-        if (homeSlideStarted_ != std::chrono::steady_clock::time_point{}
-            && homeSlideToFirst_ == firstVisibleRow
-            && now < homeSlideStarted_ + slideDuration) {
-            const float elapsed = static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(now - homeSlideStarted_).count());
+        if (homeSlideStarted_ != std::chrono::steady_clock::time_point{} && homeSlideToFirst_ == firstVisibleRow &&
+            now < homeSlideStarted_ + slideDuration) {
+            const float elapsed = static_cast<float>(
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - homeSlideStarted_).count());
             const float progress = std::clamp(elapsed / 220.0f, 0.0f, 1.0f);
             const float eased = progress * progress * (3.0f - 2.0f * progress);
             renderRowCount = 3;
@@ -5810,12 +5604,8 @@ private:
         for (int visible = 0; visible < renderRowCount; ++visible) {
             const int row = renderFirstRow + visible;
             if (row < 0 || row >= static_cast<int>(home_.rows.size())) continue;
-            renderHomeRow(
-                home_.rows[static_cast<size_t>(row)].title,
-                home_.rows[static_cast<size_t>(row)].items,
-                row,
-                150.0f + static_cast<float>(visible) * rowStep + slideOffset
-            );
+            renderHomeRow(home_.rows[static_cast<size_t>(row)].title, home_.rows[static_cast<size_t>(row)].items, row,
+                          150.0f + static_cast<float>(visible) * rowStep + slideOffset);
         }
     }
 
@@ -5843,16 +5633,15 @@ private:
                 if (!hasArtwork) drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
                 if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
                 renderer_.text(x + 4.0f, imageY + cardH + 24.0f, 2.05f,
-                    fitTextLines(items[static_cast<size_t>(index)].name, 2.05f, cardW - 8.0f, 1),
-                    focused ? kText : kSecondaryText, cardW - 8.0f);
+                               fitTextLines(items[static_cast<size_t>(index)].name, 2.05f, cardW - 8.0f, 1),
+                               focused ? kText : kSecondaryText, cardW - 8.0f);
                 x += cardW + gap;
             }
             return;
         }
 
-        renderer_.text(72.0f, top, 3.05f,
-            fitTextLines(title, 3.05f, 900.0f, 1),
-            homeState_.row() == row ? kText : kSecondaryText, 900.0f);
+        renderer_.text(72.0f, top, 3.05f, fitTextLines(title, 3.05f, 900.0f, 1),
+                       homeState_.row() == row ? kText : kSecondaryText, 900.0f);
         const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 5);
         constexpr float cardH = 202.0f;
         constexpr float cardW = 350.0f;
@@ -5868,10 +5657,10 @@ private:
             if (x + cardW > 1908.0f && index > start) break;
             const auto& item = items[static_cast<size_t>(index)];
             float itemAlpha = 1.0f;
-            if (title == "Next Up" && index == nextUpReplacementFadeIndex_
-                && item.id == nextUpReplacementFadeItemId_
-                && nextUpReplacementFadeStarted_ != std::chrono::steady_clock::time_point{}) {
-                const auto fadeElapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - nextUpReplacementFadeStarted_).count();
+            if (title == "Next Up" && index == nextUpReplacementFadeIndex_ && item.id == nextUpReplacementFadeItemId_ &&
+                nextUpReplacementFadeStarted_ != std::chrono::steady_clock::time_point{}) {
+                const auto fadeElapsed =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(now - nextUpReplacementFadeStarted_).count();
                 const float progress = std::clamp(static_cast<float>(fadeElapsed) / 300.0f, 0.0f, 1.0f);
                 itemAlpha = progress * progress * (3.0f - 2.0f * progress);
             }
@@ -5882,18 +5671,23 @@ private:
             const bool focused = homeState_.row() == row && index == selected;
             const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, materialCardFocusScale());
             const float cardRadius = material_tv::cornerSmall * bounds[3] / cardH;
-            const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
-            if (!hasArtwork) drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
+            const bool hasArtwork =
+                drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
+            if (!hasArtwork)
+                drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
             if (item.externalProgressPercent >= 0) {
                 const double progress = std::clamp(static_cast<double>(item.externalProgressPercent) / 100.0, 0.0, 1.0);
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, faded(kTrack));
+                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f,
+                                      faded(kTrack));
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
-                    static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
+                                      static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
             } else if (item.positionTicks > 0 && item.runtimeTicks > 0) {
-                const double progress = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f, faded(kTrack));
+                const double progress = std::clamp(
+                    static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
+                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f,
+                                      faded(kTrack));
                 renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
-                    static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
+                                      static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
             }
             if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], faded(kFocus), cardRadius);
 
@@ -5906,32 +5700,30 @@ private:
                 if (item.externalProgressPercent >= 0 && !item.externalProgressLabel.empty()) {
                     const std::string percentLabel = std::to_string(item.externalProgressPercent) + "%";
                     const float percentWidth = std::ceil(renderer_.textWidth(1.16f, percentLabel));
-                    const float etaWidth = item.externalProgressEta.empty()
-                        ? 0.0f
-                        : std::round(std::clamp(
-                            renderer_.textWidth(1.08f, materialLabel(item.externalProgressEta)) + 34.0f,
-                            72.0f,
-                            210.0f));
+                    const float etaWidth =
+                        item.externalProgressEta.empty()
+                            ? 0.0f
+                            : std::round(std::clamp(
+                                  renderer_.textWidth(1.08f, materialLabel(item.externalProgressEta)) + 34.0f, 72.0f,
+                                  210.0f));
                     constexpr float metadataGap = 12.0f;
                     constexpr float statusToMetadataGap = 22.0f;
                     const float rightEdge = x + cardW - 2.0f;
                     const float etaX = rightEdge - etaWidth;
-                    const float percentX = item.externalProgressEta.empty()
-                        ? rightEdge - percentWidth
-                        : etaX - metadataGap - percentWidth;
+                    const float percentX =
+                        item.externalProgressEta.empty() ? rightEdge - percentWidth : etaX - metadataGap - percentWidth;
                     const float statusWidth = std::max(60.0f, percentX - (x + 2.0f) - statusToMetadataGap);
                     renderer_.text(x + 2.0f, secondaryY, 1.48f,
-                        singleLine(item.externalProgressLabel, 1.48f, statusWidth), faded(kMuted), statusWidth);
-                    renderer_.textVerticallyCentered(
-                        percentX, secondaryY - 3.0f, 30.0f, 1.16f,
-                        percentLabel, kSecondaryText, percentWidth);
+                                   singleLine(item.externalProgressLabel, 1.48f, statusWidth), faded(kMuted),
+                                   statusWidth);
+                    renderer_.textVerticallyCentered(percentX, secondaryY - 3.0f, 30.0f, 1.16f, percentLabel,
+                                                     kSecondaryText, percentWidth);
                     if (!item.externalProgressEta.empty()) {
-                        drawChip(etaX, secondaryY - 3.0f, item.externalProgressEta,
-                            false, 1.08f, 30.0f, 210.0f);
+                        drawChip(etaX, secondaryY - 3.0f, item.externalProgressEta, false, 1.08f, 30.0f, 210.0f);
                     }
                 } else {
-                    renderer_.text(x + 2.0f, secondaryY, 1.58f,
-                        singleLine(item.externalStatus, 1.58f, cardW - 4.0f), faded(kMuted), cardW - 4.0f);
+                    renderer_.text(x + 2.0f, secondaryY, 1.58f, singleLine(item.externalStatus, 1.58f, cardW - 4.0f),
+                                   faded(kMuted), cardW - 4.0f);
                 }
             } else if (item.type == "Episode") {
                 std::string episode = episodeNumberLabel(item);
@@ -5941,30 +5733,19 @@ private:
                 }
                 if (!episode.empty()) {
                     const float secondaryY = titleY + 11.0f * 2.45f * uiTextScale(settings_.uiTextSize) + 4.0f;
-                    renderer_.text(x + 2.0f, secondaryY, 1.58f,
-                        singleLine(episode, 1.58f, cardW - 4.0f), faded(kMuted), cardW - 4.0f);
+                    renderer_.text(x + 2.0f, secondaryY, 1.58f, singleLine(episode, 1.58f, cardW - 4.0f), faded(kMuted),
+                                   cardW - 4.0f);
                 }
             }
             x += cardW + gap;
         }
     }
 
-
-    void renderMediaArtworkCard(
-        const JellyfinItem& item,
-        float x,
-        float y,
-        float slotWidth,
-        bool focused,
-        bool showState = true,
-        bool preferSeriesCover = false,
-        bool alignToPortraitBand = false,
-        int titleLineLimit = 0
-    ) {
-        const bool seriesCoverForEpisode = preferSeriesCover
-            && item.type == "Episode"
-            && !item.seriesId.empty()
-            && !item.seriesPrimaryImageTag.empty();
+    void renderMediaArtworkCard(const JellyfinItem& item, float x, float y, float slotWidth, bool focused,
+                                bool showState = true, bool preferSeriesCover = false, bool alignToPortraitBand = false,
+                                int titleLineLimit = 0) {
+        const bool seriesCoverForEpisode = preferSeriesCover && item.type == "Episode" && !item.seriesId.empty() &&
+                                           !item.seriesPrimaryImageTag.empty();
         const bool landscape = usesLandscapeMediaCard(item.type) && !seriesCoverForEpisode;
         const float imageWidth = landscape ? slotWidth : mediaPosterWidth();
         const float imageHeight = landscape ? 180.0f : mediaPosterHeight();
@@ -5981,17 +5762,19 @@ private:
             cover.type = "Series";
         }
         const bool hasArtwork = landscape
-            ? drawHomeArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius)
-            : drawArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], 1.0f, cardRadius);
+                                    ? drawHomeArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius)
+                                    : drawArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], 1.0f, cardRadius);
         if (!hasArtwork) {
             drawArtworkPlaceholder(item, bounds[0] + 1.0f, bounds[1] + 1.0f, bounds[2] - 2.0f, bounds[3] - 2.0f,
-                std::max(0.0f, cardRadius - 1.0f));
+                                   std::max(0.0f, cardRadius - 1.0f));
         }
         if (item.positionTicks > 0 && item.runtimeTicks > 0) {
-            const double fraction = std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-            renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f, bounds[2] - 20.0f, 5.0f, 2.5f, kTrack);
+            const double fraction =
+                std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
+            renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f, bounds[2] - 20.0f, 5.0f, 2.5f,
+                                  kTrack);
             renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f,
-                static_cast<float>((bounds[2] - 20.0f) * fraction), 5.0f, 2.5f, kFocus);
+                                  static_cast<float>((bounds[2] - 20.0f) * fraction), 5.0f, 2.5f, kFocus);
         }
         if (showState && (item.favorite || (settings_.showWatchedIndicators && item.played))) {
             const std::string label = item.favorite ? "Favorite" : "Watched";
@@ -6000,34 +5783,29 @@ private:
             const float badgeY = bounds[1] + 12.0f;
             const Color badgeSurface = item.favorite ? kFocusSoft : kPanelElevated;
             renderer_.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, badgeSurface);
-            renderer_.roundedOutline(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, 1.0f,
-                item.favorite ? kFocus : kOutline);
-            drawCenteredSingleLineFit(
-                badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, kText, 10.0f, 3.0f);
+            renderer_.roundedOutline(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, 1.0f, item.favorite ? kFocus : kOutline);
+            drawCenteredSingleLineFit(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, kText, 10.0f, 3.0f);
         }
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
 
         const float titleY = y + artworkBandHeight + 24.0f;
         const int titleLines = titleLineLimit > 0 ? titleLineLimit : (landscape ? 1 : 2);
-        const std::string fittedTitle = fitTextLines(
-            item.name, material_tv::type::label, imageWidth - 4.0f, titleLines);
-        renderer_.text(imageX + 2.0f, titleY, material_tv::type::label,
-            fittedTitle, kText, imageWidth - 4.0f);
-        const std::string secondary = isSeerrItem(item)
-            ? (item.externalRequested
-                ? item.externalStatus
-                : std::string("Press OK to request"))
-            : episodeLabel(item);
+        const std::string fittedTitle =
+            fitTextLines(item.name, material_tv::type::label, imageWidth - 4.0f, titleLines);
+        renderer_.text(imageX + 2.0f, titleY, material_tv::type::label, fittedTitle, kText, imageWidth - 4.0f);
+        const std::string secondary =
+            isSeerrItem(item) ? (item.externalRequested ? item.externalStatus : std::string("Press OK to request"))
+                              : episodeLabel(item);
         if (!secondary.empty()) {
-            const int renderedTitleLines = fittedTitle.empty()
-                ? 0
-                : 1 + static_cast<int>(std::count(fittedTitle.begin(), fittedTitle.end(), '\n'));
+            const int renderedTitleLines =
+                fittedTitle.empty() ? 0
+                                    : 1 + static_cast<int>(std::count(fittedTitle.begin(), fittedTitle.end(), '\n'));
             const float titleLineHeight = 11.0f * material_tv::type::label * uiTextScale(settings_.uiTextSize);
             const float secondaryY = titleY + titleLineHeight * static_cast<float>(renderedTitleLines) + 3.0f;
             const float secondaryHeight = 10.0f * 1.45f * uiTextScale(settings_.uiTextSize);
             if (secondaryY + secondaryHeight <= Renderer::logicalHeight() - 8.0f) {
-                renderer_.text(imageX + 2.0f, secondaryY, 1.45f,
-                    fitTextLines(secondary, 1.45f, imageWidth - 4.0f, 1), kMuted, imageWidth - 4.0f);
+                renderer_.text(imageX + 2.0f, secondaryY, 1.45f, fitTextLines(secondary, 1.45f, imageWidth - 4.0f, 1),
+                               kMuted, imageWidth - 4.0f);
             }
         }
     }
@@ -6035,13 +5813,12 @@ private:
     void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
         const auto bounds = focusedBounds(x, y, width, height, focused, materialCardFocusScale());
         const float tileRadius = material_tv::cornerMedium * bounds[3] / height;
-        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], tileRadius, focused ? kPanelElevated : kPanel);
-        drawCenteredSingleLineFit(
-            bounds[0] + 28.0f, bounds[1] + 18.0f, bounds[2] - 56.0f, 42.0f,
-            1.25f, item.type, kTertiary, 8.0f, 3.0f);
-        drawCenteredSingleLineFit(
-            bounds[0] + 28.0f, bounds[1] + 58.0f, bounds[2] - 56.0f, bounds[3] - 76.0f,
-            2.55f, item.name, kText, 10.0f, 6.0f);
+        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], tileRadius,
+                              focused ? kPanelElevated : kPanel);
+        drawCenteredSingleLineFit(bounds[0] + 28.0f, bounds[1] + 18.0f, bounds[2] - 56.0f, 42.0f, 1.25f, item.type,
+                                  kTertiary, 8.0f, 3.0f);
+        drawCenteredSingleLineFit(bounds[0] + 28.0f, bounds[1] + 58.0f, bounds[2] - 56.0f, bounds[3] - 76.0f, 2.55f,
+                                  item.name, kText, 10.0f, 6.0f);
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, tileRadius);
     }
 
@@ -6053,17 +5830,20 @@ private:
             float x = 88.0f;
             for (size_t index = 0; index < labels.size(); ++index) {
                 const float width = labels[index] == "COLLECTIONS" ? 235.0f : 176.0f;
-                const bool focused = browseState_.filterFocused() && static_cast<int>(index) == browseState_.filterSelection();
+                const bool focused =
+                    browseState_.filterFocused() && static_cast<int>(index) == browseState_.filterSelection();
                 const bool active = static_cast<int>(index) == browseState_.activeFilterSelection();
                 if (focused) {
                     const auto bounds = drawTabSurface(x, 190.0f, width, 58.0f, true, active);
                     drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f,
-                        materialLabel(labels[index]), kText, 14.0f, 4.0f);
+                                              materialLabel(labels[index]), kText, 14.0f, 4.0f);
                 } else {
-                    renderer_.roundedRect(x, 190.0f, width, 58.0f, material_tv::cornerLarge, active ? kFocusSoft : kPanel);
-                    if (!active) renderer_.roundedOutline(x, 190.0f, width, 58.0f, material_tv::cornerLarge, 1.5f, kOutline);
-                    drawCenteredSingleLineFit(x, 190.0f, width, 58.0f, 1.65f,
-                        materialLabel(labels[index]), active ? kText : kMuted, 14.0f, 4.0f);
+                    renderer_.roundedRect(x, 190.0f, width, 58.0f, material_tv::cornerLarge,
+                                          active ? kFocusSoft : kPanel);
+                    if (!active)
+                        renderer_.roundedOutline(x, 190.0f, width, 58.0f, material_tv::cornerLarge, 1.5f, kOutline);
+                    drawCenteredSingleLineFit(x, 190.0f, width, 58.0f, 1.65f, materialLabel(labels[index]),
+                                              active ? kText : kMuted, 14.0f, 4.0f);
                 }
                 x += width + 10.0f;
             }
@@ -6072,7 +5852,8 @@ private:
         const auto& items = browseState_.items();
         if (items.empty()) {
             renderEmptyState(loading_ ? "Loading your library" : "No titles found",
-                loading_ ? "Fetching titles from Jellyfin" : "Try another filter to discover more titles.");
+                             loading_ ? "Fetching titles from Jellyfin"
+                                      : "Try another filter to discover more titles.");
             return;
         }
 
@@ -6080,9 +5861,8 @@ private:
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
         const bool syntheticPage = browseState_.syntheticPage();
-        const bool hasPortraitCards = std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) {
-            return !usesLandscapeMediaCard(item.type);
-        });
+        const bool hasPortraitCards = std::any_of(
+            items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
         const float rowStep = syntheticPage ? 190.0f : browseMediaRowHeight(hasPortraitCards);
         const int visibleRows = browseMediaVisibleRows(syntheticPage);
         const int firstRow = mediaFirstVisibleRow(browseState_.selection(), visibleRows);
@@ -6094,12 +5874,12 @@ private:
             const float y = 285.0f + static_cast<float>(row) * rowStep;
             const bool focused = !browseState_.filterFocused() && index == browseState_.selection();
             const auto& item = items[static_cast<size_t>(index)];
-            if (syntheticPage) renderTextTile(item, x, y, slotWidth, 160.0f, focused);
+            if (syntheticPage)
+                renderTextTile(item, x, y, slotWidth, 160.0f, focused);
             else {
                 const bool showState = item.type != "BoxSet" && item.type != "CollectionFolder";
-                renderMediaArtworkCard(
-                    item, x, y, slotWidth, focused, showState, false, hasPortraitCards,
-                    browseMediaTitleLineLimit(hasPortraitCards));
+                renderMediaArtworkCard(item, x, y, slotWidth, focused, showState, false, hasPortraitCards,
+                                       browseMediaTitleLineLimit(hasPortraitCards));
             }
         }
     }
@@ -6114,36 +5894,34 @@ private:
         const bool systemSearchInputActive = systemTextInputMode_ == kTextInputSearch;
         const bool searchFieldFocused =
             systemSearchInputActive || (!searchState_.keyboard() && results.empty() && !searchState_.seerrLoading());
-        const auto searchBounds = drawInputSurface(
-            72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused, materialWideInputFocusScale());
+        const auto searchBounds =
+            drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused, materialWideInputFocusScale());
         const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
         renderer_.textVerticallyCentered(106.0f, searchBounds[1], searchBounds[3], 2.15f,
-            fitTextLines(searchDisplay, 2.15f, searchWidth - 68.0f, 1),
-            query.empty() ? kMuted : kText, searchWidth - 68.0f);
-        const std::string_view searchHint = searchState_.keyboard()
-            ? "On-screen keyboard"
-            : (systemSearchInputActive ? "Typing…" : (results.empty() ? "Press OK to type" : "Up to edit"));
-        drawLeftAlignedSingleLineFit(
-            1575.0f, searchTop, 250.0f, 68.0f, 1.45f,
-            searchHint,
-            (searchState_.keyboard() || systemSearchInputActive) ? kFocus : kSecondaryText);
+                                         fitTextLines(searchDisplay, 2.15f, searchWidth - 68.0f, 1),
+                                         query.empty() ? kMuted : kText, searchWidth - 68.0f);
+        const std::string_view searchHint =
+            searchState_.keyboard()
+                ? "On-screen keyboard"
+                : (systemSearchInputActive ? "Typing…" : (results.empty() ? "Press OK to type" : "Up to edit"));
+        drawLeftAlignedSingleLineFit(1575.0f, searchTop, 250.0f, 68.0f, 1.45f, searchHint,
+                                     (searchState_.keyboard() || systemSearchInputActive) ? kFocus : kSecondaryText);
 
         if (searchState_.keyboard()) {
             renderKeyboard(270.0f);
-            drawCenteredSingleLineFit(
-                560.0f, 886.0f, 800.0f, 58.0f, 1.62f,
-                "Done runs search   |   Back closes keyboard", kMuted, 16.0f, 5.0f);
+            drawCenteredSingleLineFit(560.0f, 886.0f, 800.0f, 58.0f, 1.62f,
+                                      "Done runs search   |   Back closes keyboard", kMuted, 16.0f, 5.0f);
             return;
         }
 
         if (systemSearchInputActive && results.empty() && !searchState_.seerrLoading()) {
-            drawCenteredSingleLineFit(
-                480.0f, 300.0f, 960.0f, 64.0f, 1.75f,
-                "Type to search Jellyfin and Seerr", kMuted, 16.0f, 5.0f);
+            drawCenteredSingleLineFit(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to search Jellyfin and Seerr", kMuted,
+                                      16.0f, 5.0f);
             return;
         }
         if (query.empty() && results.empty()) {
-            renderEmptyState("Find your next favorite", "Search your library and request anything missing through Seerr.");
+            renderEmptyState("Find your next favorite",
+                             "Search your library and request anything missing through Seerr.");
             return;
         }
 
@@ -6162,30 +5940,28 @@ private:
             semanticRows.push_back(SearchScreenState::kEpisodeRow);
         }
         if (semanticRows.empty()) {
-            renderEmptyState("No results found", seerrConfigured
-                ? "No Jellyfin or Seerr matches for this search."
-                : "No Jellyfin matches. Connect Seerr in Settings to search for more.");
+            renderEmptyState("No results found",
+                             seerrConfigured ? "No Jellyfin or Seerr matches for this search."
+                                             : "No Jellyfin matches. Connect Seerr in Settings to search for more.");
             return;
         }
 
         int selectedSemanticRow = searchState_.selectedRow();
         auto selectedPosition = std::find(semanticRows.begin(), semanticRows.end(), selectedSemanticRow);
         int selectedRowPosition = selectedPosition == semanticRows.end()
-            ? 0
-            : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
-        const int firstSemantic = std::clamp(selectedRowPosition - 1, 0, std::max(0, static_cast<int>(semanticRows.size()) - 2));
+                                      ? 0
+                                      : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
+        const int firstSemantic =
+            std::clamp(selectedRowPosition - 1, 0, std::max(0, static_cast<int>(semanticRows.size()) - 2));
 
         auto drawLoadingDots = [&](float x, float y) {
-            const double seconds = std::chrono::duration<double>(
-                std::chrono::steady_clock::now().time_since_epoch()).count();
+            const double seconds =
+                std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
             for (int i = 0; i < 3; ++i) {
                 const float pulse = 0.45f + 0.55f * static_cast<float>((std::sin(seconds * 5.0 - i * 1.2) + 1.0) * 0.5);
                 const float size = 9.0f + pulse * 5.0f;
-                renderer_.roundedRect(
-                    x + static_cast<float>(i) * 24.0f,
-                    y + (14.0f - size) * 0.5f,
-                    size, size, size * 0.5f,
-                    Color{kFocus.r, kFocus.g, kFocus.b, 0.45f + pulse * 0.55f});
+                renderer_.roundedRect(x + static_cast<float>(i) * 24.0f, y + (14.0f - size) * 0.5f, size, size,
+                                      size * 0.5f, Color{kFocus.r, kFocus.g, kFocus.b, 0.45f + pulse * 0.55f});
             }
         };
 
@@ -6194,8 +5970,8 @@ private:
             const float cardY = visibleSlot == 0 ? 314.0f : 780.0f;
             const int count = searchState_.rowItemCount(semanticRow);
             std::string label = semanticRow == SearchScreenState::kLibraryRow
-                ? "In your library"
-                : (semanticRow == SearchScreenState::kSeerrRow ? "Seerr" : "Episodes");
+                                    ? "In your library"
+                                    : (semanticRow == SearchScreenState::kSeerrRow ? "Seerr" : "Episodes");
 
             if (semanticRow == SearchScreenState::kSeerrRow) {
                 renderer_.rect(72.0f, labelY - 22.0f, 1776.0f, 1.5f, kDivider);
@@ -6217,11 +5993,11 @@ private:
                     renderer_.roundedRect(badgeX, badgeY, badgeWidth, 43.0f, 15.0f, kPanelElevated);
                     renderer_.roundedRect(badgeX + 11.0f, badgeY + 11.0f, 29.0f, 21.0f, 5.0f, kPanel);
                     renderer_.roundedRect(badgeX + 16.0f, badgeY + 16.0f, 19.0f, 4.0f, 2.0f,
-                        percent >= 90 ? kError : kSecondaryText);
+                                          percent >= 90 ? kError : kSecondaryText);
                     renderer_.roundedRect(badgeX + 31.0f, badgeY + 25.0f, 4.0f, 4.0f, 2.0f,
-                        percent >= 90 ? kError : kFocus);
-                    drawCenteredSingleLineFit(badgeX + 43.0f, badgeY, 58.0f, 43.0f, 1.32f,
-                        text, percent >= 90 ? kError : kSecondaryText, 4.0f, 2.0f);
+                                          percent >= 90 ? kError : kFocus);
+                    drawCenteredSingleLineFit(badgeX + 43.0f, badgeY, 58.0f, 43.0f, 1.32f, text,
+                                              percent >= 90 ? kError : kSecondaryText, 4.0f, 2.0f);
                     badgeRight = badgeX - 10.0f;
                     ++shownDrives;
                 }
@@ -6233,9 +6009,8 @@ private:
                     drawLoadingDots(196.0f, labelY + 8.0f);
                     renderer_.text(288.0f, labelY + 1.0f, 1.45f, "Searching Seerr…", kMuted, 440.0f);
                 } else if (count <= 0) {
-                    const std::string message = searchState_.seerrError().empty()
-                        ? "No additional matches"
-                        : "Seerr unavailable";
+                    const std::string message =
+                        searchState_.seerrError().empty() ? "No additional matches" : "Seerr unavailable";
                     renderer_.text(196.0f, labelY + 1.0f, 1.45f, message, kMuted, 520.0f);
                     return;
                 }
@@ -6263,7 +6038,8 @@ private:
                     const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
                     const auto& item = results[static_cast<size_t>(index)];
                     const bool focused = !systemSearchInputActive && index == searchState_.selection();
-                    const auto bounds = focusedBounds(x, cardY, slotWidth, imageHeight, focused, materialCardFocusScale());
+                    const auto bounds =
+                        focusedBounds(x, cardY, slotWidth, imageHeight, focused, materialCardFocusScale());
                     const float radius = material_tv::cornerSmall * bounds[3] / imageHeight;
                     renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], radius, kPanelAlt);
                     if (!drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], radius)) {
@@ -6272,47 +6048,34 @@ private:
                     if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, radius);
                     const float titleY = cardY + imageHeight + 18.0f;
                     if (focused) {
-                        drawLingeringTitle(
-                            x + 2.0f, titleY, 1.95f, item.name, slotWidth - 4.0f, kText,
-                            std::chrono::steady_clock::now());
+                        drawLingeringTitle(x + 2.0f, titleY, 1.95f, item.name, slotWidth - 4.0f, kText,
+                                           std::chrono::steady_clock::now());
                     } else {
-                        renderer_.text(x + 2.0f, titleY, 1.95f,
-                            fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1),
-                            kSecondaryText, slotWidth - 4.0f);
+                        renderer_.text(x + 2.0f, titleY, 1.95f, fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1),
+                                       kSecondaryText, slotWidth - 4.0f);
                     }
-                    const std::string state = item.externalRequested
-                        ? item.externalStatus
-                        : std::string("Press OK to request");
-                    renderer_.text(x + 2.0f, titleY + 27.0f, 1.35f,
-                        fitTextLines(state, 1.35f, slotWidth - 4.0f, 1), kMuted, slotWidth - 4.0f);
+                    const std::string state =
+                        item.externalRequested ? item.externalStatus : std::string("Press OK to request");
+                    renderer_.text(x + 2.0f, titleY + 27.0f, 1.35f, fitTextLines(state, 1.35f, slotWidth - 4.0f, 1),
+                                   kMuted, slotWidth - 4.0f);
                 }
                 return;
             }
 
-            const bool rowHasPortraitCards = std::any_of(
-                results.begin() + begin,
-                results.begin() + end,
-                [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); }
-            );
+            const bool rowHasPortraitCards =
+                std::any_of(results.begin() + begin, results.begin() + end,
+                            [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
             for (int index = begin; index < end; ++index) {
                 const int col = index - begin;
                 const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-                renderMediaArtworkCard(
-                    results[static_cast<size_t>(index)],
-                    x,
-                    cardY,
-                    slotWidth,
-                    !systemSearchInputActive && index == searchState_.selection(),
-                    true,
-                    false,
-                    rowHasPortraitCards,
-                    1
-                );
+                renderMediaArtworkCard(results[static_cast<size_t>(index)], x, cardY, slotWidth,
+                                       !systemSearchInputActive && index == searchState_.selection(), true, false,
+                                       rowHasPortraitCards, 1);
             }
         };
 
         for (int slot = 0; slot < 2 && firstSemantic + slot < static_cast<int>(semanticRows.size()); ++slot) {
-            renderResultRow(semanticRows[static_cast<size_t>(firstSemantic + slot)], slot);
+            renderResultRow(semanticRows[static_cast<size_t>(firstSemantic) + static_cast<size_t>(slot)], slot);
         }
     }
 
@@ -6320,8 +6083,8 @@ private:
         renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
         const auto& pendingRequest = seerrStorageState_.pendingRequest();
         const std::string subtitle = !pendingRequest || pendingRequest->name.empty()
-            ? "Choose where Seerr should place this request"
-            : "Choose storage for " + pendingRequest->name;
+                                         ? "Choose where Seerr should place this request"
+                                         : "Choose storage for " + pendingRequest->name;
         renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
 
         const auto& driveChoices = seerrStorageState_.driveChoices();
@@ -6340,8 +6103,8 @@ private:
             const float x = 120.0f;
             const float y = 220.0f + static_cast<float>(slot) * 145.0f;
             constexpr float width = 1680.0f;
-            drawListItemSurface(x, y, width, 116.0f, focused,
-                material_tv::cornerMedium, materialWideListItemFocusScale());
+            drawListItemSurface(x, y, width, 116.0f, focused, material_tv::cornerMedium,
+                                materialWideListItemFocusScale());
 
             // Compact physical-drive glyph: body, platter slot, activity light.
             const float iconX = x + 34.0f;
@@ -6366,8 +6129,8 @@ private:
             }
             if (name.empty()) name = target.serviceName.empty() ? "Storage" : target.serviceName;
             if (!target.serviceName.empty() && name != target.serviceName) name += " · " + target.serviceName;
-            renderer_.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f,
-                fitTextLines(name, 2.05f, 760.0f, 1), focused ? kText : kSecondaryText, 760.0f);
+            renderer_.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f, fitTextLines(name, 2.05f, 760.0f, 1),
+                                             focused ? kText : kSecondaryText, 760.0f);
 
             const float barX = 1085.0f;
             const float barY = y + 48.0f;
@@ -6379,24 +6142,25 @@ private:
                 const double usedGb = bytesToGb(target.totalSpace - target.freeSpace);
                 const double totalGb = bytesToGb(target.totalSpace);
                 std::ostringstream usage;
-                usage << std::fixed << std::setprecision(totalGb >= 100.0 ? 0 : 1)
-                      << usedGb << " / " << totalGb << " GB";
+                usage << std::fixed << std::setprecision(totalGb >= 100.0 ? 0 : 1) << usedGb << " / " << totalGb
+                      << " GB";
                 renderer_.text(x + 120.0f, y + 78.0f, 1.38f, usage.str(), kMuted, 760.0f);
 
                 renderer_.roundedRect(barX, barY, barWidth * static_cast<float>(percent) / 100.0f, 14.0f, 7.0f,
-                    percent >= 90 ? kError : (focused ? kFocus : kSecondaryText));
+                                      percent >= 90 ? kError : (focused ? kFocus : kSecondaryText));
             } else {
-                renderer_.text(x + 120.0f, y + 78.0f, 1.38f,
-                    fitTextLines(target.path, 1.38f, 920.0f, 1), kMuted, 920.0f);
+                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, fitTextLines(target.path, 1.38f, 920.0f, 1), kMuted,
+                               920.0f);
             }
-            const std::string pct = hasCapacity
-                ? std::to_string(percent) + "% full"
-                : (target.freeSpace > 0 ? formatStorageBytes(target.freeSpace) + " free" : "Free space unknown");
+            const std::string pct = hasCapacity ? std::to_string(percent) + "% full"
+                                                : (target.freeSpace > 0 ? formatStorageBytes(target.freeSpace) + " free"
+                                                                        : "Free space unknown");
             drawCenteredSingleLineFit(1510.0f, y + 26.0f, 250.0f, 58.0f, 1.60f, pct,
-                hasCapacity && percent >= 90 ? kError : (focused ? kText : kSecondaryText), 8.0f, 3.0f);
+                                      hasCapacity && percent >= 90 ? kError : (focused ? kText : kSecondaryText), 8.0f,
+                                      3.0f);
         }
         drawCenteredSingleLineFit(590.0f, 970.0f, 740.0f, 48.0f, 1.45f,
-            "Up / Down selects   ·   OK requests   ·   Back cancels", kMuted, 12.0f, 4.0f);
+                                  "Up / Down selects   ·   OK requests   ·   Back cancels", kMuted, 12.0f, 4.0f);
     }
 
     void renderPlayer() {
@@ -6414,47 +6178,32 @@ private:
                 const float widthScale = Renderer::logicalWidth() / static_cast<float>(sourceWidth);
                 const float heightScale = Renderer::logicalHeight() / static_cast<float>(sourceHeight);
                 const float scale = playbackSessionState_.zoomMode() == VideoZoomMode::Fit
-                    ? std::min(widthScale, heightScale)
-                    : std::max(widthScale, heightScale);
+                                        ? std::min(widthScale, heightScale)
+                                        : std::max(widthScale, heightScale);
                 videoW = static_cast<float>(sourceWidth) * scale;
                 videoH = static_cast<float>(sourceHeight) * scale;
                 videoX = (Renderer::logicalWidth() - videoW) * 0.5f;
                 videoY = (Renderer::logicalHeight() - videoH) * 0.5f;
             }
-            renderer_.externalImage(
-                videoSurface_.texture(),
-                videoX,
-                videoY,
-                videoW,
-                videoH,
-                videoSurface_.transform()
-            );
+            renderer_.externalImage(videoSurface_.texture(), videoX, videoY, videoW, videoH, videoSurface_.transform());
         }
 
         const auto now = std::chrono::steady_clock::now();
         const int remainingMs = playerScreenState_.durationMs() > 0
-            ? std::max(0, playerScreenState_.durationMs() - playerScreenState_.positionMs())
-            : 0;
+                                    ? std::max(0, playerScreenState_.durationMs() - playerScreenState_.positionMs())
+                                    : 0;
         const auto skipSegment = activeSkippableSegment();
         const bool userOverlayVisible = playerScreenState_.overlayVisible(now);
-        const bool showNextUp = shouldShowNextUpCard(
-            continuationState_.nextItem().has_value(),
-            remainingMs,
-            userOverlayVisible,
-            skipSegment != nullptr
-        );
-        const bool showOverlay = status == PlayerStatus::Preparing
-            || status == PlayerStatus::Paused
-            || playbackCoordinator_.transitionLoading()
-            || playbackCoordinator_.fallbackResolving()
-            || userOverlayVisible;
+        const bool showNextUp = shouldShowNextUpCard(continuationState_.nextItem().has_value(), remainingMs,
+                                                     userOverlayVisible, skipSegment != nullptr);
+        const bool showOverlay = status == PlayerStatus::Preparing || status == PlayerStatus::Paused ||
+                                 playbackCoordinator_.transitionLoading() || playbackCoordinator_.fallbackResolving() ||
+                                 userOverlayVisible;
         if (showOverlay) {
-            renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f,
-                Color{0.0f, 0.0f, 0.0f, 0.74f},
-                Color{0.0f, 0.0f, 0.0f, 0.0f});
-            renderer_.verticalGradient(0.0f, 650.0f, 1920.0f, 430.0f,
-                Color{0.0f, 0.0f, 0.0f, 0.0f},
-                Color{0.0f, 0.0f, 0.0f, 0.90f});
+            renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f, Color{0.0f, 0.0f, 0.0f, 0.74f},
+                                       Color{0.0f, 0.0f, 0.0f, 0.0f});
+            renderer_.verticalGradient(0.0f, 650.0f, 1920.0f, 430.0f, Color{0.0f, 0.0f, 0.0f, 0.0f},
+                                       Color{0.0f, 0.0f, 0.0f, 0.90f});
         }
         std::string subtitleText = player_.subtitleText();
         if (const SubtitleCue* cue = activeSubtitleCue()) subtitleText = cue->text;
@@ -6464,9 +6213,8 @@ private:
             constexpr float verticalPadding = 20.0f;
             const float textMaxWidth = boxMaxWidth - horizontalPadding * 2.0f;
             const float textScale = subtitleTextScale(settings_.subtitleSize);
-            const std::string subtitle = fitTextLines(
-                normalizeSubtitleDisplayText(subtitleText), textScale, textMaxWidth, 3
-            );
+            const std::string subtitle =
+                fitTextLines(normalizeSubtitleDisplayText(subtitleText), textScale, textMaxWidth, 3);
             const float lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize);
             std::istringstream stream(subtitle);
             std::vector<std::string> lines;
@@ -6481,30 +6229,19 @@ private:
             const float boxWidth = std::clamp(widest + horizontalPadding * 2.0f, 320.0f, boxMaxWidth);
             const float boxHeight = verticalPadding * 2.0f + lineHeight * static_cast<float>(lines.size());
             const float boxX = (Renderer::logicalWidth() - boxWidth) * 0.5f;
-            const float bottomY = subtitleBottomY(
-                showOverlay,
-                playerScreenState_.controlsActive(now),
-                settings_.subtitlePosition,
-                skipSegment != nullptr
-            );
+            const float bottomY = subtitleBottomY(showOverlay, playerScreenState_.controlsActive(now),
+                                                  settings_.subtitlePosition, skipSegment != nullptr);
             const float boxY = bottomY - boxHeight;
             if (settings_.subtitleBackground) {
-                renderer_.roundedRect(boxX, boxY, boxWidth, boxHeight, material_tv::cornerMedium, Color{0.0f, 0.0f, 0.0f, 0.80f});
+                renderer_.roundedRect(boxX, boxY, boxWidth, boxHeight, material_tv::cornerMedium,
+                                      Color{0.0f, 0.0f, 0.0f, 0.80f});
             }
             for (size_t i = 0; i < lines.size(); ++i) {
                 const float width = renderer_.textWidth(textScale, lines[i]);
                 const float textX = (Renderer::logicalWidth() - width) * 0.5f;
                 const float textY = boxY + verticalPadding + static_cast<float>(i) * lineHeight;
                 // Each subtitle row is already fitted above; do not let the glyph renderer wrap it again.
-                renderer_.outlinedText(
-                    textX,
-                    textY,
-                    textScale,
-                    lines[i],
-                    kText,
-                    Color{0.0f, 0.0f, 0.0f, 0.92f},
-                    0.0f
-                );
+                renderer_.outlinedText(textX, textY, textScale, lines[i], kText, Color{0.0f, 0.0f, 0.0f, 0.92f}, 0.0f);
             }
         }
         if (skipSegment) {
@@ -6518,18 +6255,13 @@ private:
             const float groupWidth = iconWidth + iconGap + labelWidth;
             const float iconX = std::round(bounds[0] + (bounds[2] - groupWidth) * 0.5f);
             const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
-            renderer_.triangle(iconX, iconCenterY - 11.0f, iconX, iconCenterY + 11.0f, iconX + 13.0f, iconCenterY, kText);
-            renderer_.triangle(iconX + 11.0f, iconCenterY - 11.0f, iconX + 11.0f, iconCenterY + 11.0f, iconX + 24.0f, iconCenterY, kText);
+            renderer_.triangle(iconX, iconCenterY - 11.0f, iconX, iconCenterY + 11.0f, iconX + 13.0f, iconCenterY,
+                               kText);
+            renderer_.triangle(iconX + 11.0f, iconCenterY - 11.0f, iconX + 11.0f, iconCenterY + 11.0f, iconX + 24.0f,
+                               iconCenterY, kText);
             renderer_.roundedRect(iconX + 27.0f, iconCenterY - 12.0f, 4.0f, 24.0f, 2.0f, kText);
-            renderer_.textVerticallyCentered(
-                iconX + iconWidth + iconGap,
-                bounds[1],
-                bounds[3],
-                labelScale,
-                fittedLabel,
-                kText,
-                labelWidth
-            );
+            renderer_.textVerticallyCentered(iconX + iconWidth + iconGap, bounds[1], bounds[3], labelScale, fittedLabel,
+                                             kText, labelWidth);
         }
         if (playerScreenState_.seekFeedbackVisible(now)) {
             const int seconds = playerScreenState_.seekFeedbackSeconds();
@@ -6571,9 +6303,10 @@ private:
             constexpr float textX = 1478.0f;
             constexpr float textWidth = 312.0f;
             drawModalSurface(panelX, panelY, panelWidth, panelHeight, material_tv::cornerMedium);
-            if (!drawHomeArtwork(nextItem, artworkX, contentY, artworkWidth, artworkHeight, material_tv::cornerExtraSmall)) {
+            if (!drawHomeArtwork(nextItem, artworkX, contentY, artworkWidth, artworkHeight,
+                                 material_tv::cornerExtraSmall)) {
                 drawArtworkPlaceholder(nextItem, artworkX, contentY, artworkWidth, artworkHeight,
-                    material_tv::cornerExtraSmall);
+                                       material_tv::cornerExtraSmall);
             }
             const std::string nextHeading = "Up next  |  " + std::to_string(std::max(0, remainingMs / 1000)) + "s";
             drawLeftAlignedSingleLineFit(textX, contentY, textWidth, 34.0f, 1.55f, nextHeading, kFocus);
@@ -6585,42 +6318,48 @@ private:
         }
 
         const std::string heading = playbackSessionState_.activeItem().seriesName.empty()
-            ? playbackSessionState_.activeItem().name
-            : playbackSessionState_.activeItem().seriesName;
+                                        ? playbackSessionState_.activeItem().name
+                                        : playbackSessionState_.activeItem().seriesName;
         const std::string playbackHeading = heading.empty() ? "Playback" : heading;
         const float playbackHeadingWidth = showNextUp ? 1040.0f : 1460.0f;
         renderer_.text(80.0f, 42.0f, material_tv::type::headline,
-            fitTextLines(playbackHeading, material_tv::type::headline, playbackHeadingWidth, 1),
-            kText, playbackHeadingWidth);
+                       fitTextLines(playbackHeading, material_tv::type::headline, playbackHeadingWidth, 1), kText,
+                       playbackHeadingWidth);
         const std::string playerEpisodeNumber = episodeNumberLabel(playbackSessionState_.activeItem());
-        const std::string secondary = playbackSessionState_.activeItem().seriesName.empty()
-            ? episodeLabel(playbackSessionState_.activeItem())
-            : playerEpisodeNumber + (playbackSessionState_.activeItem().name.empty() ? "" : "  |  " + playbackSessionState_.activeItem().name);
+        const std::string secondary =
+            playbackSessionState_.activeItem().seriesName.empty()
+                ? episodeLabel(playbackSessionState_.activeItem())
+                : playerEpisodeNumber + (playbackSessionState_.activeItem().name.empty()
+                                             ? ""
+                                             : "  |  " + playbackSessionState_.activeItem().name);
         if (!secondary.empty() && secondary != heading) {
-            const float secondaryY = 42.0f + 11.0f * material_tv::type::headline * uiTextScale(settings_.uiTextSize) + 8.0f;
+            const float secondaryY =
+                42.0f + 11.0f * material_tv::type::headline * uiTextScale(settings_.uiTextSize) + 8.0f;
             const float secondaryWidth = showNextUp ? 1040.0f : 1500.0f;
-            renderer_.text(80.0f, secondaryY, 2.6f,
-                fitTextLines(secondary, 2.6f, secondaryWidth, 1), kMuted, secondaryWidth);
+            renderer_.text(80.0f, secondaryY, 2.6f, fitTextLines(secondary, 2.6f, secondaryWidth, 1), kMuted,
+                           secondaryWidth);
         }
 
         const int position = playerScreenState_.positionMs();
         const int duration = playerScreenState_.durationMs();
         if (settings_.showClock) {
             const std::time_t wallNow = std::time(nullptr);
-            drawRightAlignedSingleLine(
-                1840.0f, 46.0f, 2.05f,
-                formatLocalClock(wallNow, settings_.clock24Hour), kMuted, 210.0f);
+            drawRightAlignedSingleLine(1840.0f, 46.0f, 2.05f, formatLocalClock(wallNow, settings_.clock24Hour), kMuted,
+                                       210.0f);
             if (remainingMs > 0 && status == PlayerStatus::Playing && !skipSegment) {
                 const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
                 const std::string finishLabel = "Ends " + formatLocalClock(finishAt, settings_.clock24Hour);
                 const float finishWidth = renderer_.textWidth(1.75f, finishLabel);
-                renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, finishLabel, kSecondaryText, 590.0f);
+                renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, finishLabel, kSecondaryText,
+                               590.0f);
             }
         }
-        const std::string state = playbackCoordinator_.fallbackResolving() ? "Retrying playback" :
-            (playbackCoordinator_.transitionLoading()
-                ? (playbackSessionState_.activeItem().id.empty() ? "Loading episode" : "Switching track")
-                : (status == PlayerStatus::Preparing ? "Loading" : ""));
+        const std::string state =
+            playbackCoordinator_.fallbackResolving()
+                ? "Retrying playback"
+                : (playbackCoordinator_.transitionLoading()
+                       ? (playbackSessionState_.activeItem().id.empty() ? "Loading episode" : "Switching track")
+                       : (status == PlayerStatus::Preparing ? "Loading" : ""));
         if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
 
         constexpr float progressX = 150.0f;
@@ -6647,8 +6386,8 @@ private:
             constexpr float controlHeight = 66.0f;
             constexpr float controlGap = 18.0f;
             constexpr float controlY = 925.0f;
-            const float controlGroupWidth = std::accumulate(controlWidths.begin(), controlWidths.end(), 0.0f)
-                + controlGap * static_cast<float>(controlWidths.size() - 1);
+            const float controlGroupWidth = std::accumulate(controlWidths.begin(), controlWidths.end(), 0.0f) +
+                                            controlGap * static_cast<float>(controlWidths.size() - 1);
             float x = (Renderer::logicalWidth() - controlGroupWidth) * 0.5f;
             for (size_t i = 0; i < controlWidths.size(); ++i) {
                 const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
@@ -6659,16 +6398,19 @@ private:
                     const bool forward = i == 2;
                     const float center = iconCenterX;
                     if (forward) {
-                        renderer_.triangle(center - 12.0f, iconCenterY - 14.0f, center - 12.0f, iconCenterY + 14.0f, center + 10.0f, iconCenterY, kText);
+                        renderer_.triangle(center - 12.0f, iconCenterY - 14.0f, center - 12.0f, iconCenterY + 14.0f,
+                                           center + 10.0f, iconCenterY, kText);
                         renderer_.roundedRect(center + 13.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, kText);
                     } else {
                         renderer_.roundedRect(center - 17.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, kText);
-                        renderer_.triangle(center + 12.0f, iconCenterY - 14.0f, center + 12.0f, iconCenterY + 14.0f, center - 10.0f, iconCenterY, kText);
+                        renderer_.triangle(center + 12.0f, iconCenterY - 14.0f, center + 12.0f, iconCenterY + 14.0f,
+                                           center - 10.0f, iconCenterY, kText);
                     }
                 } else if (i == 1) {
                     if (status == PlayerStatus::Paused) {
                         const float playLeft = iconCenterX - 22.0f / 3.0f;
-                        renderer_.triangle(playLeft, iconCenterY - 13.0f, playLeft, iconCenterY + 13.0f, playLeft + 22.0f, iconCenterY, kText);
+                        renderer_.triangle(playLeft, iconCenterY - 13.0f, playLeft, iconCenterY + 13.0f,
+                                           playLeft + 22.0f, iconCenterY, kText);
                     } else {
                         const float pauseLeft = iconCenterX - 10.0f;
                         renderer_.roundedRect(pauseLeft, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
@@ -6685,11 +6427,13 @@ private:
                     const float groupWidth = iconWidth + gap + textWidth;
                     const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
                     renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
-                    renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f, iconCenterY + 15.0f, kText);
+                    renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f,
+                                       iconX + 20.0f, iconCenterY + 15.0f, kText);
                     renderer_.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, kText);
                     renderer_.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, kText);
                     // Already fitted to one line; disabling maxWidth avoids atlas rounding wrapping the final glyph.
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText);
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
+                                                     kText);
                 } else {
                     constexpr float iconWidth = 42.0f;
                     constexpr float gap = 14.0f;
@@ -6703,7 +6447,8 @@ private:
                     renderer_.roundedOutline(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 6.0f, 2.0f, kText);
                     renderer_.textCentered(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 0.82f, "CC", kText);
                     // Already fitted to one line; disabling maxWidth avoids atlas rounding wrapping the final glyph.
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, kText);
+                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
+                                                     kText);
                 }
                 x += controlWidths[i] + controlGap;
             }
@@ -6719,13 +6464,10 @@ private:
 
         renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, kScrim);
         drawModalSurface(790.0f, 28.0f, 1090.0f, 1020.0f);
-        drawLeftAlignedSingleLineFit(
-            842.0f, 60.0f, 620.0f, 74.0f, 3.35f,
-            "Playback queue", kText);
+        drawLeftAlignedSingleLineFit(842.0f, 60.0f, 620.0f, 74.0f, 3.35f, "Playback queue", kText);
         renderer_.roundedRect(1555.0f, 70.0f, 255.0f, 46.0f, 18.0f, kPanelAlt);
-        drawCenteredSingleLineFit(
-            1555.0f, 70.0f, 255.0f, 46.0f, 1.35f,
-            std::to_string(size - current) + " remaining", kMuted, 12.0f, 4.0f);
+        drawCenteredSingleLineFit(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, std::to_string(size - current) + " remaining",
+                                  kMuted, 12.0f, 4.0f);
 
         constexpr int visibleRows = 5;
         const int first = std::clamp(selection - 2, current, std::max(current, size - visibleRows));
@@ -6737,24 +6479,23 @@ private:
             const bool isCurrent = index == current;
             const auto& item = queueState_.items()[static_cast<size_t>(index)];
             const auto bounds = drawListItemSurface(830.0f, y, 990.0f, 90.0f, selected);
-            if (!drawHomeArtwork(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f, material_tv::cornerExtraSmall)) {
+            if (!drawHomeArtwork(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f,
+                                 material_tv::cornerExtraSmall)) {
                 drawArtworkPlaceholder(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f,
-                    material_tv::cornerExtraSmall);
+                                       material_tv::cornerExtraSmall);
             }
-            const std::string marker = isCurrent ? "Current" : (index == current + 1 ? "Next" : std::to_string(index - current + 1));
+            const std::string marker =
+                isCurrent ? "Current" : (index == current + 1 ? "Next" : std::to_string(index - current + 1));
             const float markerWidth = isCurrent ? 122.0f : (index == current + 1 ? 88.0f : 58.0f);
-            renderer_.roundedRect(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 16.0f, isCurrent ? kFocusSoft : kPanelAlt);
-            drawCenteredSingleLineFit(
-                bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 1.20f,
-                marker, isCurrent ? kText : kMuted, 8.0f, 3.0f);
-            drawLeftAlignedSingleLineFit(
-                bounds[0] + 300.0f, bounds[1] + 5.0f, 610.0f, 46.0f, 1.85f,
-                item.name, kText);
+            renderer_.roundedRect(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 16.0f,
+                                  isCurrent ? kFocusSoft : kPanelAlt);
+            drawCenteredSingleLineFit(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 1.20f, marker,
+                                      isCurrent ? kText : kMuted, 8.0f, 3.0f);
+            drawLeftAlignedSingleLineFit(bounds[0] + 300.0f, bounds[1] + 5.0f, 610.0f, 46.0f, 1.85f, item.name, kText);
             const std::string secondary = episodeLabel(item);
             if (!secondary.empty()) {
-                drawLeftAlignedSingleLineFit(
-                    bounds[0] + 300.0f, bounds[1] + 50.0f, 610.0f, 36.0f, 1.25f,
-                    secondary, kMuted);
+                drawLeftAlignedSingleLineFit(bounds[0] + 300.0f, bounds[1] + 50.0f, 610.0f, 36.0f, 1.25f, secondary,
+                                             kMuted);
             }
         }
 
@@ -6785,25 +6526,24 @@ private:
             const bool focused = queueState_.actionSelection() == static_cast<int>(i);
             const bool available = enabled(static_cast<int>(i));
             std::array<float, 4> actionBounds{x, y, width, 68.0f};
-            if (available) actionBounds = drawButtonSurface(x, y, width, 68.0f, focused, focused, i == 4);
-            else drawDisabledButtonSurface(x, y, width, 68.0f);
-            drawCenteredSingleLineFit(
-                actionBounds[0], actionBounds[1], actionBounds[2], actionBounds[3], 1.45f,
-                materialLabel(actions[i]), available ? kText : kTertiary, 14.0f, 5.0f);
+            if (available)
+                actionBounds = drawButtonSurface(x, y, width, 68.0f, focused, focused, i == 4);
+            else
+                drawDisabledButtonSurface(x, y, width, 68.0f);
+            drawCenteredSingleLineFit(actionBounds[0], actionBounds[1], actionBounds[2], actionBounds[3], 1.45f,
+                                      materialLabel(actions[i]), available ? kText : kTertiary, 14.0f, 5.0f);
         }
-        drawCenteredSingleLineFit(
-            875.0f, 905.0f, 920.0f, 52.0f, 1.50f,
-            "Up / Down selects item   |   Left / Right chooses action   |   OK applies", kMuted, 14.0f, 4.0f);
-        drawCenteredSingleLineFit(
-            1170.0f, 958.0f, 500.0f, 48.0f, 1.40f,
-            "Back closes queue", kMuted, 12.0f, 4.0f);
+        drawCenteredSingleLineFit(875.0f, 905.0f, 920.0f, 52.0f, 1.50f,
+                                  "Up / Down selects item   |   Left / Right chooses action   |   OK applies", kMuted,
+                                  14.0f, 4.0f);
+        drawCenteredSingleLineFit(1170.0f, 958.0f, 500.0f, 48.0f, 1.40f, "Back closes queue", kMuted, 12.0f, 4.0f);
     }
 
     void renderScreensaver() {
         renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.006f, 0.008f, 0.012f, 1.0f});
-        const int64_t elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
-            std::chrono::steady_clock::now().time_since_epoch()
-        ).count();
+        const int64_t elapsedSeconds =
+            std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch())
+                .count();
         static constexpr std::array<std::array<float, 2>, 8> positions{{
             {{170.0f, 170.0f}},
             {{1120.0f, 170.0f}},
@@ -6818,15 +6558,10 @@ private:
 
         const std::string clock = formatLocalClock(std::time(nullptr), settings_.clock24Hour);
 
-        drawLeftAlignedSingleLineFit(
-            position[0], position[1], 600.0f, 104.0f, 4.2f,
-            "sloppaTV", material_tv::primary);
-        drawLeftAlignedSingleLineFit(
-            position[0], position[1] + 112.0f, 700.0f, 205.0f, 9.0f,
-            clock, kText);
-        drawCenteredSingleLineFit(
-            600.0f, 1008.0f, 720.0f, 48.0f, 1.45f,
-            "Press any button to return", kTertiary, 12.0f, 4.0f);
+        drawLeftAlignedSingleLineFit(position[0], position[1], 600.0f, 104.0f, 4.2f, "sloppaTV", material_tv::primary);
+        drawLeftAlignedSingleLineFit(position[0], position[1] + 112.0f, 700.0f, 205.0f, 9.0f, clock, kText);
+        drawCenteredSingleLineFit(600.0f, 1008.0f, 720.0f, 48.0f, 1.45f, "Press any button to return", kTertiary, 12.0f,
+                                  4.0f);
     }
 
     void renderSettings() {
@@ -6836,40 +6571,37 @@ private:
 
         const auto settingsSearchBounds = drawInputSurface(
             1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused(), materialWideInputFocusScale());
-        const std::string settingsSearchDisplay = settingsScreen_.searchQuery().empty()
-            ? "Search settings"
-            : settingsScreen_.searchQuery();
+        const std::string settingsSearchDisplay =
+            settingsScreen_.searchQuery().empty() ? "Search settings" : settingsScreen_.searchQuery();
         constexpr float settingsSearchTextWidth = 520.0f;
         renderer_.textVerticallyCentered(1102.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
-            fitTextLines(settingsSearchDisplay, 2.20f, settingsSearchTextWidth, 1),
-            settingsScreen_.searchQuery().empty() ? kMuted : kText, settingsSearchTextWidth);
+                                         fitTextLines(settingsSearchDisplay, 2.20f, settingsSearchTextWidth, 1),
+                                         settingsScreen_.searchQuery().empty() ? kMuted : kText,
+                                         settingsSearchTextWidth);
         const bool systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch;
-        drawCenteredSingleLineFit(
-            1640.0f,
-            settingsSearchBounds[1], 170.0f, settingsSearchBounds[3], 1.60f,
-            systemSettingsInputActive ? "Typing…" : "Search",
-            settingsScreen_.searchFocused() ? kFocus : kMuted, 10.0f, 4.0f);
+        drawCenteredSingleLineFit(1640.0f, settingsSearchBounds[1], 170.0f, settingsSearchBounds[3], 1.60f,
+                                  systemSettingsInputActive ? "Typing…" : "Search",
+                                  settingsScreen_.searchFocused() ? kFocus : kMuted, 10.0f, 4.0f);
 
         const auto matches = settingsScreen_.matches();
         if (matches.empty()) {
             if (systemSettingsInputActive) {
-                drawCenteredSingleLineFit(
-                    480.0f, 300.0f, 960.0f, 64.0f, 1.75f,
-                    "Type to filter settings", kMuted, 16.0f, 5.0f);
+                drawCenteredSingleLineFit(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to filter settings", kMuted,
+                                          16.0f, 5.0f);
             } else {
                 renderEmptyState("No matching settings", "Press OK or Search to change your filter.");
             }
             return;
         }
 
-        renderer_.text(120.0f, 165.0f, 2.10f,
-            settingsScreen_.advanced() ? "Advanced settings" : "Common settings", kSecondaryText, 620.0f);
+        renderer_.text(120.0f, 165.0f, 2.10f, settingsScreen_.advanced() ? "Advanced settings" : "Common settings",
+                       kSecondaryText, 620.0f);
         const std::string settingsDescription = settingsScreen_.advanced()
-            ? "Codec overrides, compatibility and device-level controls"
-            : "The settings you are most likely to change";
+                                                    ? "Codec overrides, compatibility and device-level controls"
+                                                    : "The settings you are most likely to change";
         const float descriptionY = settingsDescriptionY(settings_.uiTextSize);
-        renderer_.text(120.0f, descriptionY, 1.40f,
-            fitTextLines(settingsDescription, 1.40f, 920.0f, 1), kMuted, 920.0f);
+        renderer_.text(120.0f, descriptionY, 1.40f, fitTextLines(settingsDescription, 1.40f, 920.0f, 1), kMuted,
+                       920.0f);
 
         constexpr int visibleRows = 6;
         const float rowsTop = settingsRowsTop(settings_.uiTextSize);
@@ -6880,23 +6612,20 @@ private:
             if (matchPosition >= static_cast<int>(matches.size())) break;
             const SettingId setting = matches[static_cast<size_t>(matchPosition)];
             const float y = rowsTop + static_cast<float>(slot) * 112.0f;
-            const bool focused = !settingsScreen_.subtitleLanguagePicker()
-                && !settingsScreen_.searchFocused()
-                && setting == settingsScreen_.selection();
+            const bool focused = !settingsScreen_.subtitleLanguagePicker() && !settingsScreen_.searchFocused() &&
+                                 setting == settingsScreen_.selection();
             const bool actionRow = isActionSetting(setting);
             // Settings use contained TV list rows, which remain readable at distance.
             constexpr float rowX = 110.0f;
             constexpr float rowWidth = 1700.0f;
-            const auto rowBounds = drawListItemSurface(
-                rowX, y - 8.0f, rowWidth, 88.0f, focused,
-                material_tv::cornerMedium, materialWideListItemFocusScale()
-            );
+            const auto rowBounds = drawListItemSurface(rowX, y - 8.0f, rowWidth, 88.0f, focused,
+                                                       material_tv::cornerMedium, materialWideListItemFocusScale());
             const std::string_view rowLabel = settingLabel(setting, settingsScreen_.advanced());
             renderer_.textVerticallyCentered(rowX + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
-                fitTextLines(materialLabel(std::string(rowLabel)), 2.20f, 900.0f, 1),
-                focused ? kText : kSecondaryText, 900.0f);
-            std::string value = settingValue(
-                settings_, setting, maxAudioOutputChannels, externalPlayer, session_.username, settingsScreen_.advanced());
+                                             fitTextLines(materialLabel(std::string(rowLabel)), 2.20f, 900.0f, 1),
+                                             focused ? kText : kSecondaryText, 900.0f);
+            std::string value = settingValue(settings_, setting, maxAudioOutputChannels, externalPlayer,
+                                             session_.username, settingsScreen_.advanced());
             if (setting == SettingId::SeerrApiKey && systemTextInputMode_ == kTextInputSeerrApiKey) {
                 const size_t visibleMask = std::min<size_t>(settings_.seerrApiKey.size(), 24);
                 value.assign(visibleMask, '*');
@@ -6910,63 +6639,60 @@ private:
                 const float valueScale = 1.70f;
                 const std::string displayValue = fitTextLines(materialLabel(value), valueScale, 570.0f, 1);
                 const float valueWidth = renderer_.textWidth(valueScale, displayValue);
-                renderer_.textVerticallyCentered(std::max(1190.0f, valueRight - valueWidth), rowBounds[1], rowBounds[3], valueScale,
-                    displayValue, focused ? kFocus : kText, 570.0f);
+                renderer_.textVerticallyCentered(std::max(1190.0f, valueRight - valueWidth), rowBounds[1], rowBounds[3],
+                                                 valueScale, displayValue, focused ? kFocus : kText, 570.0f);
             } else if (isBooleanSetting(setting)) {
                 constexpr float switchWidth = 112.0f;
                 drawSwitch(valueRight - switchWidth, y + 8.0f, value == "ON", focused);
             } else {
                 const std::string displayValue(materialLabel(value));
-                const float chipWidth = std::round(std::clamp(renderer_.textWidth(1.65f, displayValue) + 44.0f, 112.0f, 570.0f));
+                const float chipWidth =
+                    std::round(std::clamp(renderer_.textWidth(1.65f, displayValue) + 44.0f, 112.0f, 570.0f));
                 const float chipX = std::round(valueRight - chipWidth);
                 renderer_.roundedRect(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, focused ? kFocusSoft : kPanelAlt);
                 if (!focused) renderer_.roundedOutline(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, 1.0f, kOutline);
-                drawCenteredSingleLineFit(
-                    chipX, y + 8.0f, chipWidth, 56.0f, 1.65f,
-                    displayValue, focused ? kText : kSecondaryText, 12.0f, 4.0f);
+                drawCenteredSingleLineFit(chipX, y + 8.0f, chipWidth, 56.0f, 1.65f, displayValue,
+                                          focused ? kText : kSecondaryText, 12.0f, 4.0f);
             }
         }
         const float footerY = settingsFooterY(settings_.uiTextSize);
-        drawCenteredSingleLineFit(
-            330.0f, footerY, 1260.0f, 58.0f, 1.65f,
-            "Left / Right changes   |   OK opens options   |   Up searches", kMuted, 14.0f, 5.0f);
+        drawCenteredSingleLineFit(330.0f, footerY, 1260.0f, 58.0f, 1.65f,
+                                  "Left / Right changes   |   OK opens options   |   Up searches", kMuted, 14.0f, 5.0f);
 
         if (settingsScreen_.subtitleLanguagePicker()) {
             renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, kScrim);
             drawModalSurface(430.0f, 92.0f, 1060.0f, 896.0f);
             renderer_.text(490.0f, 118.0f, 3.15f, "Subtitle languages", kText, 820.0f);
             renderer_.text(490.0f, 204.0f, 1.50f,
-                fitTextLines("Only selected languages will appear during playback", 1.50f, 920.0f, 1),
-                kMuted, 920.0f);
+                           fitTextLines("Only selected languages will appear during playback", 1.50f, 920.0f, 1),
+                           kMuted, 920.0f);
             constexpr int visibleLanguageRows = 8;
             constexpr int languageCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
-            const int firstLanguage = std::clamp(settingsScreen_.subtitleLanguageFirstVisible(), 0, std::max(0, languageCount - visibleLanguageRows));
+            const int firstLanguage = std::clamp(settingsScreen_.subtitleLanguageFirstVisible(), 0,
+                                                 std::max(0, languageCount - visibleLanguageRows));
             for (int slot = 0; slot < visibleLanguageRows; ++slot) {
                 const int languageIndex = firstLanguage + slot;
                 if (languageIndex >= languageCount) break;
                 const float y = 258.0f + static_cast<float>(slot) * 82.0f;
                 const bool focused = languageIndex == settingsScreen_.subtitleLanguageSelection();
-                const bool selected = languageIndex == 0
-                    ? settings_.subtitleLanguages.empty()
-                    : std::find(
-                        settings_.subtitleLanguages.begin(),
-                        settings_.subtitleLanguages.end(),
-                        kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code
-                    ) != settings_.subtitleLanguages.end();
-                const auto languageBounds = drawListItemSurface(
-                    478.0f, y - 8.0f, 964.0f, 68.0f, focused,
-                    material_tv::cornerSmall, materialListItemFocusScale()
-                );
+                const bool selected =
+                    languageIndex == 0
+                        ? settings_.subtitleLanguages.empty()
+                        : std::find(settings_.subtitleLanguages.begin(), settings_.subtitleLanguages.end(),
+                                    kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code) !=
+                              settings_.subtitleLanguages.end();
+                const auto languageBounds = drawListItemSurface(478.0f, y - 8.0f, 964.0f, 68.0f, focused,
+                                                                material_tv::cornerSmall, materialListItemFocusScale());
                 const std::string label = languageIndex == 0
-                    ? "All languages"
-                    : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
+                                              ? "All languages"
+                                              : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
                 renderer_.textVerticallyCentered(languageBounds[0] + 32.0f, languageBounds[1], languageBounds[3], 2.05f,
-                    fitTextLines(materialLabel(label), 2.05f, 620.0f, 1), focused ? kText : kSecondaryText, 620.0f);
+                                                 fitTextLines(materialLabel(label), 2.05f, 620.0f, 1),
+                                                 focused ? kText : kSecondaryText, 620.0f);
                 drawChip(1280.0f, y + 5.0f, selected ? "ON" : "OFF", selected, 1.45f, 42.0f, 116.0f);
             }
-            drawCenteredSingleLineFit(
-                540.0f, 918.0f, 840.0f, 52.0f, 1.62f,
-                "OK toggles selection   |   Back returns to settings", kMuted, 12.0f, 4.0f);
+            drawCenteredSingleLineFit(540.0f, 918.0f, 840.0f, 52.0f, 1.62f,
+                                      "OK toggles selection   |   Back returns to settings", kMuted, 12.0f, 4.0f);
         }
     }
 
@@ -6994,17 +6720,22 @@ private:
             {"App version", SLOPPATV_VERSION_NAME},
             {"ABI", architecture},
             {"Server", serverInfo_.name.empty() ? session_.server : serverInfo_.name},
-            {"Jellyfin version", serverInfo_.version.empty() ? (loading_ ? "Loading…" : "UNKNOWN") : serverInfo_.version},
+            {"Jellyfin version",
+             serverInfo_.version.empty() ? (loading_ ? "Loading…" : "UNKNOWN") : serverInfo_.version},
             {"Video decoders", videoCodecs.empty() ? "NONE DETECTED" : joinGenres(videoCodecs, videoCodecs.size())},
-            {"Direct audio", audioCodecs.empty() ? "AAC TRANSCODE FALLBACK" : joinGenres(audioCodecs, audioCodecs.size())},
+            {"Direct audio",
+             audioCodecs.empty() ? "AAC TRANSCODE FALLBACK" : joinGenres(audioCodecs, audioCodecs.size())},
             {"Audio output", std::to_string(codecs.maxAudioOutputChannels) + " CHANNELS"},
-            {"HEVC maximum", codecs.maxHevcWidth > 0 ? std::to_string(codecs.maxHevcWidth) + "X" + std::to_string(codecs.maxHevcHeight) : "UNKNOWN"},
+            {"HEVC maximum", codecs.maxHevcWidth > 0
+                                 ? std::to_string(codecs.maxHevcWidth) + "X" + std::to_string(codecs.maxHevcHeight)
+                                 : "UNKNOWN"},
             {"HDR display", hdr.empty() ? "SDR / NONE DETECTED" : joinGenres(hdr, hdr.size())},
             {"Last playback", playbackSessionState_.lastPlaybackSummary().empty()
-                ? "NOT YET PLAYED THIS SESSION"
-                : playbackSessionState_.lastPlaybackSummary()},
+                                  ? "NOT YET PLAYED THIS SESSION"
+                                  : playbackSessionState_.lastPlaybackSummary()},
         };
-        auto renderPanel = [&](float x, float y, float width, float height, const std::string& title, std::initializer_list<int> indices) {
+        auto renderPanel = [&](float x, float y, float width, float height, const std::string& title,
+                               std::initializer_list<int> indices) {
             renderer_.roundedRect(x, y, width, height, material_tv::cornerLarge, kPanelAlt);
             renderer_.roundedOutline(x, y, width, height, material_tv::cornerLarge, 1.0f, kOutline);
             const float titleWidth = drawChip(x + 26.0f, y + 22.0f, title, true, 1.45f, 42.0f, width - 52.0f);
@@ -7014,12 +6745,10 @@ private:
             for (const int index : indices) {
                 if (index < 0 || index >= static_cast<int>(rows.size())) continue;
                 if (row > 0) renderer_.rect(x + 28.0f, rowY - 13.0f, width - 56.0f, 1.0f, kDivider);
-                drawLeftAlignedSingleLineFit(
-                    x + 28.0f, rowY - 5.0f, 260.0f, 46.0f, 1.45f,
-                    rows[static_cast<size_t>(index)].first, kTertiary);
-                drawLeftAlignedSingleLineFit(
-                    x + 300.0f, rowY - 5.0f, width - 330.0f, 46.0f, 1.75f,
-                    rows[static_cast<size_t>(index)].second, kText);
+                drawLeftAlignedSingleLineFit(x + 28.0f, rowY - 5.0f, 260.0f, 46.0f, 1.45f,
+                                             rows[static_cast<size_t>(index)].first, kTertiary);
+                drawLeftAlignedSingleLineFit(x + 300.0f, rowY - 5.0f, width - 330.0f, 46.0f, 1.75f,
+                                             rows[static_cast<size_t>(index)].second, kText);
                 rowY += 58.0f;
                 ++row;
             }
@@ -7029,9 +6758,8 @@ private:
         renderPanel(995.0f, 175.0f, 840.0f, 315.0f, "Video & display", {4, 7, 8});
         renderPanel(85.0f, 515.0f, 840.0f, 250.0f, "Audio", {5, 6});
         renderPanel(995.0f, 515.0f, 840.0f, 250.0f, "Last playback", {9});
-        drawCenteredSingleLineFit(
-            560.0f, 944.0f, 800.0f, 52.0f, 1.75f,
-            "Back or OK returns to settings", kMuted, 12.0f, 4.0f);
+        drawCenteredSingleLineFit(560.0f, 944.0f, 800.0f, 52.0f, 1.75f, "Back or OK returns to settings", kMuted, 12.0f,
+                                  4.0f);
     }
 
     void renderItemMenu() {
@@ -7040,34 +6768,25 @@ private:
         if (detailsState_.deleteConfirmation()) {
             const bool seerrRequest = isSeerrItem(detail_);
             drawModalSurface(405.0f, 275.0f, 1110.0f, 520.0f);
-            renderer_.text(470.0f, 335.0f, 3.25f,
-                seerrRequest ? "Delete this request?" : "Delete this media?", kError, 980.0f);
-            renderer_.text(
-                470.0f,
-                435.0f,
-                2.0f,
-                seerrRequest
-                    ? "Removes the request from Seerr. Already-sent Sonarr/Radarr downloads may continue."
-                    : "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
-                kText,
-                980.0f
-            );
+            renderer_.text(470.0f, 335.0f, 3.25f, seerrRequest ? "Delete this request?" : "Delete this media?", kError,
+                           980.0f);
+            renderer_.text(470.0f, 435.0f, 2.0f,
+                           seerrRequest
+                               ? "Removes the request from Seerr. Already-sent Sonarr/Radarr downloads may continue."
+                               : "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
+                           kText, 980.0f);
 
-            const std::array<std::string, 2> actions{
-                seerrRequest ? "Delete request" : "Delete permanently",
-                "Cancel"
-            };
+            const std::array<std::string, 2> actions{seerrRequest ? "Delete request" : "Delete permanently", "Cancel"};
             for (int i = 0; i < 2; ++i) {
                 const float x = i == 0 ? 470.0f : 995.0f;
                 const bool focused = detailsState_.deleteConfirmationSelection() == i;
                 const auto bounds = drawButtonSurface(x, 610.0f, 450.0f, 92.0f, focused, false, i == 0);
-                drawCenteredSingleLineFit(
-                    bounds[0], bounds[1], bounds[2], bounds[3], i == 0 ? 1.75f : 2.0f,
-                    actions[static_cast<size_t>(i)], focused || i == 1 ? kText : kMuted, 20.0f, 8.0f);
+                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], i == 0 ? 1.75f : 2.0f,
+                                          actions[static_cast<size_t>(i)], focused || i == 1 ? kText : kMuted, 20.0f,
+                                          8.0f);
             }
-            drawCenteredSingleLineFit(
-                470.0f, 724.0f, 980.0f, 52.0f, 1.55f,
-                "Press Back to cancel", kTertiary, 12.0f, 4.0f);
+            drawCenteredSingleLineFit(470.0f, 724.0f, 980.0f, 52.0f, 1.55f, "Press Back to cancel", kTertiary, 12.0f,
+                                      4.0f);
             return;
         }
 
@@ -7081,43 +6800,40 @@ private:
         const float panelY = std::max(72.0f, (Renderer::logicalHeight() - panelHeight) * 0.5f);
         drawModalSurface(panelX, panelY, panelWidth, panelHeight);
         renderer_.text(panelX + 38.0f, panelY + 24.0f, 2.35f,
-            fitTextLines(detail_.name.empty() ? "Item" : detail_.name, 2.35f, panelWidth - 76.0f, 1), kText, panelWidth - 76.0f);
+                       fitTextLines(detail_.name.empty() ? "Item" : detail_.name, 2.35f, panelWidth - 76.0f, 1), kText,
+                       panelWidth - 76.0f);
         renderer_.text(panelX + 40.0f, panelY + 92.0f, 1.35f,
-            fitTextLines(detail_.type.empty() ? "Media" : detail_.type, 1.35f, panelWidth - 80.0f, 1),
-            kMuted, panelWidth - 80.0f);
+                       fitTextLines(detail_.type.empty() ? "Media" : detail_.type, 1.35f, panelWidth - 80.0f, 1),
+                       kMuted, panelWidth - 80.0f);
         if (seerrRequest && !detail_.externalStatus.empty()) {
             if (detail_.externalProgressPercent >= 0 && !detail_.externalProgressLabel.empty()) {
                 const float statusY = panelY + 119.0f;
                 const std::string percentLabel = std::to_string(detail_.externalProgressPercent) + "%";
                 const float percentWidth = std::ceil(renderer_.textWidth(1.14f, percentLabel));
-                const float etaWidth = detail_.externalProgressEta.empty()
-                    ? 0.0f
-                    : std::round(std::clamp(
-                        renderer_.textWidth(1.05f, materialLabel(detail_.externalProgressEta)) + 34.0f,
-                        72.0f,
-                        240.0f));
+                const float etaWidth =
+                    detail_.externalProgressEta.empty()
+                        ? 0.0f
+                        : std::round(
+                              std::clamp(renderer_.textWidth(1.05f, materialLabel(detail_.externalProgressEta)) + 34.0f,
+                                         72.0f, 240.0f));
                 constexpr float metadataGap = 14.0f;
                 constexpr float statusToMetadataGap = 28.0f;
                 const float rightEdge = panelX + panelWidth - 40.0f;
                 const float etaX = rightEdge - etaWidth;
-                const float percentX = detail_.externalProgressEta.empty()
-                    ? rightEdge - percentWidth
-                    : etaX - metadataGap - percentWidth;
+                const float percentX =
+                    detail_.externalProgressEta.empty() ? rightEdge - percentWidth : etaX - metadataGap - percentWidth;
                 const float statusWidth = std::max(120.0f, percentX - (panelX + 40.0f) - statusToMetadataGap);
                 renderer_.text(panelX + 40.0f, statusY, 1.45f,
-                    fitTextLines(detail_.externalProgressLabel, 1.45f, statusWidth, 1),
-                    kFocus, statusWidth);
-                renderer_.textVerticallyCentered(
-                    percentX, panelY + 115.0f, 32.0f, 1.14f,
-                    percentLabel, kSecondaryText, percentWidth);
+                               fitTextLines(detail_.externalProgressLabel, 1.45f, statusWidth, 1), kFocus, statusWidth);
+                renderer_.textVerticallyCentered(percentX, panelY + 115.0f, 32.0f, 1.14f, percentLabel, kSecondaryText,
+                                                 percentWidth);
                 if (!detail_.externalProgressEta.empty()) {
-                    drawChip(etaX, panelY + 115.0f, detail_.externalProgressEta,
-                        false, 1.05f, 32.0f, 240.0f);
+                    drawChip(etaX, panelY + 115.0f, detail_.externalProgressEta, false, 1.05f, 32.0f, 240.0f);
                 }
             } else {
                 renderer_.text(panelX + 40.0f, panelY + 122.0f, 1.55f,
-                    fitTextLines(detail_.externalStatus, 1.55f, panelWidth - 80.0f, 1),
-                    kFocus, panelWidth - 80.0f);
+                               fitTextLines(detail_.externalStatus, 1.55f, panelWidth - 80.0f, 1), kFocus,
+                               panelWidth - 80.0f);
             }
         }
         const float dividerY = panelY + (seerrRequest && !detail_.externalStatus.empty() ? 162.0f : 138.0f);
@@ -7128,24 +6844,17 @@ private:
             const float y = firstActionY + static_cast<float>(i) * rowStep;
             const bool focused = detailsState_.itemMenuSelection() == static_cast<int>(i);
             const bool destructive = actions[i] == "DELETE MEDIA" || actions[i] == "DELETE REQUEST";
-            const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, focused && !destructive, destructive);
+            const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused,
+                                                   focused && !destructive, destructive);
             renderer_.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, materialLabel(actions[i]),
-                destructive && !focused ? kMuted : kText, bounds[2] - 48.0f);
+                                             destructive && !focused ? kMuted : kText, bounds[2] - 48.0f);
         }
-        drawCenteredSingleLineFit(
-            panelX + 40.0f, panelY + panelHeight - 56.0f, panelWidth - 80.0f, 44.0f, 1.30f,
-            "OK selects   |   Back closes", kTertiary, 10.0f, 3.0f);
+        drawCenteredSingleLineFit(panelX + 40.0f, panelY + panelHeight - 56.0f, panelWidth - 80.0f, 44.0f, 1.30f,
+                                  "OK selects   |   Back closes", kTertiary, 10.0f, 3.0f);
     }
 
-    void drawLingeringTitle(
-        float x,
-        float y,
-        float scale,
-        std::string_view value,
-        float maxWidth,
-        Color color,
-        std::chrono::steady_clock::time_point now
-    ) {
+    void drawLingeringTitle(float x, float y, float scale, std::string_view value, float maxWidth, Color color,
+                            std::chrono::steady_clock::time_point now) {
         const std::string displayValue = displayText(value);
         if (displayValue.empty()) return;
         const float titleWidth = renderer_.textWidth(scale, displayValue);
@@ -7219,15 +6928,14 @@ private:
         renderHeader(title);
         if (items.empty()) {
             renderEmptyState(loading_ ? "Loading titles" : "No titles available",
-                loading_ ? "Fetching titles from Jellyfin" : "Press Back to return to your library.");
+                             loading_ ? "Fetching titles from Jellyfin" : "Press Back to return to your library.");
             return;
         }
         constexpr int columns = mediaGridColumns();
         constexpr float slotWidth = mediaCardWidth();
         constexpr float xGap = 32.0f;
-        const bool hasPortraitCards = std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) {
-            return !usesLandscapeMediaCard(item.type);
-        });
+        const bool hasPortraitCards = std::any_of(
+            items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
         const float rowStep = searchMediaRowHeight(hasPortraitCards);
         const int firstRow = mediaFirstVisibleRow(selection, 2);
         for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
@@ -7236,10 +6944,9 @@ private:
             if (row >= 2) break;
             const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
             const float y = 195.0f + static_cast<float>(row) * rowStep;
-            renderMediaArtworkCard(
-                items[static_cast<size_t>(index)], x, y, slotWidth, index == selection,
-                true, hasPortraitCards, hasPortraitCards,
-                mediaGridTitleLineLimit(row, settings_.uiTextSize, hasPortraitCards));
+            renderMediaArtworkCard(items[static_cast<size_t>(index)], x, y, slotWidth, index == selection, true,
+                                   hasPortraitCards, hasPortraitCards,
+                                   mediaGridTitleLineLimit(row, settings_.uiTextSize, hasPortraitCards));
         }
     }
 
@@ -7285,16 +6992,17 @@ private:
             if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
             const float personTitleY = y + imageHeight + 24.0f;
             renderer_.text(imageX, personTitleY, material_tv::type::label,
-                fitTextLines(person.name, material_tv::type::label, imageWidth, 1), kText, imageWidth);
+                           fitTextLines(person.name, material_tv::type::label, imageWidth, 1), kText, imageWidth);
             if (!person.role.empty()) {
-                const float roleY = personTitleY + 11.0f * material_tv::type::label * uiTextScale(settings_.uiTextSize) + 4.0f;
+                const float roleY =
+                    personTitleY + 11.0f * material_tv::type::label * uiTextScale(settings_.uiTextSize) + 4.0f;
                 renderer_.text(imageX, roleY, material_tv::type::supporting,
-                    fitTextLines(person.role, material_tv::type::supporting, imageWidth, 1), kMuted, imageWidth);
+                               fitTextLines(person.role, material_tv::type::supporting, imageWidth, 1), kMuted,
+                               imageWidth);
             }
         }
-        drawCenteredSingleLineFit(
-            500.0f, 1032.0f, 920.0f, 40.0f, 1.55f,
-            "Press OK to explore titles featuring this person", kTertiary, 12.0f, 2.0f);
+        drawCenteredSingleLineFit(500.0f, 1032.0f, 920.0f, 40.0f, 1.55f,
+                                  "Press OK to explore titles featuring this person", kTertiary, 12.0f, 2.0f);
     }
 
     void renderPersonItems() {
@@ -7305,7 +7013,8 @@ private:
 
     void renderSeasons() {
         const auto& series = detailsState_.seriesDetail();
-        renderMediaGrid(series.name.empty() ? "Seasons" : series.name + " | Seasons", detailsState_.seasons(), detailsState_.seasonSelection());
+        renderMediaGrid(series.name.empty() ? "Seasons" : series.name + " | Seasons", detailsState_.seasons(),
+                        detailsState_.seasonSelection());
     }
 
     void renderEpisodes() {
@@ -7318,20 +7027,17 @@ private:
     void renderDetails() {
         const bool backdropVisible = drawBackdrop(detail_, 0.84f);
         if (backdropVisible) {
-            renderer_.horizontalGradient(0.0f, 0.0f, 1350.0f, 1080.0f,
-                Color{0.0f, 0.0f, 0.0f, 0.92f},
-                Color{0.0f, 0.0f, 0.0f, 0.03f});
-            renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f,
-                Color{0.0f, 0.0f, 0.0f, 0.08f},
-                Color{0.0f, 0.0f, 0.0f, 0.92f});
+            renderer_.horizontalGradient(0.0f, 0.0f, 1350.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.92f},
+                                         Color{0.0f, 0.0f, 0.0f, 0.03f});
+            renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.08f},
+                                       Color{0.0f, 0.0f, 0.0f, 0.92f});
         } else {
             renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
         }
 
         if (settings_.showClock) {
-            drawRightAlignedSingleLine(
-                1840.0f, 50.0f, 2.10f,
-                formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
+            drawRightAlignedSingleLine(1840.0f, 50.0f, 2.10f,
+                                       formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
         }
 
         if (continuationState_.stillWatchingPrompt()) {
@@ -7339,8 +7045,8 @@ private:
             constexpr float promptWidth = 800.0f;
             renderer_.roundedRect(promptX, 54.0f, promptWidth, 54.0f, material_tv::cornerLarge, kPanelElevated);
             renderer_.roundedOutline(promptX, 54.0f, promptWidth, 54.0f, material_tv::cornerLarge, 1.5f, kOutline);
-            drawCenteredSingleLineFit(promptX, 54.0f, promptWidth, 54.0f, 1.95f,
-                "Still watching? Press OK to continue", kText, 20.0f, 4.0f);
+            drawCenteredSingleLineFit(promptX, 54.0f, promptWidth, 54.0f, 1.95f, "Still watching? Press OK to continue",
+                                      kText, 20.0f, 4.0f);
         }
 
         constexpr float contentX = 72.0f;
@@ -7350,27 +7056,29 @@ private:
         const bool hasLogo = drawLogo(detail_, contentX, 132.0f, 700.0f, 138.0f);
         if (!hasLogo) {
             renderer_.text(contentX, 142.0f, 6.0f,
-                fitTextLines(mainTitle.empty() ? "Loading…" : mainTitle, 6.0f, contentWidth, 1), kText, contentWidth);
+                           fitTextLines(mainTitle.empty() ? "Loading…" : mainTitle, 6.0f, contentWidth, 1), kText,
+                           contentWidth);
         }
 
         const std::string episodeNumber = episodeNumberLabel(detail_);
-        const std::string secondary = episode
-            ? (detail_.name.empty() || detail_.name == detail_.seriesName
-                ? episodeNumber
-                : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail_.name)
-            : episodeLabel(detail_);
+        const std::string secondary =
+            episode ? (detail_.name.empty() || detail_.name == detail_.seriesName
+                           ? episodeNumber
+                           : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail_.name)
+                    : episodeLabel(detail_);
         const float uiScale = uiTextScale(settings_.uiTextSize);
         const float titleBottom = hasLogo ? 270.0f : 142.0f + 10.0f * 6.0f * uiScale;
         const float secondaryY = std::max(286.0f, titleBottom + 12.0f);
         if (!secondary.empty()) {
-            renderer_.text(contentX, secondaryY, 2.80f,
-                fitTextLines(secondary, 2.80f, contentWidth, 1), kSecondaryText, contentWidth);
+            renderer_.text(contentX, secondaryY, 2.80f, fitTextLines(secondary, 2.80f, contentWidth, 1), kSecondaryText,
+                           contentWidth);
         }
 
         std::vector<std::string> metadata;
         if (detail_.productionYear > 0) metadata.emplace_back(std::to_string(detail_.productionYear));
         if (!detail_.officialRating.empty()) metadata.emplace_back(detail_.officialRating);
-        if (detail_.runtimeTicks > 0) metadata.emplace_back(formatPlaybackTime(static_cast<int>(detail_.runtimeTicks / 10000)));
+        if (detail_.runtimeTicks > 0)
+            metadata.emplace_back(formatPlaybackTime(static_cast<int>(detail_.runtimeTicks / 10000)));
         if (detail_.communityRating >= 0.0f) {
             std::ostringstream rating;
             rating << std::fixed << std::setprecision(1) << detail_.communityRating << "/10";
@@ -7390,7 +7098,8 @@ private:
         const int overviewLines = settings_.uiTextSize > 0 ? 2 : 3;
         if (!detail_.overview.empty()) {
             renderer_.text(contentX, overviewY, 2.35f,
-                fitTextLines(detail_.overview, 2.35f, contentWidth, overviewLines), kSecondaryText, contentWidth);
+                           fitTextLines(detail_.overview, 2.35f, contentWidth, overviewLines), kSecondaryText,
+                           contentWidth);
         }
         constexpr float stateY = 600.0f;
         float stateX = contentX;
@@ -7405,52 +7114,40 @@ private:
         constexpr float actionGap = 18.0f;
         constexpr float actionRightInset = 72.0f;
         auto desiredActionWidth = [&](const std::string& action) {
-            return std::round(std::max(
-                145.0f,
-                renderer_.textWidth(material_tv::type::label, materialLabel(action)) + 56.0f
-            ));
+            return std::round(
+                std::max(145.0f, renderer_.textWidth(material_tv::type::label, materialLabel(action)) + 56.0f));
         };
         float desiredActionWidths = 0.0f;
         for (const auto& action : actions) desiredActionWidths += desiredActionWidth(action);
         const float actionGaps = actions.empty() ? 0.0f : actionGap * static_cast<float>(actions.size() - 1);
-        const float availableActionWidths = std::max(
-            1.0f,
-            Renderer::logicalWidth() - contentX - actionRightInset - actionGaps
-        );
+        const float availableActionWidths =
+            std::max(1.0f, Renderer::logicalWidth() - contentX - actionRightInset - actionGaps);
         const float actionWidthScale = desiredActionWidths > availableActionWidths && desiredActionWidths > 0.0f
-            ? availableActionWidths / desiredActionWidths
-            : 1.0f;
+                                           ? availableActionWidths / desiredActionWidths
+                                           : 1.0f;
         float actionX = contentX;
         for (size_t i = 0; i < actions.size(); ++i) {
-            const bool focused = !overlayOpen
-                && !detailsState_.similarFocused()
-                && !detailsState_.episodeContextFocused()
-                && detailsState_.actionSelection() == static_cast<int>(i);
+            const bool focused = !overlayOpen && !detailsState_.similarFocused() &&
+                                 !detailsState_.episodeContextFocused() &&
+                                 detailsState_.actionSelection() == static_cast<int>(i);
             const float width = std::round(desiredActionWidth(actions[i]) * actionWidthScale);
             const bool primaryAction = i == 0;
             const auto bounds = drawButtonSurface(actionX, actionY, width, 64.0f, focused, primaryAction);
-            drawCenteredSingleLineFit(
-                bounds[0], bounds[1], bounds[2], bounds[3], 1.80f,
-                materialLabel(actions[i]), primaryAction || focused ? kText : kSecondaryText,
-                18.0f, 6.0f);
+            drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 1.80f, materialLabel(actions[i]),
+                                      primaryAction || focused ? kText : kSecondaryText, 18.0f, 6.0f);
             actionX += width + actionGap;
         }
 
         if (detail_.positionTicks > 0 && detail_.runtimeTicks > 0) {
-            const double fraction = std::clamp(static_cast<double>(detail_.positionTicks) / static_cast<double>(detail_.runtimeTicks), 0.0, 1.0);
+            const double fraction = std::clamp(
+                static_cast<double>(detail_.positionTicks) / static_cast<double>(detail_.runtimeTicks), 0.0, 1.0);
             renderer_.roundedRect(contentX, 744.0f, 560.0f, 4.0f, 2.0f, kTrack);
             renderer_.roundedRect(contentX, 744.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, kFocus);
         }
 
         if (episode && detailsState_.hasEpisodeSeriesContext()) {
-            renderer_.text(
-                72.0f,
-                752.0f,
-                2.30f,
-                "Show & seasons",
-                detailsState_.episodeContextFocused() ? kText : kSecondaryText,
-                520.0f
-            );
+            renderer_.text(72.0f, 752.0f, 2.30f, "Show & seasons",
+                           detailsState_.episodeContextFocused() ? kText : kSecondaryText, 520.0f);
             const int count = detailsState_.episodeContextCount();
             constexpr int visible = 5;
             const int maxStart = std::max(0, count - visible);
@@ -7463,52 +7160,50 @@ private:
                 const int index = start + slot;
                 if (index >= count) break;
                 const float x = 72.0f + static_cast<float>(slot) * (buttonWidth + buttonGap);
-                const bool focused = !overlayOpen
-                    && detailsState_.episodeContextFocused()
-                    && detailsState_.episodeContextSelection() == index;
+                const bool focused = !overlayOpen && detailsState_.episodeContextFocused() &&
+                                     detailsState_.episodeContextSelection() == index;
                 const auto bounds = drawButtonSurface(x, rowY, buttonWidth, buttonHeight, focused, index == 0);
                 std::string label = "GO TO SHOW";
                 if (index > 0 && static_cast<size_t>(index - 1) < detailsState_.seasons().size()) {
                     const auto& season = detailsState_.seasons()[static_cast<size_t>(index - 1)];
                     label = season.name.empty() ? "SEASON " + std::to_string(index) : season.name;
                 }
-                drawCenteredSingleLineFit(
-                    bounds[0], bounds[1], bounds[2], bounds[3], 1.75f,
-                    materialLabel(label), index == 0 || focused ? kText : kSecondaryText,
-                    18.0f, 5.0f
-                );
+                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 1.75f, materialLabel(label),
+                                          index == 0 || focused ? kText : kSecondaryText, 18.0f, 5.0f);
             }
         } else {
             const auto& similarItems = detailsState_.similar();
             if (!similarItems.empty()) {
-            // Keep the largest UI-text mode clear of the focused card's 10 px halo.
-            // At y=760 the heading descenders can overlap the first card focus ring.
-            renderer_.text(72.0f, 752.0f, 2.30f, "More like this", detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
-            constexpr int visible = 5;
-            const int maxStart = std::max(0, static_cast<int>(similarItems.size()) - visible);
-            const int start = std::clamp(detailsState_.similarSelection() - 1, 0, maxStart);
-            constexpr float cardWidth = 320.0f;
-            constexpr float cardHeight = 144.0f;
-            constexpr float cardGap = 26.0f;
-            for (int slot = 0; slot < visible; ++slot) {
-                const int index = start + slot;
-                if (index >= static_cast<int>(similarItems.size())) break;
-                const auto& similar = similarItems[static_cast<size_t>(index)];
-                const float x = 72.0f + static_cast<float>(slot) * (cardWidth + cardGap);
-                const float y = 825.0f;
-                const bool focused = !overlayOpen && detailsState_.similarFocused() && index == detailsState_.similarSelection();
-                const auto bounds = focusedBounds(x, y, cardWidth, cardHeight, focused, materialCardFocusScale());
-                const float cardRadius = material_tv::cornerExtraSmall * bounds[3] / cardHeight;
-                if (!drawHomeArtwork(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius)) {
-                    drawArtworkPlaceholder(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
-                }
-                if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
-                // Similar-card titles sit at the bottom edge of the 1080p canvas.
-                // Two normal-size lines leave only a few pixels for descenders and
-                // antialiasing, so keep every text-size mode to one stable line.
-                renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f,
-                    fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, 1),
-                    focused ? kText : kSecondaryText, cardWidth - 10.0f);
+                // Keep the largest UI-text mode clear of the focused card's 10 px halo.
+                // At y=760 the heading descenders can overlap the first card focus ring.
+                renderer_.text(72.0f, 752.0f, 2.30f, "More like this",
+                               detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
+                constexpr int visible = 5;
+                const int maxStart = std::max(0, static_cast<int>(similarItems.size()) - visible);
+                const int start = std::clamp(detailsState_.similarSelection() - 1, 0, maxStart);
+                constexpr float cardWidth = 320.0f;
+                constexpr float cardHeight = 144.0f;
+                constexpr float cardGap = 26.0f;
+                for (int slot = 0; slot < visible; ++slot) {
+                    const int index = start + slot;
+                    if (index >= static_cast<int>(similarItems.size())) break;
+                    const auto& similar = similarItems[static_cast<size_t>(index)];
+                    const float x = 72.0f + static_cast<float>(slot) * (cardWidth + cardGap);
+                    const float y = 825.0f;
+                    const bool focused =
+                        !overlayOpen && detailsState_.similarFocused() && index == detailsState_.similarSelection();
+                    const auto bounds = focusedBounds(x, y, cardWidth, cardHeight, focused, materialCardFocusScale());
+                    const float cardRadius = material_tv::cornerExtraSmall * bounds[3] / cardHeight;
+                    if (!drawHomeArtwork(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius)) {
+                        drawArtworkPlaceholder(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
+                    }
+                    if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
+                    // Similar-card titles sit at the bottom edge of the 1080p canvas.
+                    // Two normal-size lines leave only a few pixels for descenders and
+                    // antialiasing, so keep every text-size mode to one stable line.
+                    renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f,
+                                   fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, 1),
+                                   focused ? kText : kSecondaryText, cardWidth - 10.0f);
                 }
             }
         }
@@ -7521,16 +7216,17 @@ private:
             constexpr float loadingY = 120.0f;
             constexpr float loadingWidth = 210.0f;
             constexpr float loadingHeight = 48.0f;
-            renderer_.roundedRect(loadingX, loadingY, loadingWidth, loadingHeight, loadingHeight * 0.5f, kPanelElevated);
+            renderer_.roundedRect(loadingX, loadingY, loadingWidth, loadingHeight, loadingHeight * 0.5f,
+                                  kPanelElevated);
             renderer_.roundedRect(loadingX + 18.0f, loadingY + 16.0f, 16.0f, 16.0f, 8.0f, kFocus);
-            renderer_.textVerticallyCentered(loadingX + 52.0f, loadingY, loadingHeight, 1.60f, "Loading…", kText, loadingWidth - 70.0f);
+            renderer_.textVerticallyCentered(loadingX + 52.0f, loadingY, loadingHeight, 1.60f, "Loading…", kText,
+                                             loadingWidth - 70.0f);
         }
         if (!noticePersistent_ && !notice_.empty() && now >= noticeUntil_) {
             notice_.clear();
             noticeUntil_ = {};
         }
-        const bool noticeVisible = !notice_.empty()
-            && (noticePersistent_ || now < noticeUntil_);
+        const bool noticeVisible = !notice_.empty() && (noticePersistent_ || now < noticeUntil_);
         if (noticeVisible) {
             const bool playerNotice = screen_ == Screen::Player;
             const float noticeY = playerNotice ? 670.0f : 914.0f;
@@ -7539,7 +7235,8 @@ private:
             renderer_.roundedRect(noticeX, noticeY, noticeWidth, 68.0f, material_tv::cornerMedium, kPanelElevated);
             renderer_.roundedRect(noticeX + 18.0f, noticeY + 18.0f, 7.0f, 32.0f, 3.5f, kFocus);
             renderer_.textVerticallyCentered(noticeX + 46.0f, noticeY, 68.0f, 1.65f,
-                fitTextLines(notice_, 1.65f, noticeWidth - 74.0f, 1), kText, noticeWidth - 74.0f);
+                                             fitTextLines(notice_, 1.65f, noticeWidth - 74.0f, 1), kText,
+                                             noticeWidth - 74.0f);
         }
 
         if (error_.empty()) {
@@ -7554,17 +7251,16 @@ private:
         }
         if (!presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now < errorUntil_) {
             const bool playerError = screen_ == Screen::Player;
-            const float errorY = playerError
-                ? (noticeVisible ? 588.0f : 670.0f)
-                : (noticeVisible ? 834.0f : 914.0f);
+            const float errorY = playerError ? (noticeVisible ? 588.0f : 670.0f) : (noticeVisible ? 834.0f : 914.0f);
             const float errorWidth = playerError ? 1160.0f : 1320.0f;
             const float errorX = playerError ? 80.0f : (1920.0f - errorWidth) * 0.5f;
             renderer_.roundedRect(errorX, errorY, errorWidth, 68.0f, material_tv::cornerMedium, kPanelElevated);
             renderer_.roundedRect(errorX + 18.0f, errorY + 18.0f, 7.0f, 32.0f, 3.5f, kError);
             renderer_.roundedOutline(errorX, errorY, errorWidth, 68.0f, material_tv::cornerMedium, 1.5f,
-                Color{kError.r, kError.g, kError.b, 0.55f});
+                                     Color{kError.r, kError.g, kError.b, 0.55f});
             renderer_.textVerticallyCentered(errorX + 46.0f, errorY, 68.0f, 1.55f,
-                fitTextLines(presentedError_, 1.55f, errorWidth - 74.0f, 1), kText, errorWidth - 74.0f);
+                                             fitTextLines(presentedError_, 1.55f, errorWidth - 74.0f, 1), kText,
+                                             errorWidth - 74.0f);
         }
     }
 
@@ -7689,16 +7385,11 @@ private:
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;
 };
-}
+} // namespace
 
-extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
-    JNIEnv* env,
-    jclass,
-    jstring action,
-    jstring data,
-    jstring query
-) {
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(JNIEnv* env, jclass,
+                                                                                           jstring action, jstring data,
+                                                                                           jstring query) {
     const std::string actionValue = jniString(env, action);
     const std::string dataValue = jniString(env, data);
     const std::string queryValue = jniString(env, query);
@@ -7706,47 +7397,30 @@ Java_app_sloppatv_SloppaNativeActivity_nativeOnNewIntent(
     if (gActiveApp) gActiveApp->onNewLaunchIntent(actionValue, dataValue, queryValue);
 }
 
-
-extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaNativeActivity_nativeOnBackPressed(
-    JNIEnv*,
-    jclass
-) {
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeOnBackPressed(JNIEnv*, jclass) {
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemBackPressed();
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(
-    JNIEnv* env,
-    jclass,
-    jint mode,
-    jstring text
-) {
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputChanged(JNIEnv* env,
+                                                                                                        jclass,
+                                                                                                        jint mode,
+                                                                                                        jstring text) {
     const std::string value = jniString(env, text);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemTextInputChanged(static_cast<int>(mode), value);
 }
 
-extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(
-    JNIEnv* env,
-    jclass,
-    jint mode,
-    jstring text
-) {
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputDone(JNIEnv* env,
+                                                                                                     jclass, jint mode,
+                                                                                                     jstring text) {
     const std::string value = jniString(env, text);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemTextInputDone(static_cast<int>(mode), value);
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputCancelled(
-    JNIEnv* env,
-    jclass,
-    jint mode,
-    jstring text
-) {
+Java_app_sloppatv_SloppaNativeActivity_nativeOnSystemTextInputCancelled(JNIEnv* env, jclass, jint mode, jstring text) {
     const std::string value = jniString(env, text);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onSystemTextInputCancelled(static_cast<int>(mode), value);

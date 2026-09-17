@@ -33,9 +33,6 @@ private:
     jfloatArray transformArray_ = nullptr;
     GLuint texture_ = 0;
     std::array<float, 16> transform_{
-        1, 0, 0, 0,
-        0, 1, 0, 0,
-        0, 0, 1, 0,
-        0, 0, 0, 1,
+        1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
     };
 };

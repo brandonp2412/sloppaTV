@@ -26,7 +26,7 @@ SeerrStorageTarget target(std::string type, int serverId, bool isDefault = false
     value.isDefault = isDefault;
     return value;
 }
-}
+} // namespace
 
 int main() {
     using namespace std::chrono_literals;
@@ -41,9 +41,7 @@ int main() {
     assert(state.loading());
     assert(!state.beginRefresh(true, start));
 
-    state.finishRefresh(
-        {target("movie", 1), target("movie", 2, true), target("movie", 3), target("tv", 4)},
-        start);
+    state.finishRefresh({target("movie", 1), target("movie", 2, true), target("movie", 3), target("tv", 4)}, start);
     assert(!state.loading());
     assert(state.targets().size() == 4);
     assert(state.targets().front().usedPercent() == 75);
@@ -60,9 +58,7 @@ int main() {
     assert(state.refreshDeadline() == SeerrStorageState::TimePoint{});
 
     assert(state.beginRefresh(false, start + 61s));
-    state.finishRefresh(
-        {target("movie", 1), target("movie", 2, true), target("movie", 3)},
-        start + 61s);
+    state.finishRefresh({target("movie", 1), target("movie", 2, true), target("movie", 3)}, start + 61s);
     assert(state.error().empty());
 
     const SeerrMediaItem movie = media("movie", 10);

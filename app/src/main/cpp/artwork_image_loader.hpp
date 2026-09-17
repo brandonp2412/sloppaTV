@@ -22,15 +22,12 @@ struct ArtworkLoadResult {
     ArtworkLoadSource source = ArtworkLoadSource::Network;
     ArtworkLoadFailure failure = ArtworkLoadFailure::None;
 
-    [[nodiscard]] bool ok() const {
-        return failure == ArtworkLoadFailure::None && decoded.valid();
-    }
+    [[nodiscard]] bool ok() const { return failure == ArtworkLoadFailure::None && decoded.valid(); }
 };
 
 class ArtworkImageLoader {
 public:
-    template <typename Download, typename Decode>
-    static ArtworkLoadResult load(Download&& download, Decode&& decode) {
+    template <typename Download, typename Decode> static ArtworkLoadResult load(Download&& download, Decode&& decode) {
         ArtworkLoadResult result;
         auto bytes = download();
         if (!bytes.ok) {
@@ -45,12 +42,8 @@ public:
     }
 
     template <typename DiskCache, typename Download, typename Decode>
-    static ArtworkLoadResult loadCached(
-        DiskCache& diskCache,
-        const std::string& key,
-        Download&& download,
-        Decode&& decode
-    ) {
+    static ArtworkLoadResult loadCached(DiskCache& diskCache, const std::string& key, Download&& download,
+                                        Decode&& decode) {
         if (auto cached = diskCache.read(key)) {
             ArtworkLoadResult result;
             result.source = ArtworkLoadSource::DiskCache;

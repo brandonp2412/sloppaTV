@@ -32,8 +32,11 @@ LaunchRequest readLaunchRequest(android_app* app) {
 
     jclass intentClass = env->GetObjectClass(intent);
     jmethodID getAction = intentClass ? env->GetMethodID(intentClass, "getAction", "()Ljava/lang/String;") : nullptr;
-    jmethodID getDataString = intentClass ? env->GetMethodID(intentClass, "getDataString", "()Ljava/lang/String;") : nullptr;
-    jmethodID getStringExtra = intentClass ? env->GetMethodID(intentClass, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;") : nullptr;
+    jmethodID getDataString =
+        intentClass ? env->GetMethodID(intentClass, "getDataString", "()Ljava/lang/String;") : nullptr;
+    jmethodID getStringExtra =
+        intentClass ? env->GetMethodID(intentClass, "getStringExtra", "(Ljava/lang/String;)Ljava/lang/String;")
+                    : nullptr;
     if (!getAction || !getDataString || !getStringExtra || env->ExceptionCheck()) {
         if (env->ExceptionCheck()) env->ExceptionClear();
         if (intentClass) env->DeleteLocalRef(intentClass);
@@ -49,9 +52,8 @@ LaunchRequest readLaunchRequest(android_app* app) {
     std::string query;
     if (action == "android.intent.action.SEARCH") {
         jstring queryKey = env->NewStringUTF("query");
-        auto queryValue = queryKey
-            ? static_cast<jstring>(env->CallObjectMethod(intent, getStringExtra, queryKey))
-            : nullptr;
+        auto queryValue =
+            queryKey ? static_cast<jstring>(env->CallObjectMethod(intent, getStringExtra, queryKey)) : nullptr;
         query = jniString(env, queryValue);
         if (queryValue) env->DeleteLocalRef(queryValue);
         if (queryKey) env->DeleteLocalRef(queryKey);

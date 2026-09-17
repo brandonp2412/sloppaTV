@@ -23,27 +23,60 @@ int main() {
         {"CanDelete", true},
         {"ProviderIds", {{"Tmdb", "42"}, {"TmdbCollection", "84"}}},
         {"Genres", {"Comedy", "Crime"}},
-        {"People", {
-            {{"Type", "Director"}, {"Name", "Ignored"}},
-            {{"Type", "Actor"}, {"Id", "actor-1"}, {"Name", "Actor"}, {"PrimaryImageTag", "actor-tag"}, {"Role", "Lead"}}
-        }},
+        {"People",
+         {{{"Type", "Director"}, {"Name", "Ignored"}},
+          {{"Type", "Actor"},
+           {"Id", "actor-1"},
+           {"Name", "Actor"},
+           {"PrimaryImageTag", "actor-tag"},
+           {"Role", "Lead"}}}},
         {"UserData", {{"PlaybackPositionTicks", 25000000LL}, {"IsFavorite", true}, {"Played", false}}},
         {"ImageTags", {{"Primary", "primary-tag"}, {"Thumb", "thumb-tag"}, {"Logo", "logo-tag"}}},
         {"BackdropImageTags", {"backdrop-tag"}},
-        {"MediaSources", {{
-            {"Id", "media-source"},
-            {"Container", "mkv"},
-            {"MediaStreams", {
-                {{"Type", "Video"}, {"Codec", "hevc"}, {"Profile", "Main 10"}, {"VideoRangeType", "HDR10"}, {"Width", 3840}, {"Height", 2160}, {"BitDepth", 10}, {"Level", 153}, {"RealFrameRate", 23.976}},
-                {{"Type", "Audio"}, {"Index", 1}, {"Channels", 6}, {"Codec", "eac3"}, {"Language", "eng"}, {"DisplayTitle", "English"}, {"IsDefault", true}},
-                {{"Type", "Subtitle"}, {"Index", 2}, {"Codec", "subrip"}, {"Language", "eng"}, {"DisplayTitle", "English"}, {"IsForced", false}, {"IsDefault", true}, {"IsExternal", true}}
-            }}
-        }}},
-        {"Trickplay", {{"media-source", {
-            {"640", {{"Width", 640}, {"Height", 360}, {"TileWidth", 10}, {"TileHeight", 10}, {"ThumbnailCount", 100}, {"Interval", 10000}}},
-            {"320", {{"Width", 320}, {"Height", 180}, {"TileWidth", 10}, {"TileHeight", 10}, {"ThumbnailCount", 100}, {"Interval", 10000}}}
-        }}}}
-    };
+        {"MediaSources",
+         {{{"Id", "media-source"},
+           {"Container", "mkv"},
+           {"MediaStreams",
+            {{{"Type", "Video"},
+              {"Codec", "hevc"},
+              {"Profile", "Main 10"},
+              {"VideoRangeType", "HDR10"},
+              {"Width", 3840},
+              {"Height", 2160},
+              {"BitDepth", 10},
+              {"Level", 153},
+              {"RealFrameRate", 23.976}},
+             {{"Type", "Audio"},
+              {"Index", 1},
+              {"Channels", 6},
+              {"Codec", "eac3"},
+              {"Language", "eng"},
+              {"DisplayTitle", "English"},
+              {"IsDefault", true}},
+             {{"Type", "Subtitle"},
+              {"Index", 2},
+              {"Codec", "subrip"},
+              {"Language", "eng"},
+              {"DisplayTitle", "English"},
+              {"IsForced", false},
+              {"IsDefault", true},
+              {"IsExternal", true}}}}}}},
+        {"Trickplay",
+         {{"media-source",
+           {{"640",
+             {{"Width", 640},
+              {"Height", 360},
+              {"TileWidth", 10},
+              {"TileHeight", 10},
+              {"ThumbnailCount", 100},
+              {"Interval", 10000}}},
+            {"320",
+             {{"Width", 320},
+              {"Height", 180},
+              {"TileWidth", 10},
+              {"TileHeight", 10},
+              {"ThumbnailCount", 100},
+              {"Interval", 10000}}}}}}}};
 
     const JellyfinItem item = parseJellyfinItem(value);
     assert(item.id == "episode-1");
@@ -69,15 +102,13 @@ int main() {
     assert(item.trickplay.mediaSourceId == "media-source");
     assert(item.trickplay.width == 320);
 
-    const nlohmann::json parentArtwork = {
-        {"Id", "episode-2"},
-        {"Name", "Episode 2"},
-        {"Type", "Episode"},
-        {"ParentLogoImageTag", "parent-logo"},
-        {"ParentLogoItemId", "series-1"},
-        {"ParentBackdropImageTags", {"parent-backdrop"}},
-        {"ParentBackdropItemId", "series-1"}
-    };
+    const nlohmann::json parentArtwork = {{"Id", "episode-2"},
+                                          {"Name", "Episode 2"},
+                                          {"Type", "Episode"},
+                                          {"ParentLogoImageTag", "parent-logo"},
+                                          {"ParentLogoItemId", "series-1"},
+                                          {"ParentBackdropImageTags", {"parent-backdrop"}},
+                                          {"ParentBackdropItemId", "series-1"}};
     const JellyfinItem inherited = parseJellyfinItem(parentArtwork);
     assert(inherited.logoTag == "parent-logo" && inherited.logoItemId == "series-1");
     assert(inherited.backdropTag == "parent-backdrop" && inherited.backdropItemId == "series-1");
@@ -87,12 +118,10 @@ int main() {
         {"Name", "Still playable"},
         {"Type", "Movie"},
         {"BackdropImageTags", {nullptr, 123, "usable-backdrop"}},
-        {"MediaSources", {nullptr, "bad-source", {
-            {"Id", "usable-source"},
-            {"Container", "mp4"},
-            {"MediaStreams", nlohmann::json::array()}
-        }}}
-    };
+        {"MediaSources",
+         {nullptr,
+          "bad-source",
+          {{"Id", "usable-source"}, {"Container", "mp4"}, {"MediaStreams", nlohmann::json::array()}}}}};
     const JellyfinItem resilient = parseJellyfinItem(malformedArrays);
     assert(resilient.id == "movie-with-noisy-metadata");
     assert(resilient.backdropTag == "usable-backdrop");
@@ -107,11 +136,11 @@ int main() {
         {"ProductionYear", nullptr},
         {"RunTimeTicks", nullptr},
         {"UserData", {{"PlaybackPositionTicks", nullptr}, {"IsFavorite", nullptr}}},
-        {"MediaSources", {{{"Id", "nullable-source"}, {"MediaStreams", {
-            {{"Type", "Audio"}, {"Index", nullptr}, {"Channels", nullptr}, {"Codec", nullptr}},
-            {{"Type", "Subtitle"}, {"Index", 4}, {"Language", nullptr}, {"IsForced", nullptr}}
-        }}}}}
-    };
+        {"MediaSources",
+         {{{"Id", "nullable-source"},
+           {"MediaStreams",
+            {{{"Type", "Audio"}, {"Index", nullptr}, {"Channels", nullptr}, {"Codec", nullptr}},
+             {{"Type", "Subtitle"}, {"Index", 4}, {"Language", nullptr}, {"IsForced", nullptr}}}}}}}};
     const JellyfinItem nullable = parseJellyfinItem(nullableMetadata);
     assert(nullable.id == "nullable-item");
     assert(nullable.productionYear == 0);
@@ -122,23 +151,10 @@ int main() {
     assert(nullable.audios.empty());
     assert(nullable.subtitles.size() == 1 && nullable.subtitles[0].index == 4);
 
-    const nlohmann::json secondValid = {
-        {"Id", "movie-2"},
-        {"Name", "Second"},
-        {"Type", "Movie"}
-    };
-    const nlohmann::json malformed = {
-        {"Id", "broken"},
-        {"ProductionYear", "not-a-number"}
-    };
-    const auto items = parseJellyfinItems(nlohmann::json::array({
-        value,
-        nullptr,
-        {{"Name", "Missing Id"}},
-        malformed,
-        nullableMetadata,
-        secondValid
-    }));
+    const nlohmann::json secondValid = {{"Id", "movie-2"}, {"Name", "Second"}, {"Type", "Movie"}};
+    const nlohmann::json malformed = {{"Id", "broken"}, {"ProductionYear", "not-a-number"}};
+    const auto items = parseJellyfinItems(
+        nlohmann::json::array({value, nullptr, {{"Name", "Missing Id"}}, malformed, nullableMetadata, secondValid}));
     assert(items.size() == 4);
     assert(items[0].id == "episode-1");
     assert(items[1].id == "broken" && items[1].productionYear == 0);

@@ -51,9 +51,9 @@ std::string addApiKey(std::string url, const std::string& token) {
 std::string firstContainer(std::string container) {
     const auto comma = container.find(',');
     if (comma != std::string::npos) container.resize(comma);
-    container.erase(std::remove_if(container.begin(), container.end(), [](unsigned char c) {
-        return !std::isalnum(c);
-    }), container.end());
+    container.erase(
+        std::remove_if(container.begin(), container.end(), [](unsigned char c) { return !std::isalnum(c); }),
+        container.end());
     return container.empty() ? "mp4" : container;
 }
 
@@ -63,16 +63,16 @@ bool isScopedVideoItem(const JellyfinItem& item) {
 
 bool isScopedVideoCollection(const JellyfinItem& item) {
     if (item.collectionType.empty()) return true;
-    return item.collectionType == "movies" || item.collectionType == "tvshows"
-        || item.collectionType == "mixed" || item.collectionType == "boxsets";
+    return item.collectionType == "movies" || item.collectionType == "tvshows" || item.collectionType == "mixed" ||
+           item.collectionType == "boxsets";
 }
 
 void retainScopedVideoItems(std::vector<JellyfinItem>& items) {
-    items.erase(std::remove_if(items.begin(), items.end(), [](const JellyfinItem& item) {
-        return !isScopedVideoItem(item);
-    }), items.end());
+    items.erase(
+        std::remove_if(items.begin(), items.end(), [](const JellyfinItem& item) { return !isScopedVideoItem(item); }),
+        items.end());
 }
-}
+} // namespace
 
 JellyfinClient::JellyfinClient(JavaVM* vm, jobject activity) : http_(vm, activity), vm_(vm) {
     if (!vm_ || !activity) return;
@@ -97,22 +97,16 @@ DeviceCodecSupport JellyfinClient::ensureDeviceCodecSupport() const {
             std::scoped_lock lock(codecSupportMutex_);
             codecSupport_ = support;
         }
-        __android_log_print(
-            ANDROID_LOG_INFO,
-            kTag,
-            "Device capability probe complete h264=%d hevc=%d av1=%d maxAudio=%d",
-            support.h264 ? 1 : 0,
-            support.hevc ? 1 : 0,
-            support.av1 ? 1 : 0,
-            support.maxAudioOutputChannels
-        );
+        __android_log_print(ANDROID_LOG_INFO, kTag,
+                            "Device capability probe complete h264=%d hevc=%d av1=%d maxAudio=%d", support.h264 ? 1 : 0,
+                            support.hevc ? 1 : 0, support.av1 ? 1 : 0, support.maxAudioOutputChannels);
     });
     std::scoped_lock lock(codecSupportMutex_);
     return codecSupport_;
 }
 
 void JellyfinClient::warmDeviceCodecSupport() const {
-    (void) ensureDeviceCodecSupport();
+    (void)ensureDeviceCodecSupport();
 }
 
 DeviceCodecSupport JellyfinClient::deviceCodecSupport() const {
@@ -138,11 +132,7 @@ std::string JellyfinClient::discoverServerBase(const std::string& value, const s
     }
 
     for (const auto& candidate : candidates) {
-        const auto response = http_.request(
-            "GET",
-            candidate + "/System/Info/Public",
-            headers(nullptr, deviceId)
-        );
+        const auto response = http_.request("GET", candidate + "/System/Info/Public", headers(nullptr, deviceId));
         if (!response.ok() || response.body.empty()) continue;
         try {
             const auto data = json::parse(response.body);
@@ -168,7 +158,8 @@ std::string JellyfinClient::authorization(const JellyfinSession* session, const 
     return out.str();
 }
 
-std::map<std::string, std::string> JellyfinClient::headers(const JellyfinSession* session, const std::string& deviceId) const {
+std::map<std::string, std::string> JellyfinClient::headers(const JellyfinSession* session,
+                                                           const std::string& deviceId) const {
     std::map<std::string, std::string> result{
         {"Accept", "application/json"},
         {"Content-Type", "application/json"},
@@ -192,12 +183,10 @@ std::string JellyfinClient::urlEncode(const std::string& value) const {
     return escaped.str();
 }
 
-ApiValueResult<JellyfinSession> JellyfinClient::parseAuthenticationResult(
-    const HttpResponse& response,
-    const std::string& server,
-    const std::string& deviceId,
-    const std::string& fallbackUsername
-) const {
+ApiValueResult<JellyfinSession> JellyfinClient::parseAuthenticationResult(const HttpResponse& response,
+                                                                          const std::string& server,
+                                                                          const std::string& deviceId,
+                                                                          const std::string& fallbackUsername) const {
     ApiValueResult<JellyfinSession> result;
     if (!response.ok()) {
         result.error = apiError(response);
@@ -227,12 +216,8 @@ ApiValueResult<JellyfinSession> JellyfinClient::parseAuthenticationResult(
     return result;
 }
 
-ApiValueResult<JellyfinSession> JellyfinClient::login(
-    std::string server,
-    const std::string& username,
-    const std::string& password,
-    const std::string& deviceId
-) const {
+ApiValueResult<JellyfinSession> JellyfinClient::login(std::string server, const std::string& username,
+                                                      const std::string& password, const std::string& deviceId) const {
     ApiValueResult<JellyfinSession> result;
     server = normalizeServer(std::move(server));
     std::string normalizedUsername = username;
@@ -258,19 +243,13 @@ ApiValueResult<JellyfinSession> JellyfinClient::login(
         {"Username", normalizedUsername},
         {"Pw", password},
     };
-    const HttpResponse response = http_.request(
-        "POST",
-        server + "/Users/AuthenticateByName",
-        headers(nullptr, deviceId),
-        body.dump()
-    );
+    const HttpResponse response =
+        http_.request("POST", server + "/Users/AuthenticateByName", headers(nullptr, deviceId), body.dump());
     return parseAuthenticationResult(response, server, deviceId, normalizedUsername);
 }
 
-ApiValueResult<QuickConnectRequest> JellyfinClient::initiateQuickConnect(
-    std::string server,
-    const std::string& deviceId
-) const {
+ApiValueResult<QuickConnectRequest> JellyfinClient::initiateQuickConnect(std::string server,
+                                                                         const std::string& deviceId) const {
     ApiValueResult<QuickConnectRequest> result;
     server = normalizeServer(std::move(server));
     if (server.empty()) {
@@ -285,11 +264,7 @@ ApiValueResult<QuickConnectRequest> JellyfinClient::initiateQuickConnect(
     }
     server = discoveredServer;
 
-    const auto enabled = http_.request(
-        "GET",
-        server + "/QuickConnect/Enabled",
-        headers(nullptr, deviceId)
-    );
+    const auto enabled = http_.request("GET", server + "/QuickConnect/Enabled", headers(nullptr, deviceId));
     if (!enabled.ok()) {
         result.error = apiError(enabled);
         return result;
@@ -299,11 +274,7 @@ ApiValueResult<QuickConnectRequest> JellyfinClient::initiateQuickConnect(
         return result;
     }
 
-    const auto response = http_.request(
-        "POST",
-        server + "/QuickConnect/Initiate",
-        headers(nullptr, deviceId)
-    );
+    const auto response = http_.request("POST", server + "/QuickConnect/Initiate", headers(nullptr, deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -327,20 +298,16 @@ ApiValueResult<QuickConnectRequest> JellyfinClient::initiateQuickConnect(
     return result;
 }
 
-ApiValueResult<bool> JellyfinClient::pollQuickConnect(
-    const QuickConnectRequest& request,
-    const std::string& deviceId
-) const {
+ApiValueResult<bool> JellyfinClient::pollQuickConnect(const QuickConnectRequest& request,
+                                                      const std::string& deviceId) const {
     ApiValueResult<bool> result;
     if (request.server.empty() || request.secret.empty()) {
         result.error = "Quick Connect request is incomplete";
         return result;
     }
-    const auto response = http_.request(
-        "GET",
-        request.server + "/QuickConnect/Connect?secret=" + urlEncode(request.secret),
-        headers(nullptr, deviceId)
-    );
+    const auto response =
+        http_.request("GET", request.server + "/QuickConnect/Connect?secret=" + urlEncode(request.secret),
+                      headers(nullptr, deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -355,20 +322,15 @@ ApiValueResult<bool> JellyfinClient::pollQuickConnect(
     return result;
 }
 
-ApiValueResult<bool> JellyfinClient::authorizeQuickConnectCode(
-    const JellyfinSession& session,
-    const std::string& code
-) const {
+ApiValueResult<bool> JellyfinClient::authorizeQuickConnectCode(const JellyfinSession& session,
+                                                               const std::string& code) const {
     ApiValueResult<bool> result;
     if (!session.valid() || code.empty()) {
         result.error = "Quick Connect authorization is incomplete";
         return result;
     }
-    const auto response = http_.request(
-        "POST",
-        session.server + "/QuickConnect/Authorize?code=" + urlEncode(code),
-        headers(&session, session.deviceId)
-    );
+    const auto response = http_.request("POST", session.server + "/QuickConnect/Authorize?code=" + urlEncode(code),
+                                        headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -379,22 +341,16 @@ ApiValueResult<bool> JellyfinClient::authorizeQuickConnectCode(
     return result;
 }
 
-ApiValueResult<JellyfinSession> JellyfinClient::completeQuickConnect(
-    const QuickConnectRequest& request,
-    const std::string& deviceId
-) const {
+ApiValueResult<JellyfinSession> JellyfinClient::completeQuickConnect(const QuickConnectRequest& request,
+                                                                     const std::string& deviceId) const {
     if (request.server.empty() || request.secret.empty()) {
         ApiValueResult<JellyfinSession> result;
         result.error = "Quick Connect request is incomplete";
         return result;
     }
     const json body = {{"Secret", request.secret}};
-    const auto response = http_.request(
-        "POST",
-        request.server + "/Users/AuthenticateWithQuickConnect",
-        headers(nullptr, deviceId),
-        body.dump()
-    );
+    const auto response = http_.request("POST", request.server + "/Users/AuthenticateWithQuickConnect",
+                                        headers(nullptr, deviceId), body.dump());
     return parseAuthenticationResult(response, request.server, deviceId, "");
 }
 
@@ -425,11 +381,8 @@ ApiValueResult<JellyfinServerInfo> JellyfinClient::getServerInfo(const JellyfinS
         result.error = "Server info request is incomplete";
         return result;
     }
-    const auto response = http_.request(
-        "GET",
-        session.server + "/System/Info/Public",
-        headers(nullptr, session.deviceId)
-    );
+    const auto response =
+        http_.request("GET", session.server + "/System/Info/Public", headers(nullptr, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -454,30 +407,26 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         return result;
     }
 
-    const std::string common =
-        "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-        "&EnableTotalRecordCount=false";
+    const std::string common = "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                               "&EnableTotalRecordCount=false";
     auto addWarning = [&](const std::string& warning) {
         if (!result.value.warning.empty()) result.value.warning += " | ";
         result.value.warning += warning;
     };
 
-    auto viewsFuture = std::async(std::launch::async, [this, &session] {
-        return loadViews(session);
-    });
+    auto viewsFuture = std::async(std::launch::async, [this, &session] { return loadViews(session); });
     auto resumeFuture = std::async(std::launch::async, [this, &session, &common] {
-        return parseItemList(http_.request(
-            "GET",
-            session.server + "/Users/" + session.userId + "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" + common,
-            headers(&session, session.deviceId)
-        ));
+        return parseItemList(http_.request("GET",
+                                           session.server + "/Users/" + session.userId +
+                                               "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" +
+                                               common,
+                                           headers(&session, session.deviceId)));
     });
     auto nextUpFuture = std::async(std::launch::async, [this, &session, &common] {
-        return parseItemList(http_.request(
-            "GET",
-            session.server + "/Shows/NextUp?UserId=" + session.userId + "&Limit=30&EnableResumable=false" + common,
-            headers(&session, session.deviceId)
-        ));
+        return parseItemList(http_.request("GET",
+                                           session.server + "/Shows/NextUp?UserId=" + session.userId +
+                                               "&Limit=30&EnableResumable=false" + common,
+                                           headers(&session, session.deviceId)));
     });
 
     auto views = viewsFuture.get();
@@ -508,10 +457,8 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
     return result;
 }
 
-ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
-    const JellyfinSession& session,
-    const std::vector<JellyfinItem>& views
-) const {
+ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(const JellyfinSession& session,
+                                                                   const std::vector<JellyfinItem>& views) const {
     ApiValueResult<JellyfinHomeData> result;
     if (!session.valid()) {
         result.error = "Not logged in";
@@ -519,9 +466,8 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
     }
     result.value.views = views;
 
-    const std::string common =
-        "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-        "&EnableTotalRecordCount=false";
+    const std::string common = "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                               "&EnableTotalRecordCount=false";
     auto addWarning = [&](const std::string& warning) {
         if (!result.value.warning.empty()) result.value.warning += " | ";
         result.value.warning += warning;
@@ -535,9 +481,8 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
         if (view.id.empty()) continue;
         latestViews.push_back(view);
         latestFutures.push_back(std::async(std::launch::async, [this, &session, &common, view] {
-            const std::string url = session.server + "/Users/" + session.userId + "/Items/Latest"
-                + "?ParentId=" + urlEncode(view.id)
-                + "&Limit=24&GroupItems=true" + common;
+            const std::string url = session.server + "/Users/" + session.userId + "/Items/Latest" +
+                                    "?ParentId=" + urlEncode(view.id) + "&Limit=24&GroupItems=true" + common;
             auto latest = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
             if (latest.ok) retainScopedVideoItems(latest.value);
             return latest;
@@ -545,20 +490,21 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(
     }
 
     auto recommendedFuture = std::async(std::launch::async, [this, &session, &common] {
-        return parseItemList(http_.request(
-            "GET",
-            session.server + "/Users/" + session.userId + "/Items?Recursive=true&IncludeItemTypes=Movie,Series"
-                "&Limit=30&SortBy=Random&EnableTotalRecordCount=false" + common,
-            headers(&session, session.deviceId)
-        ));
+        return parseItemList(http_.request("GET",
+                                           session.server + "/Users/" + session.userId +
+                                               "/Items?Recursive=true&IncludeItemTypes=Movie,Series"
+                                               "&Limit=30&SortBy=Random&EnableTotalRecordCount=false" +
+                                               common,
+                                           headers(&session, session.deviceId)));
     });
     auto favoritesFuture = std::async(std::launch::async, [this, &session, &common] {
-        return parseItemList(http_.request(
-            "GET",
-            session.server + "/Users/" + session.userId + "/Items?Recursive=true&Filters=IsFavorite"
-                "&IncludeItemTypes=Movie,Series,Episode&Limit=30&SortBy=SortName&SortOrder=Ascending" + common,
-            headers(&session, session.deviceId)
-        ));
+        return parseItemList(
+            http_.request("GET",
+                          session.server + "/Users/" + session.userId +
+                              "/Items?Recursive=true&Filters=IsFavorite"
+                              "&IncludeItemTypes=Movie,Series,Episode&Limit=30&SortBy=SortName&SortOrder=Ascending" +
+                              common,
+                          headers(&session, session.deviceId)));
     });
 
     for (size_t index = 0; index < latestFutures.size(); ++index) {
@@ -597,132 +543,114 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::loadViews(const Jellyf
         result.error = "Not logged in";
         return result;
     }
-    auto result = parseItemList(http_.request(
-        "GET",
-        session.server + "/Users/" + session.userId + "/Views?IncludeExternalContent=false",
-        headers(&session, session.deviceId)
-    ));
+    auto result = parseItemList(
+        http_.request("GET", session.server + "/Users/" + session.userId + "/Views?IncludeExternalContent=false",
+                      headers(&session, session.deviceId)));
     if (result.ok) {
-        result.value.erase(std::remove_if(result.value.begin(), result.value.end(), [](const JellyfinItem& item) {
-            return !isScopedVideoCollection(item);
-        }), result.value.end());
+        result.value.erase(std::remove_if(result.value.begin(), result.value.end(),
+                                          [](const JellyfinItem& item) { return !isScopedVideoCollection(item); }),
+                           result.value.end());
     }
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseLibrary(
-    const JellyfinSession& session,
-    const std::string& parentId,
-    int startIndex,
-    int limit
-) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseLibrary(const JellyfinSession& session,
+                                                                        const std::string& parentId, int startIndex,
+                                                                        int limit) const {
     if (!session.valid() || parentId.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Library browse request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Users/" + session.userId + "/Items"
-        + "?ParentId=" + urlEncode(parentId)
-        + "&Recursive=false&SortBy=SortName&SortOrder=Ascending"
-        + "&IncludeItemTypes=Movie,Series,Episode,Season,Folder,BoxSet"
-        + "&StartIndex=" + std::to_string(std::max(0, startIndex))
-        + "&Limit=" + std::to_string(std::max(1, limit))
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    const std::string url =
+        session.server + "/Users/" + session.userId + "/Items" + "?ParentId=" + urlEncode(parentId) +
+        "&Recursive=false&SortBy=SortName&SortOrder=Ascending" +
+        "&IncludeItemTypes=Movie,Series,Episode,Season,Folder,BoxSet" +
+        "&StartIndex=" + std::to_string(std::max(0, startIndex)) + "&Limit=" + std::to_string(std::max(1, limit)) +
+        "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseVideoFilter(
-    const JellyfinSession& session,
-    const JellyfinItem& library,
-    int startIndex,
-    int limit,
-    bool favorites,
-    const std::string& genre,
-    const std::string& nameStartsWith
-) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseVideoFilter(const JellyfinSession& session,
+                                                                            const JellyfinItem& library, int startIndex,
+                                                                            int limit, bool favorites,
+                                                                            const std::string& genre,
+                                                                            const std::string& nameStartsWith) const {
     if (!session.valid() || library.id.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Filtered browse request is incomplete";
         return result;
     }
     std::string includeTypes = "Movie,Series";
-    if (library.collectionType == "movies") includeTypes = "Movie";
-    else if (library.collectionType == "tvshows") includeTypes = "Series";
-    else if (library.collectionType == "boxsets") includeTypes = "BoxSet";
+    if (library.collectionType == "movies")
+        includeTypes = "Movie";
+    else if (library.collectionType == "tvshows")
+        includeTypes = "Series";
+    else if (library.collectionType == "boxsets")
+        includeTypes = "BoxSet";
 
-    std::string url = session.server + "/Users/" + session.userId + "/Items"
-        + "?ParentId=" + urlEncode(library.id)
-        + "&Recursive=true&SortBy=SortName&SortOrder=Ascending"
-        + "&IncludeItemTypes=" + includeTypes
-        + "&StartIndex=" + std::to_string(std::max(0, startIndex))
-        + "&Limit=" + std::to_string(std::max(1, limit))
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    std::string url = session.server + "/Users/" + session.userId + "/Items" + "?ParentId=" + urlEncode(library.id) +
+                      "&Recursive=true&SortBy=SortName&SortOrder=Ascending" + "&IncludeItemTypes=" + includeTypes +
+                      "&StartIndex=" + std::to_string(std::max(0, startIndex)) +
+                      "&Limit=" + std::to_string(std::max(1, limit)) +
+                      "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                      "&EnableTotalRecordCount=false";
     if (favorites) url += "&Filters=IsFavorite";
     if (!genre.empty()) url += "&Genres=" + urlEncode(genre);
     if (!nameStartsWith.empty()) url += "&NameStartsWith=" + urlEncode(nameStartsWith);
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::listGenres(
-    const JellyfinSession& session,
-    const JellyfinItem& library,
-    int limit
-) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::listGenres(const JellyfinSession& session,
+                                                                     const JellyfinItem& library, int limit) const {
     if (!session.valid() || library.id.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Genre request is incomplete";
         return result;
     }
     std::string includeTypes = "Movie,Series";
-    if (library.collectionType == "movies") includeTypes = "Movie";
-    else if (library.collectionType == "tvshows") includeTypes = "Series";
-    const std::string url = session.server + "/Genres"
-        + "?UserId=" + urlEncode(session.userId)
-        + "&ParentId=" + urlEncode(library.id)
-        + "&Recursive=true&IncludeItemTypes=" + includeTypes
-        + "&SortBy=SortName&SortOrder=Ascending"
-        + "&Limit=" + std::to_string(std::max(1, limit))
-        + "&EnableTotalRecordCount=false";
+    if (library.collectionType == "movies")
+        includeTypes = "Movie";
+    else if (library.collectionType == "tvshows")
+        includeTypes = "Series";
+    const std::string url = session.server + "/Genres" + "?UserId=" + urlEncode(session.userId) +
+                            "&ParentId=" + urlEncode(library.id) + "&Recursive=true&IncludeItemTypes=" + includeTypes +
+                            "&SortBy=SortName&SortOrder=Ascending" + "&Limit=" + std::to_string(std::max(1, limit)) +
+                            "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseCollections(
-    const JellyfinSession& session,
-    int startIndex,
-    int limit
-) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseCollections(const JellyfinSession& session,
+                                                                            int startIndex, int limit) const {
     if (!session.valid()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Collections request requires login";
         return result;
     }
-    const std::string url = session.server + "/Users/" + session.userId + "/Items"
-        + "?Recursive=true&IncludeItemTypes=BoxSet&SortBy=SortName&SortOrder=Ascending"
-        + "&StartIndex=" + std::to_string(std::max(0, startIndex))
-        + "&Limit=" + std::to_string(std::max(1, limit))
-        + "&Fields=ProviderIds"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    const std::string url = session.server + "/Users/" + session.userId + "/Items" +
+                            "?Recursive=true&IncludeItemTypes=BoxSet&SortBy=SortName&SortOrder=Ascending" +
+                            "&StartIndex=" + std::to_string(std::max(0, startIndex)) +
+                            "&Limit=" + std::to_string(std::max(1, limit)) +
+                            "&Fields=ProviderIds"
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseCollectionMembersFallback(
-    const JellyfinSession& session,
-    const JellyfinItem& collection
-) const {
+ApiValueResult<std::vector<JellyfinItem>>
+JellyfinClient::browseCollectionMembersFallback(const JellyfinSession& session, const JellyfinItem& collection) const {
     ApiValueResult<std::vector<JellyfinItem>> result;
     if (!session.valid() || collection.type != "BoxSet" || collection.tmdbId.empty()) {
         result.ok = true;
         return result;
     }
 
-    const std::string url = session.server + "/Users/" + session.userId + "/Items"
-        + "?Recursive=true&IncludeItemTypes=Movie&SortBy=SortName&SortOrder=Ascending"
-          "&Fields=ProviderIds"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false&Limit=5000";
+    const std::string url = session.server + "/Users/" + session.userId + "/Items" +
+                            "?Recursive=true&IncludeItemTypes=Movie&SortBy=SortName&SortOrder=Ascending"
+                            "&Fields=ProviderIds"
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableTotalRecordCount=false&Limit=5000";
     auto allMovies = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (!allMovies.ok) return allMovies;
 
@@ -734,28 +662,28 @@ ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::browseCollectionMember
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::search(const JellyfinSession& session, const std::string& query) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::search(const JellyfinSession& session,
+                                                                 const std::string& query) const {
     if (query.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.ok = true;
         return result;
     }
-    const std::string url = session.server + "/Items?UserId=" + session.userId
-        + "&Recursive=true&SearchTerm=" + urlEncode(query)
-        + "&IncludeItemTypes=Movie,Series,Episode&Limit=60"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    const std::string url = session.server + "/Items?UserId=" + session.userId +
+                            "&Recursive=true&SearchTerm=" + urlEncode(query) +
+                            "&IncludeItemTypes=Movie,Series,Episode&Limit=60"
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
 
 ApiValueResult<JellyfinItem> JellyfinClient::getItem(const JellyfinSession& session, const std::string& itemId) const {
     ApiValueResult<JellyfinItem> result;
-    const auto response = http_.request(
-        "GET",
-        session.server + "/Users/" + session.userId + "/Items/" + itemId
-            + "?Fields=MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,CommunityRating,OfficialRating,CanDelete,Trickplay",
-        headers(&session, session.deviceId)
-    );
+    const auto response = http_.request("GET",
+                                        session.server + "/Users/" + session.userId + "/Items/" + itemId +
+                                            "?Fields=MediaSources,MediaStreams,Overview,Genres,People,ProductionYear,"
+                                            "CommunityRating,OfficialRating,CanDelete,Trickplay",
+                                        headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -770,116 +698,96 @@ ApiValueResult<JellyfinItem> JellyfinClient::getItem(const JellyfinSession& sess
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSimilar(
-    const JellyfinSession& session,
-    const std::string& itemId,
-    int limit
-) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSimilar(const JellyfinSession& session,
+                                                                     const std::string& itemId, int limit) const {
     if (!session.valid() || itemId.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Similar-items request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Items/" + urlEncode(itemId) + "/Similar"
-        + "?UserId=" + urlEncode(session.userId)
-        + "&Limit=" + std::to_string(std::clamp(limit, 1, 60))
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    const std::string url = session.server + "/Items/" + urlEncode(itemId) + "/Similar" +
+                            "?UserId=" + urlEncode(session.userId) +
+                            "&Limit=" + std::to_string(std::clamp(limit, 1, 60)) +
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableTotalRecordCount=false";
     auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (result.ok) retainScopedVideoItems(result.value);
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getItemsForPerson(
-    const JellyfinSession& session,
-    const std::string& personId,
-    int limit
-) const {
+ApiValueResult<std::vector<JellyfinItem>>
+JellyfinClient::getItemsForPerson(const JellyfinSession& session, const std::string& personId, int limit) const {
     if (!session.valid() || personId.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Person-items request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Users/" + session.userId + "/Items"
-        + "?Recursive=true&PersonIds=" + urlEncode(personId)
-        + "&IncludeItemTypes=Movie,Series,Episode"
-        + "&SortBy=ProductionYear,SortName&SortOrder=Descending"
-        + "&Limit=" + std::to_string(std::clamp(limit, 1, 100))
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    const std::string url =
+        session.server + "/Users/" + session.userId + "/Items" + "?Recursive=true&PersonIds=" + urlEncode(personId) +
+        "&IncludeItemTypes=Movie,Series,Episode" + "&SortBy=ProductionYear,SortName&SortOrder=Descending" +
+        "&Limit=" + std::to_string(std::clamp(limit, 1, 100)) +
+        "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+        "&EnableTotalRecordCount=false";
     auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (result.ok) retainScopedVideoItems(result.value);
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSeriesEpisodes(
-    const JellyfinSession& session,
-    const std::string& seriesId,
-    int limit
-) const {
+ApiValueResult<std::vector<JellyfinItem>>
+JellyfinClient::getSeriesEpisodes(const JellyfinSession& session, const std::string& seriesId, int limit) const {
     if (!session.valid() || seriesId.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Series queue request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes"
-        + "?UserId=" + urlEncode(session.userId)
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableUserData=true&EnableTotalRecordCount=false"
-        + "&Limit=" + std::to_string(std::clamp(limit, 1, 1000));
+    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes" +
+                            "?UserId=" + urlEncode(session.userId) +
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableUserData=true&EnableTotalRecordCount=false" +
+                            "&Limit=" + std::to_string(std::clamp(limit, 1, 1000));
     auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (result.ok) retainScopedVideoItems(result.value);
     return result;
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSeasons(
-    const JellyfinSession& session,
-    const std::string& seriesId
-) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getSeasons(const JellyfinSession& session,
+                                                                     const std::string& seriesId) const {
     if (!session.valid() || seriesId.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Season request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Seasons"
-        + "?UserId=" + urlEncode(session.userId)
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Seasons" +
+                            "?UserId=" + urlEncode(session.userId) +
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
 
-ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getEpisodes(
-    const JellyfinSession& session,
-    const std::string& seriesId,
-    const std::string& seasonId
-) const {
+ApiValueResult<std::vector<JellyfinItem>> JellyfinClient::getEpisodes(const JellyfinSession& session,
+                                                                      const std::string& seriesId,
+                                                                      const std::string& seasonId) const {
     if (!session.valid() || seriesId.empty() || seasonId.empty()) {
         ApiValueResult<std::vector<JellyfinItem>> result;
         result.error = "Episode request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes"
-        + "?UserId=" + urlEncode(session.userId)
-        + "&SeasonId=" + urlEncode(seasonId)
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableTotalRecordCount=false";
+    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes" +
+                            "?UserId=" + urlEncode(session.userId) + "&SeasonId=" + urlEncode(seasonId) +
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableTotalRecordCount=false";
     return parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
 }
 
-ApiValueResult<std::vector<JellyfinMediaSegment>> JellyfinClient::getMediaSegments(
-    const JellyfinSession& session,
-    const std::string& itemId
-) const {
+ApiValueResult<std::vector<JellyfinMediaSegment>> JellyfinClient::getMediaSegments(const JellyfinSession& session,
+                                                                                   const std::string& itemId) const {
     ApiValueResult<std::vector<JellyfinMediaSegment>> result;
     if (!session.valid() || itemId.empty()) {
         result.error = "Media-segment request is incomplete";
         return result;
     }
-    const auto response = http_.request(
-        "GET",
-        session.server + "/MediaSegments/" + urlEncode(itemId),
-        headers(&session, session.deviceId)
-    );
+    const auto response = http_.request("GET", session.server + "/MediaSegments/" + urlEncode(itemId),
+                                        headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;
@@ -887,12 +795,13 @@ ApiValueResult<std::vector<JellyfinMediaSegment>> JellyfinClient::getMediaSegmen
     return parseJellyfinMediaSegments(response.body);
 }
 
-ApiValueResult<JellyfinItem> JellyfinClient::getNextUpForSeries(const JellyfinSession& session, const std::string& seriesId) const {
+ApiValueResult<JellyfinItem> JellyfinClient::getNextUpForSeries(const JellyfinSession& session,
+                                                                const std::string& seriesId) const {
     ApiValueResult<JellyfinItem> result;
-    const std::string url = session.server + "/Shows/NextUp?UserId=" + session.userId
-        + "&SeriesId=" + urlEncode(seriesId)
-        + "&Limit=1&EnableResumable=true"
-          "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb";
+    const std::string url = session.server + "/Shows/NextUp?UserId=" + session.userId +
+                            "&SeriesId=" + urlEncode(seriesId) +
+                            "&Limit=1&EnableResumable=true"
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb";
     auto items = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (!items.ok) {
         result.error = items.error;
@@ -907,29 +816,25 @@ ApiValueResult<JellyfinItem> JellyfinClient::getNextUpForSeries(const JellyfinSe
     return result;
 }
 
-ApiValueResult<JellyfinItem> JellyfinClient::getFollowingEpisodeForSeries(
-    const JellyfinSession& session,
-    const std::string& seriesId,
-    const std::string& currentItemId
-) const {
+ApiValueResult<JellyfinItem> JellyfinClient::getFollowingEpisodeForSeries(const JellyfinSession& session,
+                                                                          const std::string& seriesId,
+                                                                          const std::string& currentItemId) const {
     ApiValueResult<JellyfinItem> result;
     if (!session.valid() || seriesId.empty()) {
         result.error = "Following-episode request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes"
-        + "?UserId=" + urlEncode(session.userId)
-        + "&AdjacentTo=" + urlEncode(currentItemId)
-        + "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-          "&EnableUserData=true&EnableTotalRecordCount=false";
+    const std::string url = session.server + "/Shows/" + urlEncode(seriesId) + "/Episodes" +
+                            "?UserId=" + urlEncode(session.userId) + "&AdjacentTo=" + urlEncode(currentItemId) +
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableUserData=true&EnableTotalRecordCount=false";
     auto items = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (!items.ok) {
         result.error = items.error;
         return result;
     }
-    const auto current = std::find_if(items.value.begin(), items.value.end(), [&](const JellyfinItem& item) {
-        return item.id == currentItemId;
-    });
+    const auto current = std::find_if(items.value.begin(), items.value.end(),
+                                      [&](const JellyfinItem& item) { return item.id == currentItemId; });
     if (current == items.value.end() || std::next(current) == items.value.end()) {
         result.error = "No following episode was returned for this series";
         return result;
@@ -939,82 +844,57 @@ ApiValueResult<JellyfinItem> JellyfinClient::getFollowingEpisodeForSeries(
     return result;
 }
 
-ApiResult JellyfinClient::setFavorite(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    bool favorite
-) const {
+ApiResult JellyfinClient::setFavorite(const JellyfinSession& session, const JellyfinItem& item, bool favorite) const {
     ApiResult result;
     if (!session.valid() || item.id.empty()) {
         result.error = "Favorite request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/UserFavoriteItems/" + urlEncode(item.id)
-        + "?UserId=" + urlEncode(session.userId);
-    const auto response = http_.request(
-        favorite ? "POST" : "DELETE",
-        url,
-        headers(&session, session.deviceId)
-    );
+    const std::string url =
+        session.server + "/UserFavoriteItems/" + urlEncode(item.id) + "?UserId=" + urlEncode(session.userId);
+    const auto response = http_.request(favorite ? "POST" : "DELETE", url, headers(&session, session.deviceId));
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 }
 
-ApiResult JellyfinClient::setPlayed(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    bool played
-) const {
+ApiResult JellyfinClient::setPlayed(const JellyfinSession& session, const JellyfinItem& item, bool played) const {
     ApiResult result;
     if (!session.valid() || item.id.empty()) {
         result.error = "Played-state request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/UserPlayedItems/" + urlEncode(item.id)
-        + "?UserId=" + urlEncode(session.userId);
-    const auto response = http_.request(
-        played ? "POST" : "DELETE",
-        url,
-        headers(&session, session.deviceId)
-    );
+    const std::string url =
+        session.server + "/UserPlayedItems/" + urlEncode(item.id) + "?UserId=" + urlEncode(session.userId);
+    const auto response = http_.request(played ? "POST" : "DELETE", url, headers(&session, session.deviceId));
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 }
 
-ApiResult JellyfinClient::refreshMetadata(
-    const JellyfinSession& session,
-    const JellyfinItem& item
-) const {
+ApiResult JellyfinClient::refreshMetadata(const JellyfinSession& session, const JellyfinItem& item) const {
     ApiResult result;
     if (!session.valid() || item.id.empty()) {
         result.error = "Metadata refresh request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Items/" + urlEncode(item.id) + "/Refresh"
-        + "?metadataRefreshMode=FullRefresh&imageRefreshMode=FullRefresh"
-          "&replaceAllMetadata=true&replaceAllImages=false&regenerateTrickplay=false";
+    const std::string url = session.server + "/Items/" + urlEncode(item.id) + "/Refresh" +
+                            "?metadataRefreshMode=FullRefresh&imageRefreshMode=FullRefresh"
+                            "&replaceAllMetadata=true&replaceAllImages=false&regenerateTrickplay=false";
     const auto response = http_.request("POST", url, headers(&session, session.deviceId));
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 }
 
-ApiResult JellyfinClient::deleteItem(
-    const JellyfinSession& session,
-    const JellyfinItem& item
-) const {
+ApiResult JellyfinClient::deleteItem(const JellyfinSession& session, const JellyfinItem& item) const {
     ApiResult result;
     if (!session.valid() || item.id.empty()) {
         result.error = "Delete request is incomplete";
         return result;
     }
-    const auto response = http_.request(
-        "DELETE",
-        session.server + "/Items/" + urlEncode(item.id),
-        headers(&session, session.deviceId)
-    );
+    const auto response =
+        http_.request("DELETE", session.server + "/Items/" + urlEncode(item.id), headers(&session, session.deviceId));
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
@@ -1025,25 +905,21 @@ bool JellyfinClient::isStaticStreamAvailable(const JellyfinSession& session, con
     const std::string mediaSourceId = item.mediaSourceId.empty() ? item.id : item.mediaSourceId;
     const std::string container = firstContainer(item.container);
     if (container.empty()) return false;
-    const std::string url = session.server + "/Videos/" + urlEncode(item.id) + "/stream." + urlEncode(container)
-        + "?Static=true&MediaSourceId=" + urlEncode(mediaSourceId)
-        + "&api_key=" + urlEncode(session.token);
+    const std::string url = session.server + "/Videos/" + urlEncode(item.id) + "/stream." + urlEncode(container) +
+                            "?Static=true&MediaSourceId=" + urlEncode(mediaSourceId) +
+                            "&api_key=" + urlEncode(session.token);
     const auto response = http_.request("HEAD", url, headers(&session, session.deviceId));
     if (!response.ok()) {
-        __android_log_print(ANDROID_LOG_WARN, kTag, "Static source probe failed for %s: HTTP %d", item.id.c_str(), response.status);
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Static source probe failed for %s: HTTP %d", item.id.c_str(),
+                            response.status);
     }
     return response.ok();
 }
 
-ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    int maxStreamingBitrate,
-    int maxAudioChannels,
-    PlaybackOverrides overrides,
-    int audioStreamIndex,
-    int subtitleStreamIndex
-) const {
+ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSession& session, const JellyfinItem& item,
+                                                               int maxStreamingBitrate, int maxAudioChannels,
+                                                               PlaybackOverrides overrides, int audioStreamIndex,
+                                                               int subtitleStreamIndex) const {
     ApiValueResult<PlaybackTarget> result;
     const DeviceCodecSupport codecSupport = ensureDeviceCodecSupport();
     const int requestedAudioChannels = std::clamp(maxAudioChannels, 2, 8);
@@ -1051,23 +927,20 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     const JellyfinAudioStream* selectedAudio = nullptr;
     if (!item.audios.empty()) {
         if (audioStreamIndex >= 0) {
-            const auto selected = std::find_if(item.audios.begin(), item.audios.end(), [&](const JellyfinAudioStream& audio) {
-                return audio.index == audioStreamIndex;
-            });
+            const auto selected =
+                std::find_if(item.audios.begin(), item.audios.end(),
+                             [&](const JellyfinAudioStream& audio) { return audio.index == audioStreamIndex; });
             if (selected != item.audios.end()) selectedAudio = &*selected;
         }
         if (!selectedAudio) {
-            const auto preferred = std::find_if(item.audios.begin(), item.audios.end(), [](const JellyfinAudioStream& audio) {
-                return audio.isDefault;
-            });
+            const auto preferred = std::find_if(item.audios.begin(), item.audios.end(),
+                                                [](const JellyfinAudioStream& audio) { return audio.isDefault; });
             selectedAudio = preferred == item.audios.end() ? &item.audios.front() : &*preferred;
         }
     }
-    const auto selectedSubtitle = std::find_if(
-        item.subtitles.begin(),
-        item.subtitles.end(),
-        [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == subtitleStreamIndex; }
-    );
+    const auto selectedSubtitle =
+        std::find_if(item.subtitles.begin(), item.subtitles.end(),
+                     [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == subtitleStreamIndex; });
 
     const PlaybackDeviceCapabilityInput deviceInput{
         .videoCodecs = codecSupport.jellyfinVideoCodecs(),
@@ -1106,75 +979,41 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
         .selected = subtitleStreamIndex >= 0,
         .codec = selectedSubtitle != item.subtitles.end() ? selectedSubtitle->codec : std::string{},
     };
-    const PlaybackProfilePlan plan = makePlaybackProfilePlan(
-        deviceInput,
-        videoInput,
-        audioInput,
-        subtitleInput,
-        requestedAudioChannels,
-        overrides
-    );
+    const PlaybackProfilePlan plan =
+        makePlaybackProfilePlan(deviceInput, videoInput, audioInput, subtitleInput, requestedAudioChannels, overrides);
     maxAudioChannels = plan.maxAudioChannels;
     if (maxAudioChannels != requestedAudioChannels) {
-        __android_log_print(
-            ANDROID_LOG_INFO,
-            kTag,
-            "Audio output route limits requested %d channels to %d",
-            requestedAudioChannels,
-            maxAudioChannels
-        );
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Audio output route limits requested %d channels to %d",
+                            requestedAudioChannels, maxAudioChannels);
     }
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d hdr=%d forceTranscode=%d forceServerStream=%d)",
-        item.videoCodec.c_str(), item.videoProfile.c_str(), item.videoLevel, item.videoRangeType.c_str(),
-        overrides.maxAvcLevel,
-        overrides.maxHevcLevel,
-        static_cast<int>(overrides.hdrMode),
-        overrides.forceTranscode,
-        overrides.forceServerStream
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "Playback capability check: codec=%s profile=%s level=%d range=%s overrides(avc=%d hevc=%d "
+                        "hdr=%d forceTranscode=%d forceServerStream=%d)",
+                        item.videoCodec.c_str(), item.videoProfile.c_str(), item.videoLevel,
+                        item.videoRangeType.c_str(), overrides.maxAvcLevel, overrides.maxHevcLevel,
+                        static_cast<int>(overrides.hdrMode), overrides.forceTranscode, overrides.forceServerStream);
     for (const auto& rejection : plan.videoRejections) {
-        __android_log_print(
-            ANDROID_LOG_INFO,
-            kTag,
-            "Not advertising direct %s for this item: %s",
-            rejection.codec.c_str(),
-            rejection.reason.c_str()
-        );
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Not advertising direct %s for this item: %s",
+                            rejection.codec.c_str(), rejection.reason.c_str());
     }
 
     if (selectedAudio) {
-        __android_log_print(
-            ANDROID_LOG_INFO,
-            kTag,
-            "Audio capability check: codec=%s channels=%d max=%d streamCopy=%d",
-            selectedAudio->codec.c_str(),
-            selectedAudio->channels,
-            maxAudioChannels,
-            plan.allowAudioStreamCopy
-        );
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Audio capability check: codec=%s channels=%d max=%d streamCopy=%d",
+                            selectedAudio->codec.c_str(), selectedAudio->channels, maxAudioChannels,
+                            plan.allowAudioStreamCopy);
     }
 
     const std::string requestBody = buildPlaybackInfoRequestBody(
-        session,
-        item,
-        plan,
-        overrides,
-        maxStreamingBitrate,
-        maxAudioChannels,
-        audioStreamIndex,
-        subtitleStreamIndex
-    );
+        session, item, plan, overrides, maxStreamingBitrate, maxAudioChannels, audioStreamIndex, subtitleStreamIndex);
 
-    std::string url = session.server + "/Items/" + item.id + "/PlaybackInfo?UserId=" + session.userId
-        + "&StartTimeTicks=" + std::to_string(item.positionTicks)
-        + "&AudioStreamIndex=" + std::to_string(audioStreamIndex);
+    std::string url = session.server + "/Items/" + item.id + "/PlaybackInfo?UserId=" + session.userId +
+                      "&StartTimeTicks=" + std::to_string(item.positionTicks) +
+                      "&AudioStreamIndex=" + std::to_string(audioStreamIndex);
     if (subtitleStreamIndex != kSubtitleServerDefaultIndex) {
         url += "&SubtitleStreamIndex=" + std::to_string(subtitleStreamIndex);
     }
-    url += "&IsPlayback=true&AutoOpenLiveStream=true&MaxStreamingBitrate=" + std::to_string(std::max(1000000, maxStreamingBitrate));
+    url += "&IsPlayback=true&AutoOpenLiveStream=true&MaxStreamingBitrate=" +
+           std::to_string(std::max(1000000, maxStreamingBitrate));
 
     const auto response = http_.request("POST", url, headers(&session, session.deviceId), requestBody);
     if (!response.ok()) {
@@ -1196,7 +1035,8 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
     target.startTicks = item.positionTicks;
     if (!offer.subtitleDeliveryUrl.empty()) {
         if (offer.subtitleDeliveryUrl.rfind("http://", 0) != 0 && offer.subtitleDeliveryUrl.rfind("https://", 0) != 0) {
-            if (offer.subtitleDeliveryUrl.front() != '/') offer.subtitleDeliveryUrl.insert(offer.subtitleDeliveryUrl.begin(), '/');
+            if (offer.subtitleDeliveryUrl.front() != '/')
+                offer.subtitleDeliveryUrl.insert(offer.subtitleDeliveryUrl.begin(), '/');
             offer.subtitleDeliveryUrl = session.server + offer.subtitleDeliveryUrl;
         }
         target.subtitleUrl = std::move(offer.subtitleDeliveryUrl);
@@ -1209,54 +1049,43 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(
             .supportsTranscoding = offer.supportsTranscoding,
             .transcodingUrl = offer.transcodingUrl,
         },
-        overrides
-    );
+        overrides);
     const std::string container = firstContainer(offer.container.empty() ? item.container : offer.container);
     if (!offer.transcodingUrl.empty()) {
-        target.fallbackTranscodeUrl = offer.transcodingUrl.rfind("http://", 0) == 0 || offer.transcodingUrl.rfind("https://", 0) == 0
-            ? std::move(offer.transcodingUrl)
-            : session.server + offer.transcodingUrl;
+        target.fallbackTranscodeUrl =
+            offer.transcodingUrl.rfind("http://", 0) == 0 || offer.transcodingUrl.rfind("https://", 0) == 0
+                ? std::move(offer.transcodingUrl)
+                : session.server + offer.transcodingUrl;
         target.fallbackTranscodeUrl = addApiKey(std::move(target.fallbackTranscodeUrl), urlEncode(session.token));
     }
 
     if (route == PlaybackServerRoute::DirectPlay) {
-        target.url = session.server + "/Videos/" + item.id + "/stream." + container
-            + "?Static=true&MediaSourceId=" + urlEncode(target.mediaSourceId)
-            + "&api_key=" + urlEncode(session.token);
+        target.url = session.server + "/Videos/" + item.id + "/stream." + container +
+                     "?Static=true&MediaSourceId=" + urlEncode(target.mediaSourceId) +
+                     "&api_key=" + urlEncode(session.token);
         target.playMethod = PlaybackMethod::DirectPlay;
     } else if (route == PlaybackServerRoute::DirectStream || route == PlaybackServerRoute::Transcode) {
         target.url = target.fallbackTranscodeUrl;
         target.fallbackTranscodeUrl.clear();
         target.transcoding = true;
-        target.playMethod = route == PlaybackServerRoute::DirectStream
-            ? PlaybackMethod::DirectStream
-            : PlaybackMethod::Transcode;
+        target.playMethod =
+            route == PlaybackServerRoute::DirectStream ? PlaybackMethod::DirectStream : PlaybackMethod::Transcode;
     } else {
         result.error = "No direct-play, direct-stream or transcode path was offered by Jellyfin";
         return result;
     }
 
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d",
-        playbackMethodName(target.playMethod),
-        target.audioStreamIndex,
-        target.subtitleStreamIndex,
-        subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
-        !target.subtitleUrl.empty()
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d",
+                        playbackMethodName(target.playMethod), target.audioStreamIndex, target.subtitleStreamIndex,
+                        subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
+                        !target.subtitleUrl.empty());
     result.value = std::move(target);
     result.ok = true;
     return result;
 }
 
-ApiResult JellyfinClient::reportPlaybackStart(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    const PlaybackTarget& target,
-    int64_t positionTicks
-) const {
+ApiResult JellyfinClient::reportPlaybackStart(const JellyfinSession& session, const JellyfinItem& item,
+                                              const PlaybackTarget& target, int64_t positionTicks) const {
 #ifdef SLOPPATV_BENCHMARK
     (void)session;
     (void)item;
@@ -1267,33 +1096,28 @@ ApiResult JellyfinClient::reportPlaybackStart(
     return result;
 #else
     ApiResult result;
-    json body = {
-        {"ItemId", item.id},
-        {"MediaSourceId", target.mediaSourceId},
-        {"PlaySessionId", target.playSessionId},
-        {"PositionTicks", positionTicks},
-        {"CanSeek", true},
-        {"IsPaused", false},
-        {"IsMuted", false},
-        {"VolumeLevel", 100},
-        {"AudioStreamIndex", target.audioStreamIndex},
-        {"SubtitleStreamIndex", target.subtitleStreamIndex},
-        {"PlayMethod", playbackMethodName(target.playMethod)}
-    };
-    const auto response = http_.request("POST", session.server + "/Sessions/Playing", headers(&session, session.deviceId), body.dump());
+    json body = {{"ItemId", item.id},
+                 {"MediaSourceId", target.mediaSourceId},
+                 {"PlaySessionId", target.playSessionId},
+                 {"PositionTicks", positionTicks},
+                 {"CanSeek", true},
+                 {"IsPaused", false},
+                 {"IsMuted", false},
+                 {"VolumeLevel", 100},
+                 {"AudioStreamIndex", target.audioStreamIndex},
+                 {"SubtitleStreamIndex", target.subtitleStreamIndex},
+                 {"PlayMethod", playbackMethodName(target.playMethod)}};
+    const auto response =
+        http_.request("POST", session.server + "/Sessions/Playing", headers(&session, session.deviceId), body.dump());
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 #endif
 }
 
-ApiResult JellyfinClient::reportPlaybackProgress(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    const PlaybackTarget& target,
-    int64_t positionTicks,
-    bool paused
-) const {
+ApiResult JellyfinClient::reportPlaybackProgress(const JellyfinSession& session, const JellyfinItem& item,
+                                                 const PlaybackTarget& target, int64_t positionTicks,
+                                                 bool paused) const {
 #ifdef SLOPPATV_BENCHMARK
     (void)session;
     (void)item;
@@ -1305,32 +1129,27 @@ ApiResult JellyfinClient::reportPlaybackProgress(
     return result;
 #else
     ApiResult result;
-    json body = {
-        {"ItemId", item.id},
-        {"MediaSourceId", target.mediaSourceId},
-        {"PlaySessionId", target.playSessionId},
-        {"PositionTicks", positionTicks},
-        {"CanSeek", true},
-        {"IsPaused", paused},
-        {"IsMuted", false},
-        {"VolumeLevel", 100},
-        {"AudioStreamIndex", target.audioStreamIndex},
-        {"SubtitleStreamIndex", target.subtitleStreamIndex},
-        {"PlayMethod", playbackMethodName(target.playMethod)}
-    };
-    const auto response = http_.request("POST", session.server + "/Sessions/Playing/Progress", headers(&session, session.deviceId), body.dump());
+    json body = {{"ItemId", item.id},
+                 {"MediaSourceId", target.mediaSourceId},
+                 {"PlaySessionId", target.playSessionId},
+                 {"PositionTicks", positionTicks},
+                 {"CanSeek", true},
+                 {"IsPaused", paused},
+                 {"IsMuted", false},
+                 {"VolumeLevel", 100},
+                 {"AudioStreamIndex", target.audioStreamIndex},
+                 {"SubtitleStreamIndex", target.subtitleStreamIndex},
+                 {"PlayMethod", playbackMethodName(target.playMethod)}};
+    const auto response = http_.request("POST", session.server + "/Sessions/Playing/Progress",
+                                        headers(&session, session.deviceId), body.dump());
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 #endif
 }
 
-ApiResult JellyfinClient::reportPlaybackStopped(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    const PlaybackTarget& target,
-    int64_t positionTicks
-) const {
+ApiResult JellyfinClient::reportPlaybackStopped(const JellyfinSession& session, const JellyfinItem& item,
+                                                const PlaybackTarget& target, int64_t positionTicks) const {
 #ifdef SLOPPATV_BENCHMARK
     (void)session;
     (void)item;
@@ -1341,65 +1160,44 @@ ApiResult JellyfinClient::reportPlaybackStopped(
     return result;
 #else
     ApiResult result;
-    json body = {
-        {"ItemId", item.id},
-        {"MediaSourceId", target.mediaSourceId},
-        {"PlaySessionId", target.playSessionId},
-        {"PositionTicks", positionTicks},
-        {"Failed", false}
-    };
-    const auto response = http_.request("POST", session.server + "/Sessions/Playing/Stopped", headers(&session, session.deviceId), body.dump());
+    json body = {{"ItemId", item.id},
+                 {"MediaSourceId", target.mediaSourceId},
+                 {"PlaySessionId", target.playSessionId},
+                 {"PositionTicks", positionTicks},
+                 {"Failed", false}};
+    const auto response = http_.request("POST", session.server + "/Sessions/Playing/Stopped",
+                                        headers(&session, session.deviceId), body.dump());
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 #endif
 }
 
-ApiResult JellyfinClient::reportExternalPlaybackStopped(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    std::optional<int64_t> positionTicks
-) const {
+ApiResult JellyfinClient::reportExternalPlaybackStopped(const JellyfinSession& session, const JellyfinItem& item,
+                                                        std::optional<int64_t> positionTicks) const {
     ApiResult result;
-    json body = {
-        {"ItemId", item.id},
-        {"MediaSourceId", item.mediaSourceId},
-        {"Failed", false}
-    };
+    json body = {{"ItemId", item.id}, {"MediaSourceId", item.mediaSourceId}, {"Failed", false}};
     if (positionTicks) body["PositionTicks"] = *positionTicks;
-    const auto response = http_.request(
-        "POST",
-        session.server + "/Sessions/Playing/Stopped",
-        headers(&session, session.deviceId),
-        body.dump()
-    );
+    const auto response = http_.request("POST", session.server + "/Sessions/Playing/Stopped",
+                                        headers(&session, session.deviceId), body.dump());
     result.ok = response.ok();
     if (!result.ok) result.error = apiError(response);
     return result;
 }
 
-std::string JellyfinClient::imageUrl(
-    const JellyfinSession& session,
-    const std::string& itemId,
-    const std::string& imageTag,
-    int width,
-    int height
-) const {
+std::string JellyfinClient::imageUrl(const JellyfinSession& session, const std::string& itemId,
+                                     const std::string& imageTag, int width, int height) const {
     if (itemId.empty()) return {};
-    std::string url = session.server + "/Items/" + itemId + "/Images/Primary?maxWidth=" + std::to_string(width)
-        + "&maxHeight=" + std::to_string(height) + "&quality=92";
+    std::string url = session.server + "/Items/" + itemId + "/Images/Primary?maxWidth=" + std::to_string(width) +
+                      "&maxHeight=" + std::to_string(height) + "&quality=92";
     if (!imageTag.empty()) url += "&tag=" + urlEncode(imageTag);
     url += "&api_key=" + urlEncode(session.token);
     return url;
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadPrimaryImage(
-    const JellyfinSession& session,
-    const std::string& itemId,
-    const std::string& imageTag,
-    int width,
-    int height
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadPrimaryImage(const JellyfinSession& session,
+                                                                 const std::string& itemId, const std::string& imageTag,
+                                                                 int width, int height) const {
     ApiValueResult<std::string> result;
     if (!session.valid() || itemId.empty()) {
         result.error = "Image request is incomplete";
@@ -1420,20 +1218,16 @@ ApiValueResult<std::string> JellyfinClient::downloadPrimaryImage(
     return result;
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadUserImage(
-    const JellyfinSession& session,
-    int width,
-    int height
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadUserImage(const JellyfinSession& session, int width,
+                                                              int height) const {
     ApiValueResult<std::string> result;
     if (!session.valid()) {
         result.error = "User image request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Users/" + urlEncode(session.userId)
-        + "/Images/Primary?maxWidth=" + std::to_string(width)
-        + "&maxHeight=" + std::to_string(height)
-        + "&quality=88&api_key=" + urlEncode(session.token);
+    const std::string url = session.server + "/Users/" + urlEncode(session.userId) +
+                            "/Images/Primary?maxWidth=" + std::to_string(width) +
+                            "&maxHeight=" + std::to_string(height) + "&quality=88&api_key=" + urlEncode(session.token);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
@@ -1448,22 +1242,18 @@ ApiValueResult<std::string> JellyfinClient::downloadUserImage(
     return result;
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(
-    const JellyfinSession& session,
-    const std::string& artworkItemId,
-    const std::string& artworkTag,
-    int width,
-    int height
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(const JellyfinSession& session,
+                                                                  const std::string& artworkItemId,
+                                                                  const std::string& artworkTag, int width,
+                                                                  int height) const {
     ApiValueResult<std::string> result;
     if (!session.valid() || artworkItemId.empty() || artworkTag.empty()) {
         result.error = "Backdrop request is incomplete";
         return result;
     }
-    std::string url = session.server + "/Items/" + artworkItemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
-        + "&maxHeight=" + std::to_string(height) + "&quality=82"
-        + "&tag=" + urlEncode(artworkTag)
-        + "&api_key=" + urlEncode(session.token);
+    std::string url = session.server + "/Items/" + artworkItemId +
+                      "/Images/Backdrop/0?maxWidth=" + std::to_string(width) + "&maxHeight=" + std::to_string(height) +
+                      "&quality=82" + "&tag=" + urlEncode(artworkTag) + "&api_key=" + urlEncode(session.token);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
@@ -1478,22 +1268,18 @@ ApiValueResult<std::string> JellyfinClient::downloadBackdropImage(
     return result;
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadLogoImage(
-    const JellyfinSession& session,
-    const std::string& artworkItemId,
-    const std::string& artworkTag,
-    int width,
-    int height
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadLogoImage(const JellyfinSession& session,
+                                                              const std::string& artworkItemId,
+                                                              const std::string& artworkTag, int width,
+                                                              int height) const {
     ApiValueResult<std::string> result;
     if (!session.valid() || artworkItemId.empty() || artworkTag.empty()) {
         result.error = "Logo request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Items/" + artworkItemId + "/Images/Logo?maxWidth=" + std::to_string(width)
-        + "&maxHeight=" + std::to_string(height) + "&quality=90"
-        + "&tag=" + urlEncode(artworkTag)
-        + "&api_key=" + urlEncode(session.token);
+    const std::string url = session.server + "/Items/" + artworkItemId +
+                            "/Images/Logo?maxWidth=" + std::to_string(width) + "&maxHeight=" + std::to_string(height) +
+                            "&quality=90" + "&tag=" + urlEncode(artworkTag) + "&api_key=" + urlEncode(session.token);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
@@ -1508,13 +1294,10 @@ ApiValueResult<std::string> JellyfinClient::downloadLogoImage(
     return result;
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
-    const JellyfinSession& session,
-    const std::string& sourceItemId,
-    const ArtworkReference& artwork,
-    int width,
-    int height
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadHomeImage(const JellyfinSession& session,
+                                                              const std::string& sourceItemId,
+                                                              const ArtworkReference& artwork, int width,
+                                                              int height) const {
     ApiValueResult<std::string> result;
     if (!session.valid() || sourceItemId.empty()) {
         result.error = "Home image request is incomplete";
@@ -1524,14 +1307,14 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
     std::string url;
     const ArtworkKind kind = artwork.kind;
     if (kind == ArtworkKind::Primary) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Primary?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
+        url = session.server + "/Items/" + artwork.itemId + "/Images/Primary?maxWidth=" + std::to_string(width) +
+              "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
     } else if (kind == ArtworkKind::Thumb) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Thumb?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
+        url = session.server + "/Items/" + artwork.itemId + "/Images/Thumb?maxWidth=" + std::to_string(width) +
+              "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
     } else if (kind == ArtworkKind::Backdrop) {
-        url = session.server + "/Items/" + artwork.itemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width)
-            + "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
+        url = session.server + "/Items/" + artwork.itemId + "/Images/Backdrop/0?maxWidth=" + std::to_string(width) +
+              "&maxHeight=" + std::to_string(height) + "&quality=92&tag=" + urlEncode(artwork.tag);
     } else {
         result.error = "Item has no artwork";
         return result;
@@ -1540,16 +1323,9 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
 
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
-        __android_log_print(
-            ANDROID_LOG_WARN,
-            kTag,
-            "Home image HTTP %d artworkItem=%s kind=%d tag=%s sourceItem=%s",
-            response.status,
-            artwork.itemId.c_str(),
-            static_cast<int>(kind),
-            artwork.tag.c_str(),
-            sourceItemId.c_str()
-        );
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Home image HTTP %d artworkItem=%s kind=%d tag=%s sourceItem=%s",
+                            response.status, artwork.itemId.c_str(), static_cast<int>(kind), artwork.tag.c_str(),
+                            sourceItemId.c_str());
         result.error = apiError(response);
         return result;
     }
@@ -1562,20 +1338,17 @@ ApiValueResult<std::string> JellyfinClient::downloadHomeImage(
     return result;
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadTrickplayTile(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    int tileIndex
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadTrickplayTile(const JellyfinSession& session,
+                                                                  const JellyfinItem& item, int tileIndex) const {
     ApiValueResult<std::string> result;
     if (!session.valid() || item.id.empty() || !item.trickplay.valid() || tileIndex < 0) {
         result.error = "Trickplay request is incomplete";
         return result;
     }
-    const std::string url = session.server + "/Videos/" + urlEncode(item.id)
-        + "/Trickplay/" + std::to_string(item.trickplay.width)
-        + "/" + std::to_string(tileIndex) + ".jpg?MediaSourceId=" + urlEncode(item.trickplay.mediaSourceId)
-        + "&api_key=" + urlEncode(session.token);
+    const std::string url = session.server + "/Videos/" + urlEncode(item.id) + "/Trickplay/" +
+                            std::to_string(item.trickplay.width) + "/" + std::to_string(tileIndex) +
+                            ".jpg?MediaSourceId=" + urlEncode(item.trickplay.mediaSourceId) +
+                            "&api_key=" + urlEncode(session.token);
     const auto response = http_.request("GET", url, headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
@@ -1590,65 +1363,43 @@ ApiValueResult<std::string> JellyfinClient::downloadTrickplayTile(
     return result;
 }
 
-std::string JellyfinClient::staticVideoUrl(
-    const JellyfinSession& session,
-    const JellyfinItem& item
-) const {
+std::string JellyfinClient::staticVideoUrl(const JellyfinSession& session, const JellyfinItem& item) const {
     if (!session.valid() || item.id.empty() || item.mediaSourceId.empty()) return {};
     const std::string container = firstContainer(item.container);
     if (container.empty()) return {};
-    return session.server + "/Videos/" + urlEncode(item.id) + "/stream." + urlEncode(container)
-        + "?Static=true&MediaSourceId=" + urlEncode(item.mediaSourceId)
-        + "&api_key=" + urlEncode(session.token);
+    return session.server + "/Videos/" + urlEncode(item.id) + "/stream." + urlEncode(container) +
+           "?Static=true&MediaSourceId=" + urlEncode(item.mediaSourceId) + "&api_key=" + urlEncode(session.token);
 }
 
-std::string JellyfinClient::subtitleSrtUrl(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    int subtitleIndex
-) const {
+std::string JellyfinClient::subtitleSrtUrl(const JellyfinSession& session, const JellyfinItem& item,
+                                           int subtitleIndex) const {
     if (!session.valid() || item.id.empty() || item.mediaSourceId.empty() || subtitleIndex < 0) return {};
-    return session.server + "/Videos/" + urlEncode(item.id)
-        + "/" + urlEncode(item.mediaSourceId)
-        + "/Subtitles/" + std::to_string(subtitleIndex)
-        + "/Stream.srt?api_key=" + urlEncode(session.token);
+    return session.server + "/Videos/" + urlEncode(item.id) + "/" + urlEncode(item.mediaSourceId) + "/Subtitles/" +
+           std::to_string(subtitleIndex) + "/Stream.srt?api_key=" + urlEncode(session.token);
 }
 
-std::string JellyfinClient::subtitleTextUrl(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    int subtitleIndex,
-    const std::string& codec
-) const {
+std::string JellyfinClient::subtitleTextUrl(const JellyfinSession& session, const JellyfinItem& item, int subtitleIndex,
+                                            const std::string& codec) const {
     const std::string format = subtitleTextFormat(codec);
-    if (!session.valid() || item.id.empty() || item.mediaSourceId.empty() || subtitleIndex < 0 || format.empty()) return {};
-    return session.server + "/Videos/" + urlEncode(item.id)
-        + "/" + urlEncode(item.mediaSourceId)
-        + "/Subtitles/" + std::to_string(subtitleIndex)
-        + "/Stream." + format + "?api_key=" + urlEncode(session.token);
+    if (!session.valid() || item.id.empty() || item.mediaSourceId.empty() || subtitleIndex < 0 || format.empty())
+        return {};
+    return session.server + "/Videos/" + urlEncode(item.id) + "/" + urlEncode(item.mediaSourceId) + "/Subtitles/" +
+           std::to_string(subtitleIndex) + "/Stream." + format + "?api_key=" + urlEncode(session.token);
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadSubtitleSrt(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    int subtitleIndex
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadSubtitleSrt(const JellyfinSession& session,
+                                                                const JellyfinItem& item, int subtitleIndex) const {
     return downloadSubtitleUrl(session, subtitleSrtUrl(session, item, subtitleIndex));
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadSubtitleText(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    int subtitleIndex,
-    const std::string& codec
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadSubtitleText(const JellyfinSession& session,
+                                                                 const JellyfinItem& item, int subtitleIndex,
+                                                                 const std::string& codec) const {
     return downloadSubtitleUrl(session, subtitleTextUrl(session, item, subtitleIndex, codec));
 }
 
-ApiValueResult<std::string> JellyfinClient::downloadSubtitleUrl(
-    const JellyfinSession& session,
-    const std::string& url
-) const {
+ApiValueResult<std::string> JellyfinClient::downloadSubtitleUrl(const JellyfinSession& session,
+                                                                const std::string& url) const {
     ApiValueResult<std::string> result;
     if (!session.valid() || url.empty()) {
         result.error = "Subtitle request is incomplete";

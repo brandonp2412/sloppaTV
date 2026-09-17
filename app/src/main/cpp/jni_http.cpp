@@ -57,7 +57,7 @@ jstring toJString(JNIEnv* env, const std::string& value) {
     return env->NewStringUTF(value.c_str());
 }
 
-}
+} // namespace
 
 JniHttpClient::JniHttpClient(JavaVM* vm, jobject activity) : vm_(vm) {
     if (!vm_ || !activity) return;
@@ -74,10 +74,8 @@ JniHttpClient::~JniHttpClient() {
     activity_ = nullptr;
 }
 
-std::string JniHttpClient::getCacheKey(
-    const std::string& url,
-    const std::map<std::string, std::string>& headers
-) const {
+std::string JniHttpClient::getCacheKey(const std::string& url,
+                                       const std::map<std::string, std::string>& headers) const {
     std::ostringstream key;
     key << url;
     for (const auto& [name, value] : headers) key << '\n' << name << ':' << value;
@@ -95,12 +93,8 @@ void JniHttpClient::cancelPending() const {
     retryWake_.notify_all();
 }
 
-HttpResponse JniHttpClient::request(
-    const std::string& method,
-    const std::string& url,
-    const std::map<std::string, std::string>& headers,
-    const std::string& body
-) const {
+HttpResponse JniHttpClient::request(const std::string& method, const std::string& url,
+                                    const std::map<std::string, std::string>& headers, const std::string& body) const {
     const bool deduplicate = method == "GET" && body.empty();
     if (!deduplicate) {
         HttpResponse response = requestWithRetry(method, url, headers, body);
@@ -118,15 +112,13 @@ HttpResponse JniHttpClient::request(
         requestGeneration = cacheGeneration_;
         if (cacheable) {
             const auto now = std::chrono::steady_clock::now();
-            std::erase_if(getCache_, [&](const auto& entry) {
-                return entry.second.expiresAt <= now;
-            });
+            std::erase_if(getCache_, [&](const auto& entry) { return entry.second.expiresAt <= now; });
             const auto cached = getCache_.find(key);
             if (cached != getCache_.end()) return cached->second.response;
         }
         const auto pending = inFlightGets_.find(key);
-        if (pending != inFlightGets_.end()
-            && shouldJoinInFlightApiGet(requestGeneration, pending->second->generation)) {
+        if (pending != inFlightGets_.end() &&
+            shouldJoinInFlightApiGet(requestGeneration, pending->second->generation)) {
             inFlight = pending->second;
         } else {
             inFlight = std::make_shared<InFlightRequest>();
@@ -147,17 +139,12 @@ HttpResponse JniHttpClient::request(
         std::scoped_lock lock(cacheMutex_);
         if (cacheable && response.ok() && requestGeneration == cacheGeneration_) {
             const auto now = std::chrono::steady_clock::now();
-            std::erase_if(getCache_, [&](const auto& entry) {
-                return entry.second.expiresAt <= now;
-            });
+            std::erase_if(getCache_, [&](const auto& entry) { return entry.second.expiresAt <= now; });
             if (getCache_.size() >= kMaxApiGetCacheEntries) {
-                const auto oldest = std::min_element(
-                    getCache_.begin(),
-                    getCache_.end(),
-                    [](const auto& left, const auto& right) {
+                const auto oldest =
+                    std::min_element(getCache_.begin(), getCache_.end(), [](const auto& left, const auto& right) {
                         return left.second.expiresAt < right.second.expiresAt;
-                    }
-                );
+                    });
                 if (oldest != getCache_.end()) getCache_.erase(oldest);
             }
             getCache_[key] = CacheEntry{response, now + std::chrono::seconds(5)};
@@ -173,12 +160,9 @@ HttpResponse JniHttpClient::request(
     return response;
 }
 
-HttpResponse JniHttpClient::requestWithRetry(
-    const std::string& method,
-    const std::string& url,
-    const std::map<std::string, std::string>& headers,
-    const std::string& body
-) const {
+HttpResponse JniHttpClient::requestWithRetry(const std::string& method, const std::string& url,
+                                             const std::map<std::string, std::string>& headers,
+                                             const std::string& body) const {
     HttpResponse response;
     const uint64_t generation = cancelGeneration_.load(std::memory_order_relaxed);
     constexpr std::array<std::chrono::milliseconds, 2> retryDelays{
@@ -193,26 +177,14 @@ HttpResponse JniHttpClient::requestWithRetry(
             return response;
         }
         response = requestOnce(method, url, headers, body);
-        const bool retryable = shouldRetryTransientHttpResponse(
-            method,
-            response.status,
-            !response.error.empty()
-        );
+        const bool retryable = shouldRetryTransientHttpResponse(method, response.status, !response.error.empty());
         if (!retryable || attempt == retryCount) return response;
-        const std::string failure = response.status != 0
-            ? "HTTP " + std::to_string(response.status)
-            : response.error;
-        __android_log_print(
-            ANDROID_LOG_WARN,
-            kTag,
-            "Transient request failure (%s); retrying in %lldms",
-            failure.c_str(),
-            static_cast<long long>(retryDelays[attempt].count())
-        );
+        const std::string failure = response.status != 0 ? "HTTP " + std::to_string(response.status) : response.error;
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Transient request failure (%s); retrying in %lldms",
+                            failure.c_str(), static_cast<long long>(retryDelays[attempt].count()));
         std::unique_lock retryLock(retryMutex_);
-        if (retryWake_.wait_for(retryLock, retryDelays[attempt], [&] {
-                return cancelGeneration_.load(std::memory_order_relaxed) != generation;
-            })) {
+        if (retryWake_.wait_for(retryLock, retryDelays[attempt],
+                                [&] { return cancelGeneration_.load(std::memory_order_relaxed) != generation; })) {
             response = {};
             response.error = "Request cancelled";
             return response;
@@ -221,12 +193,9 @@ HttpResponse JniHttpClient::requestWithRetry(
     return response;
 }
 
-HttpResponse JniHttpClient::requestOnce(
-    const std::string& method,
-    const std::string& url,
-    const std::map<std::string, std::string>& headers,
-    const std::string& body
-) const {
+HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::string& url,
+                                        const std::map<std::string, std::string>& headers,
+                                        const std::string& body) const {
     HttpResponse response;
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
@@ -237,12 +206,10 @@ HttpResponse JniHttpClient::requestOnce(
 
     jclass activityClass = env->GetObjectClass(activity_);
     jmethodID performRequest = activityClass
-        ? env->GetMethodID(
-            activityClass,
-            "performHttpRequestBridge",
-            "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[B)Lapp/sloppatv/SloppaNativeActivity$HttpResult;"
-        )
-        : nullptr;
+                                   ? env->GetMethodID(activityClass, "performHttpRequestBridge",
+                                                      "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[B)Lapp/"
+                                                      "sloppatv/SloppaNativeActivity$HttpResult;")
+                                   : nullptr;
     if (clearException(env, "HTTP bridge lookup", response.error) || !activityClass || !performRequest) {
         if (activityClass) env->DeleteLocalRef(activityClass);
         return response;
@@ -269,12 +236,7 @@ HttpResponse JniHttpClient::requestOnce(
 
     jbyteArray jBody = env->NewByteArray(static_cast<jsize>(body.size()));
     if (jBody && !body.empty()) {
-        env->SetByteArrayRegion(
-            jBody,
-            0,
-            static_cast<jsize>(body.size()),
-            reinterpret_cast<const jbyte*>(body.data())
-        );
+        env->SetByteArrayRegion(jBody, 0, static_cast<jsize>(body.size()), reinterpret_cast<const jbyte*>(body.data()));
     }
     if (clearException(env, "HTTP bridge request setup", response.error)) {
         if (jBody) env->DeleteLocalRef(jBody);
@@ -289,22 +251,17 @@ HttpResponse JniHttpClient::requestOnce(
     jobject result = env->CallObjectMethod(activity_, performRequest, jMethod, jUrl, jHeaders, jBody);
     if (clearException(env, "HTTP bridge request", response.error) || !result) {
         const std::string safeUrl = requestUrlForLog(url);
-        __android_log_print(
-            ANDROID_LOG_ERROR,
-            kTag,
-            "%s %s failed before HTTP status: %s",
-            method.c_str(),
-            safeUrl.c_str(),
-            response.error.c_str()
-        );
+        __android_log_print(ANDROID_LOG_ERROR, kTag, "%s %s failed before HTTP status: %s", method.c_str(),
+                            safeUrl.c_str(), response.error.c_str());
     } else {
         jclass resultClass = env->GetObjectClass(result);
         jfieldID statusField = resultClass ? env->GetFieldID(resultClass, "status", "I") : nullptr;
         jfieldID bodyField = resultClass ? env->GetFieldID(resultClass, "body", "[B") : nullptr;
         jfieldID errorField = resultClass ? env->GetFieldID(resultClass, "error", "Ljava/lang/String;") : nullptr;
-        jfieldID setCookieField = resultClass ? env->GetFieldID(resultClass, "setCookie", "Ljava/lang/String;") : nullptr;
-        if (!clearException(env, "HTTP bridge result fields", response.error)
-            && statusField && bodyField && errorField && setCookieField) {
+        jfieldID setCookieField =
+            resultClass ? env->GetFieldID(resultClass, "setCookie", "Ljava/lang/String;") : nullptr;
+        if (!clearException(env, "HTTP bridge result fields", response.error) && statusField && bodyField &&
+            errorField && setCookieField) {
             response.status = env->GetIntField(result, statusField);
             auto responseBytes = static_cast<jbyteArray>(env->GetObjectField(result, bodyField));
             auto errorText = static_cast<jstring>(env->GetObjectField(result, errorField));
@@ -314,12 +271,7 @@ HttpResponse JniHttpClient::requestOnce(
                 const jsize length = env->GetArrayLength(responseBytes);
                 if (length > 0) {
                     response.body.resize(static_cast<size_t>(length));
-                    env->GetByteArrayRegion(
-                        responseBytes,
-                        0,
-                        length,
-                        reinterpret_cast<jbyte*>(response.body.data())
-                    );
+                    env->GetByteArrayRegion(responseBytes, 0, length, reinterpret_cast<jbyte*>(response.body.data()));
                 }
                 env->DeleteLocalRef(responseBytes);
             }

@@ -17,13 +17,8 @@ struct FakeJellyfin {
     int backdropDownloads = 0;
     int logoDownloads = 0;
 
-    ApiValueResult<std::string> downloadPrimaryImage(
-        const JellyfinSession& session,
-        const std::string& itemId,
-        const std::string& imageTag,
-        int width,
-        int height
-    ) {
+    ApiValueResult<std::string> downloadPrimaryImage(const JellyfinSession& session, const std::string& itemId,
+                                                     const std::string& imageTag, int width, int height) {
         ++posterDownloads;
         assert(session.userId == "user-1");
         assert(itemId == "movie-1");
@@ -39,13 +34,8 @@ struct FakeJellyfin {
         return bytesResult("profile");
     }
 
-    ApiValueResult<std::string> downloadHomeImage(
-        const JellyfinSession& session,
-        const std::string& sourceItemId,
-        const ArtworkReference& artwork,
-        int width,
-        int height
-    ) {
+    ApiValueResult<std::string> downloadHomeImage(const JellyfinSession& session, const std::string& sourceItemId,
+                                                  const ArtworkReference& artwork, int width, int height) {
         ++homeDownloads;
         assert(session.userId == "user-1");
         assert(sourceItemId == "movie-1");
@@ -56,13 +46,8 @@ struct FakeJellyfin {
         return bytesResult("home");
     }
 
-    ApiValueResult<std::string> downloadBackdropImage(
-        const JellyfinSession& session,
-        const std::string& artworkItemId,
-        const std::string& artworkTag,
-        int width,
-        int height
-    ) {
+    ApiValueResult<std::string> downloadBackdropImage(const JellyfinSession& session, const std::string& artworkItemId,
+                                                      const std::string& artworkTag, int width, int height) {
         ++backdropDownloads;
         assert(session.userId == "user-1");
         assert(artworkItemId == "backdrop-owner");
@@ -71,13 +56,8 @@ struct FakeJellyfin {
         return bytesResult("backdrop");
     }
 
-    ApiValueResult<std::string> downloadLogoImage(
-        const JellyfinSession& session,
-        const std::string& artworkItemId,
-        const std::string& artworkTag,
-        int width,
-        int height
-    ) {
+    ApiValueResult<std::string> downloadLogoImage(const JellyfinSession& session, const std::string& artworkItemId,
+                                                  const std::string& artworkTag, int width, int height) {
         ++logoDownloads;
         assert(session.userId == "user-1");
         assert(artworkItemId == "logo-owner");
@@ -112,7 +92,7 @@ struct FakeDecoder {
         return image;
     }
 };
-}
+} // namespace
 
 int main() {
     JellyfinSession session;
@@ -136,8 +116,7 @@ int main() {
     FakeDecoder decoder;
     ArtworkLoader<FakeJellyfin, FakeSeerr, FakeDecoder> loader(jellyfin, seerr, decoder);
 
-    const std::filesystem::path cacheRoot =
-        std::filesystem::temp_directory_path() / "sloppatv-artwork-loader-test";
+    const std::filesystem::path cacheRoot = std::filesystem::temp_directory_path() / "sloppatv-artwork-loader-test";
     std::error_code error;
     std::filesystem::remove_all(cacheRoot, error);
     loader.setDataPath(cacheRoot.string());

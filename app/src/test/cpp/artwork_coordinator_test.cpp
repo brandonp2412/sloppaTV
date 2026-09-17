@@ -53,11 +53,9 @@ struct FakeRenderer {
         return static_cast<uint32_t>(100 + createCalls);
     }
 
-    void deleteTexture(uint32_t texture) {
-        deleted.push_back(texture);
-    }
+    void deleteTexture(uint32_t texture) { deleted.push_back(texture); }
 };
-}
+} // namespace
 
 int main() {
     FakeTaskRunner tasks;
@@ -96,8 +94,7 @@ int main() {
 
     int homeObserved = 0;
     assert(artwork.loadHome(
-        "home",
-        renderer,
+        "home", renderer,
         [] {
             ArtworkLoadResult result;
             result.decoded = decodeImage("home", result.error);
@@ -107,8 +104,7 @@ int main() {
             ++homeObserved;
             assert(loaded.ok());
             assert(loaded.source == ArtworkLoadSource::Network);
-        }
-    ));
+        }));
     tasks.runNext();
     ArtworkEntry* home = artwork.homeTexture("home", renderer, [&] { ++missingRequests; });
     assert(home && home->texture == 103);

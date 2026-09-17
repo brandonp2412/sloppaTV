@@ -14,7 +14,7 @@ JellyfinItem item(std::string id, std::string name, std::string type = "Movie") 
     return value;
 }
 
-}
+} // namespace
 
 int main() {
     BrowseScreenState state;

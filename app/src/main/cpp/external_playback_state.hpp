@@ -22,9 +22,7 @@ public:
         active_.reset();
     }
 
-    void stage(ExternalPlaybackLaunch launch) {
-        pending_ = std::move(launch);
-    }
+    void stage(ExternalPlaybackLaunch launch) { pending_ = std::move(launch); }
 
     [[nodiscard]] bool hasPending() const { return pending_.has_value(); }
 
@@ -35,9 +33,7 @@ public:
         return launch;
     }
 
-    void beginActive(ExternalPlaybackLaunch launch) {
-        active_ = std::move(launch);
-    }
+    void beginActive(ExternalPlaybackLaunch launch) { active_ = std::move(launch); }
 
     [[nodiscard]] bool hasActive() const { return active_.has_value(); }
 

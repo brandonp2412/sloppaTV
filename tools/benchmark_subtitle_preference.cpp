@@ -21,11 +21,9 @@ int main(int argc, char** argv) {
     for (int iteration = 0; iteration < iterations; ++iteration) {
         result = subtitleIndexForQueuePreference(subtitles, std::string{"eng"});
     }
-    const double elapsedMs = std::chrono::duration<double, std::milli>(
-        std::chrono::steady_clock::now() - started
-    ).count();
-    std::cout << std::fixed << std::setprecision(3)
-              << "candidates=" << candidates << " iterations=" << iterations
+    const double elapsedMs =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+    std::cout << std::fixed << std::setprecision(3) << "candidates=" << candidates << " iterations=" << iterations
               << " elapsed_ms=" << elapsedMs << " result=" << result << '\n';
     return result == candidates - 1 ? 0 : 1;
 }

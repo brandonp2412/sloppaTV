@@ -31,7 +31,7 @@ bool containsCodec(const std::vector<std::string>& codecs, const std::string& co
     return std::find(codecs.begin(), codecs.end(), codec) != codecs.end();
 }
 
-}
+} // namespace
 
 int main() {
     auto device = capableDevice();

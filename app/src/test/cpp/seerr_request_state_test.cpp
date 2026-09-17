@@ -15,7 +15,7 @@ SeerrMediaItem media(std::string id, int requestId = 0, bool requested = false) 
     item.requested = requested;
     return item;
 }
-}
+} // namespace
 
 int main() {
     using namespace std::chrono_literals;

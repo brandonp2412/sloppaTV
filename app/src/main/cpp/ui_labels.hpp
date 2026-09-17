@@ -111,6 +111,7 @@ inline std::string_view materialLabel(std::string_view value) {
         {"SWEDISH", "Swedish"},
         {"NORWEGIAN", "Norwegian"},
     };
-    for (const auto& [key, label] : labels) if (key == value) return label;
+    for (const auto& [key, label] : labels)
+        if (key == value) return label;
     return value;
 }

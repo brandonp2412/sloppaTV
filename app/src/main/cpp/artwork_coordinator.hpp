@@ -6,11 +6,9 @@
 #include <string>
 #include <utility>
 
-template <typename TaskRunnerLike, typename MutexLike>
-class ArtworkCoordinator {
+template <typename TaskRunnerLike, typename MutexLike> class ArtworkCoordinator {
 public:
-    ArtworkCoordinator(TaskRunnerLike& tasks, MutexLike& stateMutex)
-        : tasks_(tasks), stateMutex_(stateMutex) {}
+    ArtworkCoordinator(TaskRunnerLike& tasks, MutexLike& stateMutex) : tasks_(tasks), stateMutex_(stateMutex) {}
 
     template <typename RendererLike, typename Load>
     bool loadPoster(const std::string& key, RendererLike& renderer, Load&& load) {
@@ -23,22 +21,13 @@ public:
     }
 
     template <typename RendererLike, typename Load, typename Observe>
-    bool loadHome(
-        const std::string& key,
-        RendererLike& renderer,
-        Load&& load,
-        Observe&& observe
-    ) {
-        return queueLoad(
-            home_,
-            key,
-            renderer,
-            [load = std::forward<Load>(load), observe = std::forward<Observe>(observe)]() mutable {
-                ArtworkLoadResult loaded = load();
-                observe(loaded);
-                return loaded;
-            }
-        );
+    bool loadHome(const std::string& key, RendererLike& renderer, Load&& load, Observe&& observe) {
+        return queueLoad(home_, key, renderer,
+                         [load = std::forward<Load>(load), observe = std::forward<Observe>(observe)]() mutable {
+                             ArtworkLoadResult loaded = load();
+                             observe(loaded);
+                             return loaded;
+                         });
     }
 
     template <typename RendererLike, typename Load>
@@ -76,13 +65,11 @@ public:
         return logo_.readyTexture(key, renderer, std::forward<Request>(request));
     }
 
-    template <typename RendererLike>
-    void eraseProfile(const std::string& key, RendererLike& renderer) {
+    template <typename RendererLike> void eraseProfile(const std::string& key, RendererLike& renderer) {
         profile_.erase(key, renderer);
     }
 
-    template <typename RendererLike>
-    void clearSession(RendererLike& renderer) {
+    template <typename RendererLike> void clearSession(RendererLike& renderer) {
         poster_.clear(renderer);
         home_.clear(renderer);
         backdrop_.clear(renderer);
@@ -91,19 +78,9 @@ public:
 
 private:
     template <typename RendererLike, typename Load>
-    bool queueLoad(
-        ArtworkPipeline& pipeline,
-        const std::string& key,
-        RendererLike& renderer,
-        Load&& load
-    ) {
+    bool queueLoad(ArtworkPipeline& pipeline, const std::string& key, RendererLike& renderer, Load&& load) {
         if (!pipeline.beginLoad(key, renderer)) return false;
-        return tasks_.submit([
-            this,
-            &pipeline,
-            key,
-            load = std::forward<Load>(load)
-        ]() mutable {
+        return tasks_.submit([this, &pipeline, key, load = std::forward<Load>(load)]() mutable {
             ArtworkLoadResult loaded = load();
             std::scoped_lock lock(stateMutex_);
             pipeline.completeLoad(key, std::move(loaded));

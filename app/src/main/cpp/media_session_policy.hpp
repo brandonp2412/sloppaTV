@@ -17,10 +17,7 @@ constexpr bool shouldUpdateKeepScreenOn(const std::optional<bool>& applied, bool
     return !applied.has_value() || *applied != requested;
 }
 
-constexpr std::optional<bool> keepScreenOnAfterAttempt(
-    const std::optional<bool>& applied,
-    bool requested,
-    bool succeeded
-) {
+constexpr std::optional<bool> keepScreenOnAfterAttempt(const std::optional<bool>& applied, bool requested,
+                                                       bool succeeded) {
     return succeeded ? std::optional<bool>{requested} : applied;
 }

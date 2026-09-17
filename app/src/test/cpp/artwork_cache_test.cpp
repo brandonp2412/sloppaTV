@@ -13,7 +13,7 @@ DecodedImage image(int width, int height) {
     result.rgba.resize(static_cast<size_t>(width * height * 4), 0xff);
     return result;
 }
-}
+} // namespace
 
 int main() {
     ArtworkCache cache(2);

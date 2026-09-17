@@ -19,15 +19,9 @@ public:
     NativeExternalPlayer& operator=(const NativeExternalPlayer&) = delete;
 
     [[nodiscard]] std::vector<ExternalPlayerApp> availablePlayers() const;
-    [[nodiscard]] bool launch(
-        const ExternalPlayerApp& app,
-        const std::string& url,
-        const std::string& title,
-        int positionMs,
-        const std::string& subtitleUrl,
-        const std::string& skipSegmentsJson,
-        std::string& error
-    );
+    [[nodiscard]] bool launch(const ExternalPlayerApp& app, const std::string& url, const std::string& title,
+                              int positionMs, const std::string& subtitleUrl, const std::string& skipSegmentsJson,
+                              std::string& error);
     [[nodiscard]] std::optional<ExternalPlayerResult> takeResult();
     void handleActivityResult(JNIEnv* env, int requestCode, int resultCode, jobject dataIntent);
 

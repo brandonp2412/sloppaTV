@@ -4,12 +4,9 @@
 #include <exception>
 #include <utility>
 
-TaskRunner::TaskRunner(
-    size_t workerCount,
-    std::function<void()> onTaskComplete,
-    std::function<void(const std::string&)> onTaskError
-) : onTaskComplete_(std::move(onTaskComplete)),
-    onTaskError_(std::move(onTaskError)) {
+TaskRunner::TaskRunner(size_t workerCount, std::function<void()> onTaskComplete,
+                       std::function<void(const std::string&)> onTaskError)
+    : onTaskComplete_(std::move(onTaskComplete)), onTaskError_(std::move(onTaskError)) {
     workerCount = std::clamp<size_t>(workerCount, 1, 8);
     workers_.reserve(workerCount);
     for (size_t i = 0; i < workerCount; ++i) {

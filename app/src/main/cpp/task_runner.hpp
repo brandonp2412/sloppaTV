@@ -11,11 +11,8 @@
 
 class TaskRunner {
 public:
-    explicit TaskRunner(
-        size_t workerCount = 4,
-        std::function<void()> onTaskComplete = {},
-        std::function<void(const std::string&)> onTaskError = {}
-    );
+    explicit TaskRunner(size_t workerCount = 4, std::function<void()> onTaskComplete = {},
+                        std::function<void(const std::string&)> onTaskError = {});
     ~TaskRunner();
 
     TaskRunner(const TaskRunner&) = delete;

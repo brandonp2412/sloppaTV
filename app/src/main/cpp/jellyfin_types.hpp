@@ -13,9 +13,7 @@ struct JellyfinSession {
     std::string token;
     std::string deviceId;
 
-    [[nodiscard]] bool valid() const {
-        return !server.empty() && !userId.empty() && !token.empty();
-    }
+    [[nodiscard]] bool valid() const { return !server.empty() && !userId.empty() && !token.empty(); }
 };
 
 struct JellyfinMediaSegment {
@@ -60,8 +58,8 @@ struct JellyfinTrickplayInfo {
     int intervalMs = 0;
 
     [[nodiscard]] bool valid() const {
-        return !mediaSourceId.empty() && width > 0 && height > 0 && tileWidth > 0 && tileHeight > 0
-            && thumbnailCount > 0 && intervalMs > 0;
+        return !mediaSourceId.empty() && width > 0 && height > 0 && tileWidth > 0 && tileHeight > 0 &&
+               thumbnailCount > 0 && intervalMs > 0;
     }
 };
 
@@ -159,9 +157,12 @@ enum class PlaybackMethod {
 
 inline const char* playbackMethodName(PlaybackMethod method) {
     switch (method) {
-        case PlaybackMethod::DirectPlay: return "DirectPlay";
-        case PlaybackMethod::DirectStream: return "DirectStream";
-        case PlaybackMethod::Transcode: return "Transcode";
+    case PlaybackMethod::DirectPlay:
+        return "DirectPlay";
+    case PlaybackMethod::DirectStream:
+        return "DirectStream";
+    case PlaybackMethod::Transcode:
+        return "Transcode";
     }
     return "DirectPlay";
 }
@@ -184,7 +185,6 @@ struct ApiResult {
     std::string error;
 };
 
-template <typename T>
-struct ApiValueResult : ApiResult {
+template <typename T> struct ApiValueResult : ApiResult {
     T value{};
 };

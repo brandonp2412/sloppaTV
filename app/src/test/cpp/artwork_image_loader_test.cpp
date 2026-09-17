@@ -38,7 +38,7 @@ struct FakeDiskCache {
         values.erase(key);
     }
 };
-}
+} // namespace
 
 int main() {
     int downloads = 0;
@@ -57,8 +57,7 @@ int main() {
             ++downloads;
             return ApiValueResult<std::string>{{true, {}}, "network"};
         },
-        decode
-    );
+        decode);
     assert(success.ok());
     assert(success.source == ArtworkLoadSource::Network);
     assert(success.failure == ArtworkLoadFailure::None);
@@ -69,8 +68,7 @@ int main() {
             ++downloads;
             return ApiValueResult<std::string>{{false, "offline"}, {}};
         },
-        decode
-    );
+        decode);
     assert(!downloadFailure.ok());
     assert(downloadFailure.failure == ArtworkLoadFailure::Download);
     assert(downloadFailure.error == "offline");
@@ -81,8 +79,7 @@ int main() {
             ++downloads;
             return ApiValueResult<std::string>{{true, {}}, "invalid"};
         },
-        decode
-    );
+        decode);
     assert(!decodeFailure.ok());
     assert(decodeFailure.failure == ArtworkLoadFailure::Decode);
     assert(decodeFailure.error == "decode failed");
@@ -91,28 +88,24 @@ int main() {
     FakeDiskCache cache;
     cache.values["cached"] = "disk";
     auto cached = ArtworkImageLoader::loadCached(
-        cache,
-        "cached",
+        cache, "cached",
         [&] {
             ++downloads;
             return ApiValueResult<std::string>{{false, "should not download"}, {}};
         },
-        decode
-    );
+        decode);
     assert(cached.ok());
     assert(cached.source == ArtworkLoadSource::DiskCache);
     assert(cache.reads == 1 && cache.writes == 0 && cache.erases == 0);
 
     cache.values["recover"] = "invalid";
     auto recovered = ArtworkImageLoader::loadCached(
-        cache,
-        "recover",
+        cache, "recover",
         [&] {
             ++downloads;
             return ApiValueResult<std::string>{{true, {}}, "fresh"};
         },
-        decode
-    );
+        decode);
     assert(recovered.ok());
     assert(recovered.source == ArtworkLoadSource::Network);
     assert(cache.erases == 1);
@@ -121,14 +114,12 @@ int main() {
 
     cache.values["bad"] = "invalid";
     auto retryFailure = ArtworkImageLoader::loadCached(
-        cache,
-        "bad",
+        cache, "bad",
         [&] {
             ++downloads;
             return ApiValueResult<std::string>{{false, "network failed"}, {}};
         },
-        decode
-    );
+        decode);
     assert(!retryFailure.ok());
     assert(retryFailure.failure == ArtworkLoadFailure::Download);
     assert(retryFailure.error == "network failed");

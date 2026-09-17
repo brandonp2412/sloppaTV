@@ -14,9 +14,7 @@ enum class QueueRepeatMode {
 };
 
 constexpr bool sameEpisodeSlot(int leftSeason, int leftEpisode, int rightSeason, int rightEpisode) {
-    return leftSeason > 0 && leftEpisode > 0
-        && leftSeason == rightSeason
-        && leftEpisode == rightEpisode;
+    return leftSeason > 0 && leftEpisode > 0 && leftSeason == rightSeason && leftEpisode == rightEpisode;
 }
 
 constexpr bool preferAvailableDuplicate(bool selectedAvailable, bool candidateAvailable) {
@@ -65,12 +63,11 @@ constexpr int queueAutoplayAdvanceIndex(int currentIndex, int size, bool nextIte
 
 constexpr QueueRepeatMode nextQueueRepeatMode(QueueRepeatMode mode) {
     return mode == QueueRepeatMode::Off ? QueueRepeatMode::One
-        : (mode == QueueRepeatMode::One ? QueueRepeatMode::All : QueueRepeatMode::Off);
+                                        : (mode == QueueRepeatMode::One ? QueueRepeatMode::All : QueueRepeatMode::Off);
 }
 
 constexpr const char* queueRepeatModeName(QueueRepeatMode mode) {
-    return mode == QueueRepeatMode::One ? "ONE"
-        : (mode == QueueRepeatMode::All ? "ALL" : "OFF");
+    return mode == QueueRepeatMode::One ? "ONE" : (mode == QueueRepeatMode::All ? "ALL" : "OFF");
 }
 
 constexpr int queueNextIndex(int currentIndex, int size, QueueRepeatMode repeatMode, bool manualAdvance) {
@@ -128,9 +125,8 @@ public:
     }
 
     [[nodiscard]] int findItemIndex(const std::string& itemId) const {
-        const auto item = std::find_if(items_.begin(), items_.end(), [&](const JellyfinItem& candidate) {
-            return candidate.id == itemId;
-        });
+        const auto item = std::find_if(items_.begin(), items_.end(),
+                                       [&](const JellyfinItem& candidate) { return candidate.id == itemId; });
         return item == items_.end() ? -1 : static_cast<int>(std::distance(items_.begin(), item));
     }
 
@@ -189,9 +185,7 @@ public:
 
     [[nodiscard]] int actionSelection() const { return actionSelection_; }
     void moveAction(int direction, int actionCount = 7) {
-        actionSelection_ = actionCount <= 0
-            ? 0
-            : std::clamp(actionSelection_ + direction, 0, actionCount - 1);
+        actionSelection_ = actionCount <= 0 ? 0 : std::clamp(actionSelection_ + direction, 0, actionCount - 1);
     }
 
     bool moveItem(int from, int to) {
@@ -212,8 +206,7 @@ public:
         return true;
     }
 
-    template <typename Generator>
-    bool shuffleRemaining(Generator& generator) {
+    template <typename Generator> bool shuffleRemaining(Generator& generator) {
         const int begin = queueShuffleBegin(currentIndex_, size());
         if (!queueCanShuffle(currentIndex_, size())) return false;
         std::shuffle(items_.begin() + begin, items_.end(), generator);
@@ -222,9 +215,8 @@ public:
     }
 
     [[nodiscard]] int autoplayAdvanceIndex(const JellyfinItem& nextItem) const {
-        const bool matches = currentIndex_ >= 0
-            && currentIndex_ + 1 < size()
-            && itemMatches(currentIndex_ + 1, nextItem.id);
+        const bool matches =
+            currentIndex_ >= 0 && currentIndex_ + 1 < size() && itemMatches(currentIndex_ + 1, nextItem.id);
         return queueAutoplayAdvanceIndex(currentIndex_, size(), matches);
     }
 

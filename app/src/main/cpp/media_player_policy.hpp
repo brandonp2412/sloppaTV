@@ -44,8 +44,8 @@ struct PlaybackBufferDurations {
     int bufferForPlaybackAfterRebufferMs = -1;
 
     [[nodiscard]] constexpr bool custom() const {
-        return minBufferMs >= 0 && maxBufferMs >= 0
-            && bufferForPlaybackMs >= 0 && bufferForPlaybackAfterRebufferMs >= 0;
+        return minBufferMs >= 0 && maxBufferMs >= 0 && bufferForPlaybackMs >= 0 &&
+               bufferForPlaybackAfterRebufferMs >= 0;
     }
 };
 
@@ -81,9 +81,7 @@ constexpr int heldSeekMultiplier(int repeatCount) {
 }
 
 constexpr int64_t heldSeekDeltaMs(int seekSeconds, int repeatCount) {
-    return static_cast<int64_t>(std::max(0, seekSeconds))
-        * 1000
-        * heldSeekMultiplier(std::max(0, repeatCount));
+    return static_cast<int64_t>(std::max(0, seekSeconds)) * 1000 * heldSeekMultiplier(std::max(0, repeatCount));
 }
 
 constexpr int playbackPrepareTimeoutMs(bool transcoding) {
@@ -117,7 +115,8 @@ inline std::string transcodingReasonsFromUrl(std::string_view url) {
     if (begin == std::string_view::npos) return {};
     const size_t valueBegin = begin + marker.size();
     const size_t end = url.find('&', valueBegin);
-    std::string value(url.substr(valueBegin, end == std::string_view::npos ? url.size() - valueBegin : end - valueBegin));
+    std::string value(
+        url.substr(valueBegin, end == std::string_view::npos ? url.size() - valueBegin : end - valueBegin));
     for (size_t index = 0; index + 2 < value.size();) {
         if (value[index] == '%' && value[index + 1] == '2' && (value[index + 2] == 'C' || value[index + 2] == 'c')) {
             value.replace(index, 3, ",");
@@ -130,16 +129,11 @@ inline std::string transcodingReasonsFromUrl(std::string_view url) {
 
 inline bool directStreamTranscodeReason(std::string_view reason) {
     static constexpr std::array<std::string_view, 10> allowed{
-        "AudioCodecNotSupported",
-        "AudioBitrateNotSupported",
-        "AudioChannelsNotSupported",
-        "AudioProfileNotSupported",
-        "AudioSampleRateNotSupported",
-        "SecondaryAudioNotSupported",
-        "AudioBitDepthNotSupported",
-        "AudioIsExternal",
-        "ContainerNotSupported",
-        "VideoCodecTagNotSupported",
+        "AudioCodecNotSupported",      "AudioBitrateNotSupported",
+        "AudioChannelsNotSupported",   "AudioProfileNotSupported",
+        "AudioSampleRateNotSupported", "SecondaryAudioNotSupported",
+        "AudioBitDepthNotSupported",   "AudioIsExternal",
+        "ContainerNotSupported",       "VideoCodecTagNotSupported",
     };
     return std::find(allowed.begin(), allowed.end(), reason) != allowed.end();
 }
@@ -150,7 +144,8 @@ inline bool transcodingUrlRepresentsDirectStream(std::string_view url) {
     size_t begin = 0;
     while (begin < reasons.size()) {
         const size_t end = reasons.find(',', begin);
-        const std::string_view reason(reasons.data() + begin, (end == std::string::npos ? reasons.size() : end) - begin);
+        const std::string_view reason(reasons.data() + begin,
+                                      (end == std::string::npos ? reasons.size() : end) - begin);
         if (reason.empty() || !directStreamTranscodeReason(reason)) return false;
         if (end == std::string::npos) break;
         begin = end + 1;
@@ -170,50 +165,29 @@ inline std::string serverStreamVideoCodecList(const std::vector<std::string>& di
     return result.empty() ? "h264" : result;
 }
 
-constexpr bool postSeekPositionMatchesTarget(
-    int observedPositionMs,
-    int targetPositionMs,
-    int toleranceMs = 1500
-) {
+constexpr bool postSeekPositionMatchesTarget(int observedPositionMs, int targetPositionMs, int toleranceMs = 1500) {
     if (targetPositionMs < 0) return true;
     const int64_t difference = static_cast<int64_t>(observedPositionMs) - targetPositionMs;
     const int64_t absoluteDifference = difference < 0 ? -difference : difference;
     return absoluteDifference <= std::max(0, toleranceMs);
 }
 
-constexpr bool shouldAcceptPostSeekTelemetry(
-    int observedPositionMs,
-    int targetPositionMs,
-    int64_t elapsedSinceSeekMs,
-    int toleranceMs = 1500,
-    int holdMs = 5000
-) {
-    return postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs, toleranceMs)
-        || elapsedSinceSeekMs >= std::max(0, holdMs);
+constexpr bool shouldAcceptPostSeekTelemetry(int observedPositionMs, int targetPositionMs, int64_t elapsedSinceSeekMs,
+                                             int toleranceMs = 1500, int holdMs = 5000) {
+    return postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs, toleranceMs) ||
+           elapsedSinceSeekMs >= std::max(0, holdMs);
 }
 
-constexpr bool postSeekPositionFailed(
-    int observedPositionMs,
-    int targetPositionMs,
-    int64_t elapsedSinceSeekMs,
-    int toleranceMs = 1500,
-    int failureMs = 1500
-) {
-    return targetPositionMs >= 0
-        && elapsedSinceSeekMs >= std::max(0, failureMs)
-        && !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs, toleranceMs);
+constexpr bool postSeekPositionFailed(int observedPositionMs, int targetPositionMs, int64_t elapsedSinceSeekMs,
+                                      int toleranceMs = 1500, int failureMs = 1500) {
+    return targetPositionMs >= 0 && elapsedSinceSeekMs >= std::max(0, failureMs) &&
+           !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs, toleranceMs);
 }
 
-constexpr bool shouldFallbackAfterUnseekableSeek(
-    bool mediaSeekable,
-    int observedPositionMs,
-    int targetPositionMs,
-    bool seekFailureMatured
-) {
-    return targetPositionMs >= 0
-        && !mediaSeekable
-        && !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs)
-        && seekFailureMatured;
+constexpr bool shouldFallbackAfterUnseekableSeek(bool mediaSeekable, int observedPositionMs, int targetPositionMs,
+                                                 bool seekFailureMatured) {
+    return targetPositionMs >= 0 && !mediaSeekable &&
+           !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs) && seekFailureMatured;
 }
 
 constexpr int clampSeekPositionMs(int64_t positionMs) {
@@ -221,9 +195,8 @@ constexpr int clampSeekPositionMs(int64_t positionMs) {
 }
 
 constexpr int relativeSeekPositionMs(int currentPositionMs, int64_t deltaMs, int durationMs) {
-    const int64_t upperBound = durationMs > 0
-        ? static_cast<int64_t>(durationMs)
-        : static_cast<int64_t>(std::numeric_limits<int>::max());
+    const int64_t upperBound =
+        durationMs > 0 ? static_cast<int64_t>(durationMs) : static_cast<int64_t>(std::numeric_limits<int>::max());
     return static_cast<int>(std::clamp<int64_t>(static_cast<int64_t>(currentPositionMs) + deltaMs, 0, upperBound));
 }
 
@@ -254,28 +227,25 @@ constexpr bool subtitleCodecEquals(std::string_view left, std::string_view right
 }
 
 constexpr SubtitleStrategy subtitleStrategy(std::string_view codec) {
-    if (subtitleCodecEquals(codec, "srt") || subtitleCodecEquals(codec, "subrip")
-        || subtitleCodecEquals(codec, "vtt") || subtitleCodecEquals(codec, "webvtt")
-        || subtitleCodecEquals(codec, "mov_text")) {
+    if (subtitleCodecEquals(codec, "srt") || subtitleCodecEquals(codec, "subrip") ||
+        subtitleCodecEquals(codec, "vtt") || subtitleCodecEquals(codec, "webvtt") ||
+        subtitleCodecEquals(codec, "mov_text")) {
         return SubtitleStrategy::ClientText;
     }
     if (subtitleCodecEquals(codec, "ass") || subtitleCodecEquals(codec, "ssa")) {
         return SubtitleStrategy::ClientStyled;
     }
-    if (subtitleCodecEquals(codec, "pgs") || subtitleCodecEquals(codec, "pgssub")
-        || subtitleCodecEquals(codec, "hdmv_pgs_subtitle")
-        || subtitleCodecEquals(codec, "dvdsub") || subtitleCodecEquals(codec, "dvd_subtitle")
-        || subtitleCodecEquals(codec, "dvbsub") || subtitleCodecEquals(codec, "dvb_subtitle")
-        || subtitleCodecEquals(codec, "xsub")) {
+    if (subtitleCodecEquals(codec, "pgs") || subtitleCodecEquals(codec, "pgssub") ||
+        subtitleCodecEquals(codec, "hdmv_pgs_subtitle") || subtitleCodecEquals(codec, "dvdsub") ||
+        subtitleCodecEquals(codec, "dvd_subtitle") || subtitleCodecEquals(codec, "dvbsub") ||
+        subtitleCodecEquals(codec, "dvb_subtitle") || subtitleCodecEquals(codec, "xsub")) {
         return SubtitleStrategy::ClientEmbedded;
     }
     return SubtitleStrategy::ServerTranscode;
 }
 
 constexpr bool useNativeSubtitleRenderer(SubtitleStrategy strategy, bool subtitleSelected) {
-    return subtitleSelected
-        && (strategy == SubtitleStrategy::ClientText
-            || strategy == SubtitleStrategy::ClientStyled);
+    return subtitleSelected && (strategy == SubtitleStrategy::ClientText || strategy == SubtitleStrategy::ClientStyled);
 }
 
 constexpr bool canSwitchEmbeddedSubtitleInPlayer(SubtitleStrategy strategy, bool isExternal) {

@@ -22,13 +22,8 @@ public:
         pauseAfterRestart_ = false;
     }
 
-    void stage(
-        PlaybackTarget target,
-        JellyfinItem item,
-        bool streamRestart = false,
-        bool restartPaused = false,
-        int audioStreamIndex = -1
-    ) {
+    void stage(PlaybackTarget target, JellyfinItem item, bool streamRestart = false, bool restartPaused = false,
+               int audioStreamIndex = -1) {
         pending_ = PendingPlaybackTransition{
             .target = std::move(target),
             .item = std::move(item),

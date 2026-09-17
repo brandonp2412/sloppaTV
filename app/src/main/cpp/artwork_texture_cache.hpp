@@ -26,35 +26,20 @@ public:
     explicit ArtworkTextureCache(size_t maxEntries = 0) : cache_(maxEntries) {}
 
     template <typename DeleteTexture>
-    bool beginLoad(
-        const std::string& key,
-        uint64_t textureGeneration,
-        DeleteTexture&& deleteTexture,
-        ArtworkCache::TimePoint now = ArtworkCache::Clock::now()
-    ) {
+    bool beginLoad(const std::string& key, uint64_t textureGeneration, DeleteTexture&& deleteTexture,
+                   ArtworkCache::TimePoint now = ArtworkCache::Clock::now()) {
         return cache_.beginLoad(
-            key,
-            [&](ArtworkEntry& entry) {
-                releaseTexture(entry, textureGeneration, deleteTexture);
-            },
-            now
-        );
+            key, [&](ArtworkEntry& entry) { releaseTexture(entry, textureGeneration, deleteTexture); }, now);
     }
 
     void markFailed(const std::string& key, ArtworkCache::TimePoint now = ArtworkCache::Clock::now()) {
         cache_.markFailed(key, now);
     }
 
-    bool markReady(const std::string& key, DecodedImage decoded) {
-        return cache_.markReady(key, std::move(decoded));
-    }
+    bool markReady(const std::string& key, DecodedImage decoded) { return cache_.markReady(key, std::move(decoded)); }
 
     template <typename CreateTexture>
-    ArtworkTextureResult prepare(
-        const std::string& key,
-        uint64_t textureGeneration,
-        CreateTexture&& createTexture
-    ) {
+    ArtworkTextureResult prepare(const std::string& key, uint64_t textureGeneration, CreateTexture&& createTexture) {
         ArtworkEntry* entry = cache_.find(key);
         if (!entry) return {ArtworkTextureState::Missing, nullptr};
         if (entry->state == ArtworkState::Failed) return {ArtworkTextureState::Failed, entry};
@@ -64,11 +49,7 @@ public:
             if (!entry->decoded.valid()) return {ArtworkTextureState::InvalidDecoded, entry};
             entry->sourceWidth = entry->decoded.width;
             entry->sourceHeight = entry->decoded.height;
-            entry->texture = createTexture(
-                entry->decoded.width,
-                entry->decoded.height,
-                entry->decoded.rgba.data()
-            );
+            entry->texture = createTexture(entry->decoded.width, entry->decoded.height, entry->decoded.rgba.data());
             entry->textureGeneration = textureGeneration;
             if (entry->texture != 0) std::vector<uint8_t>().swap(entry->decoded.rgba);
         }
@@ -79,16 +60,11 @@ public:
 
     template <typename DeleteTexture>
     void erase(const std::string& key, uint64_t textureGeneration, DeleteTexture&& deleteTexture) {
-        cache_.erase(key, [&](ArtworkEntry& entry) {
-            releaseTexture(entry, textureGeneration, deleteTexture);
-        });
+        cache_.erase(key, [&](ArtworkEntry& entry) { releaseTexture(entry, textureGeneration, deleteTexture); });
     }
 
-    template <typename DeleteTexture>
-    void clear(uint64_t textureGeneration, DeleteTexture&& deleteTexture) {
-        cache_.clear([&](ArtworkEntry& entry) {
-            releaseTexture(entry, textureGeneration, deleteTexture);
-        });
+    template <typename DeleteTexture> void clear(uint64_t textureGeneration, DeleteTexture&& deleteTexture) {
+        cache_.clear([&](ArtworkEntry& entry) { releaseTexture(entry, textureGeneration, deleteTexture); });
     }
 
     [[nodiscard]] size_t size() const { return cache_.size(); }
@@ -96,11 +72,7 @@ public:
 
 private:
     template <typename DeleteTexture>
-    static void releaseTexture(
-        ArtworkEntry& entry,
-        uint64_t textureGeneration,
-        DeleteTexture& deleteTexture
-    ) {
+    static void releaseTexture(ArtworkEntry& entry, uint64_t textureGeneration, DeleteTexture& deleteTexture) {
         if (entry.texture != 0 && entry.textureGeneration == textureGeneration) {
             deleteTexture(entry.texture);
         }

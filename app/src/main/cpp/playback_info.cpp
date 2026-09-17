@@ -10,8 +10,7 @@
 using nlohmann::json;
 
 namespace {
-template <typename T>
-T scalarValueOr(const json& value, const char* key, T fallback) {
+template <typename T> T scalarValueOr(const json& value, const char* key, T fallback) {
     const auto match = value.find(key);
     if (match == value.end() || match->is_null()) return fallback;
     try {
@@ -29,18 +28,12 @@ std::string joinCodecs(const std::vector<std::string>& codecs) {
     }
     return out.str();
 }
-}
+} // namespace
 
-std::string buildPlaybackInfoRequestBody(
-    const JellyfinSession& session,
-    const JellyfinItem& item,
-    const PlaybackProfilePlan& plan,
-    PlaybackOverrides overrides,
-    int maxStreamingBitrate,
-    int maxAudioChannels,
-    int audioStreamIndex,
-    int subtitleStreamIndex
-) {
+std::string buildPlaybackInfoRequestBody(const JellyfinSession& session, const JellyfinItem& item,
+                                         const PlaybackProfilePlan& plan, PlaybackOverrides overrides,
+                                         int maxStreamingBitrate, int maxAudioChannels, int audioStreamIndex,
+                                         int subtitleStreamIndex) {
     // Embedded libmpv renders these formats itself. Advertise embedded support so
     // Jellyfin does not burn PGS/ASS/etc. into the video and force a transcode.
     // Text formats may still be delivered externally when Jellyfin prefers that.
@@ -79,39 +72,39 @@ std::string buildPlaybackInfoRequestBody(
         {"MaxStreamingBitrate", std::max(1000000, maxStreamingBitrate)},
         {"MusicStreamingTranscodingBitrate", 192000},
         {"DirectPlayProfiles", json::array({
-            {
-                {"Container", "mkv,matroska,mp4,m4v,mov,ts,mpegts,webm"},
-                {"Type", "Video"},
-                {"VideoCodec", videoCodecList},
-                {"AudioCodec", audioCodecList},
-            },
-        })},
+                                   {
+                                       {"Container", "mkv,matroska,mp4,m4v,mov,ts,mpegts,webm"},
+                                       {"Type", "Video"},
+                                       {"VideoCodec", videoCodecList},
+                                       {"AudioCodec", audioCodecList},
+                                   },
+                               })},
         {"TranscodingProfiles", json::array({
-            {
-                {"Container", "ts"},
-                {"Type", "Video"},
-                {"VideoCodec", serverStreamVideoCodecs},
-                {"AudioCodec", transcodeAudioCodecList},
-                {"Protocol", "hls"},
-                {"Context", "Streaming"},
-                {"CopyTimestamps", false},
-                {"EnableSubtitlesInManifest", true},
-                {"MaxAudioChannels", std::to_string(maxAudioChannels)},
-            },
-        })},
+                                    {
+                                        {"Container", "ts"},
+                                        {"Type", "Video"},
+                                        {"VideoCodec", serverStreamVideoCodecs},
+                                        {"AudioCodec", transcodeAudioCodecList},
+                                        {"Protocol", "hls"},
+                                        {"Context", "Streaming"},
+                                        {"CopyTimestamps", false},
+                                        {"EnableSubtitlesInManifest", true},
+                                        {"MaxAudioChannels", std::to_string(maxAudioChannels)},
+                                    },
+                                })},
         {"CodecProfiles", json::array({
-            {
-                {"Type", "VideoAudio"},
-                {"Conditions", json::array({
-                    {
-                        {"Condition", "LessThanEqual"},
-                        {"Property", "AudioChannels"},
-                        {"Value", std::to_string(maxAudioChannels)},
-                        {"IsRequired", false},
-                    },
-                })},
-            },
-        })},
+                              {
+                                  {"Type", "VideoAudio"},
+                                  {"Conditions", json::array({
+                                                     {
+                                                         {"Condition", "LessThanEqual"},
+                                                         {"Property", "AudioChannels"},
+                                                         {"Value", std::to_string(maxAudioChannels)},
+                                                         {"IsRequired", false},
+                                                     },
+                                                 })},
+                              },
+                          })},
         {"SubtitleProfiles", std::move(subtitleProfiles)},
     };
 
@@ -136,12 +129,8 @@ std::string buildPlaybackInfoRequestBody(
     return body.dump();
 }
 
-ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
-    std::string_view responseBody,
-    int audioStreamIndex,
-    int subtitleStreamIndex,
-    PlaybackOverrides overrides
-) {
+ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view responseBody, int audioStreamIndex,
+                                                         int subtitleStreamIndex, PlaybackOverrides overrides) {
     ApiValueResult<PlaybackInfoOffer> result;
     try {
         const auto data = json::parse(responseBody);
@@ -151,11 +140,8 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
         }
 
         const auto& sources = data["MediaSources"];
-        const auto firstObject = std::find_if(
-            sources.begin(),
-            sources.end(),
-            [](const json& candidate) { return candidate.is_object(); }
-        );
+        const auto firstObject =
+            std::find_if(sources.begin(), sources.end(), [](const json& candidate) { return candidate.is_object(); });
         if (firstObject == sources.end()) {
             result.error = "Jellyfin returned no playable media source";
             return result;
@@ -167,10 +153,14 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
         // when routes are equivalent or when older/noisy servers omit all capability flags.
         const auto routeRank = [](PlaybackServerRoute route) {
             switch (route) {
-                case PlaybackServerRoute::DirectPlay: return 0;
-                case PlaybackServerRoute::DirectStream: return 1;
-                case PlaybackServerRoute::Transcode: return 2;
-                case PlaybackServerRoute::Unavailable: return 3;
+            case PlaybackServerRoute::DirectPlay:
+                return 0;
+            case PlaybackServerRoute::DirectStream:
+                return 1;
+            case PlaybackServerRoute::Transcode:
+                return 2;
+            case PlaybackServerRoute::Unavailable:
+                return 3;
             }
             return 3;
         };
@@ -186,8 +176,7 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
                     .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
                     .transcodingUrl = transcodingUrl,
                 },
-                overrides
-            );
+                overrides);
             const int rank = routeRank(route);
             if (rank < bestRank) {
                 source = candidate;
@@ -198,35 +187,29 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(
         PlaybackInfoOffer offer;
         offer.playSessionId = scalarValueOr(data, "PlaySessionId", std::string{});
         offer.mediaSourceId = scalarValueOr(*source, "Id", std::string{});
-        offer.audioStreamIndex = audioStreamIndex >= 0
-            ? audioStreamIndex
-            : scalarValueOr(*source, "DefaultAudioStreamIndex", -1);
+        offer.audioStreamIndex =
+            audioStreamIndex >= 0 ? audioStreamIndex : scalarValueOr(*source, "DefaultAudioStreamIndex", -1);
         offer.subtitleStreamIndex = resolvedSubtitleIndex(
-            subtitleStreamIndex,
-            scalarValueOr(*source, "DefaultSubtitleStreamIndex", kSubtitleOffIndex)
-        );
+            subtitleStreamIndex, scalarValueOr(*source, "DefaultSubtitleStreamIndex", kSubtitleOffIndex));
         offer.transcodingUrl = scalarValueOr(*source, "TranscodingUrl", std::string{});
         offer.container = scalarValueOr(*source, "Container", std::string{});
         offer.supportsDirectPlay = scalarValueOr(*source, "SupportsDirectPlay", false);
         offer.supportsDirectStream = scalarValueOr(*source, "SupportsDirectStream", false);
         offer.supportsTranscoding = scalarValueOr(*source, "SupportsTranscoding", false);
 
-        if (offer.subtitleStreamIndex >= 0 && source->contains("MediaStreams") && (*source)["MediaStreams"].is_array()) {
+        if (offer.subtitleStreamIndex >= 0 && source->contains("MediaStreams") &&
+            (*source)["MediaStreams"].is_array()) {
             const auto stream = std::find_if(
-                (*source)["MediaStreams"].begin(),
-                (*source)["MediaStreams"].end(),
-                [&](const json& candidate) {
-                    return candidate.is_object()
-                        && scalarValueOr(candidate, "Type", std::string{}) == "Subtitle"
-                        && scalarValueOr(candidate, "Index", -1) == offer.subtitleStreamIndex;
-                }
-            );
+                (*source)["MediaStreams"].begin(), (*source)["MediaStreams"].end(), [&](const json& candidate) {
+                    return candidate.is_object() && scalarValueOr(candidate, "Type", std::string{}) == "Subtitle" &&
+                           scalarValueOr(candidate, "Index", -1) == offer.subtitleStreamIndex;
+                });
             if (stream != (*source)["MediaStreams"].end()) {
                 const std::string subtitleCodec = scalarValueOr(*stream, "Codec", std::string{});
                 const std::string delivery = scalarValueOr(*stream, "DeliveryMethod", std::string{});
                 const std::string deliveryUrl = scalarValueOr(*stream, "DeliveryUrl", std::string{});
-                if (delivery == "External" && !deliveryUrl.empty()
-                    && subtitleStrategy(subtitleCodec) != SubtitleStrategy::ServerTranscode) {
+                if (delivery == "External" && !deliveryUrl.empty() &&
+                    subtitleStrategy(subtitleCodec) != SubtitleStrategy::ServerTranscode) {
                     offer.subtitleDeliveryUrl = deliveryUrl;
                 }
             }

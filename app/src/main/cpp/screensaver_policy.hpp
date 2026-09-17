@@ -15,12 +15,7 @@ constexpr int64_t screensaverDelayMs(int minutes) {
     return static_cast<int64_t>(normalizedScreensaverMinutes(minutes)) * 60'000;
 }
 
-constexpr bool shouldActivateScreensaver(
-    int minutes,
-    int64_t idleMs,
-    bool playerScreen,
-    bool busy
-) {
+constexpr bool shouldActivateScreensaver(int minutes, int64_t idleMs, bool playerScreen, bool busy) {
     const int64_t delay = screensaverDelayMs(minutes);
     return delay > 0 && !playerScreen && !busy && idleMs >= delay;
 }

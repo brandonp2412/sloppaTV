@@ -24,9 +24,8 @@ FrameRateApi frameRateApi() {
         void* handle = dlopen("libandroid.so", RTLD_NOW | RTLD_LOCAL);
         if (!handle) return result;
         result.setFrameRate = reinterpret_cast<SetFrameRateFn>(dlsym(handle, "ANativeWindow_setFrameRate"));
-        result.setFrameRateWithStrategy = reinterpret_cast<SetFrameRateWithStrategyFn>(
-            dlsym(handle, "ANativeWindow_setFrameRateWithChangeStrategy")
-        );
+        result.setFrameRateWithStrategy =
+            reinterpret_cast<SetFrameRateWithStrategyFn>(dlsym(handle, "ANativeWindow_setFrameRateWithChangeStrategy"));
         return result;
     }();
     return api;
@@ -37,27 +36,19 @@ int32_t applyFrameRate(ANativeWindow* window, float frameRate, bool allowNonSeam
     const auto api = frameRateApi();
     const int sdk = android_get_device_api_level();
     if (sdk >= 31 && api.setFrameRateWithStrategy) {
-        return api.setFrameRateWithStrategy(
-            window,
-            frameRate,
-            frameRate > 0.0f
-                ? ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
-                : ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT,
-            allowNonSeamless ? static_cast<int8_t>(1) : static_cast<int8_t>(0)
-        );
+        return api.setFrameRateWithStrategy(window, frameRate,
+                                            frameRate > 0.0f ? ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
+                                                             : ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT,
+                                            allowNonSeamless ? static_cast<int8_t>(1) : static_cast<int8_t>(0));
     }
     if (sdk >= 30 && api.setFrameRate) {
-        return api.setFrameRate(
-            window,
-            frameRate,
-            frameRate > 0.0f
-                ? ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
-                : ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT
-        );
+        return api.setFrameRate(window, frameRate,
+                                frameRate > 0.0f ? ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
+                                                 : ANATIVEWINDOW_FRAME_RATE_COMPATIBILITY_DEFAULT);
     }
     return -1;
 }
-}
+} // namespace
 
 DisplayModeController::~DisplayModeController() {
     restore();
@@ -90,12 +81,8 @@ void DisplayModeController::restore() {
     std::scoped_lock lock(mutex_);
     if (!window_) return;
     const int32_t result = applyFrameRate(window_, 0.0f, false);
-    __android_log_print(
-        result == 0 ? ANDROID_LOG_INFO : ANDROID_LOG_WARN,
-        kTag,
-        "Cleared app-window frame-rate preference (result=%d)",
-        result
-    );
+    __android_log_print(result == 0 ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, kTag,
+                        "Cleared app-window frame-rate preference (result=%d)", result);
     ANativeWindow_release(window_);
     window_ = nullptr;
 }

@@ -48,11 +48,9 @@ public:
     [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
         std::vector<std::string> result;
         result.reserve(7);
-        result.emplace_back(
-            stillWatchingPrompt
-                ? "KEEP WATCHING"
-                : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY"))
-        );
+        result.emplace_back(stillWatchingPrompt
+                                ? "KEEP WATCHING"
+                                : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY")));
         if (item.type == "Series") {
             result.emplace_back("EPISODES");
             result.emplace_back("PLAY ALL");
@@ -92,7 +90,8 @@ public:
         similarSelection_ = std::clamp(similarSelection_ + direction, 0, static_cast<int>(similar_.size()) - 1);
     }
     [[nodiscard]] const JellyfinItem* selectedSimilar() const {
-        if (similar_.empty() || similarSelection_ < 0 || similarSelection_ >= static_cast<int>(similar_.size())) return nullptr;
+        if (similar_.empty() || similarSelection_ < 0 || similarSelection_ >= static_cast<int>(similar_.size()))
+            return nullptr;
         return &similar_[static_cast<size_t>(similarSelection_)];
     }
 
@@ -101,12 +100,8 @@ public:
         deleteConfirmation_ = false;
         deleteConfirmationSelection_ = 1;
     }
-    [[nodiscard]] std::vector<std::string> itemMenuActions(
-        const JellyfinItem& item,
-        bool hasExternalPlayer,
-        bool hasQueue,
-        bool hiddenFromHome
-    ) const {
+    [[nodiscard]] std::vector<std::string> itemMenuActions(const JellyfinItem& item, bool hasExternalPlayer,
+                                                           bool hasQueue, bool hiddenFromHome) const {
         std::vector<std::string> result;
         result.reserve(9);
         if (item.type == "Series") result.emplace_back("PLAY ALL");
@@ -185,9 +180,7 @@ public:
     void moveSeason(int dx, int dy, int columns) {
         moveGridSelection(seasonSelection_, static_cast<int>(seasons_.size()), dx, dy, columns);
     }
-    [[nodiscard]] const JellyfinItem* selectedSeasonItem() const {
-        return selectedItem(seasons_, seasonSelection_);
-    }
+    [[nodiscard]] const JellyfinItem* selectedSeasonItem() const { return selectedItem(seasons_, seasonSelection_); }
 
     void beginSeason(JellyfinItem season) {
         selectedSeason_ = std::move(season);
@@ -205,9 +198,7 @@ public:
     void moveEpisode(int dx, int dy, int columns) {
         moveGridSelection(episodeSelection_, static_cast<int>(episodes_.size()), dx, dy, columns);
     }
-    [[nodiscard]] const JellyfinItem* selectedEpisodeItem() const {
-        return selectedItem(episodes_, episodeSelection_);
-    }
+    [[nodiscard]] const JellyfinItem* selectedEpisodeItem() const { return selectedItem(episodes_, episodeSelection_); }
 
     void setEpisodeSeriesContext(JellyfinItem series, std::vector<JellyfinItem> seasons) {
         seriesDetail_ = std::move(series);
@@ -217,9 +208,7 @@ public:
     }
     [[nodiscard]] bool hasEpisodeSeriesContext() const { return !seriesDetail_.id.empty(); }
     [[nodiscard]] bool episodeContextFocused() const { return episodeContextFocused_; }
-    void setEpisodeContextFocused(bool focused) {
-        episodeContextFocused_ = focused && hasEpisodeSeriesContext();
-    }
+    void setEpisodeContextFocused(bool focused) { episodeContextFocused_ = focused && hasEpisodeSeriesContext(); }
     [[nodiscard]] int episodeContextSelection() const { return episodeContextSelection_; }
     [[nodiscard]] int episodeContextCount() const {
         return hasEpisodeSeriesContext() ? static_cast<int>(seasons_.size()) + 1 : 0;
@@ -253,18 +242,14 @@ public:
     void removeItem(const std::string& itemId) {
         if (itemId.empty()) return;
         auto remove = [&](auto& items, int& selection) {
-            const size_t selectedOffset = selection <= 0
-                ? 0
-                : std::min(static_cast<size_t>(selection), items.size());
-            const int removedBeforeSelection = static_cast<int>(std::count_if(
-                items.begin(),
-                items.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
-                [&](const JellyfinItem& item) { return item.id == itemId; }
-            ));
+            const size_t selectedOffset = selection <= 0 ? 0 : std::min(static_cast<size_t>(selection), items.size());
+            const int removedBeforeSelection = static_cast<int>(
+                std::count_if(items.begin(), items.begin() + static_cast<std::ptrdiff_t>(selectedOffset),
+                              [&](const JellyfinItem& item) { return item.id == itemId; }));
             std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
             selection = items.empty()
-                ? 0
-                : std::clamp(selection - removedBeforeSelection, 0, static_cast<int>(items.size()) - 1);
+                            ? 0
+                            : std::clamp(selection - removedBeforeSelection, 0, static_cast<int>(items.size()) - 1);
         };
         remove(similar_, similarSelection_);
         remove(personItems_, personItemSelection_);
@@ -273,7 +258,6 @@ public:
     }
 
 private:
-
     static void moveGridSelection(int& selection, int count, int dx, int dy, int columns) {
         selection = gridSelectionAfterMove(selection, count, dx, dy, columns);
     }

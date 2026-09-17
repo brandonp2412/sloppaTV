@@ -11,10 +11,34 @@ int main() {
         {.index = 3, .channels = 2, .codec = "aac", .language = "eng", .title = "English", .isDefault = false},
     };
     item.subtitles = {
-        {.index = 5, .codec = "srt", .language = "eng", .title = "English Signs & Songs", .forced = false, .isDefault = true, .isExternal = false},
-        {.index = 6, .codec = "srt", .language = "eng", .title = "English", .forced = false, .isDefault = true, .isExternal = false},
-        {.index = 7, .codec = "srt", .language = "eng", .title = "English Forced", .forced = true, .isDefault = false, .isExternal = false},
-        {.index = 8, .codec = "srt", .language = "spa", .title = "Spanish", .forced = false, .isDefault = false, .isExternal = false},
+        {.index = 5,
+         .codec = "srt",
+         .language = "eng",
+         .title = "English Signs & Songs",
+         .forced = false,
+         .isDefault = true,
+         .isExternal = false},
+        {.index = 6,
+         .codec = "srt",
+         .language = "eng",
+         .title = "English",
+         .forced = false,
+         .isDefault = true,
+         .isExternal = false},
+        {.index = 7,
+         .codec = "srt",
+         .language = "eng",
+         .title = "English Forced",
+         .forced = true,
+         .isDefault = false,
+         .isExternal = false},
+        {.index = 8,
+         .codec = "srt",
+         .language = "spa",
+         .title = "Spanish",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = false},
     };
 
     assert(playbackAudioIndexForItem(item, std::optional<std::string>{"eng"}) == 3);
@@ -35,9 +59,27 @@ int main() {
 
     JellyfinItem playerSubtitleItem;
     playerSubtitleItem.subtitles = {
-        {.index = 11, .codec = "pgs", .language = "eng", .title = "PGS", .forced = false, .isDefault = true, .isExternal = false},
-        {.index = 12, .codec = "srt", .language = "eng", .title = "Text", .forced = false, .isDefault = false, .isExternal = false},
-        {.index = 13, .codec = "pgs", .language = "eng", .title = "External PGS", .forced = false, .isDefault = false, .isExternal = true},
+        {.index = 11,
+         .codec = "pgs",
+         .language = "eng",
+         .title = "PGS",
+         .forced = false,
+         .isDefault = true,
+         .isExternal = false},
+        {.index = 12,
+         .codec = "srt",
+         .language = "eng",
+         .title = "Text",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = false},
+        {.index = 13,
+         .codec = "pgs",
+         .language = "eng",
+         .title = "External PGS",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = true},
     };
     PlaybackTarget playerSubtitleTarget;
     playerSubtitleTarget.playMethod = PlaybackMethod::DirectPlay;
@@ -70,38 +112,21 @@ int main() {
     autoPolicy.autoSubtitleSourceLanguage = "any";
     assert(playbackAutoSubtitleIndexForItem(item, 3, autoPolicy) == 6);
 
-    const auto selectedTracks = selectPlaybackTracks(
-        item,
-        std::optional<std::string>{"jpn"},
-        std::nullopt,
-        autoPolicy
-    );
+    const auto selectedTracks = selectPlaybackTracks(item, std::optional<std::string>{"jpn"}, std::nullopt, autoPolicy);
     assert(selectedTracks.audioStreamIndex == 1);
     assert(selectedTracks.subtitleStreamIndex == 6);
 
     autoPolicy.autoSubtitles = false;
     assert(playbackAutoSubtitleIndexForItem(item, 1, autoPolicy) == kSubtitleOffIndex);
 
-    auto audioCycle = planPlaybackAudioTrackCycle(
-        item,
-        1,
-        6,
-        PlaybackMethod::DirectPlay,
-        autoPolicy
-    );
+    auto audioCycle = planPlaybackAudioTrackCycle(item, 1, 6, PlaybackMethod::DirectPlay, autoPolicy);
     assert(audioCycle.available);
     assert(audioCycle.audioStreamIndex == 3);
     assert(audioCycle.audioOrdinal == 1);
     assert(audioCycle.subtitleStreamIndex == 6);
     assert(audioCycle.tryEmbeddedSwitch);
 
-    audioCycle = planPlaybackAudioTrackCycle(
-        item,
-        3,
-        6,
-        PlaybackMethod::DirectStream,
-        autoPolicy
-    );
+    audioCycle = planPlaybackAudioTrackCycle(item, 3, 6, PlaybackMethod::DirectStream, autoPolicy);
     assert(audioCycle.available);
     assert(audioCycle.audioStreamIndex == 1);
     assert(audioCycle.audioOrdinal == 0);
@@ -114,25 +139,13 @@ int main() {
         .autoSubtitleSourceLanguage = "different",
         .allowedSubtitleLanguages = {"eng"},
     };
-    audioCycle = planPlaybackAudioTrackCycle(
-        item,
-        1,
-        6,
-        PlaybackMethod::DirectPlay,
-        audioChangePolicy
-    );
+    audioCycle = planPlaybackAudioTrackCycle(item, 1, 6, PlaybackMethod::DirectPlay, audioChangePolicy);
     assert(audioCycle.available);
     assert(audioCycle.audioStreamIndex == 3);
     assert(audioCycle.subtitleStreamIndex == kSubtitleOffIndex);
     assert(!audioCycle.tryEmbeddedSwitch);
 
-    audioCycle = planPlaybackAudioTrackCycle(
-        item,
-        99,
-        6,
-        PlaybackMethod::DirectPlay,
-        autoPolicy
-    );
+    audioCycle = planPlaybackAudioTrackCycle(item, 99, 6, PlaybackMethod::DirectPlay, autoPolicy);
     assert(audioCycle.available);
     assert(audioCycle.audioStreamIndex == 1);
     assert(audioCycle.audioOrdinal == 0);
@@ -144,64 +157,39 @@ int main() {
         .allowedSubtitleLanguages = {"spa"},
     };
     assert(playbackSubtitleIndexForItem(item, 1, std::optional<std::string>{"spa"}, carriedPolicy) == 8);
-    assert(playbackSubtitleIndexForItem(item, 1, std::optional<std::string>{"eng"}, carriedPolicy) == kSubtitleOffIndex);
+    assert(playbackSubtitleIndexForItem(item, 1, std::optional<std::string>{"eng"}, carriedPolicy) ==
+           kSubtitleOffIndex);
     assert(playbackPreferredSubtitlePosition(item, carriedPolicy.allowedSubtitleLanguages) == 3);
 
     carriedPolicy.allowedSubtitleLanguages = {"eng"};
     assert(playbackPreferredSubtitlePosition(item, carriedPolicy.allowedSubtitleLanguages) == 1);
 
-    auto subtitleCycle = planPlaybackSubtitleTrackCycle(
-        item,
-        kSubtitleOffIndex,
-        PlaybackMethod::DirectPlay,
-        carriedPolicy.allowedSubtitleLanguages
-    );
+    auto subtitleCycle = planPlaybackSubtitleTrackCycle(item, kSubtitleOffIndex, PlaybackMethod::DirectPlay,
+                                                        carriedPolicy.allowedSubtitleLanguages);
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::LoadNative);
     assert(subtitleCycle.subtitleStreamIndex == 6);
     assert(subtitleCycle.strategy == SubtitleStrategy::ClientText);
 
-    subtitleCycle = planPlaybackSubtitleTrackCycle(
-        item,
-        6,
-        PlaybackMethod::DirectPlay,
-        carriedPolicy.allowedSubtitleLanguages
-    );
+    subtitleCycle =
+        planPlaybackSubtitleTrackCycle(item, 6, PlaybackMethod::DirectPlay, carriedPolicy.allowedSubtitleLanguages);
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::LoadNative);
     assert(subtitleCycle.subtitleStreamIndex == 7);
 
-    subtitleCycle = planPlaybackSubtitleTrackCycle(
-        item,
-        7,
-        PlaybackMethod::DirectPlay,
-        carriedPolicy.allowedSubtitleLanguages
-    );
+    subtitleCycle =
+        planPlaybackSubtitleTrackCycle(item, 7, PlaybackMethod::DirectPlay, carriedPolicy.allowedSubtitleLanguages);
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::DisableInPlayer);
     assert(subtitleCycle.subtitleStreamIndex == kSubtitleOffIndex);
 
-    subtitleCycle = planPlaybackSubtitleTrackCycle(
-        item,
-        7,
-        PlaybackMethod::DirectStream,
-        carriedPolicy.allowedSubtitleLanguages
-    );
+    subtitleCycle =
+        planPlaybackSubtitleTrackCycle(item, 7, PlaybackMethod::DirectStream, carriedPolicy.allowedSubtitleLanguages);
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     assert(subtitleCycle.subtitleStreamIndex == kSubtitleOffIndex);
 
-    subtitleCycle = planPlaybackSubtitleTrackCycle(
-        item,
-        kSubtitleOffIndex,
-        PlaybackMethod::DirectPlay,
-        {"deu"}
-    );
+    subtitleCycle = planPlaybackSubtitleTrackCycle(item, kSubtitleOffIndex, PlaybackMethod::DirectPlay, {"deu"});
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::NoAllowedTracks);
 
     JellyfinItem noSubtitles;
-    subtitleCycle = planPlaybackSubtitleTrackCycle(
-        noSubtitles,
-        kSubtitleOffIndex,
-        PlaybackMethod::DirectPlay,
-        {}
-    );
+    subtitleCycle = planPlaybackSubtitleTrackCycle(noSubtitles, kSubtitleOffIndex, PlaybackMethod::DirectPlay, {});
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::NoSubtitles);
 
     JellyfinItem bitmapSubtitles;
@@ -214,12 +202,8 @@ int main() {
         .isDefault = true,
         .isExternal = false,
     }};
-    subtitleCycle = planPlaybackSubtitleTrackCycle(
-        bitmapSubtitles,
-        kSubtitleOffIndex,
-        PlaybackMethod::DirectPlay,
-        {"eng"}
-    );
+    subtitleCycle =
+        planPlaybackSubtitleTrackCycle(bitmapSubtitles, kSubtitleOffIndex, PlaybackMethod::DirectPlay, {"eng"});
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     assert(subtitleCycle.subtitleStreamIndex == 11);
     assert(subtitleCycle.strategy == SubtitleStrategy::ClientEmbedded);
@@ -234,13 +218,8 @@ int main() {
         .isDefault = false,
     }};
     assert(playbackAudioLanguage(fallbackAudio, 42) == "fra");
-    assert(!planPlaybackAudioTrackCycle(
-        fallbackAudio,
-        9,
-        kSubtitleOffIndex,
-        PlaybackMethod::DirectPlay,
-        autoPolicy
-    ).available);
+    assert(!planPlaybackAudioTrackCycle(fallbackAudio, 9, kSubtitleOffIndex, PlaybackMethod::DirectPlay, autoPolicy)
+                .available);
 
     return 0;
 }

@@ -24,17 +24,14 @@ int main() {
         [&](const std::string& error) {
             std::scoped_lock lock(mutex);
             lastError = error;
-        }
-    );
+        });
 
     assert(runner.submit([] { throw std::runtime_error("boom"); }));
     assert(runner.submit([&] { ++taskRuns; }));
 
     {
         std::unique_lock lock(mutex);
-        const bool finished = completed.wait_for(lock, std::chrono::seconds(2), [&] {
-            return completionCount == 2;
-        });
+        const bool finished = completed.wait_for(lock, std::chrono::seconds(2), [&] { return completionCount == 2; });
         assert(finished);
     }
     assert(taskRuns == 1);
@@ -43,9 +40,7 @@ int main() {
     assert(runner.submit([] { throw 42; }));
     {
         std::unique_lock lock(mutex);
-        const bool finished = completed.wait_for(lock, std::chrono::seconds(2), [&] {
-            return completionCount == 3;
-        });
+        const bool finished = completed.wait_for(lock, std::chrono::seconds(2), [&] { return completionCount == 3; });
         assert(finished);
     }
     assert(lastError == "Unknown background task exception");

@@ -59,14 +59,16 @@ std::vector<DiscoveredJellyfinServer> discoverJellyfinServers(int timeoutMs) {
     std::array<char, 4096> buffer{};
 
     while (std::chrono::steady_clock::now() < deadline) {
-        const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()).count();
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now()).count();
         pollfd pfd{fd, POLLIN, 0};
         const int ready = poll(&pfd, 1, static_cast<int>(std::max<int64_t>(1, remaining)));
         if (ready <= 0) break;
 
         sockaddr_in from{};
         socklen_t fromLength = sizeof(from);
-        const ssize_t length = recvfrom(fd, buffer.data(), buffer.size() - 1, 0, reinterpret_cast<sockaddr*>(&from), &fromLength);
+        const ssize_t length =
+            recvfrom(fd, buffer.data(), buffer.size() - 1, 0, reinterpret_cast<sockaddr*>(&from), &fromLength);
         if (length <= 0) continue;
         buffer[static_cast<size_t>(length)] = '\0';
 

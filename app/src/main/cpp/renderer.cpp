@@ -116,7 +116,7 @@ void main() {
 }
 )";
 
-}
+} // namespace
 
 Renderer::Renderer(JavaVM* vm, jobject activity) : vm_(vm) {
     ScopedEnv scoped(vm_);
@@ -142,50 +142,43 @@ Renderer::PreparedFontAtlas Renderer::prepareFontAtlas(JavaVM* vm, jobject activ
     if (!env) return prepared;
 
     jclass activityClass = env->GetObjectClass(activity);
-    jmethodID createAtlas = activityClass
-        ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;")
-        : nullptr;
-    jmethodID createAdvances = activityClass
-        ? env->GetMethodID(activityClass, "createFontAdvances", "()[F")
-        : nullptr;
+    jmethodID createAtlas =
+        activityClass ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;") : nullptr;
+    jmethodID createAdvances = activityClass ? env->GetMethodID(activityClass, "createFontAdvances", "()[F") : nullptr;
     jobject bitmap = createAtlas ? env->CallObjectMethod(activity, createAtlas) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
         bitmap = nullptr;
     }
-    jfloatArray advances = createAdvances
-        ? static_cast<jfloatArray>(env->CallObjectMethod(activity, createAdvances))
-        : nullptr;
+    jfloatArray advances =
+        createAdvances ? static_cast<jfloatArray>(env->CallObjectMethod(activity, createAdvances)) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
         advances = nullptr;
     }
     if (advances && env->GetArrayLength(advances) >= static_cast<jsize>(prepared.advances.size())) {
         env->GetFloatArrayRegion(advances, 0, static_cast<jsize>(prepared.advances.size()), prepared.advances.data());
-        if (!env->ExceptionCheck()) prepared.advancesReady = true;
-        else env->ExceptionClear();
+        if (!env->ExceptionCheck())
+            prepared.advancesReady = true;
+        else
+            env->ExceptionClear();
     }
     if (advances) env->DeleteLocalRef(advances);
 
     if (bitmap) {
         AndroidBitmapInfo info{};
         void* pixels = nullptr;
-        const bool locked = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS
-            && info.width > 0 && info.height > 0
-            && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
-            && AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
-            && pixels;
+        const bool locked = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS &&
+                            info.width > 0 && info.height > 0 && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888 &&
+                            AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS && pixels;
         if (locked) {
             prepared.width = static_cast<int>(info.width);
             prepared.height = static_cast<int>(info.height);
             const size_t rowBytes = static_cast<size_t>(info.width) * 4;
             prepared.rgba.resize(rowBytes * static_cast<size_t>(info.height));
             for (uint32_t row = 0; row < info.height; ++row) {
-                std::memcpy(
-                    prepared.rgba.data() + static_cast<size_t>(row) * rowBytes,
-                    static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride,
-                    rowBytes
-                );
+                std::memcpy(prepared.rgba.data() + static_cast<size_t>(row) * rowBytes,
+                            static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride, rowBytes);
             }
             AndroidBitmap_unlockPixels(env, bitmap);
             for (size_t pixel = 0; pixel + 3 < prepared.rgba.size(); pixel += 4) {
@@ -223,9 +216,8 @@ bool Renderer::init(ANativeWindow* window) {
     if (!window) return false;
     JavaVM* const fontVm = vm_;
     jobject const fontActivity = activity_;
-    auto fontAtlasFuture = std::async(std::launch::async, [fontVm, fontActivity] {
-        return prepareFontAtlas(fontVm, fontActivity);
-    });
+    auto fontAtlasFuture =
+        std::async(std::launch::async, [fontVm, fontActivity] { return prepareFontAtlas(fontVm, fontActivity); });
 
     display_ = eglGetDisplay(EGL_DEFAULT_DISPLAY);
     if (display_ == EGL_NO_DISPLAY || !eglInitialize(display_, nullptr, nullptr)) {
@@ -234,15 +226,19 @@ bool Renderer::init(ANativeWindow* window) {
         return false;
     }
 
-    constexpr EGLint configAttribs[] = {
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_NONE
-    };
+    constexpr EGLint configAttribs[] = {EGL_SURFACE_TYPE,
+                                        EGL_WINDOW_BIT,
+                                        EGL_RENDERABLE_TYPE,
+                                        EGL_OPENGL_ES3_BIT,
+                                        EGL_RED_SIZE,
+                                        8,
+                                        EGL_GREEN_SIZE,
+                                        8,
+                                        EGL_BLUE_SIZE,
+                                        8,
+                                        EGL_ALPHA_SIZE,
+                                        8,
+                                        EGL_NONE};
     EGLint configCount = 0;
     if (!eglChooseConfig(display_, configAttribs, &config_, 1, &configCount) || configCount < 1) {
         __android_log_print(ANDROID_LOG_ERROR, kTag, "eglChooseConfig failed");
@@ -257,7 +253,8 @@ bool Renderer::init(ANativeWindow* window) {
     surface_ = eglCreateWindowSurface(display_, config_, window, nullptr);
     constexpr EGLint contextAttribs[] = {EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE};
     context_ = eglCreateContext(display_, config_, EGL_NO_CONTEXT, contextAttribs);
-    if (surface_ == EGL_NO_SURFACE || context_ == EGL_NO_CONTEXT || !eglMakeCurrent(display_, surface_, surface_, context_)) {
+    if (surface_ == EGL_NO_SURFACE || context_ == EGL_NO_CONTEXT ||
+        !eglMakeCurrent(display_, surface_, surface_, context_)) {
         __android_log_print(ANDROID_LOG_ERROR, kTag, "Unable to create EGL surface/context");
         shutdown();
         return false;
@@ -338,11 +335,14 @@ bool Renderer::init(ANativeWindow* window) {
     glGenBuffers(1, &textureVbo_);
     glBindVertexArray(textureVao_);
     glBindBuffer(GL_ARRAY_BUFFER, textureVbo_);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex), reinterpret_cast<void*>(offsetof(TextureVertex, x)));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex),
+                          reinterpret_cast<void*>(offsetof(TextureVertex, x)));
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex), reinterpret_cast<void*>(offsetof(TextureVertex, u)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex),
+                          reinterpret_cast<void*>(offsetof(TextureVertex, u)));
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex), reinterpret_cast<void*>(offsetof(TextureVertex, localX)));
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex),
+                          reinterpret_cast<void*>(offsetof(TextureVertex, localX)));
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
 
@@ -362,7 +362,8 @@ bool Renderer::init(ANativeWindow* window) {
         fontAtlasAttempted_ = false;
         loadFontAtlas();
     }
-    __android_log_print(ANDROID_LOG_INFO, kTag, "Renderer initialized at %dx%d (generation %llu)", surfaceWidth_, surfaceHeight_, static_cast<unsigned long long>(generation_));
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Renderer initialized at %dx%d (generation %llu)", surfaceWidth_,
+                        surfaceHeight_, static_cast<unsigned long long>(generation_));
     return true;
 }
 
@@ -403,7 +404,8 @@ bool Renderer::attachWindow(ANativeWindow* window) {
     eglQuerySurface(display_, surface_, EGL_WIDTH, &surfaceWidth_);
     eglQuerySurface(display_, surface_, EGL_HEIGHT, &surfaceHeight_);
     glViewport(0, 0, surfaceWidth_, surfaceHeight_);
-    __android_log_print(ANDROID_LOG_INFO, kTag, "Reattached EGL window surface at %dx%d", surfaceWidth_, surfaceHeight_);
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Reattached EGL window surface at %dx%d", surfaceWidth_,
+                        surfaceHeight_);
     return true;
 }
 
@@ -465,12 +467,8 @@ void Renderer::beginFrame() {
     if (!ready()) return;
     glViewport(0, 0, surfaceWidth_, surfaceHeight_);
     glDisable(GL_SCISSOR_TEST);
-    glClearColor(
-        material_tv::background.r,
-        material_tv::background.g,
-        material_tv::background.b,
-        material_tv::background.a
-    );
+    glClearColor(material_tv::background.r, material_tv::background.g, material_tv::background.b,
+                 material_tv::background.a);
     glClear(GL_COLOR_BUFFER_BIT);
     vertices_.clear();
 }
@@ -519,7 +517,8 @@ void Renderer::flush() {
     glUniform2f(resolutionLocation_, logicalWidth(), logicalHeight());
     glBindVertexArray(vao_);
     glBindBuffer(GL_ARRAY_BUFFER, vbo_);
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices_.size() * sizeof(Vertex)), vertices_.data(), GL_STREAM_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(vertices_.size() * sizeof(Vertex)), vertices_.data(),
+                 GL_STREAM_DRAW);
     glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(vertices_.size()));
     glBindVertexArray(0);
     vertices_.clear();
@@ -582,14 +581,10 @@ void Renderer::roundedRect(float x, float y, float w, float h, float radius, Col
         int point = 0;
         for (const auto& corner : corners) {
             for (int i = 0; i <= segmentsPerCorner; ++i) {
-                const float angle = corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
+                const float angle =
+                    corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
                 points[static_cast<size_t>(point++)] = Vertex{
-                    corner[0] + std::cos(angle) * pr,
-                    corner[1] + std::sin(angle) * pr,
-                    c.r,
-                    c.g,
-                    c.b,
-                    alpha,
+                    corner[0] + std::cos(angle) * pr, corner[1] + std::sin(angle) * pr, c.r, c.g, c.b, alpha,
                 };
             }
         }
@@ -602,16 +597,16 @@ void Renderer::roundedRect(float x, float y, float w, float h, float radius, Col
     for (int i = 0; i < pointCount; ++i) {
         const int next = (i + 1) % pointCount;
         vertices_.insert(vertices_.end(), {
-            center,
-            opaque[static_cast<size_t>(i)],
-            opaque[static_cast<size_t>(next)],
-            opaque[static_cast<size_t>(i)],
-            edge[static_cast<size_t>(i)],
-            edge[static_cast<size_t>(next)],
-            opaque[static_cast<size_t>(i)],
-            edge[static_cast<size_t>(next)],
-            opaque[static_cast<size_t>(next)],
-        });
+                                              center,
+                                              opaque[static_cast<size_t>(i)],
+                                              opaque[static_cast<size_t>(next)],
+                                              opaque[static_cast<size_t>(i)],
+                                              edge[static_cast<size_t>(i)],
+                                              edge[static_cast<size_t>(next)],
+                                              opaque[static_cast<size_t>(i)],
+                                              edge[static_cast<size_t>(next)],
+                                              opaque[static_cast<size_t>(next)],
+                                          });
     }
 }
 
@@ -650,9 +645,8 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
     // which made rounded pill corners look visibly soft on a 1080p TV. Keep
     // thick focus rings unchanged, but give thin strokes a substantially
     // narrower antialias fringe and a solid center.
-    const float feather = thickness <= 2.0f
-        ? std::min({0.35f, thickness * 0.20f, std::max(0.15f, radius * 0.10f)})
-        : std::min({1.0f, thickness * 0.35f, std::max(0.25f, radius * 0.25f)});
+    const float feather = thickness <= 2.0f ? std::min({0.35f, thickness * 0.20f, std::max(0.15f, radius * 0.10f)})
+                                            : std::min({1.0f, thickness * 0.35f, std::max(0.25f, radius * 0.25f)});
 
     auto perimeter = [&](float inset, float alpha) {
         std::array<Vertex, pointCount> points{};
@@ -670,14 +664,10 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
         int point = 0;
         for (const auto& corner : corners) {
             for (int i = 0; i <= segmentsPerCorner; ++i) {
-                const float angle = corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
+                const float angle =
+                    corner[2] + (pi * 0.5f * static_cast<float>(i) / static_cast<float>(segmentsPerCorner));
                 points[static_cast<size_t>(point++)] = Vertex{
-                    corner[0] + std::cos(angle) * pr,
-                    corner[1] + std::sin(angle) * pr,
-                    c.r,
-                    c.g,
-                    c.b,
-                    alpha,
+                    corner[0] + std::cos(angle) * pr, corner[1] + std::sin(angle) * pr, c.r, c.g, c.b, alpha,
                 };
             }
         }
@@ -692,13 +682,13 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
         for (int i = 0; i < pointCount; ++i) {
             const int next = (i + 1) % pointCount;
             vertices_.insert(vertices_.end(), {
-                outer[static_cast<size_t>(i)],
-                outer[static_cast<size_t>(next)],
-                inner[static_cast<size_t>(next)],
-                outer[static_cast<size_t>(i)],
-                inner[static_cast<size_t>(next)],
-                inner[static_cast<size_t>(i)],
-            });
+                                                  outer[static_cast<size_t>(i)],
+                                                  outer[static_cast<size_t>(next)],
+                                                  inner[static_cast<size_t>(next)],
+                                                  outer[static_cast<size_t>(i)],
+                                                  inner[static_cast<size_t>(next)],
+                                                  inner[static_cast<size_t>(i)],
+                                              });
         }
     };
     appendRing(outerEdge, outerOpaque);
@@ -763,51 +753,18 @@ void Renderer::image(GLuint texture, float x, float y, float w, float h, float a
     imageRegion(texture, x, y, w, h, 0.0f, 0.0f, 1.0f, 1.0f, alpha);
 }
 
-void Renderer::imageRegion(
-    GLuint texture,
-    float x,
-    float y,
-    float w,
-    float h,
-    float u0,
-    float v0,
-    float u1,
-    float v1,
-    float alpha
-) {
+void Renderer::imageRegion(GLuint texture, float x, float y, float w, float h, float u0, float v0, float u1, float v1,
+                           float alpha) {
     imageRegionTint(texture, x, y, w, h, u0, v0, u1, v1, Color{1.0f, 1.0f, 1.0f, 1.0f}, alpha);
 }
 
-void Renderer::roundedImageRegion(
-    GLuint texture,
-    float x,
-    float y,
-    float w,
-    float h,
-    float radius,
-    float u0,
-    float v0,
-    float u1,
-    float v1,
-    float alpha
-) {
+void Renderer::roundedImageRegion(GLuint texture, float x, float y, float w, float h, float radius, float u0, float v0,
+                                  float u1, float v1, float alpha) {
     imageRegionTint(texture, x, y, w, h, u0, v0, u1, v1, Color{1.0f, 1.0f, 1.0f, 1.0f}, alpha, radius);
 }
 
-void Renderer::imageRegionTint(
-    GLuint texture,
-    float x,
-    float y,
-    float w,
-    float h,
-    float u0,
-    float v0,
-    float u1,
-    float v1,
-    Color tint,
-    float alpha,
-    float radius
-) {
+void Renderer::imageRegionTint(GLuint texture, float x, float y, float w, float h, float u0, float v0, float u1,
+                               float v1, Color tint, float alpha, float radius) {
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f) return;
     flush();
     x = uiOffsetX_ + x * uiScale_;
@@ -815,12 +772,8 @@ void Renderer::imageRegionTint(
     w *= uiScale_;
     h *= uiScale_;
     const TextureVertex vertices[] = {
-        {x, y, u0, v0, 0.0f, 0.0f},
-        {x + w, y, u1, v0, w, 0.0f},
-        {x + w, y + h, u1, v1, w, h},
-        {x, y, u0, v0, 0.0f, 0.0f},
-        {x + w, y + h, u1, v1, w, h},
-        {x, y + h, u0, v1, 0.0f, h},
+        {x, y, u0, v0, 0.0f, 0.0f}, {x + w, y, u1, v0, w, 0.0f},  {x + w, y + h, u1, v1, w, h},
+        {x, y, u0, v0, 0.0f, 0.0f}, {x + w, y + h, u1, v1, w, h}, {x, y + h, u0, v1, 0.0f, h},
     };
     glUseProgram(textureProgram_);
     glUniform2f(textureResolutionLocation_, logicalWidth(), logicalHeight());
@@ -877,32 +830,23 @@ bool Renderer::ensureExternalProgram() {
     glGenBuffers(1, &externalVbo_);
     glBindVertexArray(externalVao_);
     glBindBuffer(GL_ARRAY_BUFFER, externalVbo_);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex), reinterpret_cast<void*>(offsetof(TextureVertex, x)));
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex),
+                          reinterpret_cast<void*>(offsetof(TextureVertex, x)));
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex), reinterpret_cast<void*>(offsetof(TextureVertex, u)));
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, sizeof(TextureVertex),
+                          reinterpret_cast<void*>(offsetof(TextureVertex, u)));
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
     return true;
 }
 
-bool Renderer::externalImage(
-    GLuint texture,
-    float x,
-    float y,
-    float w,
-    float h,
-    const std::array<float, 16>& transform,
-    float alpha
-) {
+bool Renderer::externalImage(GLuint texture, float x, float y, float w, float h, const std::array<float, 16>& transform,
+                             float alpha) {
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f || !ensureExternalProgram()) return false;
     flush();
     const TextureVertex vertices[] = {
-        {x, y, 0.0f, 0.0f, 0.0f, 0.0f},
-        {x + w, y, 1.0f, 0.0f, 0.0f, 0.0f},
-        {x + w, y + h, 1.0f, 1.0f, 0.0f, 0.0f},
-        {x, y, 0.0f, 0.0f, 0.0f, 0.0f},
-        {x + w, y + h, 1.0f, 1.0f, 0.0f, 0.0f},
-        {x, y + h, 0.0f, 1.0f, 0.0f, 0.0f},
+        {x, y, 0.0f, 0.0f, 0.0f, 0.0f}, {x + w, y, 1.0f, 0.0f, 0.0f, 0.0f},     {x + w, y + h, 1.0f, 1.0f, 0.0f, 0.0f},
+        {x, y, 0.0f, 0.0f, 0.0f, 0.0f}, {x + w, y + h, 1.0f, 1.0f, 0.0f, 0.0f}, {x, y + h, 0.0f, 1.0f, 0.0f, 0.0f},
     };
     glUseProgram(externalProgram_);
     glUniform2f(externalResolutionLocation_, logicalWidth(), logicalHeight());
@@ -923,11 +867,9 @@ GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
     if (!env || !bitmap) return 0;
     AndroidBitmapInfo info{};
     void* pixels = nullptr;
-    const bool locked = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS
-        && info.width > 0 && info.height > 0
-        && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888
-        && AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS
-        && pixels;
+    const bool locked = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS && info.width > 0 &&
+                        info.height > 0 && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888 &&
+                        AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS && pixels;
     if (!locked) return 0;
 
     const size_t rowBytes = static_cast<size_t>(info.width) * 4;
@@ -947,11 +889,8 @@ GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
     } else {
         std::vector<uint8_t> packed(rowBytes * static_cast<size_t>(info.height));
         for (uint32_t row = 0; row < info.height; ++row) {
-            std::memcpy(
-                packed.data() + static_cast<size_t>(row) * rowBytes,
-                static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride,
-                rowBytes
-            );
+            std::memcpy(packed.data() + static_cast<size_t>(row) * rowBytes,
+                        static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride, rowBytes);
         }
         for (size_t pixel = 0; pixel < pixelCount; ++pixel) {
             const size_t offset = pixel * 4;
@@ -981,12 +920,8 @@ bool Renderer::loadFontAtlas() {
         __android_log_print(ANDROID_LOG_WARN, kTag, "System font atlas unavailable; using pixel fallback");
         return false;
     }
-    __android_log_print(
-        ANDROID_LOG_INFO,
-        kTag,
-        "Loaded proportional antialiased Android system font atlas (metrics=%d)",
-        fontAdvancesReady_
-    );
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "Loaded proportional antialiased Android system font atlas (metrics=%d)", fontAdvancesReady_);
     return true;
 }
 
@@ -998,9 +933,9 @@ bool Renderer::loadFontOutlineAtlas() {
     JNIEnv* env = scoped.get();
     if (!env) return false;
     jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID createOutlineAtlas = activityClass
-        ? env->GetMethodID(activityClass, "createFontOutlineAtlas", "()Landroid/graphics/Bitmap;")
-        : nullptr;
+    jmethodID createOutlineAtlas =
+        activityClass ? env->GetMethodID(activityClass, "createFontOutlineAtlas", "()Landroid/graphics/Bitmap;")
+                      : nullptr;
     jobject bitmap = createOutlineAtlas ? env->CallObjectMethod(activity_, createOutlineAtlas) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
@@ -1065,35 +1000,20 @@ void Renderer::textCentered(float x, float y, float w, float h, float scale, std
     int lineIndex = 0;
     while (lineStart <= value.size()) {
         const size_t lineEnd = value.find('\n', lineStart);
-        const std::string_view line = lineEnd == std::string_view::npos
-            ? value.substr(lineStart)
-            : value.substr(lineStart, lineEnd - lineStart);
+        const std::string_view line =
+            lineEnd == std::string_view::npos ? value.substr(lineStart) : value.substr(lineStart, lineEnd - lineStart);
         const float width = textWidth(scale, line);
         const float textX = x + std::max(0.0f, (w - width) * 0.5f);
-        textVerticallyCentered(
-            textX,
-            firstLineY + static_cast<float>(lineIndex) * lineHeight,
-            visualHeight,
-            scale,
-            line,
-            color,
-            std::max(0.0f, w)
-        );
+        textVerticallyCentered(textX, firstLineY + static_cast<float>(lineIndex) * lineHeight, visualHeight, scale,
+                               line, color, std::max(0.0f, w));
         if (lineEnd == std::string_view::npos) break;
         lineStart = lineEnd + 1;
         ++lineIndex;
     }
 }
 
-void Renderer::textVerticallyCentered(
-    float x,
-    float y,
-    float h,
-    float scale,
-    std::string_view value,
-    Color color,
-    float maxWidth
-) {
+void Renderer::textVerticallyCentered(float x, float y, float h, float scale, std::string_view value, Color color,
+                                      float maxWidth) {
     const float effectiveScale = scale * textScale_;
     const float visualHeight = (fontTexture_ ? 10.0f : 7.0f) * effectiveScale;
     const float atlasOffset = fontTexture_ ? 0.45f * effectiveScale : 0.0f;
@@ -1101,15 +1021,8 @@ void Renderer::textVerticallyCentered(
     text(x, textY, scale, value, color, maxWidth);
 }
 
-void Renderer::textWithAtlas(
-    GLuint atlasTexture,
-    float x,
-    float y,
-    float scale,
-    std::string_view value,
-    Color color,
-    float maxWidth
-) {
+void Renderer::textWithAtlas(GLuint atlasTexture, float x, float y, float scale, std::string_view value, Color color,
+                             float maxWidth) {
     std::string transformed;
     std::string_view display = value;
     if (std::any_of(value.begin(), value.end(), [](unsigned char byte) { return byte >= 0x80; })) {
@@ -1163,13 +1076,13 @@ void Renderer::textWithAtlas(
                 const float u1 = static_cast<float>(column + 1) / atlasColumns;
                 const float v1 = static_cast<float>(row + 1) / atlasRows;
                 textVertices_.insert(textVertices_.end(), {
-                    {px, py, u0, v0, 0.0f, 0.0f},
-                    {px + pw, py, u1, v0, pw, 0.0f},
-                    {px + pw, py + ph, u1, v1, pw, ph},
-                    {px, py, u0, v0, 0.0f, 0.0f},
-                    {px + pw, py + ph, u1, v1, pw, ph},
-                    {px, py + ph, u0, v1, 0.0f, ph},
-                });
+                                                              {px, py, u0, v0, 0.0f, 0.0f},
+                                                              {px + pw, py, u1, v0, pw, 0.0f},
+                                                              {px + pw, py + ph, u1, v1, pw, ph},
+                                                              {px, py, u0, v0, 0.0f, 0.0f},
+                                                              {px + pw, py + ph, u1, v1, pw, ph},
+                                                              {px, py + ph, u0, v1, 0.0f, ph},
+                                                          });
             }
             x += advance;
         }
@@ -1180,22 +1093,15 @@ void Renderer::textWithAtlas(
             glUniform2f(textureResolutionLocation_, logicalWidth(), logicalHeight());
             glUniform1f(textureAlphaLocation_, 1.0f);
             glUniform4f(textureTintLocation_, color.r, color.g, color.b, color.a);
-            glUniform2f(
-                textureRectSizeLocation_,
-                atlasCellWidthUi * scale * uiScale_,
-                atlasCellHeightUi * scale * uiScale_
-            );
+            glUniform2f(textureRectSizeLocation_, atlasCellWidthUi * scale * uiScale_,
+                        atlasCellHeightUi * scale * uiScale_);
             glUniform1f(textureRadiusLocation_, 0.0f);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, atlasTexture);
             glBindVertexArray(textureVao_);
             glBindBuffer(GL_ARRAY_BUFFER, textureVbo_);
-            glBufferData(
-                GL_ARRAY_BUFFER,
-                static_cast<GLsizeiptr>(textVertices_.size() * sizeof(TextureVertex)),
-                textVertices_.data(),
-                GL_STREAM_DRAW
-            );
+            glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(textVertices_.size() * sizeof(TextureVertex)),
+                         textVertices_.data(), GL_STREAM_DRAW);
             glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(textVertices_.size()));
             glBindVertexArray(0);
             glBindTexture(GL_TEXTURE_2D, 0);
@@ -1234,85 +1140,143 @@ void Renderer::text(float x, float y, float scale, std::string_view value, Color
     textWithAtlas(fontTexture_, x, y, scale, value, color, maxWidth);
 }
 
-void Renderer::outlinedText(
-    float x,
-    float y,
-    float scale,
-    std::string_view value,
-    Color fill,
-    Color outline,
-    float maxWidth
-) {
+void Renderer::outlinedText(float x, float y, float scale, std::string_view value, Color fill, Color outline,
+                            float maxWidth) {
     if (!fontOutlineTexture_) loadFontOutlineAtlas();
-    if (fontOutlineTexture_) textWithAtlas(fontOutlineTexture_, x, y, scale, value, outline, maxWidth);
-    else textWithAtlas(fontTexture_, x + 2.0f, y + 2.0f, scale, value, outline, maxWidth);
+    if (fontOutlineTexture_)
+        textWithAtlas(fontOutlineTexture_, x, y, scale, value, outline, maxWidth);
+    else
+        textWithAtlas(fontTexture_, x + 2.0f, y + 2.0f, scale, value, outline, maxWidth);
     textWithAtlas(fontTexture_, x, y, scale, value, fill, maxWidth);
 }
 
 std::array<uint8_t, 7> Renderer::glyph(char c) const {
     switch (c) {
-        case 'A': return {14,17,17,31,17,17,17};
-        case 'B': return {30,17,17,30,17,17,30};
-        case 'C': return {14,17,16,16,16,17,14};
-        case 'D': return {30,17,17,17,17,17,30};
-        case 'E': return {31,16,16,30,16,16,31};
-        case 'F': return {31,16,16,30,16,16,16};
-        case 'G': return {14,17,16,23,17,17,15};
-        case 'H': return {17,17,17,31,17,17,17};
-        case 'I': return {31,4,4,4,4,4,31};
-        case 'J': return {7,2,2,2,18,18,12};
-        case 'K': return {17,18,20,24,20,18,17};
-        case 'L': return {16,16,16,16,16,16,31};
-        case 'M': return {17,27,21,21,17,17,17};
-        case 'N': return {17,25,21,19,17,17,17};
-        case 'O': return {14,17,17,17,17,17,14};
-        case 'P': return {30,17,17,30,16,16,16};
-        case 'Q': return {14,17,17,17,21,18,13};
-        case 'R': return {30,17,17,30,20,18,17};
-        case 'S': return {15,16,16,14,1,1,30};
-        case 'T': return {31,4,4,4,4,4,4};
-        case 'U': return {17,17,17,17,17,17,14};
-        case 'V': return {17,17,17,17,17,10,4};
-        case 'W': return {17,17,17,21,21,21,10};
-        case 'X': return {17,17,10,4,10,17,17};
-        case 'Y': return {17,17,10,4,4,4,4};
-        case 'Z': return {31,1,2,4,8,16,31};
-        case '0': return {14,17,19,21,25,17,14};
-        case '1': return {4,12,4,4,4,4,14};
-        case '2': return {14,17,1,2,4,8,31};
-        case '3': return {30,1,1,14,1,1,30};
-        case '4': return {2,6,10,18,31,2,2};
-        case '5': return {31,16,16,30,1,1,30};
-        case '6': return {14,16,16,30,17,17,14};
-        case '7': return {31,1,2,4,8,8,8};
-        case '8': return {14,17,17,14,17,17,14};
-        case '9': return {14,17,17,15,1,1,14};
-        case '.': return {0,0,0,0,0,12,12};
-        case ',': return {0,0,0,0,0,12,8};
-        case ':': return {0,12,12,0,12,12,0};
-        case ';': return {0,12,12,0,12,8,0};
-        case '!': return {4,4,4,4,4,0,4};
-        case '?': return {14,17,1,2,4,0,4};
-        case '-': return {0,0,0,31,0,0,0};
-        case '_': return {0,0,0,0,0,0,31};
-        case '/': return {1,2,2,4,8,8,16};
-        case '\\': return {16,8,8,4,2,2,1};
-        case '@': return {14,17,23,21,23,16,14};
-        case '(': return {2,4,8,8,8,4,2};
-        case ')': return {8,4,2,2,2,4,8};
-        case '[': return {14,8,8,8,8,8,14};
-        case ']': return {14,2,2,2,2,2,14};
-        case '+': return {0,4,4,31,4,4,0};
-        case '=': return {0,0,31,0,31,0,0};
-        case '%': return {17,2,4,8,16,17,0};
-        case '#': return {10,31,10,10,31,10,0};
-        case '*': return {0,21,14,31,14,21,0};
-        case '\'': return {4,4,2,0,0,0,0};
-        case '"': return {10,10,0,0,0,0,0};
-        case '<': return {1,2,4,8,4,2,1};
-        case '>': return {16,8,4,2,4,8,16};
-        case '|': return {4,4,4,4,4,4,4};
-        case ' ': return {0,0,0,0,0,0,0};
-        default: return {31,17,1,2,4,0,4};
+    case 'A':
+        return {14, 17, 17, 31, 17, 17, 17};
+    case 'B':
+        return {30, 17, 17, 30, 17, 17, 30};
+    case 'C':
+        return {14, 17, 16, 16, 16, 17, 14};
+    case 'D':
+        return {30, 17, 17, 17, 17, 17, 30};
+    case 'E':
+        return {31, 16, 16, 30, 16, 16, 31};
+    case 'F':
+        return {31, 16, 16, 30, 16, 16, 16};
+    case 'G':
+        return {14, 17, 16, 23, 17, 17, 15};
+    case 'H':
+        return {17, 17, 17, 31, 17, 17, 17};
+    case 'I':
+        return {31, 4, 4, 4, 4, 4, 31};
+    case 'J':
+        return {7, 2, 2, 2, 18, 18, 12};
+    case 'K':
+        return {17, 18, 20, 24, 20, 18, 17};
+    case 'L':
+        return {16, 16, 16, 16, 16, 16, 31};
+    case 'M':
+        return {17, 27, 21, 21, 17, 17, 17};
+    case 'N':
+        return {17, 25, 21, 19, 17, 17, 17};
+    case 'O':
+        return {14, 17, 17, 17, 17, 17, 14};
+    case 'P':
+        return {30, 17, 17, 30, 16, 16, 16};
+    case 'Q':
+        return {14, 17, 17, 17, 21, 18, 13};
+    case 'R':
+        return {30, 17, 17, 30, 20, 18, 17};
+    case 'S':
+        return {15, 16, 16, 14, 1, 1, 30};
+    case 'T':
+        return {31, 4, 4, 4, 4, 4, 4};
+    case 'U':
+        return {17, 17, 17, 17, 17, 17, 14};
+    case 'V':
+        return {17, 17, 17, 17, 17, 10, 4};
+    case 'W':
+        return {17, 17, 17, 21, 21, 21, 10};
+    case 'X':
+        return {17, 17, 10, 4, 10, 17, 17};
+    case 'Y':
+        return {17, 17, 10, 4, 4, 4, 4};
+    case 'Z':
+        return {31, 1, 2, 4, 8, 16, 31};
+    case '0':
+        return {14, 17, 19, 21, 25, 17, 14};
+    case '1':
+        return {4, 12, 4, 4, 4, 4, 14};
+    case '2':
+        return {14, 17, 1, 2, 4, 8, 31};
+    case '3':
+        return {30, 1, 1, 14, 1, 1, 30};
+    case '4':
+        return {2, 6, 10, 18, 31, 2, 2};
+    case '5':
+        return {31, 16, 16, 30, 1, 1, 30};
+    case '6':
+        return {14, 16, 16, 30, 17, 17, 14};
+    case '7':
+        return {31, 1, 2, 4, 8, 8, 8};
+    case '8':
+        return {14, 17, 17, 14, 17, 17, 14};
+    case '9':
+        return {14, 17, 17, 15, 1, 1, 14};
+    case '.':
+        return {0, 0, 0, 0, 0, 12, 12};
+    case ',':
+        return {0, 0, 0, 0, 0, 12, 8};
+    case ':':
+        return {0, 12, 12, 0, 12, 12, 0};
+    case ';':
+        return {0, 12, 12, 0, 12, 8, 0};
+    case '!':
+        return {4, 4, 4, 4, 4, 0, 4};
+    case '?':
+        return {14, 17, 1, 2, 4, 0, 4};
+    case '-':
+        return {0, 0, 0, 31, 0, 0, 0};
+    case '_':
+        return {0, 0, 0, 0, 0, 0, 31};
+    case '/':
+        return {1, 2, 2, 4, 8, 8, 16};
+    case '\\':
+        return {16, 8, 8, 4, 2, 2, 1};
+    case '@':
+        return {14, 17, 23, 21, 23, 16, 14};
+    case '(':
+        return {2, 4, 8, 8, 8, 4, 2};
+    case ')':
+        return {8, 4, 2, 2, 2, 4, 8};
+    case '[':
+        return {14, 8, 8, 8, 8, 8, 14};
+    case ']':
+        return {14, 2, 2, 2, 2, 2, 14};
+    case '+':
+        return {0, 4, 4, 31, 4, 4, 0};
+    case '=':
+        return {0, 0, 31, 0, 31, 0, 0};
+    case '%':
+        return {17, 2, 4, 8, 16, 17, 0};
+    case '#':
+        return {10, 31, 10, 10, 31, 10, 0};
+    case '*':
+        return {0, 21, 14, 31, 14, 21, 0};
+    case '\'':
+        return {4, 4, 2, 0, 0, 0, 0};
+    case '"':
+        return {10, 10, 0, 0, 0, 0, 0};
+    case '<':
+        return {1, 2, 4, 8, 4, 2, 1};
+    case '>':
+        return {16, 8, 4, 2, 4, 8, 16};
+    case '|':
+        return {4, 4, 4, 4, 4, 4, 4};
+    case ' ':
+        return {0, 0, 0, 0, 0, 0, 0};
+    default:
+        return {31, 17, 1, 2, 4, 0, 4};
     }
 }

@@ -23,16 +23,9 @@ public:
     NativeMediaPlayer(JavaVM* vm, jobject activity, const char* dataPath);
     ~NativeMediaPlayer();
 
-    void startAsync(
-        const std::string& url,
-        jobject surface,
-        int64_t startPositionMs,
-        int bufferPreset = 0,
-        int embeddedAudioOrdinal = -1,
-        int embeddedSubtitleStreamIndex = -1,
-        int embeddedSubtitleOrdinal = -1,
-        const std::string& externalSubtitleUrl = {}
-    );
+    void startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset = 0,
+                    int embeddedAudioOrdinal = -1, int embeddedSubtitleStreamIndex = -1,
+                    int embeddedSubtitleOrdinal = -1, const std::string& externalSubtitleUrl = {});
     void stop();
     void togglePause();
     void pause();
@@ -74,7 +67,8 @@ private:
     bool getDoublePropertyLocked(const char* name, double& value) const;
     std::string getStringPropertyLocked(const char* name) const;
     bool selectTrackOrdinalLocked(const char* type, const char* selectionProperty, int ordinal) const;
-    bool selectTrackStreamIndexLocked(const char* type, const char* selectionProperty, int streamIndex, int fallbackOrdinal) const;
+    bool selectTrackStreamIndexLocked(const char* type, const char* selectionProperty, int streamIndex,
+                                      int fallbackOrdinal) const;
     void applyPendingTracksLocked() const;
     void logPlaybackTelemetryLocked() const;
 

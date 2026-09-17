@@ -28,14 +28,14 @@ public:
     void clearPlaybackStartReported() { playbackStartReported_ = false; }
 
     [[nodiscard]] bool shouldReadPlayback(TimePoint now, bool force) const {
-        return force || lastPlaybackTelemetryRead_ == TimePoint{}
-            || now - lastPlaybackTelemetryRead_ >= std::chrono::milliseconds(250);
+        return force || lastPlaybackTelemetryRead_ == TimePoint{} ||
+               now - lastPlaybackTelemetryRead_ >= std::chrono::milliseconds(250);
     }
     void markPlaybackRead(TimePoint now) { lastPlaybackTelemetryRead_ = now; }
 
     [[nodiscard]] bool shouldProbeDuration(TimePoint now, bool force) const {
-        return force || lastPlaybackDurationProbe_ == TimePoint{}
-            || now - lastPlaybackDurationProbe_ >= std::chrono::seconds(2);
+        return force || lastPlaybackDurationProbe_ == TimePoint{} ||
+               now - lastPlaybackDurationProbe_ >= std::chrono::seconds(2);
     }
     void markDurationProbe(TimePoint now) { lastPlaybackDurationProbe_ = now; }
 
@@ -45,8 +45,8 @@ public:
     }
 
     [[nodiscard]] bool progressReportDue(TimePoint now, bool playbackAdvancing = true) const {
-        return playbackAdvancing
-            && (lastProgressReport_ == TimePoint{} || now - lastProgressReport_ >= std::chrono::seconds(10));
+        return playbackAdvancing &&
+               (lastProgressReport_ == TimePoint{} || now - lastProgressReport_ >= std::chrono::seconds(10));
     }
     void markProgressReport(TimePoint now) { lastProgressReport_ = now; }
 

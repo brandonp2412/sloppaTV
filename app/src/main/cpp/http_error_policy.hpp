@@ -11,10 +11,8 @@ inline std::string userFacingJavaHttpError(std::string_view where, std::string_v
     // HttpURLConnection wraps the useful network cause in the Throwable text. Keep
     // connection failures actionable in the TV UI instead of presenting raw JNI/Java
     // exception names. The full Throwable remains in logcat for diagnostics.
-    if (httpErrorContains(detail, "CertPathValidatorException")
-        || httpErrorContains(detail, "CertificateException")
-        || httpErrorContains(detail, "SSLPeerUnverifiedException")
-        || httpErrorContains(detail, "SSLHandshakeException")) {
+    if (httpErrorContains(detail, "CertPathValidatorException") || httpErrorContains(detail, "CertificateException") ||
+        httpErrorContains(detail, "SSLPeerUnverifiedException") || httpErrorContains(detail, "SSLHandshakeException")) {
         return "TLS certificate validation failed";
     }
     if (httpErrorContains(detail, "UnknownHostException")) {

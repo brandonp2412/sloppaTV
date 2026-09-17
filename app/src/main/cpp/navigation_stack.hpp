@@ -3,8 +3,7 @@
 #include <cstddef>
 #include <vector>
 
-template <typename Screen>
-class NavigationStack {
+template <typename Screen> class NavigationStack {
 public:
     explicit NavigationStack(Screen root) : entries_{root} {}
 
@@ -28,13 +27,17 @@ public:
     }
 
     void replace(Screen screen) {
-        if (entries_.empty()) entries_.push_back(screen);
-        else entries_.back() = screen;
+        if (entries_.empty())
+            entries_.push_back(screen);
+        else
+            entries_.back() = screen;
     }
 
     Screen popOr(Screen fallback) {
-        if (entries_.size() > 1) entries_.pop_back();
-        else if (entries_.empty()) entries_.push_back(fallback);
+        if (entries_.size() > 1)
+            entries_.pop_back();
+        else if (entries_.empty())
+            entries_.push_back(fallback);
         return entries_.back();
     }
 
