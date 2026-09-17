@@ -1,5 +1,6 @@
 #pragma once
 
+#include "audio_policy.hpp"
 #include "media_player_policy.hpp"
 #include "playback_continuation.hpp"
 #include "playback_queue.hpp"
@@ -676,6 +677,34 @@ public:
             sessionState_.activeTarget(),
             trackState_
         );
+    }
+
+    void rememberAudioLanguagePreference(int streamIndex) {
+        const auto& audios = sessionState_.activeItem().audios;
+        const auto selected = std::find_if(audios.begin(), audios.end(), [&](const JellyfinAudioStream& audio) {
+            return audio.index == streamIndex;
+        });
+        if (selected != audios.end() && !selected->language.empty()) {
+            trackState_.setAudioLanguagePreference(normalizeAudioLanguage(selected->language));
+        } else {
+            trackState_.setAudioLanguagePreference(std::nullopt);
+        }
+    }
+
+    void rememberSubtitleLanguagePreference(int streamIndex) {
+        if (streamIndex < 0) {
+            trackState_.setSubtitleLanguagePreference(std::string{});
+            return;
+        }
+        const auto& subtitles = sessionState_.activeItem().subtitles;
+        const auto selected = std::find_if(subtitles.begin(), subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+            return subtitle.index == streamIndex;
+        });
+        if (selected != subtitles.end() && !selected->language.empty()) {
+            trackState_.setSubtitleLanguagePreference(normalizeSubtitleLanguage(selected->language));
+        } else {
+            trackState_.setSubtitleLanguagePreference(std::nullopt);
+        }
     }
 
     void selectAudioStream(int streamIndex) {

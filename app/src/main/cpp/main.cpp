@@ -1888,19 +1888,6 @@ private:
         return type == 2 ? "DEFAULT" : "OFF";
     }
 
-    void rememberPlaybackAudioPreference(int streamIndex) {
-        const auto selected = std::find_if(
-            playbackSessionState_.activeItem().audios.begin(),
-            playbackSessionState_.activeItem().audios.end(),
-            [&](const JellyfinAudioStream& audio) { return audio.index == streamIndex; }
-        );
-        if (selected != playbackSessionState_.activeItem().audios.end() && !selected->language.empty()) {
-            trackState_.setAudioLanguagePreference(normalizeAudioLanguage(selected->language));
-        } else {
-            trackState_.setAudioLanguagePreference(std::nullopt);
-        }
-    }
-
     void cycleAudioTrack() {
         const PlaybackAudioCyclePlan plan = planPlaybackAudioTrackCycle(
             playbackSessionState_.activeItem(),
@@ -1914,7 +1901,7 @@ private:
             return;
         }
 
-        rememberPlaybackAudioPreference(plan.audioStreamIndex);
+        playbackCoordinator_.rememberAudioLanguagePreference(plan.audioStreamIndex);
         refreshPlaybackTelemetry(true);
         const int switchPositionMs = playerScreenState_.positionMs();
         if (plan.tryEmbeddedSwitch
@@ -1938,25 +1925,6 @@ private:
 
     bool subtitleAllowed(const JellyfinSubtitleStream& subtitle) const {
         return playbackSubtitleAllowed(subtitle, settings_.subtitleLanguages);
-    }
-
-    void rememberPlaybackSubtitlePreference(int streamIndex) {
-        if (streamIndex < 0) {
-            trackState_.setSubtitleLanguagePreference(std::string{});
-            return;
-        }
-        const auto selected = std::find_if(
-            playbackSessionState_.activeItem().subtitles.begin(),
-            playbackSessionState_.activeItem().subtitles.end(),
-            [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == streamIndex; }
-        );
-        if (selected != playbackSessionState_.activeItem().subtitles.end() && !selected->language.empty()) {
-            trackState_.setSubtitleLanguagePreference(normalizeSubtitleLanguage(selected->language));
-        } else {
-            // An unlabelled subtitle can be selected for this item, but there is no stable
-            // language key to carry to a different episode. Let Jellyfin choose again next time.
-            trackState_.setSubtitleLanguagePreference(std::nullopt);
-        }
     }
 
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
@@ -2132,7 +2100,7 @@ private:
             return;
         }
 
-        rememberPlaybackSubtitlePreference(plan.subtitleStreamIndex);
+        playbackCoordinator_.rememberSubtitleLanguagePreference(plan.subtitleStreamIndex);
         if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer
             && player_.disableSubtitles()) {
             playbackCoordinator_.selectSubtitleStream(kSubtitleOffIndex);

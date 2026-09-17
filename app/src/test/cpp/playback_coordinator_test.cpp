@@ -98,6 +98,29 @@ int main() {
     subtitleCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
     assert(!subtitleCoordinator.subtitleFallbackPlan().retry);
 
+    PlaybackCoordinator preferenceCoordinator;
+    JellyfinItem preferenceItem;
+    preferenceItem.id = "preferences";
+    preferenceItem.audios = {
+        {.index = 2, .channels = 2, .codec = "aac", .language = "EN", .title = "English", .isDefault = true},
+        {.index = 3, .channels = 2, .codec = "aac", .language = "", .title = "Unlabelled", .isDefault = false},
+    };
+    preferenceItem.subtitles = {
+        {.index = 4, .codec = "srt", .language = "English", .title = "English", .forced = false, .isDefault = true, .isExternal = true},
+        {.index = 5, .codec = "srt", .language = "", .title = "Unlabelled", .forced = false, .isDefault = false, .isExternal = true},
+    };
+    preferenceCoordinator.activate(preferenceItem, coordinatedTarget, now);
+    preferenceCoordinator.rememberAudioLanguagePreference(2);
+    assert(preferenceCoordinator.tracks().audioLanguagePreference() == std::optional<std::string>{"en"});
+    preferenceCoordinator.rememberAudioLanguagePreference(3);
+    assert(!preferenceCoordinator.tracks().audioLanguagePreference().has_value());
+    preferenceCoordinator.rememberSubtitleLanguagePreference(4);
+    assert(preferenceCoordinator.tracks().subtitleLanguagePreference() == std::optional<std::string>{"eng"});
+    preferenceCoordinator.rememberSubtitleLanguagePreference(5);
+    assert(!preferenceCoordinator.tracks().subtitleLanguagePreference().has_value());
+    preferenceCoordinator.rememberSubtitleLanguagePreference(kSubtitleOffIndex);
+    assert(preferenceCoordinator.tracks().subtitleLanguagePreference() == std::optional<std::string>{""});
+
     PlaybackCoordinator restartCoordinator;
     restartCoordinator.activate(coordinatedItem, coordinatedTarget, now);
     assert(restartCoordinator.telemetry().markPlaybackStartReported());
