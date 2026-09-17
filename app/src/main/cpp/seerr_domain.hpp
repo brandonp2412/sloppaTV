@@ -6,6 +6,10 @@
 #include "seerr_storage_state.hpp"
 
 #include <optional>
+#include <string>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 class SeerrDomainState {
 public:
@@ -22,6 +26,18 @@ public:
         RequestAction action = RequestAction::Invalid;
         bool refreshStorage = false;
         std::optional<SeerrStorageTarget> target;
+    };
+
+    enum class RefreshOutcome {
+        StaleEndpoint,
+        Failed,
+        Applied,
+    };
+
+    struct StorageRefreshCompletion {
+        RefreshOutcome outcome = RefreshOutcome::Failed;
+        bool reconnect = false;
+        bool clearedPendingRequest = false;
     };
 
     [[nodiscard]] SeerrConnectionState& connection() { return connection_; }
@@ -79,6 +95,44 @@ public:
         if (!connection_.connecting()) return false;
         connection_.deferSearchRetry();
         return true;
+    }
+
+    [[nodiscard]] RefreshOutcome completePendingRefresh(const SeerrEndpoint& requestedEndpoint,
+                                                         const SeerrEndpoint& currentEndpoint, bool ok,
+                                                         std::vector<SeerrMediaItem> pending,
+                                                         SeerrRequestState::TimePoint now) {
+        if (!requestedEndpoint.matches(currentEndpoint.server, currentEndpoint.auth)) {
+            requests_.invalidatePendingRefresh(now);
+            return RefreshOutcome::StaleEndpoint;
+        }
+        if (!ok) {
+            requests_.failPendingRefresh(now);
+            return RefreshOutcome::Failed;
+        }
+        requests_.finishPendingRefresh(std::move(pending), now);
+        return RefreshOutcome::Applied;
+    }
+
+    [[nodiscard]] StorageRefreshCompletion completeStorageRefresh(
+        const SeerrEndpoint& requestedEndpoint, const SeerrEndpoint& currentEndpoint, bool ok,
+        std::vector<SeerrStorageTarget> targets, std::string_view error, SeerrStorageState::TimePoint now) {
+        if (!requestedEndpoint.matches(currentEndpoint.server, currentEndpoint.auth)) {
+            storage_.invalidateRefresh();
+            return {.outcome = RefreshOutcome::StaleEndpoint};
+        }
+        if (!ok) {
+            storage_.failRefresh(std::string(error));
+            const bool reconnect = isSeerrAuthError(error) && !currentEndpoint.auth.sessionCookie.empty();
+            const bool clearPendingRequest = !reconnect && storage_.pendingRequest().has_value();
+            if (clearPendingRequest) storage_.clearPendingRequest();
+            return {
+                .outcome = RefreshOutcome::Failed,
+                .reconnect = reconnect,
+                .clearedPendingRequest = clearPendingRequest,
+            };
+        }
+        storage_.finishRefresh(std::move(targets), now);
+        return {.outcome = RefreshOutcome::Applied};
     }
 
 private:

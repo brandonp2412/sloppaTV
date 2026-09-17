@@ -3586,24 +3586,19 @@ private:
         tasks_.submit([this, endpoint] {
             auto result = seerr_.storageTargets(endpoint.server, endpoint.auth);
             std::scoped_lock lock(stateMutex_);
-            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) {
-                seerrStorageState_.invalidateRefresh();
-                return;
-            }
-            if (!result.ok) {
-                seerrStorageState_.failRefresh(result.error);
+            const auto completion = seerrDomain_.completeStorageRefresh(
+                endpoint, seerrEndpoint(), result.ok, std::move(result.value), result.error,
+                std::chrono::steady_clock::now());
+            if (completion.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
+            if (completion.outcome == SeerrDomainState::RefreshOutcome::Failed) {
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
-                if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
+                if (completion.reconnect) {
                     connectSeerrAsync(false);
                     return;
                 }
-                if (seerrStorageState_.pendingRequest()) {
-                    seerrStorageState_.clearPendingRequest();
-                    showNotice("SEERR STORAGE: " + result.error, 5s);
-                }
+                if (completion.clearedPendingRequest) showNotice("SEERR STORAGE: " + result.error, 5s);
                 return;
             }
-            seerrStorageState_.finishRefresh(std::move(result.value), std::chrono::steady_clock::now());
             __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
                                 seerrStorageState_.targets().size());
             if (seerrStorageState_.pendingRequest() && settings_.seerrSelectDrive) {
@@ -3663,20 +3658,14 @@ private:
         tasks_.submit([this, endpoint] {
             auto result = seerr_.pendingRequests(endpoint.server, endpoint.auth, 20);
             std::scoped_lock lock(stateMutex_);
-            const auto now = std::chrono::steady_clock::now();
-            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) {
-                // Startup Quick Connect can rotate the cookie while this request
-                // is in flight. Retry with the refreshed identity on Home.
-                seerrRequestState_.invalidatePendingRefresh(now);
-                return;
-            }
-            if (!result.ok) {
-                seerrRequestState_.failPendingRefresh(now);
+            const auto outcome = seerrDomain_.completePendingRefresh(
+                endpoint, seerrEndpoint(), result.ok, std::move(result.value), std::chrono::steady_clock::now());
+            if (outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
+            if (outcome == SeerrDomainState::RefreshOutcome::Failed) {
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s",
                                     result.error.c_str());
                 return;
             }
-            seerrRequestState_.finishPendingRefresh(std::move(result.value), now);
             __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
                                 seerrRequestState_.pending().size());
             if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {

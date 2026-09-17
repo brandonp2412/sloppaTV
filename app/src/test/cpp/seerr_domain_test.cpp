@@ -1,7 +1,9 @@
 #include "seerr_domain.hpp"
 
 #include <cassert>
+#include <chrono>
 #include <string>
+#include <vector>
 
 namespace {
 SeerrMediaItem media(std::string id, bool requested = false) {
@@ -24,6 +26,7 @@ SeerrStorageTarget target(int serverId) {
 } // namespace
 
 int main() {
+    using namespace std::chrono_literals;
     const SeerrEndpoint configured{
         .server = "https://seerr.example.nz",
         .auth =
@@ -74,5 +77,55 @@ int main() {
     state.connection().endConnect();
     assert(state.connection().takeDeferredWork().retrySearch);
     assert(!state.deferSearchIfConnecting());
+
+    const auto start = SeerrRequestState::Clock::now();
+    assert(state.requests().beginPendingRefresh());
+    assert(state.completePendingRefresh(configured, configured, true, {media("seerr:movie:20", true)}, start) ==
+           SeerrDomainState::RefreshOutcome::Applied);
+    assert(state.requests().findPending("seerr:movie:20"));
+
+    assert(state.requests().beginPendingRefresh());
+    SeerrEndpoint rotated = configured;
+    rotated.auth.sessionCookie = "rotated-session";
+    assert(state.completePendingRefresh(configured, rotated, true, {media("seerr:movie:21", true)}, start + 1s) ==
+           SeerrDomainState::RefreshOutcome::StaleEndpoint);
+    assert(state.requests().pendingRefreshDue(start + 1s));
+    assert(!state.requests().findPending("seerr:movie:21"));
+
+    state.requests().clearPendingRefreshDeadline();
+    assert(state.requests().beginPendingRefresh());
+    assert(state.completePendingRefresh(configured, configured, false, {}, start + 2s) ==
+           SeerrDomainState::RefreshOutcome::Failed);
+    assert(!state.requests().pendingRefreshDue(start + 61s));
+    assert(state.requests().pendingRefreshDue(start + 62s));
+
+    assert(state.storage().beginRefresh(true, start));
+    const auto storageApplied =
+        state.completeStorageRefresh(configured, configured, true, {target(1)}, {}, start);
+    assert(storageApplied.outcome == SeerrDomainState::RefreshOutcome::Applied);
+    assert(state.storage().targets().size() == 1);
+
+    assert(state.storage().preparePicker(media("seerr:movie:30")) == SeerrStorageState::PickerStatus::Ready);
+    assert(state.storage().beginRefresh(true, start + 1s));
+    const auto authFailure = state.completeStorageRefresh(configured, configured, false, {}, "HTTP 401 unauthorized",
+                                                          start + 1s);
+    assert(authFailure.outcome == SeerrDomainState::RefreshOutcome::Failed);
+    assert(authFailure.reconnect);
+    assert(!authFailure.clearedPendingRequest);
+    assert(state.storage().pendingRequest());
+
+    assert(state.storage().beginRefresh(true, start + 2s));
+    const auto ordinaryFailure =
+        state.completeStorageRefresh(configured, configured, false, {}, "HTTP 500", start + 2s);
+    assert(ordinaryFailure.outcome == SeerrDomainState::RefreshOutcome::Failed);
+    assert(!ordinaryFailure.reconnect);
+    assert(ordinaryFailure.clearedPendingRequest);
+    assert(!state.storage().pendingRequest());
+
+    assert(state.storage().beginRefresh(true, start + 3s));
+    const auto staleStorage = state.completeStorageRefresh(configured, rotated, true, {target(2)}, {}, start + 3s);
+    assert(staleStorage.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint);
+    assert(!state.storage().loading());
+    assert(state.storage().targets().size() == 1);
     return 0;
 }
