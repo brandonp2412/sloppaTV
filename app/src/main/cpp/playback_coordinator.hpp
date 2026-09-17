@@ -63,6 +63,15 @@ struct PlaybackTransitionPlan {
     bool resetMediaSegments = false;
 };
 
+inline std::string playbackSummary(const PlaybackTarget& target, const JellyfinItem& item) {
+    std::string summary = playbackMethodName(target.playMethod);
+    if (!item.videoCodec.empty()) summary += " / " + item.videoCodec;
+    if (item.videoWidth > 0 && item.videoHeight > 0) {
+        summary += " / " + std::to_string(item.videoWidth) + "X" + std::to_string(item.videoHeight);
+    }
+    return summary;
+}
+
 inline PlaybackTickPlan planPlaybackTick(
     bool playbackEnded,
     bool playbackPlaying,

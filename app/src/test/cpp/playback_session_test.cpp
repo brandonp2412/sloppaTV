@@ -47,11 +47,16 @@ int main() {
 
     state.markFallbackAttempted();
     assert(state.fallbackAttempted());
+    state.setLastPlaybackSummary("DirectPlay / h264 / 1920X1080");
+    assert(state.lastPlaybackSummary() == "DirectPlay / h264 / 1920X1080");
+    state.begin(VideoZoomMode::Fill);
+    assert(state.lastPlaybackSummary() == "DirectPlay / h264 / 1920X1080");
     state.resetMediaSegments();
     assert(!state.mediaSegmentsRequested());
     assert(state.mediaSegments().empty());
 
     state.reset();
+    assert(state.lastPlaybackSummary().empty());
     assert(!state.fallbackAttempted());
     assert(!state.preparing());
     assert(state.zoomMode() == VideoZoomMode::Fit);

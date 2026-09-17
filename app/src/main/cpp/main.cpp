@@ -2635,7 +2635,6 @@ private:
         playerScreenState_.resetSession();
         trackState_.resetSession();
         clearTrickplayPreview();
-        lastPlaybackSummary_.clear();
 
         if (hadAuthenticatedSession) {
             pendingDeepLinkItemId_.clear();
@@ -4741,11 +4740,7 @@ private:
         transitionState_.setPauseAfterRestart(playbackPlan.pauseAfterRestart);
         activePlaybackItem_ = item;
         activeTarget_ = target;
-        std::ostringstream playbackSummary;
-        playbackSummary << playbackMethodName(target.playMethod);
-        if (!item.videoCodec.empty()) playbackSummary << " / " << item.videoCodec;
-        if (item.videoWidth > 0 && item.videoHeight > 0) playbackSummary << " / " << item.videoWidth << 'X' << item.videoHeight;
-        lastPlaybackSummary_ = playbackSummary.str();
+        playbackSessionState_.setLastPlaybackSummary(playbackSummary(target, item));
         playbackSessionState_.resetFallbackAttempted();
         telemetryState_.beginPlayback(std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
@@ -4857,7 +4852,7 @@ private:
         } else {
             std::scoped_lock lock(stateMutex_);
             error_.clear();
-            lastPlaybackSummary_ = "EXTERNAL / " + launch.player.label;
+            playbackSessionState_.setLastPlaybackSummary("EXTERNAL / " + launch.player.label);
             externalPlaybackState_.beginActive(std::move(launch));
         }
         return true;
@@ -7140,7 +7135,9 @@ private:
             {"Audio output", std::to_string(codecs.maxAudioOutputChannels) + " CHANNELS"},
             {"HEVC maximum", codecs.maxHevcWidth > 0 ? std::to_string(codecs.maxHevcWidth) + "X" + std::to_string(codecs.maxHevcHeight) : "UNKNOWN"},
             {"HDR display", hdr.empty() ? "SDR / NONE DETECTED" : joinGenres(hdr, hdr.size())},
-            {"Last playback", lastPlaybackSummary_.empty() ? "NOT YET PLAYED THIS SESSION" : lastPlaybackSummary_},
+            {"Last playback", playbackSessionState_.lastPlaybackSummary().empty()
+                ? "NOT YET PLAYED THIS SESSION"
+                : playbackSessionState_.lastPlaybackSummary()},
         };
         auto renderPanel = [&](float x, float y, float width, float height, const std::string& title, std::initializer_list<int> indices) {
             renderer_.roundedRect(x, y, width, height, material_tv::cornerLarge, kPanelAlt);
@@ -7830,7 +7827,6 @@ private:
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;
-    std::string lastPlaybackSummary_;
 };
 }
 

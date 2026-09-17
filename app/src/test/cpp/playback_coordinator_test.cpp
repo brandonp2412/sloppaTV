@@ -55,6 +55,16 @@ int main() {
     PlaybackTarget releaseTarget;
     releaseTarget.url = "https://media.example/movie-1";
 
+    JellyfinItem summaryItem;
+    PlaybackTarget summaryTarget;
+    assert(playbackSummary(summaryTarget, summaryItem) == "DirectPlay");
+    summaryTarget.playMethod = PlaybackMethod::DirectStream;
+    summaryItem.videoCodec = "hevc";
+    assert(playbackSummary(summaryTarget, summaryItem) == "DirectStream / hevc");
+    summaryItem.videoWidth = 3840;
+    summaryItem.videoHeight = 2160;
+    assert(playbackSummary(summaryTarget, summaryItem) == "DirectStream / hevc / 3840X2160");
+
     auto releasePlan = planPlaybackRelease(
         true,
         false,

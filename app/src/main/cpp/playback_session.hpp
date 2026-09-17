@@ -4,6 +4,7 @@
 #include "jellyfin_types.hpp"
 
 #include <chrono>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -13,7 +14,10 @@ public:
     using TimePoint = Clock::time_point;
     static constexpr auto kMediaSegmentsRetryDelay = std::chrono::seconds(5);
 
-    void reset() { begin(VideoZoomMode::Fit); }
+    void reset() {
+        begin(VideoZoomMode::Fit);
+        lastPlaybackSummary_.clear();
+    }
 
     void begin(VideoZoomMode zoomMode) {
         mediaSegments_.clear();
@@ -74,6 +78,9 @@ public:
     [[nodiscard]] VideoZoomMode zoomMode() const { return zoomMode_; }
     void setZoomMode(VideoZoomMode mode) { zoomMode_ = mode; }
 
+    [[nodiscard]] const std::string& lastPlaybackSummary() const { return lastPlaybackSummary_; }
+    void setLastPlaybackSummary(std::string summary) { lastPlaybackSummary_ = std::move(summary); }
+
 private:
     std::vector<JellyfinMediaSegment> mediaSegments_;
     bool mediaSegmentsRequested_ = false;
@@ -81,4 +88,5 @@ private:
     bool fallbackAttempted_ = false;
     TimePoint preparingSince_{};
     VideoZoomMode zoomMode_ = VideoZoomMode::Fit;
+    std::string lastPlaybackSummary_;
 };
