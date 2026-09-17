@@ -400,8 +400,15 @@ struct SeerrConnectCompletion {
     SeerrQuickConnectResult result;
 };
 
+struct JellyfinSearchCompletion {
+    std::string query;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
-                                     SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion>;
+                                     SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
+                                     JellyfinSearchCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3706,18 +3713,11 @@ private:
         const uint64_t generation = requestEpochs_.search.begin();
         tasks_.submit([this, session, query, generation] {
             auto result = api_.search(session, query);
-            std::scoped_lock lock(stateMutex_);
-            if (!requestEpochs_.search.active(generation)) return;
-            if (screen_ != Screen::Search) {
-                searchState_.setLoading(false);
-                return;
-            }
-            if (!result.ok) {
-                if (searchState_.failLibrarySearch(query)) error_ = result.error;
-                return;
-            }
-            if (!searchState_.finishLibrarySearch(query, std::move(result.value))) return;
-            error_.clear();
+            asyncCompletions_.push(JellyfinSearchCompletion{
+                .query = query,
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
         if (includeSeerrImmediately) searchSeerrAsync(true);
     }
@@ -4838,6 +4838,21 @@ private:
             syncSeerrHomeRowLocked();
         }
         (void)searchState_.finishSeerrSearch(completion.query, std::move(result.value));
+    }
+
+    void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
+        if (!requestEpochs_.search.active(completion.generation)) return;
+        if (screen_ != Screen::Search) {
+            searchState_.setLoading(false);
+            return;
+        }
+        auto& result = completion.result;
+        if (!result.ok) {
+            if (searchState_.failLibrarySearch(completion.query)) error_ = result.error;
+            return;
+        }
+        if (!searchState_.finishLibrarySearch(completion.query, std::move(result.value))) return;
+        error_.clear();
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
