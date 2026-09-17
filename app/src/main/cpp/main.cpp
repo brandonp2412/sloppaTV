@@ -550,6 +550,14 @@ struct ExternalPlaybackCompletion {
     std::string error;
 };
 
+struct SubtitleLoadCompletion {
+    uint64_t generation = 0;
+    std::string itemId;
+    int requestedSubtitleIndex = -1;
+    JellyfinSubtitleStream loadedSubtitle;
+    std::vector<SubtitleCue> cues;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
@@ -560,7 +568,7 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
                                      QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
-                                     ExternalPlaybackCompletion>;
+                                     ExternalPlaybackCompletion, SubtitleLoadCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -2412,22 +2420,13 @@ private:
                 }
 
                 if (!requestEpochs_.playback.active(generation)) return;
-                std::scoped_lock lock(stateMutex_);
-                if (!playbackCoordinator_.subtitleLoadMatches(item.id, requestedSubtitleIndex)) return;
-
-                if (loadedCues.empty()) {
-                    playbackCoordinator_.failSubtitleLoad();
-                    showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
-                    return;
-                }
-
-                __android_log_print(ANDROID_LOG_INFO, kTag, "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
-                                    item.id.c_str(), loadedSubtitle.index, loadedSubtitle.codec.c_str(),
-                                    loadedCues.size());
-                playbackCoordinator_.completeSubtitleLoad(loadedSubtitle.index, loadedSubtitle.language,
-                                                          std::move(loadedCues));
-                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                reportProgressAsync(false);
+                asyncCompletions_.push(SubtitleLoadCompletion{
+                    .generation = generation,
+                    .itemId = item.id,
+                    .requestedSubtitleIndex = requestedSubtitleIndex,
+                    .loadedSubtitle = std::move(loadedSubtitle),
+                    .cues = std::move(loadedCues),
+                });
             })) {
             playbackCoordinator_.failSubtitleLoad();
             showNotice("SUBTITLES COULD NOT BE STARTED");
@@ -5194,6 +5193,23 @@ private:
         restoreHomeVisibilityForPlayback(completion.selectedItem);
         restoreHomeVisibilityForPlayback(completion.launch->item);
         externalPlaybackState_.stage(std::move(*completion.launch));
+    }
+
+    void applyAsyncCompletion(SubtitleLoadCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        if (!playbackCoordinator_.subtitleLoadMatches(completion.itemId, completion.requestedSubtitleIndex)) return;
+        if (completion.cues.empty()) {
+            playbackCoordinator_.failSubtitleLoad();
+            showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
+            return;
+        }
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
+                            completion.itemId.c_str(), completion.loadedSubtitle.index,
+                            completion.loadedSubtitle.codec.c_str(), completion.cues.size());
+        playbackCoordinator_.completeSubtitleLoad(completion.loadedSubtitle.index, completion.loadedSubtitle.language,
+                                                   std::move(completion.cues));
+        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+        reportProgressAsync(false);
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
