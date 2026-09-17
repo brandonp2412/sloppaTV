@@ -588,6 +588,66 @@ struct PlaybackAdjacentCompletion {
     std::optional<JellyfinItem> item;
 };
 
+struct PlaybackStopReportCompletion {
+    std::string server;
+    std::string userId;
+};
+
+struct QueuedPlaybackCompletion {
+    uint64_t generation = 0;
+    Screen originScreen = Screen::Home;
+    int index = -1;
+    int previousQueueIndex = -1;
+    bool replacingPlayer = false;
+    JellyfinItem item;
+    ApiValueResult<PlaybackTarget> result;
+};
+
+struct PlayerItemPlaybackCompletion {
+    uint64_t generation = 0;
+    JellyfinItem item;
+    ApiValueResult<PlaybackTarget> result;
+};
+
+struct AutoplayPlaybackCompletion {
+    uint64_t generation = 0;
+    int queuedNextIndex = -1;
+    JellyfinItem item;
+    ApiValueResult<PlaybackTarget> result;
+};
+
+struct StreamRestartCompletion {
+    uint64_t generation = 0;
+    int audioStreamIndex = -1;
+    bool wasPaused = false;
+    JellyfinItem item;
+    ApiValueResult<PlaybackTarget> result;
+};
+
+struct FallbackPlaybackCompletion {
+    uint64_t generation = 0;
+    int audioStreamIndex = -1;
+    JellyfinItem item;
+    ApiValueResult<PlaybackTarget> result;
+};
+
+struct BeginPlaybackCompletion {
+    uint64_t generation = 0;
+    int queuedPlaybackIndex = -1;
+    JellyfinItem selected;
+    JellyfinItem playable;
+    ApiValueResult<PlaybackTarget> result;
+};
+
+struct SeriesPlayAllCompletion {
+    uint64_t generation = 0;
+    JellyfinItem series;
+    std::vector<JellyfinItem> episodes;
+    JellyfinItem first;
+    std::optional<PlaybackTarget> target;
+    std::string error;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
@@ -599,7 +659,10 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
                                      QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
                                      ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion,
-                                     MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion>;
+                                     MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion,
+                                     PlaybackStopReportCompletion, QueuedPlaybackCompletion, PlayerItemPlaybackCompletion,
+                                     AutoplayPlaybackCompletion, StreamRestartCompletion, FallbackPlaybackCompletion,
+                                     BeginPlaybackCompletion, SeriesPlayAllCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -2556,14 +2619,13 @@ private:
             auto target = api_.resolvePlayback(session, item, maxStreamingBitrate, maxAudioChannels, playbackOverrides,
                                                audioStreamIndex, subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            playbackCoordinator_.finishStreamRestartRequest();
-            if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != item.id) return;
-            if (!target.ok) {
-                error_ = target.error;
-                return;
-            }
-            playbackCoordinator_.stageStreamRestart(std::move(target.value), item, wasPaused, audioStreamIndex);
+            asyncCompletions_.push(StreamRestartCompletion{
+                .generation = generation,
+                .audioStreamIndex = audioStreamIndex,
+                .wasPaused = wasPaused,
+                .item = std::move(item),
+                .result = std::move(target),
+            });
         });
     }
 
@@ -3776,21 +3838,15 @@ private:
             auto target = api_.resolvePlayback(session, queued, maxStreamingBitrate, maxAudioChannels,
                                                playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            playbackCoordinator_.finishPlaybackResolution();
-            if (screen_ != originScreen || queueState_.currentIndex() != previousQueueIndex ||
-                !queueState_.itemMatches(index, queued.id)) {
-                return;
-            }
-            if (!target.ok) {
-                if (replacingPlayer && screen_ == Screen::Player) popScreen(Screen::Details);
-                error_ = "QUEUE: " + target.error;
-                return;
-            }
-            queueState_.setCurrentIndex(index);
-            queueState_.setItemAt(index, queued);
-            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(queued));
+            asyncCompletions_.push(QueuedPlaybackCompletion{
+                .generation = generation,
+                .originScreen = originScreen,
+                .index = index,
+                .previousQueueIndex = previousQueueIndex,
+                .replacingPlayer = replacingPlayer,
+                .item = std::move(queued),
+                .result = std::move(target),
+            });
         });
     }
 
@@ -3818,16 +3874,11 @@ private:
             auto target = api_.resolvePlayback(session, selected, maxStreamingBitrate, maxAudioChannels,
                                                playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            playbackCoordinator_.finishPlaybackResolution();
-            if (screen_ != Screen::Player) return;
-            if (!target.ok) {
-                error_ = "EPISODE: " + target.error;
-                return;
-            }
-            detail_ = selected;
-            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(selected));
+            asyncCompletions_.push(PlayerItemPlaybackCompletion{
+                .generation = generation,
+                .item = std::move(selected),
+                .result = std::move(target),
+            });
         });
     }
 
@@ -3931,10 +3982,14 @@ private:
             auto episodes = api_.getSeriesEpisodes(session, series.id, 1000);
             if (!episodes.ok || episodes.value.empty()) {
                 if (!requestEpochs_.playback.active(generation)) return;
-                std::scoped_lock lock(stateMutex_);
-                loading_ = false;
-                if (screen_ != Screen::Details || detail_.id != series.id) return;
-                error_ = episodes.ok ? "PLAY ALL: NO EPISODES" : "PLAY ALL: " + episodes.error;
+                asyncCompletions_.push(SeriesPlayAllCompletion{
+                    .generation = generation,
+                    .series = series,
+                    .episodes = {},
+                    .first = {},
+                    .target = std::nullopt,
+                    .error = episodes.ok ? "PLAY ALL: NO EPISODES" : "PLAY ALL: " + episodes.error,
+                });
                 return;
             }
 
@@ -3997,10 +4052,14 @@ private:
             episodes.value = std::move(deduplicated);
             if (episodes.value.empty()) {
                 if (!requestEpochs_.playback.active(generation)) return;
-                std::scoped_lock lock(stateMutex_);
-                loading_ = false;
-                if (screen_ != Screen::Details || detail_.id != series.id) return;
-                error_ = "PLAY ALL: NO REGULAR EPISODES";
+                asyncCompletions_.push(SeriesPlayAllCompletion{
+                    .generation = generation,
+                    .series = series,
+                    .episodes = {},
+                    .first = {},
+                    .target = std::nullopt,
+                    .error = "PLAY ALL: NO REGULAR EPISODES",
+                });
                 return;
             }
 
@@ -4010,18 +4069,14 @@ private:
             auto target =
                 api_.resolvePlayback(session, first, maxStreamingBitrate, maxAudioChannels, playbackOverrides);
             if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::Details || detail_.id != series.id) return;
-            if (!target.ok) {
-                error_ = "PLAY ALL: " + target.error;
-                return;
-            }
-            queueState_.replace(std::move(episodes.value), 0);
-            queueState_.setItemAt(0, first);
-            restoreHomeVisibilityForPlayback(series);
-            restoreHomeVisibilityForPlayback(first);
-            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(first));
+            asyncCompletions_.push(SeriesPlayAllCompletion{
+                .generation = generation,
+                .series = series,
+                .episodes = std::move(episodes.value),
+                .first = std::move(first),
+                .target = target.ok ? std::optional<PlaybackTarget>{std::move(target.value)} : std::nullopt,
+                .error = target.ok ? std::string{} : "PLAY ALL: " + target.error,
+            });
         });
     }
 
@@ -4060,10 +4115,15 @@ private:
                 auto next = api_.getNextUpForSeries(session, selected.id);
                 if (!next.ok) {
                     if (!requestEpochs_.playback.active(generation)) return;
-                    std::scoped_lock lock(stateMutex_);
-                    loading_ = false;
-                    if (screen_ != Screen::Details || detail_.id != selected.id) return;
-                    error_ = next.error;
+                    ApiValueResult<PlaybackTarget> failed;
+                    failed.error = std::move(next.error);
+                    asyncCompletions_.push(BeginPlaybackCompletion{
+                        .generation = generation,
+                        .queuedPlaybackIndex = queuedPlaybackIndex,
+                        .selected = selected,
+                        .playable = {},
+                        .result = std::move(failed),
+                    });
                     return;
                 }
                 playable = std::move(next.value);
@@ -4075,20 +4135,13 @@ private:
             auto target = api_.resolvePlayback(session, playable, maxStreamingBitrate, maxAudioChannels,
                                                playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::Details || detail_.id != selected.id) return;
-            if (!target.ok) {
-                error_ = target.error;
-                return;
-            }
-            if (queuedPlaybackIndex >= 0 && queueState_.itemMatches(queuedPlaybackIndex, playable.id)) {
-                queueState_.setCurrentIndex(queuedPlaybackIndex);
-                queueState_.setItemAt(queuedPlaybackIndex, playable);
-            }
-            restoreHomeVisibilityForPlayback(selected);
-            restoreHomeVisibilityForPlayback(playable);
-            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(playable));
+            asyncCompletions_.push(BeginPlaybackCompletion{
+                .generation = generation,
+                .queuedPlaybackIndex = queuedPlaybackIndex,
+                .selected = selected,
+                .playable = std::move(playable),
+                .result = std::move(target),
+            });
         });
     }
 
@@ -4178,10 +4231,10 @@ private:
                 const ApiResult result = api_.reportPlaybackStopped(session, item, target, ticks);
                 logPlaybackReportFailure("stop", item.id, result);
                 if (!result.ok) return;
-                std::scoped_lock lock(stateMutex_);
-                if (session_.server != session.server || session_.userId != session.userId || screen_ == Screen::Player)
-                    return;
-                playbackCoordinator_.markPlaybackStopReported();
+                asyncCompletions_.push(PlaybackStopReportCompletion{
+                    .server = session.server,
+                    .userId = session.userId,
+                });
                 if (app_ && app_->looper) ALooper_wake(app_->looper);
             });
         }
@@ -4211,20 +4264,12 @@ private:
             auto target = api_.resolvePlayback(session, nextItem, maxStreamingBitrate, maxAudioChannels,
                                                playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            playbackCoordinator_.finishPlaybackResolution();
-            if (!target.ok) {
-                popScreen(Screen::Details);
-                error_ = "NEXT EPISODE: " + target.error;
-                return;
-            }
-            if (queuedNextIndex >= 0 && queueState_.currentIndex() + 1 == queuedNextIndex &&
-                queueState_.itemMatches(queuedNextIndex, nextItem.id)) {
-                queueState_.setCurrentIndex(queuedNextIndex);
-                queueState_.setItemAt(queuedNextIndex, nextItem);
-            }
-            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(nextItem));
+            asyncCompletions_.push(AutoplayPlaybackCompletion{
+                .generation = generation,
+                .queuedNextIndex = queuedNextIndex,
+                .item = std::move(nextItem),
+                .result = std::move(target),
+            });
         });
     }
 
@@ -4375,16 +4420,12 @@ private:
             auto target = api_.resolvePlayback(session, item, maxStreamingBitrate, maxAudioChannels, fallbackOverrides,
                                                audioStreamIndex, subtitleStreamIndex);
             if (!requestEpochs_.playback.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            playbackCoordinator_.finishFallbackResolution();
-            if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != item.id) return;
-            if (!target.ok) {
-                error_ = "TRANSCODE FALLBACK: " + target.error;
-                stopPlayback();
-                return;
-            }
-            playbackCoordinator_.stageResolvedFallback(std::move(target.value), std::move(item), audioStreamIndex);
+            asyncCompletions_.push(FallbackPlaybackCompletion{
+                .generation = generation,
+                .audioStreamIndex = audioStreamIndex,
+                .item = std::move(item),
+                .result = std::move(target),
+            });
         });
         if (!submitted) {
             loading_ = false;
@@ -5281,6 +5322,120 @@ private:
             return;
         }
         playPlayerItemAsync(std::move(*completion.item));
+    }
+
+    void applyAsyncCompletion(const PlaybackStopReportCompletion& completion) {
+        if (session_.server != completion.server || session_.userId != completion.userId || screen_ == Screen::Player)
+            return;
+        playbackCoordinator_.markPlaybackStopReported();
+    }
+
+    void applyAsyncCompletion(QueuedPlaybackCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        loading_ = false;
+        playbackCoordinator_.finishPlaybackResolution();
+        if (screen_ != completion.originScreen || queueState_.currentIndex() != completion.previousQueueIndex ||
+            !queueState_.itemMatches(completion.index, completion.item.id)) {
+            return;
+        }
+        if (!completion.result.ok) {
+            if (completion.replacingPlayer && screen_ == Screen::Player) popScreen(Screen::Details);
+            error_ = "QUEUE: " + completion.result.error;
+            return;
+        }
+        queueState_.setCurrentIndex(completion.index);
+        queueState_.setItemAt(completion.index, completion.item);
+        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.item));
+    }
+
+    void applyAsyncCompletion(PlayerItemPlaybackCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        loading_ = false;
+        playbackCoordinator_.finishPlaybackResolution();
+        if (screen_ != Screen::Player) return;
+        if (!completion.result.ok) {
+            error_ = "EPISODE: " + completion.result.error;
+            return;
+        }
+        detail_ = completion.item;
+        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.item));
+    }
+
+    void applyAsyncCompletion(AutoplayPlaybackCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        loading_ = false;
+        playbackCoordinator_.finishPlaybackResolution();
+        if (!completion.result.ok) {
+            popScreen(Screen::Details);
+            error_ = "NEXT EPISODE: " + completion.result.error;
+            return;
+        }
+        if (completion.queuedNextIndex >= 0 && queueState_.currentIndex() + 1 == completion.queuedNextIndex &&
+            queueState_.itemMatches(completion.queuedNextIndex, completion.item.id)) {
+            queueState_.setCurrentIndex(completion.queuedNextIndex);
+            queueState_.setItemAt(completion.queuedNextIndex, completion.item);
+        }
+        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.item));
+    }
+
+    void applyAsyncCompletion(StreamRestartCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        playbackCoordinator_.finishStreamRestartRequest();
+        if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != completion.item.id) return;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        playbackCoordinator_.stageStreamRestart(std::move(completion.result.value), std::move(completion.item),
+                                                completion.wasPaused, completion.audioStreamIndex);
+    }
+
+    void applyAsyncCompletion(FallbackPlaybackCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        loading_ = false;
+        playbackCoordinator_.finishFallbackResolution();
+        if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != completion.item.id) return;
+        if (!completion.result.ok) {
+            error_ = "TRANSCODE FALLBACK: " + completion.result.error;
+            stopPlayback();
+            return;
+        }
+        playbackCoordinator_.stageResolvedFallback(std::move(completion.result.value), std::move(completion.item),
+                                                   completion.audioStreamIndex);
+    }
+
+    void applyAsyncCompletion(BeginPlaybackCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Details || detail_.id != completion.selected.id) return;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        if (completion.queuedPlaybackIndex >= 0 &&
+            queueState_.itemMatches(completion.queuedPlaybackIndex, completion.playable.id)) {
+            queueState_.setCurrentIndex(completion.queuedPlaybackIndex);
+            queueState_.setItemAt(completion.queuedPlaybackIndex, completion.playable);
+        }
+        restoreHomeVisibilityForPlayback(completion.selected);
+        restoreHomeVisibilityForPlayback(completion.playable);
+        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.playable));
+    }
+
+    void applyAsyncCompletion(SeriesPlayAllCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Details || detail_.id != completion.series.id) return;
+        if (!completion.error.empty()) {
+            error_ = std::move(completion.error);
+            return;
+        }
+        if (!completion.target) return;
+        queueState_.replace(std::move(completion.episodes), 0);
+        queueState_.setItemAt(0, completion.first);
+        restoreHomeVisibilityForPlayback(completion.series);
+        restoreHomeVisibilityForPlayback(completion.first);
+        playbackCoordinator_.stageResolvedPlayback(std::move(*completion.target), std::move(completion.first));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
