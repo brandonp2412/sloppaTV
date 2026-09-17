@@ -1627,47 +1627,48 @@ private:
     }
 
     void handleBrowseKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
-            cancelContentLoadForNavigation();
-            const BrowseBackAction action = browseState_.back();
-            if (action == BrowseBackAction::Reload) {
+        BrowseScreenInput input = BrowseScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = BrowseScreenInput::Back;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = BrowseScreenInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = BrowseScreenInput::Right;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = BrowseScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = BrowseScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = BrowseScreenInput::Activate;
+        else if (isItemContextKey(key))
+            input = BrowseScreenInput::Context;
+
+        if (input == BrowseScreenInput::Back) cancelContentLoadForNavigation();
+        constexpr int columns = mediaGridColumns();
+        const BrowseScreenCommand command = browseState_.handleInput(input, columns);
+
+        if (command.type == BrowseScreenCommandType::Back) {
+            if (command.backAction == BrowseBackAction::Reload)
                 loadBrowsePageAsync(false);
-            } else if (action == BrowseBackAction::LocalPage) {
+            else if (command.backAction == BrowseBackAction::LocalPage) {
                 loading_ = false;
                 error_.clear();
-            } else if (action == BrowseBackAction::Exit) {
+            } else if (command.backAction == BrowseBackAction::Exit) {
                 popScreen(Screen::Home);
                 if (screen_ == Screen::Home) homeState_.focusToolbar(1);
             }
             return;
         }
-
-        if (browseState_.filterFocused() && browseState_.hasFilterBar()) {
-            if (key == AKEYCODE_DPAD_LEFT)
-                browseState_.moveFilter(-1);
-            else if (key == AKEYCODE_DPAD_RIGHT)
-                browseState_.moveFilter(1);
-            else if (key == AKEYCODE_DPAD_DOWN)
-                browseState_.setFilterFocused(false);
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                browseState_.setFilterFocused(false);
-                applyBrowseFilter(browseState_.filterSelection());
-            }
+        if (command.type == BrowseScreenCommandType::ApplyFilter) {
+            applyBrowseFilter(browseState_.filterSelection());
             return;
         }
-
-        if (key == AKEYCODE_DPAD_UP && browseState_.hasFilterBar() &&
-            isTopMediaGridSelection(browseState_.selection())) {
-            browseState_.setFilterFocused(true);
-            return;
-        }
-        if (browseState_.items().empty()) return;
-        if (isItemContextKey(key)) {
+        if (command.type == BrowseScreenCommandType::OpenContext) {
             const auto& selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
             if (supportsItemContextMenu(selected)) openItemMenuForItem(selected);
             return;
         }
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+        if (command.type == BrowseScreenCommandType::OpenSelected) {
             const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
             if (selected.type == "Genre") {
                 browseState_.selectGenre(selected.name);
@@ -1682,13 +1683,13 @@ private:
             }
             return;
         }
-        int selection = browseState_.selection();
-        auto& items = browseState_.items();
-        moveGridSelection(key, items, selection);
-        browseState_.setSelection(selection);
-        prefetchBrowseArtworkAhead();
-        if (browseState_.hasMore() && !loading_ && browseState_.selection() >= static_cast<int>(items.size()) - 12) {
-            loadMoreBrowseAsync();
+        if (command.type == BrowseScreenCommandType::SelectionChanged) {
+            const auto& items = browseState_.items();
+            prefetchBrowseArtworkAhead();
+            if (browseState_.hasMore() && !loading_ &&
+                browseState_.selection() >= static_cast<int>(items.size()) - 12) {
+                loadMoreBrowseAsync();
+            }
         }
     }
 

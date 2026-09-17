@@ -121,6 +121,38 @@ int main() {
     assert(state.selection() == 0);
     assert(state.items()[0].id == "c");
 
+    BrowseScreenState inputState;
+    inputState.resetForLibrary(movies);
+    inputState.replacePage({item("i0", "0"), item("i1", "1"), item("i2", "2"), item("i3", "3"),
+                            item("i4", "4"), item("i5", "5"), item("i6", "6")}, 60);
+    auto command = inputState.handleInput(BrowseScreenInput::Up, 5);
+    assert(command.type == BrowseScreenCommandType::None);
+    assert(inputState.filterFocused());
+    command = inputState.handleInput(BrowseScreenInput::Right, 5);
+    assert(command.type == BrowseScreenCommandType::None);
+    assert(inputState.filterSelection() == 1);
+    command = inputState.handleInput(BrowseScreenInput::Activate, 5);
+    assert(command.type == BrowseScreenCommandType::ApplyFilter);
+    assert(!inputState.filterFocused());
+
+    command = inputState.handleInput(BrowseScreenInput::Right, 5);
+    assert(command.type == BrowseScreenCommandType::SelectionChanged);
+    assert(inputState.selection() == 1);
+    command = inputState.handleInput(BrowseScreenInput::Down, 5);
+    assert(command.type == BrowseScreenCommandType::SelectionChanged);
+    assert(inputState.selection() == 6);
+    command = inputState.handleInput(BrowseScreenInput::Context, 5);
+    assert(command.type == BrowseScreenCommandType::OpenContext);
+    command = inputState.handleInput(BrowseScreenInput::Activate, 5);
+    assert(command.type == BrowseScreenCommandType::OpenSelected);
+
+    inputState.openContainer(box, true);
+    inputState.replacePage({item("nested", "Nested")}, 60);
+    command = inputState.handleInput(BrowseScreenInput::Back, 5);
+    assert(command.type == BrowseScreenCommandType::Back);
+    assert(command.backAction == BrowseBackAction::RestoredSnapshot);
+    assert(inputState.activeContainer().id == "movies");
+
     state.clear();
     assert(state.activeContainer().id.empty());
     assert(state.items().empty());

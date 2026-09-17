@@ -1,5 +1,6 @@
 #pragma once
 
+#include "grid_navigation.hpp"
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
@@ -33,6 +34,31 @@ enum class BrowseBackAction {
     Reload,
     LocalPage,
     Exit,
+};
+
+enum class BrowseScreenInput {
+    None,
+    Back,
+    Left,
+    Right,
+    Up,
+    Down,
+    Activate,
+    Context,
+};
+
+enum class BrowseScreenCommandType {
+    None,
+    Back,
+    ApplyFilter,
+    OpenContext,
+    OpenSelected,
+    SelectionChanged,
+};
+
+struct BrowseScreenCommand {
+    BrowseScreenCommandType type = BrowseScreenCommandType::None;
+    BrowseBackAction backAction = BrowseBackAction::RestoredSnapshot;
 };
 
 class BrowseScreenState {
@@ -253,6 +279,54 @@ public:
     [[nodiscard]] const std::string& genre() const { return genre_; }
 
     [[nodiscard]] const std::string& letter() const { return letter_; }
+
+    [[nodiscard]] BrowseScreenCommand handleInput(BrowseScreenInput input, int columns) {
+        if (input == BrowseScreenInput::Back) {
+            return {
+                .type = BrowseScreenCommandType::Back,
+                .backAction = back(),
+            };
+        }
+
+        if (filterFocused_ && hasFilterBar()) {
+            if (input == BrowseScreenInput::Left)
+                moveFilter(-1);
+            else if (input == BrowseScreenInput::Right)
+                moveFilter(1);
+            else if (input == BrowseScreenInput::Down)
+                filterFocused_ = false;
+            else if (input == BrowseScreenInput::Activate) {
+                filterFocused_ = false;
+                return {.type = BrowseScreenCommandType::ApplyFilter};
+            }
+            return {};
+        }
+
+        if (input == BrowseScreenInput::Up && hasFilterBar() && selection_ >= 0 && selection_ < columns) {
+            filterFocused_ = true;
+            return {};
+        }
+        if (items_.empty()) return {};
+
+        if (input == BrowseScreenInput::Context) return {.type = BrowseScreenCommandType::OpenContext};
+        if (input == BrowseScreenInput::Activate) return {.type = BrowseScreenCommandType::OpenSelected};
+
+        int dx = 0;
+        int dy = 0;
+        if (input == BrowseScreenInput::Left)
+            dx = -1;
+        else if (input == BrowseScreenInput::Right)
+            dx = 1;
+        else if (input == BrowseScreenInput::Up)
+            dy = -1;
+        else if (input == BrowseScreenInput::Down)
+            dy = 1;
+        else
+            return {.type = BrowseScreenCommandType::SelectionChanged};
+
+        selection_ = gridSelectionAfterMove(selection_, static_cast<int>(items_.size()), dx, dy, columns);
+        return {.type = BrowseScreenCommandType::SelectionChanged};
+    }
 
     [[nodiscard]] bool filterFocused() const { return filterFocused_; }
 
