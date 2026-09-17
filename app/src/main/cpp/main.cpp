@@ -507,6 +507,25 @@ struct EpisodeSeriesContextCompletion {
     std::vector<JellyfinItem> seasons;
 };
 
+struct QuickConnectStartedCompletion {
+    uint64_t generation = 0;
+    QuickConnectRequest request;
+};
+
+struct QuickConnectFailedCompletion {
+    uint64_t generation = 0;
+    std::string error;
+};
+
+struct QuickConnectAuthenticatedCompletion {
+    uint64_t generation = 0;
+    JellyfinSession session;
+};
+
+struct QuickConnectTimedOutCompletion {
+    uint64_t generation = 0;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
@@ -514,7 +533,9 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      ServerInfoNoticeCompletion, FavoriteCompletion, PlayedCompletion,
                                      MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
                                      LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
-                                     EpisodeSeriesContextCompletion>;
+                                     EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
+                                     QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
+                                     QuickConnectTimedOutCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3294,20 +3315,18 @@ private:
             auto initiated = api_.initiateQuickConnect(server, deviceId);
             if (!requestEpochs_.auth.active(generation)) return;
             if (!initiated.ok) {
-                std::scoped_lock lock(stateMutex_);
-                loading_ = false;
-                accountState_.endQuickConnect();
-                error_ = initiated.error;
+                asyncCompletions_.push(QuickConnectFailedCompletion{
+                    .generation = generation,
+                    .error = std::move(initiated.error),
+                });
                 return;
             }
 
             const QuickConnectRequest request = initiated.value;
-            {
-                std::scoped_lock lock(stateMutex_);
-                accountState_.setField(AccountScreenState::kServerField, request.server);
-                accountState_.setQuickConnectCode(request.code);
-                loading_ = false;
-            }
+            asyncCompletions_.push(QuickConnectStartedCompletion{
+                .generation = generation,
+                .request = request,
+            });
 
             for (int attempt = 0; attempt < 60; ++attempt) {
                 std::this_thread::sleep_for(5s);
@@ -3315,10 +3334,10 @@ private:
 
                 auto state = api_.pollQuickConnect(request, deviceId);
                 if (!state.ok) {
-                    std::scoped_lock lock(stateMutex_);
-                    loading_ = false;
-                    accountState_.endQuickConnect();
-                    error_ = state.error;
+                    asyncCompletions_.push(QuickConnectFailedCompletion{
+                        .generation = generation,
+                        .error = std::move(state.error),
+                    });
                     return;
                 }
                 if (!state.value) continue;
@@ -3326,34 +3345,24 @@ private:
                 auto authenticated = api_.completeQuickConnect(request, deviceId);
                 if (!requestEpochs_.auth.active(generation)) return;
                 if (!authenticated.ok) {
-                    std::scoped_lock lock(stateMutex_);
-                    loading_ = false;
-                    accountState_.endQuickConnect();
-                    error_ = authenticated.error;
+                    asyncCompletions_.push(QuickConnectFailedCompletion{
+                        .generation = generation,
+                        .error = std::move(authenticated.error),
+                    });
                     return;
                 }
 
-                {
-                    std::scoped_lock lock(stateMutex_);
-                    requestEpochs_.session.invalidate();
-                    session_ = authenticated.value;
-                    accountState_.setAuthenticatedAccount(session_.server, session_.username);
-                    loading_ = false;
-                    resetNavigation(Screen::Home);
-                    homeState_.setRow(0);
-                    homeState_.setFirstVisibleRow(0);
-                    error_.clear();
-                    saveSession(session_);
-                }
-                loadHomeAsync();
+                asyncCompletions_.push(QuickConnectAuthenticatedCompletion{
+                    .generation = generation,
+                    .session = std::move(authenticated.value),
+                });
                 return;
             }
 
             if (requestEpochs_.auth.active(generation)) {
-                std::scoped_lock lock(stateMutex_);
-                loading_ = false;
-                accountState_.endQuickConnect();
-                error_ = "QUICK CONNECT TIMED OUT - TRY AGAIN";
+                asyncCompletions_.push(QuickConnectTimedOutCompletion{
+                    .generation = generation,
+                });
             }
         });
     }
@@ -5083,6 +5092,41 @@ private:
         if (!requestEpochs_.content.active(completion.generation)) return;
         if (screen_ != Screen::Details || detail_.id != completion.itemId || detail_.type != "Episode") return;
         detailsState_.setEpisodeSeriesContext(std::move(completion.series), std::move(completion.seasons));
+    }
+
+    void applyAsyncCompletion(QuickConnectStartedCompletion& completion) {
+        if (!requestEpochs_.auth.active(completion.generation)) return;
+        accountState_.setField(AccountScreenState::kServerField, completion.request.server);
+        accountState_.setQuickConnectCode(completion.request.code);
+        loading_ = false;
+    }
+
+    void applyAsyncCompletion(QuickConnectFailedCompletion& completion) {
+        if (!requestEpochs_.auth.active(completion.generation)) return;
+        loading_ = false;
+        accountState_.endQuickConnect();
+        error_ = std::move(completion.error);
+    }
+
+    void applyAsyncCompletion(QuickConnectAuthenticatedCompletion& completion) {
+        if (!requestEpochs_.auth.active(completion.generation)) return;
+        requestEpochs_.session.invalidate();
+        session_ = std::move(completion.session);
+        accountState_.setAuthenticatedAccount(session_.server, session_.username);
+        loading_ = false;
+        resetNavigation(Screen::Home);
+        homeState_.setRow(0);
+        homeState_.setFirstVisibleRow(0);
+        error_.clear();
+        saveSession(session_);
+        loadHomeAsync();
+    }
+
+    void applyAsyncCompletion(QuickConnectTimedOutCompletion& completion) {
+        if (!requestEpochs_.auth.active(completion.generation)) return;
+        loading_ = false;
+        accountState_.endQuickConnect();
+        error_ = "QUICK CONNECT TIMED OUT - TRY AGAIN";
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
