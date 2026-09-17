@@ -4,6 +4,7 @@
 #include "jni_http.hpp"
 #include "seerr_auth.hpp"
 #include "seerr_media.hpp"
+#include "seerr_quick_connect.hpp"
 #include "seerr_storage.hpp"
 
 #include <jni.h>
@@ -12,13 +13,6 @@
 #include <map>
 #include <string>
 #include <vector>
-
-struct SeerrQuickConnectRequest {
-    std::string code;
-    std::string secret;
-    std::string csrfCookie;
-    std::string csrfToken;
-};
 
 class SeerrClient {
 public:

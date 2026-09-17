@@ -3513,48 +3513,43 @@ private:
             showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);
         }
         tasks_.submit([this, server, jellyfin, announce] {
-            auto initiated = seerr_.initiateQuickConnect(server);
-            if (!initiated.ok) {
-                std::scoped_lock lock(stateMutex_);
+            auto result = runSeerrQuickConnect(
+                [&] { return seerr_.initiateQuickConnect(server); },
+                [&](const std::string& code) { return api_.authorizeQuickConnectCode(jellyfin, code); },
+                [&](const SeerrQuickConnectRequest& request) {
+                    return seerr_.authenticateQuickConnect(server, request);
+                });
+            std::scoped_lock lock(stateMutex_);
+            if (!result.ok && result.failedStage != SeerrQuickConnectStage::AuthenticateSeerr) {
                 seerrConnectionState_.failConnect();
                 if (announce) {
                     notice_.clear();
-                    error_ = "SEERR QUICK CONNECT: " + initiated.error;
+                    error_ =
+                        (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin ? "JELLYFIN QUICK CONNECT: "
+                                                                                         : "SEERR QUICK CONNECT: ") +
+                        result.error;
+                } else if (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin) {
+                    __android_log_print(ANDROID_LOG_WARN, kTag,
+                                        "Silent Jellyfin Quick Connect authorization failed: %s", result.error.c_str());
                 } else {
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s",
-                                        initiated.error.c_str());
+                                        result.error.c_str());
                 }
                 return;
             }
-            auto authorized = api_.authorizeQuickConnectCode(jellyfin, initiated.value.code);
-            if (!authorized.ok || !authorized.value) {
-                std::scoped_lock lock(stateMutex_);
-                seerrConnectionState_.failConnect();
-                if (announce) {
-                    notice_.clear();
-                    error_ = "JELLYFIN QUICK CONNECT: " + authorized.error;
-                } else {
-                    __android_log_print(ANDROID_LOG_WARN, kTag,
-                                        "Silent Jellyfin Quick Connect authorization failed: %s",
-                                        authorized.error.c_str());
-                }
-                return;
-            }
-            auto authenticated = seerr_.authenticateQuickConnect(server, initiated.value);
-            std::scoped_lock lock(stateMutex_);
             seerrConnectionState_.endConnect();
             if (announce) notice_.clear();
             if (settings_.seerrServer != server || session_.userId != jellyfin.userId) return;
-            if (!authenticated.ok) {
+            if (!result.ok) {
                 if (announce)
-                    error_ = "SEERR QUICK CONNECT: " + authenticated.error;
+                    error_ = "SEERR QUICK CONNECT: " + result.error;
                 else
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s",
-                                        authenticated.error.c_str());
+                                        result.error.c_str());
                 seerrConnectionState_.failConnect();
                 return;
             }
-            settings_.seerrSessionCookie = std::move(authenticated.value);
+            settings_.seerrSessionCookie = std::move(result.sessionCookie);
             saveSession(session_);
             if (announce) {
                 error_.clear();
