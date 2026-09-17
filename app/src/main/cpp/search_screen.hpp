@@ -2,6 +2,7 @@
 
 #include "jellyfin_types.hpp"
 #include "seerr_jellyfin_adapter.hpp"
+#include "seerr_search_state.hpp"
 #include "unicode_text.hpp"
 
 #include <algorithm>
@@ -15,8 +16,8 @@ class SearchScreenState {
 public:
     using Clock = std::chrono::steady_clock;
     static constexpr auto kDebounceDelay = std::chrono::milliseconds(180);
-    static constexpr auto kSeerrDebounceDelay = std::chrono::milliseconds(550);
-    static constexpr size_t kSeerrMinQueryBytes = 3;
+    static constexpr auto kSeerrDebounceDelay = SeerrSearchState::kDebounceDelay;
+    static constexpr size_t kSeerrMinQueryBytes = SeerrSearchState::kMinQueryBytes;
     static constexpr int kLibraryRow = 0;
     static constexpr int kSeerrRow = 1;
     static constexpr int kEpisodeRow = 2;
@@ -25,20 +26,15 @@ public:
     void reset() {
         query_.clear();
         libraryTitles_.clear();
-        seerrResults_.clear();
+        seerrSearch_.reset();
         episodes_.clear();
         results_.clear();
         selection_ = 0;
         firstVisible_ = {0, 0, 0};
         keyboard_ = true;
         loading_ = false;
-        seerrLoading_ = false;
-        seerrError_.clear();
         debouncePending_ = false;
         debounceDeadline_ = {};
-        seerrDebouncePending_ = false;
-        seerrDebounceDeadline_ = {};
-        seerrQuery_.clear();
     }
 
     [[nodiscard]] const std::string& query() const { return query_; }
@@ -53,17 +49,17 @@ public:
 
     [[nodiscard]] bool loading() const { return loading_; }
 
-    [[nodiscard]] bool seerrLoading() const { return seerrLoading_; }
+    [[nodiscard]] bool seerrLoading() const { return seerrSearch_.loading(); }
 
-    [[nodiscard]] const std::string& seerrError() const { return seerrError_; }
+    [[nodiscard]] const std::string& seerrError() const { return seerrSearch_.error(); }
 
     [[nodiscard]] bool debouncePending() const { return debouncePending_; }
 
     [[nodiscard]] Clock::time_point debounceDeadline() const { return debounceDeadline_; }
 
-    [[nodiscard]] bool seerrDebouncePending() const { return seerrDebouncePending_; }
+    [[nodiscard]] bool seerrDebouncePending() const { return seerrSearch_.debouncePending(); }
 
-    [[nodiscard]] Clock::time_point seerrDebounceDeadline() const { return seerrDebounceDeadline_; }
+    [[nodiscard]] Clock::time_point seerrDebounceDeadline() const { return seerrSearch_.debounceDeadline(); }
 
     [[nodiscard]] int rowStart(int row) const {
         if (row <= kLibraryRow) return 0;
@@ -124,7 +120,7 @@ public:
 
     void setLoading(bool loading) { loading_ = loading; }
 
-    void setSeerrLoading(bool loading) { seerrLoading_ = loading; }
+    void setSeerrLoading(bool loading) { seerrSearch_.setLoading(loading); }
 
     void setSelection(int selection) {
         selection_ = results_.empty() ? 0 : std::clamp(selection, 0, static_cast<int>(results_.size()) - 1);
@@ -135,12 +131,10 @@ public:
         if (query_.empty()) {
             debouncePending_ = false;
             loading_ = false;
-            seerrLoading_ = false;
             libraryTitles_.clear();
-            seerrResults_.clear();
+            seerrSearch_.reset();
             episodes_.clear();
             results_.clear();
-            seerrError_.clear();
             firstVisible_ = {0, 0, 0};
             return false;
         }
@@ -151,67 +145,30 @@ public:
 
     void cancelPending() {
         debouncePending_ = false;
-        seerrDebouncePending_ = false;
+        seerrSearch_.cancelPending();
         loading_ = false;
-        seerrLoading_ = false;
     }
 
     [[nodiscard]] bool debounceDue(Clock::time_point now) const { return debouncePending_ && now >= debounceDeadline_; }
 
     [[nodiscard]] bool scheduleSeerrDebounce(Clock::time_point now, bool configured) {
-        const bool eligible = configured && query_.size() >= kSeerrMinQueryBytes;
-        if (!eligible) {
-            const bool changed = seerrDebouncePending_ || seerrLoading_ || !seerrQuery_.empty() ||
-                                 !seerrResults_.empty() || !seerrError_.empty();
-            seerrDebouncePending_ = false;
-            seerrLoading_ = false;
-            seerrDebounceDeadline_ = {};
-            seerrQuery_.clear();
-            seerrResults_.clear();
-            seerrError_.clear();
-            if (changed) rebuildResults();
-            return changed;
-        }
-        if (query_ == seerrQuery_) return false;
-        seerrQuery_ = query_;
-        seerrDebouncePending_ = true;
-        seerrDebounceDeadline_ = now + kSeerrDebounceDelay;
-        seerrLoading_ = false;
-        seerrResults_.clear();
-        seerrError_.clear();
-        rebuildResults();
-        return true;
+        const bool changed = seerrSearch_.schedule(query_, now, configured);
+        if (changed) rebuildResults();
+        return changed;
     }
 
-    [[nodiscard]] bool seerrDebounceDue(Clock::time_point now) const {
-        return seerrDebouncePending_ && now >= seerrDebounceDeadline_;
-    }
+    [[nodiscard]] bool seerrDebounceDue(Clock::time_point now) const { return seerrSearch_.debounceDue(now); }
 
-    [[nodiscard]] bool beginDueSeerrSearch(Clock::time_point now) {
-        if (!seerrDebounceDue(now)) return false;
-        seerrDebouncePending_ = false;
-        seerrLoading_ = true;
-        return true;
-    }
+    [[nodiscard]] bool beginDueSeerrSearch(Clock::time_point now) { return seerrSearch_.beginDue(now); }
 
     [[nodiscard]] bool beginImmediateSeerrSearch(bool configured) {
         if (!configured || query_.size() < kSeerrMinQueryBytes) {
             (void)scheduleSeerrDebounce(Clock::now(), false);
             return false;
         }
-        if (query_ == seerrQuery_) {
-            if (!seerrDebouncePending_) return false;
-            seerrDebouncePending_ = false;
-            seerrLoading_ = true;
-            return true;
-        }
-        seerrQuery_ = query_;
-        seerrDebouncePending_ = false;
-        seerrLoading_ = true;
-        seerrResults_.clear();
-        seerrError_.clear();
-        rebuildResults();
-        return true;
+        const auto result = seerrSearch_.beginImmediate(query_);
+        if (result.resultsChanged) rebuildResults();
+        return result.started;
     }
 
     [[nodiscard]] bool beginSearch() {
@@ -219,7 +176,7 @@ public:
         selection_ = 0;
         if (query_.empty()) {
             loading_ = false;
-            seerrLoading_ = false;
+            seerrSearch_.setLoading(false);
             clearResults();
             return false;
         }
@@ -231,12 +188,7 @@ public:
     }
 
     void beginSeerrSearch() {
-        seerrDebouncePending_ = false;
-        seerrLoading_ = true;
-        seerrQuery_ = query_;
-        seerrError_.clear();
-        seerrResults_.clear();
-        rebuildResults();
+        if (seerrSearch_.begin(query_)) rebuildResults();
     }
 
     [[nodiscard]] bool finishLibrarySearch(const std::string& query, std::vector<JellyfinItem> results) {
@@ -257,53 +209,30 @@ public:
     }
 
     [[nodiscard]] bool finishSeerrSearch(const std::string& query, std::vector<SeerrMediaItem> results) {
-        if (query_ != query || seerrQuery_ != query) return false;
-        seerrLoading_ = false;
-        seerrError_.clear();
-        seerrResults_ = std::move(results);
+        if (query_ != query || !seerrSearch_.finish(query, std::move(results))) return false;
         rebuildResults();
         return true;
     }
 
     [[nodiscard]] bool failSeerrSearch(const std::string& query, std::string error) {
-        if (query_ != query || seerrQuery_ != query) return false;
-        seerrLoading_ = false;
-        seerrError_ = std::move(error);
-        seerrResults_.clear();
+        if (query_ != query || !seerrSearch_.fail(query, std::move(error))) return false;
         rebuildResults();
         return true;
     }
 
     void markSeerrRequested(const std::string& itemId, std::string status, int requestId = 0) {
-        for (auto& item : seerrResults_) {
-            if (item.id != itemId) continue;
-            item.requested = true;
-            item.requestId = requestId;
-            item.status = std::move(status);
-            if (item.mediaStatus <= 1) item.mediaStatus = 2;
-            break;
-        }
+        seerrSearch_.markRequested(itemId, std::move(status), requestId);
         rebuildResults();
     }
 
     void markSeerrUnrequested(const std::string& itemId) {
-        for (auto& item : seerrResults_) {
-            if (item.id != itemId) continue;
-            item.requested = false;
-            item.requestId = 0;
-            item.mediaStatus = 0;
-            item.status.clear();
-            break;
-        }
-        // Force a future search of the same text to re-check Seerr instead of
-        // treating the pre-delete result as a valid cached remote query.
-        seerrQuery_.clear();
+        seerrSearch_.markUnrequested(itemId);
         rebuildResults();
     }
 
     void clearResults() {
         libraryTitles_.clear();
-        seerrResults_.clear();
+        seerrSearch_.clearResults();
         episodes_.clear();
         results_.clear();
         selection_ = 0;
@@ -365,8 +294,9 @@ private:
     }
 
     [[nodiscard]] size_t visibleSeerrCount() const {
+        const auto& seerrResults = seerrSearch_.results();
         return static_cast<size_t>(
-            std::count_if(seerrResults_.begin(), seerrResults_.end(),
+            std::count_if(seerrResults.begin(), seerrResults.end(),
                           [&](const SeerrMediaItem& item) { return !duplicatesLocalLibrary(item); }));
     }
 
@@ -376,10 +306,11 @@ private:
             selectedId = results_[static_cast<size_t>(selection_)].id;
         }
 
+        const auto& seerrResults = seerrSearch_.results();
         results_.clear();
-        results_.reserve(libraryTitles_.size() + seerrResults_.size() + episodes_.size());
+        results_.reserve(libraryTitles_.size() + seerrResults.size() + episodes_.size());
         results_.insert(results_.end(), libraryTitles_.begin(), libraryTitles_.end());
-        for (const auto& item : seerrResults_) {
+        for (const auto& item : seerrResults) {
             if (!duplicatesLocalLibrary(item)) results_.push_back(jellyfinItemFromSeerrMedia(item));
         }
         results_.insert(results_.end(), episodes_.begin(), episodes_.end());
@@ -401,18 +332,13 @@ private:
 
     std::string query_;
     std::vector<JellyfinItem> libraryTitles_;
-    std::vector<SeerrMediaItem> seerrResults_;
+    SeerrSearchState seerrSearch_;
     std::vector<JellyfinItem> episodes_;
     std::vector<JellyfinItem> results_;
     int selection_ = 0;
     std::array<int, kRowCount> firstVisible_{0, 0, 0};
     bool keyboard_ = true;
     bool loading_ = false;
-    bool seerrLoading_ = false;
-    std::string seerrError_;
     bool debouncePending_ = false;
     Clock::time_point debounceDeadline_{};
-    bool seerrDebouncePending_ = false;
-    Clock::time_point seerrDebounceDeadline_{};
-    std::string seerrQuery_;
 };
