@@ -16,6 +16,7 @@ BUILD_DIR = ROOT / "build" / "host-tests"
 CPP_TESTS = [
     "account_screen_test.cpp",
     "app_settings_test.cpp",
+    "async_completion_queue_test.cpp",
     "audio_policy_test.cpp",
     "artwork_cache_test.cpp",
     "artwork_coordinator_test.cpp",

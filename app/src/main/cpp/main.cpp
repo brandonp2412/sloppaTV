@@ -7,6 +7,7 @@
 #include "account_screen.hpp"
 #include "app_settings.hpp"
 #include "artwork_provider.hpp"
+#include "async_completion_queue.hpp"
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
 #include "details_screen.hpp"
@@ -77,6 +78,7 @@
 #include <thread>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
 
 using namespace std::chrono_literals;
@@ -362,6 +364,20 @@ struct PendingTickWork {
     std::optional<ExternalPlaybackLaunch> externalLaunch;
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
+
+struct SeerrDeleteCompletion {
+    SeerrEndpoint endpoint;
+    SeerrDeleteRequest request;
+    ApiResult result;
+};
+
+struct SeerrRequestCompletion {
+    SeerrEndpoint endpoint;
+    SeerrMediaItem requestedItem;
+    ApiValueResult<int> result;
+};
+
+using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3136,25 +3152,12 @@ private:
         mutationLoading_ = true;
         error_.clear();
         tasks_.submit([this, endpoint, request] {
-            const ApiResult result = seerr_.deleteRequest(endpoint.server, endpoint.auth, request.requestId);
-            std::scoped_lock lock(stateMutex_);
-            mutationLoading_ = false;
-            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) return;
-            if (screen_ != Screen::ItemMenu || detail_.id != request.itemId) return;
-            if (!result.ok) {
-                error_ = "SEERR DELETE: " + result.error;
-                detailsState_.setDeleteConfirmation(false);
-                return;
-            }
-            seerrRequestState_.erasePending(request.itemId, request.requestId);
-            searchState_.markSeerrUnrequested(request.itemId);
-            syncSeerrHomeRowLocked();
-            detail_ = {};
-            detailsState_.setDeleteConfirmation(false);
-            popScreen(Screen::Home);
-            if (screen_ != Screen::Home) resetNavigation(Screen::Home);
-            showNotice("SEERR REQUEST DELETED", 4s);
-            error_.clear();
+            ApiResult result = seerr_.deleteRequest(endpoint.server, endpoint.auth, request.requestId);
+            asyncCompletions_.push(SeerrDeleteCompletion{
+                .endpoint = endpoint,
+                .request = request,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -3720,24 +3723,13 @@ private:
         const SeerrMediaItem requestedItem = item;
         const std::optional<SeerrStorageTarget> target = std::move(plan.target);
         tasks_.submit([this, endpoint, requestedItem, target] {
-            const ApiValueResult<int> result =
+            auto result =
                 seerr_.requestMedia(endpoint.server, endpoint.auth, requestedItem, target ? &*target : nullptr);
-            std::scoped_lock lock(stateMutex_);
-            mutationLoading_ = false;
-            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) return;
-            if (!result.ok) {
-                error_ = "SEERR REQUEST: " + result.error;
-                return;
-            }
-
-            const std::string status = requestedItem.television() ? "Queued" : "Queued for download";
-            searchState_.markSeerrRequested(requestedItem.id, status, result.value);
-            seerrRequestState_.markRequestSucceeded(requestedItem, result.value, status,
-                                                    std::chrono::steady_clock::now());
-            syncSeerrHomeRowLocked();
-            showNotice("REQUEST SENT TO SEERR", 4s);
-            error_.clear();
-            refreshSeerrStorageAsync(true);
+            asyncCompletions_.push(SeerrRequestCompletion{
+                .endpoint = endpoint,
+                .requestedItem = requestedItem,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -4818,7 +4810,55 @@ private:
         }
     }
 
+    void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
+        mutationLoading_ = false;
+        if (!completion.endpoint.matches(settings_.seerrServer, seerrAuth())) return;
+        if (screen_ != Screen::ItemMenu || detail_.id != completion.request.itemId) return;
+        if (!completion.result.ok) {
+            error_ = "SEERR DELETE: " + completion.result.error;
+            detailsState_.setDeleteConfirmation(false);
+            return;
+        }
+        seerrRequestState_.erasePending(completion.request.itemId, completion.request.requestId);
+        searchState_.markSeerrUnrequested(completion.request.itemId);
+        syncSeerrHomeRowLocked();
+        detail_ = {};
+        detailsState_.setDeleteConfirmation(false);
+        popScreen(Screen::Home);
+        if (screen_ != Screen::Home) resetNavigation(Screen::Home);
+        showNotice("SEERR REQUEST DELETED", 4s);
+        error_.clear();
+    }
+
+    void applyAsyncCompletion(const SeerrRequestCompletion& completion) {
+        mutationLoading_ = false;
+        if (!completion.endpoint.matches(settings_.seerrServer, seerrAuth())) return;
+        if (!completion.result.ok) {
+            error_ = "SEERR REQUEST: " + completion.result.error;
+            return;
+        }
+
+        const std::string status = completion.requestedItem.television() ? "Queued" : "Queued for download";
+        searchState_.markSeerrRequested(completion.requestedItem.id, status, completion.result.value);
+        seerrRequestState_.markRequestSucceeded(completion.requestedItem, completion.result.value, status,
+                                                std::chrono::steady_clock::now());
+        syncSeerrHomeRowLocked();
+        showNotice("REQUEST SENT TO SEERR", 4s);
+        error_.clear();
+        refreshSeerrStorageAsync(true);
+    }
+
+    void applyAsyncCompletions() {
+        auto completions = asyncCompletions_.takeAll();
+        if (completions.empty()) return;
+        std::scoped_lock lock(stateMutex_);
+        for (const auto& completion : completions) {
+            std::visit([this](const auto& value) { applyAsyncCompletion(value); }, completion);
+        }
+    }
+
     void tick() {
+        applyAsyncCompletions();
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
         applyPendingRuntimeLaunchRequest();
@@ -7286,6 +7326,7 @@ private:
     JniImageDecoder imageDecoder_;
     VideoSurface videoSurface_;
     TaskRunner tasks_;
+    AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
 
     mutable std::recursive_mutex stateMutex_;
     ArtworkProvider<JellyfinClient, SeerrClient, JniImageDecoder, TaskRunner, std::recursive_mutex> artwork_;
