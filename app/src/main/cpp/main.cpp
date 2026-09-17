@@ -456,6 +456,17 @@ struct FavoriteCompletion {
     ApiResult result;
 };
 
+struct PlayedCompletion {
+    JellyfinItem item;
+    bool desired = false;
+    uint64_t sessionEpoch = 0;
+    int nextUpReplacementIndex = -1;
+    JellyfinHomeData previousHome;
+    HomeSelectionSnapshot previousHomeSelection;
+    std::optional<JellyfinItem> nextUpReplacement;
+    ApiResult result;
+};
+
 struct MetadataRefreshCompletion {
     uint64_t sessionEpoch = 0;
     ApiResult result;
@@ -476,8 +487,8 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
                                      DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion,
-                                     ServerInfoNoticeCompletion, FavoriteCompletion, MetadataRefreshCompletion,
-                                     DeleteItemCompletion, DiscoveryCompletion>;
+                                     ServerInfoNoticeCompletion, FavoriteCompletion, PlayedCompletion,
+                                     MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3114,46 +3125,16 @@ private:
                     nextUpReplacement = detailed.ok ? std::move(detailed.value) : std::move(next.value);
                 }
             }
-            std::scoped_lock lock(stateMutex_);
-            if (!requestEpochs_.session.active(sessionEpoch)) return;
-            mutationLoading_ = false;
-            if (!result.ok) {
-                JellyfinItem rolledBack = item;
-                updateCachedUserData(rolledBack);
-                home_ = std::move(previousHome);
-                HomeRestorePlan rollbackPlan = HomeScreenState::restorePlan(previousHomeSelection, home_.rows);
-                homeState_.setSelections(std::move(rollbackPlan.selections));
-                homeState_.setRow(rollbackPlan.focusedRow);
-                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-                if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id)
-                    detail_ = item;
-                error_ = result.error;
-                return;
-            }
-            const auto nextUpRow =
-                std::find_if(home_.rows.begin(), home_.rows.end(),
-                             [](const JellyfinHomeRow& candidate) { return candidate.title == "Next Up"; });
-            if (nextUpReplacementIndex >= 0 && nextUpRow != home_.rows.end()) {
-                const size_t replacementIndex = static_cast<size_t>(nextUpReplacementIndex);
-                const bool slotStillMatches =
-                    replacementIndex < nextUpRow->items.size() && nextUpRow->items[replacementIndex].id == item.id;
-                if (nextUpReplacement && slotStillMatches && !isHiddenFromHome(*nextUpReplacement)) {
-                    const std::string replacementId = nextUpReplacement->id;
-                    nextUpRow->items[replacementIndex] = std::move(*nextUpReplacement);
-                    nextUpReplacementFadeIndex_ = nextUpReplacementIndex;
-                    nextUpReplacementFadeItemId_ = replacementId;
-                    nextUpReplacementFadeStarted_ = std::chrono::steady_clock::now();
-                    renderBurstUntil_ = std::max(renderBurstUntil_, nextUpReplacementFadeStarted_ + 320ms);
-                    if (app_ && app_->looper) ALooper_wake(app_->looper);
-                } else if (slotStillMatches) {
-                    nextUpRow->items.erase(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(replacementIndex));
-                    clampHomeSelections();
-                }
-            }
-            if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) {
-                detail_.played = desired;
-                if (desired) detail_.positionTicks = 0;
-            }
+            asyncCompletions_.push(PlayedCompletion{
+                .item = item,
+                .desired = desired,
+                .sessionEpoch = sessionEpoch,
+                .nextUpReplacementIndex = nextUpReplacementIndex,
+                .previousHome = std::move(previousHome),
+                .previousHomeSelection = std::move(previousHomeSelection),
+                .nextUpReplacement = std::move(nextUpReplacement),
+                .result = std::move(result),
+            });
         });
     }
 
@@ -4953,6 +4934,48 @@ private:
         }
         if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id) {
             detail_.favorite = completion.desired;
+        }
+    }
+
+    void applyAsyncCompletion(PlayedCompletion& completion) {
+        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
+        mutationLoading_ = false;
+        if (!completion.result.ok) {
+            updateCachedUserData(completion.item);
+            home_ = std::move(completion.previousHome);
+            HomeRestorePlan rollbackPlan = HomeScreenState::restorePlan(completion.previousHomeSelection, home_.rows);
+            homeState_.setSelections(std::move(rollbackPlan.selections));
+            homeState_.setRow(rollbackPlan.focusedRow);
+            homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+            if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id)
+                detail_ = completion.item;
+            error_ = completion.result.error;
+            return;
+        }
+        const auto nextUpRow =
+            std::find_if(home_.rows.begin(), home_.rows.end(),
+                         [](const JellyfinHomeRow& candidate) { return candidate.title == "Next Up"; });
+        if (completion.nextUpReplacementIndex >= 0 && nextUpRow != home_.rows.end()) {
+            const size_t replacementIndex = static_cast<size_t>(completion.nextUpReplacementIndex);
+            const bool slotStillMatches = replacementIndex < nextUpRow->items.size() &&
+                                          nextUpRow->items[replacementIndex].id == completion.item.id;
+            if (completion.nextUpReplacement && slotStillMatches &&
+                !isHiddenFromHome(*completion.nextUpReplacement)) {
+                const std::string replacementId = completion.nextUpReplacement->id;
+                nextUpRow->items[replacementIndex] = std::move(*completion.nextUpReplacement);
+                nextUpReplacementFadeIndex_ = completion.nextUpReplacementIndex;
+                nextUpReplacementFadeItemId_ = replacementId;
+                nextUpReplacementFadeStarted_ = std::chrono::steady_clock::now();
+                renderBurstUntil_ = std::max(renderBurstUntil_, nextUpReplacementFadeStarted_ + 320ms);
+                if (app_ && app_->looper) ALooper_wake(app_->looper);
+            } else if (slotStillMatches) {
+                nextUpRow->items.erase(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(replacementIndex));
+                clampHomeSelections();
+            }
+        }
+        if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id) {
+            detail_.played = completion.desired;
+            if (completion.desired) detail_.positionTicks = 0;
         }
     }
 
