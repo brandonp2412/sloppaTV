@@ -1918,8 +1918,7 @@ private:
         const int switchPositionMs = playerScreenState_.positionMs();
         if (plan.tryEmbeddedSwitch
             && player_.selectEmbeddedAudioStream(plan.audioStreamIndex, plan.audioOrdinal)) {
-            trackState_.setSelectedAudioServerIndex(plan.audioStreamIndex);
-            playbackSessionState_.activeTarget().audioStreamIndex = plan.audioStreamIndex;
+            playbackCoordinator_.selectAudioStream(plan.audioStreamIndex);
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
             return;
@@ -2092,8 +2091,7 @@ private:
                 return;
             }
 
-            trackState_.setSelectedSubtitleServerIndex(loadedSubtitle.index);
-            playbackSessionState_.activeTarget().subtitleStreamIndex = loadedSubtitle.index;
+            playbackCoordinator_.selectSubtitleStream(loadedSubtitle.index);
             __android_log_print(
                 ANDROID_LOG_INFO,
                 kTag,
@@ -2136,9 +2134,8 @@ private:
         rememberPlaybackSubtitlePreference(plan.subtitleStreamIndex);
         if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer
             && player_.disableSubtitles()) {
-            trackState_.setSelectedSubtitleServerIndex(kSubtitleOffIndex);
+            playbackCoordinator_.selectSubtitleStream(kSubtitleOffIndex);
             trackState_.setSubtitleEnabled(false);
-            playbackSessionState_.activeTarget().subtitleStreamIndex = kSubtitleOffIndex;
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
             return;
@@ -2164,9 +2161,8 @@ private:
                 );
                 if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
                     player_.disableSubtitles();
-                    trackState_.setSelectedSubtitleServerIndex(plan.subtitleStreamIndex);
+                    playbackCoordinator_.selectSubtitleStream(plan.subtitleStreamIndex);
                     trackState_.setSubtitleEnabled(false);
-                    playbackSessionState_.activeTarget().subtitleStreamIndex = plan.subtitleStreamIndex;
                     loadSubtitleAsync(*selected);
                     playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
                     reportProgressAsync(false);

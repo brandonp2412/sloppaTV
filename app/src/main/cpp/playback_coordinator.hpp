@@ -528,6 +528,16 @@ public:
         );
     }
 
+    void selectAudioStream(int streamIndex) {
+        trackState_.setSelectedAudioServerIndex(streamIndex);
+        sessionState_.activeTarget().audioStreamIndex = streamIndex;
+    }
+
+    void selectSubtitleStream(int streamIndex) {
+        trackState_.setSelectedSubtitleServerIndex(streamIndex);
+        sessionState_.activeTarget().subtitleStreamIndex = streamIndex;
+    }
+
     bool beginStreamRestart() {
         if (!trackState_.beginSubtitleWork()) return false;
         transitionState_.setLoading(true);

@@ -127,6 +127,13 @@ int main() {
     lifecycleCoordinator.activate(coordinatedItem, coordinatedTarget, now);
     lifecycleCoordinator.tracks().setAudioLanguagePreference(std::string{"eng"});
     lifecycleCoordinator.tracks().setSubtitleLanguagePreference(std::string{"spa"});
+    lifecycleCoordinator.selectAudioStream(11);
+    assert(lifecycleCoordinator.tracks().selectedAudioServerIndex() == 11);
+    assert(lifecycleCoordinator.session().activeTarget().audioStreamIndex == 11);
+    lifecycleCoordinator.selectSubtitleStream(12);
+    assert(lifecycleCoordinator.tracks().selectedSubtitleServerIndex() == 12);
+    assert(lifecycleCoordinator.session().activeTarget().subtitleStreamIndex == 12);
+
     lifecycleCoordinator.transition().setLoading(true);
     lifecycleCoordinator.finishStop();
     assert(!lifecycleCoordinator.tracks().audioLanguagePreference().has_value());
