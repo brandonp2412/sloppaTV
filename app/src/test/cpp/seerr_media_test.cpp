@@ -40,6 +40,11 @@ int main() {
     assert(item.externalRequestId == 42);
     assert(item.externalRequested);
 
+    const auto deleteRequest = seerrDeleteRequestFromJellyfinItem(item);
+    assert(deleteRequest.has_value());
+    assert(deleteRequest->itemId == media.id);
+    assert(deleteRequest->requestId == 42);
+
     const auto restored = seerrMediaFromJellyfinItem(item);
     assert(restored.has_value());
     assert(restored->id == media.id);
@@ -52,10 +57,16 @@ int main() {
     JellyfinItem ordinary;
     ordinary.id = "movie-1";
     ordinary.tmdbId = "10";
+    assert(!seerrDeleteRequestFromJellyfinItem(ordinary).has_value());
     assert(!seerrMediaFromJellyfinItem(ordinary).has_value());
 
     JellyfinItem invalid = item;
     invalid.tmdbId = "not-a-number";
+    assert(seerrDeleteRequestFromJellyfinItem(invalid).has_value());
     assert(!seerrMediaFromJellyfinItem(invalid).has_value());
+
+    JellyfinItem pendingId = item;
+    pendingId.externalRequestId = 0;
+    assert(!seerrDeleteRequestFromJellyfinItem(pendingId).has_value());
     return 0;
 }

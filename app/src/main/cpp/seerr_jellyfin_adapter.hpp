@@ -4,6 +4,12 @@
 #include "seerr_media.hpp"
 
 #include <optional>
+#include <string>
+
+struct SeerrDeleteRequest {
+    std::string itemId;
+    int requestId = 0;
+};
 
 inline bool isSeerrItem(const JellyfinItem& item) {
     return item.externalSource == "seerr";
@@ -31,6 +37,14 @@ inline JellyfinItem jellyfinItemFromSeerrMedia(const SeerrMediaItem& media) {
     item.externalRequested = media.requested;
     item.externalAvailable = media.available;
     return item;
+}
+
+inline std::optional<SeerrDeleteRequest> seerrDeleteRequestFromJellyfinItem(const JellyfinItem& item) {
+    if (!isSeerrItem(item) || item.externalRequestId <= 0) return std::nullopt;
+    return SeerrDeleteRequest{
+        .itemId = item.id,
+        .requestId = item.externalRequestId,
+    };
 }
 
 inline std::optional<SeerrMediaItem> seerrMediaFromJellyfinItem(const JellyfinItem& item) {

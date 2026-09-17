@@ -3118,7 +3118,8 @@ private:
     }
 
     void deleteSeerrRequestAsync() {
-        if (loading_ || mutationLoading_ || !isSeerrItem(detail_) || detail_.externalRequestId <= 0) {
+        const auto deleteRequest = seerrDeleteRequestFromJellyfinItem(detail_);
+        if (loading_ || mutationLoading_ || !deleteRequest) {
             if (isSeerrItem(detail_) && detail_.externalRequestId <= 0) {
                 error_ = "SEERR REQUEST ID IS NOT AVAILABLE YET";
                 detailsState_.setDeleteConfirmation(false);
@@ -3131,22 +3132,22 @@ private:
             detailsState_.setDeleteConfirmation(false);
             return;
         }
-        const JellyfinItem item = detail_;
+        const SeerrDeleteRequest request = *deleteRequest;
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, endpoint, item] {
-            const ApiResult result = seerr_.deleteRequest(endpoint.server, endpoint.auth, item.externalRequestId);
+        tasks_.submit([this, endpoint, request] {
+            const ApiResult result = seerr_.deleteRequest(endpoint.server, endpoint.auth, request.requestId);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
             if (!endpoint.matches(settings_.seerrServer, seerrAuth())) return;
-            if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
+            if (screen_ != Screen::ItemMenu || detail_.id != request.itemId) return;
             if (!result.ok) {
                 error_ = "SEERR DELETE: " + result.error;
                 detailsState_.setDeleteConfirmation(false);
                 return;
             }
-            seerrRequestState_.erasePending(item.id, item.externalRequestId);
-            searchState_.markSeerrUnrequested(item.id);
+            seerrRequestState_.erasePending(request.itemId, request.requestId);
+            searchState_.markSeerrUnrequested(request.itemId);
             syncSeerrHomeRowLocked();
             detail_ = {};
             detailsState_.setDeleteConfirmation(false);
