@@ -13,6 +13,29 @@ enum class QueueRepeatMode {
     All,
 };
 
+enum class QueueOverlayInput {
+    None,
+    Back,
+    Up,
+    Down,
+    Left,
+    Right,
+    Activate,
+};
+
+enum class QueueOverlayCommandType {
+    None,
+    ActivateAction,
+};
+
+struct QueueOverlayCommand {
+    QueueOverlayCommandType type = QueueOverlayCommandType::None;
+    int action = 0;
+    int selection = 0;
+    int currentIndex = -1;
+    int size = 0;
+};
+
 constexpr bool sameEpisodeSlot(int leftSeason, int leftEpisode, int rightSeason, int rightEpisode) {
     return leftSeason > 0 && leftEpisode > 0 && leftSeason == rightSeason && leftEpisode == rightEpisode;
 }
@@ -176,6 +199,41 @@ public:
     }
 
     void closeOverlay() { overlayActive_ = false; }
+
+    [[nodiscard]] QueueOverlayCommand handleOverlayInput(QueueOverlayInput input) {
+        if (input == QueueOverlayInput::Back) {
+            closeOverlay();
+            return {};
+        }
+        if (items_.empty()) {
+            closeOverlay();
+            return {};
+        }
+        if (input == QueueOverlayInput::Up) {
+            moveSelection(-1);
+            return {};
+        }
+        if (input == QueueOverlayInput::Down) {
+            moveSelection(1);
+            return {};
+        }
+        if (input == QueueOverlayInput::Left) {
+            moveAction(-1);
+            return {};
+        }
+        if (input == QueueOverlayInput::Right) {
+            moveAction(1);
+            return {};
+        }
+        if (input != QueueOverlayInput::Activate) return {};
+        return {
+            .type = QueueOverlayCommandType::ActivateAction,
+            .action = actionSelection_,
+            .selection = selection_,
+            .currentIndex = currentIndex_,
+            .size = size(),
+        };
+    }
 
     [[nodiscard]] int selection() const { return selection_; }
 

@@ -82,6 +82,29 @@ int main() {
     JellyfinItem missingQueueItem;
     missingQueueItem.id = "missing";
     assert(!state.updateCachedUserData(missingQueueItem));
+
+    PlaybackQueueState inputState;
+    std::vector<JellyfinItem> inputItems(3);
+    inputItems[0].id = "input-a";
+    inputItems[1].id = "input-b";
+    inputItems[2].id = "input-c";
+    inputState.replace(std::move(inputItems), 0);
+    assert(inputState.openOverlay());
+    auto overlayCommand = inputState.handleOverlayInput(QueueOverlayInput::Down);
+    assert(overlayCommand.type == QueueOverlayCommandType::None);
+    assert(inputState.selection() == 2);
+    overlayCommand = inputState.handleOverlayInput(QueueOverlayInput::Right);
+    assert(inputState.actionSelection() == 1);
+    overlayCommand = inputState.handleOverlayInput(QueueOverlayInput::Activate);
+    assert(overlayCommand.type == QueueOverlayCommandType::ActivateAction);
+    assert(overlayCommand.action == 1);
+    assert(overlayCommand.selection == 2);
+    assert(overlayCommand.currentIndex == 0);
+    assert(overlayCommand.size == 3);
+    overlayCommand = inputState.handleOverlayInput(QueueOverlayInput::Back);
+    assert(overlayCommand.type == QueueOverlayCommandType::None);
+    assert(!inputState.overlayActive());
+
     assert(state.openOverlay());
     state.moveSelection(2);
     assert(state.selection() == 3);

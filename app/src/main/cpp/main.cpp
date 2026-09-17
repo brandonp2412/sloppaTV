@@ -3922,48 +3922,39 @@ private:
     }
 
     void handleQueueOverlayKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
-            queueState_.closeOverlay();
-            return;
-        }
-        const int size = queueState_.size();
-        if (size <= 0) {
-            queueState_.closeOverlay();
-            return;
-        }
-        if (key == AKEYCODE_DPAD_UP) {
-            queueState_.moveSelection(-1);
-            return;
-        }
-        if (key == AKEYCODE_DPAD_DOWN) {
-            queueState_.moveSelection(1);
-            return;
-        }
-        if (key == AKEYCODE_DPAD_LEFT) {
-            queueState_.moveAction(-1);
-            return;
-        }
-        if (key == AKEYCODE_DPAD_RIGHT) {
-            queueState_.moveAction(1);
-            return;
-        }
-        if (key != AKEYCODE_DPAD_CENTER && key != AKEYCODE_ENTER) return;
+        QueueOverlayInput input = QueueOverlayInput::None;
+        if (key == AKEYCODE_BACK)
+            input = QueueOverlayInput::Back;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = QueueOverlayInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = QueueOverlayInput::Down;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = QueueOverlayInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = QueueOverlayInput::Right;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = QueueOverlayInput::Activate;
 
-        const int selection = queueState_.selection();
-        const int current = queueState_.currentIndex();
-        if (queueState_.actionSelection() == 0) {
+        const QueueOverlayCommand command = queueState_.handleOverlayInput(input);
+        if (command.type != QueueOverlayCommandType::ActivateAction) return;
+
+        const int selection = command.selection;
+        const int current = command.currentIndex;
+        const int size = command.size;
+        if (command.action == 0) {
             if (queueCanPlayNow(selection, current, size)) playQueuedIndexAsync(selection);
-        } else if (queueState_.actionSelection() == 1) {
+        } else if (command.action == 1) {
             if (queueCanPlayNext(selection, current, size)) moveQueuedItem(selection, current + 1);
-        } else if (queueState_.actionSelection() == 2) {
+        } else if (command.action == 2) {
             if (queueCanMoveUp(selection, current, size)) moveQueuedItem(selection, selection - 1);
-        } else if (queueState_.actionSelection() == 3) {
+        } else if (command.action == 3) {
             if (queueCanMoveDown(selection, current, size)) moveQueuedItem(selection, selection + 1);
-        } else if (queueState_.actionSelection() == 4) {
+        } else if (command.action == 4) {
             if (queueState_.removeSelected()) playbackCoordinator_.syncQueueContinuation(queueState_);
-        } else if (queueState_.actionSelection() == 5) {
+        } else if (command.action == 5) {
             shuffleRemainingQueue();
-        } else if (queueState_.actionSelection() == 6) {
+        } else if (command.action == 6) {
             queueState_.cycleRepeatMode();
             playbackCoordinator_.syncQueueContinuation(queueState_);
         }
