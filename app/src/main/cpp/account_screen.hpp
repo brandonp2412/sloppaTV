@@ -8,6 +8,28 @@
 #include <string>
 #include <utility>
 
+enum class ProfilesScreenInput {
+    None,
+    Back,
+    Up,
+    Down,
+    Horizontal,
+    Activate,
+};
+
+enum class ProfilesScreenCommandType {
+    None,
+    Back,
+    AddAccount,
+    SwitchSession,
+    ForgetSession,
+};
+
+struct ProfilesScreenCommand {
+    ProfilesScreenCommandType type = ProfilesScreenCommandType::None;
+    int sessionIndex = -1;
+};
+
 class AccountScreenState {
 public:
     static constexpr int kServerField = 0;
@@ -120,6 +142,31 @@ public:
     void beginProfiles(int savedCount) {
         profileSelection_ = std::clamp(profileSelection_, 0, std::max(0, savedCount));
         profileAction_ = 0;
+    }
+
+    [[nodiscard]] ProfilesScreenCommand handleProfilesInput(ProfilesScreenInput input, int savedCount) {
+        if (input == ProfilesScreenInput::Back) return {.type = ProfilesScreenCommandType::Back};
+        if (input == ProfilesScreenInput::Up) {
+            moveProfile(-1, savedCount);
+            return {};
+        }
+        if (input == ProfilesScreenInput::Down) {
+            moveProfile(1, savedCount);
+            return {};
+        }
+        if (input == ProfilesScreenInput::Horizontal) {
+            toggleProfileAction(savedCount);
+            return {};
+        }
+        if (input != ProfilesScreenInput::Activate) return {};
+
+        if (profileSelection_ == savedCount) return {.type = ProfilesScreenCommandType::AddAccount};
+        if (profileSelection_ < 0 || profileSelection_ >= savedCount) return {};
+        return {
+            .type = profileAction_ == 0 ? ProfilesScreenCommandType::SwitchSession
+                                       : ProfilesScreenCommandType::ForgetSession,
+            .sessionIndex = profileSelection_,
+        };
     }
 
     void moveProfile(int direction, int savedCount) {

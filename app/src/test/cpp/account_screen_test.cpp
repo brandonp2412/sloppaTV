@@ -71,18 +71,30 @@ int main() {
 
     state.beginProfiles(3);
     assert(state.profileSelection() == 0);
-    state.moveProfile(1, 3);
-    state.moveProfile(1, 3);
+    auto profileCommand = state.handleProfilesInput(ProfilesScreenInput::Down, 3);
+    assert(profileCommand.type == ProfilesScreenCommandType::None);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Down, 3);
     assert(state.profileSelection() == 2);
-    state.toggleProfileAction(3);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Horizontal, 3);
     assert(state.profileAction() == 1);
-    state.moveProfile(1, 3);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Activate, 3);
+    assert(profileCommand.type == ProfilesScreenCommandType::ForgetSession);
+    assert(profileCommand.sessionIndex == 2);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Horizontal, 3);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Activate, 3);
+    assert(profileCommand.type == ProfilesScreenCommandType::SwitchSession);
+    assert(profileCommand.sessionIndex == 2);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Down, 3);
     assert(state.profileSelection() == 3);
     assert(state.profileAction() == 0);
-    state.toggleProfileAction(3);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Activate, 3);
+    assert(profileCommand.type == ProfilesScreenCommandType::AddAccount);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Horizontal, 3);
     assert(state.profileAction() == 0);
-    state.moveProfile(-1, 3);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Up, 3);
     assert(state.profileSelection() == 2);
+    profileCommand = state.handleProfilesInput(ProfilesScreenInput::Back, 3);
+    assert(profileCommand.type == ProfilesScreenCommandType::Back);
 
     return 0;
 }

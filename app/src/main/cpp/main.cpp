@@ -1477,26 +1477,28 @@ private:
     }
 
     void handleProfilesKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
+        ProfilesScreenInput input = ProfilesScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = ProfilesScreenInput::Back;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = ProfilesScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = ProfilesScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT)
+            input = ProfilesScreenInput::Horizontal;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = ProfilesScreenInput::Activate;
+
+        const int savedCount = static_cast<int>(sessionRegistry_.size());
+        const ProfilesScreenCommand command = accountState_.handleProfilesInput(input, savedCount);
+        if (command.type == ProfilesScreenCommandType::Back) {
             popScreen(Screen::Login);
-            return;
-        }
-        const int addIndex = static_cast<int>(sessionRegistry_.size());
-        if (key == AKEYCODE_DPAD_UP) {
-            accountState_.moveProfile(-1, addIndex);
-        } else if (key == AKEYCODE_DPAD_DOWN) {
-            accountState_.moveProfile(1, addIndex);
-        } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
-            accountState_.toggleProfileAction(addIndex);
-        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (accountState_.profileSelection() == addIndex) {
-                startAddAccount();
-            } else if (accountState_.profileSelection() >= 0 && accountState_.profileSelection() < addIndex) {
-                if (accountState_.profileAction() == 0)
-                    switchSavedSession(static_cast<size_t>(accountState_.profileSelection()));
-                else
-                    forgetSavedSession(static_cast<size_t>(accountState_.profileSelection()));
-            }
+        } else if (command.type == ProfilesScreenCommandType::AddAccount) {
+            startAddAccount();
+        } else if (command.type == ProfilesScreenCommandType::SwitchSession) {
+            switchSavedSession(static_cast<size_t>(command.sessionIndex));
+        } else if (command.type == ProfilesScreenCommandType::ForgetSession) {
+            forgetSavedSession(static_cast<size_t>(command.sessionIndex));
         }
     }
 
