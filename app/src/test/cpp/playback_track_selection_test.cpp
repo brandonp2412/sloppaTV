@@ -23,6 +23,40 @@ int main() {
     assert(playbackAudioLanguage(item, 3) == "eng");
     assert(playbackAudioLanguage(item, -1) == "jpn");
 
+    PlaybackTarget directPlayerTarget;
+    directPlayerTarget.playMethod = PlaybackMethod::DirectPlay;
+    directPlayerTarget.audioStreamIndex = 3;
+    assert(playerAudioOrdinal(directPlayerTarget, item) == 1);
+    directPlayerTarget.audioStreamIndex = 99;
+    assert(playerAudioOrdinal(directPlayerTarget, item) == -1);
+    directPlayerTarget.playMethod = PlaybackMethod::DirectStream;
+    directPlayerTarget.audioStreamIndex = 3;
+    assert(playerAudioOrdinal(directPlayerTarget, item) == -1);
+
+    JellyfinItem playerSubtitleItem;
+    playerSubtitleItem.subtitles = {
+        {.index = 11, .codec = "pgs", .language = "eng", .title = "PGS", .forced = false, .isDefault = true, .isExternal = false},
+        {.index = 12, .codec = "srt", .language = "eng", .title = "Text", .forced = false, .isDefault = false, .isExternal = false},
+        {.index = 13, .codec = "pgs", .language = "eng", .title = "External PGS", .forced = false, .isDefault = false, .isExternal = true},
+    };
+    PlaybackTarget playerSubtitleTarget;
+    playerSubtitleTarget.playMethod = PlaybackMethod::DirectPlay;
+    playerSubtitleTarget.subtitleStreamIndex = 11;
+    playerSubtitleTarget.subtitleUrl = "https://media.example/subtitle";
+    assert(playerSubtitleStreamIndex(playerSubtitleTarget, playerSubtitleItem) == 11);
+    assert(playerSubtitleOrdinal(playerSubtitleTarget, playerSubtitleItem) == 0);
+    assert(directExternalSubtitleUrl(playerSubtitleTarget, playerSubtitleItem).empty());
+    playerSubtitleTarget.subtitleStreamIndex = 12;
+    assert(playerSubtitleStreamIndex(playerSubtitleTarget, playerSubtitleItem) == kSubtitleOffIndex);
+    assert(playerSubtitleOrdinal(playerSubtitleTarget, playerSubtitleItem) == -1);
+    playerSubtitleTarget.subtitleStreamIndex = 13;
+    assert(playerSubtitleStreamIndex(playerSubtitleTarget, playerSubtitleItem) == 13);
+    assert(playerSubtitleOrdinal(playerSubtitleTarget, playerSubtitleItem) == -1);
+    assert(directExternalSubtitleUrl(playerSubtitleTarget, playerSubtitleItem) == playerSubtitleTarget.subtitleUrl);
+    playerSubtitleTarget.playMethod = PlaybackMethod::DirectStream;
+    assert(playerSubtitleStreamIndex(playerSubtitleTarget, playerSubtitleItem) == kSubtitleOffIndex);
+    assert(directExternalSubtitleUrl(playerSubtitleTarget, playerSubtitleItem).empty());
+
     PlaybackTrackSelectionPolicy autoPolicy{
         .autoSubtitles = true,
         .autoSubtitleLanguage = "eng",

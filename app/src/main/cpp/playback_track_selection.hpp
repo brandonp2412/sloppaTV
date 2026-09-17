@@ -63,6 +63,43 @@ inline bool playbackSubtitleAllowed(
     return subtitleLanguageAllowed(subtitle.language, allowedLanguages);
 }
 
+inline int playerAudioOrdinal(const PlaybackTarget& target, const JellyfinItem& item) {
+    if (target.playMethod != PlaybackMethod::DirectPlay || target.audioStreamIndex < 0) return -1;
+    for (size_t index = 0; index < item.audios.size(); ++index) {
+        if (item.audios[index].index == target.audioStreamIndex) return static_cast<int>(index);
+    }
+    return -1;
+}
+
+inline int playerSubtitleStreamIndex(const PlaybackTarget& target, const JellyfinItem& item) {
+    if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return kSubtitleOffIndex;
+    const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+        return subtitle.index == target.subtitleStreamIndex;
+    });
+    if (selected == item.subtitles.end()) return kSubtitleOffIndex;
+    return subtitleStrategy(selected->codec) == SubtitleStrategy::ClientEmbedded
+        ? target.subtitleStreamIndex
+        : kSubtitleOffIndex;
+}
+
+inline int playerSubtitleOrdinal(const PlaybackTarget& target, const JellyfinItem& item) {
+    if (playerSubtitleStreamIndex(target, item) < 0) return -1;
+    for (size_t index = 0; index < item.subtitles.size(); ++index) {
+        if (item.subtitles[index].index == target.subtitleStreamIndex && !item.subtitles[index].isExternal) {
+            return static_cast<int>(index);
+        }
+    }
+    return -1;
+}
+
+inline std::string directExternalSubtitleUrl(const PlaybackTarget& target, const JellyfinItem& item) {
+    if (playerSubtitleStreamIndex(target, item) < 0 || target.subtitleUrl.empty()) return {};
+    const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+        return subtitle.index == target.subtitleStreamIndex;
+    });
+    return selected != item.subtitles.end() && selected->isExternal ? target.subtitleUrl : std::string{};
+}
+
 inline std::string playbackAudioLanguage(const JellyfinItem& item, int audioStreamIndex) {
     auto selected = item.audios.end();
     if (audioStreamIndex >= 0) {

@@ -4442,43 +4442,6 @@ private:
         error_.clear();
     }
 
-    int playerAudioOrdinal(const PlaybackTarget& target, const JellyfinItem& item) const {
-        if (target.playMethod != PlaybackMethod::DirectPlay || target.audioStreamIndex < 0) return -1;
-        for (size_t index = 0; index < item.audios.size(); ++index) {
-            if (item.audios[index].index == target.audioStreamIndex) return static_cast<int>(index);
-        }
-        return -1;
-    }
-
-    int playerSubtitleStreamIndex(const PlaybackTarget& target, const JellyfinItem& item) const {
-        if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return kSubtitleOffIndex;
-        const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-            return subtitle.index == target.subtitleStreamIndex;
-        });
-        if (selected == item.subtitles.end()) return kSubtitleOffIndex;
-        return subtitleStrategy(selected->codec) == SubtitleStrategy::ClientEmbedded
-            ? target.subtitleStreamIndex
-            : kSubtitleOffIndex;
-    }
-
-    int playerSubtitleOrdinal(const PlaybackTarget& target, const JellyfinItem& item) const {
-        if (playerSubtitleStreamIndex(target, item) < 0) return -1;
-        for (size_t index = 0; index < item.subtitles.size(); ++index) {
-            if (item.subtitles[index].index == target.subtitleStreamIndex && !item.subtitles[index].isExternal) {
-                return static_cast<int>(index);
-            }
-        }
-        return -1;
-    }
-
-    std::string directExternalSubtitleUrl(const PlaybackTarget& target, const JellyfinItem& item) const {
-        if (playerSubtitleStreamIndex(target, item) < 0 || target.subtitleUrl.empty()) return {};
-        const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-            return subtitle.index == target.subtitleStreamIndex;
-        });
-        return selected != item.subtitles.end() && selected->isExternal ? target.subtitleUrl : std::string{};
-    }
-
     void startResolvedPlaybackTarget(const PlaybackTarget& target) {
         const auto now = std::chrono::steady_clock::now();
         const int startPositionMs = initialPlayerSeekMs(target.startTicks);
