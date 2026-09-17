@@ -717,6 +717,35 @@ public:
         sessionState_.activeTarget().subtitleStreamIndex = streamIndex;
     }
 
+    void disableSubtitleRendering() {
+        selectSubtitleStream(kSubtitleOffIndex);
+        trackState_.setSubtitleEnabled(false);
+    }
+
+    void prepareNativeSubtitleLoad(int streamIndex) {
+        selectSubtitleStream(streamIndex);
+        trackState_.setSubtitleEnabled(false);
+    }
+
+    [[nodiscard]] bool beginSubtitleLoad() {
+        return trackState_.beginSubtitleWork();
+    }
+
+    [[nodiscard]] bool subtitleLoadMatches(std::string_view itemId, int requestedStreamIndex) const {
+        return sessionState_.activeItem().id == itemId
+            && trackState_.selectedSubtitleServerIndex() == requestedStreamIndex;
+    }
+
+    void failSubtitleLoad() {
+        trackState_.failSelectedSubtitle();
+    }
+
+    void completeSubtitleLoad(int streamIndex, std::string language, std::vector<SubtitleCue> cues) {
+        trackState_.endSubtitleWork();
+        selectSubtitleStream(streamIndex);
+        trackState_.applySubtitle(streamIndex, std::move(language), std::move(cues));
+    }
+
     [[nodiscard]] std::optional<PlaybackStreamRestartPlan> beginStreamRestart() {
         if (!trackState_.beginSubtitleWork()) return std::nullopt;
         PlaybackStreamRestartPlan plan;

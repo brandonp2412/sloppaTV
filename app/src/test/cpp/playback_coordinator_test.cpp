@@ -121,6 +121,38 @@ int main() {
     preferenceCoordinator.rememberSubtitleLanguagePreference(kSubtitleOffIndex);
     assert(preferenceCoordinator.tracks().subtitleLanguagePreference() == std::optional<std::string>{""});
 
+    PlaybackCoordinator subtitleLoadCoordinator;
+    subtitleLoadCoordinator.activate(preferenceItem, coordinatedTarget, now);
+    subtitleLoadCoordinator.prepareNativeSubtitleLoad(4);
+    assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == 4);
+    assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == 4);
+    assert(!subtitleLoadCoordinator.tracks().subtitleEnabled());
+    assert(subtitleLoadCoordinator.beginSubtitleLoad());
+    assert(subtitleLoadCoordinator.tracks().subtitleBusy());
+    assert(subtitleLoadCoordinator.subtitleLoadMatches(preferenceItem.id, 4));
+    assert(!subtitleLoadCoordinator.subtitleLoadMatches("other-item", 4));
+    assert(!subtitleLoadCoordinator.subtitleLoadMatches(preferenceItem.id, 5));
+    subtitleLoadCoordinator.completeSubtitleLoad(
+        5,
+        "English",
+        {{.startMs = 100, .endMs = 500, .text = "Hello"}}
+    );
+    assert(!subtitleLoadCoordinator.tracks().subtitleBusy());
+    assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == 5);
+    assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == 5);
+    assert(subtitleLoadCoordinator.tracks().subtitleEnabled());
+    assert(subtitleLoadCoordinator.tracks().activeSubtitleServerIndex() == 5);
+    assert(subtitleLoadCoordinator.tracks().subtitleLanguage() == "English");
+    assert(subtitleLoadCoordinator.tracks().subtitleCues().size() == 1);
+    subtitleLoadCoordinator.disableSubtitleRendering();
+    assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == kSubtitleOffIndex);
+    assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == kSubtitleOffIndex);
+    assert(!subtitleLoadCoordinator.tracks().subtitleEnabled());
+    assert(subtitleLoadCoordinator.beginSubtitleLoad());
+    subtitleLoadCoordinator.failSubtitleLoad();
+    assert(!subtitleLoadCoordinator.tracks().subtitleBusy());
+    assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == kSubtitleOffIndex);
+
     PlaybackCoordinator restartCoordinator;
     restartCoordinator.activate(coordinatedItem, coordinatedTarget, now);
     assert(restartCoordinator.telemetry().markPlaybackStartReported());

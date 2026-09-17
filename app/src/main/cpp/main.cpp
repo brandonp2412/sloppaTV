@@ -1928,7 +1928,7 @@ private:
     }
 
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
-        if (!session_.valid() || subtitle.index < 0 || !trackState_.beginSubtitleWork()) return;
+        if (!session_.valid() || subtitle.index < 0 || !playbackCoordinator_.beginSubtitleLoad()) return;
         const JellyfinSession session = session_;
         const JellyfinItem item = playbackSessionState_.activeItem();
         const std::string dataPath = dataPath_;
@@ -2048,19 +2048,14 @@ private:
 
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
-            if (playbackSessionState_.activeItem().id != item.id
-                || trackState_.selectedSubtitleServerIndex() != requestedSubtitleIndex) {
-                return;
-            }
+            if (!playbackCoordinator_.subtitleLoadMatches(item.id, requestedSubtitleIndex)) return;
 
-            trackState_.endSubtitleWork();
             if (loadedCues.empty()) {
-                trackState_.failSelectedSubtitle();
+                playbackCoordinator_.failSubtitleLoad();
                 showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
                 return;
             }
 
-            playbackCoordinator_.selectSubtitleStream(loadedSubtitle.index);
             __android_log_print(
                 ANDROID_LOG_INFO,
                 kTag,
@@ -2070,11 +2065,15 @@ private:
                 loadedSubtitle.codec.c_str(),
                 loadedCues.size()
             );
-            trackState_.applySubtitle(loadedSubtitle.index, loadedSubtitle.language, std::move(loadedCues));
+            playbackCoordinator_.completeSubtitleLoad(
+                loadedSubtitle.index,
+                loadedSubtitle.language,
+                std::move(loadedCues)
+            );
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
         })) {
-            trackState_.failSelectedSubtitle();
+            playbackCoordinator_.failSubtitleLoad();
             showNotice("SUBTITLES COULD NOT BE STARTED");
         }
     }
@@ -2103,8 +2102,7 @@ private:
         playbackCoordinator_.rememberSubtitleLanguagePreference(plan.subtitleStreamIndex);
         if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer
             && player_.disableSubtitles()) {
-            playbackCoordinator_.selectSubtitleStream(kSubtitleOffIndex);
-            trackState_.setSubtitleEnabled(false);
+            playbackCoordinator_.disableSubtitleRendering();
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
             reportProgressAsync(false);
             return;
@@ -2130,8 +2128,7 @@ private:
                 );
                 if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
                     player_.disableSubtitles();
-                    playbackCoordinator_.selectSubtitleStream(plan.subtitleStreamIndex);
-                    trackState_.setSubtitleEnabled(false);
+                    playbackCoordinator_.prepareNativeSubtitleLoad(plan.subtitleStreamIndex);
                     loadSubtitleAsync(*selected);
                     playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
                     reportProgressAsync(false);
