@@ -4,9 +4,27 @@
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
+
+struct EpisodeSeriesContextRequest {
+    std::string itemId;
+    std::string seriesId;
+
+    [[nodiscard]] bool matches(const JellyfinItem& item) const {
+        return item.id == itemId && item.type == "Episode";
+    }
+};
+
+inline std::optional<EpisodeSeriesContextRequest> episodeSeriesContextRequest(const JellyfinItem& item) {
+    if (item.type != "Episode" || item.seriesId.empty()) return std::nullopt;
+    return EpisodeSeriesContextRequest{
+        .itemId = item.id,
+        .seriesId = item.seriesId,
+    };
+}
 
 class DetailsScreenState {
 public:

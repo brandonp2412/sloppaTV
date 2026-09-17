@@ -500,6 +500,12 @@ struct DetailsSimilarCompletion {
     std::vector<JellyfinItem> items;
 };
 
+struct EpisodeSeriesContextRequestCompletion {
+    JellyfinSession session;
+    EpisodeSeriesContextRequest request;
+    uint64_t generation = 0;
+};
+
 struct EpisodeSeriesContextCompletion {
     std::string itemId;
     uint64_t generation = 0;
@@ -655,7 +661,8 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      ServerInfoNoticeCompletion, FavoriteCompletion, PlayedCompletion,
                                      MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
                                      LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
-                                     EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
+                                     EpisodeSeriesContextRequestCompletion, EpisodeSeriesContextCompletion,
+                                     QuickConnectStartedCompletion,
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
                                      QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
                                      ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion,
@@ -3743,8 +3750,7 @@ private:
                 return;
             }
 
-            const bool episode = result.value.type == "Episode";
-            const std::string seriesId = result.value.seriesId;
+            auto contextRequest = episodeSeriesContextRequest(result.value);
             asyncCompletions_.push(DetailsItemCompletion{
                 .itemId = id,
                 .generation = generation,
@@ -3761,19 +3767,11 @@ private:
                 });
             }
 
-            if (!episode || seriesId.empty()) return;
-            {
-                std::scoped_lock lock(stateMutex_);
-                if (screen_ != Screen::Details || detail_.id != id) return;
-            }
-            auto series = api_.getItem(session, seriesId);
-            auto seasons = api_.getSeasons(session, seriesId);
-            if (!requestEpochs_.content.active(generation) || !series.ok || !seasons.ok) return;
-            asyncCompletions_.push(EpisodeSeriesContextCompletion{
-                .itemId = id,
+            if (!contextRequest) return;
+            asyncCompletions_.push(EpisodeSeriesContextRequestCompletion{
+                .session = session,
+                .request = std::move(*contextRequest),
                 .generation = generation,
-                .series = std::move(series.value),
-                .seasons = std::move(seasons.value),
             });
         });
     }
@@ -5058,6 +5056,27 @@ private:
         if (!requestEpochs_.content.active(completion.generation)) return;
         if (screen_ != Screen::Details || detail_.id != completion.itemId) return;
         detailsState_.setSimilar(std::move(completion.items));
+    }
+
+    void applyAsyncCompletion(EpisodeSeriesContextRequestCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        if (screen_ != Screen::Details || !completion.request.matches(detail_)) return;
+
+        const JellyfinSession session = std::move(completion.session);
+        const std::string itemId = std::move(completion.request.itemId);
+        const std::string seriesId = std::move(completion.request.seriesId);
+        const uint64_t generation = completion.generation;
+        tasks_.submit([this, session, itemId, seriesId, generation] {
+            auto series = api_.getItem(session, seriesId);
+            auto seasons = api_.getSeasons(session, seriesId);
+            if (!requestEpochs_.content.active(generation) || !series.ok || !seasons.ok) return;
+            asyncCompletions_.push(EpisodeSeriesContextCompletion{
+                .itemId = itemId,
+                .generation = generation,
+                .series = std::move(series.value),
+                .seasons = std::move(seasons.value),
+            });
+        });
     }
 
     void applyAsyncCompletion(EpisodeSeriesContextCompletion& completion) {

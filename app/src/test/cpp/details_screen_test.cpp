@@ -90,6 +90,29 @@ int main() {
     assert(state.personItemSelection() == 0);
     assert(state.selectedPersonItem()->id == "person-item-1");
 
+    JellyfinItem episodeDetail;
+    episodeDetail.id = "episode-detail";
+    episodeDetail.type = "Episode";
+    episodeDetail.seriesId = "series";
+    auto contextRequest = episodeSeriesContextRequest(episodeDetail);
+    assert(contextRequest.has_value());
+    assert(contextRequest->itemId == "episode-detail");
+    assert(contextRequest->seriesId == "series");
+    assert(contextRequest->matches(episodeDetail));
+
+    JellyfinItem otherEpisode = episodeDetail;
+    otherEpisode.id = "other-episode";
+    assert(!contextRequest->matches(otherEpisode));
+
+    JellyfinItem movieDetail = episodeDetail;
+    movieDetail.type = "Movie";
+    assert(!episodeSeriesContextRequest(movieDetail).has_value());
+    assert(!contextRequest->matches(movieDetail));
+
+    JellyfinItem detachedEpisode = episodeDetail;
+    detachedEpisode.seriesId.clear();
+    assert(!episodeSeriesContextRequest(detachedEpisode).has_value());
+
     JellyfinItem seasonOne;
     seasonOne.id = "season-1";
     seasonOne.name = "Season 1";
