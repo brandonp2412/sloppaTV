@@ -484,6 +484,21 @@ int main() {
     assert(resolutionCoordinator.continuation().autoplayChainCount() == 0);
     assert(resolutionCoordinator.continuation().stillWatchingPrompt());
 
+    resolutionCoordinator.tracks().setAudioLanguagePreference(std::string{"eng"});
+    resolutionCoordinator.tracks().setSubtitleLanguagePreference(std::string{"spa"});
+    resolutionCoordinator.continuation().incrementAutoplayChain();
+    resolutionCoordinator.continuation().setStillWatchingPrompt(true);
+    resolutionCoordinator.beginUserPlayback(true);
+    assert(resolutionCoordinator.tracks().audioLanguagePreference() == std::optional<std::string>{"eng"});
+    assert(resolutionCoordinator.tracks().subtitleLanguagePreference() == std::optional<std::string>{"spa"});
+    assert(resolutionCoordinator.continuation().autoplayChainCount() == 0);
+    assert(!resolutionCoordinator.continuation().stillWatchingPrompt());
+    resolutionCoordinator.continuation().setStillWatchingPrompt(true);
+    resolutionCoordinator.beginUserPlayback(false);
+    assert(!resolutionCoordinator.tracks().audioLanguagePreference().has_value());
+    assert(!resolutionCoordinator.tracks().subtitleLanguagePreference().has_value());
+    assert(!resolutionCoordinator.continuation().stillWatchingPrompt());
+
     resolutionCoordinator.continuation().setStillWatchingPrompt(true);
     resolutionCoordinator.beginPlaybackResolution(false);
     assert(!resolutionCoordinator.transition().loading());

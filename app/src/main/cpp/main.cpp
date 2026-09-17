@@ -4063,8 +4063,7 @@ private:
         if (loading_ || detail_.type != "Series" || detail_.id.empty() || !session_.valid()) return;
         loading_ = true;
         error_.clear();
-        playbackCoordinator_.resetContinuationPrompt();
-        trackState_.clearLanguagePreferences();
+        playbackCoordinator_.beginUserPlayback(false);
         const JellyfinSession session = session_;
         const JellyfinItem series = detail_;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
@@ -4186,14 +4185,13 @@ private:
         const bool continuingPlaybackChain = continuationState_.stillWatchingPrompt();
         const bool continuingQueuedPrompt = continuingPlaybackChain && !queueState_.empty();
         int queuedPlaybackIndex = -1;
-        if (!continuingPlaybackChain) trackState_.clearLanguagePreferences();
+        playbackCoordinator_.beginUserPlayback(continuingPlaybackChain);
         if (continuingQueuedPrompt) {
             queuedPlaybackIndex = queueState_.findItemIndex(detail_.id);
             if (queuedPlaybackIndex < 0) queueState_.reset();
         } else {
             queueState_.reset();
         }
-        playbackCoordinator_.resetContinuationPrompt();
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -4458,8 +4456,7 @@ private:
         hideSystemTextInput();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle) {
             releaseActivePlayback(true);
-            trackState_.clearLanguagePreferences();
-            transitionState_.setLoading(false);
+            playbackCoordinator_.finishStop();
         }
         resetNavigation(Screen::Home);
         queueState_.closeOverlay();

@@ -411,6 +411,11 @@ public:
         continuationState_.setStillWatchingPrompt(true);
     }
 
+    void beginUserPlayback(bool continuingPlaybackChain) {
+        resetContinuationPrompt();
+        if (!continuingPlaybackChain) trackState_.clearLanguagePreferences();
+    }
+
     void beginPlaybackResolution(bool showTransitionLoading) {
         transitionState_.setLoading(showTransitionLoading);
         continuationState_.setStillWatchingPrompt(false);
