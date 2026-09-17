@@ -27,6 +27,25 @@ public:
         SeerrStorageTarget target;
     };
 
+    enum class PickerInput {
+        None,
+        Back,
+        Up,
+        Down,
+        Activate,
+    };
+
+    enum class PickerCommandType {
+        None,
+        Back,
+        Selected,
+    };
+
+    struct PickerCommand {
+        PickerCommandType type = PickerCommandType::None;
+        std::optional<Selection> selection;
+    };
+
     [[nodiscard]] const std::vector<SeerrStorageTarget>& targets() const { return targets_; }
 
     [[nodiscard]] bool empty() const { return targets_.empty(); }
@@ -107,6 +126,33 @@ public:
     void cancelPicker() {
         pendingRequest_.reset();
         driveChoices_.clear();
+    }
+
+    [[nodiscard]] PickerCommand handlePickerInput(PickerInput input) {
+        if (input == PickerInput::Back) {
+            cancelPicker();
+            return {
+                .type = PickerCommandType::Back,
+                .selection = std::nullopt,
+            };
+        }
+        if (driveChoices_.empty()) return {};
+        if (input == PickerInput::Up) {
+            moveSelection(-1);
+            return {};
+        }
+        if (input == PickerInput::Down) {
+            moveSelection(1);
+            return {};
+        }
+        if (input != PickerInput::Activate) return {};
+
+        auto selected = takeSelection();
+        if (!selected) return {};
+        return {
+            .type = PickerCommandType::Selected,
+            .selection = std::move(selected),
+        };
     }
 
     void moveSelection(int delta) {

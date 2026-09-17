@@ -2783,25 +2783,28 @@ private:
     }
 
     void handleSeerrDrivePickerKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
-            seerrStorageState_.cancelPicker();
+        SeerrStorageState::PickerInput input = SeerrStorageState::PickerInput::None;
+        if (key == AKEYCODE_BACK)
+            input = SeerrStorageState::PickerInput::Back;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = SeerrStorageState::PickerInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = SeerrStorageState::PickerInput::Down;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = SeerrStorageState::PickerInput::Activate;
+
+        auto command = seerrStorageState_.handlePickerInput(input);
+        if (command.type == SeerrStorageState::PickerCommandType::Back) {
             popScreen(Screen::Search);
             return;
         }
-        if (seerrStorageState_.driveChoices().empty()) return;
-        if (key == AKEYCODE_DPAD_UP) {
-            seerrStorageState_.moveSelection(-1);
-        } else if (key == AKEYCODE_DPAD_DOWN) {
-            seerrStorageState_.moveSelection(1);
-        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const auto selected = seerrStorageState_.takeSelection();
-            if (!selected) return;
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
-                                selected->item.mediaType.c_str(), selected->target.serverId,
-                                selected->target.path.c_str());
-            popScreen(Screen::Search);
-            requestSeerrMediaAsync(selected->item, &selected->target, true);
-        }
+        if (command.type != SeerrStorageState::PickerCommandType::Selected || !command.selection) return;
+
+        auto selected = std::move(*command.selection);
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
+                            selected.item.mediaType.c_str(), selected.target.serverId, selected.target.path.c_str());
+        popScreen(Screen::Search);
+        requestSeerrMediaAsync(selected.item, &selected.target, true);
     }
 
     void handlePlayerKey(int32_t key, int repeatCount = 0) {

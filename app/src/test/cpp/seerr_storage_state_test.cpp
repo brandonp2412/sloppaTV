@@ -97,7 +97,21 @@ int main() {
     state.invalidateRefresh();
 
     assert(state.preparePicker(movie) == SeerrStorageState::PickerStatus::Ready);
-    state.cancelPicker();
+    auto pickerCommand = state.handlePickerInput(SeerrStorageState::PickerInput::Down);
+    assert(pickerCommand.type == SeerrStorageState::PickerCommandType::None);
+    assert(state.driveSelection() == 1);
+    pickerCommand = state.handlePickerInput(SeerrStorageState::PickerInput::Activate);
+    assert(pickerCommand.type == SeerrStorageState::PickerCommandType::Selected);
+    assert(pickerCommand.selection);
+    assert(pickerCommand.selection->item.id == movie.id);
+    assert(pickerCommand.selection->target.serverId == 1);
+    assert(!state.pendingRequest());
+    assert(state.driveChoices().empty());
+
+    assert(state.preparePicker(movie) == SeerrStorageState::PickerStatus::Ready);
+    pickerCommand = state.handlePickerInput(SeerrStorageState::PickerInput::Back);
+    assert(pickerCommand.type == SeerrStorageState::PickerCommandType::Back);
+    assert(!pickerCommand.selection);
     assert(!state.pendingRequest());
     assert(state.driveChoices().empty());
 
