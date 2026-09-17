@@ -83,6 +83,14 @@ int main() {
         coordinatedItem.id, {{.type = "Intro", .startTicks = 10'000'000, .endTicks = 50'000'000}}));
     assert(coordinator.session().mediaSegments().size() == 1);
     assert(coordinator.session().mediaSegments().front().type == "Intro");
+
+    PlaybackCoordinator mediaSegmentsFailureCoordinator;
+    mediaSegmentsFailureCoordinator.activate(coordinatedItem, coordinatedTarget, now);
+    assert(mediaSegmentsFailureCoordinator.beginMediaSegmentsRequest(now));
+    assert(mediaSegmentsFailureCoordinator.failMediaSegmentsRequest(coordinatedItem.id, now));
+    assert(!mediaSegmentsFailureCoordinator.beginMediaSegmentsRequest(now + 4999ms));
+    assert(mediaSegmentsFailureCoordinator.beginMediaSegmentsRequest(now + 5000ms));
+
     assert(coordinator.continuation().beginNextEpisodeRequest(now));
     coordinator.transition().setFallbackResolving(true);
     assert(coordinator.tracks().beginSubtitleWork());
@@ -349,6 +357,8 @@ int main() {
     assert(continuationCoordinator.failNextEpisodeRequest(continuationEpisode.id, now));
     assert(!continuationCoordinator.continuation().nextEpisodeRequested());
     assert(!continuationCoordinator.beginNextEpisodeRequest(now));
+    assert(!continuationCoordinator.beginNextEpisodeRequest(now + 9999ms));
+    assert(continuationCoordinator.beginNextEpisodeRequest(now + 10000ms));
 
     const auto adjacentRequest = continuationCoordinator.beginAdjacentEpisodeLookup();
     assert(adjacentRequest);
@@ -357,6 +367,9 @@ int main() {
     assert(adjacentRequest->currentSeason == continuationEpisode.parentIndexNumber);
     assert(adjacentRequest->currentEpisode == continuationEpisode.indexNumber);
     assert(!continuationCoordinator.beginAdjacentEpisodeLookup());
+    assert(!continuationCoordinator.finishAdjacentEpisodeLookup("stale-item"));
+    assert(!continuationCoordinator.continuation().adjacentEpisodeLookupInProgress());
+    assert(continuationCoordinator.beginAdjacentEpisodeLookup());
     assert(continuationCoordinator.finishAdjacentEpisodeLookup(continuationEpisode.id));
     assert(!continuationCoordinator.continuation().adjacentEpisodeLookupInProgress());
 

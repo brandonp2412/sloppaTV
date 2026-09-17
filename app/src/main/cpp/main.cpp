@@ -565,6 +565,29 @@ struct TrickplayTileCompletion {
     std::string error;
 };
 
+struct MediaSegmentsCompletion {
+    std::string itemId;
+    bool ok = false;
+    std::vector<JellyfinMediaSegment> segments;
+    std::string error;
+    std::chrono::steady_clock::time_point completedAt;
+};
+
+struct NextEpisodeCompletion {
+    std::string currentItemId;
+    bool ok = false;
+    JellyfinItem item;
+    std::string error;
+    std::chrono::steady_clock::time_point completedAt;
+};
+
+struct PlaybackAdjacentCompletion {
+    std::string currentItemId;
+    int direction = 0;
+    bool ok = false;
+    std::optional<JellyfinItem> item;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
@@ -575,7 +598,8 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
                                      QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
-                                     ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion>;
+                                     ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion,
+                                     MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3832,22 +3856,15 @@ private:
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
         tasks_.submit([this, session, currentItemId, seriesId, currentSeason, currentEpisode, direction] {
             auto episodes = api_.getSeriesEpisodes(session, seriesId, 1000);
-            const auto adjacent = episodes.ok ? selectAdjacentPlaybackEpisode(std::move(episodes.value), currentItemId,
-                                                                              currentSeason, currentEpisode, direction)
-                                              : std::nullopt;
-
-            std::scoped_lock lock(stateMutex_);
-            const bool sameItem = playbackCoordinator_.finishAdjacentEpisodeLookup(currentItemId);
-            if (screen_ != Screen::Player || !sameItem) return;
-            if (!episodes.ok) {
-                showNotice("EPISODE LIST UNAVAILABLE", 2s);
-                return;
-            }
-            if (!adjacent) {
-                showNotice(direction < 0 ? "NO PREVIOUS EPISODE" : "NO NEXT EPISODE", 2s);
-                return;
-            }
-            playPlayerItemAsync(*adjacent);
+            auto adjacent = episodes.ok ? selectAdjacentPlaybackEpisode(std::move(episodes.value), currentItemId,
+                                                                        currentSeason, currentEpisode, direction)
+                                        : std::nullopt;
+            asyncCompletions_.push(PlaybackAdjacentCompletion{
+                .currentItemId = currentItemId,
+                .direction = direction,
+                .ok = episodes.ok,
+                .item = std::move(adjacent),
+            });
         });
     }
 
@@ -4083,18 +4100,13 @@ private:
         const std::string itemId = *request;
         if (!tasks_.submit([this, session, itemId] {
                 auto result = api_.getMediaSegments(session, itemId);
-                std::scoped_lock lock(stateMutex_);
-                if (screen_ != Screen::Player) return;
-                if (!result.ok) {
-                    if (playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now())) {
-                        __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s",
-                                            result.error.c_str());
-                    }
-                    return;
-                }
-                const size_t segmentCount = result.value.size();
-                if (!playbackCoordinator_.completeMediaSegmentsRequest(itemId, std::move(result.value))) return;
-                __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
+                asyncCompletions_.push(MediaSegmentsCompletion{
+                    .itemId = itemId,
+                    .ok = result.ok,
+                    .segments = result.ok ? std::move(result.value) : std::vector<JellyfinMediaSegment>{},
+                    .error = result.ok ? std::string{} : std::move(result.error),
+                    .completedAt = std::chrono::steady_clock::now(),
+                });
             })) {
             playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now());
         }
@@ -4111,21 +4123,24 @@ private:
         if (!tasks_.submit([this, session, seriesId, currentItemId] {
                 auto next = api_.getFollowingEpisodeForSeries(session, seriesId, currentItemId);
                 if (!next.ok) {
-                    std::scoped_lock lock(stateMutex_);
-                    if (screen_ == Screen::Player &&
-                        playbackCoordinator_.failNextEpisodeRequest(currentItemId, std::chrono::steady_clock::now())) {
-                        __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s",
-                                            next.error.c_str());
-                    }
+                    asyncCompletions_.push(NextEpisodeCompletion{
+                        .currentItemId = currentItemId,
+                        .ok = false,
+                        .item = {},
+                        .error = std::move(next.error),
+                        .completedAt = std::chrono::steady_clock::now(),
+                    });
                     return;
                 }
                 if (next.value.id.empty() || next.value.id == currentItemId) return;
                 auto detailed = api_.getItem(session, next.value.id);
-                JellyfinItem item = detailed.ok ? std::move(detailed.value) : std::move(next.value);
-                std::scoped_lock lock(stateMutex_);
-                if (screen_ != Screen::Player ||
-                    !playbackCoordinator_.completeNextEpisodeRequest(currentItemId, std::move(item)))
-                    return;
+                asyncCompletions_.push(NextEpisodeCompletion{
+                    .currentItemId = currentItemId,
+                    .ok = true,
+                    .item = detailed.ok ? std::move(detailed.value) : std::move(next.value),
+                    .error = {},
+                    .completedAt = std::chrono::steady_clock::now(),
+                });
             })) {
             playbackCoordinator_.failNextEpisodeSubmission(std::chrono::steady_clock::now());
         }
@@ -5225,6 +5240,47 @@ private:
             return;
         }
         trickplayState_.applyDecoded(std::move(completion.decoded));
+    }
+
+    void applyAsyncCompletion(MediaSegmentsCompletion& completion) {
+        if (screen_ != Screen::Player) return;
+        if (!completion.ok) {
+            if (playbackCoordinator_.failMediaSegmentsRequest(completion.itemId, completion.completedAt)) {
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s",
+                                    completion.error.c_str());
+            }
+            return;
+        }
+        const size_t segmentCount = completion.segments.size();
+        if (!playbackCoordinator_.completeMediaSegmentsRequest(completion.itemId, std::move(completion.segments)))
+            return;
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
+    }
+
+    void applyAsyncCompletion(NextEpisodeCompletion& completion) {
+        if (screen_ != Screen::Player) return;
+        if (!completion.ok) {
+            if (playbackCoordinator_.failNextEpisodeRequest(completion.currentItemId, completion.completedAt)) {
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s",
+                                    completion.error.c_str());
+            }
+            return;
+        }
+        playbackCoordinator_.completeNextEpisodeRequest(completion.currentItemId, std::move(completion.item));
+    }
+
+    void applyAsyncCompletion(PlaybackAdjacentCompletion& completion) {
+        const bool sameItem = playbackCoordinator_.finishAdjacentEpisodeLookup(completion.currentItemId);
+        if (screen_ != Screen::Player || !sameItem) return;
+        if (!completion.ok) {
+            showNotice("EPISODE LIST UNAVAILABLE", 2s);
+            return;
+        }
+        if (!completion.item) {
+            showNotice(completion.direction < 0 ? "NO PREVIOUS EPISODE" : "NO NEXT EPISODE", 2s);
+            return;
+        }
+        playPlayerItemAsync(std::move(*completion.item));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
