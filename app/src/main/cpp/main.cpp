@@ -393,8 +393,15 @@ struct SeerrSearchCompletion {
     ApiValueResult<std::vector<SeerrMediaItem>> result;
 };
 
+struct SeerrConnectCompletion {
+    std::string server;
+    std::string jellyfinUserId;
+    bool announce = false;
+    SeerrQuickConnectResult result;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
-                                     SeerrPendingRefreshCompletion, SeerrSearchCompletion>;
+                                     SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3544,51 +3551,12 @@ private:
                 [&](const SeerrQuickConnectRequest& request) {
                     return seerr_.authenticateQuickConnect(server, request);
                 });
-            std::scoped_lock lock(stateMutex_);
-            if (!result.ok && result.failedStage != SeerrQuickConnectStage::AuthenticateSeerr) {
-                seerrConnectionState_.failConnect();
-                if (announce) {
-                    notice_.clear();
-                    error_ =
-                        (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin ? "JELLYFIN QUICK CONNECT: "
-                                                                                         : "SEERR QUICK CONNECT: ") +
-                        result.error;
-                } else if (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin) {
-                    __android_log_print(ANDROID_LOG_WARN, kTag,
-                                        "Silent Jellyfin Quick Connect authorization failed: %s", result.error.c_str());
-                } else {
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s",
-                                        result.error.c_str());
-                }
-                return;
-            }
-            seerrConnectionState_.endConnect();
-            if (announce) notice_.clear();
-            if (settings_.seerrServer != server || session_.userId != jellyfin.userId) return;
-            if (!result.ok) {
-                if (announce)
-                    error_ = "SEERR QUICK CONNECT: " + result.error;
-                else
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s",
-                                        result.error.c_str());
-                seerrConnectionState_.failConnect();
-                return;
-            }
-            settings_.seerrSessionCookie = std::move(result.sessionCookie);
-            saveSession(session_);
-            if (announce) {
-                error_.clear();
-                showNotice("SEERR CONNECTED WITH JELLYFIN", 4s);
-            }
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
-            refreshSeerrPendingAsync();
-            refreshSeerrStorageAsync(true);
-            auto deferred = seerrConnectionState_.takeDeferredWork();
-            if (deferred.request) requestSeerrMediaAsync(*deferred.request);
-            if (deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
-                (void)searchState_.scheduleSeerrDebounce(std::chrono::steady_clock::now(), false);
-                searchSeerrAsync(true);
-            }
+            asyncCompletions_.push(SeerrConnectCompletion{
+                .server = server,
+                .jellyfinUserId = jellyfin.userId,
+                .announce = announce,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -4870,6 +4838,53 @@ private:
             syncSeerrHomeRowLocked();
         }
         (void)searchState_.finishSeerrSearch(completion.query, std::move(result.value));
+    }
+
+    void applyAsyncCompletion(SeerrConnectCompletion& completion) {
+        auto& result = completion.result;
+        if (!result.ok && result.failedStage != SeerrQuickConnectStage::AuthenticateSeerr) {
+            seerrConnectionState_.failConnect();
+            if (completion.announce) {
+                notice_.clear();
+                error_ =
+                    (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin ? "JELLYFIN QUICK CONNECT: "
+                                                                                     : "SEERR QUICK CONNECT: ") +
+                    result.error;
+            } else if (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin) {
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s",
+                                    result.error.c_str());
+            } else {
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s", result.error.c_str());
+            }
+            return;
+        }
+        seerrConnectionState_.endConnect();
+        if (completion.announce) notice_.clear();
+        if (settings_.seerrServer != completion.server || session_.userId != completion.jellyfinUserId) return;
+        if (!result.ok) {
+            if (completion.announce)
+                error_ = "SEERR QUICK CONNECT: " + result.error;
+            else
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s",
+                                    result.error.c_str());
+            seerrConnectionState_.failConnect();
+            return;
+        }
+        settings_.seerrSessionCookie = std::move(result.sessionCookie);
+        saveSession(session_);
+        if (completion.announce) {
+            error_.clear();
+            showNotice("SEERR CONNECTED WITH JELLYFIN", 4s);
+        }
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
+        refreshSeerrPendingAsync();
+        refreshSeerrStorageAsync(true);
+        auto deferred = seerrConnectionState_.takeDeferredWork();
+        if (deferred.request) requestSeerrMediaAsync(*deferred.request);
+        if (deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
+            (void)searchState_.scheduleSeerrDebounce(std::chrono::steady_clock::now(), false);
+            searchSeerrAsync(true);
+        }
     }
 
     void applyAsyncCompletions() {
