@@ -37,10 +37,8 @@
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
-#include "seerr_connection_state.hpp"
+#include "seerr_domain.hpp"
 #include "seerr_jellyfin_adapter.hpp"
-#include "seerr_request_state.hpp"
-#include "seerr_storage_state.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
@@ -3126,9 +3124,8 @@ private:
             }
             return;
         }
-        const std::string server = settings_.seerrServer;
-        const SeerrAuth auth = seerrAuth();
-        if (!SeerrClient::configured(server, auth)) {
+        const SeerrEndpoint endpoint = seerrEndpoint();
+        if (!endpoint.configured()) {
             error_ = "SEERR IS NOT CONNECTED";
             detailsState_.setDeleteConfirmation(false);
             return;
@@ -3136,13 +3133,11 @@ private:
         const JellyfinItem item = detail_;
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, server, auth, item] {
-            const ApiResult result = seerr_.deleteRequest(server, auth, item.externalRequestId);
+        tasks_.submit([this, endpoint, item] {
+            const ApiResult result = seerr_.deleteRequest(endpoint.server, endpoint.auth, item.externalRequestId);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
-                seerrAuth().apiKey != auth.apiKey)
-                return;
+            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) return;
             if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
             if (!result.ok) {
                 error_ = "SEERR DELETE: " + result.error;
@@ -3486,16 +3481,18 @@ private:
         });
     }
 
-    [[nodiscard]] SeerrAuth seerrAuth() const {
-        return SeerrAuth{
-            .sessionCookie = settings_.seerrSessionCookie,
-            .apiKey = settings_.seerrApiKey,
+    [[nodiscard]] SeerrEndpoint seerrEndpoint() const {
+        return SeerrEndpoint{
+            .server = settings_.seerrServer,
+            .auth =
+                {
+                    .sessionCookie = settings_.seerrSessionCookie,
+                    .apiKey = settings_.seerrApiKey,
+                },
         };
     }
 
-    static bool isSeerrAuthError(std::string_view error) {
-        return error.find("HTTP 401") != std::string_view::npos || error.find("HTTP 403") != std::string_view::npos;
-    }
+    [[nodiscard]] SeerrAuth seerrAuth() const { return seerrEndpoint().auth; }
 
     void connectSeerrAsync(bool announce = true) {
         if (seerrConnectionState_.connecting()) return;
@@ -3575,19 +3572,17 @@ private:
     }
 
     void refreshSeerrStorageAsync(bool force = false) {
-        const std::string server = settings_.seerrServer;
-        const SeerrAuth auth = seerrAuth();
-        if (!SeerrClient::configured(server, auth)) {
+        const SeerrEndpoint endpoint = seerrEndpoint();
+        if (!endpoint.configured()) {
             seerrStorageState_.resetUnavailable();
             return;
         }
         const auto now = std::chrono::steady_clock::now();
         if (!seerrStorageState_.beginRefresh(force, now)) return;
-        tasks_.submit([this, server, auth] {
-            auto result = seerr_.storageTargets(server, auth);
+        tasks_.submit([this, endpoint] {
+            auto result = seerr_.storageTargets(endpoint.server, endpoint.auth);
             std::scoped_lock lock(stateMutex_);
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
-                seerrAuth().apiKey != auth.apiKey) {
+            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) {
                 seerrStorageState_.invalidateRefresh();
                 return;
             }
@@ -3666,20 +3661,18 @@ private:
     }
 
     void refreshSeerrPendingAsync() {
-        const std::string server = settings_.seerrServer;
-        const SeerrAuth auth = seerrAuth();
-        if (!SeerrClient::configured(server, auth)) {
+        const SeerrEndpoint endpoint = seerrEndpoint();
+        if (!endpoint.configured()) {
             seerrRequestState_.resetPending();
             syncSeerrHomeRowLocked();
             return;
         }
         if (!seerrRequestState_.beginPendingRefresh()) return;
-        tasks_.submit([this, server, auth] {
-            auto result = seerr_.pendingRequests(server, auth, 20);
+        tasks_.submit([this, endpoint] {
+            auto result = seerr_.pendingRequests(endpoint.server, endpoint.auth, 20);
             std::scoped_lock lock(stateMutex_);
             const auto now = std::chrono::steady_clock::now();
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
-                seerrAuth().apiKey != auth.apiKey) {
+            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) {
                 // Startup Quick Connect can rotate the cookie while this request
                 // is in flight. Retry with the refreshed identity on Home.
                 seerrRequestState_.invalidatePendingRefresh(now);
@@ -3712,42 +3705,41 @@ private:
 
     void requestSeerrMediaAsync(const SeerrMediaItem& item, const SeerrStorageTarget* selectedTarget = nullptr,
                                 bool skipDrivePrompt = false) {
-        if (!item.valid()) return;
-        if (item.requested) {
+        const SeerrEndpoint endpoint = seerrEndpoint();
+        auto plan =
+            seerrDomain_.prepareRequest(item, endpoint, settings_.seerrSelectDrive, skipDrivePrompt, selectedTarget);
+        switch (plan.action) {
+        case SeerrDomainState::RequestAction::Invalid:
+            return;
+        case SeerrDomainState::RequestAction::AlreadyRequested:
             showNotice(item.status.empty() ? "ALREADY REQUESTED IN SEERR" : item.status, 5s);
             return;
-        }
-        const std::string server = settings_.seerrServer;
-        const SeerrAuth auth = seerrAuth();
-        if (!SeerrClient::configured(server, auth)) {
+        case SeerrDomainState::RequestAction::NotConfigured:
             showNotice("CONNECT SEERR IN SETTINGS FIRST", 5s);
             return;
-        }
-        if (seerrConnectionState_.connecting()) {
-            seerrConnectionState_.deferRequest(item);
+        case SeerrDomainState::RequestAction::DeferredForConnection:
             showNotice("REFRESHING SEERR SESSION…", 4s);
             return;
-        }
-        if (settings_.seerrSelectDrive && !skipDrivePrompt && !selectedTarget) {
+        case SeerrDomainState::RequestAction::ChooseStorage:
             // A deliberate request should not be blocked by a cached empty result.
             // Force discovery when there are no known targets and let the pending
             // item automatically open the picker when discovery completes.
-            refreshSeerrStorageAsync(seerrStorageState_.empty());
+            refreshSeerrStorageAsync(plan.refreshStorage);
             openSeerrDrivePicker(item);
             return;
+        case SeerrDomainState::RequestAction::Submit:
+            break;
         }
+
         mutationLoading_ = true;
         const SeerrMediaItem requestedItem = item;
-        const std::optional<SeerrStorageTarget> target =
-            selectedTarget ? std::optional<SeerrStorageTarget>(*selectedTarget) : std::nullopt;
-        tasks_.submit([this, server, auth, requestedItem, target] {
+        const std::optional<SeerrStorageTarget> target = std::move(plan.target);
+        tasks_.submit([this, endpoint, requestedItem, target] {
             const ApiValueResult<int> result =
-                seerr_.requestMedia(server, auth, requestedItem, target ? &*target : nullptr);
+                seerr_.requestMedia(endpoint.server, endpoint.auth, requestedItem, target ? &*target : nullptr);
             std::scoped_lock lock(stateMutex_);
             mutationLoading_ = false;
-            if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie ||
-                seerrAuth().apiKey != auth.apiKey)
-                return;
+            if (!endpoint.matches(settings_.seerrServer, seerrAuth())) return;
             if (!result.ok) {
                 error_ = "SEERR REQUEST: " + result.error;
                 return;
@@ -3765,23 +3757,20 @@ private:
     }
 
     void searchSeerrAsync(bool immediate) {
-        if (seerrConnectionState_.connecting()) {
-            seerrConnectionState_.deferSearchRetry();
+        if (seerrDomain_.deferSearchIfConnecting()) {
             searchState_.setSeerrLoading(false);
             return;
         }
-        const std::string seerrServer = settings_.seerrServer;
-        const SeerrAuth auth = seerrAuth();
-        const bool configured = SeerrClient::configured(seerrServer, auth);
-        const bool shouldStart = immediate ? searchState_.beginImmediateSeerrSearch(configured)
+        const SeerrEndpoint endpoint = seerrEndpoint();
+        const bool shouldStart = immediate ? searchState_.beginImmediateSeerrSearch(endpoint.configured())
                                            : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
         if (!shouldStart) return;
 
-        if (!seerrConnectionState_.connecting()) refreshSeerrStorageAsync();
+        refreshSeerrStorageAsync();
         const std::string query = searchState_.query();
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
-        tasks_.submit([this, seerrServer, auth, query, generation] {
-            auto result = seerrSearch_.search(seerrServer, auth, query);
+        tasks_.submit([this, endpoint, query, generation] {
+            auto result = seerrSearch_.search(endpoint.server, endpoint.auth, query);
             std::scoped_lock lock(stateMutex_);
             if (!requestEpochs_.seerrSearch.active(generation)) return;
             if (screen_ != Screen::Search) {
@@ -7348,9 +7337,10 @@ private:
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
-    SeerrRequestState seerrRequestState_;
-    SeerrStorageState seerrStorageState_;
-    SeerrConnectionState seerrConnectionState_;
+    SeerrDomainState seerrDomain_;
+    SeerrRequestState& seerrRequestState_ = seerrDomain_.requests();
+    SeerrStorageState& seerrStorageState_ = seerrDomain_.storage();
+    SeerrConnectionState& seerrConnectionState_ = seerrDomain_.connection();
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

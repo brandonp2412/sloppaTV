@@ -2,6 +2,7 @@
 
 #include "jellyfin_types.hpp"
 #include "jni_http.hpp"
+#include "seerr_auth.hpp"
 #include "seerr_media.hpp"
 #include "seerr_storage.hpp"
 
@@ -11,13 +12,6 @@
 #include <map>
 #include <string>
 #include <vector>
-
-struct SeerrAuth {
-    std::string sessionCookie;
-    std::string apiKey;
-
-    [[nodiscard]] bool valid() const { return !sessionCookie.empty() || !apiKey.empty(); }
-};
 
 struct SeerrQuickConnectRequest {
     std::string code;
@@ -33,7 +27,7 @@ public:
     void cancelPendingRequests() const { http_.cancelPending(); }
 
     [[nodiscard]] static bool configured(const std::string& server, const SeerrAuth& auth) {
-        return !server.empty() && auth.valid();
+        return SeerrEndpoint{server, auth}.configured();
     }
 
     ApiValueResult<SeerrQuickConnectRequest> initiateQuickConnect(const std::string& server) const;
