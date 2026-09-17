@@ -20,20 +20,34 @@ int main() {
     assert(state.backspaceFocusedField());
     assert(state.field(AccountScreenState::kServerField) == "https://example/");
 
-    state.moveLoginVertical(1);
+    auto loginCommand = state.handleLoginFormInput(LoginFormInput::Down, false);
+    assert(loginCommand.type == LoginFormCommandType::None);
     assert(state.loginFocus() == AccountScreenState::kUsernameField);
-    state.moveLoginVertical(1);
+    loginCommand = state.handleLoginFormInput(LoginFormInput::Down, false);
     assert(state.loginFocus() == AccountScreenState::kPasswordField);
-    state.moveLoginVertical(1);
+    loginCommand = state.handleLoginFormInput(LoginFormInput::Down, false);
     assert(state.loginFocus() == AccountScreenState::kLoginAction);
-    state.moveLoginAction(-1, false);
+    loginCommand = state.handleLoginFormInput(LoginFormInput::Left, false);
     assert(state.loginFocus() == AccountScreenState::kDiscoverAction);
-    state.moveLoginAction(1, false);
+    loginCommand = state.handleLoginFormInput(LoginFormInput::Right, false);
     assert(state.loginFocus() == AccountScreenState::kLoginAction);
-    state.moveLoginAction(-1, true);
+    loginCommand = state.handleLoginFormInput(LoginFormInput::Left, true);
     assert(state.loginFocus() == AccountScreenState::kSavedUsersAction);
-    state.moveLoginVertical(-1);
+    loginCommand = state.handleLoginFormInput(LoginFormInput::Up, true);
     assert(state.loginFocus() == AccountScreenState::kPasswordField);
+
+    state.setLoginFocus(AccountScreenState::kServerField);
+    loginCommand = state.handleLoginFormInput(LoginFormInput::Activate, true);
+    assert(loginCommand.type == LoginFormCommandType::EditField);
+    assert(loginCommand.fieldIndex == AccountScreenState::kServerField);
+    state.setLoginFocus(AccountScreenState::kLoginAction);
+    assert(state.handleLoginFormInput(LoginFormInput::Activate, true).type == LoginFormCommandType::Login);
+    state.setLoginFocus(AccountScreenState::kQuickConnectAction);
+    assert(state.handleLoginFormInput(LoginFormInput::Activate, true).type == LoginFormCommandType::QuickConnect);
+    state.setLoginFocus(AccountScreenState::kDiscoverAction);
+    assert(state.handleLoginFormInput(LoginFormInput::Activate, true).type == LoginFormCommandType::Discover);
+    state.setLoginFocus(AccountScreenState::kSavedUsersAction);
+    assert(state.handleLoginFormInput(LoginFormInput::Activate, true).type == LoginFormCommandType::OpenProfiles);
 
     state.finishTextField(AccountScreenState::kUsernameField, "new-user");
     assert(state.field(AccountScreenState::kUsernameField) == "new-user");

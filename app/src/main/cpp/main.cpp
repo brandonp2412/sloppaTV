@@ -1448,31 +1448,36 @@ private:
             return;
         }
 
-        if (key == AKEYCODE_DPAD_UP) {
-            accountState_.moveLoginVertical(-1);
-        } else if (key == AKEYCODE_DPAD_DOWN) {
-            accountState_.moveLoginVertical(1);
-        } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
-            accountState_.moveLoginAction(key == AKEYCODE_DPAD_LEFT ? -1 : 1, !sessionRegistry_.empty());
-        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const int focus = accountState_.loginFocus();
-            if (focus < AccountScreenState::kLoginAction) {
-                const int mode = kTextInputLoginServer + focus;
-                static constexpr std::array<const char*, 3> hints{"Jellyfin server URL", "Jellyfin username",
-                                                                  "Jellyfin password"};
-                accountState_.setKeyboardActive(!showSystemTextInput(accountState_.field(focus),
-                                                                     hints[static_cast<size_t>(focus)], mode,
-                                                                     focus == AccountScreenState::kPasswordField));
-                if (accountState_.keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
-            } else if (focus == AccountScreenState::kLoginAction) {
-                loginAsync();
-            } else if (focus == AccountScreenState::kQuickConnectAction) {
-                quickConnectAsync();
-            } else if (focus == AccountScreenState::kDiscoverAction) {
-                discoverServersAsync();
-            } else {
-                openProfiles();
-            }
+        LoginFormInput input = LoginFormInput::None;
+        if (key == AKEYCODE_DPAD_UP)
+            input = LoginFormInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = LoginFormInput::Down;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = LoginFormInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = LoginFormInput::Right;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = LoginFormInput::Activate;
+
+        const LoginFormCommand command = accountState_.handleLoginFormInput(input, !sessionRegistry_.empty());
+        if (command.type == LoginFormCommandType::EditField) {
+            const int field = command.fieldIndex;
+            const int mode = kTextInputLoginServer + field;
+            static constexpr std::array<const char*, 3> hints{"Jellyfin server URL", "Jellyfin username",
+                                                              "Jellyfin password"};
+            accountState_.setKeyboardActive(!showSystemTextInput(accountState_.field(field),
+                                                                 hints[static_cast<size_t>(field)], mode,
+                                                                 field == AccountScreenState::kPasswordField));
+            if (accountState_.keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
+        } else if (command.type == LoginFormCommandType::Login) {
+            loginAsync();
+        } else if (command.type == LoginFormCommandType::QuickConnect) {
+            quickConnectAsync();
+        } else if (command.type == LoginFormCommandType::Discover) {
+            discoverServersAsync();
+        } else if (command.type == LoginFormCommandType::OpenProfiles) {
+            openProfiles();
         }
     }
 

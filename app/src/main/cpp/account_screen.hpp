@@ -8,6 +8,29 @@
 #include <string>
 #include <utility>
 
+enum class LoginFormInput {
+    None,
+    Up,
+    Down,
+    Left,
+    Right,
+    Activate,
+};
+
+enum class LoginFormCommandType {
+    None,
+    EditField,
+    Login,
+    QuickConnect,
+    Discover,
+    OpenProfiles,
+};
+
+struct LoginFormCommand {
+    LoginFormCommandType type = LoginFormCommandType::None;
+    int fieldIndex = -1;
+};
+
 enum class ProfilesScreenInput {
     None,
     Back,
@@ -64,6 +87,37 @@ public:
     [[nodiscard]] int loginFocus() const { return loginFocus_; }
 
     void setLoginFocus(int focus) { loginFocus_ = std::clamp(focus, kServerField, kSavedUsersAction); }
+
+    [[nodiscard]] LoginFormCommand handleLoginFormInput(LoginFormInput input, bool hasSavedUsers) {
+        if (input == LoginFormInput::Up) {
+            moveLoginVertical(-1);
+            return {};
+        }
+        if (input == LoginFormInput::Down) {
+            moveLoginVertical(1);
+            return {};
+        }
+        if (input == LoginFormInput::Left) {
+            moveLoginAction(-1, hasSavedUsers);
+            return {};
+        }
+        if (input == LoginFormInput::Right) {
+            moveLoginAction(1, hasSavedUsers);
+            return {};
+        }
+        if (input != LoginFormInput::Activate) return {};
+
+        if (loginFocus_ < kLoginAction) {
+            return {
+                .type = LoginFormCommandType::EditField,
+                .fieldIndex = loginFocus_,
+            };
+        }
+        if (loginFocus_ == kLoginAction) return {.type = LoginFormCommandType::Login};
+        if (loginFocus_ == kQuickConnectAction) return {.type = LoginFormCommandType::QuickConnect};
+        if (loginFocus_ == kDiscoverAction) return {.type = LoginFormCommandType::Discover};
+        return {.type = LoginFormCommandType::OpenProfiles};
+    }
 
     void moveLoginVertical(int direction) {
         if (direction < 0)
