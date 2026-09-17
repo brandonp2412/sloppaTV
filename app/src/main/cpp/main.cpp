@@ -483,12 +483,18 @@ struct DiscoveryCompletion {
     std::vector<DiscoveredJellyfinServer> servers;
 };
 
+struct LoginCompletion {
+    uint64_t generation = 0;
+    ApiValueResult<JellyfinSession> result;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
                                      DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion,
                                      ServerInfoNoticeCompletion, FavoriteCompletion, PlayedCompletion,
-                                     MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion>;
+                                     MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
+                                     LoginCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3242,26 +3248,10 @@ private:
 
         tasks_.submit([this, fields, deviceId, generation] {
             auto result = api_.login(fields[0], fields[1], fields[2], deviceId);
-            if (!requestEpochs_.auth.active(generation)) return;
-            if (!result.ok) {
-                std::scoped_lock lock(stateMutex_);
-                loading_ = false;
-                error_ = result.error;
-                return;
-            }
-            {
-                std::scoped_lock lock(stateMutex_);
-                requestEpochs_.session.invalidate();
-                session_ = result.value;
-                accountState_.setAuthenticatedAccount(session_.server, session_.username);
-                resetNavigation(Screen::Home);
-                loading_ = false;
-                homeState_.setRow(0);
-                homeState_.setFirstVisibleRow(0);
-                error_.clear();
-                saveSession(session_);
-            }
-            loadHomeAsync();
+            asyncCompletions_.push(LoginCompletion{
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -5023,6 +5013,24 @@ private:
         accountState_.setDiscoveryStatus(std::move(discoveryStatus));
         accountState_.setLoginFocus(AccountScreenState::kUsernameField);
         error_.clear();
+    }
+
+    void applyAsyncCompletion(LoginCompletion& completion) {
+        if (!requestEpochs_.auth.active(completion.generation)) return;
+        loading_ = false;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        requestEpochs_.session.invalidate();
+        session_ = std::move(completion.result.value);
+        accountState_.setAuthenticatedAccount(session_.server, session_.username);
+        resetNavigation(Screen::Home);
+        homeState_.setRow(0);
+        homeState_.setFirstVisibleRow(0);
+        error_.clear();
+        saveSession(session_);
+        loadHomeAsync();
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
