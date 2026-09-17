@@ -31,11 +31,15 @@ int main() {
     assert(coordinatedRelease.reportTicks == 123'450'000);
     assert(coordinator.session().beginMediaSegmentsRequest(now));
     assert(coordinator.continuation().beginNextEpisodeRequest(now));
+    coordinator.transition().setFallbackResolving(true);
+    assert(coordinator.tracks().beginSubtitleWork());
     coordinator.finishRelease();
     assert(coordinator.session().activeItem().id.empty());
     assert(!coordinator.telemetry().playbackStartReported());
     assert(!coordinator.session().mediaSegmentsRequested());
     assert(!coordinator.continuation().nextEpisodeRequested());
+    assert(!coordinator.transition().fallbackResolving());
+    assert(!coordinator.tracks().subtitleBusy());
 
     PlaybackTarget coordinatedFallbackTarget;
     coordinatedFallbackTarget.url = "https://media.example/direct";

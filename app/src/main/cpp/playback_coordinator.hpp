@@ -5,6 +5,8 @@
 #include "playback_queue.hpp"
 #include "playback_session.hpp"
 #include "playback_telemetry.hpp"
+#include "playback_transition.hpp"
+#include "player_tracks.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -287,6 +289,10 @@ public:
     [[nodiscard]] const PlaybackTelemetryState& telemetry() const { return telemetryState_; }
     [[nodiscard]] PlaybackContinuationState& continuation() { return continuationState_; }
     [[nodiscard]] const PlaybackContinuationState& continuation() const { return continuationState_; }
+    [[nodiscard]] PlaybackTransitionState& transition() { return transitionState_; }
+    [[nodiscard]] const PlaybackTransitionState& transition() const { return transitionState_; }
+    [[nodiscard]] PlayerTrackState& tracks() { return trackState_; }
+    [[nodiscard]] const PlayerTrackState& tracks() const { return trackState_; }
 
     void activate(const JellyfinItem& item, const PlaybackTarget& target, TimePoint now) {
         sessionState_.setActive(item, target);
@@ -319,6 +325,8 @@ public:
         telemetryState_.resetReadIntervals();
         continuationState_.clearNextEpisode();
         sessionState_.resetMediaSegments();
+        transitionState_.setFallbackResolving(false);
+        trackState_.resetPlayback();
     }
 
     [[nodiscard]] PlaybackTickPlan tickPlan(
@@ -392,4 +400,6 @@ private:
     PlaybackSessionState sessionState_;
     PlaybackTelemetryState telemetryState_;
     PlaybackContinuationState continuationState_;
+    PlaybackTransitionState transitionState_;
+    PlayerTrackState trackState_;
 };

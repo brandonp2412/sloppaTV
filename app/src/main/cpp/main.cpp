@@ -4353,10 +4353,8 @@ private:
         displayMode_.restore();
         mediaSession_.clear();
         clearTrickplayPreview();
-        transitionState_.setFallbackResolving(false);
         playbackCoordinator_.finishRelease();
         playerScreenState_.resetPosition();
-        trackState_.resetPlayback();
         if (releasePlan.reportStop) {
             tasks_.submit([this, session, item, target, ticks = releasePlan.reportTicks] {
                 const ApiResult result = api_.reportPlaybackStopped(session, item, target, ticks);
@@ -7748,13 +7746,13 @@ private:
     PlaybackQueueState queueState_;
 
     ExternalPlaybackState externalPlaybackState_;
-    PlaybackTransitionState transitionState_;
     PlaybackCoordinator playbackCoordinator_;
     PlaybackContinuationState& continuationState_ = playbackCoordinator_.continuation();
     PlaybackSessionState& playbackSessionState_ = playbackCoordinator_.session();
     PlaybackTelemetryState& telemetryState_ = playbackCoordinator_.telemetry();
+    PlaybackTransitionState& transitionState_ = playbackCoordinator_.transition();
+    PlayerTrackState& trackState_ = playbackCoordinator_.tracks();
     PlayerScreenState playerScreenState_;
-    PlayerTrackState trackState_;
     TrickplayPreviewState trickplayState_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
