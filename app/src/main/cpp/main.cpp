@@ -4355,7 +4355,7 @@ private:
             }
         }
         player_.stop();
-        playbackPreparingSince_ = {};
+        playbackSessionState_.clearPreparing();
         videoSurface_.release();
         displayMode_.restore();
         mediaSession_.clear();
@@ -4483,7 +4483,7 @@ private:
     void startResolvedPlaybackTarget(const PlaybackTarget& target) {
         const auto now = std::chrono::steady_clock::now();
         const int startPositionMs = initialPlayerSeekMs(target.startTicks);
-        playbackPreparingSince_ = now;
+        playbackSessionState_.beginPreparing(now);
         player_.startAsync(
             target.url,
             videoSurface_.surface(),
@@ -4589,7 +4589,7 @@ private:
         item.positionTicks = resumeTicks;
 
         player_.stop();
-        playbackPreparingSince_ = {};
+        playbackSessionState_.clearPreparing();
         videoSurface_.release();
         telemetryState_.clearPlaybackStartReported();
         playbackSessionState_.markFallbackAttempted();
@@ -4905,10 +4905,7 @@ private:
         if (status == PlayerStatus::Preparing) {
             mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
             const auto now = std::chrono::steady_clock::now();
-            if (playbackPreparingSince_ == std::chrono::steady_clock::time_point{}) playbackPreparingSince_ = now;
-            const int64_t preparingMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                now - playbackPreparingSince_
-            ).count();
+            const int64_t preparingMs = playbackSessionState_.preparingElapsedMs(now);
             if (playbackPrepareTimedOut(activeTarget_.transcoding, preparingMs)) {
                 std::scoped_lock lock(stateMutex_);
                 __android_log_print(
@@ -4927,7 +4924,7 @@ private:
                 return;
             }
         } else {
-            playbackPreparingSince_ = {};
+            playbackSessionState_.clearPreparing();
         }
         if (status == PlayerStatus::Playing && transitionState_.pauseAfterRestart()) {
             player_.togglePause();
@@ -7832,7 +7829,6 @@ private:
     TrickplayPreviewState trickplayState_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point playbackPreparingSince_{};
     bool screensaverActive_ = false;
     std::string lastPlaybackSummary_;
 };

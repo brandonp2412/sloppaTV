@@ -20,6 +20,7 @@ public:
         mediaSegmentsRequested_ = false;
         mediaSegmentsRetryAfter_ = {};
         fallbackAttempted_ = false;
+        preparingSince_ = {};
         zoomMode_ = zoomMode;
     }
 
@@ -59,6 +60,17 @@ public:
     void markFallbackAttempted() { fallbackAttempted_ = true; }
     void resetFallbackAttempted() { fallbackAttempted_ = false; }
 
+    void beginPreparing(TimePoint now = Clock::now()) { preparingSince_ = now; }
+    void clearPreparing() { preparingSince_ = {}; }
+    [[nodiscard]] bool preparing() const { return preparingSince_ != TimePoint{}; }
+    int64_t preparingElapsedMs(TimePoint now = Clock::now()) {
+        if (!preparing()) {
+            beginPreparing(now);
+            return 0;
+        }
+        return std::chrono::duration_cast<std::chrono::milliseconds>(now - preparingSince_).count();
+    }
+
     [[nodiscard]] VideoZoomMode zoomMode() const { return zoomMode_; }
     void setZoomMode(VideoZoomMode mode) { zoomMode_ = mode; }
 
@@ -67,5 +79,6 @@ private:
     bool mediaSegmentsRequested_ = false;
     TimePoint mediaSegmentsRetryAfter_{};
     bool fallbackAttempted_ = false;
+    TimePoint preparingSince_{};
     VideoZoomMode zoomMode_ = VideoZoomMode::Fit;
 };

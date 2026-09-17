@@ -15,7 +15,17 @@ int main() {
     state.begin(VideoZoomMode::Fill);
     assert(!state.mediaSegmentsRequested());
     assert(!state.fallbackAttempted());
+    assert(!state.preparing());
     assert(state.zoomMode() == VideoZoomMode::Fill);
+
+    const auto preparingStart = PlaybackSessionState::Clock::now();
+    assert(state.preparingElapsedMs(preparingStart) == 0);
+    assert(state.preparing());
+    assert(state.preparingElapsedMs(preparingStart + 14999ms) == 14999);
+    state.clearPreparing();
+    assert(!state.preparing());
+    state.beginPreparing(preparingStart + 1s);
+    assert(state.preparingElapsedMs(preparingStart + 3s) == 2000);
 
     const auto requestStart = PlaybackSessionState::Clock::now();
     assert(state.beginMediaSegmentsRequest(requestStart));
@@ -43,6 +53,7 @@ int main() {
 
     state.reset();
     assert(!state.fallbackAttempted());
+    assert(!state.preparing());
     assert(state.zoomMode() == VideoZoomMode::Fit);
     return 0;
 }
