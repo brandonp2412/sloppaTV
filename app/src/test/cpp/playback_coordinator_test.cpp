@@ -280,6 +280,17 @@ int main() {
     assert(lifecycleCoordinator.tracks().selectedSubtitleServerIndex() == 12);
     assert(lifecycleCoordinator.session().activeTarget().subtitleStreamIndex == 12);
 
+    PlaybackCoordinator ownershipCoordinator;
+    ownershipCoordinator.activate(coordinatedItem, coordinatedTarget, now);
+    ownershipCoordinator.setZoomMode(VideoZoomMode::Fill);
+    assert(ownershipCoordinator.session().zoomMode() == VideoZoomMode::Fill);
+    ownershipCoordinator.recordExternalPlayback("VLC");
+    assert(ownershipCoordinator.session().lastPlaybackSummary() == "EXTERNAL / VLC");
+    ownershipCoordinator.clearActivePlayback();
+    assert(ownershipCoordinator.session().activeItem().id.empty());
+    assert(ownershipCoordinator.session().activeTarget().url.empty());
+    assert(ownershipCoordinator.session().lastPlaybackSummary() == "EXTERNAL / VLC");
+
     lifecycleCoordinator.transition().setLoading(true);
     lifecycleCoordinator.finishStop();
     assert(!lifecycleCoordinator.tracks().audioLanguagePreference().has_value());

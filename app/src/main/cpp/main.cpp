@@ -1597,7 +1597,7 @@ private:
             const SettingChangeEffect effects = adjustSetting(settings_, selection, direction);
             if (effects == SettingChangeEffect::None) return;
             if (selection == SettingId::DefaultVideoZoom)
-                playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
+                playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
             if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
             if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {
                 lastInteraction_ = std::chrono::steady_clock::now();
@@ -4579,7 +4579,7 @@ private:
         } else {
             std::scoped_lock lock(stateMutex_);
             error_.clear();
-            playbackSessionState_.setLastPlaybackSummary("EXTERNAL / " + launch.player.label);
+            playbackCoordinator_.recordExternalPlayback(launch.player.label);
             externalPlaybackState_.beginActive(std::move(launch));
         }
         return true;
@@ -4600,7 +4600,7 @@ private:
             std::scoped_lock lock(stateMutex_);
             error_ = surfaceError.empty() ? "VIDEO SURFACE IS NOT AVAILABLE" : surfaceError;
             popScreen(Screen::Details);
-            playbackSessionState_.clearActive();
+            playbackCoordinator_.clearActivePlayback();
             return true;
         }
         if (settings_.refreshRateSwitching && item.videoFrameRate > 0.0f) {
@@ -7332,7 +7332,7 @@ private:
             artwork_.eraseProfile(session_, renderer_);
             sessionRegistry_.remember(session_, deviceId_);
         }
-        playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
+        playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
         accountState_.setAuthenticatedAccount(session_.server, session_.username);
     }
 

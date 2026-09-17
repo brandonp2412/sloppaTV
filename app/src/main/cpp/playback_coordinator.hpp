@@ -358,6 +358,14 @@ public:
 
     [[nodiscard]] const PlayerTrackState& tracks() const { return trackState_; }
 
+    void setZoomMode(VideoZoomMode mode) { sessionState_.setZoomMode(mode); }
+
+    void recordExternalPlayback(std::string_view playerLabel) {
+        sessionState_.setLastPlaybackSummary("EXTERNAL / " + std::string(playerLabel));
+    }
+
+    void clearActivePlayback() { sessionState_.clearActive(); }
+
     void activate(const JellyfinItem& item, const PlaybackTarget& target, TimePoint now) {
         sessionState_.setActive(item, target);
         sessionState_.setLastPlaybackSummary(playbackSummary(target, item));
