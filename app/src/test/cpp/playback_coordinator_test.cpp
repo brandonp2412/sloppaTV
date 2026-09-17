@@ -107,11 +107,11 @@ int main() {
     assert(restartPlan->previousTarget.url == coordinatedTarget.url);
     assert(!restartCoordinator.telemetry().playbackStartReported());
     assert(restartCoordinator.tracks().subtitleBusy());
-    assert(restartCoordinator.transition().loading());
+    assert(restartCoordinator.transitionLoading());
     assert(!restartCoordinator.beginStreamRestart());
     restartCoordinator.finishStreamRestartRequest();
     assert(!restartCoordinator.tracks().subtitleBusy());
-    assert(!restartCoordinator.transition().loading());
+    assert(!restartCoordinator.transitionLoading());
     restartPlan = restartCoordinator.beginStreamRestart();
     assert(restartPlan);
     assert(!restartPlan->reportPrevious);
@@ -122,13 +122,18 @@ int main() {
     JellyfinItem restartItem;
     restartItem.id = "restart-item";
     restartCoordinator.stageStreamRestart(restartTarget, restartItem, true, 6);
-    auto stagedRestart = restartCoordinator.transition().take();
+    auto stagedRestart = restartCoordinator.takePendingTransition();
     assert(stagedRestart);
     assert(stagedRestart->target.url == restartTarget.url);
     assert(stagedRestart->item.id == restartItem.id);
     assert(stagedRestart->streamRestart);
     assert(stagedRestart->restartPaused);
     assert(stagedRestart->audioStreamIndex == 6);
+    assert(!restartCoordinator.takePendingTransition());
+    restartCoordinator.setPauseAfterRestart(true);
+    assert(!restartCoordinator.consumePauseAfterRestart(false));
+    assert(restartCoordinator.consumePauseAfterRestart(true));
+    assert(!restartCoordinator.consumePauseAfterRestart(true));
 
     PlaybackCoordinator lifecycleCoordinator;
     lifecycleCoordinator.activate(coordinatedItem, coordinatedTarget, now);
@@ -470,17 +475,17 @@ int main() {
 
     PlaybackCoordinator fallbackCoordinator;
     fallbackCoordinator.beginFallbackResolution();
-    assert(fallbackCoordinator.transition().fallbackResolving());
+    assert(fallbackCoordinator.fallbackResolving());
     fallbackCoordinator.finishFallbackResolution();
-    assert(!fallbackCoordinator.transition().fallbackResolving());
+    assert(!fallbackCoordinator.fallbackResolving());
     JellyfinItem fallbackItem;
     fallbackItem.id = "fallback-item";
     PlaybackTarget resolvedFallbackTarget;
     resolvedFallbackTarget.url = "https://media.example/fallback";
     fallbackCoordinator.beginFallbackResolution();
     fallbackCoordinator.stageResolvedFallback(resolvedFallbackTarget, fallbackItem, 4);
-    assert(!fallbackCoordinator.transition().fallbackResolving());
-    auto fallbackTransition = fallbackCoordinator.transition().take();
+    assert(!fallbackCoordinator.fallbackResolving());
+    auto fallbackTransition = fallbackCoordinator.takePendingTransition();
     assert(fallbackTransition);
     assert(fallbackTransition->streamRestart);
     assert(!fallbackTransition->restartPaused);

@@ -465,6 +465,28 @@ public:
         transitionState_.stage(std::move(target), std::move(item));
     }
 
+    [[nodiscard]] std::optional<PendingPlaybackTransition> takePendingTransition() {
+        return transitionState_.take();
+    }
+
+    void setPauseAfterRestart(bool pause) {
+        transitionState_.setPauseAfterRestart(pause);
+    }
+
+    [[nodiscard]] bool consumePauseAfterRestart(bool playbackPlaying) {
+        if (!playbackPlaying || !transitionState_.pauseAfterRestart()) return false;
+        transitionState_.clearPauseAfterRestart();
+        return true;
+    }
+
+    [[nodiscard]] bool transitionLoading() const {
+        return transitionState_.loading();
+    }
+
+    [[nodiscard]] bool fallbackResolving() const {
+        return transitionState_.fallbackResolving();
+    }
+
     [[nodiscard]] PlaybackTransitionPlan activateTransition(
         const JellyfinItem& item,
         const PlaybackTarget& target,

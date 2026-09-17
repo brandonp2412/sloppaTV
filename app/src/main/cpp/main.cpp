@@ -710,7 +710,7 @@ private:
                             playerSubtitleOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
                             directExternalSubtitleUrl(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem())
                         );
-                        transitionState_.setPauseAfterRestart(!shouldResumePlayback);
+                        playbackCoordinator_.setPauseAfterRestart(!shouldResumePlayback);
                         mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
                         __android_log_print(ANDROID_LOG_WARN, kTag, "GLES context was not reusable during window restore; recreated playback surface");
                     }
@@ -4614,9 +4614,9 @@ private:
         if (externalPlaybackState_.hasPending()) {
             work.externalLaunch = externalPlaybackState_.takePending();
         }
-        if (!transitionState_.hasPending() || !app_->window) return work;
+        if (!app_->window) return work;
 
-        work.playbackTransition = transitionState_.take();
+        work.playbackTransition = playbackCoordinator_.takePendingTransition();
         if (!work.playbackTransition) return work;
         auto& transition = *work.playbackTransition;
         auto& target = transition.target;
@@ -4799,9 +4799,8 @@ private:
         } else {
             playbackSessionState_.clearPreparing();
         }
-        if (status == PlayerStatus::Playing && transitionState_.pauseAfterRestart()) {
+        if (playbackCoordinator_.consumePauseAfterRestart(status == PlayerStatus::Playing)) {
             player_.togglePause();
-            transitionState_.clearPauseAfterRestart();
             status = player_.status();
         }
         if (status == PlayerStatus::Error) {
@@ -6456,8 +6455,8 @@ private:
         );
         const bool showOverlay = status == PlayerStatus::Preparing
             || status == PlayerStatus::Paused
-            || transitionState_.loading()
-            || transitionState_.fallbackResolving()
+            || playbackCoordinator_.transitionLoading()
+            || playbackCoordinator_.fallbackResolving()
             || userOverlayVisible;
         if (showOverlay) {
             renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f,
@@ -6628,8 +6627,8 @@ private:
                 renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, finishLabel, kSecondaryText, 590.0f);
             }
         }
-        const std::string state = transitionState_.fallbackResolving() ? "Retrying playback" :
-            (transitionState_.loading()
+        const std::string state = playbackCoordinator_.fallbackResolving() ? "Retrying playback" :
+            (playbackCoordinator_.transitionLoading()
                 ? (playbackSessionState_.activeItem().id.empty() ? "Loading episode" : "Switching track")
                 : (status == PlayerStatus::Preparing ? "Loading" : ""));
         if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
@@ -7693,7 +7692,6 @@ private:
     PlaybackCoordinator playbackCoordinator_;
     PlaybackContinuationState& continuationState_ = playbackCoordinator_.continuation();
     PlaybackSessionState& playbackSessionState_ = playbackCoordinator_.session();
-    PlaybackTransitionState& transitionState_ = playbackCoordinator_.transition();
     PlayerTrackState& trackState_ = playbackCoordinator_.tracks();
     PlayerScreenState playerScreenState_;
     TrickplayPreviewState trickplayState_;
