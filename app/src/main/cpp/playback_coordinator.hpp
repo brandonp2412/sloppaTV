@@ -419,9 +419,17 @@ public:
         trackState_.resetSession();
     }
 
-    void resetContinuationPrompt() {
-        continuationState_.resetAutoplayChain();
+    void dismissStillWatchingPrompt() {
         continuationState_.setStillWatchingPrompt(false);
+    }
+
+    void resetAutoplayChain() {
+        continuationState_.resetAutoplayChain();
+    }
+
+    void resetContinuationPrompt() {
+        resetAutoplayChain();
+        dismissStillWatchingPrompt();
     }
 
     void showStillWatchingPrompt() {
@@ -436,7 +444,7 @@ public:
 
     void beginPlaybackResolution(bool showTransitionLoading) {
         transitionState_.setLoading(showTransitionLoading);
-        continuationState_.setStillWatchingPrompt(false);
+        dismissStillWatchingPrompt();
     }
 
     void beginAutoplayResolution() {

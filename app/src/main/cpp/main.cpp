@@ -3770,7 +3770,7 @@ private:
     void openDetails(const JellyfinItem& item, bool replaceCurrent = false) {
         if (replaceCurrent) replaceScreen(Screen::Details);
         else pushScreen(Screen::Details);
-        continuationState_.setStillWatchingPrompt(false);
+        playbackCoordinator_.dismissStillWatchingPrompt();
         detail_ = item;
         detailsState_.beginDetails();
         loading_ = true;
@@ -4919,7 +4919,7 @@ private:
                 return;
             case PlaybackContinuationAction::Stop:
                 stopPlayback(true);
-                if (continuationPlan.resetAutoplayChain) continuationState_.resetAutoplayChain();
+                if (continuationPlan.resetAutoplayChain) playbackCoordinator_.resetAutoplayChain();
                 return;
         }
     }

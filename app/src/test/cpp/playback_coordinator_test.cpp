@@ -576,6 +576,12 @@ int main() {
     resolutionCoordinator.showStillWatchingPrompt();
     assert(resolutionCoordinator.continuation().autoplayChainCount() == 0);
     assert(resolutionCoordinator.continuation().stillWatchingPrompt());
+    resolutionCoordinator.continuation().incrementAutoplayChain();
+    resolutionCoordinator.dismissStillWatchingPrompt();
+    assert(resolutionCoordinator.continuation().autoplayChainCount() == 1);
+    assert(!resolutionCoordinator.continuation().stillWatchingPrompt());
+    resolutionCoordinator.resetAutoplayChain();
+    assert(resolutionCoordinator.continuation().autoplayChainCount() == 0);
 
     resolutionCoordinator.tracks().setAudioLanguagePreference(std::string{"eng"});
     resolutionCoordinator.tracks().setSubtitleLanguagePreference(std::string{"spa"});
