@@ -1564,20 +1564,24 @@ private:
             return;
         }
         if (homeState_.row() < 0) {
+            HomeToolbarInput input = HomeToolbarInput::None;
             if (key == AKEYCODE_DPAD_LEFT)
-                homeState_.moveToolbar(-1);
+                input = HomeToolbarInput::Left;
             else if (key == AKEYCODE_DPAD_RIGHT)
-                homeState_.moveToolbar(1);
-            else if (key == AKEYCODE_DPAD_DOWN && !home_.rows.empty())
-                homeState_.setRow(0);
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (homeState_.navIndex() == 0)
-                    openProfiles();
-                else if (homeState_.navIndex() == 2)
-                    openSearch();
-                else if (homeState_.navIndex() == 3)
-                    openSettings();
-            }
+                input = HomeToolbarInput::Right;
+            else if (key == AKEYCODE_DPAD_DOWN)
+                input = HomeToolbarInput::Down;
+            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+                input = HomeToolbarInput::Activate;
+
+            const HomeToolbarCommand command =
+                homeState_.handleToolbarInput(input, static_cast<int>(home_.rows.size()));
+            if (command.type == HomeToolbarCommandType::OpenProfiles)
+                openProfiles();
+            else if (command.type == HomeToolbarCommandType::OpenSearch)
+                openSearch();
+            else if (command.type == HomeToolbarCommandType::OpenSettings)
+                openSettings();
             homeState_.updateViewport(static_cast<int>(home_.rows.size()));
             return;
         }
@@ -1590,20 +1594,30 @@ private:
         const int previousFirstVisibleRow = homeState_.firstVisibleRow();
         auto& section = home_.rows[static_cast<size_t>(rowIndex)];
         auto& items = section.items;
-        if (key == AKEYCODE_DPAD_LEFT && !items.empty()) {
-            homeState_.moveSelection(rowIndex, -1, static_cast<int>(items.size()));
-        } else if (key == AKEYCODE_DPAD_RIGHT && !items.empty()) {
-            homeState_.moveSelection(rowIndex, 1, static_cast<int>(items.size()));
-        } else if (key == AKEYCODE_DPAD_UP) {
-            homeState_.moveRow(-1, static_cast<int>(home_.rows.size()));
-        } else if (key == AKEYCODE_DPAD_DOWN) {
-            homeState_.moveRow(1, static_cast<int>(home_.rows.size()));
-        } else if (isItemContextKey(key) && !items.empty() && section.title != "My Media") {
+
+        HomeRowInput input = HomeRowInput::None;
+        if (key == AKEYCODE_DPAD_LEFT)
+            input = HomeRowInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = HomeRowInput::Right;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = HomeRowInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = HomeRowInput::Down;
+        else if (isItemContextKey(key))
+            input = HomeRowInput::Context;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = HomeRowInput::Activate;
+
+        const HomeRowCommand command =
+            homeState_.handleRowInput(input, static_cast<int>(home_.rows.size()), static_cast<int>(items.size()),
+                                      section.title != "My Media");
+        if (command.type == HomeRowCommandType::OpenContext) {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
-            const auto& selected = items[static_cast<size_t>(selection)];
-            openItemMenuForItem(selected);
+            openItemMenuForItem(items[static_cast<size_t>(selection)]);
             return;
-        } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
+        }
+        if (command.type == HomeRowCommandType::OpenSelected) {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             const auto& selected = items[static_cast<size_t>(selection)];
             if (section.title == "My Media") {

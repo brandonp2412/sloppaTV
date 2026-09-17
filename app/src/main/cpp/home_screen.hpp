@@ -31,6 +31,45 @@ struct HomeRestorePlan {
     std::vector<int> selections;
 };
 
+enum class HomeToolbarInput {
+    None,
+    Left,
+    Right,
+    Down,
+    Activate,
+};
+
+enum class HomeToolbarCommandType {
+    None,
+    OpenProfiles,
+    OpenSearch,
+    OpenSettings,
+};
+
+struct HomeToolbarCommand {
+    HomeToolbarCommandType type = HomeToolbarCommandType::None;
+};
+
+enum class HomeRowInput {
+    None,
+    Left,
+    Right,
+    Up,
+    Down,
+    Context,
+    Activate,
+};
+
+enum class HomeRowCommandType {
+    None,
+    OpenContext,
+    OpenSelected,
+};
+
+struct HomeRowCommand {
+    HomeRowCommandType type = HomeRowCommandType::None;
+};
+
 constexpr int homeFirstVisibleRow(int currentFirst, int focusedRow, int totalRows, int visibleRows = 2) {
     if (totalRows <= 0 || visibleRows <= 0) return 0;
     const int maxFirst = std::max(0, totalRows - visibleRows);
@@ -94,10 +133,57 @@ public:
         navIndex_ = std::clamp(navIndex, 0, 3);
     }
 
+    [[nodiscard]] HomeToolbarCommand handleToolbarInput(HomeToolbarInput input, int totalRows) {
+        if (input == HomeToolbarInput::Left) {
+            moveToolbar(-1);
+            return {};
+        }
+        if (input == HomeToolbarInput::Right) {
+            moveToolbar(1);
+            return {};
+        }
+        if (input == HomeToolbarInput::Down) {
+            if (totalRows > 0) setRow(0);
+            return {};
+        }
+        if (input != HomeToolbarInput::Activate) return {};
+
+        if (navIndex_ == 0) return {.type = HomeToolbarCommandType::OpenProfiles};
+        if (navIndex_ == 2) return {.type = HomeToolbarCommandType::OpenSearch};
+        if (navIndex_ == 3) return {.type = HomeToolbarCommandType::OpenSettings};
+        return {};
+    }
+
     void moveToolbar(int direction) {
         constexpr int navCount = 4;
         navIndex_ = (navIndex_ + direction) % navCount;
         if (navIndex_ < 0) navIndex_ += navCount;
+    }
+
+    [[nodiscard]] HomeRowCommand handleRowInput(HomeRowInput input, int totalRows, int itemCount, bool allowContext) {
+        if (input == HomeRowInput::Left) {
+            if (itemCount > 0) moveSelection(row_, -1, itemCount);
+            return {};
+        }
+        if (input == HomeRowInput::Right) {
+            if (itemCount > 0) moveSelection(row_, 1, itemCount);
+            return {};
+        }
+        if (input == HomeRowInput::Up) {
+            moveRow(-1, totalRows);
+            return {};
+        }
+        if (input == HomeRowInput::Down) {
+            moveRow(1, totalRows);
+            return {};
+        }
+        if (input == HomeRowInput::Context && itemCount > 0 && allowContext) {
+            return {.type = HomeRowCommandType::OpenContext};
+        }
+        if (input == HomeRowInput::Activate && itemCount > 0) {
+            return {.type = HomeRowCommandType::OpenSelected};
+        }
+        return {};
     }
 
     void moveRow(int direction, int totalRows) {

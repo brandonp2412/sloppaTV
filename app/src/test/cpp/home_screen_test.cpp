@@ -100,6 +100,43 @@ int main() {
     assert(state.centerLongPressed());
     assert(!state.consumeCenterRelease(true));
 
+    HomeScreenState inputState;
+    inputState.reset();
+    inputState.setSelections({0, 0});
+    inputState.focusToolbar(1);
+    auto toolbarCommand = inputState.handleToolbarInput(HomeToolbarInput::Left, 2);
+    assert(toolbarCommand.type == HomeToolbarCommandType::None);
+    assert(inputState.navIndex() == 0);
+    toolbarCommand = inputState.handleToolbarInput(HomeToolbarInput::Activate, 2);
+    assert(toolbarCommand.type == HomeToolbarCommandType::OpenProfiles);
+    inputState.focusToolbar(2);
+    toolbarCommand = inputState.handleToolbarInput(HomeToolbarInput::Activate, 2);
+    assert(toolbarCommand.type == HomeToolbarCommandType::OpenSearch);
+    inputState.focusToolbar(3);
+    toolbarCommand = inputState.handleToolbarInput(HomeToolbarInput::Activate, 2);
+    assert(toolbarCommand.type == HomeToolbarCommandType::OpenSettings);
+    inputState.focusToolbar(1);
+    toolbarCommand = inputState.handleToolbarInput(HomeToolbarInput::Activate, 2);
+    assert(toolbarCommand.type == HomeToolbarCommandType::None);
+    toolbarCommand = inputState.handleToolbarInput(HomeToolbarInput::Down, 2);
+    assert(inputState.row() == 0);
+
+    auto rowCommand = inputState.handleRowInput(HomeRowInput::Right, 2, 3, true);
+    assert(rowCommand.type == HomeRowCommandType::None);
+    assert(inputState.selection(0, 3) == 1);
+    rowCommand = inputState.handleRowInput(HomeRowInput::Context, 2, 3, true);
+    assert(rowCommand.type == HomeRowCommandType::OpenContext);
+    rowCommand = inputState.handleRowInput(HomeRowInput::Context, 2, 3, false);
+    assert(rowCommand.type == HomeRowCommandType::None);
+    rowCommand = inputState.handleRowInput(HomeRowInput::Activate, 2, 3, true);
+    assert(rowCommand.type == HomeRowCommandType::OpenSelected);
+    rowCommand = inputState.handleRowInput(HomeRowInput::Down, 2, 3, true);
+    assert(inputState.row() == 1);
+    rowCommand = inputState.handleRowInput(HomeRowInput::Up, 2, 3, true);
+    assert(inputState.row() == 0);
+    rowCommand = inputState.handleRowInput(HomeRowInput::Up, 2, 3, true);
+    assert(inputState.row() == -1);
+
     JellyfinHomeRow continueWatching;
     continueWatching.title = "Continue Watching";
     continueWatching.items = {JellyfinItem{}, JellyfinItem{}, JellyfinItem{}};
