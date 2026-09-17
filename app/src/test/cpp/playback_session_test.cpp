@@ -12,7 +12,20 @@ int main() {
     assert(!state.fallbackAttempted());
     assert(state.zoomMode() == VideoZoomMode::Fit);
 
+    JellyfinItem activeItem;
+    activeItem.id = "episode-1";
+    PlaybackTarget activeTarget;
+    activeTarget.url = "https://media.example/episode-1";
+    activeTarget.audioStreamIndex = 3;
+    state.setActive(activeItem, activeTarget);
+    assert(state.activeItem().id == "episode-1");
+    assert(state.activeTarget().url == activeTarget.url);
+    state.activeTarget().audioStreamIndex = 7;
+    assert(state.activeTarget().audioStreamIndex == 7);
+
     state.begin(VideoZoomMode::Fill);
+    assert(state.activeItem().id == "episode-1");
+    assert(state.activeTarget().url == activeTarget.url);
     assert(!state.mediaSegmentsRequested());
     assert(!state.fallbackAttempted());
     assert(!state.preparing());
@@ -65,6 +78,8 @@ int main() {
     assert(state.mediaSegments().empty());
 
     state.reset();
+    assert(state.activeItem().id.empty());
+    assert(state.activeTarget().url.empty());
     assert(!state.homeRefreshRequested());
     assert(state.lastPlaybackSummary().empty());
     assert(!state.fallbackAttempted());

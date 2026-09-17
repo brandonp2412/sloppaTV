@@ -16,6 +16,7 @@ public:
 
     void reset() {
         begin(VideoZoomMode::Fit);
+        clearActive();
         homeRefreshRequested_ = false;
         lastPlaybackSummary_.clear();
     }
@@ -79,6 +80,18 @@ public:
     [[nodiscard]] VideoZoomMode zoomMode() const { return zoomMode_; }
     void setZoomMode(VideoZoomMode mode) { zoomMode_ = mode; }
 
+    void setActive(JellyfinItem item, PlaybackTarget target) {
+        activeItem_ = std::move(item);
+        activeTarget_ = std::move(target);
+    }
+    void clearActive() {
+        activeItem_ = {};
+        activeTarget_ = {};
+    }
+    [[nodiscard]] const JellyfinItem& activeItem() const { return activeItem_; }
+    [[nodiscard]] const PlaybackTarget& activeTarget() const { return activeTarget_; }
+    PlaybackTarget& activeTarget() { return activeTarget_; }
+
     void requestHomeRefresh() { homeRefreshRequested_ = true; }
     [[nodiscard]] bool homeRefreshRequested() const { return homeRefreshRequested_; }
     bool takeHomeRefreshRequest() {
@@ -97,6 +110,8 @@ private:
     bool fallbackAttempted_ = false;
     TimePoint preparingSince_{};
     VideoZoomMode zoomMode_ = VideoZoomMode::Fit;
+    JellyfinItem activeItem_;
+    PlaybackTarget activeTarget_;
     bool homeRefreshRequested_ = false;
     std::string lastPlaybackSummary_;
 };
