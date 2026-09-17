@@ -543,6 +543,13 @@ struct HomeSecondaryCompletion {
     ApiValueResult<JellyfinHomeData> result;
 };
 
+struct ExternalPlaybackCompletion {
+    uint64_t generation = 0;
+    JellyfinItem selectedItem;
+    std::optional<ExternalPlaybackLaunch> launch;
+    std::string error;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
@@ -552,7 +559,8 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
                                      EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
-                                     QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion>;
+                                     QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
+                                     ExternalPlaybackCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -2045,10 +2053,12 @@ private:
                     auto next = api_.getNextUpForSeries(session, playable.id);
                     if (!next.ok) {
                         if (!requestEpochs_.playback.active(generation)) return;
-                        std::scoped_lock lock(stateMutex_);
-                        loading_ = false;
-                        if (screen_ != Screen::Details || detail_.id != selected.id) return;
-                        error_ = "EXTERNAL PLAYER: " + next.error;
+                        asyncCompletions_.push(ExternalPlaybackCompletion{
+                            .generation = generation,
+                            .selectedItem = selected,
+                            .launch = std::nullopt,
+                            .error = "EXTERNAL PLAYER: " + next.error,
+                        });
                         return;
                     }
                     playable = std::move(next.value);
@@ -2083,21 +2093,26 @@ private:
                 }
 
                 if (!requestEpochs_.playback.active(generation)) return;
-                std::scoped_lock lock(stateMutex_);
-                loading_ = false;
-                if (screen_ != Screen::Details || detail_.id != selected.id) return;
                 if (videoUrl.empty()) {
-                    error_ = "EXTERNAL PLAYER: NO STATIC STREAM";
+                    asyncCompletions_.push(ExternalPlaybackCompletion{
+                        .generation = generation,
+                        .selectedItem = selected,
+                        .launch = std::nullopt,
+                        .error = "EXTERNAL PLAYER: NO STATIC STREAM",
+                    });
                     return;
                 }
-                restoreHomeVisibilityForPlayback(selected);
-                restoreHomeVisibilityForPlayback(playable);
-                externalPlaybackState_.stage(ExternalPlaybackLaunch{
-                    .item = std::move(playable),
-                    .player = std::move(player),
-                    .url = videoUrl,
-                    .subtitleUrl = std::move(subtitleUrl),
-                    .skipSegmentsJson = std::move(skipSegmentsJson),
+                asyncCompletions_.push(ExternalPlaybackCompletion{
+                    .generation = generation,
+                    .selectedItem = selected,
+                    .launch = ExternalPlaybackLaunch{
+                        .item = std::move(playable),
+                        .player = std::move(player),
+                        .url = videoUrl,
+                        .subtitleUrl = std::move(subtitleUrl),
+                        .skipSegmentsJson = std::move(skipSegmentsJson),
+                    },
+                    .error = {},
                 });
             })) {
             loading_ = false;
@@ -5165,6 +5180,20 @@ private:
                                 .count();
         __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms",
                             static_cast<long long>(fullMs));
+    }
+
+    void applyAsyncCompletion(ExternalPlaybackCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Details || detail_.id != completion.selectedItem.id) return;
+        if (!completion.error.empty()) {
+            error_ = std::move(completion.error);
+            return;
+        }
+        if (!completion.launch) return;
+        restoreHomeVisibilityForPlayback(completion.selectedItem);
+        restoreHomeVisibilityForPlayback(completion.launch->item);
+        externalPlaybackState_.stage(std::move(*completion.launch));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
