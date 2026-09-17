@@ -4205,26 +4205,26 @@ private:
     }
 
     void requestMediaSegmentsAsync() {
-        if (!session_.valid() || playbackSessionState_.activeItem().id.empty()
-            || !playbackSessionState_.beginMediaSegmentsRequest(std::chrono::steady_clock::now())) {
-            return;
-        }
+        if (!session_.valid()) return;
+        const auto request = playbackCoordinator_.beginMediaSegmentsRequest(std::chrono::steady_clock::now());
+        if (!request) return;
         const JellyfinSession session = session_;
-        const std::string itemId = playbackSessionState_.activeItem().id;
+        const std::string itemId = *request;
         if (!tasks_.submit([this, session, itemId] {
             auto result = api_.getMediaSegments(session, itemId);
             std::scoped_lock lock(stateMutex_);
-            if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != itemId) return;
+            if (screen_ != Screen::Player) return;
             if (!result.ok) {
-                playbackSessionState_.mediaSegmentsRequestFailed();
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s", result.error.c_str());
+                if (playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now())) {
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s", result.error.c_str());
+                }
                 return;
             }
             const size_t segmentCount = result.value.size();
-            playbackSessionState_.setMediaSegments(std::move(result.value));
+            if (!playbackCoordinator_.completeMediaSegmentsRequest(itemId, std::move(result.value))) return;
             __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
         })) {
-            playbackSessionState_.mediaSegmentsRequestFailed(std::chrono::steady_clock::now());
+            playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now());
         }
     }
 

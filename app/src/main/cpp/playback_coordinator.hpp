@@ -529,6 +529,24 @@ public:
         return true;
     }
 
+    [[nodiscard]] std::optional<std::string> beginMediaSegmentsRequest(TimePoint now) {
+        const std::string& itemId = sessionState_.activeItem().id;
+        if (itemId.empty() || !sessionState_.beginMediaSegmentsRequest(now)) return std::nullopt;
+        return itemId;
+    }
+
+    bool completeMediaSegmentsRequest(std::string_view expectedItemId, std::vector<JellyfinMediaSegment> segments) {
+        if (sessionState_.activeItem().id != expectedItemId) return false;
+        sessionState_.setMediaSegments(std::move(segments));
+        return true;
+    }
+
+    bool failMediaSegmentsRequest(std::string_view expectedItemId, TimePoint now) {
+        if (sessionState_.activeItem().id != expectedItemId) return false;
+        sessionState_.mediaSegmentsRequestFailed(now);
+        return true;
+    }
+
     [[nodiscard]] std::optional<PlaybackNextEpisodeRequest> beginNextEpisodeRequest(
         PlaybackContinuationState::TimePoint now
     ) {

@@ -39,7 +39,18 @@ int main() {
     assert(coordinatedProgress.report);
     coordinatedProgress = coordinator.progressPlan(false, true, true, false, false, 23456);
     assert(!coordinatedProgress.report);
-    assert(coordinator.session().beginMediaSegmentsRequest(now));
+    const auto mediaSegmentsRequest = coordinator.beginMediaSegmentsRequest(now);
+    assert(mediaSegmentsRequest);
+    assert(*mediaSegmentsRequest == coordinatedItem.id);
+    assert(!coordinator.beginMediaSegmentsRequest(now));
+    assert(!coordinator.failMediaSegmentsRequest("stale-item", now));
+    assert(coordinator.session().mediaSegmentsRequested());
+    assert(coordinator.completeMediaSegmentsRequest(
+        coordinatedItem.id,
+        {{.type = "Intro", .startTicks = 10'000'000, .endTicks = 50'000'000}}
+    ));
+    assert(coordinator.session().mediaSegments().size() == 1);
+    assert(coordinator.session().mediaSegments().front().type == "Intro");
     assert(coordinator.continuation().beginNextEpisodeRequest(now));
     coordinator.transition().setFallbackResolving(true);
     assert(coordinator.tracks().beginSubtitleWork());
