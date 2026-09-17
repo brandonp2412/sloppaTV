@@ -17,6 +17,11 @@ struct PlaybackTrackSelectionPolicy {
     std::vector<std::string> allowedSubtitleLanguages;
 };
 
+struct PlaybackTrackSelection {
+    int audioStreamIndex = -1;
+    int subtitleStreamIndex = kSubtitleOffIndex;
+};
+
 struct PlaybackAudioCyclePlan {
     bool available = false;
     int audioStreamIndex = -1;
@@ -160,6 +165,23 @@ inline int playbackSubtitleIndexForItem(
     }
     return subtitleIndexForQueuePreference(candidates, languagePreference);
 #endif
+}
+
+inline PlaybackTrackSelection selectPlaybackTracks(
+    const JellyfinItem& item,
+    const std::optional<std::string>& audioLanguagePreference,
+    const std::optional<std::string>& subtitleLanguagePreference,
+    const PlaybackTrackSelectionPolicy& policy
+) {
+    PlaybackTrackSelection selection;
+    selection.audioStreamIndex = playbackAudioIndexForItem(item, audioLanguagePreference);
+    selection.subtitleStreamIndex = playbackSubtitleIndexForItem(
+        item,
+        selection.audioStreamIndex,
+        subtitleLanguagePreference,
+        policy
+    );
+    return selection;
 }
 
 inline int playbackPreferredSubtitlePosition(

@@ -35,6 +35,16 @@ int main() {
 
     autoPolicy.autoSubtitleSourceLanguage = "any";
     assert(playbackAutoSubtitleIndexForItem(item, 3, autoPolicy) == 6);
+
+    const auto selectedTracks = selectPlaybackTracks(
+        item,
+        std::optional<std::string>{"jpn"},
+        std::nullopt,
+        autoPolicy
+    );
+    assert(selectedTracks.audioStreamIndex == 1);
+    assert(selectedTracks.subtitleStreamIndex == 6);
+
     autoPolicy.autoSubtitles = false;
     assert(playbackAutoSubtitleIndexForItem(item, 1, autoPolicy) == kSubtitleOffIndex);
 

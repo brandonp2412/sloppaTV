@@ -1720,12 +1720,13 @@ private:
 
             const std::string videoUrl = api_.staticVideoUrl(session, playable);
             std::string subtitleUrl;
-            const int subtitleIndex = playbackSubtitleIndexForItem(
+            const auto tracks = selectPlaybackTracks(
                 playable,
-                -1,
+                std::nullopt,
                 subtitlePreference,
                 trackPolicy
             );
+            const int subtitleIndex = tracks.subtitleStreamIndex;
             if (subtitleIndex >= 0) {
                 const auto subtitle = std::find_if(
                     playable.subtitles.begin(),
@@ -3886,21 +3887,15 @@ private:
         tasks_.submit([this, session, queued = std::move(queued), index, previousQueueIndex, originScreen, replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, trackPolicy, generation]() mutable {
             auto detailed = api_.getItem(session, queued.id);
             if (detailed.ok) queued = std::move(detailed.value);
-            const int audioStreamIndex = playbackAudioIndexForItem(queued, audioPreference);
-            const int subtitleStreamIndex = playbackSubtitleIndexForItem(
-                queued,
-                audioStreamIndex,
-                subtitlePreference,
-                trackPolicy
-            );
+            const auto tracks = selectPlaybackTracks(queued, audioPreference, subtitlePreference, trackPolicy);
             auto target = api_.resolvePlayback(
                 session,
                 queued,
                 maxStreamingBitrate,
                 maxAudioChannels,
                 playbackOverrides,
-                audioStreamIndex,
-                subtitleStreamIndex
+                tracks.audioStreamIndex,
+                tracks.subtitleStreamIndex
             );
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
@@ -3953,21 +3948,15 @@ private:
         ]() mutable {
             auto detailed = api_.getItem(session, selected.id);
             if (detailed.ok) selected = std::move(detailed.value);
-            const int audioStreamIndex = playbackAudioIndexForItem(selected, audioPreference);
-            const int subtitleStreamIndex = playbackSubtitleIndexForItem(
-                selected,
-                audioStreamIndex,
-                subtitlePreference,
-                trackPolicy
-            );
+            const auto tracks = selectPlaybackTracks(selected, audioPreference, subtitlePreference, trackPolicy);
             auto target = api_.resolvePlayback(
                 session,
                 selected,
                 maxStreamingBitrate,
                 maxAudioChannels,
                 playbackOverrides,
-                audioStreamIndex,
-                subtitleStreamIndex
+                tracks.audioStreamIndex,
+                tracks.subtitleStreamIndex
             );
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
@@ -4251,21 +4240,15 @@ private:
                 if (detailed.ok) playable = std::move(detailed.value);
             }
 
-            const int audioStreamIndex = playbackAudioIndexForItem(playable, audioPreference);
-            const int subtitleStreamIndex = playbackSubtitleIndexForItem(
-                playable,
-                audioStreamIndex,
-                subtitlePreference,
-                trackPolicy
-            );
+            const auto tracks = selectPlaybackTracks(playable, audioPreference, subtitlePreference, trackPolicy);
             auto target = api_.resolvePlayback(
                 session,
                 playable,
                 maxStreamingBitrate,
                 maxAudioChannels,
                 playbackOverrides,
-                audioStreamIndex,
-                subtitleStreamIndex
+                tracks.audioStreamIndex,
+                tracks.subtitleStreamIndex
             );
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
@@ -4419,21 +4402,15 @@ private:
         tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference, subtitlePreference, trackPolicy, nextItem = std::move(nextItem), queuedNextIndex, generation]() mutable {
             auto detailed = api_.getItem(session, nextItem.id);
             if (detailed.ok) nextItem = std::move(detailed.value);
-            const int audioStreamIndex = playbackAudioIndexForItem(nextItem, audioPreference);
-            const int subtitleStreamIndex = playbackSubtitleIndexForItem(
-                nextItem,
-                audioStreamIndex,
-                subtitlePreference,
-                trackPolicy
-            );
+            const auto tracks = selectPlaybackTracks(nextItem, audioPreference, subtitlePreference, trackPolicy);
             auto target = api_.resolvePlayback(
                 session,
                 nextItem,
                 maxStreamingBitrate,
                 maxAudioChannels,
                 playbackOverrides,
-                audioStreamIndex,
-                subtitleStreamIndex
+                tracks.audioStreamIndex,
+                tracks.subtitleStreamIndex
             );
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
