@@ -401,6 +401,10 @@ public:
 
     void popScreen(Screen fallback = Screen::Home) {
         screen_ = navigation_.popOr(fallback);
+        if (screen_ == Screen::Browse && session_.valid() && !loading_
+            && !browseState_.activeContainer().id.empty()) {
+            loadBrowsePageAsync(false);
+        }
     }
 
     ~SloppaApp() {
@@ -739,6 +743,9 @@ private:
                     player_.play();
                     mediaSession_.updateState(MediaSessionState::Playing, playerScreenState_.positionMs());
                     __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
+                } else if (screen_ == Screen::Browse && session_.valid() && !loading_
+                    && !browseState_.activeContainer().id.empty()) {
+                    loadBrowsePageAsync(false);
                 }
                 break;
             case APP_CMD_LOST_FOCUS:
