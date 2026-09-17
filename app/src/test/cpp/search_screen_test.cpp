@@ -154,6 +154,52 @@ int main() {
     assert(!state.loading());
     assert(!state.seerrLoading());
 
+    SearchScreenState inputState;
+    auto command = inputState.handleInput(SearchScreenInput::Left, 5);
+    assert(command.type == SearchScreenCommandType::MoveKeyboard);
+    assert(command.dx == -1);
+    command = inputState.handleInput(SearchScreenInput::Activate, 5);
+    assert(command.type == SearchScreenCommandType::ActivateKeyboard);
+    command = inputState.handleInput(SearchScreenInput::Submit, 5);
+    assert(command.type == SearchScreenCommandType::SubmitSearch);
+    assert(!inputState.keyboard());
+    command = inputState.handleInput(SearchScreenInput::Back, 5);
+    assert(command.type == SearchScreenCommandType::Exit);
+
+    inputState.reset();
+    command = inputState.handleInput(SearchScreenInput::Back, 5);
+    assert(command.type == SearchScreenCommandType::None);
+    assert(!inputState.keyboard());
+    command = inputState.handleInput(SearchScreenInput::Activate, 5);
+    assert(command.type == SearchScreenCommandType::OpenTextInput);
+
+    JellyfinItem localResult;
+    localResult.id = "local";
+    localResult.type = "Movie";
+    inputState.setQuery("local");
+    assert(inputState.finishLibrarySearch("local", {localResult}));
+    inputState.setKeyboard(false);
+    command = inputState.handleInput(SearchScreenInput::Context, 5);
+    assert(command.type == SearchScreenCommandType::OpenContext);
+    command = inputState.handleInput(SearchScreenInput::Activate, 5);
+    assert(command.type == SearchScreenCommandType::OpenDetails);
+    command = inputState.handleInput(SearchScreenInput::Up, 5);
+    assert(command.type == SearchScreenCommandType::OpenTextInput);
+
+    SearchScreenState seerrInput;
+    seerrInput.setQuery("remote");
+    assert(seerrInput.beginImmediateSeerrSearch(true));
+    SeerrMediaItem remoteResult;
+    remoteResult.id = "seerr:movie:999";
+    remoteResult.mediaType = "movie";
+    remoteResult.tmdbId = 999;
+    assert(seerrInput.finishSeerrSearch("remote", {remoteResult}));
+    seerrInput.setKeyboard(false);
+    command = seerrInput.handleInput(SearchScreenInput::Context, 5);
+    assert(command.type == SearchScreenCommandType::None);
+    command = seerrInput.handleInput(SearchScreenInput::Submit, 5);
+    assert(command.type == SearchScreenCommandType::RequestSeerr);
+
     state.reset();
     assert(state.query().empty());
     assert(state.keyboard());

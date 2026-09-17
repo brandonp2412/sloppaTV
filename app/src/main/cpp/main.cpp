@@ -1693,72 +1693,74 @@ private:
     }
 
     void handleSearchKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
-            if (searchState_.keyboard()) {
-                searchState_.setKeyboard(false);
-            } else {
-                searchState_.cancelPending();
-                requestEpochs_.search.invalidate();
-                requestEpochs_.seerrSearch.invalidate();
-                seerrSearch_.cancelPendingRequests();
-                hideSystemTextInput();
-                popScreen(Screen::Home);
-                if (screen_ == Screen::Home) {
-                    homeState_.setRow(0);
-                    homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-                }
+        SearchScreenInput input = SearchScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = SearchScreenInput::Back;
+        else if (key == AKEYCODE_SEARCH)
+            input = SearchScreenInput::Search;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = SearchScreenInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = SearchScreenInput::Right;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = SearchScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = SearchScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_CENTER)
+            input = SearchScreenInput::Activate;
+        else if (key == AKEYCODE_ENTER)
+            input = SearchScreenInput::Submit;
+        else if (isItemContextKey(key))
+            input = SearchScreenInput::Context;
+        else
+            return;
+
+        constexpr int columns = mediaGridColumns();
+        const SearchScreenCommand command = searchState_.handleInput(input, columns);
+        switch (command.type) {
+        case SearchScreenCommandType::None:
+            return;
+        case SearchScreenCommandType::Exit:
+            searchState_.cancelPending();
+            requestEpochs_.search.invalidate();
+            requestEpochs_.seerrSearch.invalidate();
+            seerrSearch_.cancelPendingRequests();
+            hideSystemTextInput();
+            popScreen(Screen::Home);
+            if (screen_ == Screen::Home) {
+                homeState_.setRow(0);
+                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
             }
             return;
-        }
-        if (searchState_.keyboard()) {
-            if (key == AKEYCODE_ENTER) {
-                searchState_.setKeyboard(false);
-                searchAsync();
-            } else if (key == AKEYCODE_DPAD_LEFT)
-                moveKeyboard(-1, 0);
-            else if (key == AKEYCODE_DPAD_RIGHT)
-                moveKeyboard(1, 0);
-            else if (key == AKEYCODE_DPAD_UP)
-                moveKeyboard(0, -1);
-            else if (key == AKEYCODE_DPAD_DOWN)
-                moveKeyboard(0, 1);
-            else if (key == AKEYCODE_DPAD_CENTER)
-                activateKeyboardKey(true);
+        case SearchScreenCommandType::SubmitSearch:
+            searchAsync();
             return;
-        }
-
-        const auto& results = searchState_.results();
-        if (key == AKEYCODE_SEARCH ||
-            (key == AKEYCODE_DPAD_UP && (results.empty() || searchState_.selectionOnFirstResultRow())) ||
-            ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && results.empty())) {
+        case SearchScreenCommandType::MoveKeyboard:
+            moveKeyboard(command.dx, command.dy);
+            return;
+        case SearchScreenCommandType::ActivateKeyboard:
+            activateKeyboardKey(true);
+            return;
+        case SearchScreenCommandType::OpenTextInput:
             searchState_.setKeyboard(
                 !showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
             if (searchState_.keyboard()) keyboardRow_ = keyboardCol_ = 0;
             return;
-        }
-        if (results.empty()) return;
-        if (isItemContextKey(key)) {
+        case SearchScreenCommandType::OpenContext: {
+            const auto& results = searchState_.results();
             const auto& selected = results[static_cast<size_t>(searchState_.selection())];
-            if (searchState_.selectedSeerrResult() == nullptr) openItemMenuForItem(selected);
+            openItemMenuForItem(selected);
             return;
         }
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const auto selected = results[static_cast<size_t>(searchState_.selection())];
-            if (const auto* seerrItem = searchState_.selectedSeerrResult())
-                requestSeerrMediaAsync(*seerrItem);
-            else
-                openDetails(selected);
+        case SearchScreenCommandType::OpenDetails: {
+            const auto& results = searchState_.results();
+            openDetails(results[static_cast<size_t>(searchState_.selection())]);
             return;
         }
-        constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT)
-            searchState_.moveSelection(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            searchState_.moveSelection(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP)
-            searchState_.moveSelection(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN)
-            searchState_.moveSelection(0, 1, columns);
+        case SearchScreenCommandType::RequestSeerr:
+            if (const auto* seerrItem = searchState_.selectedSeerrResult()) requestSeerrMediaAsync(*seerrItem);
+            return;
+        }
     }
 
     std::vector<std::string> detailActions() const {

@@ -12,6 +12,37 @@
 #include <utility>
 #include <vector>
 
+enum class SearchScreenInput {
+    None,
+    Back,
+    Search,
+    Left,
+    Right,
+    Up,
+    Down,
+    Activate,
+    Submit,
+    Context,
+};
+
+enum class SearchScreenCommandType {
+    None,
+    Exit,
+    SubmitSearch,
+    MoveKeyboard,
+    ActivateKeyboard,
+    OpenTextInput,
+    OpenContext,
+    OpenDetails,
+    RequestSeerr,
+};
+
+struct SearchScreenCommand {
+    SearchScreenCommandType type = SearchScreenCommandType::None;
+    int dx = 0;
+    int dy = 0;
+};
+
 class SearchScreenState {
 public:
     using Clock = std::chrono::steady_clock;
@@ -259,6 +290,71 @@ public:
         if (libraryTitles_.size() + episodes_.size() == before) return false;
         rebuildResults();
         return true;
+    }
+
+    [[nodiscard]] SearchScreenCommand handleInput(SearchScreenInput input, int columns) {
+        if (input == SearchScreenInput::Back) {
+            if (keyboard_) {
+                keyboard_ = false;
+                return {};
+            }
+            return {.type = SearchScreenCommandType::Exit};
+        }
+
+        if (keyboard_) {
+            switch (input) {
+            case SearchScreenInput::Submit:
+                keyboard_ = false;
+                return {.type = SearchScreenCommandType::SubmitSearch};
+            case SearchScreenInput::Left:
+                return {.type = SearchScreenCommandType::MoveKeyboard, .dx = -1};
+            case SearchScreenInput::Right:
+                return {.type = SearchScreenCommandType::MoveKeyboard, .dx = 1};
+            case SearchScreenInput::Up:
+                return {.type = SearchScreenCommandType::MoveKeyboard, .dy = -1};
+            case SearchScreenInput::Down:
+                return {.type = SearchScreenCommandType::MoveKeyboard, .dy = 1};
+            case SearchScreenInput::Activate:
+                return {.type = SearchScreenCommandType::ActivateKeyboard};
+            default:
+                return {};
+            }
+        }
+
+        const bool empty = results_.empty();
+        if (input == SearchScreenInput::Search ||
+            (input == SearchScreenInput::Up && (empty || selectionOnFirstResultRow())) ||
+            ((input == SearchScreenInput::Activate || input == SearchScreenInput::Submit) && empty)) {
+            return {.type = SearchScreenCommandType::OpenTextInput};
+        }
+        if (empty) return {};
+
+        if (input == SearchScreenInput::Context) {
+            return selectedSeerrResult() == nullptr ? SearchScreenCommand{.type = SearchScreenCommandType::OpenContext}
+                                                    : SearchScreenCommand{};
+        }
+        if (input == SearchScreenInput::Activate || input == SearchScreenInput::Submit) {
+            return {.type = selectedSeerrResult() ? SearchScreenCommandType::RequestSeerr
+                                                  : SearchScreenCommandType::OpenDetails};
+        }
+
+        switch (input) {
+        case SearchScreenInput::Left:
+            moveSelection(-1, 0, columns);
+            break;
+        case SearchScreenInput::Right:
+            moveSelection(1, 0, columns);
+            break;
+        case SearchScreenInput::Up:
+            moveSelection(0, -1, columns);
+            break;
+        case SearchScreenInput::Down:
+            moveSelection(0, 1, columns);
+            break;
+        default:
+            break;
+        }
+        return {};
     }
 
     void moveSelection(int dx, int dy, int columns) {
