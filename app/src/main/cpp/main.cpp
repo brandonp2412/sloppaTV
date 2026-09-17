@@ -488,13 +488,33 @@ struct LoginCompletion {
     ApiValueResult<JellyfinSession> result;
 };
 
+struct DetailsItemCompletion {
+    std::string itemId;
+    uint64_t generation = 0;
+    ApiValueResult<JellyfinItem> result;
+};
+
+struct DetailsSimilarCompletion {
+    std::string itemId;
+    uint64_t generation = 0;
+    std::vector<JellyfinItem> items;
+};
+
+struct EpisodeSeriesContextCompletion {
+    std::string itemId;
+    uint64_t generation = 0;
+    JellyfinItem series;
+    std::vector<JellyfinItem> seasons;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
                                      DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion,
                                      ServerInfoNoticeCompletion, FavoriteCompletion, PlayedCompletion,
                                      MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
-                                     LoginCompletion>;
+                                     LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
+                                     EpisodeSeriesContextCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3703,38 +3723,47 @@ private:
         tasks_.submit([this, session, id, generation] {
             auto result = api_.getItem(session, id);
             if (!requestEpochs_.content.active(generation)) return;
-            {
-                std::scoped_lock lock(stateMutex_);
-                loading_ = false;
-                if (screen_ != Screen::Details || detail_.id != id) return;
-                if (!result.ok) {
-                    error_ = "DETAILS: " + result.error;
-                    return;
-                }
-                detail_ = std::move(result.value);
+            if (!result.ok) {
+                asyncCompletions_.push(DetailsItemCompletion{
+                    .itemId = id,
+                    .generation = generation,
+                    .result = std::move(result),
+                });
+                return;
             }
+
+            const bool episode = result.value.type == "Episode";
+            const std::string seriesId = result.value.seriesId;
+            asyncCompletions_.push(DetailsItemCompletion{
+                .itemId = id,
+                .generation = generation,
+                .result = std::move(result),
+            });
 
             auto similar = api_.getSimilar(session, id, 18);
             if (!requestEpochs_.content.active(generation)) return;
             if (similar.ok) {
-                std::scoped_lock lock(stateMutex_);
-                if (screen_ != Screen::Details || detail_.id != id) return;
-                detailsState_.setSimilar(std::move(similar.value));
+                asyncCompletions_.push(DetailsSimilarCompletion{
+                    .itemId = id,
+                    .generation = generation,
+                    .items = std::move(similar.value),
+                });
             }
 
-            std::string seriesId;
+            if (!episode || seriesId.empty()) return;
             {
                 std::scoped_lock lock(stateMutex_);
-                if (screen_ != Screen::Details || detail_.id != id || detail_.type != "Episode") return;
-                seriesId = detail_.seriesId;
+                if (screen_ != Screen::Details || detail_.id != id) return;
             }
-            if (seriesId.empty()) return;
             auto series = api_.getItem(session, seriesId);
             auto seasons = api_.getSeasons(session, seriesId);
             if (!requestEpochs_.content.active(generation) || !series.ok || !seasons.ok) return;
-            std::scoped_lock lock(stateMutex_);
-            if (screen_ != Screen::Details || detail_.id != id) return;
-            detailsState_.setEpisodeSeriesContext(std::move(series.value), std::move(seasons.value));
+            asyncCompletions_.push(EpisodeSeriesContextCompletion{
+                .itemId = id,
+                .generation = generation,
+                .series = std::move(series.value),
+                .seasons = std::move(seasons.value),
+            });
         });
     }
 
@@ -5031,6 +5060,29 @@ private:
         error_.clear();
         saveSession(session_);
         loadHomeAsync();
+    }
+
+    void applyAsyncCompletion(DetailsItemCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Details || detail_.id != completion.itemId) return;
+        if (!completion.result.ok) {
+            error_ = "DETAILS: " + completion.result.error;
+            return;
+        }
+        detail_ = std::move(completion.result.value);
+    }
+
+    void applyAsyncCompletion(DetailsSimilarCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        if (screen_ != Screen::Details || detail_.id != completion.itemId) return;
+        detailsState_.setSimilar(std::move(completion.items));
+    }
+
+    void applyAsyncCompletion(EpisodeSeriesContextCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        if (screen_ != Screen::Details || detail_.id != completion.itemId || detail_.type != "Episode") return;
+        detailsState_.setEpisodeSeriesContext(std::move(completion.series), std::move(completion.seasons));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
