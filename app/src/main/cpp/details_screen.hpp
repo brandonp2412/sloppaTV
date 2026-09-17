@@ -93,6 +93,27 @@ struct DetailGridScreenCommand {
     DetailGridScreenCommandType type = DetailGridScreenCommandType::None;
 };
 
+enum class ItemMenuScreenInput {
+    None,
+    Back,
+    Left,
+    Right,
+    Up,
+    Down,
+    Activate,
+};
+
+enum class ItemMenuScreenCommandType {
+    None,
+    Back,
+    ActivateAction,
+    ConfirmDelete,
+};
+
+struct ItemMenuScreenCommand {
+    ItemMenuScreenCommandType type = ItemMenuScreenCommandType::None;
+};
+
 class DetailsScreenState {
 public:
     void reset() {
@@ -250,6 +271,37 @@ public:
         if (item.canDelete) result.emplace_back("DELETE MEDIA");
         result.emplace_back("BACK");
         return result;
+    }
+
+    [[nodiscard]] ItemMenuScreenCommand handleItemMenuInput(ItemMenuScreenInput input, int actionCount) {
+        if (input == ItemMenuScreenInput::Back) {
+            if (deleteConfirmation_) {
+                setDeleteConfirmation(false);
+                return {};
+            }
+            return {.type = ItemMenuScreenCommandType::Back};
+        }
+
+        if (deleteConfirmation_) {
+            if (input == ItemMenuScreenInput::Up || input == ItemMenuScreenInput::Left)
+                setDeleteConfirmationSelection(0);
+            else if (input == ItemMenuScreenInput::Down || input == ItemMenuScreenInput::Right)
+                setDeleteConfirmationSelection(1);
+            else if (input == ItemMenuScreenInput::Activate) {
+                if (deleteConfirmationSelection_ == 0)
+                    return {.type = ItemMenuScreenCommandType::ConfirmDelete};
+                setDeleteConfirmation(false);
+            }
+            return {};
+        }
+
+        if (input == ItemMenuScreenInput::Up)
+            moveItemMenu(-1, actionCount);
+        else if (input == ItemMenuScreenInput::Down)
+            moveItemMenu(1, actionCount);
+        else if (input == ItemMenuScreenInput::Activate)
+            return {.type = ItemMenuScreenCommandType::ActivateAction};
+        return {};
     }
 
     [[nodiscard]] int itemMenuSelection() const { return itemMenuSelection_; }

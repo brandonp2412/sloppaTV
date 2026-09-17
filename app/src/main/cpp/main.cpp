@@ -2086,65 +2086,64 @@ private:
     }
 
     void handleItemMenuKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
-            if (detailsState_.deleteConfirmation())
-                detailsState_.setDeleteConfirmation(false);
-            else
-                popScreen(Screen::Details);
-            return;
-        }
-        if (detailsState_.deleteConfirmation()) {
-            if (key == AKEYCODE_DPAD_UP || key == AKEYCODE_DPAD_LEFT)
-                detailsState_.setDeleteConfirmationSelection(0);
-            else if (key == AKEYCODE_DPAD_DOWN || key == AKEYCODE_DPAD_RIGHT)
-                detailsState_.setDeleteConfirmationSelection(1);
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (detailsState_.deleteConfirmationSelection() == 0) {
-                    if (isSeerrItem(detail_))
-                        deleteSeerrRequestAsync();
-                    else
-                        deleteCurrentItemAsync();
-                } else
-                    detailsState_.setDeleteConfirmation(false);
-            }
-            return;
-        }
+        ItemMenuScreenInput input = ItemMenuScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = ItemMenuScreenInput::Back;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = ItemMenuScreenInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = ItemMenuScreenInput::Right;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = ItemMenuScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = ItemMenuScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = ItemMenuScreenInput::Activate;
 
         const auto actions = itemMenuActions();
-        if (key == AKEYCODE_DPAD_UP)
-            detailsState_.moveItemMenu(-1, static_cast<int>(actions.size()));
-        else if (key == AKEYCODE_DPAD_DOWN)
-            detailsState_.moveItemMenu(1, static_cast<int>(actions.size()));
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const std::string& action = actions[static_cast<size_t>(detailsState_.itemMenuSelection())];
-            if (action == "PLAY ALL") {
-                popScreen(Screen::Details);
-                if (screen_ != Screen::Details) pushScreen(Screen::Details);
-                beginSeriesPlayAll();
-            } else if (action == "PLAY EXTERNAL") {
-                popScreen(Screen::Details);
-                if (screen_ != Screen::Details) pushScreen(Screen::Details);
-                launchExternalPlaybackAsync();
-            } else if (action == "VIEW QUEUE") {
-                popScreen(Screen::Details);
-                openQueueOverlay();
-            } else if (action == "FAVORITE" || action == "UNFAVORITE") {
-                popScreen(Screen::Details);
-                toggleFavoriteAsync();
-            } else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") {
-                popScreen(Screen::Details);
-                togglePlayedAsync();
-            } else if (action == "HIDE FROM HOME" || action == "SHOW ON HOME") {
-                popScreen(Screen::Details);
-                toggleHiddenFromHome();
-            } else if (action == "REFRESH METADATA") {
-                popScreen(Screen::Details);
-                refreshCurrentItemMetadataAsync();
-            } else if (action == "DELETE MEDIA" || action == "DELETE REQUEST") {
-                detailsState_.setDeleteConfirmation(true);
-            } else {
-                popScreen(Screen::Details);
-            }
+        const ItemMenuScreenCommand command =
+            detailsState_.handleItemMenuInput(input, static_cast<int>(actions.size()));
+        if (command.type == ItemMenuScreenCommandType::Back) {
+            popScreen(Screen::Details);
+            return;
+        }
+        if (command.type == ItemMenuScreenCommandType::ConfirmDelete) {
+            if (isSeerrItem(detail_))
+                deleteSeerrRequestAsync();
+            else
+                deleteCurrentItemAsync();
+            return;
+        }
+        if (command.type != ItemMenuScreenCommandType::ActivateAction) return;
+
+        const std::string& action = actions[static_cast<size_t>(detailsState_.itemMenuSelection())];
+        if (action == "PLAY ALL") {
+            popScreen(Screen::Details);
+            if (screen_ != Screen::Details) pushScreen(Screen::Details);
+            beginSeriesPlayAll();
+        } else if (action == "PLAY EXTERNAL") {
+            popScreen(Screen::Details);
+            if (screen_ != Screen::Details) pushScreen(Screen::Details);
+            launchExternalPlaybackAsync();
+        } else if (action == "VIEW QUEUE") {
+            popScreen(Screen::Details);
+            openQueueOverlay();
+        } else if (action == "FAVORITE" || action == "UNFAVORITE") {
+            popScreen(Screen::Details);
+            toggleFavoriteAsync();
+        } else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") {
+            popScreen(Screen::Details);
+            togglePlayedAsync();
+        } else if (action == "HIDE FROM HOME" || action == "SHOW ON HOME") {
+            popScreen(Screen::Details);
+            toggleHiddenFromHome();
+        } else if (action == "REFRESH METADATA") {
+            popScreen(Screen::Details);
+            refreshCurrentItemMetadataAsync();
+        } else if (action == "DELETE MEDIA" || action == "DELETE REQUEST") {
+            detailsState_.setDeleteConfirmation(true);
+        } else {
+            popScreen(Screen::Details);
         }
     }
 

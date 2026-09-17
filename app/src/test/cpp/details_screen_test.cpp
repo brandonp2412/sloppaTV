@@ -85,15 +85,34 @@ int main() {
     assert(menu[1] == "PLAY EXTERNAL");
     assert(menu[2] == "VIEW QUEUE");
     assert(menu[menu.size() - 2] == "DELETE MEDIA");
-    state.moveItemMenu(3, static_cast<int>(menu.size()));
+    auto menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Down, static_cast<int>(menu.size()));
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Down, static_cast<int>(menu.size()));
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Down, static_cast<int>(menu.size()));
+    assert(menuCommand.type == ItemMenuScreenCommandType::None);
     assert(state.itemMenuSelection() == 3);
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Activate, static_cast<int>(menu.size()));
+    assert(menuCommand.type == ItemMenuScreenCommandType::ActivateAction);
+
     state.setDeleteConfirmation(true);
     assert(state.deleteConfirmation());
-    state.setDeleteConfirmationSelection(0);
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Left, static_cast<int>(menu.size()));
+    assert(menuCommand.type == ItemMenuScreenCommandType::None);
     assert(state.deleteConfirmationSelection() == 0);
-    state.setDeleteConfirmation(false);
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Activate, static_cast<int>(menu.size()));
+    assert(menuCommand.type == ItemMenuScreenCommandType::ConfirmDelete);
+    assert(state.deleteConfirmation());
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Right, static_cast<int>(menu.size()));
+    assert(state.deleteConfirmationSelection() == 1);
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Activate, static_cast<int>(menu.size()));
+    assert(menuCommand.type == ItemMenuScreenCommandType::None);
     assert(!state.deleteConfirmation());
     assert(state.deleteConfirmationSelection() == 1);
+    state.setDeleteConfirmation(true);
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Back, static_cast<int>(menu.size()));
+    assert(menuCommand.type == ItemMenuScreenCommandType::None);
+    assert(!state.deleteConfirmation());
+    menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Back, static_cast<int>(menu.size()));
+    assert(menuCommand.type == ItemMenuScreenCommandType::Back);
 
     state.resetCastSelection();
     auto castCommand = state.handleCastInput(CastScreenInput::Right, series.people, 5);
