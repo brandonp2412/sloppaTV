@@ -675,21 +675,30 @@ private:
                 }
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
-                if (screen_ == Screen::Player && playerScreenState_.windowRestorePending() && renderer_.ready() && !playbackSessionState_.activeTarget().url.empty()) {
+                const bool restoreCandidate = screen_ == Screen::Player
+                    && playerScreenState_.windowRestorePending()
+                    && renderer_.ready()
+                    && !playbackSessionState_.activeTarget().url.empty();
+                const PlayerStatus restoreStatus = restoreCandidate ? player_.status() : PlayerStatus::Idle;
+                const PlaybackWindowRestorePlan restorePlan = playbackCoordinator_.windowRestorePlan(
+                    screen_ == Screen::Player,
+                    playerScreenState_.windowRestorePending(),
+                    renderer_.ready(),
+                    reusedRendererContext,
+                    videoSurface_.ready(),
+                    restoreStatus != PlayerStatus::Idle
+                        && restoreStatus != PlayerStatus::Ended
+                        && restoreStatus != PlayerStatus::Error,
+                    playerScreenState_.resumeOnFocusRequested()
+                );
+                if (restorePlan.restore) {
                     if (settings_.refreshRateSwitching && playbackSessionState_.activeItem().videoFrameRate > 0.0f) {
                         displayMode_.matchVideo(app_->window, playbackSessionState_.activeItem().videoFrameRate);
                     }
-                    const PlayerStatus restoreStatus = player_.status();
-                    const bool shouldResumePlayback = playerScreenState_.resumeOnFocusRequested();
-                    const bool preservedPlayer = reusedRendererContext
-                        && videoSurface_.ready()
-                        && restoreStatus != PlayerStatus::Idle
-                        && restoreStatus != PlayerStatus::Ended
-                        && restoreStatus != PlayerStatus::Error;
-                    if (preservedPlayer) {
-                        if (shouldResumePlayback) player_.play();
+                    if (restorePlan.preservePlayer) {
+                        if (restorePlan.resumePlayback) player_.play();
                         mediaSession_.updateState(
-                            shouldResumePlayback ? MediaSessionState::Playing : MediaSessionState::Paused,
+                            restorePlan.resumePlayback ? MediaSessionState::Playing : MediaSessionState::Paused,
                             playerScreenState_.positionMs()
                         );
                         __android_log_print(ANDROID_LOG_INFO, kTag, "Restored playback with preserved libmpv and GLES context");
@@ -714,7 +723,7 @@ private:
                             playerSubtitleOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
                             directExternalSubtitleUrl(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem())
                         );
-                        playbackCoordinator_.setPauseAfterRestart(!shouldResumePlayback);
+                        playbackCoordinator_.setPauseAfterRestart(restorePlan.pauseAfterRestart);
                         mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
                         __android_log_print(ANDROID_LOG_WARN, kTag, "GLES context was not reusable during window restore; recreated playback surface");
                     }
@@ -723,19 +732,25 @@ private:
                 }
                 break;
             }
-            case APP_CMD_TERM_WINDOW:
-                if (screen_ == Screen::Player && !playbackSessionState_.activeTarget().url.empty()) {
-                    const PlayerStatus status = player_.status();
+            case APP_CMD_TERM_WINDOW: {
+                const bool suspendCandidate = screen_ == Screen::Player
+                    && !playbackSessionState_.activeTarget().url.empty();
+                const PlayerStatus status = suspendCandidate ? player_.status() : PlayerStatus::Idle;
+                const PlaybackWindowSuspendPlan suspendPlan = playbackCoordinator_.windowSuspendPlan(
+                    screen_ == Screen::Player,
+                    status == PlayerStatus::Playing || status == PlayerStatus::Preparing
+                );
+                if (suspendPlan.suspend) {
                     refreshPlaybackTelemetry(true);
-                    const bool resumePlayback = status == PlayerStatus::Playing || status == PlayerStatus::Preparing;
-                    playerScreenState_.beginWindowRestore(resumePlayback);
-                    if (resumePlayback) player_.pause();
+                    playerScreenState_.beginWindowRestore(suspendPlan.resumePlayback);
+                    if (suspendPlan.resumePlayback) player_.pause();
                     reportProgressAsync(true);
                     displayMode_.restore();
                     mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
                 }
                 if (!renderer_.detachWindow()) renderer_.shutdown();
                 break;
+            }
             case APP_CMD_GAINED_FOCUS:
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
@@ -748,17 +763,20 @@ private:
                     loadBrowsePageAsync(false);
                 }
                 break;
-            case APP_CMD_LOST_FOCUS:
+            case APP_CMD_LOST_FOCUS: {
                 screensaverActive_ = false;
-                if (screen_ == Screen::Player) {
-                    const PlayerStatus status = player_.status();
-                    if (status == PlayerStatus::Playing || status == PlayerStatus::Preparing) {
-                        playerScreenState_.requestResumeOnFocus();
-                        player_.pause();
-                        mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
-                    }
+                const bool playerScreenActive = screen_ == Screen::Player;
+                const PlayerStatus status = playerScreenActive ? player_.status() : PlayerStatus::Idle;
+                if (shouldPausePlaybackForFocusLoss(
+                        playerScreenActive,
+                        status == PlayerStatus::Playing || status == PlayerStatus::Preparing
+                    )) {
+                    playerScreenState_.requestResumeOnFocus();
+                    player_.pause();
+                    mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
                 }
                 break;
+            }
             default:
                 break;
         }

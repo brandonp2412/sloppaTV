@@ -39,6 +39,40 @@ int main() {
     assert(coordinatedProgress.report);
     coordinatedProgress = coordinator.progressPlan(false, true, true, false, false, 23456);
     assert(!coordinatedProgress.report);
+
+    auto restorePlan = coordinator.windowRestorePlan(true, true, true, true, true, true, true);
+    assert(restorePlan.restore);
+    assert(restorePlan.preservePlayer);
+    assert(restorePlan.resumePlayback);
+    assert(!restorePlan.pauseAfterRestart);
+    restorePlan = coordinator.windowRestorePlan(true, true, true, false, true, true, false);
+    assert(restorePlan.restore);
+    assert(!restorePlan.preservePlayer);
+    assert(!restorePlan.resumePlayback);
+    assert(restorePlan.pauseAfterRestart);
+    restorePlan = coordinator.windowRestorePlan(false, true, true, true, true, true, true);
+    assert(!restorePlan.restore);
+    coordinator.session().activeTarget().url.clear();
+    restorePlan = coordinator.windowRestorePlan(true, true, true, true, true, true, true);
+    assert(!restorePlan.restore);
+    coordinator.session().activeTarget() = coordinatedTarget;
+
+    auto suspendPlan = coordinator.windowSuspendPlan(true, true);
+    assert(suspendPlan.suspend);
+    assert(suspendPlan.resumePlayback);
+    suspendPlan = coordinator.windowSuspendPlan(true, false);
+    assert(suspendPlan.suspend);
+    assert(!suspendPlan.resumePlayback);
+    suspendPlan = coordinator.windowSuspendPlan(false, true);
+    assert(!suspendPlan.suspend);
+    coordinator.session().activeTarget().url.clear();
+    suspendPlan = coordinator.windowSuspendPlan(true, true);
+    assert(!suspendPlan.suspend);
+    coordinator.session().activeTarget() = coordinatedTarget;
+
+    assert(shouldPausePlaybackForFocusLoss(true, true));
+    assert(!shouldPausePlaybackForFocusLoss(true, false));
+    assert(!shouldPausePlaybackForFocusLoss(false, true));
     const auto mediaSegmentsRequest = coordinator.beginMediaSegmentsRequest(now);
     assert(mediaSegmentsRequest);
     assert(*mediaSegmentsRequest == coordinatedItem.id);

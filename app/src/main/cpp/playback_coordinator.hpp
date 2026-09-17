@@ -58,6 +58,18 @@ struct PlaybackTelemetryReadPlan {
     int knownDurationMs = 0;
 };
 
+struct PlaybackWindowRestorePlan {
+    bool restore = false;
+    bool preservePlayer = false;
+    bool resumePlayback = false;
+    bool pauseAfterRestart = false;
+};
+
+struct PlaybackWindowSuspendPlan {
+    bool suspend = false;
+    bool resumePlayback = false;
+};
+
 struct PlaybackFallbackPlan {
     int64_t resumeTicks = 0;
     bool retry = false;
@@ -174,6 +186,40 @@ inline PlaybackProgressPlan planPlaybackProgress(
     plan.ticks = playbackTicksFromPositionMs(positionMs);
     plan.paused = paused;
     return plan;
+}
+
+inline PlaybackWindowRestorePlan planPlaybackWindowRestore(
+    bool playerScreenActive,
+    bool windowRestorePending,
+    bool rendererReady,
+    bool targetAvailable,
+    bool rendererContextReused,
+    bool videoSurfaceReady,
+    bool playerReusable,
+    bool resumeRequested
+) {
+    PlaybackWindowRestorePlan plan;
+    plan.restore = playerScreenActive && windowRestorePending && rendererReady && targetAvailable;
+    if (!plan.restore) return plan;
+    plan.preservePlayer = rendererContextReused && videoSurfaceReady && playerReusable;
+    plan.resumePlayback = resumeRequested;
+    plan.pauseAfterRestart = !plan.preservePlayer && !resumeRequested;
+    return plan;
+}
+
+inline PlaybackWindowSuspendPlan planPlaybackWindowSuspend(
+    bool playerScreenActive,
+    bool targetAvailable,
+    bool playerPlayingOrPreparing
+) {
+    PlaybackWindowSuspendPlan plan;
+    plan.suspend = playerScreenActive && targetAvailable;
+    plan.resumePlayback = plan.suspend && playerPlayingOrPreparing;
+    return plan;
+}
+
+inline bool shouldPausePlaybackForFocusLoss(bool playerScreenActive, bool playerPlayingOrPreparing) {
+    return playerScreenActive && playerPlayingOrPreparing;
 }
 
 inline PlaybackFallbackPlan planPlaybackFallback(
@@ -686,6 +732,38 @@ public:
             preparing,
             paused,
             positionMs
+        );
+    }
+
+    [[nodiscard]] PlaybackWindowRestorePlan windowRestorePlan(
+        bool playerScreenActive,
+        bool windowRestorePending,
+        bool rendererReady,
+        bool rendererContextReused,
+        bool videoSurfaceReady,
+        bool playerReusable,
+        bool resumeRequested
+    ) const {
+        return planPlaybackWindowRestore(
+            playerScreenActive,
+            windowRestorePending,
+            rendererReady,
+            !sessionState_.activeTarget().url.empty(),
+            rendererContextReused,
+            videoSurfaceReady,
+            playerReusable,
+            resumeRequested
+        );
+    }
+
+    [[nodiscard]] PlaybackWindowSuspendPlan windowSuspendPlan(
+        bool playerScreenActive,
+        bool playerPlayingOrPreparing
+    ) const {
+        return planPlaybackWindowSuspend(
+            playerScreenActive,
+            !sessionState_.activeTarget().url.empty(),
+            playerPlayingOrPreparing
         );
     }
 
