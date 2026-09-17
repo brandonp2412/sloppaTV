@@ -558,6 +558,13 @@ struct SubtitleLoadCompletion {
     std::vector<SubtitleCue> cues;
 };
 
+struct TrickplayTileCompletion {
+    std::string itemId;
+    int tileIndex = -1;
+    DecodedImage decoded;
+    std::string error;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
@@ -568,7 +575,7 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
                                      QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
-                                     ExternalPlaybackCompletion, SubtitleLoadCompletion>;
+                                     ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -2567,15 +2574,12 @@ private:
                 DecodedImage decoded;
                 std::string decodeError;
                 if (image.ok) decoded = imageDecoder_.decode(image.value, decodeError);
-                std::scoped_lock lock(stateMutex_);
-                if (!trickplayState_.matchesTile(item.id, tileIndex)) return;
-                if (!image.ok || !decoded.valid()) {
-                    trickplayState_.markFailed();
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Trickplay tile %d unavailable: %s", tileIndex,
-                                        image.ok ? decodeError.c_str() : image.error.c_str());
-                    return;
-                }
-                trickplayState_.applyDecoded(std::move(decoded));
+                asyncCompletions_.push(TrickplayTileCompletion{
+                    .itemId = item.id,
+                    .tileIndex = tileIndex,
+                    .decoded = std::move(decoded),
+                    .error = image.ok ? std::move(decodeError) : std::move(image.error),
+                });
             })) {
             trickplayState_.markFailed();
         }
@@ -5210,6 +5214,17 @@ private:
                                                    std::move(completion.cues));
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
         reportProgressAsync(false);
+    }
+
+    void applyAsyncCompletion(TrickplayTileCompletion& completion) {
+        if (!trickplayState_.matchesTile(completion.itemId, completion.tileIndex)) return;
+        if (!completion.decoded.valid()) {
+            trickplayState_.markFailed();
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Trickplay tile %d unavailable: %s", completion.tileIndex,
+                                completion.error.c_str());
+            return;
+        }
+        trickplayState_.applyDecoded(std::move(completion.decoded));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
