@@ -231,21 +231,35 @@ public:
     }
 
     [[nodiscard]] const JellyfinItem& activeContainer() const { return activeContainer_; }
+
     [[nodiscard]] const std::vector<JellyfinItem>& items() const { return items_; }
+
     [[nodiscard]] std::vector<JellyfinItem>& items() { return items_; }
+
     [[nodiscard]] int selection() const { return selection_; }
+
     void setSelection(int value) {
         selection_ = items_.empty() ? 0 : std::clamp(value, 0, static_cast<int>(items_.size()) - 1);
     }
+
     [[nodiscard]] int nextIndex() const { return nextIndex_; }
+
     [[nodiscard]] bool hasMore() const { return hasMore_; }
+
     [[nodiscard]] bool nested() const { return !stack_.empty(); }
+
     [[nodiscard]] BrowseContentMode mode() const { return mode_; }
+
     [[nodiscard]] const std::string& genre() const { return genre_; }
+
     [[nodiscard]] const std::string& letter() const { return letter_; }
+
     [[nodiscard]] bool filterFocused() const { return filterFocused_; }
+
     void setFilterFocused(bool value) { filterFocused_ = value; }
+
     [[nodiscard]] int filterSelection() const { return filterSelection_; }
+
     [[nodiscard]] int activeFilterSelection() const {
         switch (mode_) {
         case BrowseContentMode::Favorites:

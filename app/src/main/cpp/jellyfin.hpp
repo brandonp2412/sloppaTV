@@ -24,6 +24,7 @@ public:
     JellyfinClient& operator=(const JellyfinClient&) = delete;
 
     void cancelPendingRequests() const { http_.cancelPending(); }
+
     void warmDeviceCodecSupport() const;
 
     ApiValueResult<JellyfinSession> login(std::string server, const std::string& username, const std::string& password,

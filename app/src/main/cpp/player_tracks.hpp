@@ -29,20 +29,25 @@ public:
     }
 
     [[nodiscard]] bool subtitleBusy() const { return subtitleBusy_; }
+
     bool beginSubtitleWork() {
         if (subtitleBusy_) return false;
         subtitleBusy_ = true;
         return true;
     }
+
     void endSubtitleWork() { subtitleBusy_ = false; }
 
     [[nodiscard]] int selectedAudioServerIndex() const { return selectedAudioServerIndex_; }
+
     void setSelectedAudioServerIndex(int index) { selectedAudioServerIndex_ = index; }
 
     [[nodiscard]] int selectedSubtitleServerIndex() const { return selectedSubtitleServerIndex_; }
+
     void setSelectedSubtitleServerIndex(int index) { selectedSubtitleServerIndex_ = index; }
 
     [[nodiscard]] const std::optional<std::string>& audioLanguagePreference() const { return audioLanguagePreference_; }
+
     void setAudioLanguagePreference(std::optional<std::string> preference) {
         audioLanguagePreference_ = std::move(preference);
     }
@@ -50,6 +55,7 @@ public:
     [[nodiscard]] const std::optional<std::string>& subtitleLanguagePreference() const {
         return subtitleLanguagePreference_;
     }
+
     void setSubtitleLanguagePreference(std::optional<std::string> preference) {
         subtitleLanguagePreference_ = std::move(preference);
     }
@@ -86,9 +92,13 @@ public:
     }
 
     [[nodiscard]] bool subtitleEnabled() const { return activeSubtitleEnabled_; }
+
     void setSubtitleEnabled(bool enabled) { activeSubtitleEnabled_ = enabled; }
+
     [[nodiscard]] const std::vector<SubtitleCue>& subtitleCues() const { return activeSubtitleCues_; }
+
     [[nodiscard]] const std::string& subtitleLanguage() const { return activeSubtitleLanguage_; }
+
     [[nodiscard]] int activeSubtitleServerIndex() const { return activeSubtitleServerIndex_; }
 
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {

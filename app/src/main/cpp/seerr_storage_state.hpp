@@ -28,15 +28,23 @@ public:
     };
 
     [[nodiscard]] const std::vector<SeerrStorageTarget>& targets() const { return targets_; }
+
     [[nodiscard]] bool empty() const { return targets_.empty(); }
+
     [[nodiscard]] bool loading() const { return loading_; }
+
     [[nodiscard]] const std::string& error() const { return error_; }
+
     [[nodiscard]] TimePoint refreshDeadline() const { return refreshAt_; }
+
     [[nodiscard]] const std::optional<SeerrMediaItem>& pendingRequest() const { return pendingRequest_; }
+
     [[nodiscard]] const std::vector<SeerrStorageTarget>& driveChoices() const { return driveChoices_; }
+
     [[nodiscard]] int driveSelection() const { return driveSelection_; }
 
     void clearTargets() { targets_.clear(); }
+
     void clearRefreshDeadline() { refreshAt_ = {}; }
 
     void resetUnavailable() {

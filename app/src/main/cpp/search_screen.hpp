@@ -42,16 +42,27 @@ public:
     }
 
     [[nodiscard]] const std::string& query() const { return query_; }
+
     [[nodiscard]] const std::vector<JellyfinItem>& results() const { return results_; }
+
     [[nodiscard]] std::vector<JellyfinItem>& results() { return results_; }
+
     [[nodiscard]] int selection() const { return selection_; }
+
     [[nodiscard]] bool keyboard() const { return keyboard_; }
+
     [[nodiscard]] bool loading() const { return loading_; }
+
     [[nodiscard]] bool seerrLoading() const { return seerrLoading_; }
+
     [[nodiscard]] const std::string& seerrError() const { return seerrError_; }
+
     [[nodiscard]] bool debouncePending() const { return debouncePending_; }
+
     [[nodiscard]] Clock::time_point debounceDeadline() const { return debounceDeadline_; }
+
     [[nodiscard]] bool seerrDebouncePending() const { return seerrDebouncePending_; }
+
     [[nodiscard]] Clock::time_point seerrDebounceDeadline() const { return seerrDebounceDeadline_; }
 
     [[nodiscard]] int rowStart(int row) const {
@@ -110,8 +121,11 @@ public:
     }
 
     void setKeyboard(bool keyboard) { keyboard_ = keyboard; }
+
     void setLoading(bool loading) { loading_ = loading; }
+
     void setSeerrLoading(bool loading) { seerrLoading_ = loading; }
+
     void setSelection(int selection) {
         selection_ = results_.empty() ? 0 : std::clamp(selection, 0, static_cast<int>(results_.size()) - 1);
     }

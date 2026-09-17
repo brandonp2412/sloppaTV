@@ -70,9 +70,13 @@ public:
     }
 
     [[nodiscard]] int positionMs() const { return positionMs_; }
+
     [[nodiscard]] int tileIndex() const { return tileIndex_; }
+
     [[nodiscard]] const DecodedImage& decoded() const { return decoded_; }
+
     [[nodiscard]] uint32_t texture() const { return texture_; }
+
     [[nodiscard]] uint64_t textureGeneration() const { return textureGeneration_; }
 
     void setTexture(uint32_t texture, uint64_t generation) {

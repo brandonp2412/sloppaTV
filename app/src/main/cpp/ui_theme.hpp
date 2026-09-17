@@ -44,6 +44,7 @@ inline constexpr float body = 2.15f;
 inline constexpr float label = 1.8f;
 inline constexpr float supporting = 1.55f;
 } // namespace type
+
 namespace layout {
 inline constexpr float pageInset = 80.0f;
 inline constexpr float contentWidth = 1760.0f;

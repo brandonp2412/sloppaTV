@@ -357,6 +357,7 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
         {"audio-display", "no", false},
         {"msg-level", "all=warn", false},
     };
+
     for (const auto& option : options) {
         if (!setOptionLocked(option.name, option.value, option.required, &error)) return false;
     }

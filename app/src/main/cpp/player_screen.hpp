@@ -49,6 +49,7 @@ public:
     }
 
     [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
+
     [[nodiscard]] int controlSelection() const { return controlSelection_; }
 
     void showControls(TimePoint now) {
@@ -107,8 +108,11 @@ public:
     [[nodiscard]] bool shouldDismissOnBack(TimePoint now) const { return overlayVisible(now); }
 
     [[nodiscard]] int positionMs() const { return positionMs_; }
+
     [[nodiscard]] int durationMs() const { return durationMs_; }
+
     void setPositionMs(int value) { positionMs_ = std::max(0, value); }
+
     void setDurationMs(int value) { durationMs_ = std::max(0, value); }
 
     void beginSeek(int targetMs, TimePoint now) {
@@ -140,13 +144,16 @@ public:
     }
 
     [[nodiscard]] int pendingSeekTargetMs() const { return pendingSeekTargetMs_; }
+
     [[nodiscard]] int recentSeekTargetMs() const { return lastSeekTargetMs_; }
+
     [[nodiscard]] bool pendingSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
         if (pendingSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
         const int64_t elapsedSinceSeekMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSeekIssued_).count();
         return postSeekPositionFailed(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs);
     }
+
     [[nodiscard]] bool recentSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
         if (lastSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
         const int64_t elapsedSinceSeekMs =
@@ -159,13 +166,18 @@ public:
         windowRestorePending_ = true;
         if (resumePlayback) resumeOnFocus_ = true;
     }
+
     [[nodiscard]] bool windowRestorePending() const { return windowRestorePending_; }
+
     [[nodiscard]] bool resumeOnFocusRequested() const { return resumeOnFocus_; }
+
     void completeWindowRestore() {
         windowRestorePending_ = false;
         resumeOnFocus_ = false;
     }
+
     void requestResumeOnFocus() { resumeOnFocus_ = true; }
+
     [[nodiscard]] bool takeResumeOnFocus() {
         if (windowRestorePending_ || !resumeOnFocus_) return false;
         resumeOnFocus_ = false;

@@ -68,6 +68,7 @@ public:
     }
 
     [[nodiscard]] size_t size() const { return cache_.size(); }
+
     [[nodiscard]] const ArtworkEntry* peek(const std::string& key) const { return cache_.peek(key); }
 
 private:

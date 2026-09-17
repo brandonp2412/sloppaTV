@@ -8,39 +8,51 @@
 constexpr int mediaGridColumns() {
     return 5;
 }
+
 constexpr bool isTopMediaGridSelection(int selection) {
     return selection >= 0 && selection < mediaGridColumns();
 }
+
 constexpr float mediaCardWidth() {
     return 320.0f;
 }
+
 constexpr float mediaPosterWidth() {
     return 208.0f;
 }
+
 constexpr float mediaPosterHeight() {
     return 312.0f;
 }
+
 constexpr int mediaFirstVisibleRow(int selection, int visibleRows) {
     return std::max(0, std::max(0, selection) / mediaGridColumns() - std::max(1, visibleRows) + 1);
 }
+
 constexpr float mediaTitleScale() {
     return 2.45f;
 }
+
 constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
     return itemType == "Episode" || itemType == "CollectionFolder" || itemType == "BoxSet" || itemType == "Folder";
 }
+
 constexpr float searchMediaRowHeight(bool hasPortraitCard) {
     return hasPortraitCard ? 430.0f : 300.0f;
 }
+
 constexpr float browseMediaRowHeight(bool hasPortraitCard) {
     return hasPortraitCard ? 390.0f : 300.0f;
 }
+
 constexpr int browseMediaVisibleRows(bool syntheticPage) {
     return syntheticPage ? 4 : 2;
 }
+
 constexpr int browseMediaTitleLineLimit(bool hasPortraitCards) {
     return hasPortraitCards ? 1 : 0;
 }
+
 constexpr int mediaGridTitleLineLimit(int visibleRow, int uiTextSize, bool hasPortraitCards) {
     (void)uiTextSize;
     // The lower portrait row starts at y=625 on the 1080p canvas. Two title
@@ -48,33 +60,43 @@ constexpr int mediaGridTitleLineLimit(int visibleRow, int uiTextSize, bool hasPo
     // normal text setting, so keep that row to one line at every text size.
     return hasPortraitCards && visibleRow > 0 ? 1 : 0;
 }
+
 constexpr float detailActionTextScale(std::size_t labelLength) {
     return labelLength > 10 ? 1.6f : 1.8f;
 }
+
 constexpr float uiTextScale(int option) {
     return option <= 0 ? 1.9f : (option == 1 ? 2.15f : 2.4f);
 }
+
 constexpr float homeRowImageOffset(int uiTextSize) {
     return uiTextSize <= 0 ? 82.0f : (uiTextSize == 1 ? 92.0f : 102.0f);
 }
+
 constexpr float homeRowStep(int uiTextSize) {
     return uiTextSize <= 0 ? 420.0f : (uiTextSize == 1 ? 440.0f : 460.0f);
 }
+
 constexpr float castRowStep(int uiTextSize) {
     return uiTextSize <= 0 ? 400.0f : (uiTextSize == 1 ? 415.0f : 430.0f);
 }
+
 constexpr int clampedUiTextSize(int uiTextSize) {
     return std::clamp(uiTextSize, 0, 2);
 }
+
 constexpr float settingsDescriptionY(int uiTextSize) {
     return 220.0f + 3.0f * static_cast<float>(clampedUiTextSize(uiTextSize));
 }
+
 constexpr float settingsRowsTop(int uiTextSize) {
     return 280.0f + 6.0f * static_cast<float>(clampedUiTextSize(uiTextSize));
 }
+
 constexpr float settingsFooterY(int uiTextSize) {
     return 956.0f + 6.0f * static_cast<float>(clampedUiTextSize(uiTextSize));
 }
+
 constexpr float uiSafeAreaFraction(int percent) {
     return static_cast<float>(percent < 0 ? 0 : (percent > 6 ? 6 : percent)) / 100.0f;
 }
@@ -93,23 +115,29 @@ constexpr float keyboardKeyHeight(float top, int rowCount, float gap) {
 constexpr float materialButtonFocusScale() {
     return 1.025f;
 }
+
 constexpr float materialCardFocusScale() {
     return 1.025f;
 }
+
 constexpr float materialListItemFocusScale() {
     return 1.02f;
 }
+
 // Full-width rows should not inherit the same percentage growth as compact
 // cards: 4% of a 1700 px settings row is a distracting 68 px jump.
 constexpr float materialWideListItemFocusScale() {
     return 1.015f;
 }
+
 constexpr float materialTabFocusScale() {
     return 1.025f;
 }
+
 constexpr float materialInputFocusScale() {
     return 1.02f;
 }
+
 constexpr float materialWideInputFocusScale() {
     return 1.015f;
 }

@@ -28,6 +28,7 @@ public:
     }
 
     void deferRequest(const SeerrMediaItem& item) { deferredRequest_ = item; }
+
     void deferSearchRetry() { retrySearch_ = true; }
 
     [[nodiscard]] DeferredWork takeDeferredWork() {

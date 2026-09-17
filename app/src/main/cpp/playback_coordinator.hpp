@@ -339,14 +339,23 @@ public:
     using TimePoint = PlaybackTelemetryState::TimePoint;
 
     [[nodiscard]] PlaybackSessionState& session() { return sessionState_; }
+
     [[nodiscard]] const PlaybackSessionState& session() const { return sessionState_; }
+
     [[nodiscard]] PlaybackTelemetryState& telemetry() { return telemetryState_; }
+
     [[nodiscard]] const PlaybackTelemetryState& telemetry() const { return telemetryState_; }
+
     [[nodiscard]] PlaybackContinuationState& continuation() { return continuationState_; }
+
     [[nodiscard]] const PlaybackContinuationState& continuation() const { return continuationState_; }
+
     [[nodiscard]] PlaybackTransitionState& transition() { return transitionState_; }
+
     [[nodiscard]] const PlaybackTransitionState& transition() const { return transitionState_; }
+
     [[nodiscard]] PlayerTrackState& tracks() { return trackState_; }
+
     [[nodiscard]] const PlayerTrackState& tracks() const { return trackState_; }
 
     void activate(const JellyfinItem& item, const PlaybackTarget& target, TimePoint now) {

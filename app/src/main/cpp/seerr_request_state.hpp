@@ -18,10 +18,13 @@ public:
     static constexpr auto kPostRequestRefreshDelay = std::chrono::seconds(2);
 
     [[nodiscard]] bool pendingLoading() const { return pendingLoading_; }
+
     [[nodiscard]] TimePoint pendingRefreshDeadline() const { return pendingRefreshAt_; }
+
     [[nodiscard]] bool pendingRefreshDue(TimePoint now) const {
         return !pendingLoading_ && pendingRefreshAt_ != TimePoint{} && now >= pendingRefreshAt_;
     }
+
     void clearPendingRefreshDeadline() { pendingRefreshAt_ = {}; }
 
     bool beginPendingRefresh() {

@@ -31,6 +31,7 @@ public:
     }
 
     [[nodiscard]] bool mediaSegmentsRequested() const { return mediaSegmentsRequested_; }
+
     bool beginMediaSegmentsRequest(TimePoint now = Clock::now()) {
         if (mediaSegmentsRequested_ || (mediaSegmentsRetryAfter_ != TimePoint{} && now < mediaSegmentsRetryAfter_)) {
             return false;
@@ -39,19 +40,23 @@ public:
         mediaSegmentsRetryAfter_ = {};
         return true;
     }
+
     void mediaSegmentsRequestFailed(TimePoint now = Clock::now()) {
         mediaSegmentsRequested_ = false;
         mediaSegmentsRetryAfter_ = now + kMediaSegmentsRetryDelay;
     }
+
     void resetMediaSegments() {
         mediaSegmentsRequested_ = false;
         mediaSegmentsRetryAfter_ = {};
         mediaSegments_.clear();
     }
+
     void setMediaSegments(std::vector<JellyfinMediaSegment> segments) {
         mediaSegments_ = std::move(segments);
         mediaSegmentsRetryAfter_ = {};
     }
+
     [[nodiscard]] const std::vector<JellyfinMediaSegment>& mediaSegments() const { return mediaSegments_; }
 
     [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int64_t positionTicks) const {
@@ -63,12 +68,17 @@ public:
     }
 
     [[nodiscard]] bool fallbackAttempted() const { return fallbackAttempted_; }
+
     void markFallbackAttempted() { fallbackAttempted_ = true; }
+
     void resetFallbackAttempted() { fallbackAttempted_ = false; }
 
     void beginPreparing(TimePoint now = Clock::now()) { preparingSince_ = now; }
+
     void clearPreparing() { preparingSince_ = {}; }
+
     [[nodiscard]] bool preparing() const { return preparingSince_ != TimePoint{}; }
+
     int64_t preparingElapsedMs(TimePoint now = Clock::now()) {
         if (!preparing()) {
             beginPreparing(now);
@@ -78,22 +88,29 @@ public:
     }
 
     [[nodiscard]] VideoZoomMode zoomMode() const { return zoomMode_; }
+
     void setZoomMode(VideoZoomMode mode) { zoomMode_ = mode; }
 
     void setActive(JellyfinItem item, PlaybackTarget target) {
         activeItem_ = std::move(item);
         activeTarget_ = std::move(target);
     }
+
     void clearActive() {
         activeItem_ = {};
         activeTarget_ = {};
     }
+
     [[nodiscard]] const JellyfinItem& activeItem() const { return activeItem_; }
+
     [[nodiscard]] const PlaybackTarget& activeTarget() const { return activeTarget_; }
+
     PlaybackTarget& activeTarget() { return activeTarget_; }
 
     void requestHomeRefresh() { homeRefreshRequested_ = true; }
+
     [[nodiscard]] bool homeRefreshRequested() const { return homeRefreshRequested_; }
+
     bool takeHomeRefreshRequest() {
         if (!homeRefreshRequested_) return false;
         homeRefreshRequested_ = false;
@@ -101,6 +118,7 @@ public:
     }
 
     [[nodiscard]] const std::string& lastPlaybackSummary() const { return lastPlaybackSummary_; }
+
     void setLastPlaybackSummary(std::string summary) { lastPlaybackSummary_ = std::move(summary); }
 
 private:

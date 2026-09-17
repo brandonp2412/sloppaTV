@@ -28,9 +28,11 @@ public:
     bool detachWindow();
     bool attachWindow(ANativeWindow* window);
     void shutdown();
+
     [[nodiscard]] bool contextReady() const {
         return display_ != EGL_NO_DISPLAY && context_ != EGL_NO_CONTEXT && config_ != nullptr;
     }
+
     [[nodiscard]] bool ready() const { return contextReady() && surface_ != EGL_NO_SURFACE; }
 
     void beginFrame();
@@ -62,9 +64,11 @@ public:
                             float u1, float v1, float alpha = 1.0f);
     bool externalImage(GLuint texture, float x, float y, float w, float h, const std::array<float, 16>& transform,
                        float alpha = 1.0f);
+
     [[nodiscard]] uint64_t generation() const { return generation_; }
 
     static constexpr float logicalWidth() { return 1920.0f; }
+
     static constexpr float logicalHeight() { return 1080.0f; }
 
 private:

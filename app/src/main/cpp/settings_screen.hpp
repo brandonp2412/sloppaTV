@@ -72,12 +72,19 @@ public:
     [[nodiscard]] const std::vector<SettingId>& matches() const { return matches_; }
 
     [[nodiscard]] SettingId selection() const { return selection_; }
+
     [[nodiscard]] int firstVisible() const { return firstVisible_; }
+
     [[nodiscard]] const std::string& searchQuery() const { return searchQuery_; }
+
     [[nodiscard]] bool searchFocused() const { return searchFocused_; }
+
     [[nodiscard]] bool advanced() const { return advanced_; }
+
     [[nodiscard]] bool subtitleLanguagePicker() const { return subtitleLanguagePicker_; }
+
     [[nodiscard]] int subtitleLanguageSelection() const { return subtitleLanguageSelection_; }
+
     [[nodiscard]] int subtitleLanguageFirstVisible() const { return subtitleLanguageFirstVisible_; }
 
     void openSubtitleLanguagePicker() {

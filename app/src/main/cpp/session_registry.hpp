@@ -85,10 +85,13 @@ public:
     }
 
     [[nodiscard]] bool empty() const { return sessions_.empty(); }
+
     [[nodiscard]] std::size_t size() const { return sessions_.size(); }
+
     [[nodiscard]] const JellyfinSession* at(std::size_t index) const {
         return index < sessions_.size() ? &sessions_[index] : nullptr;
     }
+
     [[nodiscard]] const std::vector<JellyfinSession>& sessions() const { return sessions_; }
 
 private:

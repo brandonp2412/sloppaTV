@@ -93,6 +93,7 @@ public:
 private:
     static constexpr uintmax_t kMaxDiskBytes = 48ULL * 1024ULL * 1024ULL;
     static constexpr size_t kMaxDiskFiles = 256;
+
     std::filesystem::path pathForKey(const std::string& key) const {
         if (dataPath_.empty()) return {};
         uint64_t hash = 1469598103934665603ULL;
@@ -141,6 +142,7 @@ private:
             uintmax_t size = 0;
             fs::file_time_type modified{};
         };
+
         std::vector<CachedFile> files;
         uintmax_t scannedBytes = 0;
         for (fs::directory_iterator it(directory, ec), end; !ec && it != end; it.increment(ec)) {

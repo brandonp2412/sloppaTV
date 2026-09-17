@@ -8,9 +8,11 @@ public:
     explicit NavigationStack(Screen root) : entries_{root} {}
 
     [[nodiscard]] Screen current() const { return entries_.back(); }
+
     [[nodiscard]] Screen previousOr(Screen fallback) const {
         return entries_.size() > 1 ? entries_[entries_.size() - 2] : fallback;
     }
+
     [[nodiscard]] std::size_t depth() const { return entries_.size(); }
 
     void reset(Screen root) {

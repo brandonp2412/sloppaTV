@@ -90,11 +90,15 @@ public:
     }
 
     [[nodiscard]] bool empty() const { return items_.empty(); }
+
     [[nodiscard]] int size() const { return static_cast<int>(items_.size()); }
+
     [[nodiscard]] const std::vector<JellyfinItem>& items() const { return items_; }
+
     [[nodiscard]] std::vector<JellyfinItem>& items() { return items_; }
 
     [[nodiscard]] int currentIndex() const { return currentIndex_; }
+
     bool setCurrentIndex(int index) {
         if (index < -1 || index >= size()) return false;
         currentIndex_ = index;
@@ -149,7 +153,9 @@ public:
     }
 
     [[nodiscard]] QueueRepeatMode repeatMode() const { return repeatMode_; }
+
     void setRepeatMode(QueueRepeatMode mode) { repeatMode_ = mode; }
+
     void cycleRepeatMode() { repeatMode_ = nextQueueRepeatMode(repeatMode_); }
 
     [[nodiscard]] int nextIndex(bool manualAdvance) const {
@@ -157,6 +163,7 @@ public:
     }
 
     [[nodiscard]] bool overlayActive() const { return overlayActive_; }
+
     bool openOverlay() {
         if (items_.empty()) {
             overlayActive_ = false;
@@ -167,13 +174,16 @@ public:
         actionSelection_ = 0;
         return true;
     }
+
     void closeOverlay() { overlayActive_ = false; }
 
     [[nodiscard]] int selection() const { return selection_; }
+
     void setSelection(int selection) {
         selection_ = selection;
         clampSelection();
     }
+
     void moveSelection(int direction) {
         if (items_.empty()) {
             selection_ = 0;
@@ -184,6 +194,7 @@ public:
     }
 
     [[nodiscard]] int actionSelection() const { return actionSelection_; }
+
     void moveAction(int direction, int actionCount = 7) {
         actionSelection_ = actionCount <= 0 ? 0 : std::clamp(actionSelection_ + direction, 0, actionCount - 1);
     }

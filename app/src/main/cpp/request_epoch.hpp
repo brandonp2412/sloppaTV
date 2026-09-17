@@ -6,8 +6,11 @@
 class RequestEpoch {
 public:
     [[nodiscard]] uint64_t begin() { return value_.fetch_add(1, std::memory_order_relaxed) + 1; }
+
     [[nodiscard]] uint64_t snapshot() const { return value_.load(std::memory_order_relaxed); }
+
     [[nodiscard]] bool active(uint64_t token) const { return token == snapshot(); }
+
     void invalidate() { value_.fetch_add(1, std::memory_order_relaxed); }
 
 private:

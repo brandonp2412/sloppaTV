@@ -110,7 +110,9 @@ public:
     }
 
     void setRow(int row) { row_ = row; }
+
     void setFirstVisibleRow(int row) { firstVisibleRow_ = std::max(0, row); }
+
     void setNavIndex(int index) { navIndex_ = std::clamp(index, 0, 3); }
 
     void updateViewport(int totalRows, int visibleRows = 2) {
@@ -121,10 +123,12 @@ public:
         selections_ = std::move(selections);
         firstVisibleItems_.assign(selections_.size(), 0);
     }
+
     void clearSelections() {
         selections_.clear();
         firstVisibleItems_.clear();
     }
+
     void appendSelection(int selection) {
         selections_.push_back(selection);
         firstVisibleItems_.push_back(0);
@@ -213,9 +217,13 @@ public:
     }
 
     [[nodiscard]] int row() const { return row_; }
+
     [[nodiscard]] int firstVisibleRow() const { return firstVisibleRow_; }
+
     [[nodiscard]] int navIndex() const { return navIndex_; }
+
     [[nodiscard]] const std::vector<int>& selections() const { return selections_; }
+
     [[nodiscard]] size_t selectionCount() const { return selections_.size(); }
 
     void beginCenterPress() {
@@ -224,6 +232,7 @@ public:
     }
 
     [[nodiscard]] bool centerPending() const { return centerPending_; }
+
     [[nodiscard]] bool centerLongPressed() const { return centerLongPressed_; }
 
     void markCenterLongPressed() { centerLongPressed_ = true; }
