@@ -2194,7 +2194,7 @@ private:
     }
 
     void restartPlaybackAt(int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
-        if (trackState_.subtitleBusy() || !session_.valid() || playbackSessionState_.activeItem().id.empty()) return;
+        if (!session_.valid() || playbackSessionState_.activeItem().id.empty()) return;
         const int targetPositionMs = std::max(0, positionMs);
         const bool wasPaused = player_.status() == PlayerStatus::Paused;
         const JellyfinSession session = session_;
@@ -2205,17 +2205,15 @@ private:
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        if (!playbackCoordinator_.beginStreamRestart()) return;
         const uint64_t generation = requestEpochs_.playback.begin();
 
         // A Jellyfin server-stream change is a real playback-session handoff. Resolve the
         // replacement only after closing/reporting the old session: asking Jellyfin for a
         // second transcode while the first one is still active has produced stalled HLS
         // sessions (and, on some servers, PlaybackInfo HTTP 500 responses).
-        trackState_.beginSubtitleWork();
-        transitionState_.setLoading(true);
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         playerScreenState_.setPositionMs(targetPositionMs);
-        telemetryState_.clearPlaybackStartReported();
         player_.stop();
         videoSurface_.release();
 
@@ -2251,14 +2249,13 @@ private:
             );
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
-            trackState_.endSubtitleWork();
-            transitionState_.setLoading(false);
+            playbackCoordinator_.finishStreamRestartRequest();
             if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != item.id) return;
             if (!target.ok) {
                 error_ = target.error;
                 return;
             }
-            transitionState_.stage(std::move(target.value), item, true, wasPaused, audioStreamIndex);
+            playbackCoordinator_.stageStreamRestart(std::move(target.value), item, wasPaused, audioStreamIndex);
         });
     }
 

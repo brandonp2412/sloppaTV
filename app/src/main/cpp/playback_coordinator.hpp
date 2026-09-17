@@ -406,6 +406,33 @@ public:
         );
     }
 
+    bool beginStreamRestart() {
+        if (!trackState_.beginSubtitleWork()) return false;
+        transitionState_.setLoading(true);
+        telemetryState_.clearPlaybackStartReported();
+        return true;
+    }
+
+    void finishStreamRestartRequest() {
+        trackState_.endSubtitleWork();
+        transitionState_.setLoading(false);
+    }
+
+    void stageStreamRestart(
+        PlaybackTarget target,
+        JellyfinItem item,
+        bool restartPaused,
+        int audioStreamIndex
+    ) {
+        transitionState_.stage(
+            std::move(target),
+            std::move(item),
+            true,
+            restartPaused,
+            audioStreamIndex
+        );
+    }
+
     [[nodiscard]] PlaybackFallbackPlan fallbackPlan(
         bool jellyfinSessionValid,
         int positionMs,

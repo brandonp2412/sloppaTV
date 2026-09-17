@@ -82,6 +82,31 @@ int main() {
     subtitleCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
     assert(!subtitleCoordinator.subtitleFallbackPlan().retry);
 
+    PlaybackCoordinator restartCoordinator;
+    restartCoordinator.activate(coordinatedItem, coordinatedTarget, now);
+    assert(restartCoordinator.telemetry().markPlaybackStartReported());
+    assert(restartCoordinator.beginStreamRestart());
+    assert(!restartCoordinator.telemetry().playbackStartReported());
+    assert(restartCoordinator.tracks().subtitleBusy());
+    assert(restartCoordinator.transition().loading());
+    assert(!restartCoordinator.beginStreamRestart());
+    restartCoordinator.finishStreamRestartRequest();
+    assert(!restartCoordinator.tracks().subtitleBusy());
+    assert(!restartCoordinator.transition().loading());
+
+    PlaybackTarget restartTarget;
+    restartTarget.url = "https://media.example/restart";
+    JellyfinItem restartItem;
+    restartItem.id = "restart-item";
+    restartCoordinator.stageStreamRestart(restartTarget, restartItem, true, 6);
+    auto stagedRestart = restartCoordinator.transition().take();
+    assert(stagedRestart);
+    assert(stagedRestart->target.url == restartTarget.url);
+    assert(stagedRestart->item.id == restartItem.id);
+    assert(stagedRestart->streamRestart);
+    assert(stagedRestart->restartPaused);
+    assert(stagedRestart->audioStreamIndex == 6);
+
     telemetry.beginPlayback(now - 11s);
 
     auto plan = planPlaybackTick(
