@@ -401,6 +401,24 @@ public:
         trackState_.resetSession();
     }
 
+    void beginPlaybackResolution(bool showTransitionLoading) {
+        transitionState_.setLoading(showTransitionLoading);
+        continuationState_.setStillWatchingPrompt(false);
+    }
+
+    void beginAutoplayResolution() {
+        continuationState_.incrementAutoplayChain();
+        beginPlaybackResolution(true);
+    }
+
+    void finishPlaybackResolution() {
+        transitionState_.setLoading(false);
+    }
+
+    void stageResolvedPlayback(PlaybackTarget target, JellyfinItem item) {
+        transitionState_.stage(std::move(target), std::move(item));
+    }
+
     [[nodiscard]] PlaybackTransitionPlan activateTransition(
         const JellyfinItem& item,
         const PlaybackTarget& target,

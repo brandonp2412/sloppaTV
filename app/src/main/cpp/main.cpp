@@ -3860,8 +3860,7 @@ private:
         const int previousQueueIndex = queueState_.currentIndex();
         queueState_.closeOverlay();
         loading_ = true;
-        transitionState_.setLoading(replacingPlayer);
-        continuationState_.setStillWatchingPrompt(false);
+        playbackCoordinator_.beginPlaybackResolution(replacingPlayer);
         error_.clear();
         const JellyfinSession session = session_;
         JellyfinItem queued = *queueState_.itemAt(index);
@@ -3889,7 +3888,7 @@ private:
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            transitionState_.setLoading(false);
+            playbackCoordinator_.finishPlaybackResolution();
             if (screen_ != originScreen
                 || queueState_.currentIndex() != previousQueueIndex
                 || !queueState_.itemMatches(index, queued.id)) {
@@ -3902,7 +3901,7 @@ private:
             }
             queueState_.setCurrentIndex(index);
             queueState_.setItemAt(index, queued);
-            transitionState_.stage(std::move(target.value), std::move(queued));
+            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(queued));
         });
     }
 
@@ -3919,8 +3918,7 @@ private:
         queueState_.reset();
         releaseActivePlayback(true, false);
         loading_ = true;
-        transitionState_.setLoading(true);
-        continuationState_.setStillWatchingPrompt(false);
+        playbackCoordinator_.beginPlaybackResolution(true);
         error_.clear();
         const uint64_t generation = requestEpochs_.playback.begin();
         tasks_.submit([
@@ -3950,14 +3948,14 @@ private:
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            transitionState_.setLoading(false);
+            playbackCoordinator_.finishPlaybackResolution();
             if (screen_ != Screen::Player) return;
             if (!target.ok) {
                 error_ = "EPISODE: " + target.error;
                 return;
             }
             detail_ = selected;
-            transitionState_.stage(std::move(target.value), std::move(selected));
+            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(selected));
         });
     }
 
@@ -4178,7 +4176,7 @@ private:
             queueState_.setItemAt(0, first);
             restoreHomeVisibilityForPlayback(series);
             restoreHomeVisibilityForPlayback(first);
-            transitionState_.stage(std::move(target.value), std::move(first));
+            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(first));
         });
     }
 
@@ -4253,7 +4251,7 @@ private:
             }
             restoreHomeVisibilityForPlayback(selected);
             restoreHomeVisibilityForPlayback(playable);
-            transitionState_.stage(std::move(target.value), std::move(playable));
+            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(playable));
         });
     }
 
@@ -4363,11 +4361,9 @@ private:
     void queueAutoplayNext(JellyfinItem nextItem) {
         const int queuedNextIndex = queueState_.autoplayAdvanceIndex(nextItem);
         releaseActivePlayback(true, true);
-        continuationState_.incrementAutoplayChain();
+        playbackCoordinator_.beginAutoplayResolution();
         loading_ = true;
-        transitionState_.setLoading(true);
         detail_ = nextItem;
-        continuationState_.setStillWatchingPrompt(false);
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         const JellyfinSession session = session_;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
@@ -4393,7 +4389,7 @@ private:
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            transitionState_.setLoading(false);
+            playbackCoordinator_.finishPlaybackResolution();
             if (!target.ok) {
                 popScreen(Screen::Details);
                 error_ = "NEXT EPISODE: " + target.error;
@@ -4405,7 +4401,7 @@ private:
                 queueState_.setCurrentIndex(queuedNextIndex);
                 queueState_.setItemAt(queuedNextIndex, nextItem);
             }
-            transitionState_.stage(std::move(target.value), std::move(nextItem));
+            playbackCoordinator_.stageResolvedPlayback(std::move(target.value), std::move(nextItem));
         });
     }
 

@@ -453,6 +453,32 @@ int main() {
     assert(restartTransitionCoordinator.session().zoomMode() == VideoZoomMode::Stretch);
     assert(restartTransitionCoordinator.tracks().selectedAudioServerIndex() == 7);
 
+    PlaybackCoordinator resolutionCoordinator;
+    resolutionCoordinator.continuation().setStillWatchingPrompt(true);
+    resolutionCoordinator.beginPlaybackResolution(false);
+    assert(!resolutionCoordinator.transition().loading());
+    assert(!resolutionCoordinator.continuation().stillWatchingPrompt());
+    resolutionCoordinator.beginPlaybackResolution(true);
+    assert(resolutionCoordinator.transition().loading());
+    resolutionCoordinator.finishPlaybackResolution();
+    assert(!resolutionCoordinator.transition().loading());
+
+    PlaybackTarget resolvedTarget;
+    resolvedTarget.url = "https://media.example/resolved";
+    JellyfinItem resolvedItem;
+    resolvedItem.id = "resolved-item";
+    resolutionCoordinator.beginAutoplayResolution();
+    assert(resolutionCoordinator.transition().loading());
+    assert(resolutionCoordinator.continuation().autoplayChainCount() == 1);
+    resolutionCoordinator.finishPlaybackResolution();
+    resolutionCoordinator.stageResolvedPlayback(resolvedTarget, resolvedItem);
+    assert(!resolutionCoordinator.transition().loading());
+    assert(resolutionCoordinator.transition().hasPending());
+    auto resolvedTransition = resolutionCoordinator.transition().take();
+    assert(resolvedTransition);
+    assert(resolvedTransition->target.url == resolvedTarget.url);
+    assert(resolvedTransition->item.id == resolvedItem.id);
+
     transitionTarget.audioStreamIndex = 9;
     transitionPlan = planPlaybackTransition(
         transitionTarget,
