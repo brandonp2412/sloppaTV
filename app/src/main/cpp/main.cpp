@@ -1504,6 +1504,17 @@ private:
 
     bool isItemContextKey(int32_t key) const { return key == AKEYCODE_MENU || key == AKEYCODE_INFO; }
 
+    DetailGridScreenInput detailGridInputForKey(int32_t key) const {
+        if (key == AKEYCODE_BACK) return DetailGridScreenInput::Back;
+        if (isItemContextKey(key)) return DetailGridScreenInput::Context;
+        if (key == AKEYCODE_DPAD_LEFT) return DetailGridScreenInput::Left;
+        if (key == AKEYCODE_DPAD_RIGHT) return DetailGridScreenInput::Right;
+        if (key == AKEYCODE_DPAD_UP) return DetailGridScreenInput::Up;
+        if (key == AKEYCODE_DPAD_DOWN) return DetailGridScreenInput::Down;
+        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) return DetailGridScreenInput::Activate;
+        return DetailGridScreenInput::None;
+    }
+
     bool supportsItemContextMenu(const JellyfinItem& item) const {
         return item.type == "Movie" || item.type == "Series" || item.type == "Episode" || item.type == "BoxSet";
     }
@@ -2048,28 +2059,17 @@ private:
     }
 
     void handlePersonItemsKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
+        constexpr int columns = mediaGridColumns();
+        const DetailGridScreenCommand command =
+            detailsState_.handlePersonItemsInput(detailGridInputForKey(key), columns);
+        if (command.type == DetailGridScreenCommandType::Back) {
             cancelContentLoadForNavigation();
             popScreen(Screen::Cast);
-            return;
-        }
-        if (isItemContextKey(key)) {
+        } else if (command.type == DetailGridScreenCommandType::OpenContext) {
             if (const auto* item = detailsState_.selectedPersonItem()) openItemMenuForItem(*item);
-            return;
-        }
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+        } else if (command.type == DetailGridScreenCommandType::OpenSelected) {
             if (const auto* item = detailsState_.selectedPersonItem()) openDetails(*item);
-            return;
         }
-        constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT)
-            detailsState_.movePersonItem(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            detailsState_.movePersonItem(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP)
-            detailsState_.movePersonItem(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN)
-            detailsState_.movePersonItem(0, 1, columns);
     }
 
     std::vector<std::string> itemMenuActions() const {
@@ -2258,50 +2258,28 @@ private:
     }
 
     void handleSeasonsKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
+        constexpr int columns = mediaGridColumns();
+        const DetailGridScreenCommand command = detailsState_.handleSeasonsInput(detailGridInputForKey(key), columns);
+        if (command.type == DetailGridScreenCommandType::Back) {
             cancelContentLoadForNavigation();
             detail_ = detailsState_.seriesDetail();
             popScreen(Screen::Details);
-            return;
-        }
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+        } else if (command.type == DetailGridScreenCommandType::OpenSelected) {
             if (const auto* season = detailsState_.selectedSeasonItem()) openEpisodes(*season);
-            return;
         }
-        constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT)
-            detailsState_.moveSeason(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            detailsState_.moveSeason(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP)
-            detailsState_.moveSeason(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN)
-            detailsState_.moveSeason(0, 1, columns);
     }
 
     void handleEpisodesKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
+        constexpr int columns = mediaGridColumns();
+        const DetailGridScreenCommand command = detailsState_.handleEpisodesInput(detailGridInputForKey(key), columns);
+        if (command.type == DetailGridScreenCommandType::Back) {
             cancelContentLoadForNavigation();
             popScreen(Screen::Seasons);
-            return;
-        }
-        if (isItemContextKey(key)) {
+        } else if (command.type == DetailGridScreenCommandType::OpenContext) {
             if (const auto* episode = detailsState_.selectedEpisodeItem()) openItemMenuForItem(*episode);
-            return;
-        }
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+        } else if (command.type == DetailGridScreenCommandType::OpenSelected) {
             if (const auto* episode = detailsState_.selectedEpisodeItem()) openDetails(*episode);
-            return;
         }
-        constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT)
-            detailsState_.moveEpisode(-1, 0, columns);
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            detailsState_.moveEpisode(1, 0, columns);
-        else if (key == AKEYCODE_DPAD_UP)
-            detailsState_.moveEpisode(0, -1, columns);
-        else if (key == AKEYCODE_DPAD_DOWN)
-            detailsState_.moveEpisode(0, 1, columns);
     }
 
     void refreshPlaybackTelemetry(bool force = false) {

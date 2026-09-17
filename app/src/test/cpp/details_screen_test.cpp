@@ -115,9 +115,16 @@ int main() {
     for (size_t i = 0; i < personItems.size(); ++i) personItems[i].id = "person-item-" + std::to_string(i);
     state.setPersonItems(std::move(personItems));
     assert(state.selectedPerson().id == "p1");
-    state.movePersonItem(1, 0, 5);
+    auto personCommand = state.handlePersonItemsInput(DetailGridScreenInput::Right, 5);
+    assert(personCommand.type == DetailGridScreenCommandType::None);
     assert(state.personItemSelection() == 1);
     assert(state.selectedPersonItem()->id == "person-item-1");
+    personCommand = state.handlePersonItemsInput(DetailGridScreenInput::Context, 5);
+    assert(personCommand.type == DetailGridScreenCommandType::OpenContext);
+    personCommand = state.handlePersonItemsInput(DetailGridScreenInput::Activate, 5);
+    assert(personCommand.type == DetailGridScreenCommandType::OpenSelected);
+    personCommand = state.handlePersonItemsInput(DetailGridScreenInput::Back, 5);
+    assert(personCommand.type == DetailGridScreenCommandType::Back);
     state.removeItem("person-item-0");
     assert(state.personItemSelection() == 0);
     assert(state.selectedPersonItem()->id == "person-item-1");
@@ -169,8 +176,15 @@ int main() {
     state.beginSeries(series);
     state.setSeasons({seasonOne, seasonTwo});
     assert(state.seriesDetail().id == "series");
-    state.moveSeason(1, 0, 5);
+    auto seasonCommand = state.handleSeasonsInput(DetailGridScreenInput::Right, 5);
+    assert(seasonCommand.type == DetailGridScreenCommandType::None);
     assert(state.selectedSeasonItem()->id == "season-2");
+    seasonCommand = state.handleSeasonsInput(DetailGridScreenInput::Context, 5);
+    assert(seasonCommand.type == DetailGridScreenCommandType::None);
+    seasonCommand = state.handleSeasonsInput(DetailGridScreenInput::Activate, 5);
+    assert(seasonCommand.type == DetailGridScreenCommandType::OpenSelected);
+    seasonCommand = state.handleSeasonsInput(DetailGridScreenInput::Back, 5);
+    assert(seasonCommand.type == DetailGridScreenCommandType::Back);
 
     state.setEpisodeSeriesContext(series, {seasonOne, seasonTwo});
     assert(state.hasEpisodeSeriesContext());
@@ -187,9 +201,16 @@ int main() {
     JellyfinItem episodeTwo;
     episodeTwo.id = "episode-2";
     state.setEpisodes({episodeOne, episodeTwo});
-    state.moveEpisode(1, 0, 5);
+    auto episodeCommand = state.handleEpisodesInput(DetailGridScreenInput::Right, 5);
+    assert(episodeCommand.type == DetailGridScreenCommandType::None);
     assert(state.selectedSeason().id == "season-2");
     assert(state.selectedEpisodeItem()->id == "episode-2");
+    episodeCommand = state.handleEpisodesInput(DetailGridScreenInput::Context, 5);
+    assert(episodeCommand.type == DetailGridScreenCommandType::OpenContext);
+    episodeCommand = state.handleEpisodesInput(DetailGridScreenInput::Activate, 5);
+    assert(episodeCommand.type == DetailGridScreenCommandType::OpenSelected);
+    episodeCommand = state.handleEpisodesInput(DetailGridScreenInput::Back, 5);
+    assert(episodeCommand.type == DetailGridScreenCommandType::Back);
 
     JellyfinItem updatedEpisode = episodeTwo;
     updatedEpisode.favorite = true;

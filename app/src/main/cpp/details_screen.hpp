@@ -71,6 +71,28 @@ struct CastScreenCommand {
     CastScreenCommandType type = CastScreenCommandType::None;
 };
 
+enum class DetailGridScreenInput {
+    None,
+    Back,
+    Context,
+    Left,
+    Right,
+    Up,
+    Down,
+    Activate,
+};
+
+enum class DetailGridScreenCommandType {
+    None,
+    Back,
+    OpenContext,
+    OpenSelected,
+};
+
+struct DetailGridScreenCommand {
+    DetailGridScreenCommandType type = DetailGridScreenCommandType::None;
+};
+
 class DetailsScreenState {
 public:
     void reset() {
@@ -303,6 +325,10 @@ public:
         personItemSelection_ = 0;
     }
 
+    [[nodiscard]] DetailGridScreenCommand handlePersonItemsInput(DetailGridScreenInput input, int columns) {
+        return handleItemGridInput(input, static_cast<int>(personItems_.size()), personItemSelection_, columns, true);
+    }
+
     [[nodiscard]] int personItemSelection() const { return personItemSelection_; }
 
     void movePersonItem(int dx, int dy, int columns) {
@@ -333,6 +359,10 @@ public:
         seasonSelection_ = 0;
     }
 
+    [[nodiscard]] DetailGridScreenCommand handleSeasonsInput(DetailGridScreenInput input, int columns) {
+        return handleItemGridInput(input, static_cast<int>(seasons_.size()), seasonSelection_, columns, false);
+    }
+
     [[nodiscard]] int seasonSelection() const { return seasonSelection_; }
 
     void moveSeason(int dx, int dy, int columns) {
@@ -356,6 +386,10 @@ public:
     void setEpisodes(std::vector<JellyfinItem> episodes) {
         episodes_ = std::move(episodes);
         episodeSelection_ = 0;
+    }
+
+    [[nodiscard]] DetailGridScreenCommand handleEpisodesInput(DetailGridScreenInput input, int columns) {
+        return handleItemGridInput(input, static_cast<int>(episodes_.size()), episodeSelection_, columns, true);
     }
 
     [[nodiscard]] int episodeSelection() const { return episodeSelection_; }
@@ -431,6 +465,34 @@ public:
     }
 
 private:
+    static DetailGridScreenCommand handleItemGridInput(DetailGridScreenInput input, int itemCount, int& selection,
+                                                       int columns, bool allowContext) {
+        if (input == DetailGridScreenInput::Back) return {.type = DetailGridScreenCommandType::Back};
+        if (input == DetailGridScreenInput::Context) {
+            return allowContext ? DetailGridScreenCommand{.type = DetailGridScreenCommandType::OpenContext}
+                                : DetailGridScreenCommand{};
+        }
+        if (input == DetailGridScreenInput::Activate) {
+            return {.type = DetailGridScreenCommandType::OpenSelected};
+        }
+
+        int dx = 0;
+        int dy = 0;
+        if (input == DetailGridScreenInput::Left)
+            dx = -1;
+        else if (input == DetailGridScreenInput::Right)
+            dx = 1;
+        else if (input == DetailGridScreenInput::Up)
+            dy = -1;
+        else if (input == DetailGridScreenInput::Down)
+            dy = 1;
+        else
+            return {};
+
+        moveGridSelection(selection, itemCount, dx, dy, columns);
+        return {};
+    }
+
     static void moveGridSelection(int& selection, int count, int dx, int dy, int columns) {
         selection = gridSelectionAfterMove(selection, count, dx, dy, columns);
     }
