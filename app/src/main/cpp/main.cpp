@@ -443,10 +443,41 @@ struct BrowsePageCompletion {
     ApiValueResult<std::vector<JellyfinItem>> result;
 };
 
+struct ServerInfoNoticeCompletion {
+    std::string server;
+    std::string userId;
+    ApiValueResult<JellyfinServerInfo> result;
+};
+
+struct FavoriteCompletion {
+    JellyfinItem item;
+    bool desired = false;
+    uint64_t sessionEpoch = 0;
+    ApiResult result;
+};
+
+struct MetadataRefreshCompletion {
+    uint64_t sessionEpoch = 0;
+    ApiResult result;
+};
+
+struct DeleteItemCompletion {
+    JellyfinItem item;
+    uint64_t sessionEpoch = 0;
+    ApiResult result;
+};
+
+struct DiscoveryCompletion {
+    uint64_t generation = 0;
+    std::vector<DiscoveredJellyfinServer> servers;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
-                                     DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion>;
+                                     DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion,
+                                     ServerInfoNoticeCompletion, FavoriteCompletion, MetadataRefreshCompletion,
+                                     DeleteItemCompletion, DiscoveryCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -2698,20 +2729,11 @@ private:
         serverInfoLoading_ = true;
         tasks_.submit([this, session] {
             auto result = api_.getServerInfo(session);
-            std::scoped_lock lock(stateMutex_);
-            serverInfoLoading_ = false;
-            if (!session_.valid() || session_.server != session.server || session_.userId != session.userId) return;
-            if (!result.ok) return;
-            serverInfo_ = std::move(result.value);
-            const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
-            if (compatibility == ServerCompatibility::TooOld) {
-                showNotice("JELLYFIN " + serverInfo_.version +
-                               " IS BELOW THE TESTED 10.10+ BASELINE - SERVER UPGRADE RECOMMENDED",
-                           6s, true);
-            } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
-                showNotice(
-                    "UNRECOGNIZED JELLYFIN VERSION " + serverInfo_.version + " - PLAYBACK COMPATIBILITY MAY VARY", 10s);
-            }
+            asyncCompletions_.push(ServerInfoNoticeCompletion{
+                .server = session.server,
+                .userId = session.userId,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -3034,21 +3056,12 @@ private:
         error_.clear();
         tasks_.submit([this, session, item, desired, sessionEpoch] {
             auto result = api_.setFavorite(session, item, desired);
-            std::scoped_lock lock(stateMutex_);
-            if (!requestEpochs_.session.active(sessionEpoch)) return;
-            if (result.ok) {
-                JellyfinItem updated = item;
-                updated.favorite = desired;
-                updateCachedUserData(updated);
-            }
-            mutationLoading_ = false;
-            if (!result.ok) {
-                error_ = result.error;
-                return;
-            }
-            if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == item.id) {
-                detail_.favorite = desired;
-            }
+            asyncCompletions_.push(FavoriteCompletion{
+                .item = item,
+                .desired = desired,
+                .sessionEpoch = sessionEpoch,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -3164,14 +3177,10 @@ private:
         error_.clear();
         tasks_.submit([this, session, item, sessionEpoch] {
             auto result = api_.refreshMetadata(session, item);
-            std::scoped_lock lock(stateMutex_);
-            if (!requestEpochs_.session.active(sessionEpoch)) return;
-            mutationLoading_ = false;
-            if (!result.ok) {
-                error_ = result.error;
-                return;
-            }
-            showNotice("METADATA REFRESH REQUESTED");
+            asyncCompletions_.push(MetadataRefreshCompletion{
+                .sessionEpoch = sessionEpoch,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -3212,21 +3221,11 @@ private:
         error_.clear();
         tasks_.submit([this, session, item, sessionEpoch] {
             auto result = api_.deleteItem(session, item);
-            std::scoped_lock lock(stateMutex_);
-            if (!requestEpochs_.session.active(sessionEpoch)) return;
-            if (result.ok) removeCachedItem(item.id);
-            mutationLoading_ = false;
-            if (screen_ != Screen::ItemMenu || detail_.id != item.id) return;
-            if (!result.ok) {
-                error_ = result.error;
-                detailsState_.setDeleteConfirmation(false);
-                return;
-            }
-            detail_ = {};
-            detailsState_.setDeleteConfirmation(false);
-            popScreen(Screen::Home);
-            if (screen_ == Screen::Details) popScreen(Screen::Home);
-            showNotice("MEDIA DELETED");
+            asyncCompletions_.push(DeleteItemCompletion{
+                .item = item,
+                .sessionEpoch = sessionEpoch,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -3245,22 +3244,10 @@ private:
         accountState_.setDiscoveryStatus("SEARCHING LOCAL NETWORK...");
         const uint64_t generation = requestEpochs_.auth.begin();
         tasks_.submit([this, generation] {
-            auto servers = discoverJellyfinServers(1600);
-            if (!requestEpochs_.auth.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (servers.empty()) {
-                accountState_.clearDiscoveryStatus();
-                error_ = "NO JELLYFIN SERVER FOUND ON THIS NETWORK";
-                return;
-            }
-            accountState_.setField(AccountScreenState::kServerField, servers.front().address);
-            std::string discoveryStatus =
-                "FOUND " + (servers.front().name.empty() ? std::string("JELLYFIN") : servers.front().name);
-            if (servers.size() > 1) discoveryStatus += " + " + std::to_string(servers.size() - 1) + " MORE";
-            accountState_.setDiscoveryStatus(std::move(discoveryStatus));
-            accountState_.setLoginFocus(AccountScreenState::kUsernameField);
-            error_.clear();
+            asyncCompletions_.push(DiscoveryCompletion{
+                .generation = generation,
+                .servers = discoverJellyfinServers(1600),
+            });
         });
     }
 
@@ -4933,6 +4920,85 @@ private:
         else
             browseState_.replacePage(std::move(completion.result.value), kBrowsePageSize);
         prefetchBrowseArtworkAhead();
+        error_.clear();
+    }
+
+    void applyAsyncCompletion(ServerInfoNoticeCompletion& completion) {
+        serverInfoLoading_ = false;
+        if (!session_.valid() || session_.server != completion.server || session_.userId != completion.userId) return;
+        if (!completion.result.ok) return;
+        serverInfo_ = std::move(completion.result.value);
+        const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
+        if (compatibility == ServerCompatibility::TooOld) {
+            showNotice("JELLYFIN " + serverInfo_.version +
+                           " IS BELOW THE TESTED 10.10+ BASELINE - SERVER UPGRADE RECOMMENDED",
+                       6s, true);
+        } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
+            showNotice("UNRECOGNIZED JELLYFIN VERSION " + serverInfo_.version + " - PLAYBACK COMPATIBILITY MAY VARY",
+                       10s);
+        }
+    }
+
+    void applyAsyncCompletion(FavoriteCompletion& completion) {
+        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
+        if (completion.result.ok) {
+            JellyfinItem updated = completion.item;
+            updated.favorite = completion.desired;
+            updateCachedUserData(updated);
+        }
+        mutationLoading_ = false;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id) {
+            detail_.favorite = completion.desired;
+        }
+    }
+
+    void applyAsyncCompletion(MetadataRefreshCompletion& completion) {
+        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
+        mutationLoading_ = false;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        showNotice("METADATA REFRESH REQUESTED");
+    }
+
+    void applyAsyncCompletion(DeleteItemCompletion& completion) {
+        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
+        if (completion.result.ok) removeCachedItem(completion.item.id);
+        mutationLoading_ = false;
+        if (screen_ != Screen::ItemMenu || detail_.id != completion.item.id) return;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            detailsState_.setDeleteConfirmation(false);
+            return;
+        }
+        detail_ = {};
+        detailsState_.setDeleteConfirmation(false);
+        popScreen(Screen::Home);
+        if (screen_ == Screen::Details) popScreen(Screen::Home);
+        showNotice("MEDIA DELETED");
+    }
+
+    void applyAsyncCompletion(DiscoveryCompletion& completion) {
+        if (!requestEpochs_.auth.active(completion.generation)) return;
+        loading_ = false;
+        if (completion.servers.empty()) {
+            accountState_.clearDiscoveryStatus();
+            error_ = "NO JELLYFIN SERVER FOUND ON THIS NETWORK";
+            return;
+        }
+        accountState_.setField(AccountScreenState::kServerField, completion.servers.front().address);
+        std::string discoveryStatus = "FOUND " + (completion.servers.front().name.empty()
+                                                        ? std::string("JELLYFIN")
+                                                        : completion.servers.front().name);
+        if (completion.servers.size() > 1)
+            discoveryStatus += " + " + std::to_string(completion.servers.size() - 1) + " MORE";
+        accountState_.setDiscoveryStatus(std::move(discoveryStatus));
+        accountState_.setLoginFocus(AccountScreenState::kUsernameField);
         error_.clear();
     }
 
