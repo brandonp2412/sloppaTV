@@ -26,6 +26,31 @@ inline std::optional<EpisodeSeriesContextRequest> episodeSeriesContextRequest(co
     };
 }
 
+enum class DetailsScreenInput {
+    None,
+    Back,
+    Context,
+    Left,
+    Right,
+    Up,
+    Down,
+    Activate,
+};
+
+enum class DetailsScreenCommandType {
+    None,
+    Back,
+    OpenContext,
+    OpenEpisodeSeries,
+    OpenEpisodeSeason,
+    OpenSimilar,
+    ActivateAction,
+};
+
+struct DetailsScreenCommand {
+    DetailsScreenCommandType type = DetailsScreenCommandType::None;
+};
+
 class DetailsScreenState {
 public:
     void reset() {
@@ -79,6 +104,48 @@ public:
         if (item.type != "Series") result.emplace_back("MORE");
         result.emplace_back("BACK");
         return result;
+    }
+
+    [[nodiscard]] DetailsScreenCommand handleInput(DetailsScreenInput input, int actionCount, bool episodeDetail) {
+        if (input == DetailsScreenInput::Back) return {.type = DetailsScreenCommandType::Back};
+        if (input == DetailsScreenInput::Context) return {.type = DetailsScreenCommandType::OpenContext};
+
+        if (episodeContextFocused_) {
+            if (input == DetailsScreenInput::Up)
+                setEpisodeContextFocused(false);
+            else if (input == DetailsScreenInput::Left)
+                moveEpisodeContext(-1);
+            else if (input == DetailsScreenInput::Right)
+                moveEpisodeContext(1);
+            else if (input == DetailsScreenInput::Activate)
+                return {.type = episodeContextSelection_ == 0 ? DetailsScreenCommandType::OpenEpisodeSeries
+                                                             : DetailsScreenCommandType::OpenEpisodeSeason};
+            return {};
+        }
+
+        if (similarFocused_) {
+            if (input == DetailsScreenInput::Up)
+                setSimilarFocused(false);
+            else if (input == DetailsScreenInput::Left)
+                moveSimilar(-1);
+            else if (input == DetailsScreenInput::Right)
+                moveSimilar(1);
+            else if (input == DetailsScreenInput::Activate)
+                return {.type = DetailsScreenCommandType::OpenSimilar};
+            return {};
+        }
+
+        if (input == DetailsScreenInput::Left)
+            moveAction(-1, actionCount);
+        else if (input == DetailsScreenInput::Right)
+            moveAction(1, actionCount);
+        else if (input == DetailsScreenInput::Down && episodeDetail && hasEpisodeSeriesContext())
+            setEpisodeContextFocused(true);
+        else if (input == DetailsScreenInput::Down && !similar_.empty())
+            setSimilarFocused(true);
+        else if (input == DetailsScreenInput::Activate)
+            return {.type = DetailsScreenCommandType::ActivateAction};
+        return {};
     }
 
     [[nodiscard]] int actionSelection() const { return actionSelection_; }

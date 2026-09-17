@@ -1929,74 +1929,69 @@ private:
     }
 
     void handleDetailsKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
+        DetailsScreenInput input = DetailsScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = DetailsScreenInput::Back;
+        else if (isItemContextKey(key))
+            input = DetailsScreenInput::Context;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = DetailsScreenInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = DetailsScreenInput::Right;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = DetailsScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = DetailsScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = DetailsScreenInput::Activate;
+
+        const auto actions = detailActions();
+        const DetailsScreenCommand command =
+            detailsState_.handleInput(input, static_cast<int>(actions.size()), detail_.type == "Episode");
+
+        if (command.type == DetailsScreenCommandType::Back) {
             cancelContentLoadForNavigation();
             playbackCoordinator_.resetContinuationPrompt();
             popScreen(Screen::Home);
             return;
         }
-        if (isItemContextKey(key)) {
+        if (command.type == DetailsScreenCommandType::OpenContext) {
             openItemMenu();
             return;
         }
-        const auto actions = detailActions();
-        if (detailsState_.episodeContextFocused()) {
-            if (key == AKEYCODE_DPAD_UP) {
-                detailsState_.setEpisodeContextFocused(false);
-            } else if (key == AKEYCODE_DPAD_LEFT) {
-                detailsState_.moveEpisodeContext(-1);
-            } else if (key == AKEYCODE_DPAD_RIGHT) {
-                detailsState_.moveEpisodeContext(1);
-            } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (detailsState_.episodeContextSelection() == 0) {
-                    const JellyfinItem series = detailsState_.seriesDetail();
-                    if (!series.id.empty()) openDetails(series, true);
-                } else if (const auto* season = detailsState_.selectedEpisodeContextSeason()) {
-                    openEpisodes(*season);
-                }
-            }
+        if (command.type == DetailsScreenCommandType::OpenEpisodeSeries) {
+            const JellyfinItem series = detailsState_.seriesDetail();
+            if (!series.id.empty()) openDetails(series, true);
             return;
         }
-        if (detailsState_.similarFocused()) {
-            if (key == AKEYCODE_DPAD_UP) {
-                detailsState_.setSimilarFocused(false);
-            } else if (key == AKEYCODE_DPAD_LEFT) {
-                detailsState_.moveSimilar(-1);
-            } else if (key == AKEYCODE_DPAD_RIGHT) {
-                detailsState_.moveSimilar(1);
-            } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                if (const auto* selected = detailsState_.selectedSimilar()) openDetails(*selected);
-            }
+        if (command.type == DetailsScreenCommandType::OpenEpisodeSeason) {
+            if (const auto* season = detailsState_.selectedEpisodeContextSeason()) openEpisodes(*season);
             return;
         }
-        if (key == AKEYCODE_DPAD_LEFT) {
-            detailsState_.moveAction(-1, static_cast<int>(actions.size()));
-        } else if (key == AKEYCODE_DPAD_RIGHT) {
-            detailsState_.moveAction(1, static_cast<int>(actions.size()));
-        } else if (key == AKEYCODE_DPAD_DOWN && detail_.type == "Episode" && detailsState_.hasEpisodeSeriesContext()) {
-            detailsState_.setEpisodeContextFocused(true);
-        } else if (key == AKEYCODE_DPAD_DOWN && !detailsState_.similar().empty()) {
-            detailsState_.setSimilarFocused(true);
-        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            const std::string& action = actions[static_cast<size_t>(detailsState_.actionSelection())];
-            if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING")
-                beginPlayback();
-            else if (action == "EPISODES")
-                openSeasons();
-            else if (action == "PLAY ALL")
-                beginSeriesPlayAll();
-            else if (action == "FAVORITE" || action == "UNFAVORITE")
-                toggleFavoriteAsync();
-            else if (action == "MARK WATCHED" || action == "MARK UNWATCHED")
-                togglePlayedAsync();
-            else if (action == "CAST")
-                openCast();
-            else if (action == "MORE")
-                openItemMenu();
-            else if (action == "BACK") {
-                playbackCoordinator_.resetContinuationPrompt();
-                popScreen(Screen::Home);
-            }
+        if (command.type == DetailsScreenCommandType::OpenSimilar) {
+            if (const auto* selected = detailsState_.selectedSimilar()) openDetails(*selected);
+            return;
+        }
+        if (command.type != DetailsScreenCommandType::ActivateAction) return;
+
+        const std::string& action = actions[static_cast<size_t>(detailsState_.actionSelection())];
+        if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING")
+            beginPlayback();
+        else if (action == "EPISODES")
+            openSeasons();
+        else if (action == "PLAY ALL")
+            beginSeriesPlayAll();
+        else if (action == "FAVORITE" || action == "UNFAVORITE")
+            toggleFavoriteAsync();
+        else if (action == "MARK WATCHED" || action == "MARK UNWATCHED")
+            togglePlayedAsync();
+        else if (action == "CAST")
+            openCast();
+        else if (action == "MORE")
+            openItemMenu();
+        else if (action == "BACK") {
+            playbackCoordinator_.resetContinuationPrompt();
+            popScreen(Screen::Home);
         }
     }
 

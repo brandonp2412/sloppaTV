@@ -31,6 +31,33 @@ int main() {
     state.moveAction(-10, static_cast<int>(actions.size()));
     assert(state.actionSelection() == 0);
 
+    DetailsScreenState inputState;
+    inputState.beginDetails();
+    auto inputCommand = inputState.handleInput(DetailsScreenInput::Right, static_cast<int>(actions.size()), false);
+    assert(inputCommand.type == DetailsScreenCommandType::None);
+    assert(inputState.actionSelection() == 1);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Activate, static_cast<int>(actions.size()), false);
+    assert(inputCommand.type == DetailsScreenCommandType::ActivateAction);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Context, static_cast<int>(actions.size()), false);
+    assert(inputCommand.type == DetailsScreenCommandType::OpenContext);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Back, static_cast<int>(actions.size()), false);
+    assert(inputCommand.type == DetailsScreenCommandType::Back);
+
+    std::vector<JellyfinItem> inputSimilar(3);
+    inputSimilar[0].id = "input-a";
+    inputSimilar[1].id = "input-b";
+    inputSimilar[2].id = "input-c";
+    inputState.setSimilar(std::move(inputSimilar));
+    inputCommand = inputState.handleInput(DetailsScreenInput::Down, static_cast<int>(actions.size()), false);
+    assert(inputCommand.type == DetailsScreenCommandType::None);
+    assert(inputState.similarFocused());
+    inputCommand = inputState.handleInput(DetailsScreenInput::Right, static_cast<int>(actions.size()), false);
+    assert(inputState.similarSelection() == 1);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Activate, static_cast<int>(actions.size()), false);
+    assert(inputCommand.type == DetailsScreenCommandType::OpenSimilar);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Up, static_cast<int>(actions.size()), false);
+    assert(!inputState.similarFocused());
+
     std::vector<JellyfinItem> similar(3);
     similar[0].id = "a";
     similar[1].id = "b";
@@ -119,6 +146,21 @@ int main() {
     JellyfinItem seasonTwo;
     seasonTwo.id = "season-2";
     seasonTwo.name = "Season 2";
+
+    inputState.setEpisodeSeriesContext(series, {seasonOne, seasonTwo});
+    inputCommand = inputState.handleInput(DetailsScreenInput::Down, static_cast<int>(actions.size()), true);
+    assert(inputState.episodeContextFocused());
+    inputCommand = inputState.handleInput(DetailsScreenInput::Right, static_cast<int>(actions.size()), true);
+    assert(inputState.episodeContextSelection() == 1);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Activate, static_cast<int>(actions.size()), true);
+    assert(inputCommand.type == DetailsScreenCommandType::OpenEpisodeSeason);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Left, static_cast<int>(actions.size()), true);
+    assert(inputState.episodeContextSelection() == 0);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Activate, static_cast<int>(actions.size()), true);
+    assert(inputCommand.type == DetailsScreenCommandType::OpenEpisodeSeries);
+    inputCommand = inputState.handleInput(DetailsScreenInput::Up, static_cast<int>(actions.size()), true);
+    assert(!inputState.episodeContextFocused());
+
     state.beginSeries(series);
     state.setSeasons({seasonOne, seasonTwo});
     assert(state.seriesDetail().id == "series");
