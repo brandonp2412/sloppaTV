@@ -6,6 +6,38 @@
 #include <chrono>
 #include <cstddef>
 
+enum class PlayerScreenInput {
+    None,
+    Back,
+    Up,
+    Down,
+    Left,
+    Right,
+    Activate,
+    PlayPause,
+    Previous,
+    Next,
+    Rewind,
+    FastForward,
+};
+
+enum class PlayerScreenCommandType {
+    None,
+    StopPlayback,
+    ActivateControl,
+    OpenQueue,
+    PreviousEpisode,
+    NextEpisode,
+    ActivatePlayback,
+    TogglePause,
+    SeekBackward,
+    SeekForward,
+};
+
+struct PlayerScreenCommand {
+    PlayerScreenCommandType type = PlayerScreenCommandType::None;
+};
+
 class PlayerScreenState {
 public:
     using Clock = std::chrono::steady_clock;
@@ -106,6 +138,58 @@ public:
     }
 
     [[nodiscard]] bool shouldDismissOnBack(TimePoint now) const { return overlayVisible(now); }
+
+    [[nodiscard]] PlayerScreenCommand handleInput(PlayerScreenInput input, TimePoint now) {
+        if (input == PlayerScreenInput::Back) {
+            if (shouldDismissOnBack(now)) {
+                dismissOverlay(now);
+                return {};
+            }
+            return {.type = PlayerScreenCommandType::StopPlayback};
+        }
+        if (input == PlayerScreenInput::Up && !controlsActive(now)) {
+            showControls(now);
+            return {};
+        }
+
+        if (controlsActive(now))
+            refreshControls(now);
+        else
+            showOverlayFor(now, std::chrono::seconds(5));
+
+        if (controlsActive(now)) {
+            if (input == PlayerScreenInput::Down)
+                hideControls();
+            else if (input == PlayerScreenInput::Left)
+                moveControl(-1);
+            else if (input == PlayerScreenInput::Right)
+                moveControl(1);
+            else if (input == PlayerScreenInput::Activate)
+                return {.type = PlayerScreenCommandType::ActivateControl};
+            return {};
+        }
+
+        switch (input) {
+        case PlayerScreenInput::Down:
+            return {.type = PlayerScreenCommandType::OpenQueue};
+        case PlayerScreenInput::Previous:
+            return {.type = PlayerScreenCommandType::PreviousEpisode};
+        case PlayerScreenInput::Next:
+            return {.type = PlayerScreenCommandType::NextEpisode};
+        case PlayerScreenInput::Activate:
+            return {.type = PlayerScreenCommandType::ActivatePlayback};
+        case PlayerScreenInput::PlayPause:
+            return {.type = PlayerScreenCommandType::TogglePause};
+        case PlayerScreenInput::Left:
+        case PlayerScreenInput::Rewind:
+            return {.type = PlayerScreenCommandType::SeekBackward};
+        case PlayerScreenInput::Right:
+        case PlayerScreenInput::FastForward:
+            return {.type = PlayerScreenCommandType::SeekForward};
+        default:
+            return {};
+        }
+    }
 
     [[nodiscard]] int positionMs() const { return positionMs_; }
 

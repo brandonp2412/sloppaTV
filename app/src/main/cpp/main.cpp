@@ -2808,60 +2808,70 @@ private:
     }
 
     void handlePlayerKey(int32_t key, int repeatCount = 0) {
+        PlayerScreenInput input = PlayerScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = PlayerScreenInput::Back;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = PlayerScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = PlayerScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = PlayerScreenInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = PlayerScreenInput::Right;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = PlayerScreenInput::Activate;
+        else if (key == AKEYCODE_MEDIA_PLAY_PAUSE)
+            input = PlayerScreenInput::PlayPause;
+        else if (key == AKEYCODE_MEDIA_PREVIOUS)
+            input = PlayerScreenInput::Previous;
+        else if (key == AKEYCODE_MEDIA_NEXT)
+            input = PlayerScreenInput::Next;
+        else if (key == AKEYCODE_MEDIA_REWIND)
+            input = PlayerScreenInput::Rewind;
+        else if (key == AKEYCODE_MEDIA_FAST_FORWARD)
+            input = PlayerScreenInput::FastForward;
+
         const auto now = std::chrono::steady_clock::now();
-        if (key == AKEYCODE_BACK) {
-            if (playerScreenState_.shouldDismissOnBack(now))
-                playerScreenState_.dismissOverlay(now);
-            else
-                stopPlayback();
+        const PlayerScreenCommand command = playerScreenState_.handleInput(input, now);
+        switch (command.type) {
+        case PlayerScreenCommandType::None:
             return;
-        }
-        if (key == AKEYCODE_DPAD_UP && !playerScreenState_.controlsActive(now)) {
-            playerScreenState_.showControls(now);
+        case PlayerScreenCommandType::StopPlayback:
+            stopPlayback();
             return;
-        }
-        if (playerScreenState_.controlsActive(now))
-            playerScreenState_.refreshControls(now);
-        else
-            playerScreenState_.showOverlayFor(now, 5s);
-        if (playerScreenState_.controlsActive(now)) {
-            if (key == AKEYCODE_DPAD_DOWN) {
-                playerScreenState_.hideControls();
-            } else if (key == AKEYCODE_DPAD_LEFT) {
-                playerScreenState_.moveControl(-1);
-            } else if (key == AKEYCODE_DPAD_RIGHT) {
-                playerScreenState_.moveControl(1);
-            } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                activatePlayerControl();
-            }
+        case PlayerScreenCommandType::ActivateControl:
+            activatePlayerControl();
             return;
-        }
-        if (key == AKEYCODE_DPAD_DOWN) {
+        case PlayerScreenCommandType::OpenQueue:
             openQueueOverlay();
-        } else if (key == AKEYCODE_MEDIA_PREVIOUS) {
+            return;
+        case PlayerScreenCommandType::PreviousEpisode:
             playAdjacentEpisode(-1);
-        } else if (key == AKEYCODE_MEDIA_NEXT) {
+            return;
+        case PlayerScreenCommandType::NextEpisode:
             playAdjacentEpisode(1);
-        } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && skipActiveMediaSegment()) {
-        } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER || key == AKEYCODE_MEDIA_PLAY_PAUSE) {
+            return;
+        case PlayerScreenCommandType::ActivatePlayback:
+            if (skipActiveMediaSegment()) return;
+            [[fallthrough]];
+        case PlayerScreenCommandType::TogglePause:
             player_.togglePause();
             reportProgressAsync(true);
-        } else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_MEDIA_REWIND) {
-            const int64_t deltaMs = heldSeekDeltaMs(settings_.seekBackSeconds, repeatCount);
-            const int targetMs =
-                relativeSeekPositionMs(playerScreenState_.positionMs(), -deltaMs, playerScreenState_.durationMs());
-            playerScreenState_.showSeekFeedback(-static_cast<int>(deltaMs / 1000), now);
+            return;
+        case PlayerScreenCommandType::SeekBackward:
+        case PlayerScreenCommandType::SeekForward: {
+            const bool forward = command.type == PlayerScreenCommandType::SeekForward;
+            const int64_t deltaMs =
+                heldSeekDeltaMs(forward ? settings_.seekForwardSeconds : settings_.seekBackSeconds, repeatCount);
+            const int targetMs = relativeSeekPositionMs(playerScreenState_.positionMs(), forward ? deltaMs : -deltaMs,
+                                                        playerScreenState_.durationMs());
+            playerScreenState_.showSeekFeedback(static_cast<int>((forward ? deltaMs : -deltaMs) / 1000), now);
             requestTrickplayPreview(targetMs);
             seekPlaybackTo(targetMs);
             reportProgressAsync(false);
-        } else if (key == AKEYCODE_DPAD_RIGHT || key == AKEYCODE_MEDIA_FAST_FORWARD) {
-            const int64_t deltaMs = heldSeekDeltaMs(settings_.seekForwardSeconds, repeatCount);
-            const int targetMs =
-                relativeSeekPositionMs(playerScreenState_.positionMs(), deltaMs, playerScreenState_.durationMs());
-            playerScreenState_.showSeekFeedback(static_cast<int>(deltaMs / 1000), now);
-            requestTrickplayPreview(targetMs);
-            seekPlaybackTo(targetMs);
-            reportProgressAsync(false);
+            return;
+        }
         }
     }
 

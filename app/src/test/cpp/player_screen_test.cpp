@@ -38,6 +38,45 @@ int main() {
     assert(!state.controlsActive(now + 21s));
     assert(!state.shouldDismissOnBack(now + 21s));
 
+    PlayerScreenState inputState;
+    auto command = inputState.handleInput(PlayerScreenInput::Up, now);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(inputState.controlsActive(now));
+    command = inputState.handleInput(PlayerScreenInput::Right, now + 1s);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(inputState.controlSelection() == 2);
+    command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
+    assert(command.type == PlayerScreenCommandType::ActivateControl);
+    command = inputState.handleInput(PlayerScreenInput::Down, now + 3s);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(!inputState.controlsActive(now + 3s));
+    command = inputState.handleInput(PlayerScreenInput::Down, now + 4s);
+    assert(command.type == PlayerScreenCommandType::OpenQueue);
+    assert(inputState.overlayVisible(now + 8s));
+    command = inputState.handleInput(PlayerScreenInput::Back, now + 5s);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(!inputState.overlayVisible(now + 5s));
+    command = inputState.handleInput(PlayerScreenInput::Back, now + 6s);
+    assert(command.type == PlayerScreenCommandType::StopPlayback);
+
+    PlayerScreenState playbackInputState;
+    command = playbackInputState.handleInput(PlayerScreenInput::Previous, now);
+    assert(command.type == PlayerScreenCommandType::PreviousEpisode);
+    command = playbackInputState.handleInput(PlayerScreenInput::Next, now + 6s);
+    assert(command.type == PlayerScreenCommandType::NextEpisode);
+    command = playbackInputState.handleInput(PlayerScreenInput::Activate, now + 12s);
+    assert(command.type == PlayerScreenCommandType::ActivatePlayback);
+    command = playbackInputState.handleInput(PlayerScreenInput::PlayPause, now + 18s);
+    assert(command.type == PlayerScreenCommandType::TogglePause);
+    command = playbackInputState.handleInput(PlayerScreenInput::Left, now + 24s);
+    assert(command.type == PlayerScreenCommandType::SeekBackward);
+    command = playbackInputState.handleInput(PlayerScreenInput::Rewind, now + 30s);
+    assert(command.type == PlayerScreenCommandType::SeekBackward);
+    command = playbackInputState.handleInput(PlayerScreenInput::Right, now + 36s);
+    assert(command.type == PlayerScreenCommandType::SeekForward);
+    command = playbackInputState.handleInput(PlayerScreenInput::FastForward, now + 42s);
+    assert(command.type == PlayerScreenCommandType::SeekForward);
+
     state.beginPlayback(12'000, 60'000);
     assert(state.positionMs() == 12'000);
     assert(state.durationMs() == 60'000);
