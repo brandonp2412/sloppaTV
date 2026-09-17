@@ -16,6 +16,7 @@ public:
 
     void reset() {
         begin(VideoZoomMode::Fit);
+        homeRefreshRequested_ = false;
         lastPlaybackSummary_.clear();
     }
 
@@ -78,6 +79,14 @@ public:
     [[nodiscard]] VideoZoomMode zoomMode() const { return zoomMode_; }
     void setZoomMode(VideoZoomMode mode) { zoomMode_ = mode; }
 
+    void requestHomeRefresh() { homeRefreshRequested_ = true; }
+    [[nodiscard]] bool homeRefreshRequested() const { return homeRefreshRequested_; }
+    bool takeHomeRefreshRequest() {
+        if (!homeRefreshRequested_) return false;
+        homeRefreshRequested_ = false;
+        return true;
+    }
+
     [[nodiscard]] const std::string& lastPlaybackSummary() const { return lastPlaybackSummary_; }
     void setLastPlaybackSummary(std::string summary) { lastPlaybackSummary_ = std::move(summary); }
 
@@ -88,5 +97,6 @@ private:
     bool fallbackAttempted_ = false;
     TimePoint preparingSince_{};
     VideoZoomMode zoomMode_ = VideoZoomMode::Fit;
+    bool homeRefreshRequested_ = false;
     std::string lastPlaybackSummary_;
 };

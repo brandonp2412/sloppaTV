@@ -4375,7 +4375,7 @@ private:
                 if (!result.ok) return;
                 std::scoped_lock lock(stateMutex_);
                 if (session_.server != session.server || session_.userId != session.userId || screen_ == Screen::Player) return;
-                homeRefreshAfterPlaybackStop_ = true;
+                playbackSessionState_.requestHomeRefresh();
                 if (app_ && app_->looper) ALooper_wake(app_->looper);
             });
         }
@@ -5035,8 +5035,8 @@ private:
                 homeRetryAt_ = {};
                 retryHome = true;
             }
-            if (!homeLoading_ && homeRefreshAfterPlaybackStop_ && session_.valid() && screen_ != Screen::Player) {
-                homeRefreshAfterPlaybackStop_ = false;
+            if (!homeLoading_ && session_.valid() && screen_ != Screen::Player
+                && playbackSessionState_.takeHomeRefreshRequest()) {
                 refreshHomeAfterPlaybackStop = true;
             }
             if (seerrRequestState_.pendingRefreshDue(now)
@@ -7753,7 +7753,6 @@ private:
     SeerrRequestState seerrRequestState_;
     SeerrStorageState seerrStorageState_;
     SeerrConnectionState seerrConnectionState_;
-    bool homeRefreshAfterPlaybackStop_ = false;
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

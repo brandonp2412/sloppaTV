@@ -45,6 +45,15 @@ int main() {
     assert(!state.activeSkippableSegment(75'000'000));
     assert(state.mediaSegmentsRequested());
 
+    state.requestHomeRefresh();
+    assert(state.homeRefreshRequested());
+    assert(state.takeHomeRefreshRequest());
+    assert(!state.homeRefreshRequested());
+    assert(!state.takeHomeRefreshRequest());
+    state.requestHomeRefresh();
+    state.begin(VideoZoomMode::Fill);
+    assert(state.homeRefreshRequested());
+
     state.markFallbackAttempted();
     assert(state.fallbackAttempted());
     state.setLastPlaybackSummary("DirectPlay / h264 / 1920X1080");
@@ -56,6 +65,7 @@ int main() {
     assert(state.mediaSegments().empty());
 
     state.reset();
+    assert(!state.homeRefreshRequested());
     assert(state.lastPlaybackSummary().empty());
     assert(!state.fallbackAttempted());
     assert(!state.preparing());
