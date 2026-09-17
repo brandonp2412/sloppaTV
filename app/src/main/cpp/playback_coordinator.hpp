@@ -275,3 +275,92 @@ inline PlaybackContinuationPlan planPlaybackContinuation(
     plan.resetAutoplayChain = true;
     return plan;
 }
+
+class PlaybackCoordinator {
+public:
+    using Clock = PlaybackTelemetryState::Clock;
+    using TimePoint = PlaybackTelemetryState::TimePoint;
+
+    [[nodiscard]] PlaybackSessionState& session() { return sessionState_; }
+    [[nodiscard]] const PlaybackSessionState& session() const { return sessionState_; }
+    [[nodiscard]] PlaybackTelemetryState& telemetry() { return telemetryState_; }
+    [[nodiscard]] const PlaybackTelemetryState& telemetry() const { return telemetryState_; }
+    [[nodiscard]] PlaybackContinuationState& continuation() { return continuationState_; }
+    [[nodiscard]] const PlaybackContinuationState& continuation() const { return continuationState_; }
+
+    void activate(const JellyfinItem& item, const PlaybackTarget& target, TimePoint now) {
+        sessionState_.setActive(item, target);
+        sessionState_.setLastPlaybackSummary(playbackSummary(target, item));
+        sessionState_.resetFallbackAttempted();
+        telemetryState_.beginPlayback(now);
+    }
+
+    [[nodiscard]] PlaybackReleasePlan releasePlan(
+        bool requestedStopReport,
+        bool completed,
+        bool jellyfinSessionValid,
+        int positionMs
+    ) const {
+        return planPlaybackRelease(
+            requestedStopReport,
+            completed,
+            telemetryState_.playbackStartReported(),
+            jellyfinSessionValid,
+            sessionState_.activeItem(),
+            sessionState_.activeTarget(),
+            positionMs
+        );
+    }
+
+    void finishRelease() {
+        sessionState_.clearPreparing();
+        telemetryState_.clearPlaybackStartReported();
+        sessionState_.clearActive();
+        telemetryState_.resetReadIntervals();
+        continuationState_.clearNextEpisode();
+        sessionState_.resetMediaSegments();
+    }
+
+    [[nodiscard]] PlaybackTickPlan tickPlan(
+        bool playbackEnded,
+        bool playbackPlaying,
+        int positionMs,
+        std::string_view itemType,
+        TimePoint now
+    ) const {
+        return planPlaybackTick(
+            playbackEnded,
+            playbackPlaying,
+            positionMs,
+            itemType,
+            sessionState_,
+            telemetryState_,
+            continuationState_,
+            now
+        );
+    }
+
+    [[nodiscard]] PlaybackContinuationPlan continuationPlan(
+        bool playbackEnded,
+        int positionMs,
+        int durationMs,
+        const PlaybackQueueState& queueState,
+        bool autoplayNext,
+        int stillWatchingAfter
+    ) const {
+        return planPlaybackContinuation(
+            playbackEnded,
+            positionMs,
+            durationMs,
+            queueState,
+            continuationState_,
+            autoplayNext,
+            stillWatchingAfter
+        );
+    }
+
+private:
+    PlaybackSessionState sessionState_;
+    PlaybackTelemetryState telemetryState_;
+    PlaybackContinuationState continuationState_;
+};

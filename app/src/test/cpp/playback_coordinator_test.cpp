@@ -11,6 +11,31 @@ int main() {
     PlaybackContinuationState continuation;
     PlaybackQueueState queue;
     const auto now = PlaybackTelemetryState::Clock::now();
+
+    PlaybackCoordinator coordinator;
+    JellyfinItem coordinatedItem;
+    coordinatedItem.id = "coordinated-item";
+    coordinatedItem.type = "Episode";
+    coordinatedItem.runtimeTicks = 600'000'000;
+    PlaybackTarget coordinatedTarget;
+    coordinatedTarget.url = "https://media.example/coordinated-item";
+    coordinatedTarget.playMethod = PlaybackMethod::DirectStream;
+    coordinator.activate(coordinatedItem, coordinatedTarget, now - 11s);
+    assert(coordinator.session().activeItem().id == coordinatedItem.id);
+    assert(coordinator.session().activeTarget().url == coordinatedTarget.url);
+    assert(coordinator.session().lastPlaybackSummary() == "DirectStream");
+    assert(coordinator.tickPlan(false, true, 35000, "Episode", now).reportPlaybackStart);
+    assert(coordinator.telemetry().markPlaybackStartReported());
+    const auto coordinatedRelease = coordinator.releasePlan(true, false, true, 12345);
+    assert(coordinatedRelease.reportStop);
+    assert(coordinatedRelease.reportTicks == 123'450'000);
+    assert(coordinator.session().beginMediaSegmentsRequest(now));
+    assert(coordinator.continuation().beginNextEpisodeRequest(now));
+    coordinator.finishRelease();
+    assert(coordinator.session().activeItem().id.empty());
+    assert(!coordinator.telemetry().playbackStartReported());
+    assert(!coordinator.session().mediaSegmentsRequested());
+    assert(!coordinator.continuation().nextEpisodeRequested());
     telemetry.beginPlayback(now - 11s);
 
     auto plan = planPlaybackTick(
@@ -460,6 +485,17 @@ int main() {
     );
     assert(continuationPlan.action == PlaybackContinuationAction::None);
     assert(!continuationPlan.resetAutoplayChain);
+
+    coordinator.continuation().setNextItem(episode2);
+    continuationPlan = coordinator.continuationPlan(
+        true,
+        120000,
+        120000,
+        queue,
+        true,
+        3
+    );
+    assert(continuationPlan.action == PlaybackContinuationAction::AutoplayNext);
 
     return 0;
 }

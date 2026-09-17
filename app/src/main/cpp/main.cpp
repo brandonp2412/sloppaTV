@@ -4332,13 +4332,10 @@ private:
         const auto session = session_;
         const auto item = playbackSessionState_.activeItem();
         const auto target = playbackSessionState_.activeTarget();
-        const PlaybackReleasePlan releasePlan = planPlaybackRelease(
+        const PlaybackReleasePlan releasePlan = playbackCoordinator_.releasePlan(
             reportStop,
             completed,
-            telemetryState_.playbackStartReported(),
             session.valid(),
-            item,
-            target,
             playerScreenState_.positionMs()
         );
         if (!item.id.empty()) {
@@ -4352,19 +4349,14 @@ private:
             }
         }
         player_.stop();
-        playbackSessionState_.clearPreparing();
         videoSurface_.release();
         displayMode_.restore();
         mediaSession_.clear();
         clearTrickplayPreview();
-        telemetryState_.clearPlaybackStartReported();
         transitionState_.setFallbackResolving(false);
-        playbackSessionState_.clearActive();
+        playbackCoordinator_.finishRelease();
         playerScreenState_.resetPosition();
-        telemetryState_.resetReadIntervals();
-        continuationState_.clearNextEpisode();
         trackState_.resetPlayback();
-        playbackSessionState_.resetMediaSegments();
         if (releasePlan.reportStop) {
             tasks_.submit([this, session, item, target, ticks = releasePlan.reportTicks] {
                 const ApiResult result = api_.reportPlaybackStopped(session, item, target, ticks);
@@ -4698,10 +4690,7 @@ private:
             transition.audioStreamIndex
         );
         transitionState_.setPauseAfterRestart(playbackPlan.pauseAfterRestart);
-        playbackSessionState_.setActive(item, target);
-        playbackSessionState_.setLastPlaybackSummary(playbackSummary(target, item));
-        playbackSessionState_.resetFallbackAttempted();
-        telemetryState_.beginPlayback(std::chrono::steady_clock::now());
+        playbackCoordinator_.activate(item, target, std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
         playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
         if (playbackPlan.resetContinuation) {
@@ -4943,14 +4932,11 @@ private:
         }
 
         const auto now = std::chrono::steady_clock::now();
-        const PlaybackTickPlan plan = planPlaybackTick(
+        const PlaybackTickPlan plan = playbackCoordinator_.tickPlan(
             playbackEnded,
             status == PlayerStatus::Playing,
             playerScreenState_.positionMs(),
             playbackSessionState_.activeItem().type,
-            playbackSessionState_,
-            telemetryState_,
-            continuationState_,
             now
         );
         if (plan.refreshTelemetry) {
@@ -4980,12 +4966,11 @@ private:
         }
         if (plan.requestNextEpisode) requestNextEpisodeAsync();
 
-        const PlaybackContinuationPlan continuationPlan = planPlaybackContinuation(
+        const PlaybackContinuationPlan continuationPlan = playbackCoordinator_.continuationPlan(
             playbackEnded,
             playerScreenState_.positionMs(),
             playerScreenState_.durationMs(),
             queueState_,
-            continuationState_,
             settings_.autoplayNext,
             settings_.stillWatchingAfter
         );
@@ -7773,9 +7758,10 @@ private:
 
     ExternalPlaybackState externalPlaybackState_;
     PlaybackTransitionState transitionState_;
-    PlaybackContinuationState continuationState_;
-    PlaybackSessionState playbackSessionState_;
-    PlaybackTelemetryState telemetryState_;
+    PlaybackCoordinator playbackCoordinator_;
+    PlaybackContinuationState& continuationState_ = playbackCoordinator_.continuation();
+    PlaybackSessionState& playbackSessionState_ = playbackCoordinator_.session();
+    PlaybackTelemetryState& telemetryState_ = playbackCoordinator_.telemetry();
     PlayerScreenState playerScreenState_;
     PlayerTrackState trackState_;
     TrickplayPreviewState trickplayState_;
