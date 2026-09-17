@@ -3999,12 +3999,11 @@ private:
             playPlayerItemAsync(*continuationState_.nextItem());
             return;
         }
-        if (adjacentEpisodeLookup_ || !session_.valid() || activePlaybackItem_.type != "Episode"
+        if (!session_.valid() || activePlaybackItem_.type != "Episode"
             || activePlaybackItem_.seriesId.empty() || activePlaybackItem_.id.empty()) {
             return;
         }
-
-        adjacentEpisodeLookup_ = true;
+        if (!continuationState_.beginAdjacentEpisodeLookup()) return;
         const JellyfinSession session = session_;
         const std::string currentItemId = activePlaybackItem_.id;
         const std::string seriesId = activePlaybackItem_.seriesId;
@@ -4024,7 +4023,7 @@ private:
                 : std::nullopt;
 
             std::scoped_lock lock(stateMutex_);
-            adjacentEpisodeLookup_ = false;
+            continuationState_.finishAdjacentEpisodeLookup();
             if (screen_ != Screen::Player || activePlaybackItem_.id != currentItemId) return;
             if (!episodes.ok) {
                 showNotice("EPISODE LIST UNAVAILABLE", 2s);
@@ -7843,7 +7842,6 @@ private:
     DetailsScreenState detailsState_;
 
     PlaybackQueueState queueState_;
-    bool adjacentEpisodeLookup_ = false;
 
     ExternalPlaybackState externalPlaybackState_;
     PlaybackTransitionState transitionState_;

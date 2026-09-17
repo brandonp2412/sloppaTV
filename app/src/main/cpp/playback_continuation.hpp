@@ -16,6 +16,7 @@ public:
         nextItem_.reset();
         nextEpisodeRequested_ = false;
         nextEpisodeRetryAfter_ = {};
+        adjacentEpisodeLookup_ = false;
         autoplayChainCount_ = 0;
         stillWatchingPrompt_ = false;
     }
@@ -54,6 +55,14 @@ public:
         nextItem_.reset();
     }
 
+    [[nodiscard]] bool adjacentEpisodeLookupInProgress() const { return adjacentEpisodeLookup_; }
+    bool beginAdjacentEpisodeLookup() {
+        if (adjacentEpisodeLookup_) return false;
+        adjacentEpisodeLookup_ = true;
+        return true;
+    }
+    void finishAdjacentEpisodeLookup() { adjacentEpisodeLookup_ = false; }
+
     [[nodiscard]] int autoplayChainCount() const { return autoplayChainCount_; }
     void resetAutoplayChain() { autoplayChainCount_ = 0; }
     void incrementAutoplayChain() { ++autoplayChainCount_; }
@@ -65,6 +74,7 @@ private:
     std::optional<JellyfinItem> nextItem_;
     bool nextEpisodeRequested_ = false;
     TimePoint nextEpisodeRetryAfter_{};
+    bool adjacentEpisodeLookup_ = false;
     int autoplayChainCount_ = 0;
     bool stillWatchingPrompt_ = false;
 };

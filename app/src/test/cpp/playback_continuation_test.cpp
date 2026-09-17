@@ -8,6 +8,7 @@ int main() {
     PlaybackContinuationState state;
     assert(!state.nextItem());
     assert(!state.nextEpisodeRequested());
+    assert(!state.adjacentEpisodeLookupInProgress());
     assert(state.autoplayChainCount() == 0);
     assert(!state.stillWatchingPrompt());
 
@@ -23,6 +24,12 @@ int main() {
     state.setNextItem(next);
     assert(state.nextItem());
     assert(state.nextItem()->id == "episode-2");
+
+    assert(state.beginAdjacentEpisodeLookup());
+    assert(state.adjacentEpisodeLookupInProgress());
+    assert(!state.beginAdjacentEpisodeLookup());
+    state.finishAdjacentEpisodeLookup();
+    assert(!state.adjacentEpisodeLookupInProgress());
 
     state.incrementAutoplayChain();
     state.incrementAutoplayChain();
@@ -42,10 +49,12 @@ int main() {
 
     state.markNextEpisodeRequested();
     state.setNextItem(next);
+    assert(state.beginAdjacentEpisodeLookup());
     state.incrementAutoplayChain();
     state.setStillWatchingPrompt(true);
     state.reset();
     assert(!state.nextEpisodeRequested());
+    assert(!state.adjacentEpisodeLookupInProgress());
     assert(!state.nextItem());
     assert(state.autoplayChainCount() == 0);
     assert(!state.stillWatchingPrompt());
