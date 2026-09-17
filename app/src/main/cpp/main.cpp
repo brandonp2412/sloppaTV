@@ -526,6 +526,23 @@ struct QuickConnectTimedOutCompletion {
     uint64_t generation = 0;
 };
 
+struct HomeCoreCompletion {
+    uint64_t generation = 0;
+    HomeSelectionSnapshot snapshot;
+    HomeRestorePlan restorePlan;
+    std::vector<JellyfinItem> views;
+    std::chrono::steady_clock::time_point startedAt;
+    ApiValueResult<JellyfinHomeData> result;
+};
+
+struct HomeSecondaryCompletion {
+    uint64_t generation = 0;
+    HomeSelectionSnapshot snapshot;
+    int coreRestoredRow = -1;
+    std::chrono::steady_clock::time_point startedAt;
+    ApiValueResult<JellyfinHomeData> result;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
@@ -535,7 +552,7 @@ using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompleti
                                      LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
                                      EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
-                                     QuickConnectTimedOutCompletion>;
+                                     QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3384,134 +3401,21 @@ private:
         const auto homeLoadStarted = std::chrono::steady_clock::now();
         tasks_.submit([this, session, generation, homeSnapshot = std::move(homeSnapshot), homeLoadStarted] {
             auto core = api_.loadHomeCore(session);
-            if (!requestEpochs_.home.active(generation)) return;
-            if (!core.ok) {
-                std::scoped_lock lock(stateMutex_);
-                homeLoading_ = false;
-                if (core.error.find("HTTP 401") != std::string::npos) {
-                    homeRetryAt_ = {};
-                    homeRetryAttempt_ = 0;
-                    const JellyfinSession expired = session_;
-                    artwork_.eraseProfile(expired, renderer_);
-                    sessionRegistry_.removeIdentity(expired);
-                    requestEpochs_.invalidateAll();
-                    loading_ = false;
-                    mutationLoading_ = false;
-                    searchState_.setLoading(false);
-                    session_.token.clear();
-                    session_.userId.clear();
-                    settings_.seerrSessionCookie.clear();
-                    seerrStorageState_.clearTargets();
-                    resetNavigation(Screen::Login);
-                    error_ = "SESSION EXPIRED - LOG IN AGAIN";
-                    saveSession(session_);
-                    return;
-                }
-                if (isTransientHomeLoadError(core.error)) {
-                    const int delaySeconds = std::min(30, 1 << std::min(homeRetryAttempt_, 5));
-                    ++homeRetryAttempt_;
-                    homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(delaySeconds);
-                    __android_log_print(ANDROID_LOG_WARN, kTag,
-                                        "Home load failed transiently; retrying in %d seconds: %s", delaySeconds,
-                                        core.error.c_str());
-                } else {
-                    homeRetryAt_ = {};
-                    homeRetryAttempt_ = 0;
-                }
-                if (screen_ == Screen::Home) error_ = core.error;
-                return;
+            HomeRestorePlan restorePlan;
+            std::vector<JellyfinItem> views;
+            if (core.ok) {
+                filterHiddenHomeItems(core.value);
+                views = core.value.views;
+                restorePlan = HomeScreenState::restorePlan(homeSnapshot, core.value.rows);
             }
-
-            filterHiddenHomeItems(core.value);
-            std::vector<JellyfinItem> views = core.value.views;
-            HomeRestorePlan coreRestore = HomeScreenState::restorePlan(homeSnapshot, core.value.rows);
-            const int coreRestoredRow = coreRestore.focusedRow;
-            {
-                std::scoped_lock lock(stateMutex_);
-                homeLoading_ = false;
-                homeRetryAt_ = {};
-                homeRetryAttempt_ = 0;
-                home_ = std::move(core.value);
-                homeState_.setSelections(std::move(coreRestore.selections));
-                homeState_.setRow(coreRestoredRow);
-                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-                // Reapply the locally cached Seerr row after replacing the
-                // Jellyfin home payload so a just-created request cannot vanish.
-                syncSeerrHomeRowLocked();
-                if (screen_ == Screen::Home) error_ = home_.warning;
-                if (homeState_.row() >= 0) {
-                    const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-                    prefetchHomeWindow(homeState_.row(),
-                                       homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
-                }
-                const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                        std::chrono::steady_clock::now() - homeLoadStarted)
-                                        .count();
-                __android_log_print(ANDROID_LOG_INFO, kTag, "Home primary rows ready in %lld ms",
-                                    static_cast<long long>(coreMs));
-                if (!pendingDeepLinkItemId_.empty()) {
-                    JellyfinItem linked;
-                    linked.id = std::move(pendingDeepLinkItemId_);
-                    pendingDeepLinkItemId_.clear();
-                    __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_VIEW Jellyfin item %s",
-                                        linked.id.c_str());
-                    openDetails(linked);
-                    return;
-                }
-                if (!pendingSearchQuery_.empty()) {
-                    searchState_.setQuery(std::move(pendingSearchQuery_));
-                    pendingSearchQuery_.clear();
-                    searchState_.setKeyboard(false);
-                    pushScreen(Screen::Search);
-                    __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_SEARCH query");
-                    searchAsync();
-                    return;
-                }
-            }
-
-            refreshSeerrPendingAsync();
-
-            tasks_.submit(
-                [this, session, generation, views = std::move(views), homeSnapshot, coreRestoredRow, homeLoadStarted] {
-                    auto secondary = api_.loadHomeSecondary(session, views);
-                    if (!requestEpochs_.home.active(generation)) return;
-                    std::scoped_lock lock(stateMutex_);
-                    if (!secondary.ok) {
-                        if (!home_.warning.empty()) home_.warning += " | ";
-                        home_.warning += "SECONDARY HOME ROWS UNAVAILABLE";
-                        if (screen_ == Screen::Home) error_ = home_.warning;
-                        return;
-                    }
-
-                    filterHiddenHomeItems(secondary.value);
-                    const size_t baseRowCount = home_.rows.size();
-                    for (auto& section : secondary.value.rows) {
-                        const int restoredSelection = HomeScreenState::restoredSelection(homeSnapshot, section);
-                        const bool focusAppended = !homeSnapshot.toolbarFocused &&
-                                                   section.title == homeSnapshot.focusedRowTitle &&
-                                                   homeState_.row() == coreRestoredRow;
-                        home_.rows.push_back(std::move(section));
-                        homeState_.appendSelection(restoredSelection);
-                        if (focusAppended) homeState_.setRow(static_cast<int>(home_.rows.size()) - 1);
-                    }
-                    if (!secondary.value.warning.empty()) {
-                        if (!home_.warning.empty()) home_.warning += " | ";
-                        home_.warning += secondary.value.warning;
-                        if (screen_ == Screen::Home) error_ = home_.warning;
-                    }
-                    homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-                    if (homeState_.row() >= static_cast<int>(baseRowCount) &&
-                        homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
-                        const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-                        prefetchHomeWindow(homeState_.row(),
-                                           homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
-                    }
-                    const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                            std::chrono::steady_clock::now() - homeLoadStarted)
-                                            .count();
-                    __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms",
-                                        static_cast<long long>(fullMs));
-                });
+            asyncCompletions_.push(HomeCoreCompletion{
+                .generation = generation,
+                .snapshot = std::move(homeSnapshot),
+                .restorePlan = std::move(restorePlan),
+                .views = std::move(views),
+                .startedAt = homeLoadStarted,
+                .result = std::move(core),
+            });
         });
     }
 
@@ -5127,6 +5031,140 @@ private:
         loading_ = false;
         accountState_.endQuickConnect();
         error_ = "QUICK CONNECT TIMED OUT - TRY AGAIN";
+    }
+
+    void applyAsyncCompletion(HomeCoreCompletion& completion) {
+        if (!requestEpochs_.home.active(completion.generation)) return;
+        homeLoading_ = false;
+        if (!completion.result.ok) {
+            const std::string& error = completion.result.error;
+            if (error.find("HTTP 401") != std::string::npos) {
+                homeRetryAt_ = {};
+                homeRetryAttempt_ = 0;
+                const JellyfinSession expired = session_;
+                artwork_.eraseProfile(expired, renderer_);
+                sessionRegistry_.removeIdentity(expired);
+                requestEpochs_.invalidateAll();
+                loading_ = false;
+                mutationLoading_ = false;
+                searchState_.setLoading(false);
+                session_.token.clear();
+                session_.userId.clear();
+                settings_.seerrSessionCookie.clear();
+                seerrStorageState_.clearTargets();
+                resetNavigation(Screen::Login);
+                error_ = "SESSION EXPIRED - LOG IN AGAIN";
+                saveSession(session_);
+                return;
+            }
+            if (isTransientHomeLoadError(error)) {
+                const int delaySeconds = std::min(30, 1 << std::min(homeRetryAttempt_, 5));
+                ++homeRetryAttempt_;
+                homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(delaySeconds);
+                __android_log_print(ANDROID_LOG_WARN, kTag,
+                                    "Home load failed transiently; retrying in %d seconds: %s", delaySeconds,
+                                    error.c_str());
+            } else {
+                homeRetryAt_ = {};
+                homeRetryAttempt_ = 0;
+            }
+            if (screen_ == Screen::Home) error_ = error;
+            return;
+        }
+
+        std::vector<JellyfinItem> views = std::move(completion.views);
+        const int coreRestoredRow = completion.restorePlan.focusedRow;
+        homeRetryAt_ = {};
+        homeRetryAttempt_ = 0;
+        home_ = std::move(completion.result.value);
+        homeState_.setSelections(std::move(completion.restorePlan.selections));
+        homeState_.setRow(coreRestoredRow);
+        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+        syncSeerrHomeRowLocked();
+        if (screen_ == Screen::Home) error_ = home_.warning;
+        if (homeState_.row() >= 0) {
+            const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+            prefetchHomeWindow(homeState_.row(),
+                               homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+        }
+        const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now() - completion.startedAt)
+                                .count();
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Home primary rows ready in %lld ms",
+                            static_cast<long long>(coreMs));
+        if (!pendingDeepLinkItemId_.empty()) {
+            JellyfinItem linked;
+            linked.id = std::move(pendingDeepLinkItemId_);
+            pendingDeepLinkItemId_.clear();
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_VIEW Jellyfin item %s", linked.id.c_str());
+            openDetails(linked);
+            return;
+        }
+        if (!pendingSearchQuery_.empty()) {
+            searchState_.setQuery(std::move(pendingSearchQuery_));
+            pendingSearchQuery_.clear();
+            searchState_.setKeyboard(false);
+            pushScreen(Screen::Search);
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_SEARCH query");
+            searchAsync();
+            return;
+        }
+
+        refreshSeerrPendingAsync();
+        const JellyfinSession session = session_;
+        const uint64_t generation = completion.generation;
+        HomeSelectionSnapshot snapshot = completion.snapshot;
+        const auto startedAt = completion.startedAt;
+        tasks_.submit([this, session, generation, views = std::move(views), snapshot = std::move(snapshot),
+                       coreRestoredRow, startedAt]() mutable {
+            auto secondary = api_.loadHomeSecondary(session, views);
+            if (secondary.ok) filterHiddenHomeItems(secondary.value);
+            asyncCompletions_.push(HomeSecondaryCompletion{
+                .generation = generation,
+                .snapshot = std::move(snapshot),
+                .coreRestoredRow = coreRestoredRow,
+                .startedAt = startedAt,
+                .result = std::move(secondary),
+            });
+        });
+    }
+
+    void applyAsyncCompletion(HomeSecondaryCompletion& completion) {
+        if (!requestEpochs_.home.active(completion.generation)) return;
+        if (!completion.result.ok) {
+            if (!home_.warning.empty()) home_.warning += " | ";
+            home_.warning += "SECONDARY HOME ROWS UNAVAILABLE";
+            if (screen_ == Screen::Home) error_ = home_.warning;
+            return;
+        }
+
+        const size_t baseRowCount = home_.rows.size();
+        for (auto& section : completion.result.value.rows) {
+            const int restoredSelection = HomeScreenState::restoredSelection(completion.snapshot, section);
+            const bool focusAppended = !completion.snapshot.toolbarFocused &&
+                                       section.title == completion.snapshot.focusedRowTitle &&
+                                       homeState_.row() == completion.coreRestoredRow;
+            home_.rows.push_back(std::move(section));
+            homeState_.appendSelection(restoredSelection);
+            if (focusAppended) homeState_.setRow(static_cast<int>(home_.rows.size()) - 1);
+        }
+        if (!completion.result.value.warning.empty()) {
+            if (!home_.warning.empty()) home_.warning += " | ";
+            home_.warning += completion.result.value.warning;
+            if (screen_ == Screen::Home) error_ = home_.warning;
+        }
+        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+        if (homeState_.row() >= static_cast<int>(baseRowCount) &&
+            homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
+            const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+            prefetchHomeWindow(homeState_.row(),
+                               homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+        }
+        const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now() - completion.startedAt)
+                                .count();
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms",
+                            static_cast<long long>(fullMs));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
