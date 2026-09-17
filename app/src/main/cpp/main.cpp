@@ -38,6 +38,7 @@
 #include "search_screen.hpp"
 #include "seerr.hpp"
 #include "seerr_domain.hpp"
+#include "seerr_home_projection.hpp"
 #include "seerr_jellyfin_adapter.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
@@ -3641,19 +3642,7 @@ private:
 
     void syncSeerrHomeRowLocked() {
         const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
-        std::erase_if(home_.rows, [](const JellyfinHomeRow& row) { return row.title == "Seerr requests"; });
-        const auto& pendingMedia = seerrRequestState_.pending();
-        if (!pendingMedia.empty()) {
-            std::vector<JellyfinItem> pendingItems;
-            pendingItems.reserve(pendingMedia.size());
-            for (const auto& media : pendingMedia) pendingItems.push_back(jellyfinItemFromSeerrMedia(media));
-            const auto insertAt =
-                home_.rows.begin() + static_cast<std::ptrdiff_t>(std::min<size_t>(1, home_.rows.size()));
-            home_.rows.insert(insertAt, JellyfinHomeRow{
-                                            .title = "Seerr requests",
-                                            .items = std::move(pendingItems),
-                                        });
-        }
+        projectSeerrHomeRow(home_.rows, seerrRequestState_.pending());
         HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home_.rows);
         homeState_.setSelections(std::move(restore.selections));
         homeState_.setRow(restore.focusedRow);

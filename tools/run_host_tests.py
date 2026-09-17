@@ -54,6 +54,7 @@ CPP_TESTS = [
     "search_screen_test.cpp",
     "seerr_connection_state_test.cpp",
     "seerr_domain_test.cpp",
+    "seerr_home_projection_test.cpp",
     "seerr_media_test.cpp",
     "seerr_request_state_test.cpp",
     "seerr_search_state_test.cpp",
