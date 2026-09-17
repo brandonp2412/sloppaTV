@@ -55,6 +55,12 @@ struct PlaybackFallbackPlan {
     bool forceTranscode = false;
 };
 
+struct PlaybackSubtitleFallbackPlan {
+    bool retry = false;
+    int failedSubtitleStreamIndex = kSubtitleOffIndex;
+    int audioStreamIndex = -1;
+};
+
 struct PlaybackTransitionPlan {
     int startPositionMs = 0;
     int durationMs = 0;
@@ -145,6 +151,31 @@ inline PlaybackFallbackPlan planPlaybackFallback(
     } else {
         plan.forceTranscode = true;
     }
+    return plan;
+}
+
+inline PlaybackSubtitleFallbackPlan planPlaybackSubtitleFallback(
+    const JellyfinItem& item,
+    const PlaybackTarget& target,
+    const PlayerTrackState& trackState
+) {
+    PlaybackSubtitleFallbackPlan plan;
+    plan.failedSubtitleStreamIndex = trackState.selectedSubtitleServerIndex();
+    plan.audioStreamIndex = trackState.selectedAudioServerIndex();
+    const auto selectedSubtitle = std::find_if(
+        item.subtitles.begin(),
+        item.subtitles.end(),
+        [&](const JellyfinSubtitleStream& subtitle) {
+            return subtitle.index == plan.failedSubtitleStreamIndex;
+        }
+    );
+    const bool subtitleRequiresServerTranscode = selectedSubtitle != item.subtitles.end()
+        && subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ServerTranscode;
+    plan.retry = shouldRetryFailedSubtitleTranscode(
+        target.playMethod == PlaybackMethod::Transcode,
+        plan.failedSubtitleStreamIndex,
+        subtitleRequiresServerTranscode
+    );
     return plan;
 }
 
@@ -364,6 +395,14 @@ public:
             continuationState_,
             autoplayNext,
             stillWatchingAfter
+        );
+    }
+
+    [[nodiscard]] PlaybackSubtitleFallbackPlan subtitleFallbackPlan() const {
+        return planPlaybackSubtitleFallback(
+            sessionState_.activeItem(),
+            sessionState_.activeTarget(),
+            trackState_
         );
     }
 

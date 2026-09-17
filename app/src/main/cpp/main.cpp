@@ -4447,28 +4447,15 @@ private:
     }
 
     bool retryPlaybackWithoutSubtitle() {
-        const int selectedSubtitleIndex = trackState_.selectedSubtitleServerIndex();
-        const auto selectedSubtitle = std::find_if(
-            playbackSessionState_.activeItem().subtitles.begin(),
-            playbackSessionState_.activeItem().subtitles.end(),
-            [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == selectedSubtitleIndex; }
-        );
-        const bool subtitleRequiresServerTranscode = selectedSubtitle != playbackSessionState_.activeItem().subtitles.end()
-            && subtitleStrategy(selectedSubtitle->codec) == SubtitleStrategy::ServerTranscode;
-        if (!shouldRetryFailedSubtitleTranscode(
-                playbackSessionState_.activeTarget().playMethod == PlaybackMethod::Transcode,
-                selectedSubtitleIndex,
-                subtitleRequiresServerTranscode
-            )) {
-            return false;
-        }
+        const PlaybackSubtitleFallbackPlan plan = playbackCoordinator_.subtitleFallbackPlan();
+        if (!plan.retry) return false;
         __android_log_print(
             ANDROID_LOG_WARN,
             kTag,
             "Subtitle-selected transcode failed; retrying item without subtitles (stream %d)",
-            selectedSubtitleIndex
+            plan.failedSubtitleStreamIndex
         );
-        restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(), kSubtitleOffIndex);
+        restartPlaybackAt(playerScreenState_.positionMs(), plan.audioStreamIndex, kSubtitleOffIndex);
         return true;
     }
 

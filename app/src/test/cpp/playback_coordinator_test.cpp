@@ -63,6 +63,25 @@ int main() {
     assert(coordinator.session().activeTarget().fallbackTranscodeUrl.empty());
     assert(coordinator.session().activeTarget().playMethod == PlaybackMethod::DirectStream);
 
+    PlaybackCoordinator subtitleCoordinator;
+    JellyfinItem subtitleFallbackItem;
+    subtitleFallbackItem.id = "subtitle-fallback";
+    subtitleFallbackItem.subtitles = {
+        {.index = 7, .codec = "unknown-subtitle-codec", .language = "eng", .title = "English"},
+    };
+    PlaybackTarget subtitleFallbackTarget;
+    subtitleFallbackTarget.url = "https://media.example/subtitle-fallback";
+    subtitleFallbackTarget.playMethod = PlaybackMethod::Transcode;
+    subtitleCoordinator.activate(subtitleFallbackItem, subtitleFallbackTarget, now);
+    subtitleCoordinator.tracks().setSelectedAudioServerIndex(3);
+    subtitleCoordinator.tracks().setSelectedSubtitleServerIndex(7);
+    auto subtitleFallbackPlan = subtitleCoordinator.subtitleFallbackPlan();
+    assert(subtitleFallbackPlan.retry);
+    assert(subtitleFallbackPlan.failedSubtitleStreamIndex == 7);
+    assert(subtitleFallbackPlan.audioStreamIndex == 3);
+    subtitleCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
+    assert(!subtitleCoordinator.subtitleFallbackPlan().retry);
+
     telemetry.beginPlayback(now - 11s);
 
     auto plan = planPlaybackTick(
