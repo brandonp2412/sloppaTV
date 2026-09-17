@@ -72,6 +72,10 @@ int main() {
     state.moveSelection(0, 1, 5);
     assert(state.selectedRow() == SearchScreenState::kSeerrRow);
     assert(state.results()[static_cast<size_t>(state.selection())].id == "seerr:tv:300");
+    const auto* selectedSeerr = state.selectedSeerrResult();
+    assert(selectedSeerr);
+    assert(selectedSeerr->id == "seerr:tv:300");
+    assert(selectedSeerr->jellyfinId == "jellyfin-series-300");
     state.moveSelection(0, 1, 5);
     assert(state.selectedRow() == SearchScreenState::kEpisodeRow);
     state.moveSelection(0, -1, 5);
@@ -79,6 +83,7 @@ int main() {
     state.moveSelection(0, -1, 5);
     assert(state.selectedRow() == SearchScreenState::kLibraryRow);
     assert(state.selectionOnFirstResultRow());
+    assert(state.selectedSeerrResult() == nullptr);
 
     state.markSeerrRequested("seerr:tv:300", "Episode 1 queued", 42);
     const auto requested = std::find_if(state.results().begin(), state.results().end(),

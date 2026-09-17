@@ -1432,13 +1432,13 @@ private:
         if (results.empty()) return;
         if (isItemContextKey(key)) {
             const auto& selected = results[static_cast<size_t>(searchState_.selection())];
-            if (!isSeerrItem(selected)) openItemMenuForItem(selected);
+            if (searchState_.selectedSeerrResult() == nullptr) openItemMenuForItem(selected);
             return;
         }
         if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
             const auto selected = results[static_cast<size_t>(searchState_.selection())];
-            if (isSeerrItem(selected))
-                requestSeerrItemAsync(selected);
+            if (const auto* seerrItem = searchState_.selectedSeerrResult())
+                requestSeerrMediaAsync(*seerrItem);
             else
                 openDetails(selected);
             return;
@@ -3682,13 +3682,6 @@ private:
             }
             syncSeerrHomeRowLocked();
         });
-    }
-
-    void requestSeerrItemAsync(const JellyfinItem& item, const SeerrStorageTarget* selectedTarget = nullptr,
-                               bool skipDrivePrompt = false) {
-        const auto media = seerrMediaFromJellyfinItem(item);
-        if (!media) return;
-        requestSeerrMediaAsync(*media, selectedTarget, skipDrivePrompt);
     }
 
     void requestSeerrMediaAsync(const SeerrMediaItem& item, const SeerrStorageTarget* selectedTarget = nullptr,

@@ -92,6 +92,18 @@ public:
 
     [[nodiscard]] bool selectionOnFirstResultRow() const { return selectedRow() == firstPopulatedRow(); }
 
+    [[nodiscard]] const SeerrMediaItem* selectedSeerrResult() const {
+        if (selectedRow() != kSeerrRow) return nullptr;
+        const int selectedLocal = selection_ - rowStart(kSeerrRow);
+        int visibleLocal = 0;
+        for (const auto& item : seerrSearch_.results()) {
+            if (duplicatesLocalLibrary(item)) continue;
+            if (visibleLocal == selectedLocal) return &item;
+            ++visibleLocal;
+        }
+        return nullptr;
+    }
+
     [[nodiscard]] int firstVisibleInRow(int row, int columns) const {
         if (row < 0 || row >= kRowCount || columns <= 0) return 0;
         return std::clamp(firstVisible_[static_cast<size_t>(row)], 0, std::max(0, rowItemCount(row) - columns));
