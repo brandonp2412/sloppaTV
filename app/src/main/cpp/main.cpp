@@ -1285,17 +1285,21 @@ private:
         } else if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && !items.empty()) {
             const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
             const auto& selected = items[static_cast<size_t>(selection)];
-            if (section.title == "My Media")
+            if (section.title == "My Media") {
                 openLibrary(selected);
-            else if (isSeerrItem(selected) && !selected.externalJellyfinId.empty()) {
-                JellyfinItem available = selected;
-                available.id = selected.externalJellyfinId;
-                available.externalSource.clear();
-                openDetails(available);
-            } else if (isSeerrItem(selected))
-                openItemMenuForItem(selected);
-            else
+            } else if (const auto* seerrMedia =
+                           findSeerrHomeMedia(section.title, selected.id, seerrRequestState_.pending())) {
+                if (!seerrMedia->jellyfinId.empty()) {
+                    JellyfinItem available = selected;
+                    available.id = seerrMedia->jellyfinId;
+                    available.externalSource.clear();
+                    openDetails(available);
+                } else {
+                    openItemMenuForItem(selected);
+                }
+            } else {
                 openDetails(selected);
+            }
             return;
         }
         homeState_.updateViewport(static_cast<int>(home_.rows.size()));

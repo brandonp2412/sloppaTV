@@ -12,6 +12,14 @@
 
 inline constexpr std::string_view kSeerrHomeRowTitle = "Seerr requests";
 
+inline const SeerrMediaItem* findSeerrHomeMedia(std::string_view rowTitle, std::string_view itemId,
+                                                const std::vector<SeerrMediaItem>& pending) {
+    if (rowTitle != kSeerrHomeRowTitle || itemId.empty()) return nullptr;
+    const auto found = std::find_if(pending.begin(), pending.end(),
+                                    [&](const SeerrMediaItem& item) { return item.id == itemId; });
+    return found == pending.end() ? nullptr : &*found;
+}
+
 inline void projectSeerrHomeRow(std::vector<JellyfinHomeRow>& rows, const std::vector<SeerrMediaItem>& pending) {
     std::erase_if(rows, [](const JellyfinHomeRow& row) { return row.title == kSeerrHomeRowTitle; });
     if (pending.empty()) return;

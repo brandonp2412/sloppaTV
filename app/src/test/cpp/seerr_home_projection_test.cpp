@@ -37,6 +37,11 @@ int main() {
     assert(rows[1].items[0].externalSource == "seerr");
     assert(rows[1].items[0].externalRequestId == 110);
     assert(rows[1].items[1].id == "seerr:movie:20");
+    const auto* selected = findSeerrHomeMedia(rows[1].title, rows[1].items[1].id, pending);
+    assert(selected);
+    assert(selected->id == "seerr:movie:20");
+    assert(findSeerrHomeMedia("Latest movies", rows[1].items[1].id, pending) == nullptr);
+    assert(findSeerrHomeMedia(rows[1].title, "missing", pending) == nullptr);
 
     projectSeerrHomeRow(rows, {media("seerr:movie:30", 30)});
     assert(rows.size() == 3);
