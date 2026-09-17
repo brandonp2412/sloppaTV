@@ -36,6 +36,29 @@ int main() {
     assert(!coordinator.telemetry().playbackStartReported());
     assert(!coordinator.session().mediaSegmentsRequested());
     assert(!coordinator.continuation().nextEpisodeRequested());
+
+    PlaybackTarget coordinatedFallbackTarget;
+    coordinatedFallbackTarget.url = "https://media.example/direct";
+    coordinatedFallbackTarget.fallbackTranscodeUrl = "/master.m3u8?TranscodeReasons=ContainerNotSupported";
+    coordinator.activate(coordinatedItem, coordinatedFallbackTarget, now - 11s);
+    coordinator.session().beginPreparing(now - 1s);
+    assert(coordinator.telemetry().markPlaybackStartReported());
+    coordinator.telemetry().markPlaybackRead(now);
+    const auto coordinatedFallback = coordinator.fallbackPlan(true, 43210, true);
+    assert(coordinatedFallback.retry);
+    assert(coordinatedFallback.reportPrevious);
+    assert(coordinatedFallback.useOfferedTarget);
+    assert(coordinatedFallback.resumeTicks == 432'100'000);
+    coordinator.beginFallback();
+    assert(!coordinator.session().preparing());
+    assert(coordinator.session().fallbackAttempted());
+    assert(!coordinator.telemetry().playbackStartReported());
+    assert(coordinator.telemetry().shouldReadPlayback(now, false));
+    coordinator.useOfferedFallback(coordinatedFallback);
+    assert(coordinator.session().activeTarget().url == coordinatedFallbackTarget.fallbackTranscodeUrl);
+    assert(coordinator.session().activeTarget().fallbackTranscodeUrl.empty());
+    assert(coordinator.session().activeTarget().playMethod == PlaybackMethod::DirectStream);
+
     telemetry.beginPlayback(now - 11s);
 
     auto plan = planPlaybackTick(

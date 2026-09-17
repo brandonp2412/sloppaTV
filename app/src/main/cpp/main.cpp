@@ -4519,14 +4519,8 @@ private:
         __android_log_print(ANDROID_LOG_WARN, kTag, "Benchmark build refusing Jellyfin server playback fallback");
         return false;
 #else
-        const PlaybackFallbackPlan fallbackPlan = planPlaybackFallback(
-            playbackSessionState_.fallbackAttempted(),
-            playbackSessionState_.activeTarget().playMethod,
+        const PlaybackFallbackPlan fallbackPlan = playbackCoordinator_.fallbackPlan(
             session_.valid(),
-            playbackSessionState_.activeItem().id,
-            playbackSessionState_.activeTarget().url,
-            playbackSessionState_.activeTarget().fallbackTranscodeUrl,
-            telemetryState_.playbackStartReported(),
             playerScreenState_.positionMs(),
             preferServerStream
         );
@@ -4540,13 +4534,10 @@ private:
         item.positionTicks = resumeTicks;
 
         player_.stop();
-        playbackSessionState_.clearPreparing();
         videoSurface_.release();
-        telemetryState_.clearPlaybackStartReported();
-        playbackSessionState_.markFallbackAttempted();
+        playbackCoordinator_.beginFallback();
         playerScreenState_.setPositionMs(playbackPositionMsFromTicks(resumeTicks));
         playerScreenState_.setDurationMs(playbackPositionMsFromTicks(item.runtimeTicks));
-        telemetryState_.resetReadIntervals();
 
         // Some PlaybackInfo responses include a TranscodingUrl beside DirectPlay. Use
         // that immediately when available; it avoids a second round-trip to Jellyfin.
@@ -4560,7 +4551,7 @@ private:
                     );
                 });
             }
-            playbackSessionState_.activeTarget() = offeredPlaybackFallbackTarget(failedTarget, fallbackPlan);
+            playbackCoordinator_.useOfferedFallback(fallbackPlan);
             const bool directStreamFallback = fallbackPlan.offeredDirectStream;
 
             std::string surfaceError;

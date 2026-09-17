@@ -359,6 +359,35 @@ public:
         );
     }
 
+    [[nodiscard]] PlaybackFallbackPlan fallbackPlan(
+        bool jellyfinSessionValid,
+        int positionMs,
+        bool preferServerStream
+    ) const {
+        return planPlaybackFallback(
+            sessionState_.fallbackAttempted(),
+            sessionState_.activeTarget().playMethod,
+            jellyfinSessionValid,
+            sessionState_.activeItem().id,
+            sessionState_.activeTarget().url,
+            sessionState_.activeTarget().fallbackTranscodeUrl,
+            telemetryState_.playbackStartReported(),
+            positionMs,
+            preferServerStream
+        );
+    }
+
+    void beginFallback() {
+        sessionState_.clearPreparing();
+        telemetryState_.clearPlaybackStartReported();
+        sessionState_.markFallbackAttempted();
+        telemetryState_.resetReadIntervals();
+    }
+
+    void useOfferedFallback(const PlaybackFallbackPlan& plan) {
+        sessionState_.activeTarget() = offeredPlaybackFallbackTarget(sessionState_.activeTarget(), plan);
+    }
+
 private:
     PlaybackSessionState sessionState_;
     PlaybackTelemetryState telemetryState_;
