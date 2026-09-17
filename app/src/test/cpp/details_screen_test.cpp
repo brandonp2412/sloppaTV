@@ -96,14 +96,19 @@ int main() {
     assert(state.deleteConfirmationSelection() == 1);
 
     state.resetCastSelection();
-    state.moveCastSelection(series.people, 1, 0, 5);
+    auto castCommand = state.handleCastInput(CastScreenInput::Right, series.people, 5);
+    assert(castCommand.type == CastScreenCommandType::None);
     assert(state.castSelection() == 1);
-    state.moveCastSelection(series.people, 0, 1, 5);
+    castCommand = state.handleCastInput(CastScreenInput::Down, series.people, 5);
     assert(state.castSelection() == 5);
     assert(state.selectedCastPerson(series.people)->name == "Six");
-    state.moveCastSelection(series.people, 0, -1, 5);
+    castCommand = state.handleCastInput(CastScreenInput::Activate, series.people, 5);
+    assert(castCommand.type == CastScreenCommandType::OpenPerson);
+    castCommand = state.handleCastInput(CastScreenInput::Up, series.people, 5);
     assert(state.castSelection() == 0);
     assert(state.selectedCastPerson(series.people)->name == "One");
+    castCommand = state.handleCastInput(CastScreenInput::Back, series.people, 5);
+    assert(castCommand.type == CastScreenCommandType::Back);
 
     state.beginPerson(series.people.front());
     std::vector<JellyfinItem> personItems(6);

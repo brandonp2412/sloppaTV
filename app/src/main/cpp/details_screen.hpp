@@ -51,6 +51,26 @@ struct DetailsScreenCommand {
     DetailsScreenCommandType type = DetailsScreenCommandType::None;
 };
 
+enum class CastScreenInput {
+    None,
+    Back,
+    Left,
+    Right,
+    Up,
+    Down,
+    Activate,
+};
+
+enum class CastScreenCommandType {
+    None,
+    Back,
+    OpenPerson,
+};
+
+struct CastScreenCommand {
+    CastScreenCommandType type = CastScreenCommandType::None;
+};
+
 class DetailsScreenState {
 public:
     void reset() {
@@ -232,6 +252,28 @@ public:
     void setDeleteConfirmationSelection(int selection) { deleteConfirmationSelection_ = selection <= 0 ? 0 : 1; }
 
     void resetCastSelection() { castSelection_ = 0; }
+
+    [[nodiscard]] CastScreenCommand handleCastInput(CastScreenInput input, const std::vector<JellyfinPerson>& people,
+                                                    int columns) {
+        if (input == CastScreenInput::Back) return {.type = CastScreenCommandType::Back};
+        if (input == CastScreenInput::Activate) return {.type = CastScreenCommandType::OpenPerson};
+
+        int dx = 0;
+        int dy = 0;
+        if (input == CastScreenInput::Left)
+            dx = -1;
+        else if (input == CastScreenInput::Right)
+            dx = 1;
+        else if (input == CastScreenInput::Up)
+            dy = -1;
+        else if (input == CastScreenInput::Down)
+            dy = 1;
+        else
+            return {};
+
+        moveCastSelection(people, dx, dy, columns);
+        return {};
+    }
 
     [[nodiscard]] int castSelection() const { return castSelection_; }
 

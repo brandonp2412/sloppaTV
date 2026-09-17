@@ -2005,23 +2005,27 @@ private:
     }
 
     void handleCastKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
-            popScreen(Screen::Details);
-            return;
-        }
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            if (const auto* person = detailsState_.selectedCastPerson(detail_.people)) openPersonItems(*person);
-            return;
-        }
-        constexpr int columns = mediaGridColumns();
-        if (key == AKEYCODE_DPAD_LEFT)
-            detailsState_.moveCastSelection(detail_.people, -1, 0, columns);
+        CastScreenInput input = CastScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = CastScreenInput::Back;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = CastScreenInput::Left;
         else if (key == AKEYCODE_DPAD_RIGHT)
-            detailsState_.moveCastSelection(detail_.people, 1, 0, columns);
+            input = CastScreenInput::Right;
         else if (key == AKEYCODE_DPAD_UP)
-            detailsState_.moveCastSelection(detail_.people, 0, -1, columns);
+            input = CastScreenInput::Up;
         else if (key == AKEYCODE_DPAD_DOWN)
-            detailsState_.moveCastSelection(detail_.people, 0, 1, columns);
+            input = CastScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = CastScreenInput::Activate;
+
+        constexpr int columns = mediaGridColumns();
+        const CastScreenCommand command = detailsState_.handleCastInput(input, detail_.people, columns);
+        if (command.type == CastScreenCommandType::Back) {
+            popScreen(Screen::Details);
+        } else if (command.type == CastScreenCommandType::OpenPerson) {
+            if (const auto* person = detailsState_.selectedCastPerson(detail_.people)) openPersonItems(*person);
+        }
     }
 
     void openPersonItems(const JellyfinPerson& person) {
