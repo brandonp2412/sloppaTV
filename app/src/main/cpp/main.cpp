@@ -377,7 +377,18 @@ struct SeerrRequestCompletion {
     ApiValueResult<int> result;
 };
 
-using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion>;
+struct SeerrStorageRefreshCompletion {
+    SeerrEndpoint endpoint;
+    ApiValueResult<std::vector<SeerrStorageTarget>> result;
+};
+
+struct SeerrPendingRefreshCompletion {
+    SeerrEndpoint endpoint;
+    ApiValueResult<std::vector<SeerrMediaItem>> result;
+};
+
+using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
+                                     SeerrPendingRefreshCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3585,26 +3596,10 @@ private:
         if (!seerrStorageState_.beginRefresh(force, now)) return;
         tasks_.submit([this, endpoint] {
             auto result = seerr_.storageTargets(endpoint.server, endpoint.auth);
-            std::scoped_lock lock(stateMutex_);
-            const auto completion = seerrDomain_.completeStorageRefresh(
-                endpoint, seerrEndpoint(), result.ok, std::move(result.value), result.error,
-                std::chrono::steady_clock::now());
-            if (completion.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
-            if (completion.outcome == SeerrDomainState::RefreshOutcome::Failed) {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
-                if (completion.reconnect) {
-                    connectSeerrAsync(false);
-                    return;
-                }
-                if (completion.clearedPendingRequest) showNotice("SEERR STORAGE: " + result.error, 5s);
-                return;
-            }
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
-                                seerrStorageState_.targets().size());
-            if (seerrStorageState_.pendingRequest() && settings_.seerrSelectDrive) {
-                const auto item = seerrStorageState_.takePendingRequest();
-                if (item) openSeerrDrivePicker(*item);
-            }
+            asyncCompletions_.push(SeerrStorageRefreshCompletion{
+                .endpoint = endpoint,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -3657,23 +3652,10 @@ private:
         if (!seerrRequestState_.beginPendingRefresh()) return;
         tasks_.submit([this, endpoint] {
             auto result = seerr_.pendingRequests(endpoint.server, endpoint.auth, 20);
-            std::scoped_lock lock(stateMutex_);
-            const auto outcome = seerrDomain_.completePendingRefresh(
-                endpoint, seerrEndpoint(), result.ok, std::move(result.value), std::chrono::steady_clock::now());
-            if (outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
-            if (outcome == SeerrDomainState::RefreshOutcome::Failed) {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s",
-                                    result.error.c_str());
-                return;
-            }
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
-                                seerrRequestState_.pending().size());
-            if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
-                if (const SeerrMediaItem* current = seerrRequestState_.findPending(detail_.id)) {
-                    detail_ = jellyfinItemFromSeerrMedia(*current);
-                }
-            }
-            syncSeerrHomeRowLocked();
+            asyncCompletions_.push(SeerrPendingRefreshCompletion{
+                .endpoint = endpoint,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -4834,12 +4816,54 @@ private:
         refreshSeerrStorageAsync(true);
     }
 
+    void applyAsyncCompletion(SeerrStorageRefreshCompletion& completion) {
+        auto& result = completion.result;
+        const auto domainCompletion = seerrDomain_.completeStorageRefresh(
+            completion.endpoint, seerrEndpoint(), result.ok, std::move(result.value), result.error,
+            std::chrono::steady_clock::now());
+        if (domainCompletion.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
+        if (domainCompletion.outcome == SeerrDomainState::RefreshOutcome::Failed) {
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
+            if (domainCompletion.reconnect) {
+                connectSeerrAsync(false);
+                return;
+            }
+            if (domainCompletion.clearedPendingRequest) showNotice("SEERR STORAGE: " + result.error, 5s);
+            return;
+        }
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
+                            seerrStorageState_.targets().size());
+        if (seerrStorageState_.pendingRequest() && settings_.seerrSelectDrive) {
+            const auto item = seerrStorageState_.takePendingRequest();
+            if (item) openSeerrDrivePicker(*item);
+        }
+    }
+
+    void applyAsyncCompletion(SeerrPendingRefreshCompletion& completion) {
+        auto& result = completion.result;
+        const auto outcome = seerrDomain_.completePendingRefresh(
+            completion.endpoint, seerrEndpoint(), result.ok, std::move(result.value), std::chrono::steady_clock::now());
+        if (outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
+        if (outcome == SeerrDomainState::RefreshOutcome::Failed) {
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
+            return;
+        }
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
+                            seerrRequestState_.pending().size());
+        if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
+            if (const SeerrMediaItem* current = seerrRequestState_.findPending(detail_.id)) {
+                detail_ = jellyfinItemFromSeerrMedia(*current);
+            }
+        }
+        syncSeerrHomeRowLocked();
+    }
+
     void applyAsyncCompletions() {
         auto completions = asyncCompletions_.takeAll();
         if (completions.empty()) return;
         std::scoped_lock lock(stateMutex_);
-        for (const auto& completion : completions) {
-            std::visit([this](const auto& value) { applyAsyncCompletion(value); }, completion);
+        for (auto& completion : completions) {
+            std::visit([this](auto& value) { applyAsyncCompletion(value); }, completion);
         }
     }
 
