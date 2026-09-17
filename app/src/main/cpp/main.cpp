@@ -4650,24 +4650,17 @@ private:
         auto& target = transition.target;
         auto& item = transition.item;
         const bool streamRestart = transition.streamRestart;
-        const PlaybackTransitionPlan playbackPlan = planPlaybackTransition(
-            target,
+        const PlaybackTransitionPlan playbackPlan = playbackCoordinator_.activateTransition(
             item,
+            target,
             streamRestart,
             transition.restartPaused,
-            transition.audioStreamIndex
+            transition.audioStreamIndex,
+            static_cast<VideoZoomMode>(settings_.zoomMode),
+            std::chrono::steady_clock::now()
         );
-        transitionState_.setPauseAfterRestart(playbackPlan.pauseAfterRestart);
-        playbackCoordinator_.activate(item, target, std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
-        playbackSessionState_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
-        if (playbackPlan.resetContinuation) {
-            continuationState_.clearNextEpisode();
-            syncNextPlaybackFromQueue();
-        }
-        trackState_.resetPlayback();
-        trackState_.setSelectedAudioServerIndex(playbackPlan.selectedAudioServerIndex);
-        trackState_.setSelectedSubtitleServerIndex(playbackPlan.selectedSubtitleServerIndex);
+        if (playbackPlan.resetContinuation) syncNextPlaybackFromQueue();
         if (trackState_.selectedSubtitleServerIndex() >= 0) {
             const auto selectedSubtitle = std::find_if(
                 item.subtitles.begin(),
@@ -4686,8 +4679,6 @@ private:
                 }
             }
         }
-        if (playbackPlan.resetMediaSegments) playbackSessionState_.resetMediaSegments();
-        transitionState_.setLoading(false);
         if (!streamRestart) {
             if (screen_ == Screen::Player) replaceScreen(Screen::Player);
             else pushScreen(Screen::Player);

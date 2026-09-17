@@ -394,6 +394,32 @@ int main() {
     assert(transitionPlan.resetContinuation);
     assert(transitionPlan.resetMediaSegments);
 
+    PlaybackCoordinator transitionCoordinator;
+    transitionItem.id = "transition-item";
+    transitionTarget.url = "https://media.example/transition";
+    assert(transitionCoordinator.session().beginMediaSegmentsRequest(now));
+    assert(transitionCoordinator.continuation().beginNextEpisodeRequest(now));
+    transitionCoordinator.transition().setLoading(true);
+    transitionCoordinator.tracks().setSelectedAudioServerIndex(99);
+    auto activatedTransition = transitionCoordinator.activateTransition(
+        transitionItem,
+        transitionTarget,
+        false,
+        true,
+        -1,
+        VideoZoomMode::Fill,
+        now
+    );
+    assert(transitionCoordinator.session().activeItem().id == transitionItem.id);
+    assert(transitionCoordinator.session().activeTarget().url == transitionTarget.url);
+    assert(transitionCoordinator.session().zoomMode() == VideoZoomMode::Fill);
+    assert(!transitionCoordinator.session().mediaSegmentsRequested());
+    assert(!transitionCoordinator.continuation().nextEpisodeRequested());
+    assert(!transitionCoordinator.transition().loading());
+    assert(!transitionCoordinator.transition().pauseAfterRestart());
+    assert(transitionCoordinator.tracks().selectedAudioServerIndex() == activatedTransition.selectedAudioServerIndex);
+    assert(transitionCoordinator.tracks().selectedSubtitleServerIndex() == activatedTransition.selectedSubtitleServerIndex);
+
     transitionPlan = planPlaybackTransition(
         transitionTarget,
         transitionItem,
@@ -405,6 +431,27 @@ int main() {
     assert(transitionPlan.pauseAfterRestart);
     assert(!transitionPlan.resetContinuation);
     assert(!transitionPlan.resetMediaSegments);
+
+    PlaybackCoordinator restartTransitionCoordinator;
+    assert(restartTransitionCoordinator.session().beginMediaSegmentsRequest(now));
+    assert(restartTransitionCoordinator.continuation().beginNextEpisodeRequest(now));
+    restartTransitionCoordinator.transition().setLoading(true);
+    auto activatedRestart = restartTransitionCoordinator.activateTransition(
+        transitionItem,
+        transitionTarget,
+        true,
+        true,
+        7,
+        VideoZoomMode::Stretch,
+        now
+    );
+    assert(activatedRestart.pauseAfterRestart);
+    assert(restartTransitionCoordinator.transition().pauseAfterRestart());
+    assert(restartTransitionCoordinator.transition().loading() == false);
+    assert(restartTransitionCoordinator.session().mediaSegmentsRequested());
+    assert(restartTransitionCoordinator.continuation().nextEpisodeRequested());
+    assert(restartTransitionCoordinator.session().zoomMode() == VideoZoomMode::Stretch);
+    assert(restartTransitionCoordinator.tracks().selectedAudioServerIndex() == 7);
 
     transitionTarget.audioStreamIndex = 9;
     transitionPlan = planPlaybackTransition(

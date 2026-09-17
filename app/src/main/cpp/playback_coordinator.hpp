@@ -401,6 +401,34 @@ public:
         trackState_.resetSession();
     }
 
+    [[nodiscard]] PlaybackTransitionPlan activateTransition(
+        const JellyfinItem& item,
+        const PlaybackTarget& target,
+        bool streamRestart,
+        bool restartPaused,
+        int audioStreamIndex,
+        VideoZoomMode zoomMode,
+        TimePoint now
+    ) {
+        const PlaybackTransitionPlan plan = planPlaybackTransition(
+            target,
+            item,
+            streamRestart,
+            restartPaused,
+            audioStreamIndex
+        );
+        transitionState_.setPauseAfterRestart(plan.pauseAfterRestart);
+        activate(item, target, now);
+        sessionState_.setZoomMode(zoomMode);
+        if (plan.resetContinuation) continuationState_.clearNextEpisode();
+        trackState_.resetPlayback();
+        trackState_.setSelectedAudioServerIndex(plan.selectedAudioServerIndex);
+        trackState_.setSelectedSubtitleServerIndex(plan.selectedSubtitleServerIndex);
+        if (plan.resetMediaSegments) sessionState_.resetMediaSegments();
+        transitionState_.setLoading(false);
+        return plan;
+    }
+
     [[nodiscard]] PlaybackTickPlan tickPlan(
         bool playbackEnded,
         bool playbackPlaying,
