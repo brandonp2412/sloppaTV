@@ -123,6 +123,27 @@ int main() {
     assert(stagedRestart->restartPaused);
     assert(stagedRestart->audioStreamIndex == 6);
 
+    PlaybackCoordinator lifecycleCoordinator;
+    lifecycleCoordinator.activate(coordinatedItem, coordinatedTarget, now);
+    lifecycleCoordinator.tracks().setAudioLanguagePreference(std::string{"eng"});
+    lifecycleCoordinator.tracks().setSubtitleLanguagePreference(std::string{"spa"});
+    lifecycleCoordinator.transition().setLoading(true);
+    lifecycleCoordinator.finishStop();
+    assert(!lifecycleCoordinator.tracks().audioLanguagePreference().has_value());
+    assert(!lifecycleCoordinator.tracks().subtitleLanguagePreference().has_value());
+    assert(!lifecycleCoordinator.transition().loading());
+
+    lifecycleCoordinator.continuation().setStillWatchingPrompt(true);
+    lifecycleCoordinator.transition().setFallbackResolving(true);
+    lifecycleCoordinator.tracks().setSelectedAudioServerIndex(4);
+    assert(lifecycleCoordinator.telemetry().markPlaybackStartReported());
+    lifecycleCoordinator.resetSession();
+    assert(lifecycleCoordinator.session().activeItem().id.empty());
+    assert(!lifecycleCoordinator.telemetry().playbackStartReported());
+    assert(!lifecycleCoordinator.continuation().stillWatchingPrompt());
+    assert(!lifecycleCoordinator.transition().fallbackResolving());
+    assert(lifecycleCoordinator.tracks().selectedAudioServerIndex() == -1);
+
     telemetry.beginPlayback(now - 11s);
 
     auto plan = planPlaybackTick(

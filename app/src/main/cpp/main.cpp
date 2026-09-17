@@ -2621,14 +2621,9 @@ private:
         }
 
         queueState_.reset();
-        continuationState_.reset();
-        trackState_.clearLanguagePreferences();
-        transitionState_.reset();
+        playbackCoordinator_.resetSession();
         externalPlaybackState_.reset();
-        playbackSessionState_.reset();
-        telemetryState_.reset();
         playerScreenState_.resetSession();
-        trackState_.resetSession();
         clearTrickplayPreview();
 
         if (hadAuthenticatedSession) {
@@ -5037,8 +5032,7 @@ private:
         releaseActivePlayback(true, completed);
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
-        trackState_.clearLanguagePreferences();
-        transitionState_.setLoading(false);
+        playbackCoordinator_.finishStop();
         if (screen_ == Screen::Player) popScreen(Screen::Details);
         if (app_->window && !renderer_.ready()) renderer_.init(app_->window);
         loadHomeAsync();

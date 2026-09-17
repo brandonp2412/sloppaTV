@@ -388,6 +388,19 @@ public:
         trackState_.resetPlayback();
     }
 
+    void finishStop() {
+        trackState_.clearLanguagePreferences();
+        transitionState_.setLoading(false);
+    }
+
+    void resetSession() {
+        continuationState_.reset();
+        transitionState_.reset();
+        sessionState_.reset();
+        telemetryState_.reset();
+        trackState_.resetSession();
+    }
+
     [[nodiscard]] PlaybackTickPlan tickPlan(
         bool playbackEnded,
         bool playbackPlaying,
