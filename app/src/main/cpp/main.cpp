@@ -5010,18 +5010,24 @@ private:
     }
 
     void reportProgressAsync(bool immediate) {
-        if (screen_ != Screen::Player || !playbackSessionState_.activeTarget().url.size() || !session_.valid() || !telemetryState_.playbackStartReported()) return;
-        if (!immediate && player_.status() == PlayerStatus::Preparing) return;
-        const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
-        const bool paused = player_.status() == PlayerStatus::Paused;
+        const PlayerStatus status = player_.status();
+        const PlaybackProgressPlan plan = playbackCoordinator_.progressPlan(
+            screen_ == Screen::Player,
+            session_.valid(),
+            immediate,
+            status == PlayerStatus::Preparing,
+            status == PlayerStatus::Paused,
+            playerScreenState_.positionMs()
+        );
+        if (!plan.report) return;
         const auto session = session_;
         const auto item = playbackSessionState_.activeItem();
         const auto target = playbackSessionState_.activeTarget();
-        tasks_.submit([this, session, item, target, ticks, paused] {
+        tasks_.submit([this, session, item, target, plan] {
             logPlaybackReportFailure(
-                paused ? "paused-progress" : "progress",
+                plan.paused ? "paused-progress" : "progress",
                 item.id,
-                api_.reportPlaybackProgress(session, item, target, ticks, paused)
+                api_.reportPlaybackProgress(session, item, target, plan.ticks, plan.paused)
             );
         });
     }

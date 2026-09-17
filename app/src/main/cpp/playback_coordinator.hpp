@@ -45,6 +45,12 @@ struct PlaybackReleasePlan {
     bool reportStop = false;
 };
 
+struct PlaybackProgressPlan {
+    int64_t ticks = 0;
+    bool report = false;
+    bool paused = false;
+};
+
 struct PlaybackFallbackPlan {
     int64_t resumeTicks = 0;
     bool retry = false;
@@ -121,6 +127,28 @@ inline PlaybackReleasePlan planPlaybackRelease(
         && sessionValid
         && !item.id.empty()
         && !target.url.empty();
+    return plan;
+}
+
+inline PlaybackProgressPlan planPlaybackProgress(
+    bool playerScreenActive,
+    bool jellyfinSessionValid,
+    bool playbackStartReported,
+    bool targetAvailable,
+    bool immediate,
+    bool preparing,
+    bool paused,
+    int positionMs
+) {
+    PlaybackProgressPlan plan;
+    plan.report = playerScreenActive
+        && jellyfinSessionValid
+        && playbackStartReported
+        && targetAvailable
+        && (immediate || !preparing);
+    if (!plan.report) return plan;
+    plan.ticks = playbackTicksFromPositionMs(positionMs);
+    plan.paused = paused;
     return plan;
 }
 
@@ -395,6 +423,26 @@ public:
             continuationState_,
             autoplayNext,
             stillWatchingAfter
+        );
+    }
+
+    [[nodiscard]] PlaybackProgressPlan progressPlan(
+        bool playerScreenActive,
+        bool jellyfinSessionValid,
+        bool immediate,
+        bool preparing,
+        bool paused,
+        int positionMs
+    ) const {
+        return planPlaybackProgress(
+            playerScreenActive,
+            jellyfinSessionValid,
+            telemetryState_.playbackStartReported(),
+            !sessionState_.activeTarget().url.empty(),
+            immediate,
+            preparing,
+            paused,
+            positionMs
         );
     }
 

@@ -29,6 +29,16 @@ int main() {
     const auto coordinatedRelease = coordinator.releasePlan(true, false, true, 12345);
     assert(coordinatedRelease.reportStop);
     assert(coordinatedRelease.reportTicks == 123'450'000);
+    auto coordinatedProgress = coordinator.progressPlan(true, true, false, false, true, 23456);
+    assert(coordinatedProgress.report);
+    assert(coordinatedProgress.paused);
+    assert(coordinatedProgress.ticks == 234'560'000);
+    coordinatedProgress = coordinator.progressPlan(true, true, false, true, false, 23456);
+    assert(!coordinatedProgress.report);
+    coordinatedProgress = coordinator.progressPlan(true, true, true, true, false, 23456);
+    assert(coordinatedProgress.report);
+    coordinatedProgress = coordinator.progressPlan(false, true, true, false, false, 23456);
+    assert(!coordinatedProgress.report);
     assert(coordinator.session().beginMediaSegmentsRequest(now));
     assert(coordinator.continuation().beginNextEpisodeRequest(now));
     coordinator.transition().setFallbackResolving(true);
@@ -40,6 +50,12 @@ int main() {
     assert(!coordinator.continuation().nextEpisodeRequested());
     assert(!coordinator.transition().fallbackResolving());
     assert(!coordinator.tracks().subtitleBusy());
+
+    coordinator.activate(coordinatedItem, coordinatedTarget, now);
+    assert(!coordinator.progressPlan(true, true, true, false, false, 1000).report);
+    assert(coordinator.telemetry().markPlaybackStartReported());
+    coordinator.session().activeTarget().url.clear();
+    assert(!coordinator.progressPlan(true, true, true, false, false, 1000).report);
 
     PlaybackTarget coordinatedFallbackTarget;
     coordinatedFallbackTarget.url = "https://media.example/direct";
