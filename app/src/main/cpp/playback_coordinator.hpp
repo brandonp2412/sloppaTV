@@ -58,6 +58,13 @@ struct PlaybackTelemetryReadPlan {
     int knownDurationMs = 0;
 };
 
+struct PlaybackPreparePlan {
+    int64_t elapsedMs = 0;
+    bool transcoding = false;
+    bool timedOut = false;
+    bool retryWithTranscodeFallback = false;
+};
+
 struct PlaybackWindowRestorePlan {
     bool restore = false;
     bool preservePlayer = false;
@@ -185,6 +192,19 @@ inline PlaybackProgressPlan planPlaybackProgress(
     if (!plan.report) return plan;
     plan.ticks = playbackTicksFromPositionMs(positionMs);
     plan.paused = paused;
+    return plan;
+}
+
+inline PlaybackPreparePlan planPlaybackPrepare(
+    bool transcoding,
+    PlaybackMethod method,
+    int64_t elapsedMs
+) {
+    PlaybackPreparePlan plan;
+    plan.elapsedMs = elapsedMs;
+    plan.transcoding = transcoding;
+    plan.timedOut = playbackPrepareTimedOut(transcoding, elapsedMs);
+    plan.retryWithTranscodeFallback = plan.timedOut && method != PlaybackMethod::Transcode;
     return plan;
 }
 
@@ -733,6 +753,22 @@ public:
             paused,
             positionMs
         );
+    }
+
+    void beginPreparing(TimePoint now) {
+        sessionState_.beginPreparing(now);
+    }
+
+    [[nodiscard]] PlaybackPreparePlan preparePlan(TimePoint now) {
+        return planPlaybackPrepare(
+            sessionState_.activeTarget().transcoding,
+            sessionState_.activeTarget().playMethod,
+            sessionState_.preparingElapsedMs(now)
+        );
+    }
+
+    void finishPreparing() {
+        sessionState_.clearPreparing();
     }
 
     [[nodiscard]] PlaybackWindowRestorePlan windowRestorePlan(

@@ -4387,7 +4387,7 @@ private:
     void startResolvedPlaybackTarget(const PlaybackTarget& target) {
         const auto now = std::chrono::steady_clock::now();
         const int startPositionMs = initialPlayerSeekMs(target.startTicks);
-        playbackSessionState_.beginPreparing(now);
+        playbackCoordinator_.beginPreparing(now);
         player_.startAsync(
             target.url,
             videoSurface_.surface(),
@@ -4768,17 +4768,17 @@ private:
         if (status == PlayerStatus::Preparing) {
             mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
             const auto now = std::chrono::steady_clock::now();
-            const int64_t preparingMs = playbackSessionState_.preparingElapsedMs(now);
-            if (playbackPrepareTimedOut(playbackSessionState_.activeTarget().transcoding, preparingMs)) {
+            const PlaybackPreparePlan preparePlan = playbackCoordinator_.preparePlan(now);
+            if (preparePlan.timedOut) {
                 std::scoped_lock lock(stateMutex_);
                 __android_log_print(
                     ANDROID_LOG_WARN,
                     kTag,
                     "Playback prepare timed out after %lld ms (%s)",
-                    static_cast<long long>(preparingMs),
-                    playbackSessionState_.activeTarget().transcoding ? "transcode" : "direct"
+                    static_cast<long long>(preparePlan.elapsedMs),
+                    preparePlan.transcoding ? "transcode" : "direct"
                 );
-                if (playbackSessionState_.activeTarget().playMethod != PlaybackMethod::Transcode && retryPlaybackWithTranscodeFallback()) {
+                if (preparePlan.retryWithTranscodeFallback && retryPlaybackWithTranscodeFallback()) {
                     error_.clear();
                     return;
                 }
@@ -4787,7 +4787,7 @@ private:
                 return;
             }
         } else {
-            playbackSessionState_.clearPreparing();
+            playbackCoordinator_.finishPreparing();
         }
         if (playbackCoordinator_.consumePauseAfterRestart(status == PlayerStatus::Playing)) {
             player_.togglePause();

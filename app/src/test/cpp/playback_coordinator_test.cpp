@@ -106,7 +106,7 @@ int main() {
     coordinatedFallbackTarget.url = "https://media.example/direct";
     coordinatedFallbackTarget.fallbackTranscodeUrl = "/master.m3u8?TranscodeReasons=ContainerNotSupported";
     coordinator.activate(coordinatedItem, coordinatedFallbackTarget, now - 11s);
-    coordinator.session().beginPreparing(now - 1s);
+    coordinator.beginPreparing(now - 1s);
     assert(coordinator.telemetry().markPlaybackStartReported());
     coordinator.telemetry().markPlaybackRead(now);
     const auto coordinatedFallback = coordinator.fallbackPlan(true, 43210, true);
@@ -123,6 +123,30 @@ int main() {
     assert(coordinator.session().activeTarget().url == coordinatedFallbackTarget.fallbackTranscodeUrl);
     assert(coordinator.session().activeTarget().fallbackTranscodeUrl.empty());
     assert(coordinator.session().activeTarget().playMethod == PlaybackMethod::DirectStream);
+
+    PlaybackCoordinator prepareCoordinator;
+    PlaybackTarget prepareTarget;
+    prepareTarget.url = "https://media.example/prepare";
+    prepareTarget.playMethod = PlaybackMethod::DirectPlay;
+    prepareTarget.transcoding = false;
+    prepareCoordinator.activate(coordinatedItem, prepareTarget, now);
+    prepareCoordinator.beginPreparing(now - 15s);
+    auto preparePlan = prepareCoordinator.preparePlan(now);
+    assert(preparePlan.elapsedMs == 15000);
+    assert(!preparePlan.transcoding);
+    assert(preparePlan.timedOut);
+    assert(preparePlan.retryWithTranscodeFallback);
+    prepareCoordinator.finishPreparing();
+    assert(!prepareCoordinator.session().preparing());
+    prepareTarget.playMethod = PlaybackMethod::Transcode;
+    prepareTarget.transcoding = true;
+    prepareCoordinator.activate(coordinatedItem, prepareTarget, now);
+    prepareCoordinator.beginPreparing(now - 30s);
+    preparePlan = prepareCoordinator.preparePlan(now);
+    assert(preparePlan.elapsedMs == 30000);
+    assert(preparePlan.transcoding);
+    assert(preparePlan.timedOut);
+    assert(!preparePlan.retryWithTranscodeFallback);
 
     PlaybackCoordinator subtitleCoordinator;
     JellyfinItem subtitleFallbackItem;
