@@ -1817,18 +1817,19 @@ private:
 
     void refreshPlaybackTelemetry(bool force = false) {
         const auto now = std::chrono::steady_clock::now();
-        if (!telemetryState_.shouldReadPlayback(now, force)) return;
+        const PlaybackTelemetryReadPlan plan = playbackCoordinator_.consumeTelemetryRead(
+            now,
+            force,
+            playerScreenState_.durationMs()
+        );
+        if (!plan.read) return;
         playerScreenState_.applyObservedPosition(player_.positionMs(), now);
-        if (playbackSessionState_.activeItem().runtimeTicks > 0) {
-            playerScreenState_.setDurationMs(playbackPositionMsFromTicks(playbackSessionState_.activeItem().runtimeTicks));
-        } else if (force || playerScreenState_.durationMs() <= 0) {
-            if (telemetryState_.shouldProbeDuration(now, force)) {
-                const int duration = player_.durationMs();
-                if (duration > 0) playerScreenState_.setDurationMs(duration);
-                telemetryState_.markDurationProbe(now);
-            }
+        if (plan.knownDurationMs > 0) {
+            playerScreenState_.setDurationMs(plan.knownDurationMs);
+        } else if (plan.probeDuration) {
+            const int duration = player_.durationMs();
+            if (duration > 0) playerScreenState_.setDurationMs(duration);
         }
-        telemetryState_.markPlaybackRead(now);
     }
 
     std::string playerTrackLabel(int type) const {
@@ -4861,7 +4862,7 @@ private:
         }
 
         const auto now = std::chrono::steady_clock::now();
-        const PlaybackTickPlan plan = playbackCoordinator_.tickPlan(
+        const PlaybackTickPlan plan = playbackCoordinator_.consumeTickPlan(
             playbackEnded,
             status == PlayerStatus::Playing,
             playerScreenState_.positionMs(),
@@ -4876,7 +4877,7 @@ private:
             );
         }
         if (plan.requestMediaSegments) requestMediaSegmentsAsync();
-        if (plan.reportPlaybackStart && telemetryState_.markPlaybackStartReported()) {
+        if (plan.reportPlaybackStart) {
             const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
             const auto session = session_;
             const auto itemCopy = playbackSessionState_.activeItem();
@@ -4889,10 +4890,7 @@ private:
                 );
             });
         }
-        if (plan.reportProgress) {
-            telemetryState_.markProgressReport(now);
-            reportProgressAsync(false);
-        }
+        if (plan.reportProgress) reportProgressAsync(false);
         if (plan.requestNextEpisode) requestNextEpisodeAsync();
 
         const PlaybackContinuationPlan continuationPlan = playbackCoordinator_.continuationPlan(

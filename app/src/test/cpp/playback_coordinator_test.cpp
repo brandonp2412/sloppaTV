@@ -203,6 +203,40 @@ int main() {
     assert(continuationCoordinator.finishAdjacentEpisodeLookup(continuationEpisode.id));
     assert(!continuationCoordinator.continuation().adjacentEpisodeLookupInProgress());
 
+    PlaybackCoordinator telemetryCoordinator;
+    JellyfinItem telemetryItem = coordinatedItem;
+    telemetryItem.runtimeTicks = 600'000'000;
+    telemetryCoordinator.activate(telemetryItem, coordinatedTarget, now - 11s);
+    auto telemetryRead = telemetryCoordinator.consumeTelemetryRead(now, false, 0);
+    assert(telemetryRead.read);
+    assert(!telemetryRead.probeDuration);
+    assert(telemetryRead.knownDurationMs == 60000);
+    assert(!telemetryCoordinator.consumeTelemetryRead(now, false, 0).read);
+
+    JellyfinItem unknownDurationItem = telemetryItem;
+    unknownDurationItem.runtimeTicks = 0;
+    telemetryCoordinator.activate(unknownDurationItem, coordinatedTarget, now - 11s);
+    telemetryRead = telemetryCoordinator.consumeTelemetryRead(now, false, 0);
+    assert(telemetryRead.read);
+    assert(telemetryRead.probeDuration);
+    assert(telemetryRead.knownDurationMs == 0);
+    telemetryRead = telemetryCoordinator.consumeTelemetryRead(now + 300ms, false, 0);
+    assert(telemetryRead.read);
+    assert(!telemetryRead.probeDuration);
+    telemetryRead = telemetryCoordinator.consumeTelemetryRead(now + 3s, false, 0);
+    assert(telemetryRead.read);
+    assert(telemetryRead.probeDuration);
+
+    PlaybackCoordinator tickCoordinator;
+    tickCoordinator.activate(coordinatedItem, coordinatedTarget, now - 11s);
+    auto consumedTick = tickCoordinator.consumeTickPlan(false, true, 35000, "Episode", now);
+    assert(consumedTick.reportPlaybackStart);
+    assert(consumedTick.reportProgress);
+    assert(tickCoordinator.telemetry().playbackStartReported());
+    consumedTick = tickCoordinator.consumeTickPlan(false, true, 36000, "Episode", now);
+    assert(!consumedTick.reportPlaybackStart);
+    assert(!consumedTick.reportProgress);
+
     telemetry.beginPlayback(now - 11s);
 
     auto plan = planPlaybackTick(

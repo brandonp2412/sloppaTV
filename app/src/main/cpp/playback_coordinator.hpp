@@ -51,6 +51,12 @@ struct PlaybackProgressPlan {
     bool paused = false;
 };
 
+struct PlaybackTelemetryReadPlan {
+    bool read = false;
+    bool probeDuration = false;
+    int knownDurationMs = 0;
+};
+
 struct PlaybackFallbackPlan {
     int64_t resumeTicks = 0;
     bool retry = false;
@@ -556,6 +562,38 @@ public:
             continuationState_,
             now
         );
+    }
+
+    [[nodiscard]] PlaybackTickPlan consumeTickPlan(
+        bool playbackEnded,
+        bool playbackPlaying,
+        int positionMs,
+        std::string_view itemType,
+        TimePoint now
+    ) {
+        PlaybackTickPlan plan = tickPlan(playbackEnded, playbackPlaying, positionMs, itemType, now);
+        if (plan.reportPlaybackStart && !telemetryState_.markPlaybackStartReported()) {
+            plan.reportPlaybackStart = false;
+        }
+        if (plan.reportProgress) telemetryState_.markProgressReport(now);
+        return plan;
+    }
+
+    [[nodiscard]] PlaybackTelemetryReadPlan consumeTelemetryRead(
+        TimePoint now,
+        bool force,
+        int currentDurationMs
+    ) {
+        if (!telemetryState_.shouldReadPlayback(now, force)) return {};
+        PlaybackTelemetryReadPlan plan{.read = true};
+        if (sessionState_.activeItem().runtimeTicks > 0) {
+            plan.knownDurationMs = playbackPositionMsFromTicks(sessionState_.activeItem().runtimeTicks);
+        } else if ((force || currentDurationMs <= 0) && telemetryState_.shouldProbeDuration(now, force)) {
+            plan.probeDuration = true;
+            telemetryState_.markDurationProbe(now);
+        }
+        telemetryState_.markPlaybackRead(now);
+        return plan;
     }
 
     [[nodiscard]] PlaybackContinuationPlan continuationPlan(
