@@ -1473,8 +1473,7 @@ private:
     void handleDetailsKey(int32_t key) {
         if (key == AKEYCODE_BACK) {
             cancelContentLoadForNavigation();
-            continuationState_.setStillWatchingPrompt(false);
-            continuationState_.resetAutoplayChain();
+            playbackCoordinator_.resetContinuationPrompt();
             popScreen(Screen::Home);
             return;
         }
@@ -1530,8 +1529,7 @@ private:
             else if (action == "CAST") openCast();
             else if (action == "MORE") openItemMenu();
             else if (action == "BACK") {
-                continuationState_.setStillWatchingPrompt(false);
-                continuationState_.resetAutoplayChain();
+                playbackCoordinator_.resetContinuationPrompt();
                 popScreen(Screen::Home);
             }
         }
@@ -4065,8 +4063,7 @@ private:
         if (loading_ || detail_.type != "Series" || detail_.id.empty() || !session_.valid()) return;
         loading_ = true;
         error_.clear();
-        continuationState_.resetAutoplayChain();
-        continuationState_.setStillWatchingPrompt(false);
+        playbackCoordinator_.resetContinuationPrompt();
         trackState_.clearLanguagePreferences();
         const JellyfinSession session = session_;
         const JellyfinItem series = detail_;
@@ -4196,8 +4193,7 @@ private:
         } else {
             queueState_.reset();
         }
-        continuationState_.resetAutoplayChain();
-        continuationState_.setStillWatchingPrompt(false);
+        playbackCoordinator_.resetContinuationPrompt();
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -4407,13 +4403,12 @@ private:
 
     void showStillWatching(JellyfinItem nextItem) {
         releaseActivePlayback(true, true);
-        continuationState_.resetAutoplayChain();
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
         detail_ = std::move(nextItem);
         detailsState_.beginDetails();
         popScreen(Screen::Details);
-        continuationState_.setStillWatchingPrompt(true);
+        playbackCoordinator_.showStillWatchingPrompt();
         error_.clear();
     }
 

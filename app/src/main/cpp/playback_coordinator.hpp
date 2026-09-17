@@ -401,6 +401,16 @@ public:
         trackState_.resetSession();
     }
 
+    void resetContinuationPrompt() {
+        continuationState_.resetAutoplayChain();
+        continuationState_.setStillWatchingPrompt(false);
+    }
+
+    void showStillWatchingPrompt() {
+        continuationState_.resetAutoplayChain();
+        continuationState_.setStillWatchingPrompt(true);
+    }
+
     void beginPlaybackResolution(bool showTransitionLoading) {
         transitionState_.setLoading(showTransitionLoading);
         continuationState_.setStillWatchingPrompt(false);

@@ -454,6 +454,16 @@ int main() {
     assert(restartTransitionCoordinator.tracks().selectedAudioServerIndex() == 7);
 
     PlaybackCoordinator resolutionCoordinator;
+    resolutionCoordinator.continuation().incrementAutoplayChain();
+    resolutionCoordinator.continuation().setStillWatchingPrompt(true);
+    resolutionCoordinator.resetContinuationPrompt();
+    assert(resolutionCoordinator.continuation().autoplayChainCount() == 0);
+    assert(!resolutionCoordinator.continuation().stillWatchingPrompt());
+    resolutionCoordinator.continuation().incrementAutoplayChain();
+    resolutionCoordinator.showStillWatchingPrompt();
+    assert(resolutionCoordinator.continuation().autoplayChainCount() == 0);
+    assert(resolutionCoordinator.continuation().stillWatchingPrompt());
+
     resolutionCoordinator.continuation().setStillWatchingPrompt(true);
     resolutionCoordinator.beginPlaybackResolution(false);
     assert(!resolutionCoordinator.transition().loading());
