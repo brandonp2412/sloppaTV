@@ -156,9 +156,21 @@ public:
     }
 
     void replacePage(std::vector<JellyfinItem> items, int pageSize) {
+        std::string selectedId;
+        if (selection_ >= 0 && selection_ < static_cast<int>(items_.size())) {
+            selectedId = items_[static_cast<size_t>(selection_)].id;
+        }
         const int received = static_cast<int>(items.size());
         items_ = std::move(items);
         selection_ = 0;
+        if (!selectedId.empty()) {
+            const auto selected = std::find_if(items_.begin(), items_.end(), [&](const JellyfinItem& item) {
+                return item.id == selectedId;
+            });
+            if (selected != items_.end()) {
+                selection_ = static_cast<int>(std::distance(items_.begin(), selected));
+            }
+        }
         nextIndex_ = received;
         hasMore_ = mode_ != BrowseContentMode::Genres && received == pageSize;
     }

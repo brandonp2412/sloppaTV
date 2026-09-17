@@ -376,6 +376,10 @@ public:
 
     void popScreen(Screen fallback = Screen::Home) {
         screen_ = navigation_.popOr(fallback);
+        if (screen_ == Screen::Browse && session_.valid() && !loading_
+            && !browseState_.activeContainer().id.empty()) {
+            loadBrowsePageAsync(false);
+        }
     }
 
     ~SloppaApp() {
@@ -714,6 +718,9 @@ private:
                     player_.play();
                     mediaSession_.updateState(MediaSessionState::Playing, playerScreenState_.positionMs());
                     __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
+                } else if (screen_ == Screen::Browse && session_.valid() && !loading_
+                    && !browseState_.activeContainer().id.empty()) {
+                    loadBrowsePageAsync(false);
                 }
                 break;
             case APP_CMD_LOST_FOCUS:
@@ -3445,6 +3452,10 @@ private:
                 homeState_.setSelections(std::move(coreRestore.selections));
                 homeState_.setRow(coreRestoredRow);
                 homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+                // Reapply the locally cached Seerr request row immediately after
+                // replacing the Jellyfin home payload. Otherwise a request made
+                // from Search can disappear from Home until the next Seerr poll.
+                syncSeerrHomeRowLocked();
                 if (screen_ == Screen::Home) error_ = home_.warning;
                 if (homeState_.row() >= 0) {
                     const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
@@ -3553,6 +3564,7 @@ private:
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s", initiated.error.c_str());
                 }
                 seerrRetrySearchAfterConnect_ = false;
+                queuedSeerrRequestAfterConnect_ = {};
                 return;
             }
             auto authorized = api_.authorizeQuickConnectCode(jellyfin, initiated.value.code);
@@ -3566,6 +3578,7 @@ private:
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s", authorized.error.c_str());
                 }
                 seerrRetrySearchAfterConnect_ = false;
+                queuedSeerrRequestAfterConnect_ = {};
                 return;
             }
             auto authenticated = seerr_.authenticateQuickConnect(server, initiated.value);
@@ -3577,6 +3590,7 @@ private:
                 if (announce) error_ = "SEERR QUICK CONNECT: " + authenticated.error;
                 else __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s", authenticated.error.c_str());
                 seerrRetrySearchAfterConnect_ = false;
+                queuedSeerrRequestAfterConnect_ = {};
                 return;
             }
             settings_.seerrSessionCookie = std::move(authenticated.value);
@@ -3588,6 +3602,11 @@ private:
             __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
             refreshSeerrPendingAsync();
             refreshSeerrStorageAsync(true);
+            if (!queuedSeerrRequestAfterConnect_.id.empty()) {
+                JellyfinItem queued = queuedSeerrRequestAfterConnect_;
+                queuedSeerrRequestAfterConnect_ = {};
+                requestSeerrItemAsync(queued);
+            }
             if (seerrRetrySearchAfterConnect_ && screen_ == Screen::Search && !searchState_.query().empty()) {
                 seerrRetrySearchAfterConnect_ = false;
                 (void)searchState_.scheduleSeerrDebounce(std::chrono::steady_clock::now(), false);
@@ -3725,6 +3744,10 @@ private:
             std::scoped_lock lock(stateMutex_);
             if (settings_.seerrServer != server || seerrAuth().sessionCookie != auth.sessionCookie || seerrAuth().apiKey != auth.apiKey) {
                 seerrPendingLoading_ = false;
+                // A silent Quick Connect refresh can replace the Seerr cookie while
+                // this request is in flight. Retry with the new credentials instead
+                // of leaving Home without the pending-requests row.
+                seerrPendingRefreshAt_ = std::chrono::steady_clock::now();
                 return;
             }
             seerrPendingLoading_ = false;
@@ -3733,7 +3756,20 @@ private:
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
                 return;
             }
-            seerrPending_ = std::move(result.value);
+            auto refreshedPending = std::move(result.value);
+            const auto pendingNow = std::chrono::steady_clock::now();
+            if (pendingNow < seerrOptimisticPendingUntil_) {
+                for (const auto& local : seerrPending_) {
+                    const auto found = std::find_if(refreshedPending.begin(), refreshedPending.end(), [&](const JellyfinItem& item) {
+                        return item.id == local.id || (local.externalRequestId > 0 && item.externalRequestId == local.externalRequestId);
+                    });
+                    if (found == refreshedPending.end()) refreshedPending.push_back(local);
+                }
+            } else {
+                seerrOptimisticPendingUntil_ = {};
+            }
+            seerrPending_ = std::move(refreshedPending);
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests", seerrPending_.size());
             if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
                 const auto current = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& item) {
                     return item.id == detail_.id;
@@ -3758,6 +3794,11 @@ private:
         const SeerrAuth auth = seerrAuth();
         if (!SeerrClient::configured(server, auth)) {
             showNotice("CONNECT SEERR IN SETTINGS FIRST", 5s);
+            return;
+        }
+        if (seerrConnectLoading_) {
+            queuedSeerrRequestAfterConnect_ = item;
+            showNotice("REFRESHING SEERR SESSION…", 4s);
             return;
         }
         if (settings_.seerrSelectDrive && !skipDrivePrompt && !selectedTarget) {
@@ -3798,15 +3839,23 @@ private:
             });
             if (existing == seerrPending_.end()) seerrPending_.insert(seerrPending_.begin(), std::move(pending));
             else *existing = std::move(pending);
+            seerrOptimisticPendingUntil_ = std::chrono::steady_clock::now() + 5min;
             syncSeerrHomeRowLocked();
             showNotice("REQUEST SENT TO SEERR", 4s);
             error_.clear();
-            refreshSeerrPendingAsync();
+            // Keep the optimistic home row visible while Seerr persists the new
+            // request. A zero-result read immediately after POST must not erase it.
+            seerrPendingRefreshAt_ = std::chrono::steady_clock::now() + 2s;
             refreshSeerrStorageAsync(true);
         });
     }
 
     void searchSeerrAsync(bool immediate) {
+        if (seerrConnectLoading_) {
+            seerrRetrySearchAfterConnect_ = true;
+            searchState_.setSeerrLoading(false);
+            return;
+        }
         const std::string seerrServer = settings_.seerrServer;
         const SeerrAuth auth = seerrAuth();
         const bool configured = SeerrClient::configured(seerrServer, auth);
@@ -3833,6 +3882,20 @@ private:
                     connectSeerrAsync(false);
                 }
                 return;
+            }
+            bool discoveredPending = false;
+            for (const auto& item : result.value) {
+                if (!item.externalRequested) continue;
+                const auto existing = std::find_if(seerrPending_.begin(), seerrPending_.end(), [&](const JellyfinItem& pending) {
+                    return pending.id == item.id || (item.externalRequestId > 0 && pending.externalRequestId == item.externalRequestId);
+                });
+                if (existing == seerrPending_.end()) seerrPending_.push_back(item);
+                else *existing = item;
+                discoveredPending = true;
+            }
+            if (discoveredPending) {
+                seerrOptimisticPendingUntil_ = std::chrono::steady_clock::now() + 5min;
+                syncSeerrHomeRowLocked();
             }
             (void) searchState_.finishSeerrSearch(query, std::move(result.value));
         });
@@ -8280,6 +8343,7 @@ private:
     bool homeRefreshAfterPlaybackStop_ = false;
     bool seerrPendingLoading_ = false;
     std::chrono::steady_clock::time_point seerrPendingRefreshAt_{};
+    std::chrono::steady_clock::time_point seerrOptimisticPendingUntil_{};
     std::vector<SeerrStorageTarget> seerrStorage_;
     bool seerrStorageLoading_ = false;
     std::string seerrStorageError_;
@@ -8289,6 +8353,7 @@ private:
     int seerrDriveSelection_ = 0;
     bool seerrConnectLoading_ = false;
     bool seerrRetrySearchAfterConnect_ = false;
+    JellyfinItem queuedSeerrRequestAfterConnect_;
     ArtworkCache artwork_{30};
     ArtworkCache profileArtwork_;
     ArtworkCache homeArtwork_{48};

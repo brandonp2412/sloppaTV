@@ -105,7 +105,10 @@ int main() {
 
     state.replacePage({item("a", "A"), item("b", "B"), item("c", "C")}, 60);
     state.setSelection(1);
-    state.removeItem("a");
+    state.replacePage({item("x", "X"), item("b", "B"), item("c", "C")}, 60);
+    assert(state.selection() == 1);
+    assert(state.items()[static_cast<size_t>(state.selection())].id == "b");
+    state.removeItem("x");
     assert(state.selection() == 0);
     assert(state.items()[static_cast<size_t>(state.selection())].id == "b");
 
