@@ -406,9 +406,47 @@ struct JellyfinSearchCompletion {
     ApiValueResult<std::vector<JellyfinItem>> result;
 };
 
+struct ItemMenuDetailCompletion {
+    std::string itemId;
+    ApiValueResult<JellyfinItem> result;
+};
+
+struct PersonItemsCompletion {
+    std::string personId;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
+struct DiagnosticsCompletion {
+    uint64_t generation = 0;
+    ApiValueResult<JellyfinServerInfo> result;
+};
+
+struct SeasonsCompletion {
+    std::string seriesId;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
+struct EpisodesCompletion {
+    std::string seriesId;
+    std::string seasonId;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
+struct BrowsePageCompletion {
+    std::string containerId;
+    int startIndex = 0;
+    bool append = false;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
-                                     JellyfinSearchCompletion>;
+                                     JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
+                                     DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -1247,9 +1285,10 @@ private:
         const std::string itemId = item.id;
         tasks_.submit([this, session, itemId] {
             auto result = api_.getItem(session, itemId);
-            if (!result.ok) return;
-            std::scoped_lock lock(stateMutex_);
-            if (screen_ == Screen::ItemMenu && detail_.id == itemId) detail_ = std::move(result.value);
+            asyncCompletions_.push(ItemMenuDetailCompletion{
+                .itemId = itemId,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -1769,15 +1808,11 @@ private:
         const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, personId, generation] {
             auto result = api_.getItemsForPerson(session, personId, 60);
-            if (!requestEpochs_.content.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::PersonItems || detailsState_.selectedPerson().id != personId) return;
-            if (!result.ok) {
-                error_ = "PERSON: " + result.error;
-                return;
-            }
-            detailsState_.setPersonItems(std::move(result.value));
+            asyncCompletions_.push(PersonItemsCompletion{
+                .personId = personId,
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -2697,21 +2732,10 @@ private:
         const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, generation] {
             auto result = api_.getServerInfo(session);
-            if (!requestEpochs_.content.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::Diagnostics) return;
-            if (!result.ok) {
-                error_ = "SERVER INFO: " + result.error;
-                return;
-            }
-            serverInfo_ = std::move(result.value);
-            const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
-            if (compatibility == ServerCompatibility::TooOld) {
-                error_ = "JELLYFIN " + serverInfo_.version + " IS BELOW THE TESTED 10.10+ BASELINE";
-            } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
-                error_ = "UNRECOGNIZED JELLYFIN VERSION: " + serverInfo_.version;
-            }
+            asyncCompletions_.push(DiagnosticsCompletion{
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -2875,20 +2899,13 @@ private:
             } else {
                 result.ok = true;
             }
-            if (!requestEpochs_.content.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::Browse || browseState_.activeContainer().id != container.id) return;
-            if (!result.ok) {
-                error_ = result.error;
-                return;
-            }
-            if (append)
-                browseState_.appendPage(std::move(result.value), startIndex, kBrowsePageSize);
-            else
-                browseState_.replacePage(std::move(result.value), kBrowsePageSize);
-            prefetchBrowseArtworkAhead();
-            error_.clear();
+            asyncCompletions_.push(BrowsePageCompletion{
+                .containerId = container.id,
+                .startIndex = startIndex,
+                .append = append,
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -2903,15 +2920,11 @@ private:
         const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, seriesId, generation] {
             auto result = api_.getSeasons(session, seriesId);
-            if (!requestEpochs_.content.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::Seasons || detailsState_.seriesDetail().id != seriesId) return;
-            if (!result.ok) {
-                error_ = result.error;
-                return;
-            }
-            detailsState_.setSeasons(std::move(result.value));
+            asyncCompletions_.push(SeasonsCompletion{
+                .seriesId = seriesId,
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -2927,18 +2940,12 @@ private:
         const uint64_t generation = requestEpochs_.content.begin();
         tasks_.submit([this, session, seriesId, seasonId, generation] {
             auto result = api_.getEpisodes(session, seriesId, seasonId);
-            if (!requestEpochs_.content.active(generation)) return;
-            std::scoped_lock lock(stateMutex_);
-            loading_ = false;
-            if (screen_ != Screen::Episodes || detailsState_.seriesDetail().id != seriesId ||
-                detailsState_.selectedSeason().id != seasonId) {
-                return;
-            }
-            if (!result.ok) {
-                error_ = result.error;
-                return;
-            }
-            detailsState_.setEpisodes(std::move(result.value));
+            asyncCompletions_.push(EpisodesCompletion{
+                .seriesId = seriesId,
+                .seasonId = seasonId,
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -4852,6 +4859,80 @@ private:
             return;
         }
         if (!searchState_.finishLibrarySearch(completion.query, std::move(result.value))) return;
+        error_.clear();
+    }
+
+    void applyAsyncCompletion(ItemMenuDetailCompletion& completion) {
+        if (!completion.result.ok || screen_ != Screen::ItemMenu || detail_.id != completion.itemId) return;
+        detail_ = std::move(completion.result.value);
+    }
+
+    void applyAsyncCompletion(PersonItemsCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::PersonItems || detailsState_.selectedPerson().id != completion.personId) return;
+        if (!completion.result.ok) {
+            error_ = "PERSON: " + completion.result.error;
+            return;
+        }
+        detailsState_.setPersonItems(std::move(completion.result.value));
+    }
+
+    void applyAsyncCompletion(DiagnosticsCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Diagnostics) return;
+        if (!completion.result.ok) {
+            error_ = "SERVER INFO: " + completion.result.error;
+            return;
+        }
+        serverInfo_ = std::move(completion.result.value);
+        const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
+        if (compatibility == ServerCompatibility::TooOld) {
+            error_ = "JELLYFIN " + serverInfo_.version + " IS BELOW THE TESTED 10.10+ BASELINE";
+        } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
+            error_ = "UNRECOGNIZED JELLYFIN VERSION: " + serverInfo_.version;
+        }
+    }
+
+    void applyAsyncCompletion(SeasonsCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Seasons || detailsState_.seriesDetail().id != completion.seriesId) return;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        detailsState_.setSeasons(std::move(completion.result.value));
+    }
+
+    void applyAsyncCompletion(EpisodesCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Episodes || detailsState_.seriesDetail().id != completion.seriesId ||
+            detailsState_.selectedSeason().id != completion.seasonId) {
+            return;
+        }
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        detailsState_.setEpisodes(std::move(completion.result.value));
+    }
+
+    void applyAsyncCompletion(BrowsePageCompletion& completion) {
+        if (!requestEpochs_.content.active(completion.generation)) return;
+        loading_ = false;
+        if (screen_ != Screen::Browse || browseState_.activeContainer().id != completion.containerId) return;
+        if (!completion.result.ok) {
+            error_ = completion.result.error;
+            return;
+        }
+        if (completion.append)
+            browseState_.appendPage(std::move(completion.result.value), completion.startIndex, kBrowsePageSize);
+        else
+            browseState_.replacePage(std::move(completion.result.value), kBrowsePageSize);
+        prefetchBrowseArtworkAhead();
         error_.clear();
     }
 
