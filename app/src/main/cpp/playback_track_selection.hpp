@@ -2,6 +2,7 @@
 
 #include "audio_policy.hpp"
 #include "jellyfin_types.hpp"
+#include "media_player_policy.hpp"
 #include "subtitle_policy.hpp"
 
 #include <algorithm>
@@ -22,6 +23,20 @@ struct PlaybackAudioCyclePlan {
     int audioOrdinal = -1;
     int subtitleStreamIndex = -1;
     bool tryEmbeddedSwitch = false;
+};
+
+enum class PlaybackSubtitleCycleAction {
+    NoSubtitles,
+    NoAllowedTracks,
+    DisableInPlayer,
+    LoadNative,
+    RestartPlayback,
+};
+
+struct PlaybackSubtitleCyclePlan {
+    PlaybackSubtitleCycleAction action = PlaybackSubtitleCycleAction::NoSubtitles;
+    int subtitleStreamIndex = kSubtitleOffIndex;
+    SubtitleStrategy strategy = SubtitleStrategy::ServerTranscode;
 };
 
 inline int playbackAudioIndexForItem(
@@ -180,4 +195,58 @@ inline int playbackPreferredSubtitlePosition(
     return preferred == item.subtitles.end()
         ? -1
         : static_cast<int>(std::distance(item.subtitles.begin(), preferred));
+}
+
+inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackCycle(
+    const JellyfinItem& item,
+    int selectedSubtitleStreamIndex,
+    PlaybackMethod playbackMethod,
+    const std::vector<std::string>& allowedLanguages
+) {
+    PlaybackSubtitleCyclePlan plan;
+    if (item.subtitles.empty()) return plan;
+
+    std::vector<const JellyfinSubtitleStream*> allowed;
+    allowed.reserve(item.subtitles.size());
+    for (const auto& subtitle : item.subtitles) {
+        if (playbackSubtitleAllowed(subtitle, allowedLanguages)) allowed.push_back(&subtitle);
+    }
+    if (allowed.empty()) {
+        plan.action = PlaybackSubtitleCycleAction::NoAllowedTracks;
+        return plan;
+    }
+
+    if (selectedSubtitleStreamIndex < 0) {
+        const int preferred = playbackPreferredSubtitlePosition(item, allowedLanguages);
+        if (preferred >= 0) plan.subtitleStreamIndex = item.subtitles[static_cast<size_t>(preferred)].index;
+    } else {
+        const auto selected = std::find_if(allowed.begin(), allowed.end(), [&](const JellyfinSubtitleStream* subtitle) {
+            return subtitle->index == selectedSubtitleStreamIndex;
+        });
+        if (selected != allowed.end() && std::next(selected) != allowed.end()) {
+            plan.subtitleStreamIndex = (*std::next(selected))->index;
+        }
+    }
+
+    if (playbackMethod == PlaybackMethod::DirectPlay && plan.subtitleStreamIndex < 0) {
+        plan.action = PlaybackSubtitleCycleAction::DisableInPlayer;
+        return plan;
+    }
+
+    if (plan.subtitleStreamIndex >= 0) {
+        const auto selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+            return subtitle.index == plan.subtitleStreamIndex;
+        });
+        if (selected != item.subtitles.end()) {
+            plan.strategy = subtitleStrategy(selected->codec);
+            if (playbackMethod == PlaybackMethod::DirectPlay
+                && useNativeSubtitleRenderer(plan.strategy, true)) {
+                plan.action = PlaybackSubtitleCycleAction::LoadNative;
+                return plan;
+            }
+        }
+    }
+
+    plan.action = PlaybackSubtitleCycleAction::RestartPlayback;
+    return plan;
 }

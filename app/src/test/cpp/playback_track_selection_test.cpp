@@ -106,6 +106,80 @@ int main() {
     carriedPolicy.allowedSubtitleLanguages = {"eng"};
     assert(playbackPreferredSubtitlePosition(item, carriedPolicy.allowedSubtitleLanguages) == 1);
 
+    auto subtitleCycle = planPlaybackSubtitleTrackCycle(
+        item,
+        kSubtitleOffIndex,
+        PlaybackMethod::DirectPlay,
+        carriedPolicy.allowedSubtitleLanguages
+    );
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::LoadNative);
+    assert(subtitleCycle.subtitleStreamIndex == 6);
+    assert(subtitleCycle.strategy == SubtitleStrategy::ClientText);
+
+    subtitleCycle = planPlaybackSubtitleTrackCycle(
+        item,
+        6,
+        PlaybackMethod::DirectPlay,
+        carriedPolicy.allowedSubtitleLanguages
+    );
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::LoadNative);
+    assert(subtitleCycle.subtitleStreamIndex == 7);
+
+    subtitleCycle = planPlaybackSubtitleTrackCycle(
+        item,
+        7,
+        PlaybackMethod::DirectPlay,
+        carriedPolicy.allowedSubtitleLanguages
+    );
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::DisableInPlayer);
+    assert(subtitleCycle.subtitleStreamIndex == kSubtitleOffIndex);
+
+    subtitleCycle = planPlaybackSubtitleTrackCycle(
+        item,
+        7,
+        PlaybackMethod::DirectStream,
+        carriedPolicy.allowedSubtitleLanguages
+    );
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
+    assert(subtitleCycle.subtitleStreamIndex == kSubtitleOffIndex);
+
+    subtitleCycle = planPlaybackSubtitleTrackCycle(
+        item,
+        kSubtitleOffIndex,
+        PlaybackMethod::DirectPlay,
+        {"deu"}
+    );
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::NoAllowedTracks);
+
+    JellyfinItem noSubtitles;
+    subtitleCycle = planPlaybackSubtitleTrackCycle(
+        noSubtitles,
+        kSubtitleOffIndex,
+        PlaybackMethod::DirectPlay,
+        {}
+    );
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::NoSubtitles);
+
+    JellyfinItem bitmapSubtitles;
+    bitmapSubtitles.subtitles = {{
+        .index = 11,
+        .codec = "pgs",
+        .language = "eng",
+        .title = "English PGS",
+        .forced = false,
+        .isDefault = true,
+        .isExternal = false,
+    }};
+    subtitleCycle = planPlaybackSubtitleTrackCycle(
+        bitmapSubtitles,
+        kSubtitleOffIndex,
+        PlaybackMethod::DirectPlay,
+        {"eng"}
+    );
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
+    assert(subtitleCycle.subtitleStreamIndex == 11);
+    assert(subtitleCycle.strategy == SubtitleStrategy::ClientEmbedded);
+
     JellyfinItem fallbackAudio;
     fallbackAudio.audios = {{
         .index = 9,

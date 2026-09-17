@@ -1960,10 +1960,6 @@ private:
         }
     }
 
-    int preferredSubtitlePosition() const {
-        return playbackPreferredSubtitlePosition(activePlaybackItem_, settings_.subtitleLanguages);
-    }
-
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
         if (!session_.valid() || subtitle.index < 0 || !trackState_.beginSubtitleWork()) return;
         const JellyfinSession session = session_;
@@ -2118,86 +2114,82 @@ private:
     }
 
     void cycleSubtitleTrack() {
-        if (trackState_.subtitleBusy() || activePlaybackItem_.subtitles.empty()) {
+        if (trackState_.subtitleBusy()) {
             if (activePlaybackItem_.subtitles.empty()) error_ = "NO SUBTITLE TRACKS";
             return;
         }
-        std::vector<const JellyfinSubtitleStream*> allowed;
-        for (const auto& subtitle : activePlaybackItem_.subtitles) {
-            if (subtitleAllowed(subtitle)) allowed.push_back(&subtitle);
+
+        const PlaybackSubtitleCyclePlan plan = planPlaybackSubtitleTrackCycle(
+            activePlaybackItem_,
+            trackState_.selectedSubtitleServerIndex(),
+            activeTarget_.playMethod,
+            settings_.subtitleLanguages
+        );
+        if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) {
+            error_ = "NO SUBTITLE TRACKS";
+            return;
         }
-        if (allowed.empty()) {
+        if (plan.action == PlaybackSubtitleCycleAction::NoAllowedTracks) {
             error_ = "NO ALLOWED SUBTITLE TRACKS";
             return;
         }
-        int nextIndex = -1;
-        if (trackState_.selectedSubtitleServerIndex() < 0) {
-            const int preferred = preferredSubtitlePosition();
-            if (preferred >= 0) nextIndex = activePlaybackItem_.subtitles[static_cast<size_t>(preferred)].index;
-        } else {
-            const auto selected = std::find_if(allowed.begin(), allowed.end(), [&](const JellyfinSubtitleStream* subtitle) {
-                return subtitle->index == trackState_.selectedSubtitleServerIndex();
-            });
-            if (selected != allowed.end() && std::next(selected) != allowed.end()) nextIndex = (*std::next(selected))->index;
+
+        rememberPlaybackSubtitlePreference(plan.subtitleStreamIndex);
+        if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer
+            && player_.disableSubtitles()) {
+            trackState_.setSelectedSubtitleServerIndex(kSubtitleOffIndex);
+            trackState_.setSubtitleEnabled(false);
+            activeTarget_.subtitleStreamIndex = kSubtitleOffIndex;
+            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+            reportProgressAsync(false);
+            return;
         }
-        rememberPlaybackSubtitlePreference(nextIndex);
-        if (activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
-            if (nextIndex < 0) {
-                if (player_.disableSubtitles()) {
-                    trackState_.setSelectedSubtitleServerIndex(kSubtitleOffIndex);
+
+        if (plan.subtitleStreamIndex >= 0 && activeTarget_.playMethod == PlaybackMethod::DirectPlay) {
+            const auto selected = std::find_if(
+                activePlaybackItem_.subtitles.begin(),
+                activePlaybackItem_.subtitles.end(),
+                [&](const JellyfinSubtitleStream& subtitle) {
+                    return subtitle.index == plan.subtitleStreamIndex;
+                }
+            );
+            if (selected != activePlaybackItem_.subtitles.end()) {
+                __android_log_print(
+                    ANDROID_LOG_INFO,
+                    kTag,
+                    "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
+                    plan.subtitleStreamIndex,
+                    selected->codec.c_str(),
+                    selected->isExternal ? 1 : 0,
+                    static_cast<int>(plan.strategy)
+                );
+                if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
+                    player_.disableSubtitles();
+                    trackState_.setSelectedSubtitleServerIndex(plan.subtitleStreamIndex);
                     trackState_.setSubtitleEnabled(false);
-                    activeTarget_.subtitleStreamIndex = kSubtitleOffIndex;
+                    activeTarget_.subtitleStreamIndex = plan.subtitleStreamIndex;
+                    loadSubtitleAsync(*selected);
                     playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
                     reportProgressAsync(false);
                     return;
                 }
-            } else {
-                const auto selected = std::find_if(activePlaybackItem_.subtitles.begin(), activePlaybackItem_.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-                    return subtitle.index == nextIndex;
-                });
-                if (selected != activePlaybackItem_.subtitles.end()) {
-                    const SubtitleStrategy strategy = subtitleStrategy(selected->codec);
+                if (plan.strategy == SubtitleStrategy::ClientEmbedded) {
                     __android_log_print(
                         ANDROID_LOG_INFO,
                         kTag,
-                        "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
-                        nextIndex,
-                        selected->codec.c_str(),
-                        selected->isExternal ? 1 : 0,
-                        static_cast<int>(strategy)
+                        "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
+                        plan.subtitleStreamIndex
                     );
-                    if (useNativeSubtitleRenderer(strategy, true)) {
-                        player_.disableSubtitles();
-                        trackState_.setSelectedSubtitleServerIndex(nextIndex);
-                        trackState_.setSubtitleEnabled(false);
-                        activeTarget_.subtitleStreamIndex = nextIndex;
-                        loadSubtitleAsync(*selected);
-                        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                        reportProgressAsync(false);
-                        return;
-                    }
-                    if (strategy == SubtitleStrategy::ClientEmbedded) {
-                        __android_log_print(
-                            ANDROID_LOG_INFO,
-                            kTag,
-                            "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
-                            nextIndex
-                        );
-                    } else if (canSwitchEmbeddedSubtitleInPlayer(strategy, selected->isExternal)) {
-                        const int ordinal = static_cast<int>(std::distance(activePlaybackItem_.subtitles.begin(), selected));
-                        if (player_.selectEmbeddedSubtitleStream(nextIndex, ordinal)) {
-                            trackState_.setSelectedSubtitleServerIndex(nextIndex);
-                            activeTarget_.subtitleStreamIndex = nextIndex;
-                            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                            reportProgressAsync(false);
-                            return;
-                        }
-                    }
                 }
             }
         }
+
         refreshPlaybackTelemetry(true);
-        restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(), nextIndex);
+        restartPlaybackAt(
+            playerScreenState_.positionMs(),
+            trackState_.selectedAudioServerIndex(),
+            plan.subtitleStreamIndex
+        );
     }
 
     void restartPlaybackAt(int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
