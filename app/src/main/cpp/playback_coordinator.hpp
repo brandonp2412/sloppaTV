@@ -478,6 +478,14 @@ public:
         trackState_.resetPlayback();
     }
 
+    void markPlaybackStopReported() {
+        sessionState_.requestHomeRefresh();
+    }
+
+    [[nodiscard]] bool consumeHomeRefreshRequest() {
+        return sessionState_.takeHomeRefreshRequest();
+    }
+
     void finishStop() {
         trackState_.clearLanguagePreferences();
         transitionState_.setLoading(false);

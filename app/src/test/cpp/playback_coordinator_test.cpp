@@ -95,6 +95,10 @@ int main() {
     assert(!coordinator.continuation().nextEpisodeRequested());
     assert(!coordinator.transition().fallbackResolving());
     assert(!coordinator.tracks().subtitleBusy());
+    assert(!coordinator.consumeHomeRefreshRequest());
+    coordinator.markPlaybackStopReported();
+    assert(coordinator.consumeHomeRefreshRequest());
+    assert(!coordinator.consumeHomeRefreshRequest());
 
     coordinator.activate(coordinatedItem, coordinatedTarget, now);
     assert(!coordinator.progressPlan(true, true, true, false, false, 1000).report);

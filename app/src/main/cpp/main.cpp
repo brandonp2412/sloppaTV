@@ -4320,7 +4320,7 @@ private:
                 if (!result.ok) return;
                 std::scoped_lock lock(stateMutex_);
                 if (session_.server != session.server || session_.userId != session.userId || screen_ == Screen::Player) return;
-                playbackSessionState_.requestHomeRefresh();
+                playbackCoordinator_.markPlaybackStopReported();
                 if (app_ && app_->looper) ALooper_wake(app_->looper);
             });
         }
@@ -4933,7 +4933,7 @@ private:
                 retryHome = true;
             }
             if (!homeLoading_ && session_.valid() && screen_ != Screen::Player
-                && playbackSessionState_.takeHomeRefreshRequest()) {
+                && playbackCoordinator_.consumeHomeRefreshRequest()) {
                 refreshHomeAfterPlaybackStop = true;
             }
             if (seerrRequestState_.pendingRefreshDue(now)
