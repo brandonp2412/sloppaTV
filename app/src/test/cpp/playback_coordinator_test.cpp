@@ -368,6 +368,26 @@ int main() {
         false
     ).retry);
 
+    PlaybackCoordinator fallbackCoordinator;
+    fallbackCoordinator.beginFallbackResolution();
+    assert(fallbackCoordinator.transition().fallbackResolving());
+    fallbackCoordinator.finishFallbackResolution();
+    assert(!fallbackCoordinator.transition().fallbackResolving());
+    JellyfinItem fallbackItem;
+    fallbackItem.id = "fallback-item";
+    PlaybackTarget resolvedFallbackTarget;
+    resolvedFallbackTarget.url = "https://media.example/fallback";
+    fallbackCoordinator.beginFallbackResolution();
+    fallbackCoordinator.stageResolvedFallback(resolvedFallbackTarget, fallbackItem, 4);
+    assert(!fallbackCoordinator.transition().fallbackResolving());
+    auto fallbackTransition = fallbackCoordinator.transition().take();
+    assert(fallbackTransition);
+    assert(fallbackTransition->streamRestart);
+    assert(!fallbackTransition->restartPaused);
+    assert(fallbackTransition->audioStreamIndex == 4);
+    assert(fallbackTransition->target.url == resolvedFallbackTarget.url);
+    assert(fallbackTransition->item.id == fallbackItem.id);
+
     JellyfinItem transitionItem;
     transitionItem.runtimeTicks = 900'000'000;
     transitionItem.audios = {

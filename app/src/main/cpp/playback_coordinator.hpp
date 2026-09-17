@@ -579,6 +579,25 @@ public:
         sessionState_.activeTarget() = offeredPlaybackFallbackTarget(sessionState_.activeTarget(), plan);
     }
 
+    void beginFallbackResolution() {
+        transitionState_.setFallbackResolving(true);
+    }
+
+    void finishFallbackResolution() {
+        transitionState_.setFallbackResolving(false);
+    }
+
+    void stageResolvedFallback(PlaybackTarget target, JellyfinItem item, int audioStreamIndex) {
+        transitionState_.setFallbackResolving(false);
+        transitionState_.stage(
+            std::move(target),
+            std::move(item),
+            true,
+            false,
+            audioStreamIndex
+        );
+    }
+
 private:
     PlaybackSessionState sessionState_;
     PlaybackTelemetryState telemetryState_;

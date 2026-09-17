@@ -4550,7 +4550,7 @@ private:
         const int subtitleStreamIndex = trackState_.selectedSubtitleServerIndex();
         const uint64_t generation = requestEpochs_.playback.begin();
         loading_ = true;
-        transitionState_.setFallbackResolving(true);
+        playbackCoordinator_.beginFallbackResolution();
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         __android_log_print(
             ANDROID_LOG_WARN,
@@ -4592,18 +4592,18 @@ private:
             if (!requestEpochs_.playback.active(generation)) return;
             std::scoped_lock lock(stateMutex_);
             loading_ = false;
-            transitionState_.setFallbackResolving(false);
+            playbackCoordinator_.finishFallbackResolution();
             if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != item.id) return;
             if (!target.ok) {
                 error_ = "TRANSCODE FALLBACK: " + target.error;
                 stopPlayback();
                 return;
             }
-            transitionState_.stage(std::move(target.value), std::move(item), true, false, audioStreamIndex);
+            playbackCoordinator_.stageResolvedFallback(std::move(target.value), std::move(item), audioStreamIndex);
         });
         if (!submitted) {
             loading_ = false;
-            transitionState_.setFallbackResolving(false);
+            playbackCoordinator_.finishFallbackResolution();
             error_ = "TRANSCODE FALLBACK COULD NOT BE STARTED";
             return false;
         }
