@@ -387,8 +387,14 @@ struct SeerrPendingRefreshCompletion {
     ApiValueResult<std::vector<SeerrMediaItem>> result;
 };
 
+struct SeerrSearchCompletion {
+    std::string query;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<SeerrMediaItem>> result;
+};
+
 using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
-                                     SeerrPendingRefreshCompletion>;
+                                     SeerrPendingRefreshCompletion, SeerrSearchCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -3716,24 +3722,11 @@ private:
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
         tasks_.submit([this, endpoint, query, generation] {
             auto result = seerrSearch_.search(endpoint.server, endpoint.auth, query);
-            std::scoped_lock lock(stateMutex_);
-            if (!requestEpochs_.seerrSearch.active(generation)) return;
-            if (screen_ != Screen::Search) {
-                searchState_.setSeerrLoading(false);
-                return;
-            }
-            if (!result.ok) {
-                (void)searchState_.failSeerrSearch(query, result.error);
-                if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
-                    seerrConnectionState_.deferSearchRetry();
-                    connectSeerrAsync(false);
-                }
-                return;
-            }
-            if (seerrRequestState_.mergeRequestedSearch(result.value, std::chrono::steady_clock::now())) {
-                syncSeerrHomeRowLocked();
-            }
-            (void)searchState_.finishSeerrSearch(query, std::move(result.value));
+            asyncCompletions_.push(SeerrSearchCompletion{
+                .query = query,
+                .generation = generation,
+                .result = std::move(result),
+            });
         });
     }
 
@@ -4856,6 +4849,27 @@ private:
             }
         }
         syncSeerrHomeRowLocked();
+    }
+
+    void applyAsyncCompletion(SeerrSearchCompletion& completion) {
+        if (!requestEpochs_.seerrSearch.active(completion.generation)) return;
+        if (screen_ != Screen::Search) {
+            searchState_.setSeerrLoading(false);
+            return;
+        }
+        auto& result = completion.result;
+        if (!result.ok) {
+            (void)searchState_.failSeerrSearch(completion.query, result.error);
+            if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
+                seerrConnectionState_.deferSearchRetry();
+                connectSeerrAsync(false);
+            }
+            return;
+        }
+        if (seerrRequestState_.mergeRequestedSearch(result.value, std::chrono::steady_clock::now())) {
+            syncSeerrHomeRowLocked();
+        }
+        (void)searchState_.finishSeerrSearch(completion.query, std::move(result.value));
     }
 
     void applyAsyncCompletions() {
