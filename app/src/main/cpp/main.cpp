@@ -3815,16 +3815,10 @@ private:
         });
     }
 
-    void syncNextPlaybackFromQueue() {
-        const int next = queueState_.nextIndex(false);
-        if (const auto* item = queueState_.itemAt(next)) continuationState_.setNextItem(*item);
-        else continuationState_.clearNextItem();
-    }
-
     void shuffleRemainingQueue() {
         static thread_local std::mt19937 generator(std::random_device{}());
         if (!queueState_.shuffleRemaining(generator)) return;
-        syncNextPlaybackFromQueue();
+        playbackCoordinator_.syncQueueContinuation(queueState_);
     }
 
     void openQueueOverlay() {
@@ -3838,7 +3832,7 @@ private:
 
     void moveQueuedItem(int from, int to) {
         if (!queueState_.moveItem(from, to)) return;
-        syncNextPlaybackFromQueue();
+        playbackCoordinator_.syncQueueContinuation(queueState_);
     }
 
     void playQueuedIndexAsync(int index, bool restartCurrent = false, bool replacingCompleted = false) {
@@ -3969,16 +3963,14 @@ private:
             playPlayerItemAsync(*continuationState_.nextItem());
             return;
         }
-        if (!session_.valid() || playbackSessionState_.activeItem().type != "Episode"
-            || playbackSessionState_.activeItem().seriesId.empty() || playbackSessionState_.activeItem().id.empty()) {
-            return;
-        }
-        if (!continuationState_.beginAdjacentEpisodeLookup()) return;
+        if (!session_.valid()) return;
+        const auto request = playbackCoordinator_.beginAdjacentEpisodeLookup();
+        if (!request) return;
         const JellyfinSession session = session_;
-        const std::string currentItemId = playbackSessionState_.activeItem().id;
-        const std::string seriesId = playbackSessionState_.activeItem().seriesId;
-        const int currentSeason = playbackSessionState_.activeItem().parentIndexNumber;
-        const int currentEpisode = playbackSessionState_.activeItem().indexNumber;
+        const std::string currentItemId = request->currentItemId;
+        const std::string seriesId = request->seriesId;
+        const int currentSeason = request->currentSeason;
+        const int currentEpisode = request->currentEpisode;
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
         tasks_.submit([this, session, currentItemId, seriesId, currentSeason, currentEpisode, direction] {
             auto episodes = api_.getSeriesEpisodes(session, seriesId, 1000);
@@ -3993,8 +3985,8 @@ private:
                 : std::nullopt;
 
             std::scoped_lock lock(stateMutex_);
-            continuationState_.finishAdjacentEpisodeLookup();
-            if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != currentItemId) return;
+            const bool sameItem = playbackCoordinator_.finishAdjacentEpisodeLookup(currentItemId);
+            if (screen_ != Screen::Player || !sameItem) return;
             if (!episodes.ok) {
                 showNotice("EPISODE LIST UNAVAILABLE", 2s);
                 return;
@@ -4046,12 +4038,12 @@ private:
         } else if (queueState_.actionSelection() == 3) {
             if (queueCanMoveDown(selection, current, size)) moveQueuedItem(selection, selection + 1);
         } else if (queueState_.actionSelection() == 4) {
-            if (queueState_.removeSelected()) syncNextPlaybackFromQueue();
+            if (queueState_.removeSelected()) playbackCoordinator_.syncQueueContinuation(queueState_);
         } else if (queueState_.actionSelection() == 5) {
             shuffleRemainingQueue();
         } else if (queueState_.actionSelection() == 6) {
             queueState_.cycleRepeatMode();
-            syncNextPlaybackFromQueue();
+            playbackCoordinator_.syncQueueContinuation(queueState_);
         }
     }
 
@@ -4270,25 +4262,19 @@ private:
     }
 
     void requestNextEpisodeAsync() {
-        if (queueState_.currentIndex() >= 0 && queueState_.currentIndex() < queueState_.size()) {
-            continuationState_.markNextEpisodeRequested();
-            syncNextPlaybackFromQueue();
-            return;
-        }
-        if (!session_.valid() || playbackSessionState_.activeItem().type != "Episode"
-            || playbackSessionState_.activeItem().seriesId.empty() || playbackSessionState_.activeItem().id.empty()
-            || !continuationState_.beginNextEpisodeRequest(std::chrono::steady_clock::now())) {
-            return;
-        }
+        if (playbackCoordinator_.useQueueContinuation(queueState_)) return;
+        if (!session_.valid()) return;
+        const auto request = playbackCoordinator_.beginNextEpisodeRequest(std::chrono::steady_clock::now());
+        if (!request) return;
         const JellyfinSession session = session_;
-        const std::string seriesId = playbackSessionState_.activeItem().seriesId;
-        const std::string currentItemId = playbackSessionState_.activeItem().id;
+        const std::string seriesId = request->seriesId;
+        const std::string currentItemId = request->currentItemId;
         if (!tasks_.submit([this, session, seriesId, currentItemId] {
             auto next = api_.getFollowingEpisodeForSeries(session, seriesId, currentItemId);
             if (!next.ok) {
                 std::scoped_lock lock(stateMutex_);
-                if (screen_ == Screen::Player && playbackSessionState_.activeItem().id == currentItemId) {
-                    continuationState_.nextEpisodeRequestFailed();
+                if (screen_ == Screen::Player
+                    && playbackCoordinator_.failNextEpisodeRequest(currentItemId, std::chrono::steady_clock::now())) {
                     __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s", next.error.c_str());
                 }
                 return;
@@ -4297,10 +4283,10 @@ private:
             auto detailed = api_.getItem(session, next.value.id);
             JellyfinItem item = detailed.ok ? std::move(detailed.value) : std::move(next.value);
             std::scoped_lock lock(stateMutex_);
-            if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != currentItemId) return;
-            continuationState_.setNextItem(std::move(item));
+            if (screen_ != Screen::Player
+                || !playbackCoordinator_.completeNextEpisodeRequest(currentItemId, std::move(item))) return;
         })) {
-            continuationState_.nextEpisodeRequestFailed(std::chrono::steady_clock::now());
+            playbackCoordinator_.failNextEpisodeSubmission(std::chrono::steady_clock::now());
         }
     }
 
@@ -4644,7 +4630,7 @@ private:
             std::chrono::steady_clock::now()
         );
         playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
-        if (playbackPlan.resetContinuation) syncNextPlaybackFromQueue();
+        if (playbackPlan.resetContinuation) playbackCoordinator_.syncQueueContinuation(queueState_);
         if (trackState_.selectedSubtitleServerIndex() >= 0) {
             const auto selectedSubtitle = std::find_if(
                 item.subtitles.begin(),

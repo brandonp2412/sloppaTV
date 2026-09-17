@@ -77,6 +77,18 @@ struct PlaybackTransitionPlan {
     bool resetMediaSegments = false;
 };
 
+struct PlaybackNextEpisodeRequest {
+    std::string seriesId;
+    std::string currentItemId;
+};
+
+struct PlaybackAdjacentEpisodeRequest {
+    std::string currentItemId;
+    std::string seriesId;
+    int currentSeason = 0;
+    int currentEpisode = 0;
+};
+
 inline std::string playbackSummary(const PlaybackTarget& target, const JellyfinItem& item) {
     std::string summary = playbackMethodName(target.playMethod);
     if (!item.videoCodec.empty()) summary += " / " + item.videoCodec;
@@ -460,6 +472,71 @@ public:
         if (plan.resetMediaSegments) sessionState_.resetMediaSegments();
         transitionState_.setLoading(false);
         return plan;
+    }
+
+    void syncQueueContinuation(const PlaybackQueueState& queueState) {
+        const int next = queueState.nextIndex(false);
+        if (const auto* item = queueState.itemAt(next)) continuationState_.setNextItem(*item);
+        else continuationState_.clearNextItem();
+    }
+
+    bool useQueueContinuation(const PlaybackQueueState& queueState) {
+        if (queueState.currentIndex() < 0 || queueState.currentIndex() >= queueState.size()) return false;
+        continuationState_.markNextEpisodeRequested();
+        syncQueueContinuation(queueState);
+        return true;
+    }
+
+    [[nodiscard]] std::optional<PlaybackNextEpisodeRequest> beginNextEpisodeRequest(
+        PlaybackContinuationState::TimePoint now
+    ) {
+        const JellyfinItem& item = sessionState_.activeItem();
+        if (item.type != "Episode" || item.seriesId.empty() || item.id.empty()
+            || !continuationState_.beginNextEpisodeRequest(now)) {
+            return std::nullopt;
+        }
+        return PlaybackNextEpisodeRequest{
+            .seriesId = item.seriesId,
+            .currentItemId = item.id,
+        };
+    }
+
+    bool completeNextEpisodeRequest(std::string_view expectedItemId, JellyfinItem item) {
+        if (sessionState_.activeItem().id != expectedItemId) return false;
+        continuationState_.setNextItem(std::move(item));
+        return true;
+    }
+
+    bool failNextEpisodeRequest(
+        std::string_view expectedItemId,
+        PlaybackContinuationState::TimePoint now
+    ) {
+        if (sessionState_.activeItem().id != expectedItemId) return false;
+        continuationState_.nextEpisodeRequestFailed(now);
+        return true;
+    }
+
+    void failNextEpisodeSubmission(PlaybackContinuationState::TimePoint now) {
+        continuationState_.nextEpisodeRequestFailed(now);
+    }
+
+    [[nodiscard]] std::optional<PlaybackAdjacentEpisodeRequest> beginAdjacentEpisodeLookup() {
+        const JellyfinItem& item = sessionState_.activeItem();
+        if (item.type != "Episode" || item.seriesId.empty() || item.id.empty()
+            || !continuationState_.beginAdjacentEpisodeLookup()) {
+            return std::nullopt;
+        }
+        return PlaybackAdjacentEpisodeRequest{
+            .currentItemId = item.id,
+            .seriesId = item.seriesId,
+            .currentSeason = item.parentIndexNumber,
+            .currentEpisode = item.indexNumber,
+        };
+    }
+
+    bool finishAdjacentEpisodeLookup(std::string_view expectedItemId) {
+        continuationState_.finishAdjacentEpisodeLookup();
+        return sessionState_.activeItem().id == expectedItemId;
     }
 
     [[nodiscard]] PlaybackTickPlan tickPlan(

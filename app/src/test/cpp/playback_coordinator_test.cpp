@@ -151,6 +151,58 @@ int main() {
     assert(!lifecycleCoordinator.transition().fallbackResolving());
     assert(lifecycleCoordinator.tracks().selectedAudioServerIndex() == -1);
 
+    PlaybackCoordinator continuationCoordinator;
+    JellyfinItem continuationEpisode;
+    continuationEpisode.id = "episode-current";
+    continuationEpisode.type = "Episode";
+    continuationEpisode.seriesId = "series-1";
+    continuationEpisode.parentIndexNumber = 2;
+    continuationEpisode.indexNumber = 3;
+    continuationCoordinator.activate(continuationEpisode, coordinatedTarget, now);
+
+    JellyfinItem queuedCurrent = continuationEpisode;
+    JellyfinItem queuedNext;
+    queuedNext.id = "episode-next";
+    PlaybackQueueState continuationQueue;
+    continuationQueue.replace({queuedCurrent, queuedNext}, 0);
+    continuationCoordinator.syncQueueContinuation(continuationQueue);
+    assert(continuationCoordinator.continuation().nextItem());
+    assert(continuationCoordinator.continuation().nextItem()->id == queuedNext.id);
+    assert(continuationCoordinator.useQueueContinuation(continuationQueue));
+    assert(continuationCoordinator.continuation().nextEpisodeRequested());
+    assert(continuationCoordinator.continuation().nextItem()->id == queuedNext.id);
+
+    continuationCoordinator.continuation().clearNextEpisode();
+    const auto nextEpisodeRequest = continuationCoordinator.beginNextEpisodeRequest(now);
+    assert(nextEpisodeRequest);
+    assert(nextEpisodeRequest->seriesId == continuationEpisode.seriesId);
+    assert(nextEpisodeRequest->currentItemId == continuationEpisode.id);
+    JellyfinItem resolvedNext;
+    resolvedNext.id = "episode-resolved-next";
+    assert(!continuationCoordinator.completeNextEpisodeRequest("stale-item", resolvedNext));
+    assert(!continuationCoordinator.continuation().nextItem());
+    assert(continuationCoordinator.completeNextEpisodeRequest(continuationEpisode.id, resolvedNext));
+    assert(continuationCoordinator.continuation().nextItem());
+    assert(continuationCoordinator.continuation().nextItem()->id == resolvedNext.id);
+
+    continuationCoordinator.continuation().clearNextEpisode();
+    assert(continuationCoordinator.beginNextEpisodeRequest(now));
+    assert(!continuationCoordinator.failNextEpisodeRequest("stale-item", now));
+    assert(continuationCoordinator.continuation().nextEpisodeRequested());
+    assert(continuationCoordinator.failNextEpisodeRequest(continuationEpisode.id, now));
+    assert(!continuationCoordinator.continuation().nextEpisodeRequested());
+    assert(!continuationCoordinator.beginNextEpisodeRequest(now));
+
+    const auto adjacentRequest = continuationCoordinator.beginAdjacentEpisodeLookup();
+    assert(adjacentRequest);
+    assert(adjacentRequest->currentItemId == continuationEpisode.id);
+    assert(adjacentRequest->seriesId == continuationEpisode.seriesId);
+    assert(adjacentRequest->currentSeason == continuationEpisode.parentIndexNumber);
+    assert(adjacentRequest->currentEpisode == continuationEpisode.indexNumber);
+    assert(!continuationCoordinator.beginAdjacentEpisodeLookup());
+    assert(continuationCoordinator.finishAdjacentEpisodeLookup(continuationEpisode.id));
+    assert(!continuationCoordinator.continuation().adjacentEpisodeLookupInProgress());
+
     telemetry.beginPlayback(now - 11s);
 
     auto plan = planPlaybackTick(
