@@ -64,6 +64,7 @@ CPP_TESTS = [
     "session_registry_test.cpp",
     "settings_screen_test.cpp",
     "subtitle_policy_test.cpp",
+    "system_text_input_test.cpp",
     "trickplay_policy_test.cpp",
     "trickplay_preview_test.cpp",
     "unicode_text_test.cpp",

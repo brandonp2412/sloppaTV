@@ -44,6 +44,7 @@
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
+#include "system_text_input.hpp"
 #include "ui_theme.hpp"
 #include "ui_components.hpp"
 #include "ui_labels.hpp"
@@ -654,7 +655,8 @@ struct SeriesPlayAllCompletion {
     std::string error;
 };
 
-using AsyncCompletion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
+using AsyncCompletion = std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion,
+                                     SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
                                      JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
                                      DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion,
@@ -877,85 +879,15 @@ public:
     }
 
     void onSystemTextInputChanged(int mode, const std::string& value) {
-        std::scoped_lock lock(stateMutex_);
-        const std::string text = truncateUtf8Bytes(value, 160);
-        if (mode == kTextInputSearch) {
-            searchState_.setQuery(text);
-            searchState_.setKeyboard(false);
-            scheduleLiveSearch();
-        } else if (mode == kTextInputSettingsSearch) {
-            settingsScreen_.setSearchText(text);
-        } else if (mode == kTextInputSeerrServer) {
-            settings_.seerrServer = text;
-        } else if (mode == kTextInputSeerrApiKey) {
-            settings_.seerrApiKey = text;
-        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            accountState_.setField(mode - kTextInputLoginServer, text);
-        }
-        systemTextInputMode_ = mode;
-        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
-        if (app_ && app_->looper) ALooper_wake(app_->looper);
+        queueSystemTextInputEvent(SystemTextInputPhase::Changed, mode, value);
     }
 
     void onSystemTextInputCancelled(int mode, const std::string& value) {
-        std::scoped_lock lock(stateMutex_);
-        const std::string text = truncateUtf8Bytes(value, 160);
-        systemTextInputMode_ = -1;
-        if (mode == kTextInputSearch) {
-            searchState_.setQuery(text);
-            searchState_.setKeyboard(false);
-            scheduleLiveSearch();
-        } else if (mode == kTextInputSettingsSearch) {
-            settingsScreen_.setSearchText(text);
-        } else if (mode == kTextInputSeerrServer) {
-            settings_.seerrServer = systemTextInputOriginal_;
-            systemTextInputOriginal_.clear();
-        } else if (mode == kTextInputSeerrApiKey) {
-            settings_.seerrApiKey = systemTextInputOriginal_;
-            systemTextInputOriginal_.clear();
-        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            accountState_.setField(mode - kTextInputLoginServer, text);
-        }
-        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
-        if (app_ && app_->looper) ALooper_wake(app_->looper);
+        queueSystemTextInputEvent(SystemTextInputPhase::Cancelled, mode, value);
     }
 
     void onSystemTextInputDone(int mode, const std::string& value) {
-        std::scoped_lock lock(stateMutex_);
-        const std::string text = truncateUtf8Bytes(value, 160);
-        systemTextInputMode_ = -1;
-        if (mode == kTextInputSearch) {
-            searchState_.setQuery(text);
-            searchState_.setKeyboard(false);
-            searchState_.cancelPending();
-            searchAsync();
-        } else if (mode == kTextInputSettingsSearch) {
-            settingsScreen_.setSearchText(text);
-        } else if (mode == kTextInputSeerrServer) {
-            const bool changed = settings_.seerrServer != text;
-            settings_.seerrServer = text;
-            if (changed) {
-                settings_.seerrSessionCookie.clear();
-                seerrStorageState_.clearTargets();
-            }
-            systemTextInputOriginal_.clear();
-            saveSession(session_);
-            showNotice(settings_.seerrServer.empty() ? "SEERR DISCONNECTED" : "SEERR SERVER SAVED", 3s);
-            refreshSeerrPendingAsync();
-            refreshSeerrStorageAsync(true);
-        } else if (mode == kTextInputSeerrApiKey) {
-            settings_.seerrApiKey = text;
-            systemTextInputOriginal_.clear();
-            saveSession(session_);
-            showNotice(settings_.seerrApiKey.empty() ? "SEERR API KEY CLEARED" : "SEERR API KEY SAVED", 3s);
-            refreshSeerrPendingAsync();
-            refreshSeerrStorageAsync(true);
-        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            const int field = mode - kTextInputLoginServer;
-            accountState_.finishTextField(field, text);
-        }
-        renderBurstUntil_ = std::chrono::steady_clock::now() + 500ms;
-        if (app_ && app_->looper) ALooper_wake(app_->looper);
+        queueSystemTextInputEvent(SystemTextInputPhase::Done, mode, value);
     }
 
     void onNewLaunchIntent(const std::string& action, const std::string& data, const std::string& query) {
@@ -1035,6 +967,84 @@ public:
     }
 
 private:
+    void queueSystemTextInputEvent(SystemTextInputPhase phase, int mode, std::string value) {
+        asyncCompletions_.push(systemTextInputEvent(phase, mode, std::move(value)));
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
+    void applySystemTextInputChanged(int mode, const std::string& text) {
+        if (mode == kTextInputSearch) {
+            searchState_.setQuery(text);
+            searchState_.setKeyboard(false);
+            scheduleLiveSearch();
+        } else if (mode == kTextInputSettingsSearch) {
+            settingsScreen_.setSearchText(text);
+        } else if (mode == kTextInputSeerrServer) {
+            settings_.seerrServer = text;
+        } else if (mode == kTextInputSeerrApiKey) {
+            settings_.seerrApiKey = text;
+        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
+            accountState_.setField(mode - kTextInputLoginServer, text);
+        }
+        systemTextInputMode_ = mode;
+        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
+    }
+
+    void applySystemTextInputCancelled(int mode, const std::string& text) {
+        systemTextInputMode_ = -1;
+        if (mode == kTextInputSearch) {
+            searchState_.setQuery(text);
+            searchState_.setKeyboard(false);
+            scheduleLiveSearch();
+        } else if (mode == kTextInputSettingsSearch) {
+            settingsScreen_.setSearchText(text);
+        } else if (mode == kTextInputSeerrServer) {
+            settings_.seerrServer = systemTextInputOriginal_;
+            systemTextInputOriginal_.clear();
+        } else if (mode == kTextInputSeerrApiKey) {
+            settings_.seerrApiKey = systemTextInputOriginal_;
+            systemTextInputOriginal_.clear();
+        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
+            accountState_.setField(mode - kTextInputLoginServer, text);
+        }
+        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
+    }
+
+    void applySystemTextInputDone(int mode, const std::string& text) {
+        systemTextInputMode_ = -1;
+        if (mode == kTextInputSearch) {
+            searchState_.setQuery(text);
+            searchState_.setKeyboard(false);
+            searchState_.cancelPending();
+            searchAsync();
+        } else if (mode == kTextInputSettingsSearch) {
+            settingsScreen_.setSearchText(text);
+        } else if (mode == kTextInputSeerrServer) {
+            const bool changed = settings_.seerrServer != text;
+            settings_.seerrServer = text;
+            if (changed) {
+                settings_.seerrSessionCookie.clear();
+                seerrStorageState_.clearTargets();
+            }
+            systemTextInputOriginal_.clear();
+            saveSession(session_);
+            showNotice(settings_.seerrServer.empty() ? "SEERR DISCONNECTED" : "SEERR SERVER SAVED", 3s);
+            refreshSeerrPendingAsync();
+            refreshSeerrStorageAsync(true);
+        } else if (mode == kTextInputSeerrApiKey) {
+            settings_.seerrApiKey = text;
+            systemTextInputOriginal_.clear();
+            saveSession(session_);
+            showNotice(settings_.seerrApiKey.empty() ? "SEERR API KEY CLEARED" : "SEERR API KEY SAVED", 3s);
+            refreshSeerrPendingAsync();
+            refreshSeerrStorageAsync(true);
+        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
+            const int field = mode - kTextInputLoginServer;
+            accountState_.finishTextField(field, text);
+        }
+        renderBurstUntil_ = std::chrono::steady_clock::now() + 500ms;
+    }
+
     void onAppCommand(int32_t command) {
         std::scoped_lock lock(stateMutex_);
         switch (command) {
@@ -4708,6 +4718,20 @@ private:
         case PlaybackContinuationAction::Stop:
             stopPlayback(true);
             if (continuationPlan.resetAutoplayChain) playbackCoordinator_.resetAutoplayChain();
+            return;
+        }
+    }
+
+    void applyAsyncCompletion(SystemTextInputEvent& event) {
+        switch (event.phase) {
+        case SystemTextInputPhase::Changed:
+            applySystemTextInputChanged(event.mode, event.value);
+            return;
+        case SystemTextInputPhase::Done:
+            applySystemTextInputDone(event.mode, event.value);
+            return;
+        case SystemTextInputPhase::Cancelled:
+            applySystemTextInputCancelled(event.mode, event.value);
             return;
         }
     }
