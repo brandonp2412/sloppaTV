@@ -10,12 +10,36 @@ int main() {
     assert(screen.selection() == SettingId::UiTextSize);
     assert(screen.firstVisible() == 0);
 
-    screen.moveUp();
+    auto command = screen.handleInput(SettingsScreenInput::Up);
+    assert(command.type == SettingsScreenCommandType::None);
     assert(screen.searchFocused());
-    screen.moveDown();
+    command = screen.handleInput(SettingsScreenInput::Down);
+    assert(command.type == SettingsScreenCommandType::None);
     assert(!screen.searchFocused());
     assert(screen.selection() == SettingId::UiTextSize);
 
+    command = screen.handleInput(SettingsScreenInput::Left);
+    assert(command.type == SettingsScreenCommandType::Adjust);
+    assert(command.setting == SettingId::UiTextSize);
+    assert(command.direction == -1);
+    command = screen.handleInput(SettingsScreenInput::Right);
+    assert(command.type == SettingsScreenCommandType::Adjust);
+    assert(command.setting == SettingId::UiTextSize);
+    assert(command.direction == 1);
+    command = screen.handleInput(SettingsScreenInput::Activate);
+    assert(command.type == SettingsScreenCommandType::ActivateSetting);
+    assert(command.setting == SettingId::UiTextSize);
+
+    screen.reset();
+    command = screen.handleInput(SettingsScreenInput::Search);
+    assert(command.type == SettingsScreenCommandType::EditSearch);
+    assert(screen.searchFocused());
+    command = screen.handleInput(SettingsScreenInput::Activate);
+    assert(command.type == SettingsScreenCommandType::EditSearch);
+    command = screen.handleInput(SettingsScreenInput::Back);
+    assert(command.type == SettingsScreenCommandType::Exit);
+
+    screen.reset();
     for (int i = 0; i < 7; ++i) screen.moveDown();
     assert(screen.firstVisible() > 0);
 
@@ -92,9 +116,14 @@ int main() {
     screen.openSubtitleLanguagePicker();
     assert(screen.subtitleLanguagePicker());
     assert(screen.subtitleLanguageSelection() == 0);
-    screen.moveSubtitleLanguage(1);
+    command = screen.handleInput(SettingsScreenInput::Down);
+    assert(command.type == SettingsScreenCommandType::None);
     assert(screen.subtitleLanguageSelection() == 1);
-    screen.closeSubtitleLanguagePicker();
+    command = screen.handleInput(SettingsScreenInput::Activate);
+    assert(command.type == SettingsScreenCommandType::ToggleSubtitleLanguage);
+    assert(screen.subtitleLanguagePicker());
+    command = screen.handleInput(SettingsScreenInput::Back);
+    assert(command.type == SettingsScreenCommandType::None);
     assert(!screen.subtitleLanguagePicker());
     return 0;
 }

@@ -8,6 +8,32 @@
 #include <utility>
 #include <vector>
 
+enum class SettingsScreenInput {
+    None,
+    Back,
+    Search,
+    Up,
+    Down,
+    Left,
+    Right,
+    Activate,
+};
+
+enum class SettingsScreenCommandType {
+    None,
+    Exit,
+    EditSearch,
+    Adjust,
+    ActivateSetting,
+    ToggleSubtitleLanguage,
+};
+
+struct SettingsScreenCommand {
+    SettingsScreenCommandType type = SettingsScreenCommandType::None;
+    SettingId setting = SettingId::UiTextSize;
+    int direction = 0;
+};
+
 class SettingsScreenState {
 public:
     void reset() {
@@ -58,6 +84,59 @@ public:
         if (nextPosition >= current.size()) return;
         selection_ = current[nextPosition];
         ensureVisible(static_cast<int>(nextPosition), static_cast<int>(current.size()));
+    }
+
+    SettingsScreenCommand handleInput(SettingsScreenInput input) {
+        if (subtitleLanguagePicker_) {
+            if (input == SettingsScreenInput::Back)
+                closeSubtitleLanguagePicker();
+            else if (input == SettingsScreenInput::Up)
+                moveSubtitleLanguage(-1);
+            else if (input == SettingsScreenInput::Down)
+                moveSubtitleLanguage(1);
+            else if (input == SettingsScreenInput::Activate)
+                return {.type = SettingsScreenCommandType::ToggleSubtitleLanguage};
+            return {};
+        }
+
+        if (input == SettingsScreenInput::Back) return {.type = SettingsScreenCommandType::Exit};
+        if (input == SettingsScreenInput::Search) {
+            focusSearch();
+            return {.type = SettingsScreenCommandType::EditSearch};
+        }
+
+        if (searchFocused_) {
+            if (input == SettingsScreenInput::Down) {
+                moveDown();
+            } else if (input == SettingsScreenInput::Activate) {
+                return {.type = SettingsScreenCommandType::EditSearch};
+            }
+            return {};
+        }
+
+        if (input == SettingsScreenInput::Up) {
+            moveUp();
+            return {};
+        }
+        if (input == SettingsScreenInput::Down) {
+            moveDown();
+            return {};
+        }
+        if (input == SettingsScreenInput::Left || input == SettingsScreenInput::Right) {
+            if (!isAdjustableSetting(selection_)) return {};
+            return {
+                .type = SettingsScreenCommandType::Adjust,
+                .setting = selection_,
+                .direction = input == SettingsScreenInput::Right ? 1 : -1,
+            };
+        }
+        if (input == SettingsScreenInput::Activate) {
+            return {
+                .type = SettingsScreenCommandType::ActivateSetting,
+                .setting = selection_,
+            };
+        }
+        return {};
     }
 
     void toggleAdvanced() {

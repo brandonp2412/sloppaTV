@@ -1814,63 +1814,53 @@ private:
     }
 
     void handleSettingsKey(int32_t key) {
-        if (settingsScreen_.subtitleLanguagePicker()) {
-            if (key == AKEYCODE_BACK)
-                settingsScreen_.closeSubtitleLanguagePicker();
-            else if (key == AKEYCODE_DPAD_UP)
-                settingsScreen_.moveSubtitleLanguage(-1);
-            else if (key == AKEYCODE_DPAD_DOWN)
-                settingsScreen_.moveSubtitleLanguage(1);
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-                toggleSubtitleLanguageSetting();
+        SettingsScreenInput input = SettingsScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = SettingsScreenInput::Back;
+        else if (key == AKEYCODE_SEARCH)
+            input = SettingsScreenInput::Search;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = SettingsScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = SettingsScreenInput::Down;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = SettingsScreenInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = SettingsScreenInput::Right;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = SettingsScreenInput::Activate;
+        else
             return;
-        }
-        if (key == AKEYCODE_BACK) {
+
+        const SettingsScreenCommand command = settingsScreen_.handleInput(input);
+        switch (command.type) {
+        case SettingsScreenCommandType::None:
+            return;
+        case SettingsScreenCommandType::Exit:
             hideSystemTextInput();
             popScreen(Screen::Home);
             if (screen_ == Screen::Home) homeState_.focusToolbar(3);
             return;
-        }
-        if (key == AKEYCODE_SEARCH) {
-            settingsScreen_.focusSearch();
+        case SettingsScreenCommandType::EditSearch:
             showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
             return;
-        }
-        if (settingsScreen_.searchFocused()) {
-            if (key == AKEYCODE_DPAD_DOWN) {
-                settingsScreen_.moveDown();
-            } else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-                showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
-            }
-            return;
-        }
-        if (key == AKEYCODE_DPAD_UP) {
-            settingsScreen_.moveUp();
-            return;
-        }
-        if (key == AKEYCODE_DPAD_DOWN) {
-            settingsScreen_.moveDown();
-            return;
-        }
-        if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT) {
-            const SettingId selection = settingsScreen_.selection();
-            if (!isAdjustableSetting(selection)) return;
-            const int direction = key == AKEYCODE_DPAD_RIGHT ? 1 : -1;
-            const SettingChangeEffect effects = adjustSetting(settings_, selection, direction);
+        case SettingsScreenCommandType::Adjust: {
+            const SettingChangeEffect effects = adjustSetting(settings_, command.setting, command.direction);
             if (effects == SettingChangeEffect::None) return;
-            if (selection == SettingId::DefaultVideoZoom)
+            if (command.setting == SettingId::DefaultVideoZoom)
                 playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
             if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
             if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
             }
-            if (hasSettingEffect(effects, SettingChangeEffect::CycleExternalPlayer)) cycleExternalPlayer(direction);
+            if (hasSettingEffect(effects, SettingChangeEffect::CycleExternalPlayer))
+                cycleExternalPlayer(command.direction);
             if (hasSettingEffect(effects, SettingChangeEffect::Save)) saveSession(session_);
             return;
         }
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            switch (settingActivation(settingsScreen_.selection())) {
+        case SettingsScreenCommandType::ActivateSetting:
+            switch (settingActivation(command.setting)) {
             case SettingActivation::None:
                 break;
             case SettingActivation::OpenDiagnostics:
@@ -1900,6 +1890,10 @@ private:
                 settingsScreen_.toggleAdvanced();
                 break;
             }
+            return;
+        case SettingsScreenCommandType::ToggleSubtitleLanguage:
+            toggleSubtitleLanguageSetting();
+            return;
         }
     }
 
