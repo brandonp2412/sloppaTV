@@ -27,6 +27,7 @@
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
 #include "playback_continuation.hpp"
+#include "playback_continuation_executor.hpp"
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
 #include "playback_resolver.hpp"
@@ -534,22 +535,6 @@ struct TrickplayTileCompletion {
     std::string error;
 };
 
-struct MediaSegmentsCompletion {
-    std::string itemId;
-    bool ok = false;
-    std::vector<JellyfinMediaSegment> segments;
-    std::string error;
-    std::chrono::steady_clock::time_point completedAt;
-};
-
-struct NextEpisodeCompletion {
-    std::string currentItemId;
-    bool ok = false;
-    JellyfinItem item;
-    std::string error;
-    std::chrono::steady_clock::time_point completedAt;
-};
-
 struct PlaybackAdjacentCompletion {
     std::string currentItemId;
     int direction = 0;
@@ -652,6 +637,7 @@ public:
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
           playbackTelemetryAsync_(api_, tasks_, asyncCompletions_),
+          playbackContinuationAsync_(api_, tasks_, asyncCompletions_),
           seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
@@ -4055,16 +4041,7 @@ private:
         if (!request) return;
         const JellyfinSession session = session_;
         const std::string itemId = *request;
-        if (!tasks_.submit([this, session, itemId] {
-                auto result = api_.getMediaSegments(session, itemId);
-                asyncCompletions_.push(MediaSegmentsCompletion{
-                    .itemId = itemId,
-                    .ok = result.ok,
-                    .segments = result.ok ? std::move(result.value) : std::vector<JellyfinMediaSegment>{},
-                    .error = result.ok ? std::string{} : std::move(result.error),
-                    .completedAt = std::chrono::steady_clock::now(),
-                });
-            })) {
+        if (!playbackContinuationAsync_.requestMediaSegments(session, itemId)) {
             playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now());
         }
     }
@@ -4075,30 +4052,7 @@ private:
         const auto request = playbackCoordinator_.beginNextEpisodeRequest(std::chrono::steady_clock::now());
         if (!request) return;
         const JellyfinSession session = session_;
-        const std::string seriesId = request->seriesId;
-        const std::string currentItemId = request->currentItemId;
-        if (!tasks_.submit([this, session, seriesId, currentItemId] {
-                auto next = api_.getFollowingEpisodeForSeries(session, seriesId, currentItemId);
-                if (!next.ok) {
-                    asyncCompletions_.push(NextEpisodeCompletion{
-                        .currentItemId = currentItemId,
-                        .ok = false,
-                        .item = {},
-                        .error = std::move(next.error),
-                        .completedAt = std::chrono::steady_clock::now(),
-                    });
-                    return;
-                }
-                if (next.value.id.empty() || next.value.id == currentItemId) return;
-                auto detailed = api_.getItem(session, next.value.id);
-                asyncCompletions_.push(NextEpisodeCompletion{
-                    .currentItemId = currentItemId,
-                    .ok = true,
-                    .item = detailed.ok ? std::move(detailed.value) : std::move(next.value),
-                    .error = {},
-                    .completedAt = std::chrono::steady_clock::now(),
-                });
-            })) {
+        if (!playbackContinuationAsync_.requestNextEpisode(session, request->seriesId, request->currentItemId)) {
             playbackCoordinator_.failNextEpisodeSubmission(std::chrono::steady_clock::now());
         }
     }
@@ -7826,6 +7780,8 @@ private:
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
+    PlaybackContinuationExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
+        playbackContinuationAsync_;
     SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         seerrAsync_;
 
