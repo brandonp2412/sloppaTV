@@ -17,12 +17,14 @@ int main() {
     coordinatedItem.id = "coordinated-item";
     coordinatedItem.type = "Episode";
     coordinatedItem.runtimeTicks = 600'000'000;
+    coordinatedItem.videoFrameRate = 23.976f;
     PlaybackTarget coordinatedTarget;
     coordinatedTarget.url = "https://media.example/coordinated-item";
     coordinatedTarget.playMethod = PlaybackMethod::DirectStream;
     coordinator.activate(coordinatedItem, coordinatedTarget, now - 11s);
     assert(coordinator.session().activeItem().id == coordinatedItem.id);
     assert(coordinator.session().activeTarget().url == coordinatedTarget.url);
+    assert(coordinator.activeTargetAvailable());
     assert(coordinator.session().lastPlaybackSummary() == "DirectStream");
     assert(coordinator.tickPlan(false, true, 35000, now).reportPlaybackStart);
     assert(coordinator.telemetry().markPlaybackStartReported());
@@ -47,6 +49,7 @@ int main() {
     assert(restorePlan.preservePlayer);
     assert(restorePlan.resumePlayback);
     assert(!restorePlan.pauseAfterRestart);
+    assert(restorePlan.videoFrameRate == coordinatedItem.videoFrameRate);
     restorePlan = coordinator.windowRestorePlan(true, true, true, false, true, true, false);
     assert(restorePlan.restore);
     assert(!restorePlan.preservePlayer);
@@ -54,9 +57,12 @@ int main() {
     assert(restorePlan.pauseAfterRestart);
     restorePlan = coordinator.windowRestorePlan(false, true, true, true, true, true, true);
     assert(!restorePlan.restore);
+    assert(restorePlan.videoFrameRate == 0.0f);
     coordinator.session().activeTarget().url.clear();
+    assert(!coordinator.activeTargetAvailable());
     restorePlan = coordinator.windowRestorePlan(true, true, true, true, true, true, true);
     assert(!restorePlan.restore);
+    assert(restorePlan.videoFrameRate == 0.0f);
     coordinator.session().activeTarget() = coordinatedTarget;
 
     auto suspendPlan = coordinator.windowSuspendPlan(true, true);

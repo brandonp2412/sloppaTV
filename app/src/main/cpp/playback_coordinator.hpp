@@ -122,6 +122,7 @@ struct PlaybackWindowRestorePlan {
     bool preservePlayer = false;
     bool resumePlayback = false;
     bool pauseAfterRestart = false;
+    float videoFrameRate = 0.0f;
 };
 
 struct PlaybackWindowSuspendPlan {
@@ -420,6 +421,8 @@ public:
     [[nodiscard]] PlaybackSessionState& session() { return sessionState_; }
 
     [[nodiscard]] const PlaybackSessionState& session() const { return sessionState_; }
+
+    [[nodiscard]] bool activeTargetAvailable() const { return !sessionState_.activeTarget().url.empty(); }
 
     [[nodiscard]] PlaybackTelemetryState& telemetry() { return telemetryState_; }
 
@@ -735,15 +738,17 @@ public:
                                                               bool rendererReady, bool rendererContextReused,
                                                               bool videoSurfaceReady, bool playerReusable,
                                                               bool resumeRequested) const {
-        return planPlaybackWindowRestore(playerScreenActive, windowRestorePending, rendererReady,
-                                         !sessionState_.activeTarget().url.empty(), rendererContextReused,
-                                         videoSurfaceReady, playerReusable, resumeRequested);
+        PlaybackWindowRestorePlan plan =
+            planPlaybackWindowRestore(playerScreenActive, windowRestorePending, rendererReady,
+                                      activeTargetAvailable(), rendererContextReused, videoSurfaceReady,
+                                      playerReusable, resumeRequested);
+        if (plan.restore) plan.videoFrameRate = sessionState_.activeItem().videoFrameRate;
+        return plan;
     }
 
     [[nodiscard]] PlaybackWindowSuspendPlan windowSuspendPlan(bool playerScreenActive,
                                                               bool playerPlayingOrPreparing) const {
-        return planPlaybackWindowSuspend(playerScreenActive, !sessionState_.activeTarget().url.empty(),
-                                         playerPlayingOrPreparing);
+        return planPlaybackWindowSuspend(playerScreenActive, activeTargetAvailable(), playerPlayingOrPreparing);
     }
 
     [[nodiscard]] PlaybackSubtitleFallbackPlan subtitleFallbackPlan() const {

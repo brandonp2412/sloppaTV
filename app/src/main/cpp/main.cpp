@@ -942,7 +942,7 @@ private:
             lastInteraction_ = std::chrono::steady_clock::now();
             screensaverActive_ = false;
             const bool restoreCandidate = screen_ == Screen::Player && playerScreenState_.windowRestorePending() &&
-                                          renderer_.ready() && !playbackCoordinator_.session().activeTarget().url.empty();
+                                          renderer_.ready() && playbackCoordinator_.activeTargetAvailable();
             const PlayerStatus restoreStatus = restoreCandidate ? player_.status() : PlayerStatus::Idle;
             const PlaybackWindowRestorePlan restorePlan = playbackCoordinator_.windowRestorePlan(
                 screen_ == Screen::Player, playerScreenState_.windowRestorePending(), renderer_.ready(),
@@ -951,8 +951,8 @@ private:
                     restoreStatus != PlayerStatus::Error,
                 playerScreenState_.resumeOnFocusRequested());
             if (restorePlan.restore) {
-                if (settings_.refreshRateSwitching && playbackCoordinator_.session().activeItem().videoFrameRate > 0.0f) {
-                    displayMode_.matchVideo(app_->window, playbackCoordinator_.session().activeItem().videoFrameRate);
+                if (settings_.refreshRateSwitching && restorePlan.videoFrameRate > 0.0f) {
+                    displayMode_.matchVideo(app_->window, restorePlan.videoFrameRate);
                 }
                 if (restorePlan.preservePlayer) {
                     if (restorePlan.resumePlayback) player_.play();
@@ -989,8 +989,7 @@ private:
             break;
         }
         case APP_CMD_TERM_WINDOW: {
-            const bool suspendCandidate =
-                screen_ == Screen::Player && !playbackCoordinator_.session().activeTarget().url.empty();
+            const bool suspendCandidate = screen_ == Screen::Player && playbackCoordinator_.activeTargetAvailable();
             const PlayerStatus status = suspendCandidate ? player_.status() : PlayerStatus::Idle;
             const PlaybackWindowSuspendPlan suspendPlan = playbackCoordinator_.windowSuspendPlan(
                 screen_ == Screen::Player, status == PlayerStatus::Playing || status == PlayerStatus::Preparing);
