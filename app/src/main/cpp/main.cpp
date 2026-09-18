@@ -35,6 +35,7 @@
 #include "playback_transition.hpp"
 #include "player_screen.hpp"
 #include "player_tracks.hpp"
+#include "queue_overlay_screen.hpp"
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
@@ -7116,17 +7117,17 @@ private:
         drawModalSurface(790.0f, 28.0f, 1090.0f, 1020.0f);
         drawLeftAlignedSingleLineFit(842.0f, 60.0f, 620.0f, 74.0f, 3.35f, "Playback queue", kText);
         renderer_.roundedRect(1555.0f, 70.0f, 255.0f, 46.0f, 18.0f, kPanelAlt);
-        drawCenteredSingleLineFit(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f, std::to_string(size - current) + " remaining",
-                                  kMuted, 12.0f, 4.0f);
+        drawCenteredSingleLineFit(1555.0f, 70.0f, 255.0f, 46.0f, 1.35f,
+                                  std::to_string(queueOverlayRemainingCount(current, size)) + " remaining", kMuted,
+                                  12.0f, 4.0f);
 
         constexpr int visibleRows = 5;
-        const int first = std::clamp(selection - 2, current, std::max(current, size - visibleRows));
+        const int first = queueOverlayFirstVisible(selection, current, size, visibleRows);
         for (int slot = 0; slot < visibleRows; ++slot) {
             const int index = first + slot;
             if (index >= size) break;
             const float y = 160.0f + static_cast<float>(slot) * 108.0f;
             const bool selected = index == selection;
-            const bool isCurrent = index == current;
             const auto& item = queueState_.items()[static_cast<size_t>(index)];
             const auto bounds = drawListItemSurface(830.0f, y, 990.0f, 90.0f, selected);
             if (!drawHomeArtwork(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f,
@@ -7134,13 +7135,11 @@ private:
                 drawArtworkPlaceholder(item, bounds[0] + 12.0f, bounds[1] + 10.0f, 124.0f, 70.0f,
                                        material_tv::cornerExtraSmall);
             }
-            const std::string marker =
-                isCurrent ? "Current" : (index == current + 1 ? "Next" : std::to_string(index - current + 1));
-            const float markerWidth = isCurrent ? 122.0f : (index == current + 1 ? 88.0f : 58.0f);
-            renderer_.roundedRect(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 16.0f,
-                                  isCurrent ? kFocusSoft : kPanelAlt);
-            drawCenteredSingleLineFit(bounds[0] + 154.0f, bounds[1] + 24.0f, markerWidth, 40.0f, 1.20f, marker,
-                                      isCurrent ? kText : kMuted, 8.0f, 3.0f);
+            const QueueOverlayMarker marker = queueOverlayMarker(index, current);
+            renderer_.roundedRect(bounds[0] + 154.0f, bounds[1] + 24.0f, marker.width, 40.0f, 16.0f,
+                                  marker.current ? kFocusSoft : kPanelAlt);
+            drawCenteredSingleLineFit(bounds[0] + 154.0f, bounds[1] + 24.0f, marker.width, 40.0f, 1.20f, marker.label,
+                                      marker.current ? kText : kMuted, 8.0f, 3.0f);
             drawLeftAlignedSingleLineFit(bounds[0] + 300.0f, bounds[1] + 5.0f, 610.0f, 46.0f, 1.85f, item.name, kText);
             const std::string secondary = episodeLabel(item);
             if (!secondary.empty()) {
@@ -7149,24 +7148,7 @@ private:
             }
         }
 
-        const std::array<std::string, 7> actions{
-            "Play now",
-            "Play next",
-            "Move up",
-            "Move down",
-            "Remove",
-            "Shuffle",
-            std::string("Repeat ") + queueRepeatModeName(queueState_.repeatMode()),
-        };
-        auto enabled = [&](int action) {
-            if (action == 0) return queueCanPlayNow(selection, current, size);
-            if (action == 1) return queueCanPlayNext(selection, current, size);
-            if (action == 2) return queueCanMoveUp(selection, current, size);
-            if (action == 3) return queueCanMoveDown(selection, current, size);
-            if (action == 4) return queueCanRemove(selection, current, size);
-            if (action == 5) return queueCanShuffle(current, size);
-            return true;
-        };
+        const auto actions = queueOverlayActionLabels(queueState_.repeatMode());
         for (size_t i = 0; i < actions.size(); ++i) {
             const bool firstActionRow = i < 4;
             const int column = firstActionRow ? static_cast<int>(i) : static_cast<int>(i) - 4;
@@ -7174,7 +7156,7 @@ private:
             const float x = 835.0f + static_cast<float>(column) * (width + 16.0f);
             const float y = firstActionRow ? 715.0f : 805.0f;
             const bool focused = queueState_.actionSelection() == static_cast<int>(i);
-            const bool available = enabled(static_cast<int>(i));
+            const bool available = queueOverlayActionEnabled(static_cast<int>(i), selection, current, size);
             std::array<float, 4> actionBounds{x, y, width, 68.0f};
             if (available)
                 actionBounds = drawButtonSurface(x, y, width, 68.0f, focused, focused, i == 4);

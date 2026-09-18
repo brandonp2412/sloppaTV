@@ -49,6 +49,7 @@ CPP_TESTS = [
     "playback_transition_test.cpp",
     "player_screen_test.cpp",
     "player_tracks_test.cpp",
+    "queue_overlay_screen_test.cpp",
     "ui_policy_test.cpp",
     "playback_queue_test.cpp",
     "request_epoch_test.cpp",
