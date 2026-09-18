@@ -49,6 +49,42 @@ int main() {
     state.setLoginFocus(AccountScreenState::kSavedUsersAction);
     assert(state.handleLoginFormInput(LoginFormInput::Activate, true).type == LoginFormCommandType::OpenProfiles);
 
+    state.setLoginFocus(AccountScreenState::kServerField);
+    auto loginScreenCommand = state.handleLoginInput(LoginScreenInput::Activate, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::EditField);
+    assert(loginScreenCommand.fieldIndex == AccountScreenState::kServerField);
+
+    state.setLoginFocus(AccountScreenState::kLoginAction);
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Activate, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::Login);
+
+    state.setKeyboardActive(true);
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Left, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::MoveKeyboard);
+    assert(loginScreenCommand.keyboardX == -1);
+    assert(loginScreenCommand.keyboardY == 0);
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Down, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::MoveKeyboard);
+    assert(loginScreenCommand.keyboardX == 0);
+    assert(loginScreenCommand.keyboardY == 1);
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Activate, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::ActivateKeyboard);
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Back, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::None);
+    assert(!state.keyboardActive());
+
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Back, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::FinishActivity);
+
+    state.beginQuickConnect("ABC123");
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Activate, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::None);
+    assert(state.quickConnectActive());
+    loginScreenCommand = state.handleLoginInput(LoginScreenInput::Back, true);
+    assert(loginScreenCommand.type == LoginScreenCommandType::CancelQuickConnect);
+    assert(!state.quickConnectActive());
+    assert(state.loginFocus() == AccountScreenState::kQuickConnectAction);
+
     state.finishTextField(AccountScreenState::kUsernameField, "new-user");
     assert(state.field(AccountScreenState::kUsernameField) == "new-user");
     assert(state.loginFocus() == AccountScreenState::kPasswordField);

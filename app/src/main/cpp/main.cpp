@@ -1153,51 +1153,33 @@ private:
     }
 
     void handleLoginKey(int32_t key) {
-        if (accountState_.quickConnectActive()) {
-            if (key == AKEYCODE_BACK) {
-                api_.cancelPendingRequests();
-                requestEpochs_.auth.invalidate();
-                accountState_.endQuickConnect(true);
-                loading_ = false;
-                error_.clear();
-            }
-            return;
-        }
-        if (key == AKEYCODE_BACK) {
-            if (accountState_.keyboardActive())
-                accountState_.setKeyboardActive(false);
-            else
-                ANativeActivity_finish(app_->activity);
-            return;
-        }
-        if (accountState_.keyboardActive()) {
-            if (key == AKEYCODE_DPAD_LEFT)
-                moveKeyboard(-1, 0);
-            else if (key == AKEYCODE_DPAD_RIGHT)
-                moveKeyboard(1, 0);
-            else if (key == AKEYCODE_DPAD_UP)
-                moveKeyboard(0, -1);
-            else if (key == AKEYCODE_DPAD_DOWN)
-                moveKeyboard(0, 1);
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-                activateKeyboardKey(false);
-            return;
-        }
-
-        LoginFormInput input = LoginFormInput::None;
-        if (key == AKEYCODE_DPAD_UP)
-            input = LoginFormInput::Up;
+        LoginScreenInput input = LoginScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = LoginScreenInput::Back;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = LoginScreenInput::Up;
         else if (key == AKEYCODE_DPAD_DOWN)
-            input = LoginFormInput::Down;
+            input = LoginScreenInput::Down;
         else if (key == AKEYCODE_DPAD_LEFT)
-            input = LoginFormInput::Left;
+            input = LoginScreenInput::Left;
         else if (key == AKEYCODE_DPAD_RIGHT)
-            input = LoginFormInput::Right;
+            input = LoginScreenInput::Right;
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = LoginFormInput::Activate;
+            input = LoginScreenInput::Activate;
 
-        const LoginFormCommand command = accountState_.handleLoginFormInput(input, !sessionRegistry_.empty());
-        if (command.type == LoginFormCommandType::EditField) {
+        const LoginScreenCommand command = accountState_.handleLoginInput(input, !sessionRegistry_.empty());
+        if (command.type == LoginScreenCommandType::FinishActivity) {
+            ANativeActivity_finish(app_->activity);
+        } else if (command.type == LoginScreenCommandType::CancelQuickConnect) {
+            api_.cancelPendingRequests();
+            requestEpochs_.auth.invalidate();
+            loading_ = false;
+            error_.clear();
+        } else if (command.type == LoginScreenCommandType::MoveKeyboard) {
+            moveKeyboard(command.keyboardX, command.keyboardY);
+        } else if (command.type == LoginScreenCommandType::ActivateKeyboard) {
+            activateKeyboardKey(false);
+        } else if (command.type == LoginScreenCommandType::EditField) {
             const int field = command.fieldIndex;
             const int mode = kTextInputLoginServer + field;
             static constexpr std::array<const char*, 3> hints{"Jellyfin server URL", "Jellyfin username",
@@ -1206,13 +1188,13 @@ private:
                                                                  hints[static_cast<size_t>(field)], mode,
                                                                  field == AccountScreenState::kPasswordField));
             if (accountState_.keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
-        } else if (command.type == LoginFormCommandType::Login) {
+        } else if (command.type == LoginScreenCommandType::Login) {
             loginAsync();
-        } else if (command.type == LoginFormCommandType::QuickConnect) {
+        } else if (command.type == LoginScreenCommandType::QuickConnect) {
             quickConnectAsync();
-        } else if (command.type == LoginFormCommandType::Discover) {
+        } else if (command.type == LoginScreenCommandType::Discover) {
             discoverServersAsync();
-        } else if (command.type == LoginFormCommandType::OpenProfiles) {
+        } else if (command.type == LoginScreenCommandType::OpenProfiles) {
             openProfiles();
         }
     }

@@ -8,6 +8,36 @@
 #include <string>
 #include <utility>
 
+enum class LoginScreenInput {
+    None,
+    Back,
+    Up,
+    Down,
+    Left,
+    Right,
+    Activate,
+};
+
+enum class LoginScreenCommandType {
+    None,
+    FinishActivity,
+    CancelQuickConnect,
+    MoveKeyboard,
+    ActivateKeyboard,
+    EditField,
+    Login,
+    QuickConnect,
+    Discover,
+    OpenProfiles,
+};
+
+struct LoginScreenCommand {
+    LoginScreenCommandType type = LoginScreenCommandType::None;
+    int fieldIndex = -1;
+    int keyboardX = 0;
+    int keyboardY = 0;
+};
+
 enum class LoginFormInput {
     None,
     Up,
@@ -87,6 +117,62 @@ public:
     [[nodiscard]] int loginFocus() const { return loginFocus_; }
 
     void setLoginFocus(int focus) { loginFocus_ = std::clamp(focus, kServerField, kSavedUsersAction); }
+
+    [[nodiscard]] LoginScreenCommand handleLoginInput(LoginScreenInput input, bool hasSavedUsers) {
+        if (quickConnectActive_) {
+            if (input == LoginScreenInput::Back) {
+                endQuickConnect(true);
+                return {.type = LoginScreenCommandType::CancelQuickConnect};
+            }
+            return {};
+        }
+
+        if (input == LoginScreenInput::Back) {
+            if (keyboardActive_) {
+                keyboardActive_ = false;
+                return {};
+            }
+            return {.type = LoginScreenCommandType::FinishActivity};
+        }
+
+        if (keyboardActive_) {
+            if (input == LoginScreenInput::Left) return {.type = LoginScreenCommandType::MoveKeyboard, .keyboardX = -1};
+            if (input == LoginScreenInput::Right) return {.type = LoginScreenCommandType::MoveKeyboard, .keyboardX = 1};
+            if (input == LoginScreenInput::Up) return {.type = LoginScreenCommandType::MoveKeyboard, .keyboardY = -1};
+            if (input == LoginScreenInput::Down) return {.type = LoginScreenCommandType::MoveKeyboard, .keyboardY = 1};
+            if (input == LoginScreenInput::Activate) return {.type = LoginScreenCommandType::ActivateKeyboard};
+            return {};
+        }
+
+        LoginFormInput formInput = LoginFormInput::None;
+        if (input == LoginScreenInput::Up)
+            formInput = LoginFormInput::Up;
+        else if (input == LoginScreenInput::Down)
+            formInput = LoginFormInput::Down;
+        else if (input == LoginScreenInput::Left)
+            formInput = LoginFormInput::Left;
+        else if (input == LoginScreenInput::Right)
+            formInput = LoginFormInput::Right;
+        else if (input == LoginScreenInput::Activate)
+            formInput = LoginFormInput::Activate;
+
+        const LoginFormCommand command = handleLoginFormInput(formInput, hasSavedUsers);
+        switch (command.type) {
+        case LoginFormCommandType::EditField:
+            return {.type = LoginScreenCommandType::EditField, .fieldIndex = command.fieldIndex};
+        case LoginFormCommandType::Login:
+            return {.type = LoginScreenCommandType::Login};
+        case LoginFormCommandType::QuickConnect:
+            return {.type = LoginScreenCommandType::QuickConnect};
+        case LoginFormCommandType::Discover:
+            return {.type = LoginScreenCommandType::Discover};
+        case LoginFormCommandType::OpenProfiles:
+            return {.type = LoginScreenCommandType::OpenProfiles};
+        case LoginFormCommandType::None:
+            return {};
+        }
+        return {};
+    }
 
     [[nodiscard]] LoginFormCommand handleLoginFormInput(LoginFormInput input, bool hasSavedUsers) {
         if (input == LoginFormInput::Up) {
@@ -218,7 +304,7 @@ public:
         if (profileSelection_ < 0 || profileSelection_ >= savedCount) return {};
         return {
             .type = profileAction_ == 0 ? ProfilesScreenCommandType::SwitchSession
-                                       : ProfilesScreenCommandType::ForgetSession,
+                                        : ProfilesScreenCommandType::ForgetSession,
             .sessionIndex = profileSelection_,
         };
     }
