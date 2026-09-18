@@ -905,7 +905,7 @@ private:
             settings_.seerrServer = text;
             if (changed) {
                 settings_.seerrSessionCookie.clear();
-                seerrStorageState_.clearTargets();
+                seerrDomain_.invalidateStorageTargets();
             }
             systemTextInputOriginal_.clear();
             saveSession(session_);
@@ -2501,7 +2501,7 @@ private:
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
             input = SeerrStorageState::PickerInput::Activate;
 
-        auto command = seerrStorageState_.handlePickerInput(input);
+        auto command = seerrDomain_.handleStoragePickerInput(input);
         if (command.type == SeerrStorageState::PickerCommandType::Back) {
             popScreen(Screen::Search);
             return;
@@ -2694,8 +2694,7 @@ private:
         }
         session_ = {};
         settings_.seerrSessionCookie.clear();
-        seerrStorageState_.clearTargets();
-        seerrStorageState_.clearRefreshDeadline();
+        seerrDomain_.resetStorageForSessionClear();
         serverInfo_ = {};
         serverInfoLoading_ = false;
         home_ = {};
@@ -3292,7 +3291,7 @@ private:
     }
 
     void openSeerrDrivePicker(const SeerrMediaItem& item) {
-        const auto status = seerrStorageState_.preparePicker(item);
+        const auto status = seerrDomain_.prepareStoragePicker(item);
         if (status == SeerrStorageState::PickerStatus::Loading) {
             showNotice("LOADING SEERR STORAGE…", 4s);
             return;
@@ -4580,7 +4579,7 @@ private:
                 session_.token.clear();
                 session_.userId.clear();
                 settings_.seerrSessionCookie.clear();
-                seerrStorageState_.clearTargets();
+                seerrDomain_.invalidateStorageTargets();
                 resetNavigation(Screen::Login);
                 error_ = "SESSION EXPIRED - LOG IN AGAIN";
                 saveSession(session_);
@@ -7404,9 +7403,8 @@ private:
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
     SeerrDomainState seerrDomain_;
-    SeerrRequestState& seerrRequestState_ = seerrDomain_.requests();
-    SeerrStorageState& seerrStorageState_ = seerrDomain_.storage();
-    SeerrConnectionState& seerrConnectionState_ = seerrDomain_.connection();
+    const SeerrRequestState& seerrRequestState_ = seerrDomain_.requests();
+    const SeerrStorageState& seerrStorageState_ = seerrDomain_.storage();
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

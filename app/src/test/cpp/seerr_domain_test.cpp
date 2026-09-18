@@ -174,13 +174,27 @@ int main() {
 
     SeerrDomainState deferredStorage;
     deferredStorage.storage().finishRefresh({target(9)}, start);
-    assert(deferredStorage.storage().preparePicker(media("seerr:movie:21")) ==
+    assert(deferredStorage.prepareStoragePicker(media("seerr:movie:21")) ==
            SeerrStorageState::PickerStatus::Ready);
     assert(!deferredStorage.takePendingStorageRequest(false));
     assert(deferredStorage.storage().pendingRequest());
     const auto pendingStorage = deferredStorage.takePendingStorageRequest(true);
     assert(pendingStorage && pendingStorage->id == "seerr:movie:21");
     assert(!deferredStorage.storage().pendingRequest());
+
+    assert(deferredStorage.prepareStoragePicker(media("seerr:movie:22")) ==
+           SeerrStorageState::PickerStatus::Ready);
+    const auto pickerCommand =
+        deferredStorage.handleStoragePickerInput(SeerrStorageState::PickerInput::Activate);
+    assert(pickerCommand.type == SeerrStorageState::PickerCommandType::Selected);
+    assert(pickerCommand.selection && pickerCommand.selection->item.id == "seerr:movie:22");
+
+    const auto refreshDeadline = deferredStorage.storage().refreshDeadline();
+    deferredStorage.invalidateStorageTargets();
+    assert(deferredStorage.storage().targets().empty());
+    assert(deferredStorage.storage().refreshDeadline() == refreshDeadline);
+    deferredStorage.resetStorageForSessionClear();
+    assert(deferredStorage.storage().refreshDeadline() == SeerrStorageState::TimePoint{});
 
     SeerrEndpoint rotated = configured;
     rotated.auth.sessionCookie = "rotated-session";

@@ -189,9 +189,24 @@ public:
         return true;
     }
 
+    [[nodiscard]] SeerrStorageState::PickerStatus prepareStoragePicker(const SeerrMediaItem& item) {
+        return storage_.preparePicker(item);
+    }
+
+    [[nodiscard]] SeerrStorageState::PickerCommand handleStoragePickerInput(SeerrStorageState::PickerInput input) {
+        return storage_.handlePickerInput(input);
+    }
+
     [[nodiscard]] std::optional<SeerrMediaItem> takePendingStorageRequest(bool driveSelectionEnabled) {
         if (!driveSelectionEnabled || !storage_.pendingRequest()) return std::nullopt;
         return storage_.takePendingRequest();
+    }
+
+    void invalidateStorageTargets() { storage_.clearTargets(); }
+
+    void resetStorageForSessionClear() {
+        storage_.clearTargets();
+        storage_.clearRefreshDeadline();
     }
 
     [[nodiscard]] MutationOutcome completeDeleteRequest(const SeerrEndpoint& requestedEndpoint,
