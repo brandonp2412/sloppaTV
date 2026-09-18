@@ -60,6 +60,7 @@
 #include "player_screen.hpp"
 #include "player_seek_feedback_renderer.hpp"
 #include "player_skip_button_renderer.hpp"
+#include "player_status_renderer.hpp"
 #include "player_subtitle_renderer.hpp"
 #include "player_trickplay_renderer.hpp"
 #include "player_tracks.hpp"
@@ -5588,16 +5589,14 @@ private:
 
         const int position = playerScreenState_.positionMs();
         const int duration = playerScreenState_.durationMs();
+        std::string clockText;
+        std::string finishLabel;
         if (settings_.showClock) {
             const std::time_t wallNow = std::time(nullptr);
-            drawRightAlignedSingleLine(1840.0f, 46.0f, 2.05f, formatLocalClock(wallNow, settings_.clock24Hour), kMuted,
-                                       210.0f);
+            clockText = formatLocalClock(wallNow, settings_.clock24Hour);
             if (remainingMs > 0 && status == PlayerStatus::Playing && !skipSegment) {
                 const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
-                const std::string finishLabel = "Ends " + formatLocalClock(finishAt, settings_.clock24Hour);
-                const float finishWidth = renderer_.textWidth(1.75f, finishLabel);
-                renderer_.text(std::max(1180.0f, 1770.0f - finishWidth), 772.0f, 1.75f, finishLabel, kSecondaryText,
-                               590.0f);
+                finishLabel = "Ends " + formatLocalClock(finishAt, settings_.clock24Hour);
             }
         }
         const std::string state =
@@ -5606,7 +5605,20 @@ private:
                 : (playbackCoordinator_.transitionLoading()
                        ? (playbackCoordinator_.session().activeItem().id.empty() ? "Loading episode" : "Switching track")
                        : (status == PlayerStatus::Preparing ? "Loading" : ""));
-        if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
+        renderPlayerStatus(
+            renderer_,
+            PlayerStatusRenderState{
+                .clockText = clockText,
+                .finishText = finishLabel,
+                .statusText = state,
+            },
+            PlayerStatusRenderStyle<Color>{
+                .muted = kMuted,
+                .secondary = kSecondaryText,
+            },
+            [this](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
+                drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
+            });
 
         const std::string positionText = formatPlaybackTime(position);
         const std::string durationText = formatPlaybackTime(duration);

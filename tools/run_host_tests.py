@@ -73,6 +73,7 @@ CPP_TESTS = [
     "player_screen_test.cpp",
     "player_seek_feedback_renderer_test.cpp",
     "player_skip_button_renderer_test.cpp",
+    "player_status_renderer_test.cpp",
     "player_subtitle_renderer_test.cpp",
     "player_trickplay_renderer_test.cpp",
     "player_tracks_test.cpp",
