@@ -11,7 +11,10 @@ def metadata_path
 end
 
 def release_aab
-  File.join(project_root, "app", "build", "outputs", "bundle", "release", "app-release.aab")
+  ENV.fetch(
+    "SLOPPATV_RELEASE_AAB",
+    File.join(project_root, "app", "build", "outputs", "bundle", "release", "app-release.aab")
+  )
 end
 
 def release_gradle_user_home
@@ -151,6 +154,15 @@ platform :android do
     validate_metadata!
     build_release_bundle!
     upload_store!(track: "internal", include_bundle: true)
+  end
+
+  desc "Deploy a prebuilt signed AAB and the current listing to Google Play production"
+  lane :production_artifact do
+    ensure_play_credentials!
+    ensure_production_confirmation!
+    validate_metadata!
+    UI.user_error!("Release AAB was not found at #{release_aab}") unless File.file?(release_aab)
+    upload_store!(track: "production", include_bundle: true)
   end
 
   desc "Build the signed AAB and deploy it to Google Play production"

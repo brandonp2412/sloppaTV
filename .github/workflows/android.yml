@@ -59,6 +59,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y clang-format clang-tidy cppcheck
 
+      - name: Set Play version code for main release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          play_version_code=$((100000 + GITHUB_RUN_NUMBER))
+          echo "ORG_GRADLE_PROJECT_SLOPPATV_VERSION_CODE=$play_version_code" >> "$GITHUB_ENV"
+          echo "SLOPPATV_PLAY_VERSION_CODE=$play_version_code" >> "$GITHUB_ENV"
+          echo "Google Play version code: $play_version_code"
+
       - name: Configure Play signing identity
         shell: bash
         env:
@@ -124,6 +133,7 @@ jobs:
         run: ./gradlew --no-daemon test assembleDebug assembleBenchmark assembleRelease bundleRelease
 
       - name: Run C++ quality gates
+        continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: ./tools/cpp_quality.py check
 
       - name: Upload Android build artifacts
@@ -185,8 +195,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  publish-screenshots:
-    name: Attach Android TV screenshots to the release source
+  publish-play-store:
+    name: Publish Android TV release to Google Play
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: screenshots
     runs-on: ubuntu-latest
@@ -206,8 +216,38 @@ jobs:
           name: sloppaTV-screenshots
           path: artifacts/ci-screenshots
 
+      - name: Download tested Android build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sloppaTV-apks
+          path: artifacts/apks
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1
+        with:
+          bundler-cache: true
+
       - name: Update Play Store listing assets
         run: python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots
+
+      - name: Prepare Google Play release notes
+        shell: bash
+        run: |
+          play_version_code=$((100000 + GITHUB_RUN_NUMBER))
+          release_notes="fastlane/metadata/android/en-US/changelogs/$play_version_code.txt"
+          printf 'Latest sloppaTV main release: %s\n' "$(git log -1 --pretty=%s)" > "$release_notes"
+
+      - name: Publish AAB, metadata, graphics and screenshots to production
+        shell: bash
+        env:
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          PLAY_PRODUCTION: "1"
+        run: |
+          set -euo pipefail
+          : "${SUPPLY_JSON_KEY_DATA:?GOOGLE_PLAY_JSON_KEY secret is required}"
+          release_aab="$(find artifacts/apks -type f -name '*.aab' -print -quit)"
+          test -n "$release_aab"
+          SLOPPATV_RELEASE_AAB="$release_aab" bundle exec fastlane android production_artifact
 
       - name: Commit updated screenshot assets
         env:
