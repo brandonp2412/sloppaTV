@@ -28,6 +28,14 @@ struct AutoplayPlaybackCompletion {
     ApiValueResult<PlaybackTarget> result;
 };
 
+struct BeginPlaybackCompletion {
+    uint64_t generation = 0;
+    int queuedPlaybackIndex = -1;
+    JellyfinItem selected;
+    JellyfinItem playable;
+    ApiValueResult<PlaybackTarget> result;
+};
+
 template <typename Client, typename TaskRunner, typename CompletionSink, typename Epoch>
 class PlaybackResolutionExecutor {
 public:
@@ -80,6 +88,47 @@ public:
                 .queuedNextIndex = queuedNextIndex,
                 .item = std::move(resolved.item),
                 .result = std::move(resolved.target),
+            });
+        });
+    }
+
+    bool resolveSelection(JellyfinSession session, JellyfinItem selected, PlaybackResolutionOptions options,
+                          uint64_t generation, int queuedPlaybackIndex) {
+        return tasks_.submit([this, session = std::move(session), selected = std::move(selected),
+                              options = std::move(options), generation, queuedPlaybackIndex]() mutable {
+            JellyfinItem playable = selected;
+            if (selected.type == "Series") {
+                auto next = client_.getNextUpForSeries(session, selected.id);
+                if (!next.ok) {
+                    if (!epoch_.active(generation)) return;
+                    ApiValueResult<PlaybackTarget> failed;
+                    failed.error = std::move(next.error);
+                    completions_.push(BeginPlaybackCompletion{
+                        .generation = generation,
+                        .queuedPlaybackIndex = queuedPlaybackIndex,
+                        .selected = std::move(selected),
+                        .playable = {},
+                        .result = std::move(failed),
+                    });
+                    return;
+                }
+                playable = std::move(next.value);
+                auto detailed = client_.getItem(session, playable.id);
+                if (detailed.ok) playable = std::move(detailed.value);
+            }
+
+            const auto tracks = selectPlaybackTracks(playable, options.audioLanguagePreference,
+                                                     options.subtitleLanguagePreference, options.trackPolicy);
+            auto target = client_.resolvePlayback(session, playable, options.maxStreamingBitrate,
+                                                  options.maxAudioChannels, options.overrides, tracks.audioStreamIndex,
+                                                  tracks.subtitleStreamIndex);
+            if (!epoch_.active(generation)) return;
+            completions_.push(BeginPlaybackCompletion{
+                .generation = generation,
+                .queuedPlaybackIndex = queuedPlaybackIndex,
+                .selected = std::move(selected),
+                .playable = std::move(playable),
+                .result = std::move(target),
             });
         });
     }

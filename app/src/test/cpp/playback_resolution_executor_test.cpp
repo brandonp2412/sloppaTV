@@ -13,7 +13,8 @@ enum class Origin {
 };
 
 using QueuedCompletion = QueuedPlaybackResolutionCompletion<Origin>;
-using Completion = std::variant<QueuedCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion>;
+using Completion =
+    std::variant<QueuedCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, BeginPlaybackCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -53,6 +54,20 @@ struct FakeClient {
         return result;
     }
 
+    ApiValueResult<JellyfinItem> getNextUpForSeries(const JellyfinSession&, const std::string& seriesId) {
+        lastSeriesId = seriesId;
+        ApiValueResult<JellyfinItem> result;
+        result.ok = nextUpOk;
+        if (!nextUpOk) {
+            result.error = "next up failed";
+            return result;
+        }
+        result.value.id = nextUpItemId;
+        result.value.type = "Episode";
+        result.value.name = "Next up summary";
+        return result;
+    }
+
     ApiValueResult<PlaybackTarget> resolvePlayback(const JellyfinSession&, const JellyfinItem& item, int bitrate,
                                                    int channels, const PlaybackOverrides&, int audioStreamIndex,
                                                    int subtitleStreamIndex) {
@@ -72,8 +87,11 @@ struct FakeClient {
     }
 
     bool detailOk = true;
+    bool nextUpOk = true;
     bool resolveOk = true;
     int detailRequests = 0;
+    std::string nextUpItemId = "series-next";
+    std::string lastSeriesId;
     std::string lastResolvedItemId;
     int lastBitrate = 0;
     int lastChannels = 0;
@@ -129,6 +147,39 @@ int main() {
     assert(autoplayCompletion.queuedNextIndex == 9);
     assert(autoplayCompletion.item.id == "autoplay");
 
+    JellyfinItem movieSelection;
+    movieSelection.id = "movie";
+    movieSelection.type = "Movie";
+    const int detailRequestsBeforeMovie = client.detailRequests;
+    assert(executor.resolveSelection(session, movieSelection, options, 7, -1));
+    const auto& movieCompletion = std::get<BeginPlaybackCompletion>(completions.events.back());
+    assert(movieCompletion.selected.id == "movie");
+    assert(movieCompletion.playable.id == "movie");
+    assert(movieCompletion.result.ok);
+    assert(client.detailRequests == detailRequestsBeforeMovie);
+
+    JellyfinItem seriesSelection;
+    seriesSelection.id = "series-1";
+    seriesSelection.type = "Series";
+    assert(executor.resolveSelection(session, seriesSelection, options, 7, 4));
+    const auto& seriesCompletion = std::get<BeginPlaybackCompletion>(completions.events.back());
+    assert(seriesCompletion.queuedPlaybackIndex == 4);
+    assert(seriesCompletion.selected.id == "series-1");
+    assert(seriesCompletion.playable.id == "series-next");
+    assert(seriesCompletion.playable.name == "Detailed");
+    assert(client.lastSeriesId == "series-1");
+    assert(client.lastResolvedItemId == "series-next");
+
+    client.nextUpOk = false;
+    assert(executor.resolveSelection(session, seriesSelection, options, 7, 5));
+    const auto& failedSeriesCompletion = std::get<BeginPlaybackCompletion>(completions.events.back());
+    assert(failedSeriesCompletion.queuedPlaybackIndex == 5);
+    assert(failedSeriesCompletion.selected.id == "series-1");
+    assert(failedSeriesCompletion.playable.id.empty());
+    assert(!failedSeriesCompletion.result.ok);
+    assert(failedSeriesCompletion.result.error == "next up failed");
+    client.nextUpOk = true;
+
     const size_t completionCount = completions.events.size();
     epoch.activeGeneration = 8;
     JellyfinItem stale;
@@ -151,6 +202,7 @@ int main() {
     assert(!executor.resolvePlayerItem(session, rejected, options, 8));
     assert(!executor.resolveAutoplay(session, rejected, options, 8, 10));
     assert(!executor.resolveQueued(session, rejected, options, 8, Origin::Home, 0, -1, false));
+    assert(!executor.resolveSelection(session, rejected, options, 8, -1));
 
     return 0;
 }

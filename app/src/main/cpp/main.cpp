@@ -553,14 +553,6 @@ struct FallbackPlaybackCompletion {
     ApiValueResult<PlaybackTarget> result;
 };
 
-struct BeginPlaybackCompletion {
-    uint64_t generation = 0;
-    int queuedPlaybackIndex = -1;
-    JellyfinItem selected;
-    JellyfinItem playable;
-    ApiValueResult<PlaybackTarget> result;
-};
-
 struct SeriesPlayAllCompletion {
     uint64_t generation = 0;
     JellyfinItem series;
@@ -3934,49 +3926,18 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const JellyfinItem selected = detail_;
-        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
-        const int maxAudioChannels = settings_.maxAudioChannels;
-        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        const auto audioPreference = trackState_.audioLanguagePreference();
-        const auto subtitlePreference = trackState_.subtitleLanguagePreference();
-        const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
+        PlaybackResolutionOptions resolutionOptions{
+            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
+            .maxAudioChannels = settings_.maxAudioChannels,
+            .overrides = playbackOverridesFor(settings_),
+            .audioLanguagePreference = trackState_.audioLanguagePreference(),
+            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .trackPolicy = playbackTrackSelectionPolicy(),
+        };
         const uint64_t generation = requestEpochs_.playback.begin();
 
-        tasks_.submit([this, session, selected, maxStreamingBitrate, maxAudioChannels, playbackOverrides,
-                       audioPreference, subtitlePreference, trackPolicy, queuedPlaybackIndex, generation] {
-            JellyfinItem playable = selected;
-            if (selected.type == "Series") {
-                auto next = api_.getNextUpForSeries(session, selected.id);
-                if (!next.ok) {
-                    if (!requestEpochs_.playback.active(generation)) return;
-                    ApiValueResult<PlaybackTarget> failed;
-                    failed.error = std::move(next.error);
-                    asyncCompletions_.push(BeginPlaybackCompletion{
-                        .generation = generation,
-                        .queuedPlaybackIndex = queuedPlaybackIndex,
-                        .selected = selected,
-                        .playable = {},
-                        .result = std::move(failed),
-                    });
-                    return;
-                }
-                playable = std::move(next.value);
-                auto detailed = api_.getItem(session, playable.id);
-                if (detailed.ok) playable = std::move(detailed.value);
-            }
-
-            const auto tracks = selectPlaybackTracks(playable, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(session, playable, maxStreamingBitrate, maxAudioChannels,
-                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
-            if (!requestEpochs_.playback.active(generation)) return;
-            asyncCompletions_.push(BeginPlaybackCompletion{
-                .generation = generation,
-                .queuedPlaybackIndex = queuedPlaybackIndex,
-                .selected = selected,
-                .playable = std::move(playable),
-                .result = std::move(target),
-            });
-        });
+        playbackResolutionAsync_.resolveSelection(session, selected, std::move(resolutionOptions), generation,
+                                                  queuedPlaybackIndex);
     }
 
     void requestMediaSegmentsAsync() {
