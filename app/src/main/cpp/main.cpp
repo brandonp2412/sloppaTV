@@ -2206,10 +2206,7 @@ private:
     }
 
     void cycleAudioTrack() {
-        const PlaybackAudioCyclePlan plan = planPlaybackAudioTrackCycle(
-            playbackSessionState_.activeItem(), trackState_.selectedAudioServerIndex(),
-            trackState_.selectedSubtitleServerIndex(), playbackSessionState_.activeTarget().playMethod,
-            playbackTrackSelectionPolicy());
+        const PlaybackAudioCyclePlan plan = playbackCoordinator_.audioTrackCyclePlan(playbackTrackSelectionPolicy());
         if (!plan.available) {
             error_ = "ONLY ONE AUDIO TRACK";
             return;
@@ -2289,9 +2286,7 @@ private:
             return;
         }
 
-        const PlaybackSubtitleCyclePlan plan = planPlaybackSubtitleTrackCycle(
-            playbackSessionState_.activeItem(), trackState_.selectedSubtitleServerIndex(),
-            playbackSessionState_.activeTarget().playMethod, settings_.subtitleLanguages);
+        const PlaybackSubtitleCyclePlan plan = playbackCoordinator_.subtitleTrackCyclePlan(settings_.subtitleLanguages);
         if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) {
             error_ = "NO SUBTITLE TRACKS";
             return;

@@ -201,6 +201,27 @@ int main() {
          .isExternal = true},
     };
     preferenceCoordinator.activate(preferenceItem, coordinatedTarget, now);
+    preferenceCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
+    preferenceCoordinator.selectAudioStream(2);
+    preferenceCoordinator.selectSubtitleStream(4);
+    const PlaybackTrackSelectionPolicy cyclePolicy{
+        .autoSubtitles = false,
+        .autoSubtitleLanguage = {},
+        .autoSubtitleSourceLanguage = {},
+        .allowedSubtitleLanguages = {},
+    };
+    auto audioCyclePlan = preferenceCoordinator.audioTrackCyclePlan(cyclePolicy);
+    assert(audioCyclePlan.available);
+    assert(audioCyclePlan.audioStreamIndex == 3);
+    assert(audioCyclePlan.subtitleStreamIndex == 4);
+    assert(audioCyclePlan.tryEmbeddedSwitch);
+    auto subtitleCyclePlan = preferenceCoordinator.subtitleTrackCyclePlan({});
+    assert(subtitleCyclePlan.action == PlaybackSubtitleCycleAction::LoadNative);
+    assert(subtitleCyclePlan.subtitleStreamIndex == 5);
+    preferenceCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectStream;
+    audioCyclePlan = preferenceCoordinator.audioTrackCyclePlan(cyclePolicy);
+    assert(!audioCyclePlan.tryEmbeddedSwitch);
+
     preferenceCoordinator.rememberAudioLanguagePreference(2);
     assert(preferenceCoordinator.tracks().audioLanguagePreference() == std::optional<std::string>{"en"});
     preferenceCoordinator.rememberAudioLanguagePreference(3);

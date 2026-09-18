@@ -6,6 +6,7 @@
 #include "playback_queue.hpp"
 #include "playback_session.hpp"
 #include "playback_telemetry.hpp"
+#include "playback_track_selection.hpp"
 #include "playback_transition.hpp"
 #include "player_tracks.hpp"
 
@@ -594,6 +595,18 @@ public:
 
     [[nodiscard]] PlaybackSubtitleFallbackPlan subtitleFallbackPlan() const {
         return planPlaybackSubtitleFallback(sessionState_.activeItem(), sessionState_.activeTarget(), trackState_);
+    }
+
+    [[nodiscard]] PlaybackAudioCyclePlan audioTrackCyclePlan(const PlaybackTrackSelectionPolicy& policy) const {
+        return planPlaybackAudioTrackCycle(sessionState_.activeItem(), trackState_.selectedAudioServerIndex(),
+                                           trackState_.selectedSubtitleServerIndex(),
+                                           sessionState_.activeTarget().playMethod, policy);
+    }
+
+    [[nodiscard]] PlaybackSubtitleCyclePlan
+    subtitleTrackCyclePlan(const std::vector<std::string>& allowedLanguages) const {
+        return planPlaybackSubtitleTrackCycle(sessionState_.activeItem(), trackState_.selectedSubtitleServerIndex(),
+                                              sessionState_.activeTarget().playMethod, allowedLanguages);
     }
 
     void rememberAudioLanguagePreference(int streamIndex) {
