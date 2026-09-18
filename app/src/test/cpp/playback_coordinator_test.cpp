@@ -516,6 +516,14 @@ int main() {
     assert(continuationCoordinator.completeNextEpisodeRequest(continuationEpisode.id, resolvedNext));
     assert(continuationCoordinator.continuation().nextItem());
     assert(continuationCoordinator.continuation().nextItem()->id == resolvedNext.id);
+    const auto prefetchedAdjacentPlan = continuationCoordinator.beginAdjacentEpisodePlan(1);
+    assert(prefetchedAdjacentPlan.nextItem);
+    assert(prefetchedAdjacentPlan.nextItem->id == resolvedNext.id);
+    assert(!prefetchedAdjacentPlan.lookup);
+    assert(!continuationCoordinator.continuation().adjacentEpisodeLookupInProgress());
+    const auto noAdjacentPlan = continuationCoordinator.beginAdjacentEpisodePlan(0);
+    assert(!noAdjacentPlan.nextItem);
+    assert(!noAdjacentPlan.lookup);
 
     continuationCoordinator.continuation().clearNextEpisode();
     assert(continuationCoordinator.beginNextEpisodeRequest(now));
@@ -527,12 +535,13 @@ int main() {
     assert(!continuationCoordinator.beginNextEpisodeRequest(now + 9999ms));
     assert(continuationCoordinator.beginNextEpisodeRequest(now + 10000ms));
 
-    const auto adjacentRequest = continuationCoordinator.beginAdjacentEpisodeLookup();
-    assert(adjacentRequest);
-    assert(adjacentRequest->currentItemId == continuationEpisode.id);
-    assert(adjacentRequest->seriesId == continuationEpisode.seriesId);
-    assert(adjacentRequest->currentSeason == continuationEpisode.parentIndexNumber);
-    assert(adjacentRequest->currentEpisode == continuationEpisode.indexNumber);
+    const auto adjacentPlan = continuationCoordinator.beginAdjacentEpisodePlan(-1);
+    assert(!adjacentPlan.nextItem);
+    assert(adjacentPlan.lookup);
+    assert(adjacentPlan.lookup->currentItemId == continuationEpisode.id);
+    assert(adjacentPlan.lookup->seriesId == continuationEpisode.seriesId);
+    assert(adjacentPlan.lookup->currentSeason == continuationEpisode.parentIndexNumber);
+    assert(adjacentPlan.lookup->currentEpisode == continuationEpisode.indexNumber);
     assert(!continuationCoordinator.beginAdjacentEpisodeLookup());
     assert(!continuationCoordinator.finishAdjacentEpisodeLookup("stale-item"));
     assert(!continuationCoordinator.continuation().adjacentEpisodeLookupInProgress());

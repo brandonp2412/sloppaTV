@@ -3435,18 +3435,18 @@ private:
                 return;
             }
         }
-        if (direction > 0 && playbackCoordinator_.continuation().nextItem()) {
-            playPlayerItemAsync(*playbackCoordinator_.continuation().nextItem());
+        if (!session_.valid()) return;
+        PlaybackAdjacentEpisodePlan plan = playbackCoordinator_.beginAdjacentEpisodePlan(direction);
+        if (plan.nextItem) {
+            playPlayerItemAsync(std::move(*plan.nextItem));
             return;
         }
-        if (!session_.valid()) return;
-        const auto request = playbackCoordinator_.beginAdjacentEpisodeLookup();
-        if (!request) return;
+        if (!plan.lookup) return;
         const JellyfinSession session = session_;
-        const std::string currentItemId = request->currentItemId;
-        const std::string seriesId = request->seriesId;
-        const int currentSeason = request->currentSeason;
-        const int currentEpisode = request->currentEpisode;
+        const std::string currentItemId = plan.lookup->currentItemId;
+        const std::string seriesId = plan.lookup->seriesId;
+        const int currentSeason = plan.lookup->currentSeason;
+        const int currentEpisode = plan.lookup->currentEpisode;
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
         playbackContinuationAsync_.requestAdjacentEpisode(session, seriesId, currentItemId, currentSeason,
                                                           currentEpisode, direction);

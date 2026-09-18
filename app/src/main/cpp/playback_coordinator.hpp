@@ -188,6 +188,11 @@ struct PlaybackAdjacentEpisodeRequest {
     int currentEpisode = 0;
 };
 
+struct PlaybackAdjacentEpisodePlan {
+    std::optional<JellyfinItem> nextItem;
+    std::optional<PlaybackAdjacentEpisodeRequest> lookup;
+};
+
 inline std::string playbackSummary(const PlaybackTarget& target, const JellyfinItem& item) {
     std::string summary = playbackMethodName(target.playMethod);
     if (!item.videoCodec.empty()) summary += " / " + item.videoCodec;
@@ -663,6 +668,17 @@ public:
             .currentSeason = item.parentIndexNumber,
             .currentEpisode = item.indexNumber,
         };
+    }
+
+    [[nodiscard]] PlaybackAdjacentEpisodePlan beginAdjacentEpisodePlan(int direction) {
+        PlaybackAdjacentEpisodePlan plan;
+        if (direction == 0) return plan;
+        if (direction > 0 && continuationState_.nextItem()) {
+            plan.nextItem = *continuationState_.nextItem();
+            return plan;
+        }
+        plan.lookup = beginAdjacentEpisodeLookup();
+        return plan;
     }
 
     bool finishAdjacentEpisodeLookup(std::string_view expectedItemId) {
