@@ -71,6 +71,7 @@ CPP_TESTS = [
     "seerr_async_executor_test.cpp",
     "seerr_connection_state_test.cpp",
     "seerr_domain_test.cpp",
+    "seerr_drive_picker_renderer_test.cpp",
     "seerr_drive_picker_screen_test.cpp",
     "seerr_home_projection_test.cpp",
     "seerr_media_test.cpp",

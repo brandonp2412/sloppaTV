@@ -56,6 +56,7 @@
 #include "series_playback_executor.hpp"
 #include "seerr_async_executor.hpp"
 #include "seerr_domain.hpp"
+#include "seerr_drive_picker_renderer.hpp"
 #include "seerr_drive_picker_screen.hpp"
 #include "seerr_home_projection.hpp"
 #include "seerr_jellyfin_adapter.hpp"
@@ -5716,52 +5717,32 @@ private:
         const SeerrDrivePickerViewModel model =
             seerrDrivePickerViewModel(seerrDomain_.pendingStorageRequest(), seerrDomain_.storageDriveChoices(),
                                       seerrDomain_.storageDriveSelection());
-        renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
-        renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(model.subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
-
-        if (model.rows.empty()) {
-            renderEmptyState("No storage targets", "Back returns to search.");
-            return;
-        }
-
-        for (size_t slot = 0; slot < model.rows.size(); ++slot) {
-            const SeerrDrivePickerRow& row = model.rows[slot].row;
-            const bool focused = model.rows[slot].focused;
-            const float x = 120.0f;
-            const float y = 220.0f + static_cast<float>(slot) * 145.0f;
-            constexpr float width = 1680.0f;
-            drawListItemSurface(x, y, width, 116.0f, focused, material_tv::cornerMedium,
-                                materialWideListItemFocusScale());
-
-            // Compact physical-drive glyph: body, platter slot, activity light.
-            const float iconX = x + 34.0f;
-            const float iconY = y + 30.0f;
-            renderer_.roundedRect(iconX, iconY, 58.0f, 52.0f, 10.0f, focused ? kFocusSoft : kPanelElevated);
-            renderer_.roundedRect(iconX + 10.0f, iconY + 11.0f, 38.0f, 7.0f, 3.5f, focused ? kFocus : kMuted);
-            renderer_.roundedRect(iconX + 40.0f, iconY + 33.0f, 7.0f, 7.0f, 3.5f, focused ? kFocus : kSecondaryText);
-
-            renderer_.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f,
-                                             fitTextLines(row.name, 2.05f, 760.0f, 1),
-                                             focused ? kText : kSecondaryText, 760.0f);
-
-            const float barX = 1085.0f;
-            const float barY = y + 48.0f;
-            constexpr float barWidth = 500.0f;
-            if (row.hasCapacity) {
-                renderer_.roundedRect(barX, barY, barWidth, 14.0f, 7.0f, kPanelElevated);
-                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, row.secondaryText, kMuted, 760.0f);
-                renderer_.roundedRect(barX, barY, barWidth * static_cast<float>(row.usedPercent) / 100.0f, 14.0f, 7.0f,
-                                      row.nearFull ? kError : (focused ? kFocus : kSecondaryText));
-            } else {
-                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, fitTextLines(row.secondaryText, 1.38f, 920.0f, 1), kMuted,
-                               920.0f);
-            }
-            drawCenteredSingleLineFit(1510.0f, y + 26.0f, 250.0f, 58.0f, 1.60f, row.statusText,
-                                      row.nearFull ? kError : (focused ? kText : kSecondaryText), 8.0f,
-                                      3.0f);
-        }
-        drawCenteredSingleLineFit(590.0f, 970.0f, 740.0f, 48.0f, 1.45f,
-                                  "Up / Down selects   ·   OK requests   ·   Back cancels", kMuted, 12.0f, 4.0f);
+        renderSeerrDrivePickerScreen(
+            renderer_, model,
+            SeerrDrivePickerRenderStyle<Color>{
+                .headlineScale = material_tv::type::headline,
+                .cornerMedium = material_tv::cornerMedium,
+                .focusScale = materialWideListItemFocusScale(),
+                .text = kText,
+                .muted = kMuted,
+                .secondaryText = kSecondaryText,
+                .focus = kFocus,
+                .focusSoft = kFocusSoft,
+                .panelElevated = kPanelElevated,
+                .error = kError,
+            },
+            [this](float x, float y, float width, float height, bool focused, float radius, float focusScale) {
+                drawListItemSurface(x, y, width, height, focused, radius, focusScale);
+            },
+            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(value, scale, maxWidth, maxLines);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
+                                          verticalPadding);
+            },
+            [this](const std::string& title, const std::string& message) { renderEmptyState(title, message); });
     }
 
     void renderPlayer() {
