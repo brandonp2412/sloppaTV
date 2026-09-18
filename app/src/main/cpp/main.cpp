@@ -17,6 +17,7 @@
 #include "browse_renderer.hpp"
 #include "browse_screen.hpp"
 #include "cast_renderer.hpp"
+#include "details_completion_controller.hpp"
 #include "details_renderer.hpp"
 #include "details_screen.hpp"
 #include "details_navigation_controller.hpp"
@@ -3554,20 +3555,20 @@ private:
         error_.clear();
     }
 
+    void applyDetailsCompletionEffects(DetailsCompletionEffects effects) {
+        if (effects.finishLoading) loading_ = false;
+        if (effects.error) error_ = std::move(*effects.error);
+    }
+
     void applyAsyncCompletion(ItemMenuDetailCompletion& completion) {
-        if (!completion.result.ok || screen_ != Screen::ItemMenu || detail_.id != completion.itemId) return;
-        detail_ = std::move(completion.result.value);
+        applyDetailsCompletionEffects(
+            DetailsCompletionController::apply(completion, screen_ == Screen::ItemMenu, detail_));
     }
 
     void applyAsyncCompletion(PersonItemsCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::PersonItems || detailsState_.selectedPerson().id != completion.personId) return;
-        if (!completion.result.ok) {
-            error_ = "PERSON: " + completion.result.error;
-            return;
-        }
-        detailsState_.setPersonItems(std::move(completion.result.value));
+        applyDetailsCompletionEffects(DetailsCompletionController::apply(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::PersonItems,
+            detailsState_));
     }
 
     void applyAsyncCompletion(DiagnosticsCompletion& completion) {
@@ -3588,28 +3589,15 @@ private:
     }
 
     void applyAsyncCompletion(SeasonsCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::Seasons || detailsState_.seriesDetail().id != completion.seriesId) return;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
-        detailsState_.setSeasons(std::move(completion.result.value));
+        applyDetailsCompletionEffects(DetailsCompletionController::apply(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Seasons,
+            detailsState_));
     }
 
     void applyAsyncCompletion(EpisodesCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::Episodes || detailsState_.seriesDetail().id != completion.seriesId ||
-            detailsState_.selectedSeason().id != completion.seasonId) {
-            return;
-        }
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
-        detailsState_.setEpisodes(std::move(completion.result.value));
+        applyDetailsCompletionEffects(DetailsCompletionController::apply(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Episodes,
+            detailsState_));
     }
 
     void applyAsyncCompletion(BrowsePageCompletion& completion) {
@@ -3770,20 +3758,14 @@ private:
     }
 
     void applyAsyncCompletion(DetailsItemCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::Details || detail_.id != completion.itemId) return;
-        if (!completion.result.ok) {
-            error_ = "DETAILS: " + completion.result.error;
-            return;
-        }
-        detail_ = std::move(completion.result.value);
+        applyDetailsCompletionEffects(DetailsCompletionController::apply(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Details, detail_));
     }
 
     void applyAsyncCompletion(DetailsSimilarCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        if (screen_ != Screen::Details || detail_.id != completion.itemId) return;
-        detailsState_.setSimilar(std::move(completion.items));
+        applyDetailsCompletionEffects(DetailsCompletionController::apply(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Details, detail_,
+            detailsState_));
     }
 
     void applyAsyncCompletion(EpisodeSeriesContextRequestCompletion& completion) {
@@ -3795,9 +3777,9 @@ private:
     }
 
     void applyAsyncCompletion(EpisodeSeriesContextCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        if (screen_ != Screen::Details || detail_.id != completion.itemId || detail_.type != "Episode") return;
-        detailsState_.setEpisodeSeriesContext(std::move(completion.series), std::move(completion.seasons));
+        applyDetailsCompletionEffects(DetailsCompletionController::apply(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Details, detail_,
+            detailsState_));
     }
 
     void applyAsyncCompletion(QuickConnectStartedCompletion& completion) {

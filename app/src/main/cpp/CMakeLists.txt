@@ -15,6 +15,7 @@ add_library(sloppatv SHARED
     account_completion_controller.cpp
     account_navigation_controller.cpp
     browse_navigation_controller.cpp
+    details_completion_controller.cpp
     details_navigation_controller.cpp
     home_navigation_controller.cpp
     queue_navigation_controller.cpp

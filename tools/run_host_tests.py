@@ -129,6 +129,7 @@ CPP_TESTS = [
 
 LINKED_CPP_TESTS = [
     ("account_completion_controller_test.cpp", ["account_completion_controller.cpp"], []),
+    ("details_completion_controller_test.cpp", ["details_completion_controller.cpp"], []),
     ("details_navigation_controller_test.cpp", ["details_navigation_controller.cpp"], []),
     ("screen_navigation_controller_test.cpp", [
         "browse_navigation_controller.cpp",
