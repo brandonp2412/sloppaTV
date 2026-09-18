@@ -26,9 +26,11 @@ int main() {
     assert(coordinator.session().lastPlaybackSummary() == "DirectStream");
     assert(coordinator.tickPlan(false, true, 35000, "Episode", now).reportPlaybackStart);
     assert(coordinator.telemetry().markPlaybackStartReported());
-    const auto coordinatedRelease = coordinator.releasePlan(true, false, true, 12345);
-    assert(coordinatedRelease.reportStop);
-    assert(coordinatedRelease.reportTicks == 123'450'000);
+    const auto coordinatedRelease = coordinator.releaseContext(true, false, true, 12345);
+    assert(coordinatedRelease.item.id == coordinatedItem.id);
+    assert(coordinatedRelease.target.url == coordinatedTarget.url);
+    assert(coordinatedRelease.plan.reportStop);
+    assert(coordinatedRelease.plan.reportTicks == 123'450'000);
     auto coordinatedProgress = coordinator.progressPlan(true, true, false, false, true, 23456);
     assert(coordinatedProgress.report);
     assert(coordinatedProgress.paused);

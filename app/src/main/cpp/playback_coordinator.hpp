@@ -47,6 +47,12 @@ struct PlaybackReleasePlan {
     bool reportStop = false;
 };
 
+struct PlaybackReleaseContext {
+    PlaybackReleasePlan plan;
+    JellyfinItem item;
+    PlaybackTarget target;
+};
+
 struct PlaybackProgressPlan {
     int64_t ticks = 0;
     bool report = false;
@@ -357,6 +363,15 @@ public:
         return planPlaybackRelease(requestedStopReport, completed, telemetryState_.playbackStartReported(),
                                    jellyfinSessionValid, sessionState_.activeItem(), sessionState_.activeTarget(),
                                    positionMs);
+    }
+
+    [[nodiscard]] PlaybackReleaseContext releaseContext(bool requestedStopReport, bool completed,
+                                                        bool jellyfinSessionValid, int positionMs) const {
+        return PlaybackReleaseContext{
+            .plan = releasePlan(requestedStopReport, completed, jellyfinSessionValid, positionMs),
+            .item = sessionState_.activeItem(),
+            .target = sessionState_.activeTarget(),
+        };
     }
 
     void finishRelease() {

@@ -3662,10 +3662,11 @@ private:
             refreshPlaybackTelemetry(true);
         }
         const auto session = session_;
-        const auto item = playbackSessionState_.activeItem();
-        const auto target = playbackSessionState_.activeTarget();
-        const PlaybackReleasePlan releasePlan =
-            playbackCoordinator_.releasePlan(reportStop, completed, session.valid(), playerScreenState_.positionMs());
+        const PlaybackReleaseContext release =
+            playbackCoordinator_.releaseContext(reportStop, completed, session.valid(), playerScreenState_.positionMs());
+        const PlaybackReleasePlan releasePlan = release.plan;
+        const auto& item = release.item;
+        const auto& target = release.target;
         if (!item.id.empty()) {
             JellyfinItem updated = item;
             updated.positionTicks = releasePlan.cachedPositionTicks;
