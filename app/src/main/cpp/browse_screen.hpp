@@ -52,7 +52,10 @@ enum class BrowseScreenCommandType {
     Back,
     ApplyFilter,
     OpenContext,
-    OpenSelected,
+    SelectGenre,
+    SelectLetter,
+    OpenContainer,
+    OpenDetails,
     SelectionChanged,
 };
 
@@ -309,7 +312,15 @@ public:
         if (items_.empty()) return {};
 
         if (input == BrowseScreenInput::Context) return {.type = BrowseScreenCommandType::OpenContext};
-        if (input == BrowseScreenInput::Activate) return {.type = BrowseScreenCommandType::OpenSelected};
+        if (input == BrowseScreenInput::Activate) {
+            const auto& selected = items_[static_cast<size_t>(selection_)];
+            if (selected.type == "Genre") return {.type = BrowseScreenCommandType::SelectGenre};
+            if (selected.type == "Letter") return {.type = BrowseScreenCommandType::SelectLetter};
+            if (selected.type == "Folder" || selected.type == "BoxSet" || selected.type == "CollectionFolder") {
+                return {.type = BrowseScreenCommandType::OpenContainer};
+            }
+            return {.type = BrowseScreenCommandType::OpenDetails};
+        }
 
         int dx = 0;
         int dy = 0;

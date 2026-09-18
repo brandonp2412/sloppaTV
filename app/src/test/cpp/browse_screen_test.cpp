@@ -144,7 +144,27 @@ int main() {
     command = inputState.handleInput(BrowseScreenInput::Context, 5);
     assert(command.type == BrowseScreenCommandType::OpenContext);
     command = inputState.handleInput(BrowseScreenInput::Activate, 5);
-    assert(command.type == BrowseScreenCommandType::OpenSelected);
+    assert(command.type == BrowseScreenCommandType::OpenDetails);
+
+    inputState.replacePage({item("genre", "Comedy", "Genre")}, 60);
+    command = inputState.handleInput(BrowseScreenInput::Activate, 5);
+    assert(command.type == BrowseScreenCommandType::SelectGenre);
+
+    inputState.replacePage({item("letter", "C", "Letter")}, 60);
+    command = inputState.handleInput(BrowseScreenInput::Activate, 5);
+    assert(command.type == BrowseScreenCommandType::SelectLetter);
+
+    inputState.replacePage({item("folder", "Folder", "Folder")}, 60);
+    command = inputState.handleInput(BrowseScreenInput::Activate, 5);
+    assert(command.type == BrowseScreenCommandType::OpenContainer);
+
+    inputState.replacePage({item("box", "Box", "BoxSet")}, 60);
+    command = inputState.handleInput(BrowseScreenInput::Activate, 5);
+    assert(command.type == BrowseScreenCommandType::OpenContainer);
+
+    inputState.replacePage({item("library", "Library", "CollectionFolder")}, 60);
+    command = inputState.handleInput(BrowseScreenInput::Activate, 5);
+    assert(command.type == BrowseScreenCommandType::OpenContainer);
 
     inputState.openContainer(box, true);
     inputState.replacePage({item("nested", "Nested")}, 60);

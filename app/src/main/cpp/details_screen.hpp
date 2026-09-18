@@ -51,6 +51,57 @@ struct DetailsScreenCommand {
     DetailsScreenCommandType type = DetailsScreenCommandType::None;
 };
 
+enum class DetailsAction {
+    StartPlayback,
+    OpenEpisodes,
+    PlayAll,
+    ToggleFavorite,
+    TogglePlayed,
+    OpenCast,
+    OpenItemMenu,
+    Back,
+};
+
+inline std::vector<DetailsAction> detailActionIdsFor(const JellyfinItem& item) {
+    std::vector<DetailsAction> result;
+    result.reserve(7);
+    result.push_back(DetailsAction::StartPlayback);
+    if (item.type == "Series") {
+        result.push_back(DetailsAction::OpenEpisodes);
+        result.push_back(DetailsAction::PlayAll);
+    }
+    result.push_back(DetailsAction::ToggleFavorite);
+    result.push_back(DetailsAction::TogglePlayed);
+    if (!item.people.empty()) result.push_back(DetailsAction::OpenCast);
+    if (item.type != "Series") result.push_back(DetailsAction::OpenItemMenu);
+    result.push_back(DetailsAction::Back);
+    return result;
+}
+
+inline std::string detailsActionLabel(DetailsAction action, const JellyfinItem& item, bool stillWatchingPrompt) {
+    switch (action) {
+    case DetailsAction::StartPlayback:
+        return stillWatchingPrompt
+                   ? "KEEP WATCHING"
+                   : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY"));
+    case DetailsAction::OpenEpisodes:
+        return "EPISODES";
+    case DetailsAction::PlayAll:
+        return "PLAY ALL";
+    case DetailsAction::ToggleFavorite:
+        return item.favorite ? "UNFAVORITE" : "FAVORITE";
+    case DetailsAction::TogglePlayed:
+        return item.played ? "MARK UNWATCHED" : "MARK WATCHED";
+    case DetailsAction::OpenCast:
+        return "CAST";
+    case DetailsAction::OpenItemMenu:
+        return "MORE";
+    case DetailsAction::Back:
+        return "BACK";
+    }
+    return {};
+}
+
 enum class CastScreenInput {
     None,
     Back,
@@ -114,6 +165,63 @@ struct ItemMenuScreenCommand {
     ItemMenuScreenCommandType type = ItemMenuScreenCommandType::None;
 };
 
+enum class ItemMenuAction {
+    PlayAll,
+    PlayExternal,
+    ViewQueue,
+    ToggleFavorite,
+    TogglePlayed,
+    ToggleHomeVisibility,
+    RefreshMetadata,
+    DeleteMedia,
+    DeleteRequest,
+    Back,
+};
+
+inline std::vector<ItemMenuAction> itemMenuActionIdsFor(const JellyfinItem& item, bool seerrRequest,
+                                                        bool hasExternalPlayer, bool hasQueue) {
+    if (seerrRequest) return {ItemMenuAction::DeleteRequest, ItemMenuAction::Back};
+
+    std::vector<ItemMenuAction> result;
+    result.reserve(9);
+    if (item.type == "Series") result.push_back(ItemMenuAction::PlayAll);
+    if (hasExternalPlayer) result.push_back(ItemMenuAction::PlayExternal);
+    if (hasQueue) result.push_back(ItemMenuAction::ViewQueue);
+    result.push_back(ItemMenuAction::ToggleFavorite);
+    result.push_back(ItemMenuAction::TogglePlayed);
+    result.push_back(ItemMenuAction::ToggleHomeVisibility);
+    result.push_back(ItemMenuAction::RefreshMetadata);
+    if (item.canDelete) result.push_back(ItemMenuAction::DeleteMedia);
+    result.push_back(ItemMenuAction::Back);
+    return result;
+}
+
+inline std::string itemMenuActionLabel(ItemMenuAction action, const JellyfinItem& item, bool hiddenFromHome) {
+    switch (action) {
+    case ItemMenuAction::PlayAll:
+        return "PLAY ALL";
+    case ItemMenuAction::PlayExternal:
+        return "PLAY EXTERNAL";
+    case ItemMenuAction::ViewQueue:
+        return "VIEW QUEUE";
+    case ItemMenuAction::ToggleFavorite:
+        return item.favorite ? "UNFAVORITE" : "FAVORITE";
+    case ItemMenuAction::TogglePlayed:
+        return item.played ? "MARK UNWATCHED" : "MARK WATCHED";
+    case ItemMenuAction::ToggleHomeVisibility:
+        return hiddenFromHome ? "SHOW ON HOME" : "HIDE FROM HOME";
+    case ItemMenuAction::RefreshMetadata:
+        return "REFRESH METADATA";
+    case ItemMenuAction::DeleteMedia:
+        return "DELETE MEDIA";
+    case ItemMenuAction::DeleteRequest:
+        return "DELETE REQUEST";
+    case ItemMenuAction::Back:
+        return "BACK";
+    }
+    return {};
+}
+
 class DetailsScreenState {
 public:
     void reset() {
@@ -152,21 +260,17 @@ public:
     }
 
     [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
+        const auto ids = detailActionIdsFor(item);
         std::vector<std::string> result;
-        result.reserve(7);
-        result.emplace_back(stillWatchingPrompt
-                                ? "KEEP WATCHING"
-                                : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY")));
-        if (item.type == "Series") {
-            result.emplace_back("EPISODES");
-            result.emplace_back("PLAY ALL");
-        }
-        result.emplace_back(item.favorite ? "UNFAVORITE" : "FAVORITE");
-        result.emplace_back(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        if (!item.people.empty()) result.emplace_back("CAST");
-        if (item.type != "Series") result.emplace_back("MORE");
-        result.emplace_back("BACK");
+        result.reserve(ids.size());
+        for (DetailsAction action : ids) result.push_back(detailsActionLabel(action, item, stillWatchingPrompt));
         return result;
+    }
+
+    [[nodiscard]] std::optional<DetailsAction> selectedAction(const JellyfinItem& item) const {
+        const auto ids = detailActionIdsFor(item);
+        if (actionSelection_ < 0 || actionSelection_ >= static_cast<int>(ids.size())) return std::nullopt;
+        return ids[static_cast<size_t>(actionSelection_)];
     }
 
     [[nodiscard]] DetailsScreenCommand handleInput(DetailsScreenInput input, int actionCount, bool episodeDetail) {
@@ -257,20 +361,21 @@ public:
         deleteConfirmationSelection_ = 1;
     }
 
-    [[nodiscard]] std::vector<std::string> itemMenuActions(const JellyfinItem& item, bool hasExternalPlayer,
-                                                           bool hasQueue, bool hiddenFromHome) const {
+    [[nodiscard]] std::vector<std::string> itemMenuActions(const JellyfinItem& item, bool seerrRequest,
+                                                           bool hasExternalPlayer, bool hasQueue,
+                                                           bool hiddenFromHome) const {
+        const auto ids = itemMenuActionIdsFor(item, seerrRequest, hasExternalPlayer, hasQueue);
         std::vector<std::string> result;
-        result.reserve(9);
-        if (item.type == "Series") result.emplace_back("PLAY ALL");
-        if (hasExternalPlayer) result.emplace_back("PLAY EXTERNAL");
-        if (hasQueue) result.emplace_back("VIEW QUEUE");
-        result.emplace_back(item.favorite ? "UNFAVORITE" : "FAVORITE");
-        result.emplace_back(item.played ? "MARK UNWATCHED" : "MARK WATCHED");
-        result.emplace_back(hiddenFromHome ? "SHOW ON HOME" : "HIDE FROM HOME");
-        result.emplace_back("REFRESH METADATA");
-        if (item.canDelete) result.emplace_back("DELETE MEDIA");
-        result.emplace_back("BACK");
+        result.reserve(ids.size());
+        for (ItemMenuAction action : ids) result.push_back(itemMenuActionLabel(action, item, hiddenFromHome));
         return result;
+    }
+
+    [[nodiscard]] std::optional<ItemMenuAction> selectedItemMenuAction(const JellyfinItem& item, bool seerrRequest,
+                                                                       bool hasExternalPlayer, bool hasQueue) const {
+        const auto ids = itemMenuActionIdsFor(item, seerrRequest, hasExternalPlayer, hasQueue);
+        if (itemMenuSelection_ < 0 || itemMenuSelection_ >= static_cast<int>(ids.size())) return std::nullopt;
+        return ids[static_cast<size_t>(itemMenuSelection_)];
     }
 
     [[nodiscard]] ItemMenuScreenCommand handleItemMenuInput(ItemMenuScreenInput input, int actionCount) {

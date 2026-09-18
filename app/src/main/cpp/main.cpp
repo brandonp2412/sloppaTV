@@ -1336,10 +1336,6 @@ private:
         }
     }
 
-    bool isBrowsableContainer(const JellyfinItem& item) const {
-        return item.type == "Folder" || item.type == "BoxSet" || item.type == "CollectionFolder";
-    }
-
     void cancelContentLoadForNavigation() {
         if (!loading_) return;
         requestEpochs_.content.invalidate();
@@ -1388,19 +1384,26 @@ private:
             if (supportsItemContextMenu(selected)) openItemMenuForItem(selected);
             return;
         }
-        if (command.type == BrowseScreenCommandType::OpenSelected) {
+        if (command.type == BrowseScreenCommandType::SelectGenre) {
             const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
-            if (selected.type == "Genre") {
-                browseState_.selectGenre(selected.name);
-                loadBrowsePageAsync(false);
-            } else if (selected.type == "Letter") {
-                browseState_.selectLetter(selected.name);
-                loadBrowsePageAsync(false);
-            } else if (isBrowsableContainer(selected)) {
-                openBrowseContainer(selected, true);
-            } else {
-                openDetails(selected);
-            }
+            browseState_.selectGenre(selected.name);
+            loadBrowsePageAsync(false);
+            return;
+        }
+        if (command.type == BrowseScreenCommandType::SelectLetter) {
+            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
+            browseState_.selectLetter(selected.name);
+            loadBrowsePageAsync(false);
+            return;
+        }
+        if (command.type == BrowseScreenCommandType::OpenContainer) {
+            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
+            openBrowseContainer(selected, true);
+            return;
+        }
+        if (command.type == BrowseScreenCommandType::OpenDetails) {
+            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
+            openDetails(selected);
             return;
         }
         if (command.type == BrowseScreenCommandType::SelectionChanged) {
@@ -1701,24 +1704,34 @@ private:
         }
         if (command.type != DetailsScreenCommandType::ActivateAction) return;
 
-        const std::string& action = actions[static_cast<size_t>(detailsState_.actionSelection())];
-        if (action == "PLAY" || action == "RESUME" || action == "PLAY NEXT" || action == "KEEP WATCHING")
+        const auto action = detailsState_.selectedAction(detail_);
+        if (!action) return;
+        switch (*action) {
+        case DetailsAction::StartPlayback:
             beginPlayback();
-        else if (action == "EPISODES")
+            return;
+        case DetailsAction::OpenEpisodes:
             openSeasons();
-        else if (action == "PLAY ALL")
+            return;
+        case DetailsAction::PlayAll:
             beginSeriesPlayAll();
-        else if (action == "FAVORITE" || action == "UNFAVORITE")
+            return;
+        case DetailsAction::ToggleFavorite:
             toggleFavoriteAsync();
-        else if (action == "MARK WATCHED" || action == "MARK UNWATCHED")
+            return;
+        case DetailsAction::TogglePlayed:
             togglePlayedAsync();
-        else if (action == "CAST")
+            return;
+        case DetailsAction::OpenCast:
             openCast();
-        else if (action == "MORE")
+            return;
+        case DetailsAction::OpenItemMenu:
             openItemMenu();
-        else if (action == "BACK") {
+            return;
+        case DetailsAction::Back:
             playbackCoordinator_.resetContinuationPrompt();
             popScreen(Screen::Home);
+            return;
         }
     }
 
@@ -1780,9 +1793,8 @@ private:
     }
 
     std::vector<std::string> itemMenuActions() const {
-        if (isSeerrItem(detail_)) return {"DELETE REQUEST", "BACK"};
-        return detailsState_.itemMenuActions(detail_, selectedExternalPlayer().has_value(), !queueState_.empty(),
-                                             isHiddenFromHome(detail_));
+        return detailsState_.itemMenuActions(detail_, isSeerrItem(detail_), selectedExternalPlayer().has_value(),
+                                             !queueState_.empty(), isHiddenFromHome(detail_));
     }
 
     void openItemMenu() {
@@ -1807,7 +1819,11 @@ private:
         else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
             input = ItemMenuScreenInput::Activate;
 
-        const auto actions = itemMenuActions();
+        const bool seerrRequest = isSeerrItem(detail_);
+        const bool hasExternalPlayer = selectedExternalPlayer().has_value();
+        const bool hasQueue = !queueState_.empty();
+        const auto actions =
+            detailsState_.itemMenuActions(detail_, seerrRequest, hasExternalPlayer, hasQueue, isHiddenFromHome(detail_));
         const ItemMenuScreenCommand command =
             detailsState_.handleItemMenuInput(input, static_cast<int>(actions.size()));
         if (command.type == ItemMenuScreenCommandType::Back) {
@@ -1823,34 +1839,47 @@ private:
         }
         if (command.type != ItemMenuScreenCommandType::ActivateAction) return;
 
-        const std::string& action = actions[static_cast<size_t>(detailsState_.itemMenuSelection())];
-        if (action == "PLAY ALL") {
+        const auto action =
+            detailsState_.selectedItemMenuAction(detail_, seerrRequest, hasExternalPlayer, hasQueue);
+        if (!action) return;
+        switch (*action) {
+        case ItemMenuAction::PlayAll:
             popScreen(Screen::Details);
             if (screen_ != Screen::Details) pushScreen(Screen::Details);
             beginSeriesPlayAll();
-        } else if (action == "PLAY EXTERNAL") {
+            return;
+        case ItemMenuAction::PlayExternal:
             popScreen(Screen::Details);
             if (screen_ != Screen::Details) pushScreen(Screen::Details);
             launchExternalPlaybackAsync();
-        } else if (action == "VIEW QUEUE") {
+            return;
+        case ItemMenuAction::ViewQueue:
             popScreen(Screen::Details);
             openQueueOverlay();
-        } else if (action == "FAVORITE" || action == "UNFAVORITE") {
+            return;
+        case ItemMenuAction::ToggleFavorite:
             popScreen(Screen::Details);
             toggleFavoriteAsync();
-        } else if (action == "MARK WATCHED" || action == "MARK UNWATCHED") {
+            return;
+        case ItemMenuAction::TogglePlayed:
             popScreen(Screen::Details);
             togglePlayedAsync();
-        } else if (action == "HIDE FROM HOME" || action == "SHOW ON HOME") {
+            return;
+        case ItemMenuAction::ToggleHomeVisibility:
             popScreen(Screen::Details);
             toggleHiddenFromHome();
-        } else if (action == "REFRESH METADATA") {
+            return;
+        case ItemMenuAction::RefreshMetadata:
             popScreen(Screen::Details);
             refreshCurrentItemMetadataAsync();
-        } else if (action == "DELETE MEDIA" || action == "DELETE REQUEST") {
+            return;
+        case ItemMenuAction::DeleteMedia:
+        case ItemMenuAction::DeleteRequest:
             detailsState_.setDeleteConfirmation(true);
-        } else {
+            return;
+        case ItemMenuAction::Back:
             popScreen(Screen::Details);
+            return;
         }
     }
 

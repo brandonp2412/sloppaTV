@@ -19,6 +19,10 @@ int main() {
     series.people.push_back({.id = "p6", .name = "Six", .imageTag = "", .role = ""});
 
     state.beginDetails();
+    const auto actionIds = detailActionIdsFor(series);
+    assert(actionIds.front() == DetailsAction::StartPlayback);
+    assert(actionIds[1] == DetailsAction::OpenEpisodes);
+    assert(actionIds[2] == DetailsAction::PlayAll);
     const auto actions = state.actions(series, false);
     assert(actions.front() == "PLAY NEXT");
     assert(actions[1] == "EPISODES");
@@ -28,6 +32,7 @@ int main() {
 
     state.moveAction(1, static_cast<int>(actions.size()));
     assert(state.actionSelection() == 1);
+    assert(state.selectedAction(series) == DetailsAction::OpenEpisodes);
     state.moveAction(-10, static_cast<int>(actions.size()));
     assert(state.actionSelection() == 0);
 
@@ -80,7 +85,11 @@ int main() {
     assert(state.selectedSimilar()->id == "b");
 
     state.beginItemMenu();
-    auto menu = state.itemMenuActions(series, true, true, false);
+    const auto menuIds = itemMenuActionIdsFor(series, false, true, true);
+    assert(menuIds.front() == ItemMenuAction::PlayAll);
+    assert(menuIds[1] == ItemMenuAction::PlayExternal);
+    assert(menuIds[2] == ItemMenuAction::ViewQueue);
+    auto menu = state.itemMenuActions(series, false, true, true, false);
     assert(menu.front() == "PLAY ALL");
     assert(menu[1] == "PLAY EXTERNAL");
     assert(menu[2] == "VIEW QUEUE");
@@ -90,8 +99,17 @@ int main() {
     menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Down, static_cast<int>(menu.size()));
     assert(menuCommand.type == ItemMenuScreenCommandType::None);
     assert(state.itemMenuSelection() == 3);
+    assert(state.selectedItemMenuAction(series, false, true, true) == ItemMenuAction::ToggleFavorite);
     menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Activate, static_cast<int>(menu.size()));
     assert(menuCommand.type == ItemMenuScreenCommandType::ActivateAction);
+
+    const auto seerrMenu = state.itemMenuActions(series, true, false, false, false);
+    assert(seerrMenu.size() == 2);
+    assert(seerrMenu[0] == "DELETE REQUEST");
+    assert(seerrMenu[1] == "BACK");
+    const auto seerrMenuIds = itemMenuActionIdsFor(series, true, false, false);
+    assert(seerrMenuIds[0] == ItemMenuAction::DeleteRequest);
+    assert(seerrMenuIds[1] == ItemMenuAction::Back);
 
     state.setDeleteConfirmation(true);
     assert(state.deleteConfirmation());
