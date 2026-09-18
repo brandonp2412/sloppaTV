@@ -146,6 +146,7 @@ LINKED_CPP_TESTS = [
     ("jellyfin_item_parser_test.cpp", ["jellyfin_item_parser.cpp"], []),
     ("jellyfin_media_segment_parser_test.cpp", ["jellyfin_media_segment_parser.cpp"], []),
     ("playback_completion_controller_test.cpp", ["playback_completion_controller.cpp"], []),
+    ("player_completion_controller_test.cpp", ["player_completion_controller.cpp"], []),
     ("playback_info_test.cpp", ["playback_info.cpp"], []),
     ("session_store_test.cpp", ["session_store.cpp"], []),
     ("task_runner_test.cpp", ["task_runner.cpp"], ["-pthread"]),

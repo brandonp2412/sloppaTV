@@ -63,6 +63,7 @@
 #include "playback_telemetry_executor.hpp"
 #include "playback_track_selection.hpp"
 #include "playback_transition.hpp"
+#include "player_completion_controller.hpp"
 #include "player_controls_renderer.hpp"
 #include "player_header_renderer.hpp"
 #include "player_next_up_renderer.hpp"
@@ -3944,21 +3945,39 @@ private:
         externalPlaybackState_.stage(std::move(*completion.launch));
     }
 
-    void applyAsyncCompletion(SubtitleLoadCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        if (!playbackCoordinator_.subtitleLoadMatches(completion.itemId, completion.requestedSubtitleIndex)) return;
-        if (completion.cues.empty()) {
-            playbackCoordinator_.failSubtitleLoad();
-            showNotice("SUBTITLES UNAVAILABLE FOR THIS FILE");
-            return;
+    void applyPlayerCompletionEffects(PlayerCompletionEffects effects) {
+        if (effects.diagnostic) {
+            const auto& diagnostic = *effects.diagnostic;
+            switch (diagnostic.kind) {
+            case PlayerCompletionDiagnosticKind::None:
+                break;
+            case PlayerCompletionDiagnosticKind::SubtitleLoaded:
+                __android_log_print(ANDROID_LOG_INFO, kTag, "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
+                                    diagnostic.itemId.c_str(), diagnostic.streamIndex, diagnostic.codec.c_str(),
+                                    diagnostic.count);
+                break;
+            case PlayerCompletionDiagnosticKind::MediaSegmentsUnavailable:
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s",
+                                    diagnostic.error.c_str());
+                break;
+            case PlayerCompletionDiagnosticKind::MediaSegmentsLoaded:
+                __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", diagnostic.count);
+                break;
+            case PlayerCompletionDiagnosticKind::NextEpisodeUnavailable:
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s",
+                                    diagnostic.error.c_str());
+                break;
+            }
         }
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Subtitle loaded item=%s stream=%d codec=%s cues=%zu",
-                            completion.itemId.c_str(), completion.loadedSubtitle.index,
-                            completion.loadedSubtitle.codec.c_str(), completion.cues.size());
-        playbackCoordinator_.completeSubtitleLoad(completion.loadedSubtitle.index, completion.loadedSubtitle.language,
-                                                   std::move(completion.cues));
-        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-        reportProgressAsync(false);
+        if (effects.notice) showNotice(std::move(effects.notice->text), effects.notice->duration);
+        if (effects.showSubtitleOverlay) playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+        if (effects.reportProgress) reportProgressAsync(false);
+        if (effects.playItem) playPlayerItemAsync(std::move(*effects.playItem));
+    }
+
+    void applyAsyncCompletion(SubtitleLoadCompletion& completion) {
+        applyPlayerCompletionEffects(PlayerCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), playbackCoordinator_));
     }
 
     void applyAsyncCompletion(TrickplayTileCompletion& completion) {
@@ -3977,59 +3996,25 @@ private:
     }
 
     void applyAsyncCompletion(MediaSegmentsCompletion& completion) {
-        if (screen_ != Screen::Player) return;
-        if (!completion.ok) {
-            if (playbackCoordinator_.failMediaSegmentsRequest(completion.itemId, completion.completedAt)) {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s",
-                                    completion.error.c_str());
-            }
-            return;
-        }
-        const size_t segmentCount = completion.segments.size();
-        if (!playbackCoordinator_.completeMediaSegmentsRequest(completion.itemId, std::move(completion.segments)))
-            return;
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", segmentCount);
+        applyPlayerCompletionEffects(
+            PlayerCompletionController::apply(completion, screen_ == Screen::Player, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(NextEpisodeCompletion& completion) {
-        if (screen_ != Screen::Player) return;
-        if (!completion.ok) {
-            if (playbackCoordinator_.failNextEpisodeRequest(completion.currentItemId, completion.completedAt)) {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s",
-                                    completion.error.c_str());
-            }
-            return;
-        }
-        playbackCoordinator_.completeNextEpisodeRequest(completion.currentItemId, std::move(completion.item));
+        applyPlayerCompletionEffects(
+            PlayerCompletionController::apply(completion, screen_ == Screen::Player, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(PlaybackAdjacentCompletion& completion) {
-        const bool sameItem = playbackCoordinator_.finishAdjacentEpisodeLookup(completion.currentItemId);
-        if (screen_ != Screen::Player || !sameItem) return;
-        if (!completion.ok) {
-            showNotice("EPISODE LIST UNAVAILABLE", 2s);
-            return;
-        }
-        if (!completion.item) {
-            showNotice(completion.direction < 0 ? "NO PREVIOUS EPISODE" : "NO NEXT EPISODE", 2s);
-            return;
-        }
-        playPlayerItemAsync(std::move(*completion.item));
+        applyPlayerCompletionEffects(
+            PlayerCompletionController::apply(completion, screen_ == Screen::Player, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(const PlaybackReportCompletion& completion) {
-        const char* stage = "progress";
-        if (completion.kind == PlaybackReportKind::Start)
-            stage = "start";
-        else if (completion.kind == PlaybackReportKind::PausedProgress)
-            stage = "paused-progress";
-        else if (completion.kind == PlaybackReportKind::Stop)
-            stage = "stop";
-        logPlaybackReportFailure(stage, completion.itemId, completion.result);
-        if (completion.kind != PlaybackReportKind::Stop || !completion.result.ok) return;
-        if (session_.server != completion.server || session_.userId != completion.userId || screen_ == Screen::Player)
-            return;
-        playbackCoordinator_.markPlaybackStopReported();
+        logPlaybackReportFailure(PlayerCompletionController::reportStage(completion.kind), completion.itemId,
+                                 completion.result);
+        PlayerCompletionController::apply(completion, session_.server, session_.userId, screen_ == Screen::Player,
+                                          playbackCoordinator_);
     }
 
     void applyPlaybackCompletionEffects(PlaybackCompletionEffects effects) {
