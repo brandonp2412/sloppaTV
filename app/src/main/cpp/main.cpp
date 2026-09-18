@@ -12,6 +12,7 @@
 #include "browse_screen.hpp"
 #include "details_screen.hpp"
 #include "deep_link.hpp"
+#include "diagnostics_screen.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
 #include "external_playback_state.hpp"
@@ -227,15 +228,6 @@ std::string formatPlaybackTime(int milliseconds) {
         out << minutes;
     out << ':' << std::setw(2) << std::setfill('0') << seconds;
     return out.str();
-}
-
-std::string joinGenres(const std::vector<std::string>& genres, size_t limit = 5) {
-    std::string result;
-    for (size_t i = 0; i < std::min(limit, genres.size()); ++i) {
-        if (!result.empty()) result += " / ";
-        result += genres[i];
-    }
-    return result;
 }
 
 enum class Screen {
@@ -1950,14 +1942,20 @@ private:
     }
 
     void handleDiagnosticsKey(int32_t key) {
-        if (key == AKEYCODE_BACK || key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
-            // Diagnostics owns the current content request. Cancel it before
-            // returning so an in-flight server-info response cannot leave the
-            // app's global loading state stuck after this screen is gone.
-            requestEpochs_.content.invalidate();
-            loading_ = false;
-            popScreen(Screen::Settings);
-        }
+        DiagnosticsScreenInput input = DiagnosticsScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = DiagnosticsScreenInput::Back;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = DiagnosticsScreenInput::Activate;
+
+        if (handleDiagnosticsScreenInput(input).type != DiagnosticsScreenCommandType::Exit) return;
+
+        // Diagnostics owns the current content request. Cancel it before
+        // returning so an in-flight server-info response cannot leave the
+        // app's global loading state stuck after this screen is gone.
+        requestEpochs_.content.invalidate();
+        loading_ = false;
+        popScreen(Screen::Settings);
     }
 
     void handleDetailsKey(int32_t key) {
@@ -7408,24 +7406,21 @@ private:
         architecture = "X86_64";
 #endif
 
-        std::vector<std::pair<std::string, std::string>> rows{
-            {"App version", SLOPPATV_VERSION_NAME},
-            {"ABI", architecture},
-            {"Server", serverInfo_.name.empty() ? session_.server : serverInfo_.name},
-            {"Jellyfin version",
-             serverInfo_.version.empty() ? (loading_ ? "Loading…" : "UNKNOWN") : serverInfo_.version},
-            {"Video decoders", videoCodecs.empty() ? "NONE DETECTED" : joinGenres(videoCodecs, videoCodecs.size())},
-            {"Direct audio",
-             audioCodecs.empty() ? "AAC TRANSCODE FALLBACK" : joinGenres(audioCodecs, audioCodecs.size())},
-            {"Audio output", std::to_string(codecs.maxAudioOutputChannels) + " CHANNELS"},
-            {"HEVC maximum", codecs.maxHevcWidth > 0
-                                 ? std::to_string(codecs.maxHevcWidth) + "X" + std::to_string(codecs.maxHevcHeight)
-                                 : "UNKNOWN"},
-            {"HDR display", hdr.empty() ? "SDR / NONE DETECTED" : joinGenres(hdr, hdr.size())},
-            {"Last playback", playbackSessionState_.lastPlaybackSummary().empty()
-                                  ? "NOT YET PLAYED THIS SESSION"
-                                  : playbackSessionState_.lastPlaybackSummary()},
-        };
+        const auto rows = diagnosticsRows({
+            .appVersion = SLOPPATV_VERSION_NAME,
+            .architecture = std::move(architecture),
+            .sessionServer = session_.server,
+            .serverName = serverInfo_.name,
+            .serverVersion = serverInfo_.version,
+            .serverLoading = loading_,
+            .videoCodecs = videoCodecs,
+            .audioCodecs = audioCodecs,
+            .maxAudioOutputChannels = codecs.maxAudioOutputChannels,
+            .maxHevcWidth = codecs.maxHevcWidth,
+            .maxHevcHeight = codecs.maxHevcHeight,
+            .hdrFormats = std::move(hdr),
+            .lastPlaybackSummary = playbackSessionState_.lastPlaybackSummary(),
+        });
         auto renderPanel = [&](float x, float y, float width, float height, const std::string& title,
                                std::initializer_list<int> indices) {
             renderer_.roundedRect(x, y, width, height, material_tv::cornerLarge, kPanelAlt);
