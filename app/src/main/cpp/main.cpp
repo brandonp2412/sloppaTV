@@ -361,13 +361,6 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-struct SeerrConnectCompletion {
-    std::string server;
-    std::string jellyfinUserId;
-    bool announce = false;
-    SeerrQuickConnectResult result;
-};
-
 struct JellyfinSearchCompletion {
     std::string query;
     uint64_t generation = 0;
@@ -661,7 +654,7 @@ public:
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
-          seerrAsync_(seerr_, seerrSearch_, tasks_, asyncCompletions_),
+          seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
                        if (loaded.ok()) return;
@@ -3544,20 +3537,7 @@ private:
             error_.clear();
             showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);
         }
-        tasks_.submit([this, server, jellyfin, announce] {
-            auto result = runSeerrQuickConnect(
-                [&] { return seerr_.initiateQuickConnect(server); },
-                [&](const std::string& code) { return api_.authorizeQuickConnectCode(jellyfin, code); },
-                [&](const SeerrQuickConnectRequest& request) {
-                    return seerr_.authenticateQuickConnect(server, request);
-                });
-            asyncCompletions_.push(SeerrConnectCompletion{
-                .server = server,
-                .jellyfinUserId = jellyfin.userId,
-                .announce = announce,
-                .result = std::move(result),
-            });
-        });
+        seerrAsync_.connect(server, jellyfin, announce);
     }
 
     void refreshSeerrStorageAsync(bool force = false) {
@@ -7859,7 +7839,8 @@ private:
     VideoSurface videoSurface_;
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
-    SeerrAsyncExecutor<SeerrClient, SeerrClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> seerrAsync_;
+    SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
+        seerrAsync_;
 
     mutable std::recursive_mutex stateMutex_;
     ArtworkProvider<JellyfinClient, SeerrClient, JniImageDecoder, TaskRunner, std::recursive_mutex> artwork_;

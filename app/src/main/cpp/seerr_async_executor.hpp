@@ -4,6 +4,7 @@
 #include "seerr_auth.hpp"
 #include "seerr_jellyfin_adapter.hpp"
 #include "seerr_media.hpp"
+#include "seerr_quick_connect.hpp"
 #include "seerr_storage.hpp"
 
 #include <cstdint>
@@ -40,12 +41,38 @@ struct SeerrSearchCompletion {
     ApiValueResult<std::vector<SeerrMediaItem>> result;
 };
 
-template <typename RequestClient, typename SearchClient, typename TaskRunner, typename CompletionSink>
+struct SeerrConnectCompletion {
+    std::string server;
+    std::string jellyfinUserId;
+    bool announce = false;
+    SeerrQuickConnectResult result;
+};
+
+template <typename RequestClient, typename SearchClient, typename JellyfinClient, typename TaskRunner,
+          typename CompletionSink>
 class SeerrAsyncExecutor {
 public:
-    SeerrAsyncExecutor(RequestClient& requestClient, SearchClient& searchClient, TaskRunner& tasks,
-                       CompletionSink& completions)
-        : requestClient_(requestClient), searchClient_(searchClient), tasks_(tasks), completions_(completions) {}
+    SeerrAsyncExecutor(RequestClient& requestClient, SearchClient& searchClient, JellyfinClient& jellyfinClient,
+                       TaskRunner& tasks, CompletionSink& completions)
+        : requestClient_(requestClient), searchClient_(searchClient), jellyfinClient_(jellyfinClient), tasks_(tasks),
+          completions_(completions) {}
+
+    void connect(std::string server, JellyfinSession jellyfin, bool announce) {
+        tasks_.submit([this, server = std::move(server), jellyfin = std::move(jellyfin), announce] {
+            auto result = runSeerrQuickConnect(
+                [&] { return requestClient_.initiateQuickConnect(server); },
+                [&](const std::string& code) { return jellyfinClient_.authorizeQuickConnectCode(jellyfin, code); },
+                [&](const SeerrQuickConnectRequest& request) {
+                    return requestClient_.authenticateQuickConnect(server, request);
+                });
+            completions_.push(SeerrConnectCompletion{
+                .server = server,
+                .jellyfinUserId = jellyfin.userId,
+                .announce = announce,
+                .result = std::move(result),
+            });
+        });
+    }
 
     void deleteRequest(SeerrEndpoint endpoint, SeerrDeleteRequest request) {
         tasks_.submit([this, endpoint = std::move(endpoint), request = std::move(request)] {
@@ -104,6 +131,7 @@ public:
 private:
     RequestClient& requestClient_;
     SearchClient& searchClient_;
+    JellyfinClient& jellyfinClient_;
     TaskRunner& tasks_;
     CompletionSink& completions_;
 };

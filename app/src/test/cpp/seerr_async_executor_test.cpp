@@ -9,7 +9,7 @@
 
 namespace {
 using Completion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
-                                SeerrPendingRefreshCompletion, SeerrSearchCompletion>;
+                                SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -27,7 +27,42 @@ struct CompletionSink {
     std::vector<Completion> events;
 };
 
+struct FakeJellyfinClient {
+    ApiValueResult<bool> authorizeQuickConnectCode(const JellyfinSession& session, const std::string& code) {
+        lastUserId = session.userId;
+        lastCode = code;
+        ApiValueResult<bool> result;
+        result.ok = true;
+        result.value = true;
+        return result;
+    }
+
+    std::string lastUserId;
+    std::string lastCode;
+};
+
 struct FakeSeerrClient {
+    ApiValueResult<SeerrQuickConnectRequest> initiateQuickConnect(const std::string& server) {
+        lastServer = server;
+        SeerrQuickConnectRequest request;
+        request.code = "CODE";
+        request.secret = "SECRET";
+        ApiValueResult<SeerrQuickConnectRequest> result;
+        result.ok = true;
+        result.value = request;
+        return result;
+    }
+
+    ApiValueResult<std::string> authenticateQuickConnect(const std::string& server,
+                                                         const SeerrQuickConnectRequest& request) {
+        lastServer = server;
+        lastQuickConnectSecret = request.secret;
+        ApiValueResult<std::string> result;
+        result.ok = true;
+        result.value = "session-cookie";
+        return result;
+    }
+
     ApiResult deleteRequest(const std::string& server, const SeerrAuth& auth, int requestId) {
         lastServer = server;
         lastAuth = auth;
@@ -101,6 +136,7 @@ struct FakeSeerrClient {
     int lastLimit = -1;
     std::string lastItemId;
     std::string lastQuery;
+    std::string lastQuickConnectSecret;
 };
 
 SeerrEndpoint endpoint() {
@@ -135,12 +171,27 @@ SeerrStorageTarget target() {
 int main() {
     FakeSeerrClient requestClient;
     FakeSeerrClient searchClient;
+    FakeJellyfinClient jellyfinClient;
     ImmediateTaskRunner tasks;
     CompletionSink completions;
-    SeerrAsyncExecutor executor(requestClient, searchClient, tasks, completions);
+    SeerrAsyncExecutor executor(requestClient, searchClient, jellyfinClient, tasks, completions);
+
+    JellyfinSession jellyfin;
+    jellyfin.userId = "jellyfin-user";
+    executor.connect("https://seerr.example.nz", jellyfin, true);
+    assert(tasks.submissions == 1);
+    assert(requestClient.lastQuickConnectSecret == "SECRET");
+    assert(jellyfinClient.lastUserId == "jellyfin-user");
+    assert(jellyfinClient.lastCode == "CODE");
+    const auto& connected = std::get<SeerrConnectCompletion>(completions.events.back());
+    assert(connected.server == "https://seerr.example.nz");
+    assert(connected.jellyfinUserId == "jellyfin-user");
+    assert(connected.announce);
+    assert(connected.result.ok);
+    assert(connected.result.sessionCookie == "session-cookie");
 
     executor.deleteRequest(endpoint(), {.itemId = "seerr:movie:10", .requestId = 44});
-    assert(tasks.submissions == 1);
+    assert(tasks.submissions == 2);
     assert(requestClient.lastRequestId == 44);
     const auto& deleted = std::get<SeerrDeleteCompletion>(completions.events.back());
     assert(deleted.endpoint.server == "https://seerr.example.nz");
@@ -148,7 +199,7 @@ int main() {
     assert(deleted.result.ok);
 
     executor.requestMedia(endpoint(), media(), target());
-    assert(tasks.submissions == 2);
+    assert(tasks.submissions == 3);
     assert(requestClient.lastItemId == "seerr:movie:10");
     assert(requestClient.lastTargetServerId == 4);
     const auto& requested = std::get<SeerrRequestCompletion>(completions.events.back());
@@ -156,19 +207,19 @@ int main() {
     assert(requested.result.ok && requested.result.value == 91);
 
     executor.refreshStorage(endpoint());
-    assert(tasks.submissions == 3);
+    assert(tasks.submissions == 4);
     const auto& storage = std::get<SeerrStorageRefreshCompletion>(completions.events.back());
     assert(storage.result.ok && storage.result.value.size() == 1);
     assert(storage.result.value.front().serverId == 7);
 
     executor.refreshPending(endpoint());
-    assert(tasks.submissions == 4);
+    assert(tasks.submissions == 5);
     assert(requestClient.lastLimit == 20);
     const auto& pending = std::get<SeerrPendingRefreshCompletion>(completions.events.back());
     assert(pending.result.ok && pending.result.value.front().id == "seerr:movie:20");
 
     executor.search(endpoint(), "arrival", 12);
-    assert(tasks.submissions == 5);
+    assert(tasks.submissions == 6);
     assert(searchClient.lastQuery == "arrival");
     assert(requestClient.lastQuery.empty());
     const auto& searched = std::get<SeerrSearchCompletion>(completions.events.back());
