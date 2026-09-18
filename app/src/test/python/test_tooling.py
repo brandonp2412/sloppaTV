@@ -308,7 +308,7 @@ class WaydroidToolingTest(unittest.TestCase):
 
     def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
-        self.assertIn("publish-screenshots:", workflow)
+        self.assertIn("publish-play-store:", workflow)
         self.assertIn("needs: screenshots", workflow)
         self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
         self.assertIn("git commit -m \"Update Android TV screenshots [skip ci]\"", workflow)
