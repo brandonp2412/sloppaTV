@@ -12,10 +12,14 @@ endif()
 add_library(sloppatv SHARED
     ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
     main.cpp
+    account_navigation_controller.cpp
     browse_navigation_controller.cpp
     details_navigation_controller.cpp
     home_navigation_controller.cpp
+    queue_navigation_controller.cpp
     search_navigation_controller.cpp
+    seerr_drive_navigation_controller.cpp
+    settings_navigation_controller.cpp
     discovery.cpp
     device_capabilities.cpp
     display_mode.cpp

@@ -5,6 +5,7 @@
 #include <android_native_app_glue.h>
 
 #include "account_async_executor.hpp"
+#include "account_navigation_controller.hpp"
 #include "account_screen.hpp"
 #include "app_settings.hpp"
 #include "artwork_provider.hpp"
@@ -73,6 +74,7 @@
 #include "player_video_renderer.hpp"
 #include "profiles_renderer.hpp"
 #include "queue_overlay_renderer.hpp"
+#include "queue_navigation_controller.hpp"
 #include "queue_overlay_screen.hpp"
 #include "quick_connect_executor.hpp"
 #include "request_epoch.hpp"
@@ -88,6 +90,7 @@
 #include "seerr_connection_coordinator.hpp"
 #include "seerr_domain.hpp"
 #include "seerr_drive_picker_renderer.hpp"
+#include "seerr_drive_navigation_controller.hpp"
 #include "seerr_drive_picker_screen.hpp"
 #include "seerr_home_projection.hpp"
 #include "seerr_jellyfin_adapter.hpp"
@@ -97,6 +100,7 @@
 #include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
+#include "settings_navigation_controller.hpp"
 #include "settings_screen.hpp"
 #include "settings_renderer.hpp"
 #include "status_overlay_renderer.hpp"
@@ -1163,34 +1167,28 @@ private:
     }
 
     void handleLoginKey(int32_t key) {
-        LoginScreenInput input = LoginScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = LoginScreenInput::Back;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = LoginScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = LoginScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = LoginScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = LoginScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = LoginScreenInput::Activate;
-
-        const LoginScreenCommand command = accountState_.handleLoginInput(input, !sessionRegistry_.empty());
-        if (command.type == LoginScreenCommandType::FinishActivity) {
+        const AccountNavigationAction navigation = AccountNavigationController::handleLogin(
+            accountState_, screenNavigationKeyForKey(key), !sessionRegistry_.empty());
+        switch (navigation.type) {
+        case AccountNavigationActionType::None:
+            return;
+        case AccountNavigationActionType::FinishActivity:
             ANativeActivity_finish(app_->activity);
-        } else if (command.type == LoginScreenCommandType::CancelQuickConnect) {
+            return;
+        case AccountNavigationActionType::CancelQuickConnect:
             api_.cancelPendingRequests();
             requestEpochs_.auth.invalidate();
             loading_ = false;
             error_.clear();
-        } else if (command.type == LoginScreenCommandType::MoveKeyboard) {
-            moveKeyboard(command.keyboardX, command.keyboardY);
-        } else if (command.type == LoginScreenCommandType::ActivateKeyboard) {
+            return;
+        case AccountNavigationActionType::MoveKeyboard:
+            moveKeyboard(navigation.dx, navigation.dy);
+            return;
+        case AccountNavigationActionType::ActivateKeyboard:
             activateKeyboardKey(false);
-        } else if (command.type == LoginScreenCommandType::EditField) {
-            const int field = command.fieldIndex;
+            return;
+        case AccountNavigationActionType::EditField: {
+            const int field = navigation.index;
             const int mode = kTextInputLoginServer + field;
             static constexpr std::array<const char*, 3> hints{"Jellyfin server URL", "Jellyfin username",
                                                               "Jellyfin password"};
@@ -1198,40 +1196,46 @@ private:
                                                                  hints[static_cast<size_t>(field)], mode,
                                                                  field == AccountScreenState::kPasswordField));
             if (accountState_.keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
-        } else if (command.type == LoginScreenCommandType::Login) {
+            return;
+        }
+        case AccountNavigationActionType::Login:
             loginAsync();
-        } else if (command.type == LoginScreenCommandType::QuickConnect) {
+            return;
+        case AccountNavigationActionType::QuickConnect:
             quickConnectAsync();
-        } else if (command.type == LoginScreenCommandType::Discover) {
+            return;
+        case AccountNavigationActionType::Discover:
             discoverServersAsync();
-        } else if (command.type == LoginScreenCommandType::OpenProfiles) {
+            return;
+        case AccountNavigationActionType::OpenProfiles:
             openProfiles();
+            return;
+        case AccountNavigationActionType::ProfilesBack:
+        case AccountNavigationActionType::AddAccount:
+        case AccountNavigationActionType::SwitchSession:
+        case AccountNavigationActionType::ForgetSession:
+            return;
         }
     }
 
     void handleProfilesKey(int32_t key) {
-        ProfilesScreenInput input = ProfilesScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = ProfilesScreenInput::Back;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = ProfilesScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = ProfilesScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_LEFT || key == AKEYCODE_DPAD_RIGHT)
-            input = ProfilesScreenInput::Horizontal;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = ProfilesScreenInput::Activate;
-
-        const int savedCount = static_cast<int>(sessionRegistry_.size());
-        const ProfilesScreenCommand command = accountState_.handleProfilesInput(input, savedCount);
-        if (command.type == ProfilesScreenCommandType::Back) {
+        const AccountNavigationAction navigation = AccountNavigationController::handleProfiles(
+            accountState_, screenNavigationKeyForKey(key), static_cast<int>(sessionRegistry_.size()));
+        switch (navigation.type) {
+        case AccountNavigationActionType::ProfilesBack:
             popScreen(Screen::Login);
-        } else if (command.type == ProfilesScreenCommandType::AddAccount) {
+            return;
+        case AccountNavigationActionType::AddAccount:
             startAddAccount();
-        } else if (command.type == ProfilesScreenCommandType::SwitchSession) {
-            switchSavedSession(static_cast<size_t>(command.sessionIndex));
-        } else if (command.type == ProfilesScreenCommandType::ForgetSession) {
-            forgetSavedSession(static_cast<size_t>(command.sessionIndex));
+            return;
+        case AccountNavigationActionType::SwitchSession:
+            switchSavedSession(static_cast<size_t>(navigation.index));
+            return;
+        case AccountNavigationActionType::ForgetSession:
+            forgetSavedSession(static_cast<size_t>(navigation.index));
+            return;
+        default:
+            return;
         }
     }
 
@@ -1481,53 +1485,34 @@ private:
     }
 
     void handleSettingsKey(int32_t key) {
-        SettingsScreenInput input = SettingsScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = SettingsScreenInput::Back;
-        else if (key == AKEYCODE_SEARCH)
-            input = SettingsScreenInput::Search;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = SettingsScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = SettingsScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = SettingsScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = SettingsScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = SettingsScreenInput::Activate;
-        else
+        const SettingsNavigationAction navigation =
+            SettingsNavigationController::handle(settingsScreen_, settings_, screenNavigationKeyForKey(key));
+        switch (navigation.type) {
+        case SettingsNavigationActionType::None:
             return;
-
-        const SettingsScreenCommand command = settingsScreen_.handleInput(input);
-        switch (command.type) {
-        case SettingsScreenCommandType::None:
-            return;
-        case SettingsScreenCommandType::Exit:
+        case SettingsNavigationActionType::Exit:
             hideSystemTextInput();
             popScreen(Screen::Home);
             if (screen_ == Screen::Home) homeState_.focusToolbar(3);
             return;
-        case SettingsScreenCommandType::EditSearch:
+        case SettingsNavigationActionType::EditSearch:
             showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
             return;
-        case SettingsScreenCommandType::Adjust: {
-            const SettingChangeEffect effects = adjustSetting(settings_, command.setting, command.direction);
-            if (effects == SettingChangeEffect::None) return;
-            if (hasSettingEffect(effects, SettingChangeEffect::ApplyVideoZoom))
+        case SettingsNavigationActionType::ApplyEffects:
+            if (navigation.effects == SettingChangeEffect::None) return;
+            if (hasSettingEffect(navigation.effects, SettingChangeEffect::ApplyVideoZoom))
                 playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
-            if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
-            if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {
+            if (hasSettingEffect(navigation.effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
+            if (hasSettingEffect(navigation.effects, SettingChangeEffect::ResetScreensaver)) {
                 lastInteraction_ = std::chrono::steady_clock::now();
                 screensaverActive_ = false;
             }
-            if (hasSettingEffect(effects, SettingChangeEffect::CycleExternalPlayer))
-                cycleExternalPlayer(command.direction);
-            if (hasSettingEffect(effects, SettingChangeEffect::Save)) saveSession(session_);
+            if (hasSettingEffect(navigation.effects, SettingChangeEffect::CycleExternalPlayer))
+                cycleExternalPlayer(navigation.direction);
+            if (hasSettingEffect(navigation.effects, SettingChangeEffect::Save)) saveSession(session_);
             return;
-        }
-        case SettingsScreenCommandType::ActivateSetting:
-            switch (settingActivation(command.setting)) {
+        case SettingsNavigationActionType::Activate:
+            switch (navigation.activation) {
             case SettingActivation::None:
                 break;
             case SettingActivation::OpenDiagnostics:
@@ -1558,7 +1543,7 @@ private:
                 break;
             }
             return;
-        case SettingsScreenCommandType::ToggleSubtitleLanguage:
+        case SettingsNavigationActionType::ToggleSubtitleLanguage:
             toggleSubtitleLanguageSetting();
             return;
         }
@@ -2091,24 +2076,15 @@ private:
     }
 
     void handleSeerrDrivePickerKey(int32_t key) {
-        SeerrStorageState::PickerInput input = SeerrStorageState::PickerInput::None;
-        if (key == AKEYCODE_BACK)
-            input = SeerrStorageState::PickerInput::Back;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = SeerrStorageState::PickerInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = SeerrStorageState::PickerInput::Down;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = SeerrStorageState::PickerInput::Activate;
-
-        auto command = seerrDomain_.handleStoragePickerInput(input);
-        if (command.type == SeerrStorageState::PickerCommandType::Back) {
+        SeerrDriveNavigationAction navigation =
+            SeerrDriveNavigationController::handle(seerrDomain_.storage(), screenNavigationKeyForKey(key));
+        if (navigation.type == SeerrDriveNavigationActionType::Back) {
             popScreen(Screen::Search);
             return;
         }
-        if (command.type != SeerrStorageState::PickerCommandType::Selected || !command.selection) return;
+        if (navigation.type != SeerrDriveNavigationActionType::Selected || !navigation.selection) return;
 
-        auto selected = std::move(*command.selection);
+        auto selected = std::move(*navigation.selection);
         __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
                             selected.item.mediaType.c_str(), selected.target.serverId, selected.target.path.c_str());
         popScreen(Screen::Search);
@@ -2845,11 +2821,6 @@ private:
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
     }
 
-    void moveQueuedItem(int from, int to) {
-        if (!queueState_.moveItem(from, to)) return;
-        playbackCoordinator_.syncQueueContinuation(queueState_);
-    }
-
     void playQueuedIndexAsync(int index, bool restartCurrent = false, bool replacingCompleted = false) {
         if (loading_ || index < 0 || index >= queueState_.size() || !session_.valid()) return;
         if (index == queueState_.currentIndex() && screen_ == Screen::Player && !restartCurrent) {
@@ -2917,41 +2888,20 @@ private:
     }
 
     void handleQueueOverlayKey(int32_t key) {
-        QueueOverlayInput input = QueueOverlayInput::None;
-        if (key == AKEYCODE_BACK)
-            input = QueueOverlayInput::Back;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = QueueOverlayInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = QueueOverlayInput::Down;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = QueueOverlayInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = QueueOverlayInput::Right;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = QueueOverlayInput::Activate;
-
-        const QueueOverlayCommand command = queueState_.handleOverlayInput(input);
-        if (command.type != QueueOverlayCommandType::ActivateAction) return;
-
-        const int selection = command.selection;
-        const int current = command.currentIndex;
-        const int size = command.size;
-        if (command.action == 0) {
-            if (queueCanPlayNow(selection, current, size)) playQueuedIndexAsync(selection);
-        } else if (command.action == 1) {
-            if (queueCanPlayNext(selection, current, size)) moveQueuedItem(selection, current + 1);
-        } else if (command.action == 2) {
-            if (queueCanMoveUp(selection, current, size)) moveQueuedItem(selection, selection - 1);
-        } else if (command.action == 3) {
-            if (queueCanMoveDown(selection, current, size)) moveQueuedItem(selection, selection + 1);
-        } else if (command.action == 4) {
-            if (queueState_.removeSelected()) playbackCoordinator_.syncQueueContinuation(queueState_);
-        } else if (command.action == 5) {
-            shuffleRemainingQueue();
-        } else if (command.action == 6) {
-            queueState_.cycleRepeatMode();
+        const QueueNavigationAction navigation =
+            QueueNavigationController::handle(queueState_, screenNavigationKeyForKey(key));
+        switch (navigation.type) {
+        case QueueNavigationActionType::None:
+            return;
+        case QueueNavigationActionType::PlayIndex:
+            playQueuedIndexAsync(navigation.index);
+            return;
+        case QueueNavigationActionType::QueueChanged:
             playbackCoordinator_.syncQueueContinuation(queueState_);
+            return;
+        case QueueNavigationActionType::Shuffle:
+            shuffleRemainingQueue();
+            return;
         }
     }
 

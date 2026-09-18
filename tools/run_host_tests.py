@@ -134,6 +134,12 @@ LINKED_CPP_TESTS = [
         "home_navigation_controller.cpp",
         "search_navigation_controller.cpp",
     ], []),
+    ("secondary_navigation_controller_test.cpp", [
+        "account_navigation_controller.cpp",
+        "queue_navigation_controller.cpp",
+        "seerr_drive_navigation_controller.cpp",
+        "settings_navigation_controller.cpp",
+    ], []),
     ("http_get_coordinator_test.cpp", [], ["-pthread"]),
     ("jellyfin_item_parser_test.cpp", ["jellyfin_item_parser.cpp"], []),
     ("jellyfin_media_segment_parser_test.cpp", ["jellyfin_media_segment_parser.cpp"], []),
