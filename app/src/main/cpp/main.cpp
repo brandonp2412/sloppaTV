@@ -1780,7 +1780,7 @@ private:
         case SettingsScreenCommandType::Adjust: {
             const SettingChangeEffect effects = adjustSetting(settings_, command.setting, command.direction);
             if (effects == SettingChangeEffect::None) return;
-            if (command.setting == SettingId::DefaultVideoZoom)
+            if (hasSettingEffect(effects, SettingChangeEffect::ApplyVideoZoom))
                 playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
             if (hasSettingEffect(effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
             if (hasSettingEffect(effects, SettingChangeEffect::ResetScreensaver)) {

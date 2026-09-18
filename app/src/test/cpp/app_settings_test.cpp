@@ -59,6 +59,7 @@ int main() {
     assert(hasSettingEffect(settingChangeEffects(SettingId::Screensaver), SettingChangeEffect::Save));
     assert(hasSettingEffect(settingChangeEffects(SettingId::Screensaver), SettingChangeEffect::ResetScreensaver));
     assert(hasSettingEffect(settingChangeEffects(SettingId::ExternalPlayer), SettingChangeEffect::CycleExternalPlayer));
+    assert(hasSettingEffect(settingChangeEffects(SettingId::DefaultVideoZoom), SettingChangeEffect::ApplyVideoZoom));
     assert(settingLabel(SettingId::AdvancedToggle, false) == "ADVANCED SETTINGS");
     assert(settingLabel(SettingId::AdvancedToggle, true) == "BASIC SETTINGS");
     for (size_t i = 0; i < kSettingDescriptors.size(); ++i) {
@@ -79,6 +80,10 @@ int main() {
     effects = adjustSetting(adjusted, SettingId::ExternalPlayer, 1);
     assert(hasSettingEffect(effects, SettingChangeEffect::Save));
     assert(hasSettingEffect(effects, SettingChangeEffect::CycleExternalPlayer));
+    effects = adjustSetting(adjusted, SettingId::DefaultVideoZoom, 1);
+    assert(adjusted.zoomMode == static_cast<int>(VideoZoomMode::Fill));
+    assert(hasSettingEffect(effects, SettingChangeEffect::Save));
+    assert(hasSettingEffect(effects, SettingChangeEffect::ApplyVideoZoom));
     effects = adjustSetting(adjusted, SettingId::Diagnostics, 1);
     assert(effects == SettingChangeEffect::None);
 

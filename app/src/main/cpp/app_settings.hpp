@@ -119,6 +119,7 @@ enum class SettingChangeEffect : uint8_t {
     RestoreDisplayMode = 1 << 1,
     ResetScreensaver = 1 << 2,
     CycleExternalPlayer = 1 << 3,
+    ApplyVideoZoom = 1 << 4,
 };
 
 enum class SettingActivation : uint8_t {
@@ -426,7 +427,8 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
     {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      adjustSeekForward, renderSkipAhead},
     {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, SettingKind::Value,
-     SettingChangeEffect::Save, stepClampedSetting<&AppSettings::zoomMode, 0, 2>, renderDefaultVideoZoom},
+     SettingChangeEffect::Save | SettingChangeEffect::ApplyVideoZoom,
+     stepClampedSetting<&AppSettings::zoomMode, 0, 2>, renderDefaultVideoZoom},
     {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::autoplayNext>,
      renderBooleanSetting<&AppSettings::autoplayNext>},
