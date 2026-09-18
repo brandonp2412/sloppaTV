@@ -5,7 +5,29 @@
 
 class RequestEpoch {
 public:
+    class Token {
+    public:
+        [[nodiscard]] uint64_t value() const { return value_; }
+
+        [[nodiscard]] bool active() const { return owner_ != nullptr && owner_->active(value_); }
+
+    private:
+        friend class RequestEpoch;
+
+        Token(const RequestEpoch* owner, uint64_t value) : owner_(owner), value_(value) {}
+
+        const RequestEpoch* owner_ = nullptr;
+        uint64_t value_ = 0;
+    };
+
     [[nodiscard]] uint64_t begin() { return value_.fetch_add(1, std::memory_order_relaxed) + 1; }
+
+    [[nodiscard]] Token beginToken() {
+        const uint64_t value = begin();
+        return Token{this, value};
+    }
+
+    [[nodiscard]] Token token(uint64_t value) const { return Token{this, value}; }
 
     [[nodiscard]] uint64_t snapshot() const { return value_.load(std::memory_order_relaxed); }
 

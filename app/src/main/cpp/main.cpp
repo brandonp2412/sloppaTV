@@ -3067,14 +3067,14 @@ private:
         loading_ = true;
         accountState_.beginQuickConnect();
         error_.clear();
-        const uint64_t generation = requestEpochs_.auth.begin();
+        const RequestEpoch::Token requestToken = requestEpochs_.auth.beginToken();
 
-        tasks_.submit([this, server, deviceId, generation] {
+        tasks_.submit([this, server, deviceId, requestToken] {
             auto initiated = api_.initiateQuickConnect(server, deviceId);
-            if (!requestEpochs_.auth.active(generation)) return;
+            if (!requestToken.active()) return;
             if (!initiated.ok) {
                 asyncCompletions_.push(QuickConnectFailedCompletion{
-                    .generation = generation,
+                    .generation = requestToken.value(),
                     .error = std::move(initiated.error),
                 });
                 return;
@@ -3082,18 +3082,18 @@ private:
 
             const QuickConnectRequest request = initiated.value;
             asyncCompletions_.push(QuickConnectStartedCompletion{
-                .generation = generation,
+                .generation = requestToken.value(),
                 .request = request,
             });
 
             for (int attempt = 0; attempt < 60; ++attempt) {
                 std::this_thread::sleep_for(5s);
-                if (!requestEpochs_.auth.active(generation)) return;
+                if (!requestToken.active()) return;
 
                 auto state = api_.pollQuickConnect(request, deviceId);
                 if (!state.ok) {
                     asyncCompletions_.push(QuickConnectFailedCompletion{
-                        .generation = generation,
+                        .generation = requestToken.value(),
                         .error = std::move(state.error),
                     });
                     return;
@@ -3101,25 +3101,25 @@ private:
                 if (!state.value) continue;
 
                 auto authenticated = api_.completeQuickConnect(request, deviceId);
-                if (!requestEpochs_.auth.active(generation)) return;
+                if (!requestToken.active()) return;
                 if (!authenticated.ok) {
                     asyncCompletions_.push(QuickConnectFailedCompletion{
-                        .generation = generation,
+                        .generation = requestToken.value(),
                         .error = std::move(authenticated.error),
                     });
                     return;
                 }
 
                 asyncCompletions_.push(QuickConnectAuthenticatedCompletion{
-                    .generation = generation,
+                    .generation = requestToken.value(),
                     .session = std::move(authenticated.value),
                 });
                 return;
             }
 
-            if (requestEpochs_.auth.active(generation)) {
+            if (requestToken.active()) {
                 asyncCompletions_.push(QuickConnectTimedOutCompletion{
-                    .generation = generation,
+                    .generation = requestToken.value(),
                 });
             }
         });
@@ -3327,14 +3327,14 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const std::string id = item.id;
-        const uint64_t generation = requestEpochs_.content.begin();
-        tasks_.submit([this, session, id, generation] {
+        const RequestEpoch::Token requestToken = requestEpochs_.content.beginToken();
+        tasks_.submit([this, session, id, requestToken] {
             auto result = api_.getItem(session, id);
-            if (!requestEpochs_.content.active(generation)) return;
+            if (!requestToken.active()) return;
             if (!result.ok) {
                 asyncCompletions_.push(DetailsItemCompletion{
                     .itemId = id,
-                    .generation = generation,
+                    .generation = requestToken.value(),
                     .result = std::move(result),
                 });
                 return;
@@ -3343,16 +3343,16 @@ private:
             auto contextRequest = episodeSeriesContextRequest(result.value);
             asyncCompletions_.push(DetailsItemCompletion{
                 .itemId = id,
-                .generation = generation,
+                .generation = requestToken.value(),
                 .result = std::move(result),
             });
 
             auto similar = api_.getSimilar(session, id, 18);
-            if (!requestEpochs_.content.active(generation)) return;
+            if (!requestToken.active()) return;
             if (similar.ok) {
                 asyncCompletions_.push(DetailsSimilarCompletion{
                     .itemId = id,
-                    .generation = generation,
+                    .generation = requestToken.value(),
                     .items = std::move(similar.value),
                 });
             }
@@ -3361,7 +3361,7 @@ private:
             asyncCompletions_.push(EpisodeSeriesContextRequestCompletion{
                 .session = session,
                 .request = std::move(*contextRequest),
-                .generation = generation,
+                .generation = requestToken.value(),
             });
         });
     }
@@ -4381,14 +4381,14 @@ private:
         const JellyfinSession session = std::move(completion.session);
         const std::string itemId = std::move(completion.request.itemId);
         const std::string seriesId = std::move(completion.request.seriesId);
-        const uint64_t generation = completion.generation;
-        tasks_.submit([this, session, itemId, seriesId, generation] {
+        const RequestEpoch::Token requestToken = requestEpochs_.content.token(completion.generation);
+        tasks_.submit([this, session, itemId, seriesId, requestToken] {
             auto series = api_.getItem(session, seriesId);
             auto seasons = api_.getSeasons(session, seriesId);
-            if (!requestEpochs_.content.active(generation) || !series.ok || !seasons.ok) return;
+            if (!requestToken.active() || !series.ok || !seasons.ok) return;
             asyncCompletions_.push(EpisodeSeriesContextCompletion{
                 .itemId = itemId,
-                .generation = generation,
+                .generation = requestToken.value(),
                 .series = std::move(series.value),
                 .seasons = std::move(seasons.value),
             });
