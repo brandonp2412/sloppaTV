@@ -142,6 +142,31 @@ int main() {
     assert(searchCompletions.completeSearchFailure("HTTP 401 unauthorized", true));
     assert(searchCompletions.takeDeferredConnectionWork().retrySearch);
 
+    SeerrDomainState searchLifecycle;
+    assert(searchLifecycle.scheduleSearch("brook", start, true));
+    assert(searchLifecycle.searchDebouncePending());
+    assert(searchLifecycle.searchDebounceDeadline() == start + SeerrSearchState::kDebounceDelay);
+    assert(!searchLifecycle.searchDebounceDue(start + 549ms));
+    assert(searchLifecycle.searchDebounceDue(start + 550ms));
+    assert(searchLifecycle.beginDueSearch(start + 550ms));
+    assert(searchLifecycle.searchLoading());
+    assert(searchLifecycle.finishSearch("brook", {media("seerr:movie:18")}));
+    assert(!searchLifecycle.searchLoading());
+    assert(searchLifecycle.searchResults().size() == 1);
+    assert(searchLifecycle.findSearchResult("seerr:movie:18"));
+    searchLifecycle.markSearchRequested("seerr:movie:18", "Queued", 61);
+    assert(searchLifecycle.findSearchResult("seerr:movie:18")->requested);
+    searchLifecycle.markSearchUnrequested("seerr:movie:18");
+    assert(!searchLifecycle.findSearchResult("seerr:movie:18")->requested);
+    assert(searchLifecycle.scheduleSearch("other", start + 1s, true));
+    const auto immediateSearch = searchLifecycle.beginImmediateSearch("other", true);
+    assert(immediateSearch.started);
+    assert(searchLifecycle.failSearch("other", "offline"));
+    assert(searchLifecycle.searchError() == "offline");
+    searchLifecycle.resetSearch();
+    assert(searchLifecycle.searchResults().empty());
+    assert(searchLifecycle.searchError().empty());
+
     auto requestedSearchItem = media("seerr:movie:19", true);
     assert(searchCompletions.completeSearchSuccess({requestedSearchItem}, start));
     assert(searchCompletions.findPendingRequest("seerr:movie:19"));

@@ -583,7 +583,8 @@ public:
                                                ? "Home artwork download failed item=%s type=%s reason=%s"
                                                : "Home artwork decode failed item=%s type=%s reason=%s",
                                            request.itemId.c_str(), request.itemType.c_str(), loaded.error.c_str());
-                   }) {
+                   }),
+          searchState_(seerrDomain_.searchResults()) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         artwork_.setDataPath(dataPath_);
@@ -668,7 +669,7 @@ public:
                 else if (screensaverActive_)
                     timeoutMs = 30000;
                 else if (loading_ || homeLoading_ || mutationLoading_ || searchState_.loading() ||
-                         searchState_.seerrLoading() || accountState_.quickConnectActive())
+                         seerrDomain_.searchLoading() || accountState_.quickConnectActive())
                     timeoutMs = 100;
                 else {
                     const int64_t delayMs = screensaverDelayMs(settings_.screensaverMinutes);
@@ -685,9 +686,9 @@ public:
                     const int searchTimeoutMs = static_cast<int>(std::max<int64_t>(0, searchDelayMs));
                     timeoutMs = timeoutMs < 0 ? searchTimeoutMs : std::min(timeoutMs, searchTimeoutMs);
                 }
-                if (searchState_.seerrDebouncePending()) {
+                if (seerrDomain_.searchDebouncePending()) {
                     const int64_t seerrDelayMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                                     searchState_.seerrDebounceDeadline() - pollNow)
+                                                     seerrDomain_.searchDebounceDeadline() - pollNow)
                                                      .count();
                     const int seerrTimeoutMs = static_cast<int>(std::max<int64_t>(0, seerrDelayMs));
                     timeoutMs = timeoutMs < 0 ? seerrTimeoutMs : std::min(timeoutMs, seerrTimeoutMs);
@@ -750,7 +751,7 @@ public:
                     screensaverActive_ = shouldActivateScreensaver(
                         settings_.screensaverMinutes, idleMs, false,
                         loading_ || homeLoading_ || mutationLoading_ || searchState_.loading() ||
-                            searchState_.seerrLoading() || accountState_.quickConnectActive());
+                            seerrDomain_.searchLoading() || accountState_.quickConnectActive());
                 }
                 screensaver = screensaverActive_;
             }
@@ -897,6 +898,7 @@ private:
             searchState_.setQuery(text);
             searchState_.setKeyboard(false);
             searchState_.cancelPending();
+            seerrDomain_.cancelSearch();
             searchAsync();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
@@ -1182,7 +1184,8 @@ private:
         const auto now = std::chrono::steady_clock::now();
         requestEpochs_.search.invalidate();
         const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth());
-        if (searchState_.scheduleSeerrDebounce(now, seerrConfigured)) {
+        if (seerrDomain_.scheduleSearch(searchState_.query(), now, seerrConfigured)) {
+            searchState_.refreshSeerrResults();
             requestEpochs_.seerrSearch.invalidate();
             seerrSearch_.cancelPendingRequests();
         }
@@ -1194,6 +1197,7 @@ private:
         std::scoped_lock lock(stateMutex_);
         if (screen_ != Screen::Search) {
             searchState_.cancelPending();
+            seerrDomain_.cancelSearch();
             requestEpochs_.search.invalidate();
             requestEpochs_.seerrSearch.invalidate();
             seerrSearch_.cancelPendingRequests();
@@ -1201,7 +1205,7 @@ private:
         }
         const auto now = std::chrono::steady_clock::now();
         if (searchState_.debounceDue(now)) searchAsync(false);
-        if (searchState_.seerrDebounceDue(now)) searchSeerrAsync(false);
+        if (seerrDomain_.searchDebounceDue(now)) searchSeerrAsync(false);
     }
 
     bool showSystemTextInput(const std::string& initial, const std::string& hint, int mode, bool password = false) {
@@ -1636,6 +1640,7 @@ private:
             return;
         case SearchScreenCommandType::Exit:
             searchState_.cancelPending();
+            seerrDomain_.cancelSearch();
             requestEpochs_.search.invalidate();
             requestEpochs_.seerrSearch.invalidate();
             seerrSearch_.cancelPendingRequests();
@@ -2700,6 +2705,7 @@ private:
         home_ = {};
         homeState_.reset();
         browseState_.clear();
+        seerrDomain_.resetSearch();
         searchState_.reset();
         detail_ = {};
         detailsState_.reset();
@@ -3361,21 +3367,31 @@ private:
 
     void searchSeerrAsync(bool immediate) {
         if (seerrDomain_.deferSearchIfConnecting()) {
-            searchState_.setSeerrLoading(false);
+            seerrDomain_.stopSearchLoading();
             return;
         }
         const SeerrEndpoint endpoint = seerrEndpoint();
-        const bool shouldStart = immediate ? searchState_.beginImmediateSeerrSearch(endpoint.configured())
-                                           : searchState_.beginDueSeerrSearch(std::chrono::steady_clock::now());
+        const std::string query = searchState_.query();
+        bool shouldStart = false;
+        if (immediate) {
+            const auto start = seerrDomain_.beginImmediateSearch(query, endpoint.configured());
+            if (start.resultsChanged) searchState_.refreshSeerrResults();
+            shouldStart = start.started;
+        } else {
+            shouldStart = seerrDomain_.beginDueSearch(std::chrono::steady_clock::now());
+        }
         if (!shouldStart) return;
 
         refreshSeerrStorageAsync();
-        const std::string query = searchState_.query();
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
         seerrAsync_.search(endpoint, query, generation);
     }
 
     void searchAsync(bool includeSeerrImmediately = true) {
+        if (searchState_.query().empty()) {
+            seerrDomain_.resetSearch();
+            searchState_.refreshSeerrResults();
+        }
         if (!session_.valid() || !searchState_.beginSearch()) return;
         const JellyfinSession session = session_;
         const std::string query = searchState_.query();
@@ -4166,7 +4182,8 @@ private:
             detailsState_.setDeleteConfirmation(false);
             return;
         }
-        searchState_.markSeerrUnrequested(completion.request.itemId);
+        seerrDomain_.markSearchUnrequested(completion.request.itemId);
+        searchState_.refreshSeerrResults();
         syncSeerrHomeRowLocked();
         detail_ = {};
         detailsState_.setDeleteConfirmation(false);
@@ -4187,7 +4204,8 @@ private:
             return;
         }
 
-        searchState_.markSeerrRequested(completion.requestedItem.id, domainCompletion.status, completion.result.value);
+        seerrDomain_.markSearchRequested(completion.requestedItem.id, domainCompletion.status, completion.result.value);
+        searchState_.refreshSeerrResults();
         syncSeerrHomeRowLocked();
         showNotice("REQUEST SENT TO SEERR", 4s);
         error_.clear();
@@ -4237,12 +4255,12 @@ private:
     void applyAsyncCompletion(SeerrSearchCompletion& completion) {
         if (!requestEpochs_.seerrSearch.active(completion.generation)) return;
         if (screen_ != Screen::Search) {
-            searchState_.setSeerrLoading(false);
+            seerrDomain_.stopSearchLoading();
             return;
         }
         auto& result = completion.result;
         if (!result.ok) {
-            (void)searchState_.failSeerrSearch(completion.query, result.error);
+            if (seerrDomain_.failSearch(completion.query, result.error)) searchState_.refreshSeerrResults();
             if (seerrDomain_.completeSearchFailure(result.error, !settings_.seerrSessionCookie.empty())) {
                 connectSeerrAsync(false);
             }
@@ -4251,7 +4269,7 @@ private:
         if (seerrDomain_.completeSearchSuccess(result.value, std::chrono::steady_clock::now())) {
             syncSeerrHomeRowLocked();
         }
-        (void)searchState_.finishSeerrSearch(completion.query, std::move(result.value));
+        if (seerrDomain_.finishSearch(completion.query, std::move(result.value))) searchState_.refreshSeerrResults();
     }
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
@@ -4947,7 +4965,9 @@ private:
         auto deferred = seerrDomain_.takeDeferredConnectionWork();
         if (deferred.request) requestSeerrMediaAsync(*deferred.request);
         if (deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
-            (void)searchState_.scheduleSeerrDebounce(std::chrono::steady_clock::now(), false);
+            if (seerrDomain_.scheduleSearch(searchState_.query(), std::chrono::steady_clock::now(), false)) {
+                searchState_.refreshSeerrResults();
+            }
             searchSeerrAsync(true);
         }
     }
@@ -6006,7 +6026,7 @@ private:
         constexpr float searchWidth = 1450.0f;
         const bool systemSearchInputActive = systemTextInputMode_ == kTextInputSearch;
         const bool searchFieldFocused =
-            systemSearchInputActive || (!searchState_.keyboard() && results.empty() && !searchState_.seerrLoading());
+            systemSearchInputActive || (!searchState_.keyboard() && results.empty() && !seerrDomain_.searchLoading());
         const auto searchBounds =
             drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused, materialWideInputFocusScale());
         const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
@@ -6027,7 +6047,7 @@ private:
             return;
         }
 
-        if (systemSearchInputActive && results.empty() && !searchState_.seerrLoading()) {
+        if (systemSearchInputActive && results.empty() && !seerrDomain_.searchLoading()) {
             drawCenteredSingleLineFit(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to search Jellyfin and Seerr", kMuted,
                                       16.0f, 5.0f);
             return;
@@ -6118,12 +6138,12 @@ private:
                     renderer_.text(1635.0f, labelY + 1.0f, 1.30f, "Loading storage…", kMuted, 210.0f);
                 }
 
-                if (searchState_.seerrLoading()) {
+                if (seerrDomain_.searchLoading()) {
                     drawLoadingDots(196.0f, labelY + 8.0f);
                     renderer_.text(288.0f, labelY + 1.0f, 1.45f, "Searching Seerr…", kMuted, 440.0f);
                 } else if (count <= 0) {
                     const std::string message =
-                        searchState_.seerrError().empty() ? "No additional matches" : "Seerr unavailable";
+                        seerrDomain_.searchError().empty() ? "No additional matches" : "Seerr unavailable";
                     renderer_.text(196.0f, labelY + 1.0f, 1.45f, message, kMuted, 520.0f);
                     return;
                 }

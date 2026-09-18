@@ -3,8 +3,10 @@
 #include "seerr_auth.hpp"
 #include "seerr_connection_state.hpp"
 #include "seerr_request_state.hpp"
+#include "seerr_search_state.hpp"
 #include "seerr_storage_state.hpp"
 
+#include <algorithm>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -110,6 +112,63 @@ public:
     }
 
     [[nodiscard]] int storageDriveSelection() const { return storage_.driveSelection(); }
+
+    [[nodiscard]] bool searchLoading() const { return search_.loading(); }
+
+    [[nodiscard]] const std::string& searchError() const { return search_.error(); }
+
+    [[nodiscard]] bool searchDebouncePending() const { return search_.debouncePending(); }
+
+    [[nodiscard]] SeerrSearchState::Clock::time_point searchDebounceDeadline() const {
+        return search_.debounceDeadline();
+    }
+
+    [[nodiscard]] bool searchDebounceDue(SeerrSearchState::Clock::time_point now) const {
+        return search_.debounceDue(now);
+    }
+
+    [[nodiscard]] const std::vector<SeerrMediaItem>& searchResults() const { return search_.results(); }
+
+    [[nodiscard]] const SeerrMediaItem* findSearchResult(std::string_view id) const {
+        const auto found = std::find_if(search_.results().begin(), search_.results().end(),
+                                        [&](const SeerrMediaItem& item) { return item.id == id; });
+        return found == search_.results().end() ? nullptr : &*found;
+    }
+
+    [[nodiscard]] bool scheduleSearch(std::string_view query, SeerrSearchState::Clock::time_point now,
+                                      bool configured) {
+        return search_.schedule(std::string(query), now, configured);
+    }
+
+    void cancelSearch() { search_.cancelPending(); }
+
+    void resetSearch() { search_.reset(); }
+
+    void stopSearchLoading() { search_.setLoading(false); }
+
+    [[nodiscard]] bool beginDueSearch(SeerrSearchState::Clock::time_point now) { return search_.beginDue(now); }
+
+    [[nodiscard]] SeerrSearchState::BeginResult beginImmediateSearch(std::string_view query, bool configured) {
+        if (!configured || query.size() < SeerrSearchState::kMinQueryBytes) {
+            const bool changed = search_.schedule(std::string(query), SeerrSearchState::Clock::now(), false);
+            return {.started = false, .resultsChanged = changed};
+        }
+        return search_.beginImmediate(std::string(query));
+    }
+
+    [[nodiscard]] bool finishSearch(std::string_view query, std::vector<SeerrMediaItem> results) {
+        return search_.finish(std::string(query), std::move(results));
+    }
+
+    [[nodiscard]] bool failSearch(std::string_view query, std::string error) {
+        return search_.fail(std::string(query), std::move(error));
+    }
+
+    void markSearchRequested(const std::string& itemId, std::string status, int requestId = 0) {
+        search_.markRequested(itemId, std::move(status), requestId);
+    }
+
+    void markSearchUnrequested(const std::string& itemId) { search_.markUnrequested(itemId); }
 
     [[nodiscard]] ConnectAction prepareConnect(std::string_view server, bool jellyfinValid) {
         if (connection_.connecting()) return ConnectAction::AlreadyConnecting;
@@ -315,5 +374,6 @@ public:
 private:
     SeerrConnectionState connection_;
     SeerrRequestState requests_;
+    SeerrSearchState search_;
     SeerrStorageState storage_;
 };

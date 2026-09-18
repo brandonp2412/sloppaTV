@@ -1,31 +1,34 @@
 #include "search_screen.hpp"
+#include "seerr_search_state.hpp"
 
 #include <cassert>
 #include <chrono>
 
 int main() {
     using namespace std::chrono_literals;
-    SearchScreenState state;
+    SeerrSearchState seerrState;
+    SearchScreenState state(seerrState.results());
     const auto start = SearchScreenState::Clock::now();
 
     assert(state.query().empty());
     assert(state.results().empty());
     assert(state.keyboard());
     assert(!state.loading());
-    assert(!state.seerrLoading());
+    assert(!seerrState.loading());
 
     state.setQuery("bro");
     assert(state.scheduleDebounce(start));
-    assert(state.scheduleSeerrDebounce(start, true));
-    assert(!state.seerrLoading());
+    assert(seerrState.schedule(state.query(), start, true));
+    state.refreshSeerrResults();
+    assert(!seerrState.loading());
     assert(!state.debounceDue(start + 179ms));
     assert(state.debounceDue(start + 180ms));
-    assert(!state.seerrDebounceDue(start + 549ms));
-    assert(state.seerrDebounceDue(start + 550ms));
+    assert(!seerrState.debounceDue(start + 549ms));
+    assert(seerrState.debounceDue(start + 550ms));
     assert(state.beginSearch());
-    assert(state.beginDueSeerrSearch(start + 550ms));
+    assert(seerrState.beginDue(start + 550ms));
     assert(state.loading());
-    assert(state.seerrLoading());
+    assert(seerrState.loading());
 
     std::vector<JellyfinItem> library(7);
     for (int i = 0; i < 7; ++i) library[static_cast<size_t>(i)].id = std::to_string(i);
@@ -57,8 +60,9 @@ int main() {
     seerr[1].tmdbId = 300;
     seerr[1].jellyfinId = "jellyfin-series-300";
     seerr[1].available = true;
-    assert(state.finishSeerrSearch("bro", std::move(seerr)));
-    assert(!state.seerrLoading());
+    assert(seerrState.finish("bro", std::move(seerr)));
+    state.refreshSeerrResults();
+    assert(!seerrState.loading());
     assert(state.rowItemCount(SearchScreenState::kSeerrRow) == 1);
     assert(state.results().size() == 8);
     assert(state.results()[4].id == "seerr:tv:300");
@@ -85,14 +89,16 @@ int main() {
     assert(state.selectionOnFirstResultRow());
     assert(state.selectedSeerrResult() == nullptr);
 
-    state.markSeerrRequested("seerr:tv:300", "Episode 1 queued", 42);
+    seerrState.markRequested("seerr:tv:300", "Episode 1 queued", 42);
+    state.refreshSeerrResults();
     const auto requested = std::find_if(state.results().begin(), state.results().end(),
                                         [](const JellyfinItem& item) { return item.id == "seerr:tv:300"; });
     assert(requested != state.results().end());
     assert(requested->externalRequested);
     assert(requested->externalRequestId == 42);
     assert(requested->externalStatus == "Episode 1 queued");
-    state.markSeerrUnrequested("seerr:tv:300");
+    seerrState.markUnrequested("seerr:tv:300");
+    state.refreshSeerrResults();
     const auto unrequested = std::find_if(state.results().begin(), state.results().end(),
                                           [](const JellyfinItem& item) { return item.id == "seerr:tv:300"; });
     assert(unrequested != state.results().end());
@@ -101,20 +107,23 @@ int main() {
 
     state.setQuery("brook");
     state.setLoading(true);
-    assert(state.scheduleSeerrDebounce(start + 1s, true));
+    assert(seerrState.schedule(state.query(), start + 1s, true));
+    state.refreshSeerrResults();
     std::vector<JellyfinItem> stale(1);
     assert(!state.finishLibrarySearch("bro", std::move(stale)));
     assert(state.loading());
     assert(!state.failLibrarySearch("bro"));
     assert(state.failLibrarySearch("brook"));
     assert(!state.loading());
-    assert(!state.failSeerrSearch("bro", "stale"));
-    assert(state.beginDueSeerrSearch(start + 1550ms));
-    assert(state.failSeerrSearch("brook", "offline"));
-    assert(state.seerrError() == "offline");
-    assert(!state.scheduleSeerrDebounce(start + 2s, true));
+    assert(!seerrState.fail("bro", "stale"));
+    assert(seerrState.beginDue(start + 1550ms));
+    assert(seerrState.fail("brook", "offline"));
+    state.refreshSeerrResults();
+    assert(seerrState.error() == "offline");
+    assert(!seerrState.schedule(state.query(), start + 2s, true));
 
-    SearchScreenState deletion;
+    std::vector<SeerrMediaItem> noDeletionSeerr;
+    SearchScreenState deletion(noDeletionSeerr);
     deletion.setQuery("delete");
     std::vector<JellyfinItem> deletionResults(3);
     deletionResults[0].id = "movie";
@@ -143,18 +152,21 @@ int main() {
     assert(state.query() == "M");
 
     state.setQuery("ab");
-    assert(state.scheduleSeerrDebounce(start + 3s, true));
-    assert(!state.seerrLoading());
-    assert(!state.seerrDebouncePending());
+    assert(seerrState.schedule(state.query(), start + 3s, true));
+    state.refreshSeerrResults();
+    assert(!seerrState.loading());
+    assert(!seerrState.debouncePending());
 
     state.setQuery("");
     assert(!state.scheduleDebounce(start));
-    assert(!state.scheduleSeerrDebounce(start, true));
+    assert(!seerrState.schedule(state.query(), start, true));
+    state.refreshSeerrResults();
     assert(state.results().empty());
     assert(!state.loading());
-    assert(!state.seerrLoading());
+    assert(!seerrState.loading());
 
-    SearchScreenState inputState;
+    std::vector<SeerrMediaItem> noInputSeerr;
+    SearchScreenState inputState(noInputSeerr);
     auto command = inputState.handleInput(SearchScreenInput::Left, 5);
     assert(command.type == SearchScreenCommandType::MoveKeyboard);
     assert(command.dx == -1);
@@ -186,20 +198,23 @@ int main() {
     command = inputState.handleInput(SearchScreenInput::Up, 5);
     assert(command.type == SearchScreenCommandType::OpenTextInput);
 
-    SearchScreenState seerrInput;
+    SeerrSearchState seerrInputState;
+    SearchScreenState seerrInput(seerrInputState.results());
     seerrInput.setQuery("remote");
-    assert(seerrInput.beginImmediateSeerrSearch(true));
+    assert(seerrInputState.beginImmediate(seerrInput.query()).started);
     SeerrMediaItem remoteResult;
     remoteResult.id = "seerr:movie:999";
     remoteResult.mediaType = "movie";
     remoteResult.tmdbId = 999;
-    assert(seerrInput.finishSeerrSearch("remote", {remoteResult}));
+    assert(seerrInputState.finish("remote", {remoteResult}));
+    seerrInput.refreshSeerrResults();
     seerrInput.setKeyboard(false);
     command = seerrInput.handleInput(SearchScreenInput::Context, 5);
     assert(command.type == SearchScreenCommandType::None);
     command = seerrInput.handleInput(SearchScreenInput::Submit, 5);
     assert(command.type == SearchScreenCommandType::RequestSeerr);
 
+    seerrState.reset();
     state.reset();
     assert(state.query().empty());
     assert(state.keyboard());
