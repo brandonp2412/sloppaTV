@@ -366,19 +366,6 @@ struct DiagnosticsCompletion {
     ApiValueResult<JellyfinServerInfo> result;
 };
 
-struct SeasonsCompletion {
-    std::string seriesId;
-    uint64_t generation = 0;
-    ApiValueResult<std::vector<JellyfinItem>> result;
-};
-
-struct EpisodesCompletion {
-    std::string seriesId;
-    std::string seasonId;
-    uint64_t generation = 0;
-    ApiValueResult<std::vector<JellyfinItem>> result;
-};
-
 struct ServerInfoNoticeCompletion {
     std::string server;
     std::string userId;
@@ -2699,14 +2686,7 @@ private:
         const JellyfinSession session = session_;
         const std::string seriesId = detailsState_.seriesDetail().id;
         const uint64_t generation = requestEpochs_.content.begin();
-        tasks_.submit([this, session, seriesId, generation] {
-            auto result = api_.getSeasons(session, seriesId);
-            asyncCompletions_.push(SeasonsCompletion{
-                .seriesId = seriesId,
-                .generation = generation,
-                .result = std::move(result),
-            });
-        });
+        detailsAsync_.loadSeasons(session, seriesId, generation);
     }
 
     void openEpisodes(const JellyfinItem& season) {
@@ -2719,15 +2699,7 @@ private:
         const std::string seriesId = detailsState_.seriesDetail().id;
         const std::string seasonId = season.id;
         const uint64_t generation = requestEpochs_.content.begin();
-        tasks_.submit([this, session, seriesId, seasonId, generation] {
-            auto result = api_.getEpisodes(session, seriesId, seasonId);
-            asyncCompletions_.push(EpisodesCompletion{
-                .seriesId = seriesId,
-                .seasonId = seasonId,
-                .generation = generation,
-                .result = std::move(result),
-            });
-        });
+        detailsAsync_.loadEpisodes(session, seriesId, seasonId, generation);
     }
 
     std::string hiddenHomeKey(const std::string& itemId) const {

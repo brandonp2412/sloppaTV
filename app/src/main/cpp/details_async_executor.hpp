@@ -34,6 +34,19 @@ struct EpisodeSeriesContextCompletion {
     std::vector<JellyfinItem> seasons;
 };
 
+struct SeasonsCompletion {
+    std::string seriesId;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
+struct EpisodesCompletion {
+    std::string seriesId;
+    std::string seasonId;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
 template <typename Client, typename TaskRunner, typename CompletionSink>
 class DetailsAsyncExecutor {
 public:
@@ -94,6 +107,31 @@ public:
                     .seasons = std::move(seasons.value),
                 });
             });
+    }
+
+    bool loadSeasons(JellyfinSession session, std::string seriesId, uint64_t generation) {
+        return tasks_.submit(
+            [this, session = std::move(session), seriesId = std::move(seriesId), generation]() mutable {
+                auto result = client_.getSeasons(session, seriesId);
+                completions_.push(SeasonsCompletion{
+                    .seriesId = std::move(seriesId),
+                    .generation = generation,
+                    .result = std::move(result),
+                });
+            });
+    }
+
+    bool loadEpisodes(JellyfinSession session, std::string seriesId, std::string seasonId, uint64_t generation) {
+        return tasks_.submit([this, session = std::move(session), seriesId = std::move(seriesId),
+                              seasonId = std::move(seasonId), generation]() mutable {
+            auto result = client_.getEpisodes(session, seriesId, seasonId);
+            completions_.push(EpisodesCompletion{
+                .seriesId = std::move(seriesId),
+                .seasonId = std::move(seasonId),
+                .generation = generation,
+                .result = std::move(result),
+            });
+        });
     }
 
 private:

@@ -9,7 +9,7 @@
 
 namespace {
 using Completion = std::variant<DetailsItemCompletion, DetailsSimilarCompletion, EpisodeSeriesContextRequestCompletion,
-                                EpisodeSeriesContextCompletion>;
+                                EpisodeSeriesContextCompletion, SeasonsCompletion, EpisodesCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -51,18 +51,30 @@ struct FakeClient {
         return seasonsResult;
     }
 
+    ApiValueResult<std::vector<JellyfinItem>> getEpisodes(const JellyfinSession&, const std::string& seriesId,
+                                                          const std::string& seasonId) {
+        ++episodesCalls;
+        episodesSeriesId = seriesId;
+        episodesSeasonId = seasonId;
+        return episodesResult;
+    }
+
     ApiValueResult<JellyfinItem> itemResult;
     ApiValueResult<JellyfinItem> seriesResult;
     ApiValueResult<std::vector<JellyfinItem>> similarResult;
     ApiValueResult<std::vector<JellyfinItem>> seasonsResult;
+    ApiValueResult<std::vector<JellyfinItem>> episodesResult;
     std::function<void()> onGetItem;
     std::vector<std::string> requestedItems;
     std::string similarItemId;
     std::string seasonsSeriesId;
+    std::string episodesSeriesId;
+    std::string episodesSeasonId;
     int similarLimit = -1;
     int getItemCalls = 0;
     int similarCalls = 0;
     int seasonsCalls = 0;
+    int episodesCalls = 0;
 };
 
 JellyfinSession session() {
@@ -236,6 +248,50 @@ int main() {
 
     {
         FakeClient client;
+        client.seasonsResult.ok = true;
+        JellyfinItem season;
+        season.id = "season-2";
+        season.type = "Season";
+        client.seasonsResult.value = {season};
+        ImmediateTaskRunner tasks;
+        CompletionSink completions;
+        DetailsAsyncExecutor executor(client, tasks, completions);
+
+        assert(executor.loadSeasons(session(), "series-2", 41));
+        assert(client.seasonsCalls == 1);
+        assert(client.seasonsSeriesId == "series-2");
+        assert(completions.events.size() == 1);
+        const auto& seasons = std::get<SeasonsCompletion>(completions.events.front());
+        assert(seasons.seriesId == "series-2");
+        assert(seasons.generation == 41);
+        assert(seasons.result.ok);
+        assert(seasons.result.value.size() == 1);
+        assert(seasons.result.value.front().id == "season-2");
+    }
+
+    {
+        FakeClient client;
+        client.episodesResult.ok = false;
+        client.episodesResult.error = "episodes failed";
+        ImmediateTaskRunner tasks;
+        CompletionSink completions;
+        DetailsAsyncExecutor executor(client, tasks, completions);
+
+        assert(executor.loadEpisodes(session(), "series-3", "season-3", 42));
+        assert(client.episodesCalls == 1);
+        assert(client.episodesSeriesId == "series-3");
+        assert(client.episodesSeasonId == "season-3");
+        assert(completions.events.size() == 1);
+        const auto& episodes = std::get<EpisodesCompletion>(completions.events.front());
+        assert(episodes.seriesId == "series-3");
+        assert(episodes.seasonId == "season-3");
+        assert(episodes.generation == 42);
+        assert(!episodes.result.ok);
+        assert(episodes.result.error == "episodes failed");
+    }
+
+    {
+        FakeClient client;
         client.itemResult.ok = true;
         client.itemResult.value = movie();
         ImmediateTaskRunner tasks;
@@ -245,7 +301,11 @@ int main() {
         DetailsAsyncExecutor executor(client, tasks, completions);
 
         assert(!executor.load(session(), "movie-1", epoch.beginToken()));
+        assert(!executor.loadSeasons(session(), "series-4", 43));
+        assert(!executor.loadEpisodes(session(), "series-4", "season-4", 44));
         assert(client.getItemCalls == 0);
+        assert(client.seasonsCalls == 0);
+        assert(client.episodesCalls == 0);
         assert(completions.events.empty());
     }
 
