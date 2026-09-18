@@ -32,6 +32,7 @@
 #include "playback_resolver.hpp"
 #include "playback_session.hpp"
 #include "playback_telemetry.hpp"
+#include "playback_telemetry_executor.hpp"
 #include "playback_track_selection.hpp"
 #include "playback_transition.hpp"
 #include "player_screen.hpp"
@@ -556,11 +557,6 @@ struct PlaybackAdjacentCompletion {
     std::optional<JellyfinItem> item;
 };
 
-struct PlaybackStopReportCompletion {
-    std::string server;
-    std::string userId;
-};
-
 struct QueuedPlaybackCompletion {
     uint64_t generation = 0;
     Screen originScreen = Screen::Home;
@@ -630,7 +626,7 @@ using AsyncCompletion = std::variant<SystemTextInputEvent, SeerrDeleteCompletion
                                      QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
                                      ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion,
                                      MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion,
-                                     PlaybackStopReportCompletion, QueuedPlaybackCompletion, PlayerItemPlaybackCompletion,
+                                     PlaybackReportCompletion, QueuedPlaybackCompletion, PlayerItemPlaybackCompletion,
                                      AutoplayPlaybackCompletion, StreamRestartCompletion, FallbackPlaybackCompletion,
                                      BeginPlaybackCompletion, SeriesPlayAllCompletion>;
 
@@ -655,6 +651,7 @@ public:
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
+          playbackTelemetryAsync_(api_, tasks_, asyncCompletions_),
           seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
@@ -4134,16 +4131,7 @@ private:
         playbackCoordinator_.finishRelease();
         playerScreenState_.resetPosition();
         if (releasePlan.reportStop) {
-            tasks_.submit([this, session, item, target, ticks = releasePlan.reportTicks] {
-                const ApiResult result = api_.reportPlaybackStopped(session, item, target, ticks);
-                logPlaybackReportFailure("stop", item.id, result);
-                if (!result.ok) return;
-                asyncCompletions_.push(PlaybackStopReportCompletion{
-                    .server = session.server,
-                    .userId = session.userId,
-                });
-                if (app_ && app_->looper) ALooper_wake(app_->looper);
-            });
+            playbackTelemetryAsync_.reportStop(session, item, target, releasePlan.reportTicks);
         }
     }
 
@@ -4590,10 +4578,7 @@ private:
             const auto session = session_;
             const auto itemCopy = playbackSessionState_.activeItem();
             const auto targetCopy = playbackSessionState_.activeTarget();
-            tasks_.submit([this, session, itemCopy, targetCopy, ticks] {
-                logPlaybackReportFailure("start", itemCopy.id,
-                                         api_.reportPlaybackStart(session, itemCopy, targetCopy, ticks));
-            });
+            playbackTelemetryAsync_.reportStart(session, itemCopy, targetCopy, ticks);
         }
         if (plan.reportProgress) reportProgressAsync(false);
         if (plan.requestNextEpisode) requestNextEpisodeAsync();
@@ -5265,7 +5250,16 @@ private:
         playPlayerItemAsync(std::move(*completion.item));
     }
 
-    void applyAsyncCompletion(const PlaybackStopReportCompletion& completion) {
+    void applyAsyncCompletion(const PlaybackReportCompletion& completion) {
+        const char* stage = "progress";
+        if (completion.kind == PlaybackReportKind::Start)
+            stage = "start";
+        else if (completion.kind == PlaybackReportKind::PausedProgress)
+            stage = "paused-progress";
+        else if (completion.kind == PlaybackReportKind::Stop)
+            stage = "stop";
+        logPlaybackReportFailure(stage, completion.itemId, completion.result);
+        if (completion.kind != PlaybackReportKind::Stop || !completion.result.ok) return;
         if (session_.server != completion.server || session_.userId != completion.userId || screen_ == Screen::Player)
             return;
         playbackCoordinator_.markPlaybackStopReported();
@@ -5482,10 +5476,7 @@ private:
         const auto session = session_;
         const auto item = playbackSessionState_.activeItem();
         const auto target = playbackSessionState_.activeTarget();
-        tasks_.submit([this, session, item, target, plan] {
-            logPlaybackReportFailure(plan.paused ? "paused-progress" : "progress", item.id,
-                                     api_.reportPlaybackProgress(session, item, target, plan.ticks, plan.paused));
-        });
+        playbackTelemetryAsync_.reportProgress(session, item, target, plan.ticks, plan.paused);
     }
 
     void stopPlayback(bool completed = false) {
@@ -7834,6 +7825,7 @@ private:
     VideoSurface videoSurface_;
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
+    PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
     SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         seerrAsync_;
 
