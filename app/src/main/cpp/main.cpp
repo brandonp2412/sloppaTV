@@ -44,6 +44,7 @@
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
+#include "series_playback_executor.hpp"
 #include "seerr_async_executor.hpp"
 #include "seerr_domain.hpp"
 #include "seerr_drive_picker_screen.hpp"
@@ -553,15 +554,6 @@ struct FallbackPlaybackCompletion {
     ApiValueResult<PlaybackTarget> result;
 };
 
-struct SeriesPlayAllCompletion {
-    uint64_t generation = 0;
-    JellyfinItem series;
-    std::vector<JellyfinItem> episodes;
-    JellyfinItem first;
-    std::optional<PlaybackTarget> target;
-    std::string error;
-};
-
 using AsyncCompletion = std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion,
                                      SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
@@ -604,6 +596,13 @@ public:
           playbackTelemetryAsync_(api_, tasks_, asyncCompletions_),
           playbackContinuationAsync_(api_, tasks_, asyncCompletions_),
           playbackResolutionAsync_(api_, tasks_, asyncCompletions_, requestEpochs_.playback),
+          seriesPlaybackAsync_(
+              api_, tasks_, asyncCompletions_, requestEpochs_.playback, [](const SeriesEpisodeSlot& slot) {
+                  __android_log_print(
+                      ANDROID_LOG_WARN, kTag,
+                      "No available source found for duplicate S%02dE%02d slot; retaining first server result",
+                      slot.season, slot.episode);
+              }),
           seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
@@ -3800,68 +3799,13 @@ private:
         playbackCoordinator_.beginUserPlayback(false);
         const JellyfinSession session = session_;
         const JellyfinItem series = detail_;
-        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
-        const int maxAudioChannels = settings_.maxAudioChannels;
-        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        SeriesPlayAllOptions options{
+            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
+            .maxAudioChannels = settings_.maxAudioChannels,
+            .overrides = playbackOverridesFor(settings_),
+        };
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, series, maxStreamingBitrate, maxAudioChannels, playbackOverrides, generation] {
-            auto episodes = api_.getSeriesEpisodes(session, series.id, 1000);
-            if (!episodes.ok || episodes.value.empty()) {
-                if (!requestEpochs_.playback.active(generation)) return;
-                asyncCompletions_.push(SeriesPlayAllCompletion{
-                    .generation = generation,
-                    .series = series,
-                    .episodes = {},
-                    .first = {},
-                    .target = std::nullopt,
-                    .error = episodes.ok ? "PLAY ALL: NO EPISODES" : "PLAY ALL: " + episodes.error,
-                });
-                return;
-            }
-
-            auto prepared = prepareSeriesPlaybackQueue(std::move(episodes.value), [&](JellyfinItem& candidate) {
-                if (candidate.mediaSourceId.empty() || candidate.container.empty()) {
-                    auto detailed = api_.getItem(session, candidate.id);
-                    if (!detailed.ok) return false;
-                    candidate = std::move(detailed.value);
-                }
-                return api_.isStaticStreamAvailable(session, candidate);
-            });
-            for (const auto& slot : prepared.unavailableDuplicateSlots) {
-                __android_log_print(
-                    ANDROID_LOG_WARN, kTag,
-                    "No available source found for duplicate S%02dE%02d slot; retaining first server result",
-                    slot.season, slot.episode);
-            }
-            episodes.value = std::move(prepared.episodes);
-            if (episodes.value.empty()) {
-                if (!requestEpochs_.playback.active(generation)) return;
-                asyncCompletions_.push(SeriesPlayAllCompletion{
-                    .generation = generation,
-                    .series = series,
-                    .episodes = {},
-                    .first = {},
-                    .target = std::nullopt,
-                    .error = "PLAY ALL: NO REGULAR EPISODES",
-                });
-                return;
-            }
-
-            JellyfinItem first = episodes.value.front();
-            auto detailed = api_.getItem(session, first.id);
-            if (detailed.ok) first = std::move(detailed.value);
-            auto target =
-                api_.resolvePlayback(session, first, maxStreamingBitrate, maxAudioChannels, playbackOverrides);
-            if (!requestEpochs_.playback.active(generation)) return;
-            asyncCompletions_.push(SeriesPlayAllCompletion{
-                .generation = generation,
-                .series = series,
-                .episodes = std::move(episodes.value),
-                .first = std::move(first),
-                .target = target.ok ? std::optional<PlaybackTarget>{std::move(target.value)} : std::nullopt,
-                .error = target.ok ? std::string{} : "PLAY ALL: " + target.error,
-            });
-        });
+        seriesPlaybackAsync_.playAll(session, series, std::move(options), generation);
     }
 
     void beginPlayback() {
@@ -7639,6 +7583,8 @@ private:
         playbackContinuationAsync_;
     PlaybackResolutionExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         playbackResolutionAsync_;
+    SeriesPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
+        seriesPlaybackAsync_;
     SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         seerrAsync_;
 
