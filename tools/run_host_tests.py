@@ -128,6 +128,7 @@ CPP_TESTS = [
 ]
 
 LINKED_CPP_TESTS = [
+    ("details_navigation_controller_test.cpp", ["details_navigation_controller.cpp"], []),
     ("http_get_coordinator_test.cpp", [], ["-pthread"]),
     ("jellyfin_item_parser_test.cpp", ["jellyfin_item_parser.cpp"], []),
     ("jellyfin_media_segment_parser_test.cpp", ["jellyfin_media_segment_parser.cpp"], []),

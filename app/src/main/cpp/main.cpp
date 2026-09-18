@@ -16,6 +16,7 @@
 #include "cast_renderer.hpp"
 #include "details_renderer.hpp"
 #include "details_screen.hpp"
+#include "details_navigation_controller.hpp"
 #include "details_async_executor.hpp"
 #include "deep_link.hpp"
 #include "diagnostics_screen.hpp"
@@ -1233,15 +1234,15 @@ private:
 
     bool isItemContextKey(int32_t key) const { return key == AKEYCODE_MENU || key == AKEYCODE_INFO; }
 
-    DetailGridScreenInput detailGridInputForKey(int32_t key) const {
-        if (key == AKEYCODE_BACK) return DetailGridScreenInput::Back;
-        if (isItemContextKey(key)) return DetailGridScreenInput::Context;
-        if (key == AKEYCODE_DPAD_LEFT) return DetailGridScreenInput::Left;
-        if (key == AKEYCODE_DPAD_RIGHT) return DetailGridScreenInput::Right;
-        if (key == AKEYCODE_DPAD_UP) return DetailGridScreenInput::Up;
-        if (key == AKEYCODE_DPAD_DOWN) return DetailGridScreenInput::Down;
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) return DetailGridScreenInput::Activate;
-        return DetailGridScreenInput::None;
+    DetailsNavigationKey detailsNavigationKeyForKey(int32_t key) const {
+        if (key == AKEYCODE_BACK) return DetailsNavigationKey::Back;
+        if (isItemContextKey(key)) return DetailsNavigationKey::Context;
+        if (key == AKEYCODE_DPAD_LEFT) return DetailsNavigationKey::Left;
+        if (key == AKEYCODE_DPAD_RIGHT) return DetailsNavigationKey::Right;
+        if (key == AKEYCODE_DPAD_UP) return DetailsNavigationKey::Up;
+        if (key == AKEYCODE_DPAD_DOWN) return DetailsNavigationKey::Down;
+        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) return DetailsNavigationKey::Activate;
+        return DetailsNavigationKey::None;
     }
 
     bool supportsItemContextMenu(const JellyfinItem& item) const {
@@ -1664,54 +1665,33 @@ private:
     }
 
     void handleDetailsKey(int32_t key) {
-        DetailsScreenInput input = DetailsScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = DetailsScreenInput::Back;
-        else if (isItemContextKey(key))
-            input = DetailsScreenInput::Context;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = DetailsScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = DetailsScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = DetailsScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = DetailsScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = DetailsScreenInput::Activate;
-
-        const auto actions = detailActions();
-        const DetailsScreenCommand command =
-            detailsState_.handleInput(input, static_cast<int>(actions.size()), detail_.type == "Episode");
-
-        if (command.type == DetailsScreenCommandType::Back) {
+        const DetailsNavigationAction navigation =
+            DetailsNavigationController::handleDetails(detailsState_, detailsNavigationKeyForKey(key), detail_);
+        if (navigation.type == DetailsNavigationActionType::Back) {
             cancelContentLoadForNavigation();
             playbackCoordinator_.resetContinuationPrompt();
             popScreen(Screen::Home);
             return;
         }
-        if (command.type == DetailsScreenCommandType::OpenContext) {
+        if (navigation.type == DetailsNavigationActionType::OpenContext) {
             openItemMenu();
             return;
         }
-        if (command.type == DetailsScreenCommandType::OpenEpisodeSeries) {
-            const JellyfinItem series = detailsState_.seriesDetail();
-            if (!series.id.empty()) openDetails(series, true);
+        if (navigation.type == DetailsNavigationActionType::OpenEpisodeSeries && navigation.item) {
+            openDetails(*navigation.item, true);
             return;
         }
-        if (command.type == DetailsScreenCommandType::OpenEpisodeSeason) {
-            if (const auto* season = detailsState_.selectedEpisodeContextSeason()) openEpisodes(*season);
+        if (navigation.type == DetailsNavigationActionType::OpenEpisodeSeason && navigation.item) {
+            openEpisodes(*navigation.item);
             return;
         }
-        if (command.type == DetailsScreenCommandType::OpenSimilar) {
-            if (const auto* selected = detailsState_.selectedSimilar()) openDetails(*selected);
+        if (navigation.type == DetailsNavigationActionType::OpenSimilar && navigation.item) {
+            openDetails(*navigation.item);
             return;
         }
-        if (command.type != DetailsScreenCommandType::ActivateAction) return;
+        if (navigation.type != DetailsNavigationActionType::ActivateDetailAction || !navigation.detailAction) return;
 
-        const auto action = detailsState_.selectedAction(detail_);
-        if (!action) return;
-        switch (*action) {
+        switch (*navigation.detailAction) {
         case DetailsAction::StartPlayback:
             beginPlayback();
             return;
@@ -1748,26 +1728,13 @@ private:
     }
 
     void handleCastKey(int32_t key) {
-        CastScreenInput input = CastScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = CastScreenInput::Back;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = CastScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = CastScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = CastScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = CastScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = CastScreenInput::Activate;
-
         constexpr int columns = mediaGridColumns();
-        const CastScreenCommand command = detailsState_.handleCastInput(input, detail_.people, columns);
-        if (command.type == CastScreenCommandType::Back) {
+        const DetailsNavigationAction navigation =
+            DetailsNavigationController::handleCast(detailsState_, detailsNavigationKeyForKey(key), detail_.people, columns);
+        if (navigation.type == DetailsNavigationActionType::Back) {
             popScreen(Screen::Details);
-        } else if (command.type == CastScreenCommandType::OpenPerson) {
-            if (const auto* person = detailsState_.selectedCastPerson(detail_.people)) openPersonItems(*person);
+        } else if (navigation.type == DetailsNavigationActionType::OpenPerson && navigation.person) {
+            openPersonItems(*navigation.person);
         }
     }
 
@@ -1785,15 +1752,15 @@ private:
 
     void handlePersonItemsKey(int32_t key) {
         constexpr int columns = mediaGridColumns();
-        const DetailGridScreenCommand command =
-            detailsState_.handlePersonItemsInput(detailGridInputForKey(key), columns);
-        if (command.type == DetailGridScreenCommandType::Back) {
+        const DetailsNavigationAction navigation =
+            DetailsNavigationController::handlePersonItems(detailsState_, detailsNavigationKeyForKey(key), columns);
+        if (navigation.type == DetailsNavigationActionType::Back) {
             cancelContentLoadForNavigation();
             popScreen(Screen::Cast);
-        } else if (command.type == DetailGridScreenCommandType::OpenContext) {
-            if (const auto* item = detailsState_.selectedPersonItem()) openItemMenuForItem(*item);
-        } else if (command.type == DetailGridScreenCommandType::OpenSelected) {
-            if (const auto* item = detailsState_.selectedPersonItem()) openDetails(*item);
+        } else if (navigation.type == DetailsNavigationActionType::OpenPersonItemContext && navigation.item) {
+            openItemMenuForItem(*navigation.item);
+        } else if (navigation.type == DetailsNavigationActionType::OpenPersonItem && navigation.item) {
+            openDetails(*navigation.item);
         }
     }
 
@@ -1810,44 +1777,24 @@ private:
     }
 
     void handleItemMenuKey(int32_t key) {
-        ItemMenuScreenInput input = ItemMenuScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = ItemMenuScreenInput::Back;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = ItemMenuScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = ItemMenuScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = ItemMenuScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = ItemMenuScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = ItemMenuScreenInput::Activate;
-
         const bool seerrRequest = isSeerrItem(detail_);
-        const bool hasExternalPlayer = selectedExternalPlayer().has_value();
-        const bool hasQueue = !queueState_.empty();
-        const auto actions =
-            detailsState_.itemMenuActions(detail_, seerrRequest, hasExternalPlayer, hasQueue, isHiddenFromHome(detail_));
-        const ItemMenuScreenCommand command =
-            detailsState_.handleItemMenuInput(input, static_cast<int>(actions.size()));
-        if (command.type == ItemMenuScreenCommandType::Back) {
+        const DetailsNavigationAction navigation = DetailsNavigationController::handleItemMenu(
+            detailsState_, detailsNavigationKeyForKey(key), detail_, seerrRequest,
+            selectedExternalPlayer().has_value(), !queueState_.empty());
+        if (navigation.type == DetailsNavigationActionType::Back) {
             popScreen(Screen::Details);
             return;
         }
-        if (command.type == ItemMenuScreenCommandType::ConfirmDelete) {
-            if (isSeerrItem(detail_))
+        if (navigation.type == DetailsNavigationActionType::ConfirmDelete) {
+            if (seerrRequest)
                 deleteSeerrRequestAsync();
             else
                 deleteCurrentItemAsync();
             return;
         }
-        if (command.type != ItemMenuScreenCommandType::ActivateAction) return;
+        if (navigation.type != DetailsNavigationActionType::ActivateItemMenuAction || !navigation.itemMenuAction) return;
 
-        const auto action =
-            detailsState_.selectedItemMenuAction(detail_, seerrRequest, hasExternalPlayer, hasQueue);
-        if (!action) return;
-        switch (*action) {
+        switch (*navigation.itemMenuAction) {
         case ItemMenuAction::PlayAll:
             popScreen(Screen::Details);
             if (screen_ != Screen::Details) pushScreen(Screen::Details);
@@ -1880,7 +1827,6 @@ private:
             return;
         case ItemMenuAction::DeleteMedia:
         case ItemMenuAction::DeleteRequest:
-            detailsState_.setDeleteConfirmation(true);
             return;
         case ItemMenuAction::Back:
             popScreen(Screen::Details);
@@ -1943,26 +1889,28 @@ private:
 
     void handleSeasonsKey(int32_t key) {
         constexpr int columns = mediaGridColumns();
-        const DetailGridScreenCommand command = detailsState_.handleSeasonsInput(detailGridInputForKey(key), columns);
-        if (command.type == DetailGridScreenCommandType::Back) {
+        const DetailsNavigationAction navigation =
+            DetailsNavigationController::handleSeasons(detailsState_, detailsNavigationKeyForKey(key), columns);
+        if (navigation.type == DetailsNavigationActionType::Back) {
             cancelContentLoadForNavigation();
-            detail_ = detailsState_.seriesDetail();
+            if (navigation.item) detail_ = *navigation.item;
             popScreen(Screen::Details);
-        } else if (command.type == DetailGridScreenCommandType::OpenSelected) {
-            if (const auto* season = detailsState_.selectedSeasonItem()) openEpisodes(*season);
+        } else if (navigation.type == DetailsNavigationActionType::OpenSeason && navigation.item) {
+            openEpisodes(*navigation.item);
         }
     }
 
     void handleEpisodesKey(int32_t key) {
         constexpr int columns = mediaGridColumns();
-        const DetailGridScreenCommand command = detailsState_.handleEpisodesInput(detailGridInputForKey(key), columns);
-        if (command.type == DetailGridScreenCommandType::Back) {
+        const DetailsNavigationAction navigation =
+            DetailsNavigationController::handleEpisodes(detailsState_, detailsNavigationKeyForKey(key), columns);
+        if (navigation.type == DetailsNavigationActionType::Back) {
             cancelContentLoadForNavigation();
             popScreen(Screen::Seasons);
-        } else if (command.type == DetailGridScreenCommandType::OpenContext) {
-            if (const auto* episode = detailsState_.selectedEpisodeItem()) openItemMenuForItem(*episode);
-        } else if (command.type == DetailGridScreenCommandType::OpenSelected) {
-            if (const auto* episode = detailsState_.selectedEpisodeItem()) openDetails(*episode);
+        } else if (navigation.type == DetailsNavigationActionType::OpenEpisodeContext && navigation.item) {
+            openItemMenuForItem(*navigation.item);
+        } else if (navigation.type == DetailsNavigationActionType::OpenEpisode && navigation.item) {
+            openDetails(*navigation.item);
         }
     }
 
