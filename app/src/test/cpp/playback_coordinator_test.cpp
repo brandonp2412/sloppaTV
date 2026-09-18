@@ -372,14 +372,16 @@ int main() {
     assert(restartCoordinator.tracks().subtitleBusy());
     assert(restartCoordinator.transitionLoading());
     assert(!restartCoordinator.beginStreamRestart(20000));
-    restartCoordinator.finishStreamRestartRequest();
+    assert(!restartCoordinator.completeStreamRestartRequest("stale-item"));
     assert(!restartCoordinator.tracks().subtitleBusy());
     assert(!restartCoordinator.transitionLoading());
     restartPlan = restartCoordinator.beginStreamRestart(-100);
     assert(restartPlan);
     assert(restartPlan->item.positionTicks == 0);
     assert(!restartPlan->reportPrevious);
-    restartCoordinator.finishStreamRestartRequest();
+    assert(restartCoordinator.completeStreamRestartRequest(coordinatedItem.id));
+    assert(!restartCoordinator.tracks().subtitleBusy());
+    assert(!restartCoordinator.transitionLoading());
 
     PlaybackTarget restartTarget;
     restartTarget.url = "https://media.example/restart";
@@ -659,10 +661,14 @@ int main() {
     PlaybackCoordinator fallbackCoordinator;
     fallbackCoordinator.beginFallbackResolution();
     assert(fallbackCoordinator.fallbackResolving());
-    fallbackCoordinator.finishFallbackResolution();
+    assert(!fallbackCoordinator.completeFallbackResolution("stale-item"));
     assert(!fallbackCoordinator.fallbackResolving());
     JellyfinItem fallbackItem;
     fallbackItem.id = "fallback-item";
+    fallbackCoordinator.activate(fallbackItem, fallbackTarget, now);
+    fallbackCoordinator.beginFallbackResolution();
+    assert(fallbackCoordinator.completeFallbackResolution(fallbackItem.id));
+    assert(!fallbackCoordinator.fallbackResolving());
     PlaybackTarget resolvedFallbackTarget;
     resolvedFallbackTarget.url = "https://media.example/fallback";
     fallbackCoordinator.beginFallbackResolution();

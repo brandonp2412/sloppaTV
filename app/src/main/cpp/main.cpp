@@ -4786,8 +4786,8 @@ private:
 
     void applyAsyncCompletion(StreamRestartCompletion& completion) {
         if (!requestEpochs_.playback.active(completion.generation)) return;
-        playbackCoordinator_.finishStreamRestartRequest();
-        if (screen_ != Screen::Player || playbackCoordinator_.session().activeItem().id != completion.item.id) return;
+        const bool sameItem = playbackCoordinator_.completeStreamRestartRequest(completion.item.id);
+        if (screen_ != Screen::Player || !sameItem) return;
         if (!completion.result.ok) {
             error_ = completion.result.error;
             return;
@@ -4799,8 +4799,8 @@ private:
     void applyAsyncCompletion(FallbackPlaybackCompletion& completion) {
         if (!requestEpochs_.playback.active(completion.generation)) return;
         loading_ = false;
-        playbackCoordinator_.finishFallbackResolution();
-        if (screen_ != Screen::Player || playbackCoordinator_.session().activeItem().id != completion.item.id) return;
+        const bool sameItem = playbackCoordinator_.completeFallbackResolution(completion.item.id);
+        if (screen_ != Screen::Player || !sameItem) return;
         if (!completion.result.ok) {
             error_ = "TRANSCODE FALLBACK: " + completion.result.error;
             stopPlayback();

@@ -866,6 +866,11 @@ public:
         transitionState_.setLoading(false);
     }
 
+    [[nodiscard]] bool completeStreamRestartRequest(std::string_view expectedItemId) {
+        finishStreamRestartRequest();
+        return sessionState_.activeItem().id == expectedItemId;
+    }
+
     void stageStreamRestart(PlaybackTarget target, JellyfinItem item, bool restartPaused, int audioStreamIndex) {
         transitionState_.stage(std::move(target), std::move(item), true, restartPaused, audioStreamIndex);
     }
@@ -905,6 +910,11 @@ public:
     void beginFallbackResolution() { transitionState_.setFallbackResolving(true); }
 
     void finishFallbackResolution() { transitionState_.setFallbackResolving(false); }
+
+    [[nodiscard]] bool completeFallbackResolution(std::string_view expectedItemId) {
+        finishFallbackResolution();
+        return sessionState_.activeItem().id == expectedItemId;
+    }
 
     void stageResolvedFallback(PlaybackTarget target, JellyfinItem item, int audioStreamIndex) {
         transitionState_.setFallbackResolving(false);
