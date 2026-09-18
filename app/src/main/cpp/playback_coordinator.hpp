@@ -269,37 +269,6 @@ inline PlaybackTransitionPlan planPlaybackTransition(const PlaybackTarget& targe
     return plan;
 }
 
-inline std::optional<JellyfinItem> selectAdjacentPlaybackEpisode(std::vector<JellyfinItem> episodes,
-                                                                 const std::string& currentItemId, int currentSeason,
-                                                                 int currentEpisode, int direction) {
-    if (direction == 0) return std::nullopt;
-
-    std::sort(episodes.begin(), episodes.end(), [](const JellyfinItem& left, const JellyfinItem& right) {
-        if (left.parentIndexNumber != right.parentIndexNumber) return left.parentIndexNumber < right.parentIndexNumber;
-        if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
-        return left.name < right.name;
-    });
-    auto current = std::find_if(episodes.begin(), episodes.end(),
-                                [&](const JellyfinItem& candidate) { return candidate.id == currentItemId; });
-    if (current == episodes.end() && currentSeason >= 0 && currentEpisode >= 0) {
-        current = std::find_if(episodes.begin(), episodes.end(), [&](const JellyfinItem& candidate) {
-            return sameEpisodeSlot(candidate.parentIndexNumber, candidate.indexNumber, currentSeason, currentEpisode);
-        });
-    }
-    if (current == episodes.end()) return std::nullopt;
-
-    int candidateIndex = static_cast<int>(std::distance(episodes.begin(), current)) + direction;
-    while (candidateIndex >= 0 && candidateIndex < static_cast<int>(episodes.size())) {
-        const auto& candidate = episodes[static_cast<size_t>(candidateIndex)];
-        const bool duplicateSlot = sameEpisodeSlot(candidate.parentIndexNumber, candidate.indexNumber,
-                                                   current->parentIndexNumber, current->indexNumber);
-        const bool specialOutsideRegularRun = current->parentIndexNumber > 0 && candidate.parentIndexNumber <= 0;
-        if (!duplicateSlot && !specialOutsideRegularRun) return candidate;
-        candidateIndex += direction;
-    }
-    return std::nullopt;
-}
-
 inline PlaybackContinuationPlan planPlaybackContinuation(bool playbackEnded, int positionMs, int durationMs,
                                                          const PlaybackQueueState& queueState,
                                                          const PlaybackContinuationState& continuationState,

@@ -1,8 +1,10 @@
 #pragma once
 
 #include "jellyfin_types.hpp"
+#include "playback_continuation.hpp"
 
 #include <chrono>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -21,6 +23,13 @@ struct NextEpisodeCompletion {
     JellyfinItem item;
     std::string error;
     std::chrono::steady_clock::time_point completedAt;
+};
+
+struct PlaybackAdjacentCompletion {
+    std::string currentItemId;
+    int direction = 0;
+    bool ok = false;
+    std::optional<JellyfinItem> item;
 };
 
 template <typename Client, typename TaskRunner, typename CompletionSink> class PlaybackContinuationExecutor {
@@ -63,6 +72,23 @@ public:
                 .item = detailed.ok ? std::move(detailed.value) : std::move(next.value),
                 .error = {},
                 .completedAt = std::chrono::steady_clock::now(),
+            });
+        });
+    }
+
+    bool requestAdjacentEpisode(JellyfinSession session, std::string seriesId, std::string currentItemId,
+                                int currentSeason, int currentEpisode, int direction) {
+        return tasks_.submit([this, session = std::move(session), seriesId = std::move(seriesId),
+                              currentItemId = std::move(currentItemId), currentSeason, currentEpisode, direction] {
+            auto episodes = client_.getSeriesEpisodes(session, seriesId, 1000);
+            auto adjacent = episodes.ok ? selectAdjacentPlaybackEpisode(std::move(episodes.value), currentItemId,
+                                                                        currentSeason, currentEpisode, direction)
+                                        : std::nullopt;
+            completions_.push(PlaybackAdjacentCompletion{
+                .currentItemId = currentItemId,
+                .direction = direction,
+                .ok = episodes.ok,
+                .item = std::move(adjacent),
             });
         });
     }

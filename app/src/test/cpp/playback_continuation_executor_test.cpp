@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace {
-using Completion = std::variant<MediaSegmentsCompletion, NextEpisodeCompletion>;
+using Completion = std::variant<MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -70,13 +70,30 @@ struct FakeClient {
         return result;
     }
 
+    ApiValueResult<std::vector<JellyfinItem>> getSeriesEpisodes(const JellyfinSession&, const std::string& seriesId,
+                                                                int limit) {
+        lastSeriesId = seriesId;
+        lastEpisodeLimit = limit;
+        ApiValueResult<std::vector<JellyfinItem>> result;
+        result.ok = seriesEpisodesOk;
+        if (!seriesEpisodesOk) {
+            result.error = "episodes failed";
+            return result;
+        }
+        result.value = seriesEpisodes;
+        return result;
+    }
+
     bool mediaSegmentsOk = true;
     bool nextEpisodeOk = true;
     bool detailOk = true;
+    bool seriesEpisodesOk = true;
     std::string nextEpisodeId = "episode-2";
     std::string lastSeriesId;
     std::string lastItemId;
+    int lastEpisodeLimit = 0;
     int detailRequests = 0;
+    std::vector<JellyfinItem> seriesEpisodes;
 };
 } // namespace
 
@@ -136,9 +153,40 @@ int main() {
     assert(executor.requestNextEpisode(session, "series-1", "episode-4"));
     assert(completions.events.size() == completionCount);
 
+    JellyfinItem current;
+    current.id = "episode-4";
+    current.parentIndexNumber = 1;
+    current.indexNumber = 4;
+    JellyfinItem nextEpisodeItem;
+    nextEpisodeItem.id = "episode-5";
+    nextEpisodeItem.parentIndexNumber = 1;
+    nextEpisodeItem.indexNumber = 5;
+    JellyfinItem special;
+    special.id = "special";
+    special.parentIndexNumber = 0;
+    special.indexNumber = 1;
+    client.seriesEpisodes = {nextEpisodeItem, special, current};
+    assert(executor.requestAdjacentEpisode(session, "series-1", current.id, 1, 4, 1));
+    const auto& adjacent = std::get<PlaybackAdjacentCompletion>(completions.events.back());
+    assert(adjacent.ok);
+    assert(adjacent.direction == 1);
+    assert(adjacent.currentItemId == current.id);
+    assert(adjacent.item);
+    assert(adjacent.item->id == nextEpisodeItem.id);
+    assert(client.lastSeriesId == "series-1");
+    assert(client.lastEpisodeLimit == 1000);
+
+    client.seriesEpisodesOk = false;
+    assert(executor.requestAdjacentEpisode(session, "series-1", current.id, 1, 4, -1));
+    const auto& failedAdjacent = std::get<PlaybackAdjacentCompletion>(completions.events.back());
+    assert(!failedAdjacent.ok);
+    assert(failedAdjacent.direction == -1);
+    assert(!failedAdjacent.item);
+
     tasks.accept = false;
     assert(!executor.requestMediaSegments(session, "episode-5"));
     assert(!executor.requestNextEpisode(session, "series-1", "episode-5"));
+    assert(!executor.requestAdjacentEpisode(session, "series-1", "episode-5", 1, 5, 1));
 
     return 0;
 }

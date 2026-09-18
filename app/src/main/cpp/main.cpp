@@ -536,13 +536,6 @@ struct TrickplayTileCompletion {
     std::string error;
 };
 
-struct PlaybackAdjacentCompletion {
-    std::string currentItemId;
-    int direction = 0;
-    bool ok = false;
-    std::optional<JellyfinItem> item;
-};
-
 using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
 
 struct StreamRestartCompletion {
@@ -3765,18 +3758,8 @@ private:
         const int currentSeason = request->currentSeason;
         const int currentEpisode = request->currentEpisode;
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-        tasks_.submit([this, session, currentItemId, seriesId, currentSeason, currentEpisode, direction] {
-            auto episodes = api_.getSeriesEpisodes(session, seriesId, 1000);
-            auto adjacent = episodes.ok ? selectAdjacentPlaybackEpisode(std::move(episodes.value), currentItemId,
-                                                                        currentSeason, currentEpisode, direction)
-                                        : std::nullopt;
-            asyncCompletions_.push(PlaybackAdjacentCompletion{
-                .currentItemId = currentItemId,
-                .direction = direction,
-                .ok = episodes.ok,
-                .item = std::move(adjacent),
-            });
-        });
+        playbackContinuationAsync_.requestAdjacentEpisode(session, seriesId, currentItemId, currentSeason,
+                                                          currentEpisode, direction);
     }
 
     void handleQueueOverlayKey(int32_t key) {
