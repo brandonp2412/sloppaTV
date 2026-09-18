@@ -5,17 +5,22 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class HttpBridge {
-    private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(6, runnable -> {
-        Thread thread = new Thread(runnable, "sloppa-http");
-        thread.setDaemon(true);
-        return thread;
-    });
+    private static final long REQUEST_TIMEOUT_MS = 45_000;
+    private static final ScheduledExecutorService DEADLINE_EXECUTOR = Executors.newSingleThreadScheduledExecutor(
+        runnable -> {
+            Thread thread = new Thread(runnable, "sloppa-http-timeout");
+            thread.setDaemon(true);
+            return thread;
+        }
+    );
 
     public static final class Result {
         public final int status;
@@ -34,22 +39,32 @@ public final class HttpBridge {
     private HttpBridge() {}
 
     public static Result perform(String method, String url, String[] headerPairs, byte[] requestBody) {
-        Future<Result> future = null;
-        try {
-            future = EXECUTOR.submit(() -> performRequest(method, url, headerPairs, requestBody));
-            return future.get(45, TimeUnit.SECONDS);
-        } catch (Exception error) {
-            if (future != null) future.cancel(true);
-            if (error instanceof InterruptedException) Thread.currentThread().interrupt();
-            Throwable cause = error.getCause() != null ? error.getCause() : error;
-            return new Result(0, new byte[0], cause.toString(), "");
-        }
+        return perform(method, url, headerPairs, requestBody, REQUEST_TIMEOUT_MS);
     }
 
-    private static Result performRequest(String method, String url, String[] headerPairs, byte[] requestBody) {
+    static Result perform(
+        String method,
+        String url,
+        String[] headerPairs,
+        byte[] requestBody,
+        long requestTimeoutMs
+    ) {
         HttpURLConnection connection = null;
+        ScheduledFuture<?> deadline = null;
+        AtomicBoolean timedOut = new AtomicBoolean(false);
+        Result result;
         try {
             connection = (HttpURLConnection) new URL(url).openConnection();
+            HttpURLConnection activeConnection = connection;
+            deadline = DEADLINE_EXECUTOR.schedule(
+                () -> {
+                    timedOut.set(true);
+                    activeConnection.disconnect();
+                },
+                requestTimeoutMs,
+                TimeUnit.MILLISECONDS
+            );
+
             connection.setConnectTimeout(10_000);
             connection.setReadTimeout(30_000);
             connection.setInstanceFollowRedirects(true);
@@ -87,11 +102,17 @@ public final class HttpBridge {
                     setCookies.append(value);
                 }
             }
-            return new Result(status, responseBody, "", setCookies.toString());
+            result = new Result(status, responseBody, "", setCookies.toString());
         } catch (Exception error) {
-            return new Result(0, new byte[0], error.toString(), "");
+            result = new Result(0, new byte[0], error.toString(), "");
         } finally {
+            if (deadline != null) deadline.cancel(false);
             if (connection != null) connection.disconnect();
         }
+
+        if (timedOut.get()) {
+            return new Result(0, new byte[0], new TimeoutException().toString(), "");
+        }
+        return result;
     }
 }

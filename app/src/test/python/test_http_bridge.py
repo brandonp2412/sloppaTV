@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import unittest
 
 
@@ -16,6 +17,15 @@ HTTP_BRIDGE = ROOT / "app" / "src" / "main" / "java" / "app" / "sloppatv" / "Htt
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
+        if self.path == "/slow":
+            self.send_response(200)
+            self.end_headers()
+            time.sleep(0.5)
+            try:
+                self.wfile.write(b"late")
+            except BrokenPipeError:
+                pass
+            return
         if self.path == "/redirect":
             self.send_response(302)
             self.send_header("Location", "/final")
@@ -63,12 +73,20 @@ public final class HttpBridgeHarness {
 
     public static void main(String[] args) {
         byte[] body = args.length > 2 ? args[2].getBytes(StandardCharsets.UTF_8) : new byte[0];
-        HttpBridge.Result result = HttpBridge.perform(
-            args[0],
-            args[1],
-            new String[] {"X-Test", "bridge"},
-            body
-        );
+        HttpBridge.Result result = args.length > 3
+            ? HttpBridge.perform(
+                args[0],
+                args[1],
+                new String[] {"X-Test", "bridge"},
+                body,
+                Long.parseLong(args[3])
+            )
+            : HttpBridge.perform(
+                args[0],
+                args[1],
+                new String[] {"X-Test", "bridge"},
+                body
+            );
         System.out.println(result.status);
         System.out.println(Base64.getEncoder().encodeToString(result.body));
         System.out.println(encode(result.error));
@@ -98,17 +116,26 @@ public final class HttpBridgeHarness {
         cls.server_thread.join(timeout=2)
         cls._temp.cleanup()
 
-    def _request(self, method: str, url: str, body: str = "") -> tuple[int, bytes, str, str]:
+    def _request(
+        self,
+        method: str,
+        url: str,
+        body: str = "",
+        timeout_ms: int | None = None,
+    ) -> tuple[int, bytes, str, str]:
+        command = [
+            "java",
+            "-cp",
+            str(self.classes),
+            "app.sloppatv.HttpBridgeHarness",
+            method,
+            url,
+            body,
+        ]
+        if timeout_ms is not None:
+            command.append(str(timeout_ms))
         completed = subprocess.run(
-            [
-                "java",
-                "-cp",
-                str(self.classes),
-                "app.sloppatv.HttpBridgeHarness",
-                method,
-                url,
-                body,
-            ],
+            command,
             check=True,
             cwd=ROOT,
             capture_output=True,
@@ -136,6 +163,19 @@ public final class HttpBridgeHarness {
         self.assertEqual(status, 201)
         self.assertEqual(body, b"POST|bridge|payload")
         self.assertEqual(error, "")
+        self.assertEqual(cookies, "")
+
+    def test_enforces_overall_request_deadline(self) -> None:
+        started = time.monotonic()
+        status, body, error, cookies = self._request(
+            "GET",
+            self.base_url + "/slow",
+            timeout_ms=100,
+        )
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertEqual(status, 0)
+        self.assertEqual(body, b"")
+        self.assertEqual(error, "java.util.concurrent.TimeoutException")
         self.assertEqual(cookies, "")
 
     def test_returns_transport_errors_as_result(self) -> None:
