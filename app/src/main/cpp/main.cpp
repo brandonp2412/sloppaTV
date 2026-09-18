@@ -40,6 +40,7 @@
 #include "search_screen.hpp"
 #include "seerr.hpp"
 #include "seerr_domain.hpp"
+#include "seerr_drive_picker_screen.hpp"
 #include "seerr_home_projection.hpp"
 #include "seerr_jellyfin_adapter.hpp"
 #include "session_registry.hpp"
@@ -3608,19 +3609,6 @@ private:
         });
     }
 
-    static double bytesToGb(int64_t bytes) { return static_cast<double>(std::max<int64_t>(0, bytes)) / 1000000000.0; }
-
-    static std::string formatStorageBytes(int64_t bytes) {
-        const double gb = bytesToGb(bytes);
-        std::ostringstream value;
-        if (gb >= 1000.0) {
-            value << std::fixed << std::setprecision(gb >= 10000.0 ? 0 : 1) << (gb / 1000.0) << " TB";
-        } else {
-            value << std::fixed << std::setprecision(gb >= 100.0 ? 0 : 1) << gb << " GB";
-        }
-        return value.str();
-    }
-
     void openSeerrDrivePicker(const SeerrMediaItem& item) {
         const auto status = seerrStorageState_.preparePicker(item);
         if (status == SeerrStorageState::PickerStatus::Loading) {
@@ -6771,10 +6759,7 @@ private:
 
     void renderSeerrDrivePicker() {
         renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
-        const auto& pendingRequest = seerrStorageState_.pendingRequest();
-        const std::string subtitle = !pendingRequest || pendingRequest->name.empty()
-                                         ? "Choose where Seerr should place this request"
-                                         : "Choose storage for " + pendingRequest->name;
+        const std::string subtitle = seerrDrivePickerSubtitle(seerrStorageState_.pendingRequest());
         renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
 
         const auto& driveChoices = seerrStorageState_.driveChoices();
@@ -6784,11 +6769,12 @@ private:
         }
 
         const int driveSelection = seerrStorageState_.driveSelection();
-        const int first = std::clamp(driveSelection - 2, 0, std::max(0, static_cast<int>(driveChoices.size()) - 5));
+        const int first = seerrDrivePickerFirstVisible(driveSelection, static_cast<int>(driveChoices.size()));
         for (int slot = 0; slot < 5; ++slot) {
             const int index = first + slot;
             if (index >= static_cast<int>(driveChoices.size())) break;
             const auto& target = driveChoices[static_cast<size_t>(index)];
+            const SeerrDrivePickerRow row = seerrDrivePickerRow(target);
             const bool focused = index == driveSelection;
             const float x = 120.0f;
             const float y = 220.0f + static_cast<float>(slot) * 145.0f;
@@ -6803,50 +6789,24 @@ private:
             renderer_.roundedRect(iconX + 10.0f, iconY + 11.0f, 38.0f, 7.0f, 3.5f, focused ? kFocus : kMuted);
             renderer_.roundedRect(iconX + 40.0f, iconY + 33.0f, 7.0f, 7.0f, 3.5f, focused ? kFocus : kSecondaryText);
 
-            std::string normalizedPath = target.path;
-            while (normalizedPath.size() > 1 && normalizedPath.back() == '/') normalizedPath.pop_back();
-            std::string name = normalizedPath;
-            const size_t slash = normalizedPath.find_last_of('/');
-            if (slash != std::string::npos && slash + 1 < normalizedPath.size()) {
-                const std::string leaf = normalizedPath.substr(slash + 1);
-                std::string parent;
-                if (slash > 0) {
-                    const size_t parentSlash = normalizedPath.find_last_of('/', slash - 1);
-                    const size_t parentStart = parentSlash == std::string::npos ? 0 : parentSlash + 1;
-                    parent = normalizedPath.substr(parentStart, slash - parentStart);
-                }
-                name = parent.empty() ? leaf : parent + " · " + leaf;
-            }
-            if (name.empty()) name = target.serviceName.empty() ? "Storage" : target.serviceName;
-            if (!target.serviceName.empty() && name != target.serviceName) name += " · " + target.serviceName;
-            renderer_.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f, fitTextLines(name, 2.05f, 760.0f, 1),
+            renderer_.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f,
+                                             fitTextLines(row.name, 2.05f, 760.0f, 1),
                                              focused ? kText : kSecondaryText, 760.0f);
 
             const float barX = 1085.0f;
             const float barY = y + 48.0f;
             constexpr float barWidth = 500.0f;
-            const bool hasCapacity = target.totalSpace > 0;
-            const int percent = hasCapacity ? std::clamp(target.usedPercent(), 0, 100) : 0;
-            if (hasCapacity) {
+            if (row.hasCapacity) {
                 renderer_.roundedRect(barX, barY, barWidth, 14.0f, 7.0f, kPanelElevated);
-                const double usedGb = bytesToGb(target.totalSpace - target.freeSpace);
-                const double totalGb = bytesToGb(target.totalSpace);
-                std::ostringstream usage;
-                usage << std::fixed << std::setprecision(totalGb >= 100.0 ? 0 : 1) << usedGb << " / " << totalGb
-                      << " GB";
-                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, usage.str(), kMuted, 760.0f);
-
-                renderer_.roundedRect(barX, barY, barWidth * static_cast<float>(percent) / 100.0f, 14.0f, 7.0f,
-                                      percent >= 90 ? kError : (focused ? kFocus : kSecondaryText));
+                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, row.secondaryText, kMuted, 760.0f);
+                renderer_.roundedRect(barX, barY, barWidth * static_cast<float>(row.usedPercent) / 100.0f, 14.0f, 7.0f,
+                                      row.nearFull ? kError : (focused ? kFocus : kSecondaryText));
             } else {
-                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, fitTextLines(target.path, 1.38f, 920.0f, 1), kMuted,
+                renderer_.text(x + 120.0f, y + 78.0f, 1.38f, fitTextLines(row.secondaryText, 1.38f, 920.0f, 1), kMuted,
                                920.0f);
             }
-            const std::string pct = hasCapacity ? std::to_string(percent) + "% full"
-                                                : (target.freeSpace > 0 ? formatStorageBytes(target.freeSpace) + " free"
-                                                                        : "Free space unknown");
-            drawCenteredSingleLineFit(1510.0f, y + 26.0f, 250.0f, 58.0f, 1.60f, pct,
-                                      hasCapacity && percent >= 90 ? kError : (focused ? kText : kSecondaryText), 8.0f,
+            drawCenteredSingleLineFit(1510.0f, y + 26.0f, 250.0f, 58.0f, 1.60f, row.statusText,
+                                      row.nearFull ? kError : (focused ? kText : kSecondaryText), 8.0f,
                                       3.0f);
         }
         drawCenteredSingleLineFit(590.0f, 970.0f, 740.0f, 48.0f, 1.45f,
