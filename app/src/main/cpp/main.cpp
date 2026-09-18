@@ -25,6 +25,7 @@
 #include "home_async_executor.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
+#include "item_menu_renderer.hpp"
 #include "item_mutation_executor.hpp"
 #include "jellyfin.hpp"
 #include "jellyfin_search_executor.hpp"
@@ -6248,94 +6249,53 @@ private:
     }
 
     void renderItemMenu() {
-        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kScrim);
-
-        if (detailsState_.deleteConfirmation()) {
-            const bool seerrRequest = isSeerrItem(detail_);
-            drawModalSurface(405.0f, 275.0f, 1110.0f, 520.0f);
-            renderer_.text(470.0f, 335.0f, 3.25f, seerrRequest ? "Delete this request?" : "Delete this media?", kError,
-                           980.0f);
-            renderer_.text(470.0f, 435.0f, 2.0f,
-                           seerrRequest
-                               ? "Removes the request from Seerr. Already-sent Sonarr/Radarr downloads may continue."
-                               : "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
-                           kText, 980.0f);
-
-            const std::array<std::string, 2> actions{seerrRequest ? "Delete request" : "Delete permanently", "Cancel"};
-            for (int i = 0; i < 2; ++i) {
-                const float x = i == 0 ? 470.0f : 995.0f;
-                const bool focused = detailsState_.deleteConfirmationSelection() == i;
-                const auto bounds = drawButtonSurface(x, 610.0f, 450.0f, 92.0f, focused, false, i == 0);
-                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], i == 0 ? 1.75f : 2.0f,
-                                          actions[static_cast<size_t>(i)], focused || i == 1 ? kText : kMuted, 20.0f,
-                                          8.0f);
-            }
-            drawCenteredSingleLineFit(470.0f, 724.0f, 980.0f, 52.0f, 1.55f, "Press Back to cancel", kTertiary, 12.0f,
-                                      4.0f);
-            return;
-        }
-
-        const auto actions = itemMenuActions();
-        constexpr float panelX = 1110.0f;
-        constexpr float panelWidth = 700.0f;
-        constexpr float rowStep = 66.0f;
-        const bool seerrRequest = isSeerrItem(detail_);
-        const float panelHeaderHeight = seerrRequest && !detail_.externalStatus.empty() ? 194.0f : 170.0f;
-        const float panelHeight = panelHeaderHeight + static_cast<float>(actions.size()) * rowStep + 46.0f;
-        const float panelY = std::max(72.0f, (Renderer::logicalHeight() - panelHeight) * 0.5f);
-        drawModalSurface(panelX, panelY, panelWidth, panelHeight);
-        renderer_.text(panelX + 38.0f, panelY + 24.0f, 2.35f,
-                       fitTextLines(detail_.name.empty() ? "Item" : detail_.name, 2.35f, panelWidth - 76.0f, 1), kText,
-                       panelWidth - 76.0f);
-        renderer_.text(panelX + 40.0f, panelY + 92.0f, 1.35f,
-                       fitTextLines(detail_.type.empty() ? "Media" : detail_.type, 1.35f, panelWidth - 80.0f, 1),
-                       kMuted, panelWidth - 80.0f);
-        if (seerrRequest && !detail_.externalStatus.empty()) {
-            if (detail_.externalProgressPercent >= 0 && !detail_.externalProgressLabel.empty()) {
-                const float statusY = panelY + 119.0f;
-                const std::string percentLabel = std::to_string(detail_.externalProgressPercent) + "%";
-                const float percentWidth = std::ceil(renderer_.textWidth(1.14f, percentLabel));
-                const float etaWidth =
-                    detail_.externalProgressEta.empty()
-                        ? 0.0f
-                        : std::round(
-                              std::clamp(renderer_.textWidth(1.05f, materialLabel(detail_.externalProgressEta)) + 34.0f,
-                                         72.0f, 240.0f));
-                constexpr float metadataGap = 14.0f;
-                constexpr float statusToMetadataGap = 28.0f;
-                const float rightEdge = panelX + panelWidth - 40.0f;
-                const float etaX = rightEdge - etaWidth;
-                const float percentX =
-                    detail_.externalProgressEta.empty() ? rightEdge - percentWidth : etaX - metadataGap - percentWidth;
-                const float statusWidth = std::max(120.0f, percentX - (panelX + 40.0f) - statusToMetadataGap);
-                renderer_.text(panelX + 40.0f, statusY, 1.45f,
-                               fitTextLines(detail_.externalProgressLabel, 1.45f, statusWidth, 1), kFocus, statusWidth);
-                renderer_.textVerticallyCentered(percentX, panelY + 115.0f, 32.0f, 1.14f, percentLabel, kSecondaryText,
-                                                 percentWidth);
-                if (!detail_.externalProgressEta.empty()) {
-                    drawChip(etaX, panelY + 115.0f, detail_.externalProgressEta, false, 1.05f, 32.0f, 240.0f);
-                }
-            } else {
-                renderer_.text(panelX + 40.0f, panelY + 122.0f, 1.55f,
-                               fitTextLines(detail_.externalStatus, 1.55f, panelWidth - 80.0f, 1), kFocus,
-                               panelWidth - 80.0f);
-            }
-        }
-        const float dividerY = panelY + (seerrRequest && !detail_.externalStatus.empty() ? 162.0f : 138.0f);
-        renderer_.rect(panelX + 34.0f, dividerY, panelWidth - 68.0f, 1.0f, kDivider);
-
-        const float firstActionY = dividerY + 16.0f;
-        for (size_t i = 0; i < actions.size(); ++i) {
-            const float y = firstActionY + static_cast<float>(i) * rowStep;
-            const bool focused = detailsState_.itemMenuSelection() == static_cast<int>(i);
-            const bool destructive = actions[i] == "DELETE MEDIA" || actions[i] == "DELETE REQUEST";
-            const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused,
-                                                   focused && !destructive, destructive);
-            renderer_.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, materialLabel(actions[i]),
-                                             destructive && !focused ? kMuted : kText, bounds[2] - 48.0f);
-        }
-        drawCenteredSingleLineFit(panelX + 40.0f, panelY + panelHeight - 56.0f, panelWidth - 80.0f, 44.0f, 1.30f,
-                                  "OK selects   |   Back closes", kTertiary, 10.0f, 3.0f);
+        std::vector<std::string> actions;
+        if (!detailsState_.deleteConfirmation()) actions = itemMenuActions();
+        renderItemMenuScreen(
+            renderer_, Renderer::logicalWidth(), Renderer::logicalHeight(),
+            ItemMenuRenderState{
+                .deleteConfirmation = detailsState_.deleteConfirmation(),
+                .deleteConfirmationSelection = detailsState_.deleteConfirmationSelection(),
+                .itemMenuSelection = detailsState_.itemMenuSelection(),
+                .seerrRequest = isSeerrItem(detail_),
+                .itemName = detail_.name,
+                .itemType = detail_.type,
+                .externalStatus = detail_.externalStatus,
+                .externalProgressPercent = detail_.externalProgressPercent,
+                .externalProgressLabel = detail_.externalProgressLabel,
+                .externalProgressEta = detail_.externalProgressEta,
+            },
+            actions,
+            ItemMenuRenderStyle<Color>{
+                .cornerLarge = material_tv::cornerLarge,
+                .scrim = kScrim,
+                .error = kError,
+                .text = kText,
+                .muted = kMuted,
+                .tertiary = kTertiary,
+                .focus = kFocus,
+                .secondaryText = kSecondaryText,
+                .divider = kDivider,
+            },
+            [this](float x, float y, float width, float height) { drawModalSurface(x, y, width, height); },
+            [this](float x, float y, float width, float height, bool focused, bool primary, bool destructive) {
+                return drawButtonSurface(x, y, width, height, focused, primary, destructive);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
+                                          verticalPadding);
+            },
+            [this](std::string_view value, float scale, float width, int lines) {
+                return fitTextLines(value, scale, width, lines);
+            },
+            [this](float x, float y, std::string_view label, bool selected, float scale, float height, float maxWidth) {
+                return drawChip(x, y, std::string(label), selected, scale, height, maxWidth);
+            },
+            [this](float x, float y, float width, float height, bool focused, bool primary, bool destructive) {
+                return drawFocusedSurface(x, y, width, height, focused, primary, destructive);
+            },
+            [](std::string_view value) { return materialLabel(value); });
     }
 
     void drawLingeringTitle(float x, float y, float scale, std::string_view value, float maxWidth, Color color,
