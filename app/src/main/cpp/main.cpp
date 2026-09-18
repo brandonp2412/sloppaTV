@@ -4212,10 +4212,8 @@ private:
         }
         __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
                             seerrStorageState_.targets().size());
-        if (seerrStorageState_.pendingRequest() && settings_.seerrSelectDrive) {
-            const auto item = seerrStorageState_.takePendingRequest();
-            if (item) openSeerrDrivePicker(*item);
-        }
+        const auto pendingRequest = seerrDomain_.takePendingStorageRequest(settings_.seerrSelectDrive);
+        if (pendingRequest) openSeerrDrivePicker(*pendingRequest);
     }
 
     void applyAsyncCompletion(SeerrPendingRefreshCompletion& completion) {
@@ -4985,12 +4983,10 @@ private:
                 playbackCoordinator_.consumeHomeRefreshRequest()) {
                 refreshHomeAfterPlaybackStop = true;
             }
-            if (seerrRequestState_.pendingRefreshDue(now) &&
+            const bool seerrRefreshEligible =
                 SeerrClient::configured(settings_.seerrServer, seerrAuth()) &&
-                (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
-                seerrRequestState_.clearPendingRefreshDeadline();
-                refreshSeerr = true;
-            }
+                (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)));
+            if (seerrDomain_.consumePendingRefreshDue(now, seerrRefreshEligible)) refreshSeerr = true;
         }
         if (retryHome || refreshHomeAfterPlaybackStop) loadHomeAsync();
         if (refreshSeerr) refreshSeerrPendingAsync();

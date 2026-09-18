@@ -165,6 +165,23 @@ int main() {
     assert(refreshStarts.preparePendingRefresh(disconnected) == SeerrDomainState::RefreshStartAction::Reset);
     assert(!refreshStarts.requests().pendingLoading());
 
+    refreshStarts.requests().finishPendingRefresh({}, start);
+    const auto pendingDue = start + SeerrRequestState::kPendingRefreshInterval;
+    assert(!refreshStarts.consumePendingRefreshDue(pendingDue, false));
+    assert(refreshStarts.requests().pendingRefreshDue(pendingDue));
+    assert(refreshStarts.consumePendingRefreshDue(pendingDue, true));
+    assert(!refreshStarts.consumePendingRefreshDue(pendingDue, true));
+
+    SeerrDomainState deferredStorage;
+    deferredStorage.storage().finishRefresh({target(9)}, start);
+    assert(deferredStorage.storage().preparePicker(media("seerr:movie:21")) ==
+           SeerrStorageState::PickerStatus::Ready);
+    assert(!deferredStorage.takePendingStorageRequest(false));
+    assert(deferredStorage.storage().pendingRequest());
+    const auto pendingStorage = deferredStorage.takePendingStorageRequest(true);
+    assert(pendingStorage && pendingStorage->id == "seerr:movie:21");
+    assert(!deferredStorage.storage().pendingRequest());
+
     SeerrEndpoint rotated = configured;
     rotated.auth.sessionCookie = "rotated-session";
 

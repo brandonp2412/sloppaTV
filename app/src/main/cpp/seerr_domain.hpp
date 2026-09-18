@@ -183,6 +183,17 @@ public:
         return requests_.beginPendingRefresh() ? RefreshStartAction::Submit : RefreshStartAction::None;
     }
 
+    [[nodiscard]] bool consumePendingRefreshDue(SeerrRequestState::TimePoint now, bool eligible) {
+        if (!requests_.pendingRefreshDue(now) || !eligible) return false;
+        requests_.clearPendingRefreshDeadline();
+        return true;
+    }
+
+    [[nodiscard]] std::optional<SeerrMediaItem> takePendingStorageRequest(bool driveSelectionEnabled) {
+        if (!driveSelectionEnabled || !storage_.pendingRequest()) return std::nullopt;
+        return storage_.takePendingRequest();
+    }
+
     [[nodiscard]] MutationOutcome completeDeleteRequest(const SeerrEndpoint& requestedEndpoint,
                                                         const SeerrEndpoint& currentEndpoint, std::string_view itemId,
                                                         int requestId, bool ok) {
