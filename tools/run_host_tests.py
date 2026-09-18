@@ -133,6 +133,7 @@ LINKED_CPP_TESTS = [
     ("details_navigation_controller_test.cpp", ["details_navigation_controller.cpp"], []),
     ("search_completion_controller_test.cpp", ["search_completion_controller.cpp"], []),
     ("server_info_completion_controller_test.cpp", ["server_info_completion_controller.cpp"], []),
+    ("settings_action_controller_test.cpp", ["settings_action_controller.cpp"], []),
     ("system_text_input_controller_test.cpp", ["system_text_input_controller.cpp"], []),
     ("screen_navigation_controller_test.cpp", [
         "browse_navigation_controller.cpp",

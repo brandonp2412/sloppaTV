@@ -106,6 +106,7 @@
 #include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
+#include "settings_action_controller.hpp"
 #include "settings_navigation_controller.hpp"
 #include "settings_screen.hpp"
 #include "settings_renderer.hpp"
@@ -1373,132 +1374,63 @@ private:
 
     void refreshExternalPlayers() {
         externalPlayers_ = externalPlayer_.availablePlayers();
-        if (settings_.externalPlayerComponent.empty()) return;
-        const auto selected =
-            std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-                return player.componentName == settings_.externalPlayerComponent;
-            });
-        if (selected == externalPlayers_.end()) settings_.externalPlayerComponent.clear();
+        SettingsActionController::reconcileExternalPlayer(settings_, externalPlayers_);
     }
 
     std::string externalPlayerLabel() const {
-        if (settings_.externalPlayerComponent.empty()) return "INTERNAL";
-        const auto selected =
-            std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-                return player.componentName == settings_.externalPlayerComponent;
-            });
-        return selected == externalPlayers_.end() ? "INTERNAL" : selected->label;
+        return SettingsActionController::externalPlayerLabel(settings_, externalPlayers_);
     }
 
     std::optional<ExternalPlayerApp> selectedExternalPlayer() const {
-        if (settings_.externalPlayerComponent.empty()) return std::nullopt;
-        const auto selected =
-            std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-                return player.componentName == settings_.externalPlayerComponent;
-            });
-        if (selected == externalPlayers_.end()) return std::nullopt;
-        return *selected;
+        return SettingsActionController::selectedExternalPlayer(settings_, externalPlayers_);
     }
 
-    void cycleExternalPlayer(int direction) {
-        if (externalPlayers_.empty()) {
-            settings_.externalPlayerComponent.clear();
-            return;
+    void applySettingsActionEffects(const SettingsActionEffects& effects) {
+        if (hasSettingEffect(effects.settingEffects, SettingChangeEffect::ApplyVideoZoom))
+            playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
+        if (hasSettingEffect(effects.settingEffects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
+        if (hasSettingEffect(effects.settingEffects, SettingChangeEffect::ResetScreensaver)) {
+            lastInteraction_ = std::chrono::steady_clock::now();
+            screensaverActive_ = false;
         }
-        int index = 0;
-        if (!settings_.externalPlayerComponent.empty()) {
-            const auto selected =
-                std::find_if(externalPlayers_.begin(), externalPlayers_.end(), [&](const ExternalPlayerApp& player) {
-                    return player.componentName == settings_.externalPlayerComponent;
-                });
-            if (selected != externalPlayers_.end())
-                index = static_cast<int>(std::distance(externalPlayers_.begin(), selected)) + 1;
-        }
-        index = std::clamp(index + direction, 0, static_cast<int>(externalPlayers_.size()));
-        settings_.externalPlayerComponent =
-            index == 0 ? std::string{} : externalPlayers_[static_cast<size_t>(index - 1)].componentName;
-    }
-
-    void toggleSubtitleLanguageSetting() {
-        const int selection = settingsScreen_.subtitleLanguageSelection();
-        if (selection <= 0) {
-            settings_.subtitleLanguages.clear();
+        if (effects.saveSession || hasSettingEffect(effects.settingEffects, SettingChangeEffect::Save))
             saveSession(session_);
+        if (effects.refreshSeerrStorage) refreshSeerrStorageAsync(true);
+
+        switch (effects.hostAction) {
+        case SettingsHostAction::None:
+            return;
+        case SettingsHostAction::Exit:
+            hideSystemTextInput();
+            popScreen(Screen::Home);
+            if (screen_ == Screen::Home) homeState_.focusToolbar(3);
+            return;
+        case SettingsHostAction::EditSearch:
+            showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
+            return;
+        case SettingsHostAction::OpenDiagnostics:
+            openDiagnostics();
+            return;
+        case SettingsHostAction::SwitchUser:
+            openProfiles();
+            return;
+        case SettingsHostAction::EditSeerrServer:
+            showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
+            return;
+        case SettingsHostAction::ConnectSeerr:
+            connectSeerrAsync();
+            return;
+        case SettingsHostAction::EditSeerrApiKey:
+            showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
             return;
         }
-        const std::string code = kSubtitleLanguageOptions[static_cast<size_t>(selection - 1)].code;
-        auto current = std::find(settings_.subtitleLanguages.begin(), settings_.subtitleLanguages.end(), code);
-        if (settings_.subtitleLanguages.empty() || current == settings_.subtitleLanguages.end()) {
-            settings_.subtitleLanguages.push_back(code);
-        } else {
-            settings_.subtitleLanguages.erase(current);
-        }
-        saveSession(session_);
     }
 
     void handleSettingsKey(int32_t key) {
         const SettingsNavigationAction navigation =
             SettingsNavigationController::handle(settingsScreen_, settings_, screenNavigationKeyForKey(key));
-        switch (navigation.type) {
-        case SettingsNavigationActionType::None:
-            return;
-        case SettingsNavigationActionType::Exit:
-            hideSystemTextInput();
-            popScreen(Screen::Home);
-            if (screen_ == Screen::Home) homeState_.focusToolbar(3);
-            return;
-        case SettingsNavigationActionType::EditSearch:
-            showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
-            return;
-        case SettingsNavigationActionType::ApplyEffects:
-            if (navigation.effects == SettingChangeEffect::None) return;
-            if (hasSettingEffect(navigation.effects, SettingChangeEffect::ApplyVideoZoom))
-                playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
-            if (hasSettingEffect(navigation.effects, SettingChangeEffect::RestoreDisplayMode)) displayMode_.restore();
-            if (hasSettingEffect(navigation.effects, SettingChangeEffect::ResetScreensaver)) {
-                lastInteraction_ = std::chrono::steady_clock::now();
-                screensaverActive_ = false;
-            }
-            if (hasSettingEffect(navigation.effects, SettingChangeEffect::CycleExternalPlayer))
-                cycleExternalPlayer(navigation.direction);
-            if (hasSettingEffect(navigation.effects, SettingChangeEffect::Save)) saveSession(session_);
-            return;
-        case SettingsNavigationActionType::Activate:
-            switch (navigation.activation) {
-            case SettingActivation::None:
-                break;
-            case SettingActivation::OpenDiagnostics:
-                openDiagnostics();
-                break;
-            case SettingActivation::SwitchUser:
-                openProfiles();
-                break;
-            case SettingActivation::OpenSubtitleLanguages:
-                settingsScreen_.openSubtitleLanguagePicker();
-                break;
-            case SettingActivation::EditSeerrServer:
-                showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
-                break;
-            case SettingActivation::ConnectSeerr:
-                connectSeerrAsync();
-                break;
-            case SettingActivation::ToggleSeerrDriveSelection:
-                settings_.seerrSelectDrive = !settings_.seerrSelectDrive;
-                saveSession(session_);
-                if (settings_.seerrSelectDrive) refreshSeerrStorageAsync(true);
-                break;
-            case SettingActivation::EditSeerrApiKey:
-                showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
-                break;
-            case SettingActivation::ToggleAdvanced:
-                settingsScreen_.toggleAdvanced();
-                break;
-            }
-            return;
-        case SettingsNavigationActionType::ToggleSubtitleLanguage:
-            toggleSubtitleLanguageSetting();
-            return;
-        }
+        applySettingsActionEffects(
+            SettingsActionController::apply(navigation, settingsScreen_, settings_, externalPlayers_));
     }
 
     void handleDiagnosticsKey(int32_t key) {
