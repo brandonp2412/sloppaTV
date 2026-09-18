@@ -2150,66 +2150,6 @@ private:
         }
     }
 
-    std::string playerTrackLabel(int type) const {
-        if (type == 2 && !playbackCoordinator_.session().activeItem().audios.empty()) {
-            const auto selected =
-                std::find_if(playbackCoordinator_.session().activeItem().audios.begin(),
-                             playbackCoordinator_.session().activeItem().audios.end(), [&](const JellyfinAudioStream& audio) {
-                                 return audio.index == playbackCoordinator_.tracks().selectedAudioServerIndex();
-                             });
-            const auto& audio = selected == playbackCoordinator_.session().activeItem().audios.end()
-                                    ? playbackCoordinator_.session().activeItem().audios.front()
-                                    : *selected;
-            std::string label = audio.language.empty() ? "AUDIO" : audio.language;
-            std::transform(label.begin(), label.end(), label.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-            if (playbackCoordinator_.session().activeItem().audios.size() > 1) {
-                label += " " +
-                         std::to_string(std::distance(playbackCoordinator_.session().activeItem().audios.begin(),
-                                                      selected == playbackCoordinator_.session().activeItem().audios.end()
-                                                          ? playbackCoordinator_.session().activeItem().audios.begin()
-                                                          : selected) +
-                                        1) +
-                         "/" + std::to_string(playbackCoordinator_.session().activeItem().audios.size());
-            }
-            return label;
-        }
-        if (type == 4 && playbackCoordinator_.tracks().subtitleBusy()) return "LOADING";
-        if (type == 4 && playbackCoordinator_.tracks().selectedSubtitleServerIndex() >= 0) {
-            const auto selected = std::find_if(playbackCoordinator_.session().activeItem().subtitles.begin(),
-                                               playbackCoordinator_.session().activeItem().subtitles.end(),
-                                               [&](const JellyfinSubtitleStream& subtitle) {
-                                                   return subtitle.index == playbackCoordinator_.tracks().selectedSubtitleServerIndex();
-                                               });
-            if (selected != playbackCoordinator_.session().activeItem().subtitles.end()) {
-                std::string label = selected->language.empty() ? "ON" : selected->language;
-                std::transform(label.begin(), label.end(), label.begin(),
-                               [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-                return label;
-            }
-        }
-        if (type == 4 && !playbackCoordinator_.tracks().subtitleCues().empty()) {
-            if (!playbackCoordinator_.tracks().subtitleEnabled()) return "OFF";
-            std::string label = playbackCoordinator_.tracks().subtitleLanguage().empty() ? "ON" : playbackCoordinator_.tracks().subtitleLanguage();
-            std::transform(label.begin(), label.end(), label.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-            const auto subtitle = std::find_if(playbackCoordinator_.session().activeItem().subtitles.begin(),
-                                               playbackCoordinator_.session().activeItem().subtitles.end(),
-                                               [&](const JellyfinSubtitleStream& candidate) {
-                                                   return candidate.index == playbackCoordinator_.tracks().activeSubtitleServerIndex();
-                                               });
-            if (subtitle != playbackCoordinator_.session().activeItem().subtitles.end() &&
-                playbackCoordinator_.session().activeItem().subtitles.size() > 1) {
-                label +=
-                    " " +
-                    std::to_string(std::distance(playbackCoordinator_.session().activeItem().subtitles.begin(), subtitle) + 1) +
-                    "/" + std::to_string(playbackCoordinator_.session().activeItem().subtitles.size());
-            }
-            return label;
-        }
-        return type == 2 ? "DEFAULT" : "OFF";
-    }
-
     void cycleAudioTrack() {
         const PlaybackAudioCyclePlan plan = playbackCoordinator_.audioTrackCyclePlan(playbackTrackSelectionPolicy());
         if (!plan.available) {
@@ -6515,7 +6455,8 @@ private:
                 } else if (i == 3) {
                     constexpr float iconWidth = 36.0f;
                     constexpr float gap = 14.0f;
-                    const std::string audioTrackLabel = playerTrackLabel(2);
+                    const std::string audioTrackLabel =
+                        playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Audio);
                     const std::string label = "Audio  " + std::string(materialLabel(audioTrackLabel));
                     const float textAvailableWidth = std::max(1.0f, bounds[2] - 78.0f);
                     const float labelScale = fittedSingleLineScale(1.45f, label, textAvailableWidth, bounds[3] - 8.0f);
@@ -6533,7 +6474,8 @@ private:
                 } else {
                     constexpr float iconWidth = 42.0f;
                     constexpr float gap = 14.0f;
-                    const std::string subtitleTrackLabel = playerTrackLabel(4);
+                    const std::string subtitleTrackLabel =
+                        playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Subtitle);
                     const std::string label = "Subtitles  " + std::string(materialLabel(subtitleTrackLabel));
                     const float textAvailableWidth = std::max(1.0f, bounds[2] - 86.0f);
                     const float labelScale = fittedSingleLineScale(1.45f, label, textAvailableWidth, bounds[3] - 8.0f);

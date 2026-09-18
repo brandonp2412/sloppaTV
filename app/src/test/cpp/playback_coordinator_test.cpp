@@ -215,6 +215,25 @@ int main() {
     preferenceCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
     preferenceCoordinator.selectAudioStream(2);
     preferenceCoordinator.selectSubtitleStream(4);
+    assert(preferenceCoordinator.trackLabel(PlaybackTrackLabelKind::Audio) == "EN 1/2");
+    assert(preferenceCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "ENGLISH");
+    preferenceCoordinator.selectAudioStream(3);
+    assert(preferenceCoordinator.trackLabel(PlaybackTrackLabelKind::Audio) == "AUDIO 2/2");
+    preferenceCoordinator.selectAudioStream(2);
+
+    PlaybackCoordinator loadedSubtitleLabelCoordinator;
+    loadedSubtitleLabelCoordinator.activate(preferenceItem, coordinatedTarget, now);
+    loadedSubtitleLabelCoordinator.tracks().applySubtitle(
+        5, "English", {{.startMs = 100, .endMs = 500, .text = "Hello"}});
+    assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "ENGLISH 2/2");
+    loadedSubtitleLabelCoordinator.tracks().setSubtitleEnabled(false);
+    assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "OFF");
+    assert(loadedSubtitleLabelCoordinator.beginSubtitleLoad());
+    assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "LOADING");
+
+    PlaybackCoordinator emptyTrackLabelCoordinator;
+    assert(emptyTrackLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Audio) == "DEFAULT");
+    assert(emptyTrackLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "OFF");
     const PlaybackTrackSelectionPolicy cyclePolicy{
         .autoSubtitles = false,
         .autoSubtitleLanguage = {},

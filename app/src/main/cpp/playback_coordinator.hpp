@@ -11,6 +11,7 @@
 #include "player_tracks.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <optional>
 #include <string>
@@ -23,6 +24,11 @@ enum class PlaybackContinuationAction {
     AutoplayNext,
     ShowStillWatching,
     Stop,
+};
+
+enum class PlaybackTrackLabelKind {
+    Audio,
+    Subtitle,
 };
 
 struct PlaybackTickPlan {
@@ -267,6 +273,55 @@ inline PlaybackSubtitleFallbackPlan planPlaybackSubtitleFallback(const JellyfinI
     plan.retry = shouldRetryFailedSubtitleTranscode(target.playMethod == PlaybackMethod::Transcode,
                                                     plan.failedSubtitleStreamIndex, subtitleRequiresServerTranscode);
     return plan;
+}
+
+inline std::string uppercasePlaybackTrackLabel(std::string label) {
+    std::transform(label.begin(), label.end(), label.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return label;
+}
+
+inline std::string playbackTrackLabel(const JellyfinItem& item, const PlayerTrackState& tracks,
+                                      PlaybackTrackLabelKind kind) {
+    if (kind == PlaybackTrackLabelKind::Audio) {
+        if (item.audios.empty()) return "DEFAULT";
+        const auto selected =
+            std::find_if(item.audios.begin(), item.audios.end(), [&](const JellyfinAudioStream& audio) {
+                return audio.index == tracks.selectedAudioServerIndex();
+            });
+        const auto audio = selected == item.audios.end() ? item.audios.begin() : selected;
+        std::string label = uppercasePlaybackTrackLabel(audio->language.empty() ? "AUDIO" : audio->language);
+        if (item.audios.size() > 1) {
+            label += " " + std::to_string(std::distance(item.audios.begin(), audio) + 1) + "/" +
+                     std::to_string(item.audios.size());
+        }
+        return label;
+    }
+
+    if (tracks.subtitleBusy()) return "LOADING";
+    if (tracks.selectedSubtitleServerIndex() >= 0) {
+        const auto selected =
+            std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+                return subtitle.index == tracks.selectedSubtitleServerIndex();
+            });
+        if (selected != item.subtitles.end()) {
+            return uppercasePlaybackTrackLabel(selected->language.empty() ? "ON" : selected->language);
+        }
+    }
+    if (tracks.subtitleCues().empty()) return "OFF";
+    if (!tracks.subtitleEnabled()) return "OFF";
+
+    std::string label =
+        uppercasePlaybackTrackLabel(tracks.subtitleLanguage().empty() ? "ON" : tracks.subtitleLanguage());
+    const auto subtitle =
+        std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& candidate) {
+            return candidate.index == tracks.activeSubtitleServerIndex();
+        });
+    if (subtitle != item.subtitles.end() && item.subtitles.size() > 1) {
+        label += " " + std::to_string(std::distance(item.subtitles.begin(), subtitle) + 1) + "/" +
+                 std::to_string(item.subtitles.size());
+    }
+    return label;
 }
 
 inline PlaybackTarget offeredPlaybackFallbackTarget(PlaybackTarget target, const PlaybackFallbackPlan& plan) {
@@ -649,6 +704,10 @@ public:
 
     [[nodiscard]] PlaybackSubtitleFallbackPlan subtitleFallbackPlan() const {
         return planPlaybackSubtitleFallback(sessionState_.activeItem(), sessionState_.activeTarget(), trackState_);
+    }
+
+    [[nodiscard]] std::string trackLabel(PlaybackTrackLabelKind kind) const {
+        return playbackTrackLabel(sessionState_.activeItem(), trackState_, kind);
     }
 
     [[nodiscard]] PlaybackAudioCyclePlan audioTrackCyclePlan(const PlaybackTrackSelectionPolicy& policy) const {
