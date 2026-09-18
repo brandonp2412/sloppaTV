@@ -26,6 +26,9 @@ int main() {
     assert(subtitleTextScale(0) == 2.55f);
     assert(settingLabelContains("AUDIO OUTPUT", "audio"));
     assert(!settingLabelContains("SUBTITLE SIZE", "audio"));
+    assert(settingKind(SettingId::AutoplayNextEpisode) == SettingKind::Boolean);
+    assert(settingKind(SettingId::Backdrops) == SettingKind::Value);
+    assert(settingKind(SettingId::Diagnostics) == SettingKind::Action);
     assert(isBooleanSetting(SettingId::AutoplayNextEpisode));
     assert(isBooleanSetting(SettingId::MatchVideoRefreshRate));
     assert(isBooleanSetting(SettingId::WatchedIndicators));

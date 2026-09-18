@@ -7256,16 +7256,21 @@ private:
             constexpr float valueRightInset = 45.0f;
             // Keep row content anchored while the focus surface grows around it.
             const float valueRight = std::round(rowX + rowWidth - valueRightInset);
-            if (row->action) {
+            switch (row->kind) {
+            case SettingKind::Action: {
                 const float valueScale = 1.70f;
                 const std::string displayValue = fitTextLines(materialLabel(value), valueScale, 570.0f, 1);
                 const float valueWidth = renderer_.textWidth(valueScale, displayValue);
                 renderer_.textVerticallyCentered(std::max(1190.0f, valueRight - valueWidth), rowBounds[1], rowBounds[3],
                                                  valueScale, displayValue, focused ? kFocus : kText, 570.0f);
-            } else if (row->boolean) {
+                break;
+            }
+            case SettingKind::Boolean: {
                 constexpr float switchWidth = 112.0f;
                 drawSwitch(valueRight - switchWidth, y + 8.0f, value == "ON", focused);
-            } else {
+                break;
+            }
+            case SettingKind::Value: {
                 const std::string displayValue(materialLabel(value));
                 const float chipWidth =
                     std::round(std::clamp(renderer_.textWidth(1.65f, displayValue) + 44.0f, 112.0f, 570.0f));
@@ -7274,6 +7279,8 @@ private:
                 if (!focused) renderer_.roundedOutline(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, 1.0f, kOutline);
                 drawCenteredSingleLineFit(chipX, y + 8.0f, chipWidth, 56.0f, 1.65f, displayValue,
                                           focused ? kText : kSecondaryText, 12.0f, 4.0f);
+                break;
+            }
             }
         }
         const float footerY = settingsFooterY(settings_.uiTextSize);

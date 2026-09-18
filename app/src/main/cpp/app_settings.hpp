@@ -391,13 +391,18 @@ inline std::string renderAdvancedToggle(const AppSettings&, const SettingValueCo
     return context.advanced ? "SHOW COMMON" : "SHOW TECHNICAL";
 }
 
+enum class SettingKind : uint8_t {
+    Value,
+    Boolean,
+    Action,
+};
+
 struct SettingDescriptor {
     SettingId id;
     std::string_view label;
     int commonOrder;
     int advancedOrder;
-    bool boolean;
-    bool action;
+    SettingKind kind;
     SettingChangeEffect changeEffects;
     SettingAdjuster adjuster;
     SettingValueRenderer valueRenderer;
@@ -412,75 +417,77 @@ constexpr size_t settingIndex(SettingId setting) {
 }
 
 inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptors{{
-    {SettingId::MaxStreamingBitrate, "MAX STREAMING BITRATE", kNoSettingOrder, 0, false, false,
+    {SettingId::MaxStreamingBitrate, "MAX STREAMING BITRATE", kNoSettingOrder, 0, SettingKind::Value,
      SettingChangeEffect::Save, adjustMaxStreamingBitrate, renderMaxStreamingBitrate},
-    {SettingId::PlaybackBuffer, "PLAYBACK BUFFER", kNoSettingOrder, 1, false, false, SettingChangeEffect::Save,
+    {SettingId::PlaybackBuffer, "PLAYBACK BUFFER", kNoSettingOrder, 1, SettingKind::Value, SettingChangeEffect::Save,
      stepClampedSetting<&AppSettings::playbackBufferPreset, 0, 2>, renderPlaybackBuffer},
-    {SettingId::SkipBack, "SKIP BACK", 14, kNoSettingOrder, false, false, SettingChangeEffect::Save, adjustSeekBack,
-     renderSkipBack},
-    {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+    {SettingId::SkipBack, "SKIP BACK", 14, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
+     adjustSeekBack, renderSkipBack},
+    {SettingId::SkipAhead, "SKIP AHEAD", 15, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      adjustSeekForward, renderSkipAhead},
-    {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, false, false, SettingChangeEffect::Save,
-     stepClampedSetting<&AppSettings::zoomMode, 0, 2>, renderDefaultVideoZoom},
-    {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, true, false,
+    {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, SettingKind::Value,
+     SettingChangeEffect::Save, stepClampedSetting<&AppSettings::zoomMode, 0, 2>, renderDefaultVideoZoom},
+    {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::autoplayNext>,
      renderBooleanSetting<&AppSettings::autoplayNext>},
-    {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, false, false,
+    {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save, adjustStillWatchingAfter, renderStillWatchingAfter},
-    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, true, false,
+    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, SettingKind::Boolean,
      SettingChangeEffect::Save, adjustRefreshRateSwitching, renderBooleanSetting<&AppSettings::refreshRateSwitching>},
-    {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, true, false, SettingChangeEffect::Save,
-     toggleSetting<&AppSettings::showWatchedIndicators>, renderBooleanSetting<&AppSettings::showWatchedIndicators>},
-    {SettingId::Clock, "CLOCK", 17, kNoSettingOrder, true, false, SettingChangeEffect::Save,
+    {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, SettingKind::Boolean,
+     SettingChangeEffect::Save, toggleSetting<&AppSettings::showWatchedIndicators>,
+     renderBooleanSetting<&AppSettings::showWatchedIndicators>},
+    {SettingId::Clock, "CLOCK", 17, kNoSettingOrder, SettingKind::Boolean, SettingChangeEffect::Save,
      toggleSetting<&AppSettings::showClock>, renderBooleanSetting<&AppSettings::showClock>},
-    {SettingId::Backdrops, "BACKDROPS", 1, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+    {SettingId::Backdrops, "BACKDROPS", 1, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      stepClampedSetting<&AppSettings::backdropMode, 0, 2>, renderBackdrops},
-    {SettingId::SubtitleSize, "SUBTITLE SIZE", 2, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+    {SettingId::SubtitleSize, "SUBTITLE SIZE", 2, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      stepClampedSetting<&AppSettings::subtitleSize, 0, 2>, renderSubtitleSize},
-    {SettingId::SubtitleBackground, "SUBTITLE BACKGROUND", 4, kNoSettingOrder, true, false, SettingChangeEffect::Save,
-     toggleSetting<&AppSettings::subtitleBackground>, renderBooleanSetting<&AppSettings::subtitleBackground>},
-    {SettingId::SubtitlePosition, "SUBTITLE POSITION", 3, kNoSettingOrder, false, false, SettingChangeEffect::Save,
-     stepClampedSetting<&AppSettings::subtitlePosition, 0, 2>, renderSubtitlePosition},
-    {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+    {SettingId::SubtitleBackground, "SUBTITLE BACKGROUND", 4, kNoSettingOrder, SettingKind::Boolean,
+     SettingChangeEffect::Save, toggleSetting<&AppSettings::subtitleBackground>,
+     renderBooleanSetting<&AppSettings::subtitleBackground>},
+    {SettingId::SubtitlePosition, "SUBTITLE POSITION", 3, kNoSettingOrder, SettingKind::Value,
+     SettingChangeEffect::Save, stepClampedSetting<&AppSettings::subtitlePosition, 0, 2>, renderSubtitlePosition},
+    {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      adjustAudioOutput, renderAudioOutput},
-    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, false, false, SettingChangeEffect::Save,
-     adjustAvcMaxLevel, renderAvcMaxLevel},
-    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, false, false, SettingChangeEffect::Save,
-     adjustHevcMaxLevel, renderHevcMaxLevel},
-    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, false, false, SettingChangeEffect::Save,
+    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, SettingKind::Value,
+     SettingChangeEffect::Save, adjustAvcMaxLevel, renderAvcMaxLevel},
+    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, SettingKind::Value,
+     SettingChangeEffect::Save, adjustHevcMaxLevel, renderHevcMaxLevel},
+    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, SettingKind::Value, SettingChangeEffect::Save,
      stepClampedSetting<&AppSettings::hdrOverride, 0, 2>, renderHdrPlayback},
-    {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+    {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      stepClampedSetting<&AppSettings::uiTextSize, 0, 2>, renderUiTextSize},
-    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, false, false, SettingChangeEffect::Save,
-     adjustOverscanSafeArea, renderOverscanSafeArea},
-    {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, false, false,
+    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, SettingKind::Value,
+     SettingChangeEffect::Save, adjustOverscanSafeArea, renderOverscanSafeArea},
+    {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save | SettingChangeEffect::ResetScreensaver, adjustScreensaver, renderScreensaver},
-    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, false, false,
+    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, SettingKind::Value,
      SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer, adjustExternalPlayer, renderExternalPlayer},
-    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, false, true, SettingChangeEffect::None, nullptr,
+    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, SettingKind::Action, SettingChangeEffect::None, nullptr,
      renderDiagnostics, SettingActivation::OpenDiagnostics},
-    {SettingId::SwitchUser, "SWITCH USER", 21, 10, false, true, SettingChangeEffect::None, nullptr, renderSwitchUser,
-     SettingActivation::SwitchUser},
-    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, false, true, SettingChangeEffect::None,
-     nullptr, renderSubtitleLanguages, SettingActivation::OpenSubtitleLanguages},
-    {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, false, false, SettingChangeEffect::Save,
+    {SettingId::SwitchUser, "SWITCH USER", 21, 10, SettingKind::Action, SettingChangeEffect::None, nullptr,
+     renderSwitchUser, SettingActivation::SwitchUser},
+    {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, SettingKind::Action,
+     SettingChangeEffect::None, nullptr, renderSubtitleLanguages, SettingActivation::OpenSubtitleLanguages},
+    {SettingId::TimeFormat, "TIME FORMAT", 18, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      toggleSetting<&AppSettings::clock24Hour>, renderTimeFormat},
-    {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, true, false, SettingChangeEffect::Save,
+    {SettingId::AutoSubtitles, "AUTO SUBTITLES", 6, kNoSettingOrder, SettingKind::Boolean, SettingChangeEffect::Save,
      toggleSetting<&AppSettings::autoSubtitles>, renderBooleanSetting<&AppSettings::autoSubtitles>},
-    {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, false, false,
+    {SettingId::AutoSubtitleLanguage, "AUTO SUBTITLE LANGUAGE", 7, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save, adjustAutoSubtitleLanguage, renderAutoSubtitleLanguage},
-    {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, false, false,
+    {SettingId::AutoSubtitleSourceAudio, "AUTO SUBTITLE SOURCE AUDIO", 8, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save, adjustAutoSubtitleSourceAudio, renderAutoSubtitleSourceAudio},
-    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, false, true, SettingChangeEffect::None, nullptr,
+    {SettingId::SeerrServer, "SEERR SERVER", 9, kNoSettingOrder, SettingKind::Action, SettingChangeEffect::None, nullptr,
      renderSeerrServer, SettingActivation::EditSeerrServer},
-    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, false, true, SettingChangeEffect::None,
-     nullptr, renderSeerrConnection, SettingActivation::ConnectSeerr},
-    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, true, false,
+    {SettingId::SeerrConnection, "SEERR CONNECTION", 10, kNoSettingOrder, SettingKind::Action,
+     SettingChangeEffect::None, nullptr, renderSeerrConnection, SettingActivation::ConnectSeerr},
+    {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::seerrSelectDrive>,
      renderBooleanSetting<&AppSettings::seerrSelectDrive>, SettingActivation::ToggleSeerrDriveSelection},
-    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, false, true, SettingChangeEffect::None,
-     nullptr, renderSeerrApiKey, SettingActivation::EditSeerrApiKey},
-    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, false, true, SettingChangeEffect::None, nullptr,
+    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, SettingKind::Action,
+     SettingChangeEffect::None, nullptr, renderSeerrApiKey, SettingActivation::EditSeerrApiKey},
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, SettingKind::Action, SettingChangeEffect::None, nullptr,
      renderAdvancedToggle, SettingActivation::ToggleAdvanced},
 }};
 
@@ -488,12 +495,16 @@ constexpr const SettingDescriptor& settingDescriptor(SettingId setting) {
     return kSettingDescriptors[settingIndex(setting)];
 }
 
+constexpr SettingKind settingKind(SettingId setting) {
+    return settingDescriptor(setting).kind;
+}
+
 constexpr bool isBooleanSetting(SettingId setting) {
-    return settingDescriptor(setting).boolean;
+    return settingKind(setting) == SettingKind::Boolean;
 }
 
 constexpr bool isActionSetting(SettingId setting) {
-    return settingDescriptor(setting).action;
+    return settingKind(setting) == SettingKind::Action;
 }
 
 constexpr SettingChangeEffect settingChangeEffects(SettingId setting) {

@@ -111,8 +111,7 @@ int main() {
     assert(row->setting == SettingId::UiTextSize);
     assert(row->label == "UI TEXT SIZE");
     assert(row->focused);
-    assert(!row->action);
-    assert(!row->boolean);
+    assert(row->kind == SettingKind::Value);
     assert(settingsScreenRow(screen, settings, 6, "MPV", "viewer", false, 5));
     assert(!settingsScreenRow(screen, settings, 6, "MPV", "viewer", false, 6));
 
@@ -124,8 +123,7 @@ int main() {
     assert(row->label == "SEERR API KEY (LEGACY)");
     assert(row->value == "******");
     assert(!row->focused);
-    assert(row->action);
-    assert(!row->boolean);
+    assert(row->kind == SettingKind::Action);
     assert(!settingsScreenRow(screen, settings, 6, "MPV", "viewer", true, 1));
 
     screen.reset();

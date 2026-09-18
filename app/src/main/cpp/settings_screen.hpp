@@ -41,8 +41,7 @@ struct SettingsScreenRow {
     std::string_view label;
     std::string value;
     bool focused = false;
-    bool action = false;
-    bool boolean = false;
+    SettingKind kind = SettingKind::Value;
 };
 
 struct SubtitleLanguageScreenRow {
@@ -285,7 +284,6 @@ inline std::optional<SettingsScreenRow> settingsScreenRow(const SettingsScreenSt
         .label = settingLabel(setting, screen.advanced()),
         .value = std::move(value),
         .focused = !screen.subtitleLanguagePicker() && !screen.searchFocused() && setting == screen.selection(),
-        .action = isActionSetting(setting),
-        .boolean = isBooleanSetting(setting),
+        .kind = settingKind(setting),
     };
 }
