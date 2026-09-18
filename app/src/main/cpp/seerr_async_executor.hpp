@@ -128,6 +128,8 @@ public:
         });
     }
 
+    void cancelSearch() { searchClient_.cancelPendingRequests(); }
+
 private:
     RequestClient& requestClient_;
     SearchClient& searchClient_;

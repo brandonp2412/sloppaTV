@@ -764,7 +764,7 @@ private:
             searchState_.setQuery(text);
             searchState_.setKeyboard(false);
             searchState_.cancelPending();
-            seerrDomain_.cancelSearch();
+            seerrSearchCoordinator_.cancel();
             searchAsync();
         } else if (mode == kTextInputSettingsSearch) {
             settingsScreen_.setSearchText(text);
@@ -1044,11 +1044,9 @@ private:
         const auto now = std::chrono::steady_clock::now();
         requestEpochs_.search.invalidate();
         const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth());
-        if (seerrDomain_.scheduleSearch(searchState_.query(), now, seerrConfigured)) {
-            searchState_.refreshSeerrResults();
-            requestEpochs_.seerrSearch.invalidate();
-            seerrSearch_.cancelPendingRequests();
-        }
+        const auto seerrPlan = seerrSearchCoordinator_.schedule(searchState_.query(), now, seerrConfigured);
+        if (seerrPlan.resultsChanged) searchState_.refreshSeerrResults();
+        if (seerrPlan.invalidateRequest) requestEpochs_.seerrSearch.invalidate();
         if (!searchState_.scheduleDebounce(now)) error_.clear();
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
@@ -1057,15 +1055,14 @@ private:
         std::scoped_lock lock(stateMutex_);
         if (screen_ != Screen::Search) {
             searchState_.cancelPending();
-            seerrDomain_.cancelSearch();
+            seerrSearchCoordinator_.cancel();
             requestEpochs_.search.invalidate();
             requestEpochs_.seerrSearch.invalidate();
-            seerrSearch_.cancelPendingRequests();
             return;
         }
         const auto now = std::chrono::steady_clock::now();
         if (searchState_.debounceDue(now)) searchAsync(false);
-        if (seerrDomain_.searchDebounceDue(now)) searchSeerrAsync(false);
+        if (seerrSearchCoordinator_.debounceDue(now)) searchSeerrAsync(false);
     }
 
     bool showSystemTextInput(const std::string& initial, const std::string& hint, int mode, bool password = false) {
@@ -1455,10 +1452,9 @@ private:
             return;
         case SearchScreenCommandType::Exit:
             searchState_.cancelPending();
-            seerrDomain_.cancelSearch();
+            seerrSearchCoordinator_.cancel();
             requestEpochs_.search.invalidate();
             requestEpochs_.seerrSearch.invalidate();
-            seerrSearch_.cancelPendingRequests();
             hideSystemTextInput();
             popScreen(Screen::Home);
             if (screen_ == Screen::Home) {
@@ -2429,7 +2425,7 @@ private:
         home_ = {};
         homeState_.reset();
         browseState_.clear();
-        seerrDomain_.resetSearch();
+        seerrSearchCoordinator_.reset();
         searchState_.reset();
         detail_ = {};
         detailsState_.reset();
@@ -2941,7 +2937,7 @@ private:
 
     void searchAsync(bool includeSeerrImmediately = true) {
         if (searchState_.query().empty()) {
-            seerrDomain_.resetSearch();
+            seerrSearchCoordinator_.reset();
             searchState_.refreshSeerrResults();
         }
         if (!session_.valid() || !searchState_.beginSearch()) return;
@@ -4414,7 +4410,7 @@ private:
         refreshSeerrStorageAsync(true);
         if (plan.deferred.request) requestSeerrMediaAsync(*plan.deferred.request);
         if (plan.deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
-            if (seerrDomain_.scheduleSearch(searchState_.query(), std::chrono::steady_clock::now(), false)) {
+            if (seerrSearchCoordinator_.prepareReconnectRetry(searchState_.query(), std::chrono::steady_clock::now())) {
                 searchState_.refreshSeerrResults();
             }
             searchSeerrAsync(true);

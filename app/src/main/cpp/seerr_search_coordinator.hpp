@@ -28,9 +28,39 @@ struct SeerrSearchCompletionPlan {
     bool reconnect = false;
 };
 
+struct SeerrSearchSchedulePlan {
+    bool resultsChanged = false;
+    bool invalidateRequest = false;
+};
+
 template <typename AsyncExecutor> class SeerrSearchCoordinator {
 public:
     SeerrSearchCoordinator(SeerrDomainState& domain, AsyncExecutor& async) : domain_(domain), async_(async) {}
+
+    [[nodiscard]] SeerrSearchSchedulePlan schedule(std::string_view query, SeerrSearchState::Clock::time_point now,
+                                                   bool configured) {
+        const bool changed = domain_.scheduleSearch(query, now, configured);
+        if (changed) async_.cancelSearch();
+        return {
+            .resultsChanged = changed,
+            .invalidateRequest = changed,
+        };
+    }
+
+    void cancel() {
+        domain_.cancelSearch();
+        async_.cancelSearch();
+    }
+
+    void reset() { domain_.resetSearch(); }
+
+    [[nodiscard]] bool debounceDue(SeerrSearchState::Clock::time_point now) const {
+        return domain_.searchDebounceDue(now);
+    }
+
+    [[nodiscard]] bool prepareReconnectRetry(std::string_view query, SeerrSearchState::Clock::time_point now) {
+        return domain_.scheduleSearch(query, now, false);
+    }
 
     [[nodiscard]] SeerrSearchDispatchPlan prepareImmediate(SeerrEndpoint endpoint, std::string query) {
         if (deferForConnection()) {

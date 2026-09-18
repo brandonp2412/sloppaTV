@@ -22,7 +22,10 @@ struct FakeAsyncExecutor {
         });
     }
 
+    void cancelSearch() { ++cancellations; }
+
     std::vector<Submission> submissions;
+    int cancellations = 0;
 };
 
 SeerrEndpoint configuredEndpoint() {
@@ -48,6 +51,33 @@ SeerrMediaItem media() {
 
 int main() {
     using namespace std::chrono_literals;
+
+    {
+        SeerrDomainState domain;
+        FakeAsyncExecutor async;
+        SeerrSearchCoordinator coordinator(domain, async);
+        const auto start = SeerrSearchState::Clock::now();
+
+        const auto scheduled = coordinator.schedule("arrival", start, true);
+        assert(scheduled.resultsChanged);
+        assert(scheduled.invalidateRequest);
+        assert(async.cancellations == 1);
+        assert(domain.searchDebouncePending());
+
+        assert(coordinator.debounceDue(start + 550ms));
+        coordinator.cancel();
+        assert(async.cancellations == 2);
+        assert(!domain.searchDebouncePending());
+        assert(!domain.searchLoading());
+
+        assert(coordinator.schedule("matrix", start + 1s, true).resultsChanged);
+        coordinator.reset();
+        assert(domain.searchResults().empty());
+        assert(!domain.searchDebouncePending());
+        assert(!domain.searchLoading());
+
+        assert(!coordinator.prepareReconnectRetry("arrival", start + 2s));
+    }
 
     {
         SeerrDomainState domain;

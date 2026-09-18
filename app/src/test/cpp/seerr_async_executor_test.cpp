@@ -129,6 +129,8 @@ struct FakeSeerrClient {
         return result;
     }
 
+    void cancelPendingRequests() { ++cancelCount; }
+
     std::string lastServer;
     SeerrAuth lastAuth;
     int lastRequestId = -1;
@@ -137,6 +139,7 @@ struct FakeSeerrClient {
     std::string lastItemId;
     std::string lastQuery;
     std::string lastQuickConnectSecret;
+    int cancelCount = 0;
 };
 
 SeerrEndpoint endpoint() {
@@ -226,6 +229,10 @@ int main() {
     assert(searched.query == "arrival");
     assert(searched.generation == 12);
     assert(searched.result.ok && searched.result.value.front().id == "seerr:movie:30");
+
+    executor.cancelSearch();
+    assert(searchClient.cancelCount == 1);
+    assert(requestClient.cancelCount == 0);
 
     return 0;
 }
