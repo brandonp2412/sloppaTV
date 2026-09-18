@@ -88,6 +88,7 @@ CPP_TESTS = [
     "server_info_executor_test.cpp",
     "series_playback_executor_test.cpp",
     "session_registry_test.cpp",
+    "settings_renderer_test.cpp",
     "settings_screen_test.cpp",
     "status_overlay_renderer_test.cpp",
     "subtitle_load_executor_test.cpp",

@@ -70,6 +70,7 @@
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
+#include "settings_renderer.hpp"
 #include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
 #include "system_text_input.hpp"
@@ -6077,114 +6078,56 @@ private:
     }
 
     void renderSettings() {
-        renderer_.text(80.0f, 58.0f, material_tv::type::headline, "Settings", kText, 560.0f);
-        const int maxAudioOutputChannels = api_.deviceCodecSupport().maxAudioOutputChannels;
         const std::string externalPlayer = externalPlayerLabel();
-
-        const bool systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch;
-        const auto presentation = settingsScreenPresentation(settingsScreen_, systemSettingsInputActive);
-        const auto settingsSearchBounds = drawInputSurface(
-            1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused(), materialWideInputFocusScale());
-        constexpr float settingsSearchTextWidth = 520.0f;
-        renderer_.textVerticallyCentered(1102.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
-                                         fitTextLines(presentation.searchText, 2.20f, settingsSearchTextWidth, 1),
-                                         presentation.searchPlaceholder ? kMuted : kText, settingsSearchTextWidth);
-        drawCenteredSingleLineFit(1640.0f, settingsSearchBounds[1], 170.0f, settingsSearchBounds[3], 1.60f,
-                                  std::string(presentation.searchActionLabel),
-                                  settingsScreen_.searchFocused() ? kFocus : kMuted, 10.0f, 4.0f);
-
-        const auto matches = settingsScreen_.matches();
-        if (matches.empty()) {
-            if (presentation.showTypingFilterHint) {
-                drawCenteredSingleLineFit(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to filter settings", kMuted,
-                                          16.0f, 5.0f);
-            } else {
-                renderEmptyState("No matching settings", "Press OK or Search to change your filter.");
-            }
-            return;
-        }
-
-        renderer_.text(120.0f, 165.0f, 2.10f, std::string(presentation.sectionTitle), kSecondaryText, 620.0f);
-        const float descriptionY = settingsDescriptionY(settings_.uiTextSize);
-        renderer_.text(120.0f, descriptionY, 1.40f,
-                       fitTextLines(std::string(presentation.sectionDescription), 1.40f, 920.0f, 1), kMuted, 920.0f);
-
-        constexpr int visibleRows = 6;
-        const float rowsTop = settingsRowsTop(settings_.uiTextSize);
-        for (int slot = 0; slot < visibleRows; ++slot) {
-            const auto row = settingsScreenRow(settingsScreen_, settings_, maxAudioOutputChannels, externalPlayer,
-                                               session_.username, systemTextInputMode_ == kTextInputSeerrApiKey, slot,
-                                               visibleRows);
-            if (!row) break;
-            const float y = rowsTop + static_cast<float>(slot) * 112.0f;
-            const bool focused = row->focused;
-            // Settings use contained TV list rows, which remain readable at distance.
-            constexpr float rowX = 110.0f;
-            constexpr float rowWidth = 1700.0f;
-            const auto rowBounds = drawListItemSurface(rowX, y - 8.0f, rowWidth, 88.0f, focused,
-                                                       material_tv::cornerMedium, materialWideListItemFocusScale());
-            renderer_.textVerticallyCentered(rowX + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
-                                             fitTextLines(materialLabel(std::string(row->label)), 2.20f, 900.0f, 1),
-                                             focused ? kText : kSecondaryText, 900.0f);
-            const std::string& value = row->value;
-            constexpr float valueRightInset = 45.0f;
-            // Keep row content anchored while the focus surface grows around it.
-            const float valueRight = std::round(rowX + rowWidth - valueRightInset);
-            switch (row->kind) {
-            case SettingKind::Action: {
-                const float valueScale = 1.70f;
-                const std::string displayValue = fitTextLines(materialLabel(value), valueScale, 570.0f, 1);
-                const float valueWidth = renderer_.textWidth(valueScale, displayValue);
-                renderer_.textVerticallyCentered(std::max(1190.0f, valueRight - valueWidth), rowBounds[1], rowBounds[3],
-                                                 valueScale, displayValue, focused ? kFocus : kText, 570.0f);
-                break;
-            }
-            case SettingKind::Boolean: {
-                constexpr float switchWidth = 112.0f;
-                drawSwitch(valueRight - switchWidth, y + 8.0f, value == "ON", focused);
-                break;
-            }
-            case SettingKind::Value: {
-                const std::string displayValue(materialLabel(value));
-                const float chipWidth =
-                    std::round(std::clamp(renderer_.textWidth(1.65f, displayValue) + 44.0f, 112.0f, 570.0f));
-                const float chipX = std::round(valueRight - chipWidth);
-                renderer_.roundedRect(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, focused ? kFocusSoft : kPanelAlt);
-                if (!focused) renderer_.roundedOutline(chipX, y + 8.0f, chipWidth, 56.0f, 28.0f, 1.0f, kOutline);
-                drawCenteredSingleLineFit(chipX, y + 8.0f, chipWidth, 56.0f, 1.65f, displayValue,
-                                          focused ? kText : kSecondaryText, 12.0f, 4.0f);
-                break;
-            }
-            }
-        }
-        const float footerY = settingsFooterY(settings_.uiTextSize);
-        drawCenteredSingleLineFit(330.0f, footerY, 1260.0f, 58.0f, 1.65f,
-                                  "Left / Right changes   |   OK opens options   |   Up searches", kMuted, 14.0f, 5.0f);
-
-        if (settingsScreen_.subtitleLanguagePicker()) {
-            renderer_.rect(0.0f, 0.0f, 1920.0f, 1080.0f, kScrim);
-            drawModalSurface(430.0f, 92.0f, 1060.0f, 896.0f);
-            renderer_.text(490.0f, 118.0f, 3.15f, "Subtitle languages", kText, 820.0f);
-            renderer_.text(490.0f, 204.0f, 1.50f,
-                           fitTextLines("Only selected languages will appear during playback", 1.50f, 920.0f, 1),
-                           kMuted, 920.0f);
-            constexpr int visibleLanguageRows = 8;
-            for (int slot = 0; slot < visibleLanguageRows; ++slot) {
-                const auto row = subtitleLanguageScreenRow(settingsScreen_, settings_, slot, visibleLanguageRows);
-                if (!row) break;
-                const float y = 258.0f + static_cast<float>(slot) * 82.0f;
-                const bool focused = row->focused;
-                const auto languageBounds = drawListItemSurface(478.0f, y - 8.0f, 964.0f, 68.0f, focused,
-                                                                material_tv::cornerSmall, materialListItemFocusScale());
-                renderer_.textVerticallyCentered(
-                    languageBounds[0] + 32.0f, languageBounds[1], languageBounds[3], 2.05f,
-                    fitTextLines(materialLabel(std::string(row->label)), 2.05f, 620.0f, 1),
-                    focused ? kText : kSecondaryText, 620.0f);
-                drawChip(1280.0f, y + 5.0f, row->selected ? "ON" : "OFF", row->selected, 1.45f, 42.0f, 116.0f);
-            }
-            drawCenteredSingleLineFit(540.0f, 918.0f, 840.0f, 52.0f, 1.62f,
-                                      "OK toggles selection   |   Back returns to settings", kMuted, 12.0f, 4.0f);
-        }
+        renderSettingsScreen(
+            renderer_,
+            SettingsRenderState{
+                .screen = settingsScreen_,
+                .settings = settings_,
+                .maxAudioOutputChannels = api_.deviceCodecSupport().maxAudioOutputChannels,
+                .externalPlayer = externalPlayer,
+                .username = session_.username,
+                .systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch,
+                .seerrApiKeyTyping = systemTextInputMode_ == kTextInputSeerrApiKey,
+            },
+            SettingsRenderStyle<Color>{
+                .headlineScale = material_tv::type::headline,
+                .cornerMedium = material_tv::cornerMedium,
+                .cornerSmall = material_tv::cornerSmall,
+                .wideInputFocusScale = materialWideInputFocusScale(),
+                .wideListItemFocusScale = materialWideListItemFocusScale(),
+                .listItemFocusScale = materialListItemFocusScale(),
+                .text = kText,
+                .secondaryText = kSecondaryText,
+                .muted = kMuted,
+                .focus = kFocus,
+                .focusSoft = kFocusSoft,
+                .panelAlt = kPanelAlt,
+                .outline = kOutline,
+                .scrim = kScrim,
+            },
+            [this](float x, float y, float width, float height, bool focused, float focusScale) {
+                return drawInputSurface(x, y, width, height, focused, focusScale);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
+            },
+            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(std::string(value), scale, maxWidth, maxLines);
+            },
+            [this](std::string_view title, std::string_view message) {
+                renderEmptyState(std::string(title), std::string(message));
+            },
+            [this](float x, float y, float width, float height, bool focused, float radius, float focusScale) {
+                return drawListItemSurface(x, y, width, height, focused, radius, focusScale);
+            },
+            [](std::string_view value) { return std::string(materialLabel(std::string(value))); },
+            [this](float x, float y, bool on, bool focused) { drawSwitch(x, y, on, focused); },
+            [this](float x, float y, std::string_view label, bool selected, float scale, float height, float maxWidth) {
+                return drawChip(x, y, std::string(label), selected, scale, height, maxWidth);
+            },
+            [this](float x, float y, float width, float height) { drawModalSurface(x, y, width, height); });
     }
 
     void renderDiagnostics() {
