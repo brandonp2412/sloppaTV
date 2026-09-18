@@ -192,6 +192,55 @@ int main() {
     subtitleCycle = planPlaybackSubtitleTrackCycle(noSubtitles, kSubtitleOffIndex, PlaybackMethod::DirectPlay, {});
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::NoSubtitles);
 
+    JellyfinItem loadFallbacks;
+    loadFallbacks.subtitles = {
+        {.index = 20,
+         .codec = "srt",
+         .language = "eng",
+         .title = "English",
+         .forced = false,
+         .isDefault = true,
+         .isExternal = true},
+        {.index = 21,
+         .codec = "pgs",
+         .language = "eng",
+         .title = "English PGS",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = false},
+        {.index = 22,
+         .codec = "srt",
+         .language = "eng",
+         .title = "English alternate",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = true},
+        {.index = 23,
+         .codec = "srt",
+         .language = "spa",
+         .title = "Spanish",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = true},
+    };
+    const auto loadCandidates =
+        playbackSubtitleLoadCandidates(loadFallbacks, loadFallbacks.subtitles.front(), {"eng"});
+    assert(loadCandidates.size() == 2);
+    assert(loadCandidates[0].index == 20);
+    assert(loadCandidates[1].index == 22);
+    const JellyfinSubtitleStream detachedRequested{
+        .index = 99,
+        .codec = "srt",
+        .language = "eng",
+        .title = "Detached",
+        .forced = false,
+        .isDefault = false,
+        .isExternal = true,
+    };
+    const auto detachedCandidates = playbackSubtitleLoadCandidates(loadFallbacks, detachedRequested, {"eng"});
+    assert(detachedCandidates.size() == 1);
+    assert(detachedCandidates.front().index == 99);
+
     JellyfinItem bitmapSubtitles;
     bitmapSubtitles.subtitles = {{
         .index = 11,

@@ -2233,37 +2233,14 @@ private:
         };
     }
 
-    bool subtitleAllowed(const JellyfinSubtitleStream& subtitle) const {
-        return playbackSubtitleAllowed(subtitle, settings_.subtitleLanguages);
-    }
-
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
         if (!session_.valid() || subtitle.index < 0 || !playbackCoordinator_.beginSubtitleLoad()) return;
         const JellyfinSession session = session_;
-        const JellyfinItem item = playbackSessionState_.activeItem();
+        const auto& item = playbackSessionState_.activeItem();
         const std::string dataPath = dataPath_;
         const uint64_t generation = requestEpochs_.playback.snapshot();
         const int requestedSubtitleIndex = subtitle.index;
-
-        std::vector<JellyfinSubtitleStream> candidates;
-        candidates.push_back(subtitle);
-        const std::string requestedLanguage = normalizeSubtitleLanguage(subtitle.language);
-        const auto requested =
-            std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& candidate) {
-                return candidate.index == requestedSubtitleIndex;
-            });
-        if (requested != item.subtitles.end()) {
-            for (auto candidate = std::next(requested); candidate != item.subtitles.end(); ++candidate) {
-                if (!subtitleAllowed(*candidate) ||
-                    !useNativeSubtitleRenderer(subtitleStrategy(candidate->codec), true)) {
-                    continue;
-                }
-                if (!requestedLanguage.empty() && normalizeSubtitleLanguage(candidate->language) != requestedLanguage) {
-                    continue;
-                }
-                candidates.push_back(*candidate);
-            }
-        }
+        auto candidates = playbackCoordinator_.subtitleLoadCandidates(subtitle, settings_.subtitleLanguages);
 
         if (!subtitleLoadAsync_.load(
                 session, SubtitleLoadRequest{

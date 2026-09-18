@@ -609,6 +609,12 @@ public:
                                               sessionState_.activeTarget().playMethod, allowedLanguages);
     }
 
+    [[nodiscard]] std::vector<JellyfinSubtitleStream>
+    subtitleLoadCandidates(const JellyfinSubtitleStream& requested,
+                           const std::vector<std::string>& allowedLanguages) const {
+        return playbackSubtitleLoadCandidates(sessionState_.activeItem(), requested, allowedLanguages);
+    }
+
     void rememberAudioLanguagePreference(int streamIndex) {
         const auto& audios = sessionState_.activeItem().audios;
         const auto selected = std::find_if(

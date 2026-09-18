@@ -58,6 +58,29 @@ inline bool playbackSubtitleAllowed(const JellyfinSubtitleStream& subtitle,
     return subtitleLanguageAllowed(subtitle.language, allowedLanguages);
 }
 
+inline std::vector<JellyfinSubtitleStream>
+playbackSubtitleLoadCandidates(const JellyfinItem& item, const JellyfinSubtitleStream& requested,
+                               const std::vector<std::string>& allowedLanguages) {
+    std::vector<JellyfinSubtitleStream> candidates{requested};
+    const auto requestedInItem =
+        std::find_if(item.subtitles.begin(), item.subtitles.end(),
+                     [&](const JellyfinSubtitleStream& candidate) { return candidate.index == requested.index; });
+    if (requestedInItem == item.subtitles.end()) return candidates;
+
+    const std::string requestedLanguage = normalizeSubtitleLanguage(requested.language);
+    for (auto candidate = std::next(requestedInItem); candidate != item.subtitles.end(); ++candidate) {
+        if (!playbackSubtitleAllowed(*candidate, allowedLanguages) ||
+            !useNativeSubtitleRenderer(subtitleStrategy(candidate->codec), true)) {
+            continue;
+        }
+        if (!requestedLanguage.empty() && normalizeSubtitleLanguage(candidate->language) != requestedLanguage) {
+            continue;
+        }
+        candidates.push_back(*candidate);
+    }
+    return candidates;
+}
+
 inline int playerAudioOrdinal(const PlaybackTarget& target, const JellyfinItem& item) {
     if (target.playMethod != PlaybackMethod::DirectPlay || target.audioStreamIndex < 0) return -1;
     for (size_t index = 0; index < item.audios.size(); ++index) {
