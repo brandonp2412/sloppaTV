@@ -56,6 +56,7 @@
 #include "seerr_drive_picker_screen.hpp"
 #include "seerr_home_projection.hpp"
 #include "seerr_jellyfin_adapter.hpp"
+#include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
@@ -345,17 +346,6 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-struct DiagnosticsCompletion {
-    uint64_t generation = 0;
-    ApiValueResult<JellyfinServerInfo> result;
-};
-
-struct ServerInfoNoticeCompletion {
-    std::string server;
-    std::string userId;
-    ApiValueResult<JellyfinServerInfo> result;
-};
-
 struct FavoriteCompletion {
     JellyfinItem item;
     bool desired = false;
@@ -464,6 +454,7 @@ public:
           detailsAsync_(api_, tasks_, asyncCompletions_),
           browseAsync_(api_, tasks_, asyncCompletions_),
           jellyfinSearchAsync_(api_, tasks_, asyncCompletions_),
+          serverInfoAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -2462,14 +2453,7 @@ private:
         if (!session_.valid() || serverInfoLoading_ || !serverInfo_.version.empty()) return;
         const JellyfinSession session = session_;
         serverInfoLoading_ = true;
-        tasks_.submit([this, session] {
-            auto result = api_.getServerInfo(session);
-            asyncCompletions_.push(ServerInfoNoticeCompletion{
-                .server = session.server,
-                .userId = session.userId,
-                .result = std::move(result),
-            });
-        });
+        serverInfoAsync_.loadNotice(session);
     }
 
     void openSettings() {
@@ -2487,13 +2471,7 @@ private:
         serverInfo_ = {};
         const JellyfinSession session = session_;
         const uint64_t generation = requestEpochs_.content.begin();
-        tasks_.submit([this, session, generation] {
-            auto result = api_.getServerInfo(session);
-            asyncCompletions_.push(DiagnosticsCompletion{
-                .generation = generation,
-                .result = std::move(result),
-            });
-        });
+        serverInfoAsync_.loadDiagnostics(session, generation);
     }
 
     void clearCurrentSessionUi() {
@@ -7006,6 +6984,7 @@ private:
     DetailsAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> detailsAsync_;
     BrowseAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> browseAsync_;
     JellyfinSearchExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> jellyfinSearchAsync_;
+    ServerInfoExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> serverInfoAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;

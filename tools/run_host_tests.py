@@ -75,6 +75,7 @@ CPP_TESTS = [
     "seerr_request_state_test.cpp",
     "seerr_search_state_test.cpp",
     "seerr_storage_state_test.cpp",
+    "server_info_executor_test.cpp",
     "series_playback_executor_test.cpp",
     "session_registry_test.cpp",
     "settings_screen_test.cpp",
