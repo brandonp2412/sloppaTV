@@ -5,6 +5,7 @@
 #include <android_native_app_glue.h>
 
 #include "account_async_executor.hpp"
+#include "account_completion_controller.hpp"
 #include "account_navigation_controller.hpp"
 #include "account_screen.hpp"
 #include "app_settings.hpp"
@@ -3743,41 +3744,29 @@ private:
         showNotice("MEDIA DELETED");
     }
 
-    void applyAsyncCompletion(DiscoveryCompletion& completion) {
-        if (!requestEpochs_.auth.active(completion.generation)) return;
-        loading_ = false;
-        if (completion.servers.empty()) {
-            accountState_.clearDiscoveryStatus();
-            error_ = "NO JELLYFIN SERVER FOUND ON THIS NETWORK";
-            return;
-        }
-        accountState_.setField(AccountScreenState::kServerField, completion.servers.front().address);
-        std::string discoveryStatus = "FOUND " + (completion.servers.front().name.empty()
-                                                        ? std::string("JELLYFIN")
-                                                        : completion.servers.front().name);
-        if (completion.servers.size() > 1)
-            discoveryStatus += " + " + std::to_string(completion.servers.size() - 1) + " MORE";
-        accountState_.setDiscoveryStatus(std::move(discoveryStatus));
-        accountState_.setLoginFocus(AccountScreenState::kUsernameField);
-        error_.clear();
-    }
+    void applyAccountCompletionEffects(AccountCompletionEffects effects) {
+        if (effects.finishLoading) loading_ = false;
+        if (effects.error) error_ = std::move(*effects.error);
+        if (effects.clearError) error_.clear();
+        if (!effects.authenticatedSession) return;
 
-    void applyAsyncCompletion(LoginCompletion& completion) {
-        if (!requestEpochs_.auth.active(completion.generation)) return;
-        loading_ = false;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
         requestEpochs_.session.invalidate();
-        session_ = std::move(completion.result.value);
-        accountState_.setAuthenticatedAccount(session_.server, session_.username);
+        session_ = std::move(*effects.authenticatedSession);
         resetNavigation(Screen::Home);
         homeState_.setRow(0);
         homeState_.setFirstVisibleRow(0);
-        error_.clear();
         saveSession(session_);
         loadHomeAsync();
+    }
+
+    void applyAsyncCompletion(DiscoveryCompletion& completion) {
+        applyAccountCompletionEffects(AccountCompletionController::apply(
+            completion, requestEpochs_.auth.active(completion.generation), accountState_));
+    }
+
+    void applyAsyncCompletion(LoginCompletion& completion) {
+        applyAccountCompletionEffects(AccountCompletionController::apply(
+            completion, requestEpochs_.auth.active(completion.generation), accountState_));
     }
 
     void applyAsyncCompletion(DetailsItemCompletion& completion) {
@@ -3812,38 +3801,23 @@ private:
     }
 
     void applyAsyncCompletion(QuickConnectStartedCompletion& completion) {
-        if (!requestEpochs_.auth.active(completion.generation)) return;
-        accountState_.setField(AccountScreenState::kServerField, completion.request.server);
-        accountState_.setQuickConnectCode(completion.request.code);
-        loading_ = false;
+        applyAccountCompletionEffects(AccountCompletionController::apply(
+            completion, requestEpochs_.auth.active(completion.generation), accountState_));
     }
 
     void applyAsyncCompletion(QuickConnectFailedCompletion& completion) {
-        if (!requestEpochs_.auth.active(completion.generation)) return;
-        loading_ = false;
-        accountState_.endQuickConnect();
-        error_ = std::move(completion.error);
+        applyAccountCompletionEffects(AccountCompletionController::apply(
+            completion, requestEpochs_.auth.active(completion.generation), accountState_));
     }
 
     void applyAsyncCompletion(QuickConnectAuthenticatedCompletion& completion) {
-        if (!requestEpochs_.auth.active(completion.generation)) return;
-        requestEpochs_.session.invalidate();
-        session_ = std::move(completion.session);
-        accountState_.setAuthenticatedAccount(session_.server, session_.username);
-        loading_ = false;
-        resetNavigation(Screen::Home);
-        homeState_.setRow(0);
-        homeState_.setFirstVisibleRow(0);
-        error_.clear();
-        saveSession(session_);
-        loadHomeAsync();
+        applyAccountCompletionEffects(AccountCompletionController::apply(
+            completion, requestEpochs_.auth.active(completion.generation), accountState_));
     }
 
     void applyAsyncCompletion(QuickConnectTimedOutCompletion& completion) {
-        if (!requestEpochs_.auth.active(completion.generation)) return;
-        loading_ = false;
-        accountState_.endQuickConnect();
-        error_ = "QUICK CONNECT TIMED OUT - TRY AGAIN";
+        applyAccountCompletionEffects(AccountCompletionController::apply(
+            completion, requestEpochs_.auth.active(completion.generation), accountState_));
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
