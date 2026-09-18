@@ -345,17 +345,6 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-struct ItemMenuDetailCompletion {
-    std::string itemId;
-    ApiValueResult<JellyfinItem> result;
-};
-
-struct PersonItemsCompletion {
-    std::string personId;
-    uint64_t generation = 0;
-    ApiValueResult<std::vector<JellyfinItem>> result;
-};
-
 struct DiagnosticsCompletion {
     uint64_t generation = 0;
     ApiValueResult<JellyfinServerInfo> result;
@@ -1349,13 +1338,7 @@ private:
 
         const JellyfinSession session = session_;
         const std::string itemId = item.id;
-        tasks_.submit([this, session, itemId] {
-            auto result = api_.getItem(session, itemId);
-            asyncCompletions_.push(ItemMenuDetailCompletion{
-                .itemId = itemId,
-                .result = std::move(result),
-            });
-        });
+        detailsAsync_.loadItemMenuDetail(session, itemId);
     }
 
     int homeVisibleItemCount(const JellyfinHomeRow& row) const { return row.title == "My Media" ? 4 : 5; }
@@ -1889,14 +1872,7 @@ private:
         const JellyfinSession session = session_;
         const std::string personId = person.id;
         const uint64_t generation = requestEpochs_.content.begin();
-        tasks_.submit([this, session, personId, generation] {
-            auto result = api_.getItemsForPerson(session, personId, 60);
-            asyncCompletions_.push(PersonItemsCompletion{
-                .personId = personId,
-                .generation = generation,
-                .result = std::move(result),
-            });
-        });
+        detailsAsync_.loadPersonItems(session, personId, generation, 60);
     }
 
     void handlePersonItemsKey(int32_t key) {

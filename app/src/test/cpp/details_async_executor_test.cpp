@@ -9,7 +9,8 @@
 
 namespace {
 using Completion = std::variant<DetailsItemCompletion, DetailsSimilarCompletion, EpisodeSeriesContextRequestCompletion,
-                                EpisodeSeriesContextCompletion, SeasonsCompletion, EpisodesCompletion>;
+                                 EpisodeSeriesContextCompletion, SeasonsCompletion, EpisodesCompletion,
+                                 ItemMenuDetailCompletion, PersonItemsCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -59,22 +60,34 @@ struct FakeClient {
         return episodesResult;
     }
 
+    ApiValueResult<std::vector<JellyfinItem>> getItemsForPerson(const JellyfinSession&, const std::string& personId,
+                                                                int limit) {
+        ++personItemsCalls;
+        personItemsPersonId = personId;
+        personItemsLimit = limit;
+        return personItemsResult;
+    }
+
     ApiValueResult<JellyfinItem> itemResult;
     ApiValueResult<JellyfinItem> seriesResult;
     ApiValueResult<std::vector<JellyfinItem>> similarResult;
     ApiValueResult<std::vector<JellyfinItem>> seasonsResult;
     ApiValueResult<std::vector<JellyfinItem>> episodesResult;
+    ApiValueResult<std::vector<JellyfinItem>> personItemsResult;
     std::function<void()> onGetItem;
     std::vector<std::string> requestedItems;
     std::string similarItemId;
     std::string seasonsSeriesId;
     std::string episodesSeriesId;
     std::string episodesSeasonId;
+    std::string personItemsPersonId;
     int similarLimit = -1;
+    int personItemsLimit = -1;
     int getItemCalls = 0;
     int similarCalls = 0;
     int seasonsCalls = 0;
     int episodesCalls = 0;
+    int personItemsCalls = 0;
 };
 
 JellyfinSession session() {
@@ -295,6 +308,45 @@ int main() {
         client.itemResult.ok = true;
         client.itemResult.value = movie();
         ImmediateTaskRunner tasks;
+        CompletionSink completions;
+        DetailsAsyncExecutor executor(client, tasks, completions);
+
+        assert(executor.loadItemMenuDetail(session(), "movie-menu"));
+        assert(client.getItemCalls == 1);
+        assert(client.requestedItems.size() == 1);
+        assert(client.requestedItems.front() == "movie-menu");
+        assert(completions.events.size() == 1);
+        const auto& menu = std::get<ItemMenuDetailCompletion>(completions.events.front());
+        assert(menu.itemId == "movie-menu");
+        assert(menu.result.ok);
+        assert(menu.result.value.id == "movie-1");
+    }
+
+    {
+        FakeClient client;
+        client.personItemsResult.ok = true;
+        client.personItemsResult.value = {movie(), similarItem()};
+        ImmediateTaskRunner tasks;
+        CompletionSink completions;
+        DetailsAsyncExecutor executor(client, tasks, completions);
+
+        assert(executor.loadPersonItems(session(), "person-1", 51, 60));
+        assert(client.personItemsCalls == 1);
+        assert(client.personItemsPersonId == "person-1");
+        assert(client.personItemsLimit == 60);
+        assert(completions.events.size() == 1);
+        const auto& person = std::get<PersonItemsCompletion>(completions.events.front());
+        assert(person.personId == "person-1");
+        assert(person.generation == 51);
+        assert(person.result.ok);
+        assert(person.result.value.size() == 2);
+    }
+
+    {
+        FakeClient client;
+        client.itemResult.ok = true;
+        client.itemResult.value = movie();
+        ImmediateTaskRunner tasks;
         tasks.accept = false;
         CompletionSink completions;
         RequestEpoch epoch;
@@ -303,9 +355,12 @@ int main() {
         assert(!executor.load(session(), "movie-1", epoch.beginToken()));
         assert(!executor.loadSeasons(session(), "series-4", 43));
         assert(!executor.loadEpisodes(session(), "series-4", "season-4", 44));
+        assert(!executor.loadItemMenuDetail(session(), "menu-4"));
+        assert(!executor.loadPersonItems(session(), "person-4", 45, 60));
         assert(client.getItemCalls == 0);
         assert(client.seasonsCalls == 0);
         assert(client.episodesCalls == 0);
+        assert(client.personItemsCalls == 0);
         assert(completions.events.empty());
     }
 

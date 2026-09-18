@@ -47,6 +47,17 @@ struct EpisodesCompletion {
     ApiValueResult<std::vector<JellyfinItem>> result;
 };
 
+struct ItemMenuDetailCompletion {
+    std::string itemId;
+    ApiValueResult<JellyfinItem> result;
+};
+
+struct PersonItemsCompletion {
+    std::string personId;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
 template <typename Client, typename TaskRunner, typename CompletionSink>
 class DetailsAsyncExecutor {
 public:
@@ -128,6 +139,27 @@ public:
             completions_.push(EpisodesCompletion{
                 .seriesId = std::move(seriesId),
                 .seasonId = std::move(seasonId),
+                .generation = generation,
+                .result = std::move(result),
+            });
+        });
+    }
+
+    bool loadItemMenuDetail(JellyfinSession session, std::string itemId) {
+        return tasks_.submit([this, session = std::move(session), itemId = std::move(itemId)]() mutable {
+            auto result = client_.getItem(session, itemId);
+            completions_.push(ItemMenuDetailCompletion{
+                .itemId = std::move(itemId),
+                .result = std::move(result),
+            });
+        });
+    }
+
+    bool loadPersonItems(JellyfinSession session, std::string personId, uint64_t generation, int limit) {
+        return tasks_.submit([this, session = std::move(session), personId = std::move(personId), generation, limit]() mutable {
+            auto result = client_.getItemsForPerson(session, personId, limit);
+            completions_.push(PersonItemsCompletion{
+                .personId = std::move(personId),
                 .generation = generation,
                 .result = std::move(result),
             });
