@@ -55,6 +55,7 @@
 #include "playback_transition.hpp"
 #include "player_controls_renderer.hpp"
 #include "player_next_up_renderer.hpp"
+#include "player_progress_renderer.hpp"
 #include "player_screen.hpp"
 #include "player_seek_feedback_renderer.hpp"
 #include "player_skip_button_renderer.hpp"
@@ -5608,23 +5609,25 @@ private:
                        : (status == PlayerStatus::Preparing ? "Loading" : ""));
         if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
 
-        constexpr float progressX = 150.0f;
-        constexpr float progressWidth = 1620.0f;
-        renderer_.text(progressX, 834.0f, 2.0f, formatPlaybackTime(position), kText);
+        const std::string positionText = formatPlaybackTime(position);
         const std::string durationText = formatPlaybackTime(duration);
-        const float durationRight = playbackDurationRightX(skipSegment != nullptr);
-        drawRightAlignedSingleLine(durationRight, 834.0f, 2.0f, durationText, kText, 220.0f);
-        // Leave enough vertical separation for the enlarged time labels. At the
-        // largest UI text size their glyph box reaches y=882 from the y=834 row.
-        constexpr float progressTrackY = 890.0f;
-        renderer_.roundedRect(progressX, progressTrackY, progressWidth, 7.0f, 3.5f, kTrack);
-        if (duration > 0) {
-            const float progress = std::clamp(static_cast<float>(position) / static_cast<float>(duration), 0.0f, 1.0f);
-            const float progressPixels = progressWidth * progress;
-            renderer_.roundedRect(progressX, progressTrackY, progressPixels, 7.0f, 3.5f, kFocus);
-            const float thumbCenterX = playbackProgressThumbCenterX(progressX, progressWidth, progress, 9.0f);
-            renderer_.roundedRect(thumbCenterX - 9.0f, progressTrackY - 5.5f, 18.0f, 18.0f, 9.0f, kText);
-        }
+        renderPlayerProgress(
+            renderer_,
+            PlayerProgressRenderState{
+                .positionMs = position,
+                .durationMs = duration,
+                .skipButtonVisible = skipSegment != nullptr,
+                .positionText = positionText,
+                .durationText = durationText,
+            },
+            PlayerProgressRenderStyle<Color>{
+                .text = kText,
+                .track = kTrack,
+                .focus = kFocus,
+            },
+            [this](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
+                drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
+            });
         drawTrickplayPreview();
 
         if (playerScreenState_.controlsActive(now)) {
