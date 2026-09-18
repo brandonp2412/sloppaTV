@@ -60,6 +60,7 @@
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
 #include "screensaver_renderer.hpp"
+#include "search_renderer.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
 #include "series_playback_executor.hpp"
@@ -5441,198 +5442,65 @@ private:
     }
 
     void renderSearch() {
-        const auto& results = searchState_.results();
-        const auto& query = searchState_.query();
-        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth());
-        renderer_.text(80.0f, 44.0f, material_tv::type::headline, "Search", kText, 520.0f);
-        constexpr float searchTop = 155.0f;
-        constexpr float searchWidth = 1450.0f;
-        const bool systemSearchInputActive = systemTextInputMode_ == kTextInputSearch;
-        const bool searchFieldFocused =
-            systemSearchInputActive || (!searchState_.keyboard() && results.empty() && !seerrDomain_.searchLoading());
-        const auto searchBounds =
-            drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused, materialWideInputFocusScale());
-        const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
-        renderer_.textVerticallyCentered(106.0f, searchBounds[1], searchBounds[3], 2.15f,
-                                         fitTextLines(searchDisplay, 2.15f, searchWidth - 68.0f, 1),
-                                         query.empty() ? kMuted : kText, searchWidth - 68.0f);
-        const std::string_view searchHint =
-            searchState_.keyboard()
-                ? "On-screen keyboard"
-                : (systemSearchInputActive ? "Typing…" : (results.empty() ? "Press OK to type" : "Up to edit"));
-        drawLeftAlignedSingleLineFit(1575.0f, searchTop, 250.0f, 68.0f, 1.45f, searchHint,
-                                     (searchState_.keyboard() || systemSearchInputActive) ? kFocus : kSecondaryText);
-
-        if (searchState_.keyboard()) {
-            renderKeyboard(270.0f);
-            drawCenteredSingleLineFit(560.0f, 886.0f, 800.0f, 58.0f, 1.62f,
-                                      "Done runs search   |   Back closes keyboard", kMuted, 16.0f, 5.0f);
-            return;
-        }
-
-        if (systemSearchInputActive && results.empty() && !seerrDomain_.searchLoading()) {
-            drawCenteredSingleLineFit(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to search Jellyfin and Seerr", kMuted,
-                                      16.0f, 5.0f);
-            return;
-        }
-        if (query.empty() && results.empty()) {
-            renderEmptyState("Find your next favorite",
-                             "Search your library and request anything missing through Seerr.");
-            return;
-        }
-
-        constexpr int columns = mediaGridColumns();
-        constexpr float slotWidth = mediaCardWidth();
-        constexpr float xGap = 32.0f;
-
-        std::vector<int> semanticRows;
-        // Keep the library lane reserved for the lifetime of a query. Otherwise the
-        // Seerr lane jumps upward when an async Jellyfin search returns zero matches.
-        if (!query.empty() || searchState_.rowItemCount(SearchScreenState::kLibraryRow) > 0 || searchState_.loading()) {
-            semanticRows.push_back(SearchScreenState::kLibraryRow);
-        }
-        if (seerrConfigured) semanticRows.push_back(SearchScreenState::kSeerrRow);
-        if (searchState_.rowItemCount(SearchScreenState::kEpisodeRow) > 0) {
-            semanticRows.push_back(SearchScreenState::kEpisodeRow);
-        }
-        if (semanticRows.empty()) {
-            renderEmptyState("No results found",
-                             seerrConfigured ? "No Jellyfin or Seerr matches for this search."
-                                             : "No Jellyfin matches. Connect Seerr in Settings to search for more.");
-            return;
-        }
-
-        int selectedSemanticRow = searchState_.selectedRow();
-        auto selectedPosition = std::find(semanticRows.begin(), semanticRows.end(), selectedSemanticRow);
-        int selectedRowPosition = selectedPosition == semanticRows.end()
-                                      ? 0
-                                      : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
-        const int firstSemantic =
-            std::clamp(selectedRowPosition - 1, 0, std::max(0, static_cast<int>(semanticRows.size()) - 2));
-
-        auto drawLoadingDots = [&](float x, float y) {
-            const double seconds =
-                std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-            for (int i = 0; i < 3; ++i) {
-                const float pulse = 0.45f + 0.55f * static_cast<float>((std::sin(seconds * 5.0 - i * 1.2) + 1.0) * 0.5);
-                const float size = 9.0f + pulse * 5.0f;
-                renderer_.roundedRect(x + static_cast<float>(i) * 24.0f, y + (14.0f - size) * 0.5f, size, size,
-                                      size * 0.5f, Color{kFocus.r, kFocus.g, kFocus.b, 0.45f + pulse * 0.55f});
-            }
-        };
-
-        auto renderResultRow = [&](int semanticRow, int visibleSlot) {
-            const float labelY = visibleSlot == 0 ? 258.0f : 726.0f;
-            const float cardY = visibleSlot == 0 ? 314.0f : 780.0f;
-            const int count = searchState_.rowItemCount(semanticRow);
-            std::string label = semanticRow == SearchScreenState::kLibraryRow
-                                    ? "In your library"
-                                    : (semanticRow == SearchScreenState::kSeerrRow ? "Seerr" : "Episodes");
-
-            if (semanticRow == SearchScreenState::kSeerrRow) {
-                renderer_.rect(72.0f, labelY - 22.0f, 1776.0f, 1.5f, kDivider);
-                renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
-
-                // Right-aligned storage health: a tiny drive glyph plus percentage full.
-                float badgeRight = 1848.0f;
-                int shownDrives = 0;
-                std::unordered_set<std::string> shownStorage;
-                const auto& storageTargets = seerrDomain_.storageTargets();
-                for (auto it = storageTargets.rbegin(); it != storageTargets.rend() && shownDrives < 5; ++it) {
-                    const std::string identity = it->path + ":" + std::to_string(it->totalSpace);
-                    if (!shownStorage.insert(identity).second || it->totalSpace <= 0) continue;
-                    const int percent = std::clamp(it->usedPercent(), 0, 100);
-                    const std::string text = std::to_string(percent) + "%";
-                    const float badgeWidth = 108.0f;
-                    const float badgeX = badgeRight - badgeWidth;
-                    const float badgeY = labelY - 8.0f;
-                    renderer_.roundedRect(badgeX, badgeY, badgeWidth, 43.0f, 15.0f, kPanelElevated);
-                    renderer_.roundedRect(badgeX + 11.0f, badgeY + 11.0f, 29.0f, 21.0f, 5.0f, kPanel);
-                    renderer_.roundedRect(badgeX + 16.0f, badgeY + 16.0f, 19.0f, 4.0f, 2.0f,
-                                          percent >= 90 ? kError : kSecondaryText);
-                    renderer_.roundedRect(badgeX + 31.0f, badgeY + 25.0f, 4.0f, 4.0f, 2.0f,
-                                          percent >= 90 ? kError : kFocus);
-                    drawCenteredSingleLineFit(badgeX + 43.0f, badgeY, 58.0f, 43.0f, 1.32f, text,
-                                              percent >= 90 ? kError : kSecondaryText, 4.0f, 2.0f);
-                    badgeRight = badgeX - 10.0f;
-                    ++shownDrives;
-                }
-                if (seerrDomain_.storageLoading() && shownDrives == 0) {
-                    renderer_.text(1635.0f, labelY + 1.0f, 1.30f, "Loading storage…", kMuted, 210.0f);
-                }
-
-                if (seerrDomain_.searchLoading()) {
-                    drawLoadingDots(196.0f, labelY + 8.0f);
-                    renderer_.text(288.0f, labelY + 1.0f, 1.45f, "Searching Seerr…", kMuted, 440.0f);
-                } else if (count <= 0) {
-                    const std::string message =
-                        seerrDomain_.searchError().empty() ? "No additional matches" : "Seerr unavailable";
-                    renderer_.text(196.0f, labelY + 1.0f, 1.45f, message, kMuted, 520.0f);
-                    return;
-                }
-            } else {
-                renderer_.text(72.0f, labelY, 1.75f, label, kSecondaryText, 520.0f);
-                if (semanticRow == SearchScreenState::kLibraryRow && searchState_.loading() && count <= 0) {
-                    drawLoadingDots(228.0f, labelY + 8.0f);
-                    renderer_.text(320.0f, labelY + 1.0f, 1.45f, "Searching Jellyfin…", kMuted, 440.0f);
-                    return;
-                }
-                if (semanticRow == SearchScreenState::kLibraryRow && count <= 0) {
-                    renderer_.text(228.0f, labelY + 1.0f, 1.45f, "No library matches", kMuted, 440.0f);
-                    return;
-                }
-            }
-            if (count <= 0) return;
-
-            const int localStart = searchState_.firstVisibleInRow(semanticRow, columns);
-            const int begin = searchState_.rowStart(semanticRow) + localStart;
-            const int end = std::min(begin + columns, searchState_.rowStart(semanticRow) + count);
-            if (semanticRow == SearchScreenState::kSeerrRow) {
-                const float imageHeight = slotWidth * 0.56f;
-                for (int index = begin; index < end; ++index) {
-                    const int col = index - begin;
-                    const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-                    const auto& item = results[static_cast<size_t>(index)];
-                    const bool focused = !systemSearchInputActive && index == searchState_.selection();
-                    const auto bounds =
-                        focusedBounds(x, cardY, slotWidth, imageHeight, focused, materialCardFocusScale());
-                    const float radius = material_tv::cornerSmall * bounds[3] / imageHeight;
-                    renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], radius, kPanelAlt);
-                    if (!drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], radius)) {
-                        drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], radius);
-                    }
-                    if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, radius);
-                    const float titleY = cardY + imageHeight + 18.0f;
-                    if (focused) {
-                        drawLingeringTitle(x + 2.0f, titleY, 1.95f, item.name, slotWidth - 4.0f, kText,
-                                           std::chrono::steady_clock::now());
-                    } else {
-                        renderer_.text(x + 2.0f, titleY, 1.95f, fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1),
-                                       kSecondaryText, slotWidth - 4.0f);
-                    }
-                    const std::string state =
-                        item.externalRequested ? item.externalStatus : std::string("Press OK to request");
-                    renderer_.text(x + 2.0f, titleY + 27.0f, 1.35f, fitTextLines(state, 1.35f, slotWidth - 4.0f, 1),
-                                   kMuted, slotWidth - 4.0f);
-                }
-                return;
-            }
-
-            const bool rowHasPortraitCards =
-                std::any_of(results.begin() + begin, results.begin() + end,
-                            [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
-            for (int index = begin; index < end; ++index) {
-                const int col = index - begin;
-                const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-                renderMediaArtworkCard(results[static_cast<size_t>(index)], x, cardY, slotWidth,
-                                       !systemSearchInputActive && index == searchState_.selection(), true, false,
-                                       rowHasPortraitCards, 1);
-            }
-        };
-
-        for (int slot = 0; slot < 2 && firstSemantic + slot < static_cast<int>(semanticRows.size()); ++slot) {
-            renderResultRow(semanticRows[static_cast<size_t>(firstSemantic) + static_cast<size_t>(slot)], slot);
-        }
+        renderSearchScreen(
+            renderer_, searchState_, SeerrClient::configured(settings_.seerrServer, seerrAuth()),
+            systemTextInputMode_ == kTextInputSearch, seerrDomain_.searchLoading(), seerrDomain_.searchError(),
+            seerrDomain_.storageLoading(), seerrDomain_.storageTargets(),
+            SearchRenderStyle<Color>{
+                .headlineScale = material_tv::type::headline,
+                .cornerSmall = material_tv::cornerSmall,
+                .wideInputFocusScale = materialWideInputFocusScale(),
+                .cardFocusScale = materialCardFocusScale(),
+                .text = kText,
+                .muted = kMuted,
+                .secondaryText = kSecondaryText,
+                .focus = kFocus,
+                .divider = kDivider,
+                .panel = kPanel,
+                .panelAlt = kPanelAlt,
+                .panelElevated = kPanelElevated,
+                .error = kError,
+            },
+            [&](float x, float y, float width, float height, bool focused, float focusScale) {
+                return drawInputSurface(x, y, width, height, focused, focusScale);
+            },
+            [&](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(value, scale, maxWidth, maxLines);
+            },
+            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
+                drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
+            },
+            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
+            },
+            [&](float top) { renderKeyboard(top); },
+            [&](std::string_view title, std::string_view message) {
+                renderEmptyState(std::string(title), std::string(message));
+            },
+            [&](float x, float y, float width, float height, bool focused, float focusScale) {
+                return focusedBounds(x, y, width, height, focused, focusScale);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
+                return drawHomeArtwork(item, x, y, width, height, radius);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
+                drawArtworkPlaceholder(item, x, y, width, height, radius);
+            },
+            [&](float x, float y, float width, float height, Color color, float radius) {
+                drawFocusHalo(x, y, width, height, color, radius);
+            },
+            [&](float x, float y, float scale, std::string_view value, float maxWidth, Color color,
+                std::chrono::steady_clock::time_point now) {
+                drawLingeringTitle(x, y, scale, value, maxWidth, color, now);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
+                bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
+                renderMediaArtworkCard(item, x, y, width, focused, showState, seriesCoverForEpisode, alignMixedHeights,
+                                       titleLineLimit);
+            },
+            [] { return std::chrono::steady_clock::now(); },
+            [](Color color, float alpha) { return Color{color.r, color.g, color.b, alpha}; });
     }
 
     void renderSeerrDrivePicker() {
