@@ -53,6 +53,7 @@
 #include "quick_connect_executor.hpp"
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
+#include "screensaver_renderer.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
 #include "series_playback_executor.hpp"
@@ -6088,28 +6089,26 @@ private:
     }
 
     void renderScreensaver() {
-        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.006f, 0.008f, 0.012f, 1.0f});
         const int64_t elapsedSeconds =
             std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now().time_since_epoch())
                 .count();
-        static constexpr std::array<std::array<float, 2>, 8> positions{{
-            {{170.0f, 170.0f}},
-            {{1120.0f, 170.0f}},
-            {{170.0f, 675.0f}},
-            {{1120.0f, 675.0f}},
-            {{650.0f, 245.0f}},
-            {{650.0f, 635.0f}},
-            {{340.0f, 410.0f}},
-            {{980.0f, 410.0f}},
-        }};
-        const auto& position = positions[static_cast<size_t>(screensaverPositionSlot(elapsedSeconds))];
-
         const std::string clock = formatLocalClock(std::time(nullptr), settings_.clock24Hour);
-
-        drawLeftAlignedSingleLineFit(position[0], position[1], 600.0f, 104.0f, 4.2f, "sloppaTV", material_tv::primary);
-        drawLeftAlignedSingleLineFit(position[0], position[1] + 112.0f, 700.0f, 205.0f, 9.0f, clock, kText);
-        drawCenteredSingleLineFit(600.0f, 1008.0f, 720.0f, 48.0f, 1.45f, "Press any button to return", kTertiary, 12.0f,
-                                  4.0f);
+        renderScreensaverScreen(
+            renderer_, elapsedSeconds, clock, Renderer::logicalWidth(), Renderer::logicalHeight(),
+            ScreensaverRenderStyle<Color>{
+                .background = Color{0.006f, 0.008f, 0.012f, 1.0f},
+                .primary = material_tv::primary,
+                .text = kText,
+                .tertiary = kTertiary,
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
+                drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
+                                          verticalPadding);
+            });
     }
 
     void renderSettings() {
