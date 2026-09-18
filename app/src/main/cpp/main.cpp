@@ -30,6 +30,7 @@
 #include "jellyfin_search_executor.hpp"
 #include "jni_env.hpp"
 #include "launch_intent.hpp"
+#include "login_renderer.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
@@ -4927,97 +4928,58 @@ private:
     }
 
     void renderLogin() {
-        renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
-        renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f, material_tv::surfaceContainerHigh,
-                                   material_tv::background);
-        drawCenteredSingleLineFit(410.0f, 15.0f, 1100.0f, 145.0f, material_tv::type::display, "sloppaTV", kText, 20.0f,
-                                  8.0f);
-        drawCenteredSingleLineFit(410.0f, 165.0f, 1100.0f, 50.0f, material_tv::type::body,
-                                  "Connect to your Jellyfin server", kMuted, 20.0f, 4.0f);
-
-        if (accountState_.quickConnectActive()) {
-            drawModalSurface(465.0f, 230.0f, 990.0f, 610.0f);
-            drawCenteredSingleLineFit(610.0f, 266.0f, 700.0f, 62.0f, 2.5f, "Quick Connect", kSecondaryText, 12.0f,
-                                      4.0f);
-
-            renderer_.roundedRect(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, kPanelElevated);
-            renderer_.roundedOutline(610.0f, 345.0f, 700.0f, 150.0f, material_tv::cornerLarge, 1.0f, kOutline);
-            drawCenteredSingleLineFit(610.0f, 345.0f, 700.0f, 150.0f, 7.6f, accountState_.quickConnectCode(), kText,
-                                      24.0f, 10.0f);
-
-            const std::array<std::string, 2> steps{
-                "Open Jellyfin on another device",
-                "Settings > Quick Connect > Enter code",
-            };
-            for (size_t i = 0; i < steps.size(); ++i) {
-                const float rowY = 535.0f + static_cast<float>(i) * 74.0f;
-                renderer_.roundedRect(510.0f, rowY, 900.0f, 58.0f, material_tv::cornerMedium, kPanelAlt);
-                renderer_.roundedRect(528.0f, rowY + 9.0f, 40.0f, 40.0f, 20.0f, kFocusSoft);
-                drawCenteredSingleLineFit(528.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f, std::to_string(i + 1), kText, 4.0f,
-                                          3.0f);
-                renderer_.textVerticallyCentered(595.0f, rowY, 58.0f, 1.45f, fitTextLines(steps[i], 1.45f, 790.0f, 1),
-                                                 kSecondaryText, 790.0f);
-            }
-
-            const std::string status = loading_ ? "Starting…" : "Waiting for authorization…";
-            const float statusWidth =
-                std::round(std::clamp(renderer_.textWidth(1.55f, status) + 54.0f, 260.0f, 560.0f));
-            const float statusX = std::round(960.0f - statusWidth * 0.5f);
-            renderer_.roundedRect(statusX, 706.0f, statusWidth, 48.0f, 24.0f, kFocusSoft);
-            drawCenteredSingleLineFit(statusX, 706.0f, statusWidth, 48.0f, 1.55f, status, kText, 16.0f, 4.0f);
-            drawCenteredSingleLineFit(610.0f, 776.0f, 700.0f, 48.0f, 1.55f, "Press Back to cancel", kMuted, 12.0f,
-                                      4.0f);
-            return;
-        }
-
-        const bool hasSavedUsers = !sessionRegistry_.empty();
-        drawModalSurface(410.0f, 225.0f, 1100.0f, hasSavedUsers ? 680.0f : 615.0f);
-        static constexpr std::array<const char*, 3> labels{"Server", "Username", "Password"};
-        for (int i = 0; i < 3; ++i) {
-            const float y = 290.0f + static_cast<float>(i) * 128.0f;
-            drawLeftAlignedSingleLineFit(495.0f, y - 45.0f, 420.0f, 32.0f, 1.35f, labels[static_cast<size_t>(i)],
-                                         kMuted);
-            const bool focused = !accountState_.keyboardActive() && accountState_.loginFocus() == i;
-            const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused, materialWideInputFocusScale());
-            std::string value = accountState_.field(i);
-            if (i == 2 && !value.empty()) value.assign(value.size(), '*');
-            const bool placeholder = value.empty() && i == 0;
-            if (placeholder) value = "https://your-jellyfin-server";
-            renderer_.textVerticallyCentered(520.0f, bounds[1], bounds[3], 2.35f, fitTextLines(value, 2.35f, 880.0f, 1),
-                                             placeholder ? kTertiary : kText, 880.0f);
-        }
-
-        const bool loginFocused =
-            accountState_.loginFocus() == AccountScreenState::kLoginAction && !accountState_.keyboardActive();
-        const auto loginBounds = drawButtonSurface(490.0f, 690.0f, 330.0f, 72.0f, loginFocused, true);
-        drawCenteredSingleLineFit(loginBounds[0], loginBounds[1], loginBounds[2], loginBounds[3], 2.15f, "Log in",
-                                  kText, 18.0f, 6.0f);
-        const bool quickFocused =
-            accountState_.loginFocus() == AccountScreenState::kQuickConnectAction && !accountState_.keyboardActive();
-        const auto quickBounds = drawButtonSurface(840.0f, 690.0f, 310.0f, 72.0f, quickFocused);
-        drawCenteredSingleLineFit(quickBounds[0], quickBounds[1], quickBounds[2], quickBounds[3], 1.65f,
-                                  "Quick Connect", kText, 18.0f, 6.0f);
-        const bool discoverFocused =
-            accountState_.loginFocus() == AccountScreenState::kDiscoverAction && !accountState_.keyboardActive();
-        const auto discoverBounds = drawButtonSurface(1170.0f, 690.0f, 260.0f, 72.0f, discoverFocused);
-        drawCenteredSingleLineFit(discoverBounds[0], discoverBounds[1], discoverBounds[2], discoverBounds[3], 1.8f,
-                                  "Discover", kText, 18.0f, 6.0f);
-
-        if (hasSavedUsers) {
-            const bool savedFocused =
-                accountState_.loginFocus() == AccountScreenState::kSavedUsersAction && !accountState_.keyboardActive();
-            const auto savedBounds = drawFocusedSurface(650.0f, 785.0f, 620.0f, 58.0f, savedFocused);
-            drawCenteredSingleLineFit(savedBounds[0], savedBounds[1], savedBounds[2], savedBounds[3], 1.65f,
-                                      "Saved users (" + std::to_string(sessionRegistry_.size()) + ")",
-                                      savedFocused ? kText : kMuted, 16.0f, 5.0f);
-        }
-        if (!accountState_.keyboardActive()) {
-            const std::string hint = !accountState_.discoveryStatus().empty() ? accountState_.discoveryStatus()
-                                                                              : "Discover searches your local network";
-            renderer_.text(555.0f, 870.0f, 1.65f, fitTextLines(hint, 1.65f, 810.0f, 1),
-                           accountState_.discoveryStatus().empty() ? kTertiary : kFocus, 810.0f);
-        }
-        if (accountState_.keyboardActive()) renderKeyboard(655.0f);
+        renderLoginScreen(
+            renderer_, Renderer::logicalWidth(), Renderer::logicalHeight(),
+            LoginRenderState{
+                .quickConnectActive = accountState_.quickConnectActive(),
+                .quickConnectCode = accountState_.quickConnectCode(),
+                .loading = loading_,
+                .savedUserCount = static_cast<int>(sessionRegistry_.size()),
+                .keyboardActive = accountState_.keyboardActive(),
+                .loginFocus = accountState_.loginFocus(),
+                .fields = {accountState_.field(0), accountState_.field(1), accountState_.field(2)},
+                .discoveryStatus = accountState_.discoveryStatus(),
+            },
+            LoginRenderStyle<Color>{
+                .cornerLarge = material_tv::cornerLarge,
+                .cornerMedium = material_tv::cornerMedium,
+                .displayScale = material_tv::type::display,
+                .bodyScale = material_tv::type::body,
+                .wideInputFocusScale = materialWideInputFocusScale(),
+                .background = kBackground,
+                .surfaceContainerHigh = material_tv::surfaceContainerHigh,
+                .text = kText,
+                .muted = kMuted,
+                .secondaryText = kSecondaryText,
+                .panelElevated = kPanelElevated,
+                .outline = kOutline,
+                .panelAlt = kPanelAlt,
+                .focusSoft = kFocusSoft,
+                .tertiary = kTertiary,
+                .focus = kFocus,
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
+                                          verticalPadding);
+            },
+            [this](float x, float y, float width, float height) { drawModalSurface(x, y, width, height); },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
+                drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
+            },
+            [this](float x, float y, float width, float height, bool focused, float focusScale) {
+                return drawInputSurface(x, y, width, height, focused, focusScale);
+            },
+            [this](float x, float y, float width, float height, bool focused, bool primary) {
+                return drawButtonSurface(x, y, width, height, focused, primary);
+            },
+            [this](float x, float y, float width, float height, bool focused) {
+                return drawFocusedSurface(x, y, width, height, focused);
+            },
+            [this](std::string_view value, float scale, float width, int lines) {
+                return fitTextLines(value, scale, width, lines);
+            },
+            [this](float top) { renderKeyboard(top); });
     }
 
     void renderProfiles() {

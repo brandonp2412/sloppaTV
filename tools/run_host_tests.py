@@ -45,6 +45,7 @@ CPP_TESTS = [
     "home_screen_test.cpp",
     "item_mutation_executor_test.cpp",
     "launch_intent_test.cpp",
+    "login_renderer_test.cpp",
     "media_player_policy_test.cpp",
     "media_session_policy_test.cpp",
     "playback_continuation_test.cpp",
