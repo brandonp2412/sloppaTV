@@ -21,6 +21,7 @@ add_library(sloppatv SHARED
     playback_completion_controller.cpp
     player_completion_controller.cpp
     queue_navigation_controller.cpp
+    search_completion_controller.cpp
     search_navigation_controller.cpp
     seerr_drive_navigation_controller.cpp
     settings_navigation_controller.cpp

@@ -85,6 +85,7 @@
 #include "screensaver_policy.hpp"
 #include "screensaver_renderer.hpp"
 #include "screen_chrome_renderer.hpp"
+#include "search_completion_controller.hpp"
 #include "search_navigation_controller.hpp"
 #include "search_renderer.hpp"
 #include "search_screen.hpp"
@@ -3522,39 +3523,23 @@ private:
         syncSeerrHomeRowLocked();
     }
 
+    void applySearchCompletionEffects(SearchCompletionEffects effects) {
+        if (effects.error) error_ = std::move(*effects.error);
+        if (effects.clearError) error_.clear();
+        if (effects.reconnectSeerr) connectSeerrAsync(false);
+        if (effects.syncSeerrHome) syncSeerrHomeRowLocked();
+    }
+
     void applyAsyncCompletion(SeerrSearchCompletion& completion) {
-        if (!requestEpochs_.seerrSearch.active(completion.generation)) return;
-        if (screen_ != Screen::Search) {
-            seerrSearchCoordinator_.abandonCompletion();
-            return;
-        }
-        auto& result = completion.result;
-        if (!result.ok) {
-            const auto plan = seerrSearchCoordinator_.completeFailure(
-                completion.query, result.error, !settings_.seerrSessionCookie.empty());
-            if (plan.resultsChanged) searchState_.refreshSeerrResults();
-            if (plan.reconnect) connectSeerrAsync(false);
-            return;
-        }
-        const auto plan = seerrSearchCoordinator_.completeSuccess(
-            completion.query, std::move(result.value), std::chrono::steady_clock::now());
-        if (plan.pendingChanged) syncSeerrHomeRowLocked();
-        if (plan.resultsChanged) searchState_.refreshSeerrResults();
+        applySearchCompletionEffects(SearchCompletionController::apply(
+            completion, requestEpochs_.seerrSearch.active(completion.generation), screen_ == Screen::Search,
+            !settings_.seerrSessionCookie.empty(), searchState_, seerrSearchCoordinator_,
+            std::chrono::steady_clock::now()));
     }
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
-        if (!requestEpochs_.search.active(completion.generation)) return;
-        if (screen_ != Screen::Search) {
-            searchState_.setLoading(false);
-            return;
-        }
-        auto& result = completion.result;
-        if (!result.ok) {
-            if (searchState_.failLibrarySearch(completion.query)) error_ = result.error;
-            return;
-        }
-        if (!searchState_.finishLibrarySearch(completion.query, std::move(result.value))) return;
-        error_.clear();
+        applySearchCompletionEffects(SearchCompletionController::apply(
+            completion, requestEpochs_.search.active(completion.generation), screen_ == Screen::Search, searchState_));
     }
 
     void applyDetailsCompletionEffects(DetailsCompletionEffects effects) {
