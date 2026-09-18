@@ -62,6 +62,7 @@
 #include "player_subtitle_renderer.hpp"
 #include "player_trickplay_renderer.hpp"
 #include "player_tracks.hpp"
+#include "player_video_renderer.hpp"
 #include "profiles_renderer.hpp"
 #include "queue_overlay_renderer.hpp"
 #include "queue_overlay_screen.hpp"
@@ -5445,24 +5446,17 @@ private:
         std::string videoError;
         if (videoSurface_.ready()) {
             videoSurface_.update(videoError);
-            float videoX = 0.0f;
-            float videoY = 0.0f;
-            float videoW = Renderer::logicalWidth();
-            float videoH = Renderer::logicalHeight();
-            const int sourceWidth = player_.videoWidth();
-            const int sourceHeight = player_.videoHeight();
-            if (sourceWidth > 0 && sourceHeight > 0 && playbackCoordinator_.session().zoomMode() != VideoZoomMode::Stretch) {
-                const float widthScale = Renderer::logicalWidth() / static_cast<float>(sourceWidth);
-                const float heightScale = Renderer::logicalHeight() / static_cast<float>(sourceHeight);
-                const float scale = playbackCoordinator_.session().zoomMode() == VideoZoomMode::Fit
-                                        ? std::min(widthScale, heightScale)
-                                        : std::max(widthScale, heightScale);
-                videoW = static_cast<float>(sourceWidth) * scale;
-                videoH = static_cast<float>(sourceHeight) * scale;
-                videoX = (Renderer::logicalWidth() - videoW) * 0.5f;
-                videoY = (Renderer::logicalHeight() - videoH) * 0.5f;
-            }
-            renderer_.externalImage(videoSurface_.texture(), videoX, videoY, videoW, videoH, videoSurface_.transform());
+            renderPlayerVideo(
+                renderer_,
+                PlayerVideoRenderState{
+                    .texture = videoSurface_.texture(),
+                    .sourceWidth = player_.videoWidth(),
+                    .sourceHeight = player_.videoHeight(),
+                    .zoomMode = playbackCoordinator_.session().zoomMode(),
+                    .logicalWidth = Renderer::logicalWidth(),
+                    .logicalHeight = Renderer::logicalHeight(),
+                },
+                videoSurface_.transform());
         }
 
         const auto now = std::chrono::steady_clock::now();

@@ -75,6 +75,7 @@ CPP_TESTS = [
     "player_subtitle_renderer_test.cpp",
     "player_trickplay_renderer_test.cpp",
     "player_tracks_test.cpp",
+    "player_video_renderer_test.cpp",
     "profiles_renderer_test.cpp",
     "queue_overlay_renderer_test.cpp",
     "queue_overlay_screen_test.cpp",
