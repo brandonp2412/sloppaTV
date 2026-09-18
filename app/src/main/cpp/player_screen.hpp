@@ -21,6 +21,15 @@ enum class PlayerScreenInput {
     FastForward,
 };
 
+enum class PlayerControl {
+    PreviousEpisode,
+    PlayPause,
+    NextEpisode,
+    AudioTrack,
+    SubtitleTrack,
+    Count,
+};
+
 enum class PlayerScreenCommandType {
     None,
     StopPlayback,
@@ -44,11 +53,11 @@ public:
     using Clock = std::chrono::steady_clock;
     using TimePoint = Clock::time_point;
 
-    static constexpr std::size_t controlCount() { return 5; }
+    static constexpr std::size_t controlCount() { return static_cast<std::size_t>(PlayerControl::Count); }
 
     void resetSession() {
         controlsActive_ = false;
-        controlSelection_ = 1;
+        controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = {};
         overlayUntil_ = {};
         seekFeedbackSeconds_ = 0;
@@ -72,7 +81,7 @@ public:
 
     void beginPlayback(int positionMs, int durationMs) {
         controlsActive_ = false;
-        controlSelection_ = 1;
+        controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = {};
         positionMs_ = std::max(0, positionMs);
         durationMs_ = std::max(0, durationMs);
@@ -83,11 +92,15 @@ public:
 
     [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
 
-    [[nodiscard]] int controlSelection() const { return controlSelection_; }
+    [[nodiscard]] PlayerControl controlSelection() const { return controlSelection_; }
+
+    [[nodiscard]] bool controlSelected(std::size_t index) const {
+        return index == static_cast<std::size_t>(controlSelection_);
+    }
 
     void showControls(TimePoint now) {
         controlsActive_ = true;
-        controlSelection_ = 1;
+        controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = now + std::chrono::seconds(10);
         showOverlayFor(now, std::chrono::seconds(10));
     }
@@ -104,7 +117,9 @@ public:
     }
 
     void moveControl(int delta) {
-        controlSelection_ = std::clamp(controlSelection_ + delta, 0, static_cast<int>(controlCount()) - 1);
+        const int selection = std::clamp(static_cast<int>(controlSelection_) + delta, 0,
+                                         static_cast<int>(controlCount()) - 1);
+        controlSelection_ = static_cast<PlayerControl>(selection);
     }
 
     [[nodiscard]] bool overlayVisible(TimePoint now) const { return now < overlayUntil_; }
@@ -272,23 +287,24 @@ public:
 private:
     [[nodiscard]] PlayerScreenCommand selectedControlCommand() const {
         switch (controlSelection_) {
-        case 0:
+        case PlayerControl::PreviousEpisode:
             return {.type = PlayerScreenCommandType::PreviousEpisode};
-        case 1:
+        case PlayerControl::PlayPause:
             return {.type = PlayerScreenCommandType::TogglePause};
-        case 2:
+        case PlayerControl::NextEpisode:
             return {.type = PlayerScreenCommandType::NextEpisode};
-        case 3:
+        case PlayerControl::AudioTrack:
             return {.type = PlayerScreenCommandType::CycleAudioTrack};
-        case 4:
+        case PlayerControl::SubtitleTrack:
             return {.type = PlayerScreenCommandType::CycleSubtitleTrack};
-        default:
+        case PlayerControl::Count:
             return {};
         }
+        return {};
     }
 
     bool controlsActive_ = false;
-    int controlSelection_ = 1;
+    PlayerControl controlSelection_ = PlayerControl::PlayPause;
     TimePoint controlsUntil_{};
     TimePoint overlayUntil_{};
     int seekFeedbackSeconds_ = 0;

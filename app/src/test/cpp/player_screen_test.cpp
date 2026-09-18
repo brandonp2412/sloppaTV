@@ -10,7 +10,7 @@ int main() {
 
     assert(PlayerScreenState::controlCount() == 5);
     assert(!state.controlsActive(now));
-    assert(state.controlSelection() == 1);
+    assert(state.controlSelection() == PlayerControl::PlayPause);
     assert(!state.overlayVisible(now));
 
     state.showControls(now);
@@ -28,9 +28,9 @@ int main() {
     state.moveControl(1);
     state.moveControl(1);
     state.moveControl(1);
-    assert(state.controlSelection() == 4);
+    assert(state.controlSelection() == PlayerControl::SubtitleTrack);
     state.moveControl(-1);
-    assert(state.controlSelection() == 3);
+    assert(state.controlSelection() == PlayerControl::AudioTrack);
     assert(!state.shouldDismissOnBack(now + 20s));
     state.showOverlayFor(now + 20s, 5s);
     assert(state.shouldDismissOnBack(now + 21s));
@@ -44,7 +44,7 @@ int main() {
     assert(inputState.controlsActive(now));
     command = inputState.handleInput(PlayerScreenInput::Right, now + 1s);
     assert(command.type == PlayerScreenCommandType::None);
-    assert(inputState.controlSelection() == 2);
+    assert(inputState.controlSelection() == PlayerControl::NextEpisode);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
     assert(command.type == PlayerScreenCommandType::NextEpisode);
     inputState.moveControl(1);
@@ -148,7 +148,7 @@ int main() {
 
     state.resetSession();
     assert(!state.controlsActive(now));
-    assert(state.controlSelection() == 1);
+    assert(state.controlSelection() == PlayerControl::PlayPause);
     assert(state.positionMs() == 0);
     assert(state.durationMs() == 0);
     assert(state.pendingSeekTargetMs() == -1);

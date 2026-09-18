@@ -6375,7 +6375,7 @@ private:
                                             controlGap * static_cast<float>(controlWidths.size() - 1);
             float x = (Renderer::logicalWidth() - controlGroupWidth) * 0.5f;
             for (size_t i = 0; i < controlWidths.size(); ++i) {
-                const bool selected = static_cast<int>(i) == playerScreenState_.controlSelection();
+                const bool selected = playerScreenState_.controlSelected(i);
                 const auto bounds = drawButtonSurface(x, controlY, controlWidths[i], controlHeight, selected, i == 1);
                 const float iconCenterX = std::round(bounds[0] + bounds[2] * 0.5f);
                 const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
