@@ -208,7 +208,7 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
     jmethodID performRequest = activityClass
                                    ? env->GetMethodID(activityClass, "performHttpRequestBridge",
                                                       "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[B)Lapp/"
-                                                      "sloppatv/SloppaNativeActivity$HttpResult;")
+                                                      "sloppatv/HttpBridge$Result;")
                                    : nullptr;
     if (clearException(env, "HTTP bridge lookup", response.error) || !activityClass || !performRequest) {
         if (activityClass) env->DeleteLocalRef(activityClass);
