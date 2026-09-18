@@ -4,6 +4,7 @@
 #include <android/native_activity.h>
 #include <android_native_app_glue.h>
 
+#include "account_async_executor.hpp"
 #include "account_screen.hpp"
 #include "app_settings.hpp"
 #include "artwork_provider.hpp"
@@ -375,16 +376,6 @@ struct DeleteItemCompletion {
     ApiResult result;
 };
 
-struct DiscoveryCompletion {
-    uint64_t generation = 0;
-    std::vector<DiscoveredJellyfinServer> servers;
-};
-
-struct LoginCompletion {
-    uint64_t generation = 0;
-    ApiValueResult<JellyfinSession> result;
-};
-
 struct HomeCoreCompletion {
     uint64_t generation = 0;
     HomeSelectionSnapshot snapshot;
@@ -450,6 +441,7 @@ public:
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
+          accountAsync_(api_, tasks_, asyncCompletions_),
           quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_),
           browseAsync_(api_, tasks_, asyncCompletions_),
@@ -2887,12 +2879,7 @@ private:
         error_.clear();
         accountState_.setDiscoveryStatus("SEARCHING LOCAL NETWORK...");
         const uint64_t generation = requestEpochs_.auth.begin();
-        tasks_.submit([this, generation] {
-            asyncCompletions_.push(DiscoveryCompletion{
-                .generation = generation,
-                .servers = discoverJellyfinServers(1600),
-            });
-        });
+        accountAsync_.discover(generation, 1600);
     }
 
     void loginAsync() {
@@ -2902,14 +2889,7 @@ private:
         const auto fields = accountState_.fields();
         const std::string deviceId = deviceId_;
         const uint64_t generation = requestEpochs_.auth.begin();
-
-        tasks_.submit([this, fields, deviceId, generation] {
-            auto result = api_.login(fields[0], fields[1], fields[2], deviceId);
-            asyncCompletions_.push(LoginCompletion{
-                .generation = generation,
-                .result = std::move(result),
-            });
-        });
+        accountAsync_.login(fields, deviceId, generation);
     }
 
     void quickConnectAsync() {
@@ -6980,6 +6960,7 @@ private:
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
+    AccountAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> accountAsync_;
     QuickConnectExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> quickConnectAsync_;
     DetailsAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> detailsAsync_;
     BrowseAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> browseAsync_;
