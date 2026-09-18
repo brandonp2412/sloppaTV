@@ -14,6 +14,7 @@
 #include "browse_renderer.hpp"
 #include "browse_screen.hpp"
 #include "cast_renderer.hpp"
+#include "details_renderer.hpp"
 #include "details_screen.hpp"
 #include "details_async_executor.hpp"
 #include "deep_link.hpp"
@@ -6172,188 +6173,74 @@ private:
     }
 
     void renderDetails() {
-        const bool backdropVisible = drawBackdrop(detail_, 0.84f);
-        if (backdropVisible) {
-            renderer_.horizontalGradient(0.0f, 0.0f, 1350.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.92f},
-                                         Color{0.0f, 0.0f, 0.0f, 0.03f});
-            renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f, Color{0.0f, 0.0f, 0.0f, 0.08f},
-                                       Color{0.0f, 0.0f, 0.0f, 0.92f});
-        } else {
-            renderer_.rect(0, 0, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
-        }
-
-        if (settings_.showClock) {
-            drawRightAlignedSingleLine(1840.0f, 50.0f, 2.10f,
-                                       formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
-        }
-
-        if (playbackCoordinator_.continuation().stillWatchingPrompt()) {
-            constexpr float promptX = 820.0f;
-            constexpr float promptWidth = 800.0f;
-            renderer_.roundedRect(promptX, 54.0f, promptWidth, 54.0f, material_tv::cornerLarge, kPanelElevated);
-            renderer_.roundedOutline(promptX, 54.0f, promptWidth, 54.0f, material_tv::cornerLarge, 1.5f, kOutline);
-            drawCenteredSingleLineFit(promptX, 54.0f, promptWidth, 54.0f, 1.95f, "Still watching? Press OK to continue",
-                                      kText, 20.0f, 4.0f);
-        }
-
-        constexpr float contentX = 72.0f;
-        constexpr float contentWidth = 920.0f;
-        const bool episode = detail_.type == "Episode";
-        const std::string mainTitle = episode && !detail_.seriesName.empty() ? detail_.seriesName : detail_.name;
-        const bool hasLogo = drawLogo(detail_, contentX, 132.0f, 700.0f, 138.0f);
-        if (!hasLogo) {
-            renderer_.text(contentX, 142.0f, 6.0f,
-                           fitTextLines(mainTitle.empty() ? "Loading…" : mainTitle, 6.0f, contentWidth, 1), kText,
-                           contentWidth);
-        }
-
-        const std::string episodeNumber = episodeNumberLabel(detail_);
-        const std::string secondary =
-            episode ? (detail_.name.empty() || detail_.name == detail_.seriesName
-                           ? episodeNumber
-                           : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail_.name)
-                    : episodeLabel(detail_);
-        const float uiScale = uiTextScale(settings_.uiTextSize);
-        const float titleBottom = hasLogo ? 270.0f : 142.0f + 10.0f * 6.0f * uiScale;
-        const float secondaryY = std::max(286.0f, titleBottom + 12.0f);
-        if (!secondary.empty()) {
-            renderer_.text(contentX, secondaryY, 2.80f, fitTextLines(secondary, 2.80f, contentWidth, 1), kSecondaryText,
-                           contentWidth);
-        }
-
-        std::vector<std::string> metadata;
-        if (detail_.productionYear > 0) metadata.emplace_back(std::to_string(detail_.productionYear));
-        if (!detail_.officialRating.empty()) metadata.emplace_back(detail_.officialRating);
-        if (detail_.runtimeTicks > 0)
-            metadata.emplace_back(formatPlaybackTime(static_cast<int>(detail_.runtimeTicks / 10000)));
-        if (detail_.communityRating >= 0.0f) {
-            std::ostringstream rating;
-            rating << std::fixed << std::setprecision(1) << detail_.communityRating << "/10";
-            metadata.emplace_back(rating.str());
-        }
-        if (!detail_.genres.empty()) metadata.emplace_back(detail_.genres.front());
-        constexpr float metadataY = 380.0f;
-        float metadataX = contentX;
-        for (const auto& value : metadata) {
-            const float available = contentX + contentWidth - metadataX;
-            if (available < 72.0f) break;
-            const float width = drawChip(metadataX, metadataY, value, false, 1.38f, 42.0f, available);
-            metadataX += width + 10.0f;
-        }
-
-        constexpr float overviewY = 438.0f;
-        const int overviewLines = settings_.uiTextSize > 0 ? 2 : 3;
-        if (!detail_.overview.empty()) {
-            renderer_.text(contentX, overviewY, 2.35f,
-                           fitTextLines(detail_.overview, 2.35f, contentWidth, overviewLines), kSecondaryText,
-                           contentWidth);
-        }
-        constexpr float stateY = 600.0f;
-        float stateX = contentX;
-        if (detail_.favorite) stateX += drawChip(stateX, stateY, "Favorite", true, 1.42f, 42.0f, 180.0f) + 10.0f;
-        if (settings_.showWatchedIndicators && detail_.played) {
-            drawChip(stateX, stateY, "Watched", true, 1.42f, 42.0f, 180.0f);
-        }
-
         const auto actions = detailActions();
-        const bool overlayOpen = screen_ == Screen::ItemMenu;
-        constexpr float actionY = 658.0f;
-        constexpr float actionGap = 18.0f;
-        constexpr float actionRightInset = 72.0f;
-        auto desiredActionWidth = [&](const std::string& action) {
-            return std::round(
-                std::max(145.0f, renderer_.textWidth(material_tv::type::label, materialLabel(action)) + 56.0f));
-        };
-        float desiredActionWidths = 0.0f;
-        for (const auto& action : actions) desiredActionWidths += desiredActionWidth(action);
-        const float actionGaps = actions.empty() ? 0.0f : actionGap * static_cast<float>(actions.size() - 1);
-        const float availableActionWidths =
-            std::max(1.0f, Renderer::logicalWidth() - contentX - actionRightInset - actionGaps);
-        const float actionWidthScale = desiredActionWidths > availableActionWidths && desiredActionWidths > 0.0f
-                                           ? availableActionWidths / desiredActionWidths
-                                           : 1.0f;
-        float actionX = contentX;
-        for (size_t i = 0; i < actions.size(); ++i) {
-            const bool focused = !overlayOpen && !detailsState_.similarFocused() &&
-                                 !detailsState_.episodeContextFocused() &&
-                                 detailsState_.actionSelection() == static_cast<int>(i);
-            const float width = std::round(desiredActionWidth(actions[i]) * actionWidthScale);
-            const bool primaryAction = i == 0;
-            const auto bounds = drawButtonSurface(actionX, actionY, width, 64.0f, focused, primaryAction);
-            drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 1.80f, materialLabel(actions[i]),
-                                      primaryAction || focused ? kText : kSecondaryText, 18.0f, 6.0f);
-            actionX += width + actionGap;
-        }
-
-        if (detail_.positionTicks > 0 && detail_.runtimeTicks > 0) {
-            const double fraction = std::clamp(
-                static_cast<double>(detail_.positionTicks) / static_cast<double>(detail_.runtimeTicks), 0.0, 1.0);
-            renderer_.roundedRect(contentX, 744.0f, 560.0f, 4.0f, 2.0f, kTrack);
-            renderer_.roundedRect(contentX, 744.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, kFocus);
-        }
-
-        if (episode && detailsState_.hasEpisodeSeriesContext()) {
-            renderer_.text(72.0f, 752.0f, 2.30f, "Show & seasons",
-                           detailsState_.episodeContextFocused() ? kText : kSecondaryText, 520.0f);
-            const int count = detailsState_.episodeContextCount();
-            constexpr int visible = 5;
-            const int maxStart = std::max(0, count - visible);
-            const int start = std::clamp(detailsState_.episodeContextSelection() - 1, 0, maxStart);
-            constexpr float buttonWidth = 320.0f;
-            constexpr float buttonHeight = 72.0f;
-            constexpr float buttonGap = 26.0f;
-            constexpr float rowY = 825.0f;
-            for (int slot = 0; slot < visible; ++slot) {
-                const int index = start + slot;
-                if (index >= count) break;
-                const float x = 72.0f + static_cast<float>(slot) * (buttonWidth + buttonGap);
-                const bool focused = !overlayOpen && detailsState_.episodeContextFocused() &&
-                                     detailsState_.episodeContextSelection() == index;
-                const auto bounds = drawButtonSurface(x, rowY, buttonWidth, buttonHeight, focused, index == 0);
-                std::string label = "GO TO SHOW";
-                if (index > 0 && static_cast<size_t>(index - 1) < detailsState_.seasons().size()) {
-                    const auto& season = detailsState_.seasons()[static_cast<size_t>(index - 1)];
-                    label = season.name.empty() ? "SEASON " + std::to_string(index) : season.name;
-                }
-                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 1.75f, materialLabel(label),
-                                          index == 0 || focused ? kText : kSecondaryText, 18.0f, 5.0f);
-            }
-        } else {
-            const auto& similarItems = detailsState_.similar();
-            if (!similarItems.empty()) {
-                // Keep the largest UI-text mode clear of the focused card's 10 px halo.
-                // At y=760 the heading descenders can overlap the first card focus ring.
-                renderer_.text(72.0f, 752.0f, 2.30f, "More like this",
-                               detailsState_.similarFocused() ? kText : kSecondaryText, 440.0f);
-                constexpr int visible = 5;
-                const int maxStart = std::max(0, static_cast<int>(similarItems.size()) - visible);
-                const int start = std::clamp(detailsState_.similarSelection() - 1, 0, maxStart);
-                constexpr float cardWidth = 320.0f;
-                constexpr float cardHeight = 144.0f;
-                constexpr float cardGap = 26.0f;
-                for (int slot = 0; slot < visible; ++slot) {
-                    const int index = start + slot;
-                    if (index >= static_cast<int>(similarItems.size())) break;
-                    const auto& similar = similarItems[static_cast<size_t>(index)];
-                    const float x = 72.0f + static_cast<float>(slot) * (cardWidth + cardGap);
-                    const float y = 825.0f;
-                    const bool focused =
-                        !overlayOpen && detailsState_.similarFocused() && index == detailsState_.similarSelection();
-                    const auto bounds = focusedBounds(x, y, cardWidth, cardHeight, focused, materialCardFocusScale());
-                    const float cardRadius = material_tv::cornerExtraSmall * bounds[3] / cardHeight;
-                    if (!drawHomeArtwork(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius)) {
-                        drawArtworkPlaceholder(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
-                    }
-                    if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
-                    // Similar-card titles sit at the bottom edge of the 1080p canvas.
-                    // Two normal-size lines leave only a few pixels for descenders and
-                    // antialiasing, so keep every text-size mode to one stable line.
-                    renderer_.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f,
-                                   fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, 1),
-                                   focused ? kText : kSecondaryText, cardWidth - 10.0f);
-                }
-            }
-        }
+        renderDetailsScreen(
+            renderer_, detail_, detailsState_, actions,
+            DetailsRenderConfig{
+                .showClock = settings_.showClock,
+                .clock24Hour = settings_.clock24Hour,
+                .showWatchedIndicators = settings_.showWatchedIndicators,
+                .uiTextSize = settings_.uiTextSize,
+                .stillWatchingPrompt = playbackCoordinator_.continuation().stillWatchingPrompt(),
+                .overlayOpen = screen_ == Screen::ItemMenu,
+            },
+            DetailsRenderStyle<Color>{
+                .canvasWidth = Renderer::logicalWidth(),
+                .canvasHeight = Renderer::logicalHeight(),
+                .cornerLarge = material_tv::cornerLarge,
+                .cornerExtraSmall = material_tv::cornerExtraSmall,
+                .cardFocusScale = materialCardFocusScale(),
+                .labelScale = material_tv::type::label,
+                .background = kBackground,
+                .text = kText,
+                .muted = kMuted,
+                .secondaryText = kSecondaryText,
+                .focus = kFocus,
+                .panelElevated = kPanelElevated,
+                .outline = kOutline,
+                .track = kTrack,
+                .backdropHorizontalStart = Color{0.0f, 0.0f, 0.0f, 0.92f},
+                .backdropHorizontalEnd = Color{0.0f, 0.0f, 0.0f, 0.03f},
+                .backdropVerticalStart = Color{0.0f, 0.0f, 0.0f, 0.08f},
+                .backdropVerticalEnd = Color{0.0f, 0.0f, 0.0f, 0.92f},
+            },
+            [&](const JellyfinItem& item, float alpha) { return drawBackdrop(item, alpha); },
+            [&](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
+                drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
+            },
+            [](bool clock24Hour) { return formatLocalClock(std::time(nullptr), clock24Hour); },
+            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, float height) {
+                return drawLogo(item, x, y, width, height);
+            },
+            [&](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(value, scale, maxWidth, maxLines);
+            },
+            [](const JellyfinItem& item) { return episodeNumberLabel(item); },
+            [](const JellyfinItem& item) { return episodeLabel(item); },
+            [](int milliseconds) { return formatPlaybackTime(milliseconds); },
+            [&](float x, float y, std::string_view value, bool active, float scale, float height, float maxWidth) {
+                return drawChip(x, y, std::string(value), active, scale, height, maxWidth);
+            },
+            [](std::string_view value) { return materialLabel(value); },
+            [&](float x, float y, float width, float height, bool focused, bool primary) {
+                return drawButtonSurface(x, y, width, height, focused, primary);
+            },
+            [&](float x, float y, float width, float height, bool focused, float focusScale) {
+                return focusedBounds(x, y, width, height, focused, focusScale);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
+                return drawHomeArtwork(item, x, y, width, height, radius);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
+                drawArtworkPlaceholder(item, x, y, width, height, radius);
+            },
+            [&](float x, float y, float width, float height, Color color, float radius) {
+                drawFocusHalo(x, y, width, height, color, radius);
+            });
     }
 
     void renderStatus() {
