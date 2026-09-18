@@ -326,6 +326,19 @@ int main() {
     assert(subtitleCycle.plan.subtitleStreamIndex == 5);
     assert(subtitleCycle.plan.directPlayStream);
     assert(subtitleCycle.plan.directPlayStream->index == 5);
+
+    PlaybackCoordinator cycleOwnershipCoordinator;
+    cycleOwnershipCoordinator.activate(preferenceItem, coordinatedTarget, now);
+    cycleOwnershipCoordinator.selectAudioStream(3);
+    cycleOwnershipCoordinator.selectSubtitleStream(kSubtitleOffIndex);
+    const auto begunAudioCycle = cycleOwnershipCoordinator.beginAudioTrackCycle(cyclePolicy);
+    assert(begunAudioCycle.available);
+    assert(begunAudioCycle.audioStreamIndex == 2);
+    assert(cycleOwnershipCoordinator.languagePreferences().audio == std::optional<std::string>{"en"});
+    const auto begunSubtitleCycle = cycleOwnershipCoordinator.beginSubtitleTrackCycle({});
+    assert(begunSubtitleCycle.plan.subtitleStreamIndex == 4);
+    assert(cycleOwnershipCoordinator.languagePreferences().subtitle == std::optional<std::string>{"eng"});
+
     preferenceCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectStream;
     audioCyclePlan = preferenceCoordinator.audioTrackCyclePlan(cyclePolicy);
     assert(!audioCyclePlan.tryEmbeddedSwitch);

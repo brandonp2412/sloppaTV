@@ -2145,13 +2145,12 @@ private:
     }
 
     void cycleAudioTrack() {
-        const PlaybackAudioCyclePlan plan = playbackCoordinator_.audioTrackCyclePlan(playbackTrackSelectionPolicy());
+        const PlaybackAudioCyclePlan plan = playbackCoordinator_.beginAudioTrackCycle(playbackTrackSelectionPolicy());
         if (!plan.available) {
             error_ = "ONLY ONE AUDIO TRACK";
             return;
         }
 
-        playbackCoordinator_.rememberAudioLanguagePreference(plan.audioStreamIndex);
         refreshPlaybackTelemetry(true);
         const int switchPositionMs = playerScreenState_.positionMs();
         if (plan.tryEmbeddedSwitch && player_.selectEmbeddedAudioStream(plan.audioStreamIndex, plan.audioOrdinal)) {
@@ -2209,7 +2208,7 @@ private:
 
     void cycleSubtitleTrack() {
         const PlaybackSubtitleCycleContext cycle =
-            playbackCoordinator_.subtitleTrackCycleContext(settings_.subtitleLanguages);
+            playbackCoordinator_.beginSubtitleTrackCycle(settings_.subtitleLanguages);
         const PlaybackSubtitleCyclePlan& plan = cycle.plan;
         if (cycle.busy) {
             if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) error_ = "NO SUBTITLE TRACKS";
@@ -2224,7 +2223,6 @@ private:
             return;
         }
 
-        playbackCoordinator_.rememberSubtitleLanguagePreference(plan.subtitleStreamIndex);
         if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer && player_.disableSubtitles()) {
             playbackCoordinator_.disableSubtitleRendering();
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);

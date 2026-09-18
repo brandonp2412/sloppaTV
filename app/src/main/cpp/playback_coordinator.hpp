@@ -808,6 +808,12 @@ public:
                                            sessionState_.activeTarget().playMethod, policy);
     }
 
+    [[nodiscard]] PlaybackAudioCyclePlan beginAudioTrackCycle(const PlaybackTrackSelectionPolicy& policy) {
+        PlaybackAudioCyclePlan plan = audioTrackCyclePlan(policy);
+        if (plan.available) rememberAudioLanguagePreference(plan.audioStreamIndex);
+        return plan;
+    }
+
     [[nodiscard]] PlaybackSubtitleCycleContext
     subtitleTrackCycleContext(const std::vector<std::string>& allowedLanguages) const {
         return {
@@ -817,6 +823,16 @@ public:
             .audioStreamIndex = trackState_.selectedAudioServerIndex(),
             .busy = trackState_.subtitleBusy(),
         };
+    }
+
+    [[nodiscard]] PlaybackSubtitleCycleContext
+    beginSubtitleTrackCycle(const std::vector<std::string>& allowedLanguages) {
+        PlaybackSubtitleCycleContext cycle = subtitleTrackCycleContext(allowedLanguages);
+        if (!cycle.busy && cycle.plan.action != PlaybackSubtitleCycleAction::NoSubtitles &&
+            cycle.plan.action != PlaybackSubtitleCycleAction::NoAllowedTracks) {
+            rememberSubtitleLanguagePreference(cycle.plan.subtitleStreamIndex);
+        }
+        return cycle;
     }
 
     [[nodiscard]] std::optional<PlaybackSubtitleLoadContext>
