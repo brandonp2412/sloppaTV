@@ -139,6 +139,21 @@ int main() {
     screen.openSubtitleLanguagePicker();
     assert(screen.subtitleLanguagePicker());
     assert(screen.subtitleLanguageSelection() == 0);
+    auto languageRow = subtitleLanguageScreenRow(screen, settings, 0);
+    assert(languageRow);
+    assert(languageRow->index == 0);
+    assert(languageRow->label == "All languages");
+    assert(languageRow->focused);
+    assert(languageRow->selected);
+    settings.subtitleLanguages = {"eng"};
+    languageRow = subtitleLanguageScreenRow(screen, settings, 1);
+    assert(languageRow);
+    assert(languageRow->index == 1);
+    assert(!languageRow->focused);
+    assert(!languageRow->label.empty());
+    assert(languageRow->selected);
+    assert(!subtitleLanguageScreenRow(screen, settings, 8));
+
     command = screen.handleInput(SettingsScreenInput::Down);
     assert(command.type == SettingsScreenCommandType::None);
     assert(screen.subtitleLanguageSelection() == 1);

@@ -45,6 +45,13 @@ struct SettingsScreenRow {
     bool boolean = false;
 };
 
+struct SubtitleLanguageScreenRow {
+    int index = 0;
+    std::string_view label;
+    bool focused = false;
+    bool selected = false;
+};
+
 class SettingsScreenState {
 public:
     void reset() {
@@ -226,6 +233,32 @@ private:
     int subtitleLanguageSelection_ = 0;
     int subtitleLanguageFirstVisible_ = 0;
 };
+
+inline std::optional<SubtitleLanguageScreenRow> subtitleLanguageScreenRow(const SettingsScreenState& screen,
+                                                                          const AppSettings& settings, int slot,
+                                                                          int visibleRows = 8) {
+    constexpr int languageCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
+    if (visibleRows <= 0 || slot < 0 || slot >= visibleRows) return std::nullopt;
+
+    const int first =
+        std::clamp(screen.subtitleLanguageFirstVisible(), 0, std::max(0, languageCount - visibleRows));
+    const int languageIndex = first + slot;
+    if (languageIndex >= languageCount) return std::nullopt;
+
+    const bool selected =
+        languageIndex == 0
+            ? settings.subtitleLanguages.empty()
+            : std::find(settings.subtitleLanguages.begin(), settings.subtitleLanguages.end(),
+                        kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code) !=
+                  settings.subtitleLanguages.end();
+    return SubtitleLanguageScreenRow{
+        .index = languageIndex,
+        .label = languageIndex == 0 ? std::string_view("All languages")
+                                    : std::string_view(kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label),
+        .focused = languageIndex == screen.subtitleLanguageSelection(),
+        .selected = selected,
+    };
+}
 
 inline std::optional<SettingsScreenRow> settingsScreenRow(const SettingsScreenState& screen,
                                                           const AppSettings& settings, int maxAudioOutputChannels,

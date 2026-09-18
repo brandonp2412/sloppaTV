@@ -7288,29 +7288,18 @@ private:
                            fitTextLines("Only selected languages will appear during playback", 1.50f, 920.0f, 1),
                            kMuted, 920.0f);
             constexpr int visibleLanguageRows = 8;
-            constexpr int languageCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
-            const int firstLanguage = std::clamp(settingsScreen_.subtitleLanguageFirstVisible(), 0,
-                                                 std::max(0, languageCount - visibleLanguageRows));
             for (int slot = 0; slot < visibleLanguageRows; ++slot) {
-                const int languageIndex = firstLanguage + slot;
-                if (languageIndex >= languageCount) break;
+                const auto row = subtitleLanguageScreenRow(settingsScreen_, settings_, slot, visibleLanguageRows);
+                if (!row) break;
                 const float y = 258.0f + static_cast<float>(slot) * 82.0f;
-                const bool focused = languageIndex == settingsScreen_.subtitleLanguageSelection();
-                const bool selected =
-                    languageIndex == 0
-                        ? settings_.subtitleLanguages.empty()
-                        : std::find(settings_.subtitleLanguages.begin(), settings_.subtitleLanguages.end(),
-                                    kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code) !=
-                              settings_.subtitleLanguages.end();
+                const bool focused = row->focused;
                 const auto languageBounds = drawListItemSurface(478.0f, y - 8.0f, 964.0f, 68.0f, focused,
                                                                 material_tv::cornerSmall, materialListItemFocusScale());
-                const std::string label = languageIndex == 0
-                                              ? "All languages"
-                                              : kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label;
-                renderer_.textVerticallyCentered(languageBounds[0] + 32.0f, languageBounds[1], languageBounds[3], 2.05f,
-                                                 fitTextLines(materialLabel(label), 2.05f, 620.0f, 1),
-                                                 focused ? kText : kSecondaryText, 620.0f);
-                drawChip(1280.0f, y + 5.0f, selected ? "ON" : "OFF", selected, 1.45f, 42.0f, 116.0f);
+                renderer_.textVerticallyCentered(
+                    languageBounds[0] + 32.0f, languageBounds[1], languageBounds[3], 2.05f,
+                    fitTextLines(materialLabel(std::string(row->label)), 2.05f, 620.0f, 1),
+                    focused ? kText : kSecondaryText, 620.0f);
+                drawChip(1280.0f, y + 5.0f, row->selected ? "ON" : "OFF", row->selected, 1.45f, 42.0f, 116.0f);
             }
             drawCenteredSingleLineFit(540.0f, 918.0f, 840.0f, 52.0f, 1.62f,
                                       "OK toggles selection   |   Back returns to settings", kMuted, 12.0f, 4.0f);
