@@ -46,6 +46,18 @@ public:
         async_.requestMedia(std::move(plan.endpoint), std::move(plan.item), std::move(plan.target));
     }
 
+    [[nodiscard]] SeerrDomainState::RequestMutationCompletion complete(
+        const SeerrEndpoint& requestedEndpoint, const SeerrEndpoint& currentEndpoint, SeerrMediaItem requestedItem,
+        int requestId, bool ok, SeerrRequestState::TimePoint now) {
+        const std::string itemId = requestedItem.id;
+        auto completion =
+            domain_.completeRequest(requestedEndpoint, currentEndpoint, std::move(requestedItem), requestId, ok, now);
+        if (completion.outcome == SeerrDomainState::MutationOutcome::Applied) {
+            domain_.markSearchRequested(itemId, completion.status, requestId);
+        }
+        return completion;
+    }
+
 private:
     SeerrDomainState& domain_;
     AsyncExecutor& async_;

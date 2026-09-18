@@ -118,5 +118,34 @@ int main() {
     assert(plan.action == SeerrDomainState::RequestAction::Submit);
     assert(!plan.target);
 
+    const auto now = SeerrRequestState::Clock::now();
+    assert(domain.beginImmediateSearch("arrival", true).started);
+    assert(domain.finishSearch("arrival", {media()}));
+
+    auto completion =
+        coordinator.complete(configuredEndpoint(), configuredEndpoint(), media(), 77, true, now);
+    assert(completion.outcome == SeerrDomainState::MutationOutcome::Applied);
+    assert(completion.status == "Queued for download");
+    const auto* requestedSearchResult = domain.findSearchResult("seerr:movie:10");
+    assert(requestedSearchResult != nullptr);
+    assert(requestedSearchResult->requested);
+    assert(requestedSearchResult->requestId == 77);
+    assert(requestedSearchResult->status == "Queued for download");
+    assert(domain.pendingRequests().size() == 1);
+    assert(domain.pendingRequests().front().requestId == 77);
+
+    auto staleEndpoint = configuredEndpoint();
+    staleEndpoint.server = "https://other.example.nz";
+    completion = coordinator.complete(configuredEndpoint(), staleEndpoint, media("seerr:movie:12"), 88, true, now);
+    assert(completion.outcome == SeerrDomainState::MutationOutcome::StaleEndpoint);
+    assert(domain.findSearchResult("seerr:movie:12") == nullptr);
+    assert(domain.pendingRequests().size() == 1);
+
+    completion =
+        coordinator.complete(configuredEndpoint(), configuredEndpoint(), media("seerr:movie:13"), 99, false, now);
+    assert(completion.outcome == SeerrDomainState::MutationOutcome::Failed);
+    assert(domain.findSearchResult("seerr:movie:13") == nullptr);
+    assert(domain.pendingRequests().size() == 1);
+
     return 0;
 }

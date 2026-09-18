@@ -3656,15 +3656,14 @@ private:
     void applyAsyncCompletion(const SeerrRequestCompletion& completion) {
         mutationLoading_ = false;
         const auto domainCompletion =
-            seerrDomain_.completeRequest(completion.endpoint, seerrEndpoint(), completion.requestedItem,
-                                         completion.result.value, completion.result.ok, std::chrono::steady_clock::now());
+            seerrRequest_.complete(completion.endpoint, seerrEndpoint(), completion.requestedItem, completion.result.value,
+                                   completion.result.ok, std::chrono::steady_clock::now());
         if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
         if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::Failed) {
             error_ = "SEERR REQUEST: " + completion.result.error;
             return;
         }
 
-        seerrDomain_.markSearchRequested(completion.requestedItem.id, domainCompletion.status, completion.result.value);
         searchState_.refreshSeerrResults();
         syncSeerrHomeRowLocked();
         showNotice("REQUEST SENT TO SEERR", 4s);
