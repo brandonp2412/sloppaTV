@@ -17,6 +17,7 @@
 #include "details_async_executor.hpp"
 #include "deep_link.hpp"
 #include "diagnostics_screen.hpp"
+#include "diagnostics_renderer.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
 #include "external_playback_executor.hpp"
@@ -6113,7 +6114,6 @@ private:
     }
 
     void renderDiagnostics() {
-        renderHeader("Diagnostics");
         const auto& codecs = api_.deviceCodecSupport();
         const auto videoCodecs = codecs.jellyfinVideoCodecs();
         const auto audioCodecs = codecs.jellyfinAudioCodecs(codecs.maxAudioOutputChannels);
@@ -6132,47 +6132,44 @@ private:
         architecture = "X86_64";
 #endif
 
-        const auto rows = diagnosticsRows({
-            .appVersion = SLOPPATV_VERSION_NAME,
-            .architecture = std::move(architecture),
-            .sessionServer = session_.server,
-            .serverName = serverInfo_.name,
-            .serverVersion = serverInfo_.version,
-            .serverLoading = loading_,
-            .videoCodecs = videoCodecs,
-            .audioCodecs = audioCodecs,
-            .maxAudioOutputChannels = codecs.maxAudioOutputChannels,
-            .maxHevcWidth = codecs.maxHevcWidth,
-            .maxHevcHeight = codecs.maxHevcHeight,
-            .hdrFormats = std::move(hdr),
-            .lastPlaybackSummary = playbackCoordinator_.session().lastPlaybackSummary(),
-        });
-        auto renderPanel = [&](float x, float y, float width, float height, const std::string& title,
-                               std::initializer_list<int> indices) {
-            renderer_.roundedRect(x, y, width, height, material_tv::cornerLarge, kPanelAlt);
-            renderer_.roundedOutline(x, y, width, height, material_tv::cornerLarge, 1.0f, kOutline);
-            const float titleWidth = drawChip(x + 26.0f, y + 22.0f, title, true, 1.45f, 42.0f, width - 52.0f);
-            (void)titleWidth;
-            float rowY = y + 86.0f;
-            size_t row = 0;
-            for (const int index : indices) {
-                if (index < 0 || index >= static_cast<int>(rows.size())) continue;
-                if (row > 0) renderer_.rect(x + 28.0f, rowY - 13.0f, width - 56.0f, 1.0f, kDivider);
-                drawLeftAlignedSingleLineFit(x + 28.0f, rowY - 5.0f, 260.0f, 46.0f, 1.45f,
-                                             rows[static_cast<size_t>(index)].first, kTertiary);
-                drawLeftAlignedSingleLineFit(x + 300.0f, rowY - 5.0f, width - 330.0f, 46.0f, 1.75f,
-                                             rows[static_cast<size_t>(index)].second, kText);
-                rowY += 58.0f;
-                ++row;
-            }
-        };
-
-        renderPanel(85.0f, 175.0f, 840.0f, 315.0f, "App & server", {0, 1, 2, 3});
-        renderPanel(995.0f, 175.0f, 840.0f, 315.0f, "Video & display", {4, 7, 8});
-        renderPanel(85.0f, 515.0f, 840.0f, 250.0f, "Audio", {5, 6});
-        renderPanel(995.0f, 515.0f, 840.0f, 250.0f, "Last playback", {9});
-        drawCenteredSingleLineFit(560.0f, 944.0f, 800.0f, 52.0f, 1.75f, "Back or OK returns to settings", kMuted, 12.0f,
-                                  4.0f);
+        renderDiagnosticsScreen(
+            renderer_,
+            DiagnosticsScreenData{
+                .appVersion = SLOPPATV_VERSION_NAME,
+                .architecture = std::move(architecture),
+                .sessionServer = session_.server,
+                .serverName = serverInfo_.name,
+                .serverVersion = serverInfo_.version,
+                .serverLoading = loading_,
+                .videoCodecs = videoCodecs,
+                .audioCodecs = audioCodecs,
+                .maxAudioOutputChannels = codecs.maxAudioOutputChannels,
+                .maxHevcWidth = codecs.maxHevcWidth,
+                .maxHevcHeight = codecs.maxHevcHeight,
+                .hdrFormats = std::move(hdr),
+                .lastPlaybackSummary = playbackCoordinator_.session().lastPlaybackSummary(),
+            },
+            DiagnosticsRenderStyle<Color>{
+                .cornerLarge = material_tv::cornerLarge,
+                .panelAlt = kPanelAlt,
+                .outline = kOutline,
+                .divider = kDivider,
+                .tertiary = kTertiary,
+                .text = kText,
+                .muted = kMuted,
+            },
+            [this](std::string_view title) { renderHeader(std::string(title)); },
+            [this](float x, float y, std::string_view label, bool selected, float scale, float height, float maxWidth) {
+                return drawChip(x, y, std::string(label), selected, scale, height, maxWidth);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
+                drawLeftAlignedSingleLineFit(x, y, width, height, scale, std::string(value), color);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, std::string(value), color, horizontalPadding,
+                                          verticalPadding);
+            });
     }
 
     void renderItemMenu() {
