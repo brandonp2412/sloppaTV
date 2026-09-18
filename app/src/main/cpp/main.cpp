@@ -4111,8 +4111,7 @@ private:
 
         const auto now = std::chrono::steady_clock::now();
         const PlaybackTickPlan plan = playbackCoordinator_.consumeTickPlan(
-            playbackEnded, status == PlayerStatus::Playing, playerScreenState_.positionMs(),
-            playbackCoordinator_.session().activeItem().type, now);
+            playbackEnded, status == PlayerStatus::Playing, playerScreenState_.positionMs(), now);
         if (plan.refreshTelemetry) {
             refreshPlaybackTelemetry();
             mediaSession_.updateState(status == PlayerStatus::Playing ? MediaSessionState::Playing
@@ -4121,11 +4120,9 @@ private:
         }
         if (plan.requestMediaSegments) requestMediaSegmentsAsync();
         if (plan.reportPlaybackStart) {
-            const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
-            const auto session = session_;
-            const auto itemCopy = playbackCoordinator_.session().activeItem();
-            const auto targetCopy = playbackCoordinator_.session().activeTarget();
-            playbackTelemetryAsync_.reportStart(session, itemCopy, targetCopy, ticks);
+            const PlaybackStartContext start =
+                playbackCoordinator_.playbackStartContext(playerScreenState_.positionMs());
+            playbackTelemetryAsync_.reportStart(session_, start.item, start.target, start.ticks);
         }
         if (plan.reportProgress) reportProgressAsync(false);
         if (plan.requestNextEpisode) requestNextEpisodeAsync();
@@ -5019,14 +5016,12 @@ private:
 
     void reportProgressAsync(bool immediate) {
         const PlayerStatus status = player_.status();
-        const PlaybackProgressPlan plan = playbackCoordinator_.progressPlan(
+        const PlaybackProgressContext progress = playbackCoordinator_.progressContext(
             screen_ == Screen::Player, session_.valid(), immediate, status == PlayerStatus::Preparing,
             status == PlayerStatus::Paused, playerScreenState_.positionMs());
-        if (!plan.report) return;
-        const auto session = session_;
-        const auto item = playbackCoordinator_.session().activeItem();
-        const auto target = playbackCoordinator_.session().activeTarget();
-        playbackTelemetryAsync_.reportProgress(session, item, target, plan.ticks, plan.paused);
+        if (!progress.plan.report) return;
+        playbackTelemetryAsync_.reportProgress(session_, progress.item, progress.target, progress.plan.ticks,
+                                               progress.plan.paused);
     }
 
     void stopPlayback(bool completed = false) {

@@ -24,7 +24,7 @@ int main() {
     assert(coordinator.session().activeItem().id == coordinatedItem.id);
     assert(coordinator.session().activeTarget().url == coordinatedTarget.url);
     assert(coordinator.session().lastPlaybackSummary() == "DirectStream");
-    assert(coordinator.tickPlan(false, true, 35000, "Episode", now).reportPlaybackStart);
+    assert(coordinator.tickPlan(false, true, 35000, now).reportPlaybackStart);
     assert(coordinator.telemetry().markPlaybackStartReported());
     const auto coordinatedRelease = coordinator.releaseContext(true, false, true, 12345);
     assert(coordinatedRelease.item.id == coordinatedItem.id);
@@ -417,6 +417,19 @@ int main() {
     JellyfinItem telemetryItem = coordinatedItem;
     telemetryItem.runtimeTicks = 600'000'000;
     telemetryCoordinator.activate(telemetryItem, coordinatedTarget, now - 11s);
+    assert(telemetryCoordinator.telemetry().markPlaybackStartReported());
+    const auto progressContext = telemetryCoordinator.progressContext(true, true, false, false, true, 12345);
+    assert(progressContext.plan.report);
+    assert(progressContext.plan.paused);
+    assert(progressContext.plan.ticks == playbackTicksFromPositionMs(12345));
+    assert(progressContext.item.id == telemetryItem.id);
+    assert(progressContext.target.url == coordinatedTarget.url);
+    const auto startContext = telemetryCoordinator.playbackStartContext(12345);
+    assert(startContext.ticks == playbackTicksFromPositionMs(12345));
+    assert(startContext.item.id == telemetryItem.id);
+    assert(startContext.target.url == coordinatedTarget.url);
+    const auto suppressedProgress = telemetryCoordinator.progressContext(false, true, false, false, false, 12345);
+    assert(!suppressedProgress.plan.report);
     auto telemetryRead = telemetryCoordinator.consumeTelemetryRead(now, false, 0);
     assert(telemetryRead.read);
     assert(!telemetryRead.probeDuration);
@@ -439,11 +452,11 @@ int main() {
 
     PlaybackCoordinator tickCoordinator;
     tickCoordinator.activate(coordinatedItem, coordinatedTarget, now - 11s);
-    auto consumedTick = tickCoordinator.consumeTickPlan(false, true, 35000, "Episode", now);
+    auto consumedTick = tickCoordinator.consumeTickPlan(false, true, 35000, now);
     assert(consumedTick.reportPlaybackStart);
     assert(consumedTick.reportProgress);
     assert(tickCoordinator.telemetry().playbackStartReported());
-    consumedTick = tickCoordinator.consumeTickPlan(false, true, 36000, "Episode", now);
+    consumedTick = tickCoordinator.consumeTickPlan(false, true, 36000, now);
     assert(!consumedTick.reportPlaybackStart);
     assert(!consumedTick.reportProgress);
 

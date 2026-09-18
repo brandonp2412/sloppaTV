@@ -59,6 +59,18 @@ struct PlaybackProgressPlan {
     bool paused = false;
 };
 
+struct PlaybackProgressContext {
+    PlaybackProgressPlan plan;
+    JellyfinItem item;
+    PlaybackTarget target;
+};
+
+struct PlaybackStartContext {
+    int64_t ticks = 0;
+    JellyfinItem item;
+    PlaybackTarget target;
+};
+
 struct PlaybackTelemetryReadPlan {
     bool read = false;
     bool probeDuration = false;
@@ -551,19 +563,27 @@ public:
     }
 
     [[nodiscard]] PlaybackTickPlan tickPlan(bool playbackEnded, bool playbackPlaying, int positionMs,
-                                            std::string_view itemType, TimePoint now) const {
-        return planPlaybackTick(playbackEnded, playbackPlaying, positionMs, itemType, sessionState_, telemetryState_,
-                                continuationState_, now);
+                                            TimePoint now) const {
+        return planPlaybackTick(playbackEnded, playbackPlaying, positionMs, sessionState_.activeItem().type,
+                                sessionState_, telemetryState_, continuationState_, now);
     }
 
     [[nodiscard]] PlaybackTickPlan consumeTickPlan(bool playbackEnded, bool playbackPlaying, int positionMs,
-                                                   std::string_view itemType, TimePoint now) {
-        PlaybackTickPlan plan = tickPlan(playbackEnded, playbackPlaying, positionMs, itemType, now);
+                                                   TimePoint now) {
+        PlaybackTickPlan plan = tickPlan(playbackEnded, playbackPlaying, positionMs, now);
         if (plan.reportPlaybackStart && !telemetryState_.markPlaybackStartReported()) {
             plan.reportPlaybackStart = false;
         }
         if (plan.reportProgress) telemetryState_.markProgressReport(now);
         return plan;
+    }
+
+    [[nodiscard]] PlaybackStartContext playbackStartContext(int positionMs) const {
+        return PlaybackStartContext{
+            .ticks = playbackTicksFromPositionMs(positionMs),
+            .item = sessionState_.activeItem(),
+            .target = sessionState_.activeTarget(),
+        };
     }
 
     [[nodiscard]] PlaybackTelemetryReadPlan consumeTelemetryRead(TimePoint now, bool force, int currentDurationMs) {
@@ -591,6 +611,16 @@ public:
         return planPlaybackProgress(playerScreenActive, jellyfinSessionValid, telemetryState_.playbackStartReported(),
                                     !sessionState_.activeTarget().url.empty(), immediate, preparing, paused,
                                     positionMs);
+    }
+
+    [[nodiscard]] PlaybackProgressContext progressContext(bool playerScreenActive, bool jellyfinSessionValid,
+                                                         bool immediate, bool preparing, bool paused,
+                                                         int positionMs) const {
+        return PlaybackProgressContext{
+            .plan = progressPlan(playerScreenActive, jellyfinSessionValid, immediate, preparing, paused, positionMs),
+            .item = sessionState_.activeItem(),
+            .target = sessionState_.activeTarget(),
+        };
     }
 
     void beginPreparing(TimePoint now) { sessionState_.beginPreparing(now); }
