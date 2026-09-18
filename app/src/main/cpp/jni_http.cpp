@@ -8,8 +8,6 @@
 
 #include <array>
 #include <chrono>
-#include <sstream>
-#include <thread>
 
 namespace {
 constexpr const char* kTag = "sloppaTV/http";
@@ -74,18 +72,8 @@ JniHttpClient::~JniHttpClient() {
     activity_ = nullptr;
 }
 
-std::string JniHttpClient::getCacheKey(const std::string& url,
-                                       const std::map<std::string, std::string>& headers) const {
-    std::ostringstream key;
-    key << url;
-    for (const auto& [name, value] : headers) key << '\n' << name << ':' << value;
-    return key.str();
-}
-
 void JniHttpClient::invalidateGetCache() const {
-    std::scoped_lock lock(cacheMutex_);
-    getCache_.clear();
-    ++cacheGeneration_;
+    getCoordinator_.invalidate();
 }
 
 void JniHttpClient::cancelPending() const {
@@ -102,62 +90,8 @@ HttpResponse JniHttpClient::request(const std::string& method, const std::string
         return response;
     }
 
-    const bool cacheable = shouldCacheApiGet(url);
-    const std::string key = getCacheKey(url, headers);
-    std::shared_ptr<InFlightRequest> inFlight;
-    bool owner = false;
-    uint64_t requestGeneration = 0;
-    {
-        std::unique_lock lock(cacheMutex_);
-        requestGeneration = cacheGeneration_;
-        if (cacheable) {
-            const auto now = std::chrono::steady_clock::now();
-            std::erase_if(getCache_, [&](const auto& entry) { return entry.second.expiresAt <= now; });
-            const auto cached = getCache_.find(key);
-            if (cached != getCache_.end()) return cached->second.response;
-        }
-        const auto pending = inFlightGets_.find(key);
-        if (pending != inFlightGets_.end() &&
-            shouldJoinInFlightApiGet(requestGeneration, pending->second->generation)) {
-            inFlight = pending->second;
-        } else {
-            inFlight = std::make_shared<InFlightRequest>();
-            inFlight->generation = requestGeneration;
-            inFlightGets_[key] = inFlight;
-            owner = true;
-        }
-    }
-
-    if (!owner) {
-        std::unique_lock lock(cacheMutex_);
-        inFlight->completed.wait(lock, [&] { return inFlight->done; });
-        return inFlight->response;
-    }
-
-    HttpResponse response = requestWithRetry(method, url, headers, body);
-    {
-        std::scoped_lock lock(cacheMutex_);
-        if (cacheable && response.ok() && requestGeneration == cacheGeneration_) {
-            const auto now = std::chrono::steady_clock::now();
-            std::erase_if(getCache_, [&](const auto& entry) { return entry.second.expiresAt <= now; });
-            if (getCache_.size() >= kMaxApiGetCacheEntries) {
-                const auto oldest =
-                    std::min_element(getCache_.begin(), getCache_.end(), [](const auto& left, const auto& right) {
-                        return left.second.expiresAt < right.second.expiresAt;
-                    });
-                if (oldest != getCache_.end()) getCache_.erase(oldest);
-            }
-            getCache_[key] = CacheEntry{response, now + std::chrono::seconds(5)};
-        }
-        inFlight->response = response;
-        inFlight->done = true;
-        const auto pending = inFlightGets_.find(key);
-        if (pending != inFlightGets_.end() && pending->second == inFlight) {
-            inFlightGets_.erase(pending);
-        }
-    }
-    inFlight->completed.notify_all();
-    return response;
+    return getCoordinator_.request(httpGetCacheKey(url, headers), shouldCacheApiGet(url),
+                                   [&] { return requestWithRetry(method, url, headers, body); });
 }
 
 HttpResponse JniHttpClient::requestWithRetry(const std::string& method, const std::string& url,
