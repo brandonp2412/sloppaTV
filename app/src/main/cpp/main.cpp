@@ -47,6 +47,7 @@
 #include "playback_transition.hpp"
 #include "player_screen.hpp"
 #include "player_tracks.hpp"
+#include "profiles_renderer.hpp"
 #include "queue_overlay_screen.hpp"
 #include "quick_connect_executor.hpp"
 #include "request_epoch.hpp"
@@ -5018,54 +5019,34 @@ private:
     }
 
     void renderProfiles() {
-        renderHeader("Users & servers");
-        drawLeftAlignedSingleLineFit(105.0f, 176.0f, 640.0f, 50.0f, 2.15f, "Choose who is watching", kMuted);
-        const int totalRows = static_cast<int>(sessionRegistry_.size()) + 1;
-        constexpr int visibleRows = 5;
-        const int maxFirst = std::max(0, totalRows - visibleRows);
-        const int first = std::clamp(accountState_.profileSelection() - visibleRows + 1, 0, maxFirst);
-        for (int slot = 0; slot < visibleRows; ++slot) {
-            const int index = first + slot;
-            if (index >= totalRows) break;
-            const float y = 245.0f + static_cast<float>(slot) * 138.0f;
-            const bool focused = index == accountState_.profileSelection();
-            if (index == static_cast<int>(sessionRegistry_.size())) {
-                const auto bounds = drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false);
-                drawCenteredSingleLineFit(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", kFocus, 8.0f,
-                                          8.0f);
-                renderer_.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f, "Add another account",
-                                                 kText, bounds[2] - 160.0f);
-                continue;
-            }
-            // Focus belongs to the action, not simultaneously to its parent row.
-            renderer_.roundedRect(250.0f, y, 1420.0f, 108.0f, material_tv::cornerMedium,
-                                  focused ? kPanelElevated : kPanelAlt);
-            const auto* savedSession = sessionRegistry_.at(static_cast<size_t>(index));
-            if (!savedSession) continue;
-            const auto& saved = *savedSession;
-            if (!drawProfileArtwork(saved, 280.0f, y + 12.0f, 84.0f)) {
-                renderer_.roundedRect(280.0f, y + 12.0f, 84.0f, 84.0f, material_tv::cornerMedium, kPanelAlt);
-                std::string initial =
-                    saved.username.empty()
-                        ? "?"
-                        : std::string(
-                              1, static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
-                drawCenteredSingleLineFit(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, kText, 8.0f, 8.0f);
-            }
-            const std::string profileName = saved.username.empty() ? "User" : saved.username;
-            drawLeftAlignedSingleLineFit(395.0f, y + 6.0f, 650.0f, 54.0f, 2.35f, profileName, kText);
-            drawLeftAlignedSingleLineFit(395.0f, y + 64.0f, 650.0f, 34.0f, 1.35f, saved.server, kMuted);
-            const bool useFocused = focused && accountState_.profileAction() == 0;
-            const bool forgetFocused = focused && accountState_.profileAction() == 1;
-            const auto useBounds = drawButtonSurface(1110.0f, y + 18.0f, 210.0f, 72.0f, useFocused, true);
-            drawCenteredSingleLineFit(useBounds[0], useBounds[1], useBounds[2], useBounds[3], 1.85f, "Use", kText,
-                                      16.0f, 6.0f);
-            const auto forgetBounds = drawButtonSurface(1340.0f, y + 18.0f, 270.0f, 72.0f, forgetFocused, false, true);
-            drawCenteredSingleLineFit(forgetBounds[0], forgetBounds[1], forgetBounds[2], forgetBounds[3], 1.75f,
-                                      "Forget", forgetFocused ? kText : kMuted, 16.0f, 6.0f);
-        }
-        drawCenteredSingleLineFit(270.0f, 950.0f, 1380.0f, 58.0f, 1.72f,
-                                  "Up / Down chooses account   |   Left / Right chooses action", kMuted, 18.0f, 5.0f);
+        renderProfilesScreen(
+            renderer_, static_cast<int>(sessionRegistry_.size()), accountState_.profileSelection(),
+            accountState_.profileAction(),
+            ProfilesRenderStyle<Color>{
+                .cornerMedium = material_tv::cornerMedium,
+                .text = kText,
+                .muted = kMuted,
+                .focus = kFocus,
+                .panelElevated = kPanelElevated,
+                .panelAlt = kPanelAlt,
+            },
+            [this](std::string_view title) { renderHeader(std::string(title)); },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
+                drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
+            },
+            [this](float x, float y, float width, float height, bool focused, bool primary) {
+                return drawFocusedSurface(x, y, width, height, focused, primary);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
+                                          verticalPadding);
+            },
+            [this](int index) { return sessionRegistry_.at(static_cast<size_t>(index)); },
+            [this](const auto& saved, float x, float y, float size) { return drawProfileArtwork(saved, x, y, size); },
+            [this](float x, float y, float width, float height, bool focused, bool primary, bool destructive) {
+                return drawButtonSurface(x, y, width, height, focused, primary, destructive);
+            });
     }
 
     void renderKeyboard(float top) {
