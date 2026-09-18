@@ -306,12 +306,13 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("GET /Shows/series-open-classics/Episodes", fixture_assertions)
         self.assertIn("POST /Items/movie-big-buck-bunny/PlaybackInfo", fixture_assertions)
 
-    def test_main_branch_pipeline_commits_generated_store_screenshots(self) -> None:
+    def test_main_branch_pipeline_publishes_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
         self.assertIn("publish-play-store:", workflow)
         self.assertIn("needs: screenshots", workflow)
         self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
-        self.assertIn("git commit -m \"Update Android TV screenshots [skip ci]\"", workflow)
+        self.assertIn("ruby-version: \"3.4\"", workflow)
+        self.assertIn("bundle exec fastlane android production_artifact", workflow)
         self.assertIn("target: android-tv", workflow)
         script = (ROOT / "tools" / "ci_screenshots.sh").read_text(encoding="utf-8")
         self.assertIn("screenshot_fixture_server.py", script)
