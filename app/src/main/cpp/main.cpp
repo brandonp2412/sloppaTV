@@ -30,6 +30,7 @@
 #include "playback_continuation_executor.hpp"
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
+#include "playback_resolution_executor.hpp"
 #include "playback_resolver.hpp"
 #include "playback_session.hpp"
 #include "playback_telemetry.hpp"
@@ -542,28 +543,7 @@ struct PlaybackAdjacentCompletion {
     std::optional<JellyfinItem> item;
 };
 
-struct QueuedPlaybackCompletion {
-    uint64_t generation = 0;
-    Screen originScreen = Screen::Home;
-    int index = -1;
-    int previousQueueIndex = -1;
-    bool replacingPlayer = false;
-    JellyfinItem item;
-    ApiValueResult<PlaybackTarget> result;
-};
-
-struct PlayerItemPlaybackCompletion {
-    uint64_t generation = 0;
-    JellyfinItem item;
-    ApiValueResult<PlaybackTarget> result;
-};
-
-struct AutoplayPlaybackCompletion {
-    uint64_t generation = 0;
-    int queuedNextIndex = -1;
-    JellyfinItem item;
-    ApiValueResult<PlaybackTarget> result;
-};
+using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
 
 struct StreamRestartCompletion {
     uint64_t generation = 0;
@@ -638,6 +618,7 @@ public:
               }),
           playbackTelemetryAsync_(api_, tasks_, asyncCompletions_),
           playbackContinuationAsync_(api_, tasks_, asyncCompletions_),
+          playbackResolutionAsync_(api_, tasks_, asyncCompletions_, requestEpochs_.playback),
           seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
@@ -3735,20 +3716,8 @@ private:
             .trackPolicy = playbackTrackSelectionPolicy(),
         };
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, queued = std::move(queued), index, previousQueueIndex, originScreen,
-                       replacingPlayer, resolutionOptions = std::move(resolutionOptions), generation]() mutable {
-            auto resolved = resolvePreferredPlayback(api_, session, std::move(queued), resolutionOptions);
-            if (!requestEpochs_.playback.active(generation)) return;
-            asyncCompletions_.push(QueuedPlaybackCompletion{
-                .generation = generation,
-                .originScreen = originScreen,
-                .index = index,
-                .previousQueueIndex = previousQueueIndex,
-                .replacingPlayer = replacingPlayer,
-                .item = std::move(resolved.item),
-                .result = std::move(resolved.target),
-            });
-        });
+        playbackResolutionAsync_.resolveQueued(session, std::move(queued), std::move(resolutionOptions), generation,
+                                               originScreen, index, previousQueueIndex, replacingPlayer);
     }
 
     void playPlayerItemAsync(JellyfinItem selected) {
@@ -3769,16 +3738,8 @@ private:
         playbackCoordinator_.beginPlaybackResolution(true);
         error_.clear();
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, selected = std::move(selected), resolutionOptions = std::move(resolutionOptions),
-                       generation]() mutable {
-            auto resolved = resolvePreferredPlayback(api_, session, std::move(selected), resolutionOptions);
-            if (!requestEpochs_.playback.active(generation)) return;
-            asyncCompletions_.push(PlayerItemPlaybackCompletion{
-                .generation = generation,
-                .item = std::move(resolved.item),
-                .result = std::move(resolved.target),
-            });
-        });
+        playbackResolutionAsync_.resolvePlayerItem(session, std::move(selected), std::move(resolutionOptions),
+                                                   generation);
     }
 
     void playAdjacentEpisode(int direction) {
@@ -4106,17 +4067,8 @@ private:
             .trackPolicy = playbackTrackSelectionPolicy(),
         };
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, resolutionOptions = std::move(resolutionOptions), nextItem = std::move(nextItem),
-                       queuedNextIndex, generation]() mutable {
-            auto resolved = resolvePreferredPlayback(api_, session, std::move(nextItem), resolutionOptions);
-            if (!requestEpochs_.playback.active(generation)) return;
-            asyncCompletions_.push(AutoplayPlaybackCompletion{
-                .generation = generation,
-                .queuedNextIndex = queuedNextIndex,
-                .item = std::move(resolved.item),
-                .result = std::move(resolved.target),
-            });
-        });
+        playbackResolutionAsync_.resolveAutoplay(session, std::move(nextItem), std::move(resolutionOptions), generation,
+                                                 queuedNextIndex);
     }
 
     void showStillWatching(JellyfinItem nextItem) {
@@ -7779,15 +7731,17 @@ private:
     VideoSurface videoSurface_;
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
+    RequestEpochs requestEpochs_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
     PlaybackContinuationExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         playbackContinuationAsync_;
+    PlaybackResolutionExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
+        playbackResolutionAsync_;
     SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         seerrAsync_;
 
     mutable std::recursive_mutex stateMutex_;
     ArtworkProvider<JellyfinClient, SeerrClient, JniImageDecoder, TaskRunner, std::recursive_mutex> artwork_;
-    RequestEpochs requestEpochs_;
     std::string dataPath_;
     std::string deviceId_;
 
