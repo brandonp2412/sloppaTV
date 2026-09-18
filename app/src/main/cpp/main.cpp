@@ -6199,24 +6199,20 @@ private:
     }
 
     void renderSeerrDrivePicker() {
+        const SeerrDrivePickerViewModel model =
+            seerrDrivePickerViewModel(seerrStorageState_.pendingRequest(), seerrStorageState_.driveChoices(),
+                                      seerrStorageState_.driveSelection());
         renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
-        const std::string subtitle = seerrDrivePickerSubtitle(seerrStorageState_.pendingRequest());
-        renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
+        renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(model.subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
 
-        const auto& driveChoices = seerrStorageState_.driveChoices();
-        if (driveChoices.empty()) {
+        if (model.rows.empty()) {
             renderEmptyState("No storage targets", "Back returns to search.");
             return;
         }
 
-        const int driveSelection = seerrStorageState_.driveSelection();
-        const int first = seerrDrivePickerFirstVisible(driveSelection, static_cast<int>(driveChoices.size()));
-        for (int slot = 0; slot < 5; ++slot) {
-            const int index = first + slot;
-            if (index >= static_cast<int>(driveChoices.size())) break;
-            const auto& target = driveChoices[static_cast<size_t>(index)];
-            const SeerrDrivePickerRow row = seerrDrivePickerRow(target);
-            const bool focused = index == driveSelection;
+        for (size_t slot = 0; slot < model.rows.size(); ++slot) {
+            const SeerrDrivePickerRow& row = model.rows[slot].row;
+            const bool focused = model.rows[slot].focused;
             const float x = 120.0f;
             const float y = 220.0f + static_cast<float>(slot) * 145.0f;
             constexpr float width = 1680.0f;

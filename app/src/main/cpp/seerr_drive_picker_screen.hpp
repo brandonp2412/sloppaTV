@@ -9,6 +9,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <vector>
 
 struct SeerrDrivePickerRow {
     std::string name;
@@ -17,6 +18,16 @@ struct SeerrDrivePickerRow {
     int usedPercent = 0;
     bool hasCapacity = false;
     bool nearFull = false;
+};
+
+struct SeerrDrivePickerVisibleRow {
+    SeerrDrivePickerRow row;
+    bool focused = false;
+};
+
+struct SeerrDrivePickerViewModel {
+    std::string subtitle;
+    std::vector<SeerrDrivePickerVisibleRow> rows;
 };
 
 inline std::string seerrDrivePickerSubtitle(const std::optional<SeerrMediaItem>& pendingRequest) {
@@ -88,4 +99,24 @@ inline SeerrDrivePickerRow seerrDrivePickerRow(const SeerrStorageTarget& target)
         .hasCapacity = hasCapacity,
         .nearFull = hasCapacity && percent >= 90,
     };
+}
+
+inline SeerrDrivePickerViewModel
+seerrDrivePickerViewModel(const std::optional<SeerrMediaItem>& pendingRequest,
+                          const std::vector<SeerrStorageTarget>& driveChoices, int selection, int visibleRows = 5) {
+    SeerrDrivePickerViewModel model;
+    model.subtitle = seerrDrivePickerSubtitle(pendingRequest);
+    if (driveChoices.empty() || visibleRows <= 0) return model;
+
+    const int first =
+        seerrDrivePickerFirstVisible(selection, static_cast<int>(driveChoices.size()), visibleRows);
+    const int end = std::min(first + visibleRows, static_cast<int>(driveChoices.size()));
+    model.rows.reserve(static_cast<size_t>(end - first));
+    for (int index = first; index < end; ++index) {
+        model.rows.push_back({
+            .row = seerrDrivePickerRow(driveChoices[static_cast<size_t>(index)]),
+            .focused = index == selection,
+        });
+    }
+    return model;
 }
