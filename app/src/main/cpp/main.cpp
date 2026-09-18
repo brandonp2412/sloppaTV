@@ -54,6 +54,7 @@
 #include "playback_track_selection.hpp"
 #include "playback_transition.hpp"
 #include "player_controls_renderer.hpp"
+#include "player_header_renderer.hpp"
 #include "player_next_up_renderer.hpp"
 #include "player_progress_renderer.hpp"
 #include "player_screen.hpp"
@@ -5561,11 +5562,6 @@ private:
         const std::string heading = playbackCoordinator_.session().activeItem().seriesName.empty()
                                         ? playbackCoordinator_.session().activeItem().name
                                         : playbackCoordinator_.session().activeItem().seriesName;
-        const std::string playbackHeading = heading.empty() ? "Playback" : heading;
-        const float playbackHeadingWidth = showNextUp ? 1040.0f : 1460.0f;
-        renderer_.text(80.0f, 42.0f, material_tv::type::headline,
-                       fitTextLines(playbackHeading, material_tv::type::headline, playbackHeadingWidth, 1), kText,
-                       playbackHeadingWidth);
         const std::string playerEpisodeNumber = episodeNumberLabel(playbackCoordinator_.session().activeItem());
         const std::string secondary =
             playbackCoordinator_.session().activeItem().seriesName.empty()
@@ -5573,13 +5569,22 @@ private:
                 : playerEpisodeNumber + (playbackCoordinator_.session().activeItem().name.empty()
                                              ? ""
                                              : "  |  " + playbackCoordinator_.session().activeItem().name);
-        if (!secondary.empty() && secondary != heading) {
-            const float secondaryY =
-                42.0f + 11.0f * material_tv::type::headline * uiTextScale(settings_.uiTextSize) + 8.0f;
-            const float secondaryWidth = showNextUp ? 1040.0f : 1500.0f;
-            renderer_.text(80.0f, secondaryY, 2.6f, fitTextLines(secondary, 2.6f, secondaryWidth, 1), kMuted,
-                           secondaryWidth);
-        }
+        renderPlayerHeader(
+            renderer_,
+            PlayerHeaderRenderState{
+                .heading = heading,
+                .secondary = secondary,
+                .showNextUp = showNextUp,
+                .headlineScale = material_tv::type::headline,
+                .secondaryY = 42.0f + 11.0f * material_tv::type::headline * uiTextScale(settings_.uiTextSize) + 8.0f,
+            },
+            PlayerHeaderRenderStyle<Color>{
+                .text = kText,
+                .muted = kMuted,
+            },
+            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(value, scale, maxWidth, maxLines);
+            });
 
         const int position = playerScreenState_.positionMs();
         const int duration = playerScreenState_.durationMs();
