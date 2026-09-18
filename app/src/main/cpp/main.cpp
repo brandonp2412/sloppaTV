@@ -33,6 +33,7 @@
 #include "playback_resolution_executor.hpp"
 #include "playback_resolver.hpp"
 #include "playback_session.hpp"
+#include "playback_stream_executor.hpp"
 #include "playback_telemetry.hpp"
 #include "playback_telemetry_executor.hpp"
 #include "playback_track_selection.hpp"
@@ -539,21 +540,6 @@ struct TrickplayTileCompletion {
 
 using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
 
-struct StreamRestartCompletion {
-    uint64_t generation = 0;
-    int audioStreamIndex = -1;
-    bool wasPaused = false;
-    JellyfinItem item;
-    ApiValueResult<PlaybackTarget> result;
-};
-
-struct FallbackPlaybackCompletion {
-    uint64_t generation = 0;
-    int audioStreamIndex = -1;
-    JellyfinItem item;
-    ApiValueResult<PlaybackTarget> result;
-};
-
 using AsyncCompletion = std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion,
                                      SeerrStorageRefreshCompletion,
                                      SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
@@ -596,6 +582,7 @@ public:
           playbackTelemetryAsync_(api_, tasks_, asyncCompletions_),
           playbackContinuationAsync_(api_, tasks_, asyncCompletions_),
           playbackResolutionAsync_(api_, tasks_, asyncCompletions_, requestEpochs_.playback),
+          playbackStreamAsync_(api_, tasks_, asyncCompletions_, requestEpochs_.playback, logPlaybackReportFailure),
           seriesPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback, [](const SeriesEpisodeSlot& slot) {
                   __android_log_print(
@@ -2537,23 +2524,15 @@ private:
         player_.stop();
         videoSurface_.release();
 
-        tasks_.submit([this, session, item, previousTarget, shouldReportPrevious, maxStreamingBitrate, maxAudioChannels,
-                       playbackOverrides, audioStreamIndex, subtitleStreamIndex, wasPaused, generation] {
-            if (shouldReportPrevious) {
-                logPlaybackReportFailure("stop", item.id,
-                                         api_.reportPlaybackStopped(session, item, previousTarget, item.positionTicks));
-            }
-            auto target = api_.resolvePlayback(session, item, maxStreamingBitrate, maxAudioChannels, playbackOverrides,
-                                               audioStreamIndex, subtitleStreamIndex);
-            if (!requestEpochs_.playback.active(generation)) return;
-            asyncCompletions_.push(StreamRestartCompletion{
-                .generation = generation,
-                .audioStreamIndex = audioStreamIndex,
-                .wasPaused = wasPaused,
-                .item = std::move(item),
-                .result = std::move(target),
-            });
-        });
+        PlaybackStreamResolutionOptions options{
+            .maxStreamingBitrate = maxStreamingBitrate,
+            .maxAudioChannels = maxAudioChannels,
+            .overrides = playbackOverrides,
+            .audioStreamIndex = audioStreamIndex,
+            .subtitleStreamIndex = subtitleStreamIndex,
+        };
+        playbackStreamAsync_.restart(session, std::move(item), previousTarget, shouldReportPrevious, std::move(options),
+                                     wasPaused, generation);
     }
 
     void clearTrickplayPreview() {
@@ -4016,10 +3995,7 @@ private:
         // that immediately when available; it avoids a second round-trip to Jellyfin.
         if (fallbackPlan.useOfferedTarget) {
             if (shouldReportPrevious) {
-                tasks_.submit([this, session, item, failedTarget, resumeTicks] {
-                    logPlaybackReportFailure("stop-after-failure", item.id,
-                                             api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks));
-                });
+                playbackStreamAsync_.reportPreviousStop(session, item, failedTarget, resumeTicks, "stop-after-failure");
             }
             playbackCoordinator_.useOfferedFallback(fallbackPlan);
             const bool directStreamFallback = fallbackPlan.offeredDirectStream;
@@ -4054,23 +4030,16 @@ private:
                             "Direct play failed without fallback URL; forcing Jellyfin %s negotiation",
                             preferServerStream ? "server-stream" : "transcode");
 
-        const bool submitted = tasks_.submit([this, session, item, failedTarget, shouldReportPrevious, resumeTicks,
-                                              maxStreamingBitrate, maxAudioChannels, fallbackOverrides,
-                                              audioStreamIndex, subtitleStreamIndex, generation]() mutable {
-            if (shouldReportPrevious) {
-                logPlaybackReportFailure("stop-after-failure", item.id,
-                                         api_.reportPlaybackStopped(session, item, failedTarget, resumeTicks));
-            }
-            auto target = api_.resolvePlayback(session, item, maxStreamingBitrate, maxAudioChannels, fallbackOverrides,
-                                               audioStreamIndex, subtitleStreamIndex);
-            if (!requestEpochs_.playback.active(generation)) return;
-            asyncCompletions_.push(FallbackPlaybackCompletion{
-                .generation = generation,
-                .audioStreamIndex = audioStreamIndex,
-                .item = std::move(item),
-                .result = std::move(target),
-            });
-        });
+        PlaybackStreamResolutionOptions fallbackOptions{
+            .maxStreamingBitrate = maxStreamingBitrate,
+            .maxAudioChannels = maxAudioChannels,
+            .overrides = fallbackOverrides,
+            .audioStreamIndex = audioStreamIndex,
+            .subtitleStreamIndex = subtitleStreamIndex,
+        };
+        const bool submitted = playbackStreamAsync_.resolveFallback(
+            session, std::move(item), failedTarget, shouldReportPrevious, resumeTicks, std::move(fallbackOptions),
+            generation);
         if (!submitted) {
             loading_ = false;
             playbackCoordinator_.finishFallbackResolution();
@@ -7583,6 +7552,8 @@ private:
         playbackContinuationAsync_;
     PlaybackResolutionExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         playbackResolutionAsync_;
+    PlaybackStreamExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
+        playbackStreamAsync_;
     SeriesPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         seriesPlaybackAsync_;
     SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>

@@ -47,6 +47,7 @@ CPP_TESTS = [
     "playback_resolution_executor_test.cpp",
     "playback_resolver_test.cpp",
     "playback_session_test.cpp",
+    "playback_stream_executor_test.cpp",
     "playback_telemetry_test.cpp",
     "playback_telemetry_executor_test.cpp",
     "playback_track_selection_test.cpp",
