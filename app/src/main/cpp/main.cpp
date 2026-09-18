@@ -56,6 +56,7 @@
 #include "player_controls_renderer.hpp"
 #include "player_screen.hpp"
 #include "player_seek_feedback_renderer.hpp"
+#include "player_skip_button_renderer.hpp"
 #include "player_subtitle_renderer.hpp"
 #include "player_tracks.hpp"
 #include "profiles_renderer.hpp"
@@ -5508,23 +5509,20 @@ private:
                 });
         }
         if (skipSegment) {
-            const auto bounds = drawButtonSurface(1480.0f, skipButtonY(showOverlay), 320.0f, 74.0f, true, true);
             const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
-            constexpr float labelScale = 1.82f;
-            constexpr float iconWidth = 34.0f;
-            constexpr float iconGap = 14.0f;
-            const std::string fittedLabel = fitTextLines(skipLabel, labelScale, 224.0f, 1);
-            const float labelWidth = renderer_.textWidth(labelScale, fittedLabel);
-            const float groupWidth = iconWidth + iconGap + labelWidth;
-            const float iconX = std::round(bounds[0] + (bounds[2] - groupWidth) * 0.5f);
-            const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
-            renderer_.triangle(iconX, iconCenterY - 11.0f, iconX, iconCenterY + 11.0f, iconX + 13.0f, iconCenterY,
-                               kText);
-            renderer_.triangle(iconX + 11.0f, iconCenterY - 11.0f, iconX + 11.0f, iconCenterY + 11.0f, iconX + 24.0f,
-                               iconCenterY, kText);
-            renderer_.roundedRect(iconX + 27.0f, iconCenterY - 12.0f, 4.0f, 24.0f, 2.0f, kText);
-            renderer_.textVerticallyCentered(iconX + iconWidth + iconGap, bounds[1], bounds[3], labelScale, fittedLabel,
-                                             kText, labelWidth);
+            renderPlayerSkipButton(
+                renderer_,
+                PlayerSkipButtonRenderState{
+                    .label = skipLabel,
+                    .y = skipButtonY(showOverlay),
+                },
+                PlayerSkipButtonRenderStyle<Color>{.text = kText},
+                [this](float x, float y, float width, float height, bool focused, bool primary) {
+                    return drawButtonSurface(x, y, width, height, focused, primary);
+                },
+                [this](std::string_view value, float scale, float maxWidth, int maxLines) {
+                    return fitTextLines(value, scale, maxWidth, maxLines);
+                });
         }
         if (playerScreenState_.seekFeedbackVisible(now)) {
             renderPlayerSeekFeedback(
