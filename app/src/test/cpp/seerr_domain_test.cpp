@@ -79,14 +79,48 @@ int main() {
     assert(!state.deferSearchIfConnecting());
 
     const auto start = SeerrRequestState::Clock::now();
+    SeerrEndpoint rotated = configured;
+    rotated.auth.sessionCookie = "rotated-session";
+
+    SeerrDomainState mutations;
+    const auto movieRequest =
+        mutations.completeRequest(configured, configured, media("seerr:movie:15"), 51, true, start);
+    assert(movieRequest.outcome == SeerrDomainState::MutationOutcome::Applied);
+    assert(movieRequest.status == "Queued for download");
+    const auto* requestedMovie = mutations.requests().findPending("seerr:movie:15");
+    assert(requestedMovie && requestedMovie->requestId == 51 && requestedMovie->requested);
+
+    auto television = media("seerr:tv:16");
+    television.mediaType = "tv";
+    const auto televisionRequest = mutations.completeRequest(configured, configured, television, 52, true, start);
+    assert(televisionRequest.outcome == SeerrDomainState::MutationOutcome::Applied);
+    assert(televisionRequest.status == "Queued");
+
+    const auto failedRequest =
+        mutations.completeRequest(configured, configured, media("seerr:movie:17"), 53, false, start);
+    assert(failedRequest.outcome == SeerrDomainState::MutationOutcome::Failed);
+    assert(!mutations.requests().findPending("seerr:movie:17"));
+
+    const auto staleRequest = mutations.completeRequest(configured, rotated, media("seerr:movie:18"), 54, true, start);
+    assert(staleRequest.outcome == SeerrDomainState::MutationOutcome::StaleEndpoint);
+    assert(!mutations.requests().findPending("seerr:movie:18"));
+
+    assert(mutations.completeDeleteRequest(configured, configured, "seerr:movie:15", 51, false) ==
+           SeerrDomainState::MutationOutcome::Failed);
+    assert(mutations.requests().findPending("seerr:movie:15"));
+    assert(mutations.completeDeleteRequest(configured, rotated, "seerr:movie:15", 51, true) ==
+           SeerrDomainState::MutationOutcome::StaleEndpoint);
+    assert(mutations.requests().findPending("seerr:movie:15"));
+    assert(mutations.completeDeleteRequest(configured, configured, "seerr:movie:15", 51, true) ==
+           SeerrDomainState::MutationOutcome::Applied);
+    assert(!mutations.requests().findPending("seerr:movie:15"));
+
     assert(state.requests().beginPendingRefresh());
     assert(state.completePendingRefresh(configured, configured, true, {media("seerr:movie:20", true)}, start) ==
            SeerrDomainState::RefreshOutcome::Applied);
     assert(state.requests().findPending("seerr:movie:20"));
 
     assert(state.requests().beginPendingRefresh());
-    SeerrEndpoint rotated = configured;
-    rotated.auth.sessionCookie = "rotated-session";
     assert(state.completePendingRefresh(configured, rotated, true, {media("seerr:movie:21", true)}, start + 1s) ==
            SeerrDomainState::RefreshOutcome::StaleEndpoint);
     assert(state.requests().pendingRefreshDue(start + 1s));
@@ -100,15 +134,14 @@ int main() {
     assert(state.requests().pendingRefreshDue(start + 62s));
 
     assert(state.storage().beginRefresh(true, start));
-    const auto storageApplied =
-        state.completeStorageRefresh(configured, configured, true, {target(1)}, {}, start);
+    const auto storageApplied = state.completeStorageRefresh(configured, configured, true, {target(1)}, {}, start);
     assert(storageApplied.outcome == SeerrDomainState::RefreshOutcome::Applied);
     assert(state.storage().targets().size() == 1);
 
     assert(state.storage().preparePicker(media("seerr:movie:30")) == SeerrStorageState::PickerStatus::Ready);
     assert(state.storage().beginRefresh(true, start + 1s));
-    const auto authFailure = state.completeStorageRefresh(configured, configured, false, {}, "HTTP 401 unauthorized",
-                                                          start + 1s);
+    const auto authFailure =
+        state.completeStorageRefresh(configured, configured, false, {}, "HTTP 401 unauthorized", start + 1s);
     assert(authFailure.outcome == SeerrDomainState::RefreshOutcome::Failed);
     assert(authFailure.reconnect);
     assert(!authFailure.clearedPendingRequest);

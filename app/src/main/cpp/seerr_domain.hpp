@@ -34,6 +34,17 @@ public:
         Applied,
     };
 
+    enum class MutationOutcome {
+        StaleEndpoint,
+        Failed,
+        Applied,
+    };
+
+    struct RequestMutationCompletion {
+        MutationOutcome outcome = MutationOutcome::Failed;
+        std::string status;
+    };
+
     struct StorageRefreshCompletion {
         RefreshOutcome outcome = RefreshOutcome::Failed;
         bool reconnect = false;
@@ -97,10 +108,45 @@ public:
         return true;
     }
 
+    [[nodiscard]] MutationOutcome completeDeleteRequest(const SeerrEndpoint& requestedEndpoint,
+                                                        const SeerrEndpoint& currentEndpoint, std::string_view itemId,
+                                                        int requestId, bool ok) {
+        if (!requestedEndpoint.matches(currentEndpoint.server, currentEndpoint.auth)) {
+            return MutationOutcome::StaleEndpoint;
+        }
+        if (!ok) return MutationOutcome::Failed;
+        requests_.erasePending(itemId, requestId);
+        return MutationOutcome::Applied;
+    }
+
+    [[nodiscard]] RequestMutationCompletion completeRequest(const SeerrEndpoint& requestedEndpoint,
+                                                            const SeerrEndpoint& currentEndpoint,
+                                                            SeerrMediaItem requestedItem, int requestId, bool ok,
+                                                            SeerrRequestState::TimePoint now) {
+        if (!requestedEndpoint.matches(currentEndpoint.server, currentEndpoint.auth)) {
+            return {
+                .outcome = MutationOutcome::StaleEndpoint,
+                .status = {},
+            };
+        }
+        if (!ok) {
+            return {
+                .outcome = MutationOutcome::Failed,
+                .status = {},
+            };
+        }
+        std::string status = requestedItem.television() ? "Queued" : "Queued for download";
+        requests_.markRequestSucceeded(std::move(requestedItem), requestId, status, now);
+        return {
+            .outcome = MutationOutcome::Applied,
+            .status = std::move(status),
+        };
+    }
+
     [[nodiscard]] RefreshOutcome completePendingRefresh(const SeerrEndpoint& requestedEndpoint,
-                                                         const SeerrEndpoint& currentEndpoint, bool ok,
-                                                         std::vector<SeerrMediaItem> pending,
-                                                         SeerrRequestState::TimePoint now) {
+                                                        const SeerrEndpoint& currentEndpoint, bool ok,
+                                                        std::vector<SeerrMediaItem> pending,
+                                                        SeerrRequestState::TimePoint now) {
         if (!requestedEndpoint.matches(currentEndpoint.server, currentEndpoint.auth)) {
             requests_.invalidatePendingRefresh(now);
             return RefreshOutcome::StaleEndpoint;
@@ -113,9 +159,11 @@ public:
         return RefreshOutcome::Applied;
     }
 
-    [[nodiscard]] StorageRefreshCompletion completeStorageRefresh(
-        const SeerrEndpoint& requestedEndpoint, const SeerrEndpoint& currentEndpoint, bool ok,
-        std::vector<SeerrStorageTarget> targets, std::string_view error, SeerrStorageState::TimePoint now) {
+    [[nodiscard]] StorageRefreshCompletion completeStorageRefresh(const SeerrEndpoint& requestedEndpoint,
+                                                                  const SeerrEndpoint& currentEndpoint, bool ok,
+                                                                  std::vector<SeerrStorageTarget> targets,
+                                                                  std::string_view error,
+                                                                  SeerrStorageState::TimePoint now) {
         if (!requestedEndpoint.matches(currentEndpoint.server, currentEndpoint.auth)) {
             storage_.invalidateRefresh();
             return {.outcome = RefreshOutcome::StaleEndpoint};

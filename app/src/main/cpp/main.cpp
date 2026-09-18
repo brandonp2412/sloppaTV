@@ -4647,14 +4647,16 @@ private:
 
     void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
         mutationLoading_ = false;
-        if (!completion.endpoint.matches(settings_.seerrServer, seerrAuth())) return;
         if (screen_ != Screen::ItemMenu || detail_.id != completion.request.itemId) return;
-        if (!completion.result.ok) {
+        const auto outcome =
+            seerrDomain_.completeDeleteRequest(completion.endpoint, seerrEndpoint(), completion.request.itemId,
+                                               completion.request.requestId, completion.result.ok);
+        if (outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
+        if (outcome == SeerrDomainState::MutationOutcome::Failed) {
             error_ = "SEERR DELETE: " + completion.result.error;
             detailsState_.setDeleteConfirmation(false);
             return;
         }
-        seerrRequestState_.erasePending(completion.request.itemId, completion.request.requestId);
         searchState_.markSeerrUnrequested(completion.request.itemId);
         syncSeerrHomeRowLocked();
         detail_ = {};
@@ -4667,16 +4669,16 @@ private:
 
     void applyAsyncCompletion(const SeerrRequestCompletion& completion) {
         mutationLoading_ = false;
-        if (!completion.endpoint.matches(settings_.seerrServer, seerrAuth())) return;
-        if (!completion.result.ok) {
+        const auto domainCompletion =
+            seerrDomain_.completeRequest(completion.endpoint, seerrEndpoint(), completion.requestedItem,
+                                         completion.result.value, completion.result.ok, std::chrono::steady_clock::now());
+        if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
+        if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::Failed) {
             error_ = "SEERR REQUEST: " + completion.result.error;
             return;
         }
 
-        const std::string status = completion.requestedItem.television() ? "Queued" : "Queued for download";
-        searchState_.markSeerrRequested(completion.requestedItem.id, status, completion.result.value);
-        seerrRequestState_.markRequestSucceeded(completion.requestedItem, completion.result.value, status,
-                                                std::chrono::steady_clock::now());
+        searchState_.markSeerrRequested(completion.requestedItem.id, domainCompletion.status, completion.result.value);
         syncSeerrHomeRowLocked();
         showNotice("REQUEST SENT TO SEERR", 4s);
         error_.clear();
