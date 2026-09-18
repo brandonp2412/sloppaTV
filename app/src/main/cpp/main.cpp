@@ -40,6 +40,7 @@
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
+#include "seerr_async_executor.hpp"
 #include "seerr_domain.hpp"
 #include "seerr_drive_picker_screen.hpp"
 #include "seerr_home_projection.hpp"
@@ -360,34 +361,6 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-struct SeerrDeleteCompletion {
-    SeerrEndpoint endpoint;
-    SeerrDeleteRequest request;
-    ApiResult result;
-};
-
-struct SeerrRequestCompletion {
-    SeerrEndpoint endpoint;
-    SeerrMediaItem requestedItem;
-    ApiValueResult<int> result;
-};
-
-struct SeerrStorageRefreshCompletion {
-    SeerrEndpoint endpoint;
-    ApiValueResult<std::vector<SeerrStorageTarget>> result;
-};
-
-struct SeerrPendingRefreshCompletion {
-    SeerrEndpoint endpoint;
-    ApiValueResult<std::vector<SeerrMediaItem>> result;
-};
-
-struct SeerrSearchCompletion {
-    std::string query;
-    uint64_t generation = 0;
-    ApiValueResult<std::vector<SeerrMediaItem>> result;
-};
-
 struct SeerrConnectCompletion {
     std::string server;
     std::string jellyfinUserId;
@@ -688,6 +661,7 @@ public:
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
+          seerrAsync_(seerr_, seerrSearch_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
                        if (loaded.ok()) return;
@@ -3375,14 +3349,7 @@ private:
         const SeerrDeleteRequest request = *deleteRequest;
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, endpoint, request] {
-            ApiResult result = seerr_.deleteRequest(endpoint.server, endpoint.auth, request.requestId);
-            asyncCompletions_.push(SeerrDeleteCompletion{
-                .endpoint = endpoint,
-                .request = request,
-                .result = std::move(result),
-            });
-        });
+        seerrAsync_.deleteRequest(endpoint, request);
     }
 
     void deleteCurrentItemAsync() {
@@ -3601,13 +3568,7 @@ private:
         }
         const auto now = std::chrono::steady_clock::now();
         if (!seerrStorageState_.beginRefresh(force, now)) return;
-        tasks_.submit([this, endpoint] {
-            auto result = seerr_.storageTargets(endpoint.server, endpoint.auth);
-            asyncCompletions_.push(SeerrStorageRefreshCompletion{
-                .endpoint = endpoint,
-                .result = std::move(result),
-            });
-        });
+        seerrAsync_.refreshStorage(endpoint);
     }
 
     void openSeerrDrivePicker(const SeerrMediaItem& item) {
@@ -3644,13 +3605,7 @@ private:
             return;
         }
         if (!seerrRequestState_.beginPendingRefresh()) return;
-        tasks_.submit([this, endpoint] {
-            auto result = seerr_.pendingRequests(endpoint.server, endpoint.auth, 20);
-            asyncCompletions_.push(SeerrPendingRefreshCompletion{
-                .endpoint = endpoint,
-                .result = std::move(result),
-            });
-        });
+        seerrAsync_.refreshPending(endpoint);
     }
 
     void requestSeerrMediaAsync(const SeerrMediaItem& item, const SeerrStorageTarget* selectedTarget = nullptr,
@@ -3682,17 +3637,7 @@ private:
         }
 
         mutationLoading_ = true;
-        const SeerrMediaItem requestedItem = item;
-        const std::optional<SeerrStorageTarget> target = std::move(plan.target);
-        tasks_.submit([this, endpoint, requestedItem, target] {
-            auto result =
-                seerr_.requestMedia(endpoint.server, endpoint.auth, requestedItem, target ? &*target : nullptr);
-            asyncCompletions_.push(SeerrRequestCompletion{
-                .endpoint = endpoint,
-                .requestedItem = requestedItem,
-                .result = std::move(result),
-            });
-        });
+        seerrAsync_.requestMedia(endpoint, item, std::move(plan.target));
     }
 
     void searchSeerrAsync(bool immediate) {
@@ -3708,14 +3653,7 @@ private:
         refreshSeerrStorageAsync();
         const std::string query = searchState_.query();
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
-        tasks_.submit([this, endpoint, query, generation] {
-            auto result = seerrSearch_.search(endpoint.server, endpoint.auth, query);
-            asyncCompletions_.push(SeerrSearchCompletion{
-                .query = query,
-                .generation = generation,
-                .result = std::move(result),
-            });
-        });
+        seerrAsync_.search(endpoint, query, generation);
     }
 
     void searchAsync(bool includeSeerrImmediately = true) {
@@ -7921,6 +7859,7 @@ private:
     VideoSurface videoSurface_;
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
+    SeerrAsyncExecutor<SeerrClient, SeerrClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> seerrAsync_;
 
     mutable std::recursive_mutex stateMutex_;
     ArtworkProvider<JellyfinClient, SeerrClient, JniImageDecoder, TaskRunner, std::recursive_mutex> artwork_;
