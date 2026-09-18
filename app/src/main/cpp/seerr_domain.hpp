@@ -135,6 +135,17 @@ public:
         return true;
     }
 
+    [[nodiscard]] bool completeSearchFailure(std::string_view error, bool hasSessionCookie) {
+        if (!hasSessionCookie || !isSeerrAuthError(error)) return false;
+        connection_.deferSearchRetry();
+        return true;
+    }
+
+    [[nodiscard]] bool completeSearchSuccess(const std::vector<SeerrMediaItem>& results,
+                                             SeerrRequestState::TimePoint now) {
+        return requests_.mergeRequestedSearch(results, now);
+    }
+
     [[nodiscard]] ConnectCompletionAction completeConnect(bool ok, bool authenticationStageFailure,
                                                           bool currentRequest) {
         if (!ok && !authenticationStageFailure) {

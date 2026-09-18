@@ -134,6 +134,19 @@ int main() {
 
     const auto start = SeerrRequestState::Clock::now();
 
+    SeerrDomainState searchCompletions;
+    assert(!searchCompletions.completeSearchFailure("HTTP 401 unauthorized", false));
+    assert(!searchCompletions.takeDeferredConnectionWork().retrySearch);
+    assert(!searchCompletions.completeSearchFailure("HTTP 500", true));
+    assert(!searchCompletions.takeDeferredConnectionWork().retrySearch);
+    assert(searchCompletions.completeSearchFailure("HTTP 401 unauthorized", true));
+    assert(searchCompletions.takeDeferredConnectionWork().retrySearch);
+
+    auto requestedSearchItem = media("seerr:movie:19", true);
+    assert(searchCompletions.completeSearchSuccess({requestedSearchItem}, start));
+    assert(searchCompletions.requests().findPending("seerr:movie:19"));
+    assert(!searchCompletions.completeSearchSuccess({media("seerr:movie:20")}, start));
+
     SeerrDomainState refreshStarts;
     refreshStarts.storage().finishRefresh({target(4)}, start);
     assert(refreshStarts.prepareStorageRefresh(disconnected, false, start) ==

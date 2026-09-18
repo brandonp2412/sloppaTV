@@ -4246,13 +4246,12 @@ private:
         auto& result = completion.result;
         if (!result.ok) {
             (void)searchState_.failSeerrSearch(completion.query, result.error);
-            if (isSeerrAuthError(result.error) && !settings_.seerrSessionCookie.empty()) {
-                seerrConnectionState_.deferSearchRetry();
+            if (seerrDomain_.completeSearchFailure(result.error, !settings_.seerrSessionCookie.empty())) {
                 connectSeerrAsync(false);
             }
             return;
         }
-        if (seerrRequestState_.mergeRequestedSearch(result.value, std::chrono::steady_clock::now())) {
+        if (seerrDomain_.completeSearchSuccess(result.value, std::chrono::steady_clock::now())) {
             syncSeerrHomeRowLocked();
         }
         (void)searchState_.finishSeerrSearch(completion.query, std::move(result.value));
