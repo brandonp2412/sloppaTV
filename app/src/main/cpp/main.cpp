@@ -2179,21 +2179,20 @@ private:
     }
 
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
-        if (!session_.valid() || subtitle.index < 0 || !playbackCoordinator_.beginSubtitleLoad()) return;
+        if (!session_.valid()) return;
+        auto context = playbackCoordinator_.beginSubtitleLoadContext(subtitle, settings_.subtitleLanguages);
+        if (!context) return;
         const JellyfinSession session = session_;
-        const auto& item = playbackCoordinator_.session().activeItem();
         const std::string dataPath = dataPath_;
         const uint64_t generation = requestEpochs_.playback.snapshot();
-        const int requestedSubtitleIndex = subtitle.index;
-        auto candidates = playbackCoordinator_.subtitleLoadCandidates(subtitle, settings_.subtitleLanguages);
 
         if (!subtitleLoadAsync_.load(
                 session, SubtitleLoadRequest{
                              .generation = generation,
-                             .itemId = item.id,
-                             .mediaSourceId = item.mediaSourceId,
-                             .requestedSubtitleIndex = requestedSubtitleIndex,
-                             .candidates = std::move(candidates),
+                             .itemId = std::move(context->itemId),
+                             .mediaSourceId = std::move(context->mediaSourceId),
+                             .requestedSubtitleIndex = context->requestedSubtitleStreamIndex,
+                             .candidates = std::move(context->candidates),
                              .deliveryUrl = deliveryUrl,
                              .dataPath = dataPath,
                          })) {

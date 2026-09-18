@@ -83,6 +83,13 @@ struct PlaybackSubtitleCycleContext {
     bool busy = false;
 };
 
+struct PlaybackSubtitleLoadContext {
+    std::string itemId;
+    std::string mediaSourceId;
+    int requestedSubtitleStreamIndex = -1;
+    std::vector<JellyfinSubtitleStream> candidates;
+};
+
 struct PlaybackTelemetryReadPlan {
     bool read = false;
     bool probeDuration = false;
@@ -733,10 +740,17 @@ public:
         };
     }
 
-    [[nodiscard]] std::vector<JellyfinSubtitleStream>
-    subtitleLoadCandidates(const JellyfinSubtitleStream& requested,
-                           const std::vector<std::string>& allowedLanguages) const {
-        return playbackSubtitleLoadCandidates(sessionState_.activeItem(), requested, allowedLanguages);
+    [[nodiscard]] std::optional<PlaybackSubtitleLoadContext>
+    beginSubtitleLoadContext(const JellyfinSubtitleStream& requested,
+                             const std::vector<std::string>& allowedLanguages) {
+        if (requested.index < 0 || !trackState_.beginSubtitleWork()) return std::nullopt;
+        const auto& item = sessionState_.activeItem();
+        return PlaybackSubtitleLoadContext{
+            .itemId = item.id,
+            .mediaSourceId = item.mediaSourceId,
+            .requestedSubtitleStreamIndex = requested.index,
+            .candidates = playbackSubtitleLoadCandidates(item, requested, allowedLanguages),
+        };
     }
 
     void rememberAudioLanguagePreference(int streamIndex) {
@@ -785,8 +799,6 @@ public:
         selectSubtitleStream(streamIndex);
         trackState_.setSubtitleEnabled(false);
     }
-
-    [[nodiscard]] bool beginSubtitleLoad() { return trackState_.beginSubtitleWork(); }
 
     [[nodiscard]] bool subtitleLoadMatches(std::string_view itemId, int requestedStreamIndex) const {
         return sessionState_.activeItem().id == itemId &&

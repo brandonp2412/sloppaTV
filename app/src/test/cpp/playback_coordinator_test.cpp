@@ -228,7 +228,7 @@ int main() {
     assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "ENGLISH 2/2");
     loadedSubtitleLabelCoordinator.tracks().setSubtitleEnabled(false);
     assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "OFF");
-    assert(loadedSubtitleLabelCoordinator.beginSubtitleLoad());
+    assert(loadedSubtitleLabelCoordinator.beginSubtitleLoadContext(preferenceItem.subtitles[1], {}));
     assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "LOADING");
 
     PlaybackCoordinator emptyTrackLabelCoordinator;
@@ -273,7 +273,12 @@ int main() {
     assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == 4);
     assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == 4);
     assert(!subtitleLoadCoordinator.tracks().subtitleEnabled());
-    assert(subtitleLoadCoordinator.beginSubtitleLoad());
+    auto subtitleLoadContext = subtitleLoadCoordinator.beginSubtitleLoadContext(preferenceItem.subtitles.front(), {});
+    assert(subtitleLoadContext);
+    assert(subtitleLoadContext->itemId == preferenceItem.id);
+    assert(subtitleLoadContext->requestedSubtitleStreamIndex == 4);
+    assert(subtitleLoadContext->candidates.size() == 1);
+    assert(subtitleLoadContext->candidates.front().index == 4);
     assert(subtitleLoadCoordinator.tracks().subtitleBusy());
     assert(subtitleLoadCoordinator.subtitleTrackCycleContext({}).busy);
     assert(subtitleLoadCoordinator.subtitleLoadMatches(preferenceItem.id, 4));
@@ -291,7 +296,7 @@ int main() {
     assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == kSubtitleOffIndex);
     assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == kSubtitleOffIndex);
     assert(!subtitleLoadCoordinator.tracks().subtitleEnabled());
-    assert(subtitleLoadCoordinator.beginSubtitleLoad());
+    assert(subtitleLoadCoordinator.beginSubtitleLoadContext(preferenceItem.subtitles.front(), {}));
     subtitleLoadCoordinator.failSubtitleLoad();
     assert(!subtitleLoadCoordinator.tracks().subtitleBusy());
     assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == kSubtitleOffIndex);
