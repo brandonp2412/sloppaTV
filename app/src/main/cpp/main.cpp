@@ -32,6 +32,7 @@
 #include "item_menu_renderer.hpp"
 #include "item_mutation_executor.hpp"
 #include "jellyfin.hpp"
+#include "keyboard_renderer.hpp"
 #include "jellyfin_search_executor.hpp"
 #include "jni_env.hpp"
 #include "launch_intent.hpp"
@@ -72,6 +73,7 @@
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
 #include "screensaver_renderer.hpp"
+#include "screen_chrome_renderer.hpp"
 #include "search_renderer.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
@@ -4871,24 +4873,39 @@ private:
         renderer_.textCentered(x, y, width, height, scale, initial, faded(kMuted));
     }
 
+    ScreenChromeRenderStyle<Color> screenChromeStyle() const {
+        return ScreenChromeRenderStyle<Color>{
+            .pageInset = material_tv::layout::pageInset,
+            .supportingScale = material_tv::type::supporting,
+            .headlineScale = material_tv::type::headline,
+            .titleScale = material_tv::type::title,
+            .labelScale = material_tv::type::label,
+            .cornerLarge = material_tv::cornerLarge,
+            .muted = kMuted,
+            .text = kText,
+            .panelAlt = kPanelAlt,
+        };
+    }
+
     void renderHeader(const std::string& title) {
-        renderer_.text(material_tv::layout::pageInset, 28.0f, material_tv::type::supporting, "sloppaTV", kMuted);
-        renderer_.text(material_tv::layout::pageInset, 76.0f, material_tv::type::headline,
-                       fitTextLines(title, material_tv::type::headline, 1480.0f, 1), kText, 1480.0f);
-        if (settings_.showClock) {
-            drawRightAlignedSingleLine(1840.0f, 52.0f, 2.05f,
-                                       formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
-        }
+        renderScreenHeader(
+            renderer_, title, settings_.showClock, settings_.clock24Hour, screenChromeStyle(),
+            [this](std::string_view value, float scale, float width, int lines) {
+                return fitTextLines(value, scale, width, lines);
+            },
+            [this](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
+                drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
+            },
+            [](bool clock24Hour) { return formatLocalClock(std::time(nullptr), clock24Hour); });
     }
 
     void renderEmptyState(const std::string& title, const std::string& message) {
-        constexpr float x = 440.0f;
-        constexpr float width = 1040.0f;
-        renderer_.roundedRect(x, 350.0f, width, 250.0f, material_tv::cornerLarge, kPanelAlt);
-        drawCenteredSingleLineFit(x + 48.0f, 386.0f, width - 96.0f, 80.0f, material_tv::type::title, title, kText,
-                                  10.0f, 6.0f);
-        drawCenteredSingleLineFit(x + 48.0f, 480.0f, width - 96.0f, 64.0f, material_tv::type::label, message, kMuted,
-                                  10.0f, 5.0f);
+        renderScreenEmptyState(
+            renderer_, title, message, screenChromeStyle(),
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
+            });
     }
 
     void renderLogin() {
@@ -4978,26 +4995,21 @@ private:
     }
 
     void renderKeyboard(float top) {
-        const auto& rows = keyboardRows();
-        renderer_.roundedRect(110.0f, top - 24.0f, 1700.0f, Renderer::logicalHeight() - top + 24.0f,
-                              material_tv::cornerLarge, material_tv::surfaceContainerHigh);
-        constexpr float startX = 150.0f;
-        constexpr float gap = 14.0f;
-        const float keyH = keyboardKeyHeight(top, static_cast<int>(rows.size()), gap);
-        for (size_t row = 0; row < rows.size(); ++row) {
-            const float y = top + static_cast<float>(row) * (keyH + gap);
-            const auto& keys = rows[row];
-            const float keyW = row == rows.size() - 1 ? 310.0f : 145.0f;
-            for (size_t col = 0; col < keys.size(); ++col) {
-                const float x = startX + static_cast<float>(col) * (keyW + gap);
-                const bool selected = static_cast<int>(row) == keyboardRow_ && static_cast<int>(col) == keyboardCol_;
-                const auto bounds = drawButtonSurface(x, y, keyW, keyH, selected, selected);
-                const auto& label = keys[col].label;
-                const float scale = label.size() > 4 ? 2.15f : 2.65f;
-                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], scale, materialLabel(label),
-                                          kText, 12.0f, 5.0f);
-            }
-        }
+        renderVirtualKeyboard(
+            renderer_, keyboardRows(), keyboardRow_, keyboardCol_, top,
+            KeyboardRenderStyle<Color>{
+                .canvasHeight = Renderer::logicalHeight(),
+                .cornerLarge = material_tv::cornerLarge,
+                .surfaceContainerHigh = material_tv::surfaceContainerHigh,
+                .text = kText,
+            },
+            [this](float x, float y, float width, float height, bool focused, bool primary) {
+                return drawButtonSurface(x, y, width, height, focused, primary);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
+            });
     }
 
     void loadBundledBrandMark() {
