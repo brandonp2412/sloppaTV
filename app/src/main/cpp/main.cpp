@@ -11,6 +11,7 @@
 #include "async_completion_queue.hpp"
 #include "audio_policy.hpp"
 #include "browse_async_executor.hpp"
+#include "browse_renderer.hpp"
 #include "browse_screen.hpp"
 #include "cast_renderer.hpp"
 #include "details_screen.hpp"
@@ -5408,65 +5409,35 @@ private:
     }
 
     void renderBrowse() {
-        renderHeader(browseState_.heading());
-
-        if (browseState_.hasFilterBar()) {
-            const auto labels = browseState_.filterLabels();
-            float x = 88.0f;
-            for (size_t index = 0; index < labels.size(); ++index) {
-                const float width = labels[index] == "COLLECTIONS" ? 235.0f : 176.0f;
-                const bool focused =
-                    browseState_.filterFocused() && static_cast<int>(index) == browseState_.filterSelection();
-                const bool active = static_cast<int>(index) == browseState_.activeFilterSelection();
-                if (focused) {
-                    const auto bounds = drawTabSurface(x, 190.0f, width, 58.0f, true, active);
-                    drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f,
-                                              materialLabel(labels[index]), kText, 14.0f, 4.0f);
-                } else {
-                    renderer_.roundedRect(x, 190.0f, width, 58.0f, material_tv::cornerLarge,
-                                          active ? kFocusSoft : kPanel);
-                    if (!active)
-                        renderer_.roundedOutline(x, 190.0f, width, 58.0f, material_tv::cornerLarge, 1.5f, kOutline);
-                    drawCenteredSingleLineFit(x, 190.0f, width, 58.0f, 1.65f, materialLabel(labels[index]),
-                                              active ? kText : kMuted, 14.0f, 4.0f);
-                }
-                x += width + 10.0f;
-            }
-        }
-
-        const auto& items = browseState_.items();
-        if (items.empty()) {
-            renderEmptyState(loading_ ? "Loading your library" : "No titles found",
-                             loading_ ? "Fetching titles from Jellyfin"
-                                      : "Try another filter to discover more titles.");
-            return;
-        }
-
-        constexpr int columns = mediaGridColumns();
-        constexpr float slotWidth = mediaCardWidth();
-        constexpr float xGap = 32.0f;
-        const bool syntheticPage = browseState_.syntheticPage();
-        const bool hasPortraitCards = std::any_of(
-            items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
-        const float rowStep = syntheticPage ? 190.0f : browseMediaRowHeight(hasPortraitCards);
-        const int visibleRows = browseMediaVisibleRows(syntheticPage);
-        const int firstRow = mediaFirstVisibleRow(browseState_.selection(), visibleRows);
-        for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
-            const int row = index / columns - firstRow;
-            const int col = index % columns;
-            if (row >= visibleRows) break;
-            const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-            const float y = 285.0f + static_cast<float>(row) * rowStep;
-            const bool focused = !browseState_.filterFocused() && index == browseState_.selection();
-            const auto& item = items[static_cast<size_t>(index)];
-            if (syntheticPage)
-                renderTextTile(item, x, y, slotWidth, 160.0f, focused);
-            else {
-                const bool showState = item.type != "BoxSet" && item.type != "CollectionFolder";
-                renderMediaArtworkCard(item, x, y, slotWidth, focused, showState, false, hasPortraitCards,
-                                       browseMediaTitleLineLimit(hasPortraitCards));
-            }
-        }
+        renderBrowseScreen(
+            renderer_, browseState_, loading_,
+            BrowseRenderStyle<Color>{
+                .cornerLarge = material_tv::cornerLarge,
+                .focusSoft = kFocusSoft,
+                .panel = kPanel,
+                .outline = kOutline,
+                .text = kText,
+                .muted = kMuted,
+            },
+            [&](std::string_view heading) { renderHeader(std::string(heading)); },
+            [&](std::string_view title, std::string_view message) {
+                renderEmptyState(std::string(title), std::string(message));
+            },
+            [&](float x, float y, float width, float height, bool focused, bool selected) {
+                return drawTabSurface(x, y, width, height, focused, selected);
+            },
+            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
+                renderTextTile(item, x, y, width, height, focused);
+            },
+            [&](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
+                bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
+                renderMediaArtworkCard(item, x, y, width, focused, showState, seriesCoverForEpisode, alignMixedHeights,
+                                       titleLineLimit);
+            });
     }
 
     void renderSearch() {
