@@ -42,6 +42,7 @@
 #include "player_screen.hpp"
 #include "player_tracks.hpp"
 #include "queue_overlay_screen.hpp"
+#include "quick_connect_executor.hpp"
 #include "request_epoch.hpp"
 #include "screensaver_policy.hpp"
 #include "search_screen.hpp"
@@ -85,7 +86,6 @@
 #include <random>
 #include <sstream>
 #include <string>
-#include <thread>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -455,25 +455,6 @@ struct EpisodeSeriesContextCompletion {
     std::vector<JellyfinItem> seasons;
 };
 
-struct QuickConnectStartedCompletion {
-    uint64_t generation = 0;
-    QuickConnectRequest request;
-};
-
-struct QuickConnectFailedCompletion {
-    uint64_t generation = 0;
-    std::string error;
-};
-
-struct QuickConnectAuthenticatedCompletion {
-    uint64_t generation = 0;
-    JellyfinSession session;
-};
-
-struct QuickConnectTimedOutCompletion {
-    uint64_t generation = 0;
-};
-
 struct HomeCoreCompletion {
     uint64_t generation = 0;
     HomeSelectionSnapshot snapshot;
@@ -539,6 +520,7 @@ public:
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
+          quickConnectAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -3069,60 +3051,7 @@ private:
         error_.clear();
         const RequestEpoch::Token requestToken = requestEpochs_.auth.beginToken();
 
-        tasks_.submit([this, server, deviceId, requestToken] {
-            auto initiated = api_.initiateQuickConnect(server, deviceId);
-            if (!requestToken.active()) return;
-            if (!initiated.ok) {
-                asyncCompletions_.push(QuickConnectFailedCompletion{
-                    .generation = requestToken.value(),
-                    .error = std::move(initiated.error),
-                });
-                return;
-            }
-
-            const QuickConnectRequest request = initiated.value;
-            asyncCompletions_.push(QuickConnectStartedCompletion{
-                .generation = requestToken.value(),
-                .request = request,
-            });
-
-            for (int attempt = 0; attempt < 60; ++attempt) {
-                std::this_thread::sleep_for(5s);
-                if (!requestToken.active()) return;
-
-                auto state = api_.pollQuickConnect(request, deviceId);
-                if (!state.ok) {
-                    asyncCompletions_.push(QuickConnectFailedCompletion{
-                        .generation = requestToken.value(),
-                        .error = std::move(state.error),
-                    });
-                    return;
-                }
-                if (!state.value) continue;
-
-                auto authenticated = api_.completeQuickConnect(request, deviceId);
-                if (!requestToken.active()) return;
-                if (!authenticated.ok) {
-                    asyncCompletions_.push(QuickConnectFailedCompletion{
-                        .generation = requestToken.value(),
-                        .error = std::move(authenticated.error),
-                    });
-                    return;
-                }
-
-                asyncCompletions_.push(QuickConnectAuthenticatedCompletion{
-                    .generation = requestToken.value(),
-                    .session = std::move(authenticated.value),
-                });
-                return;
-            }
-
-            if (requestToken.active()) {
-                asyncCompletions_.push(QuickConnectTimedOutCompletion{
-                    .generation = requestToken.value(),
-                });
-            }
-        });
+        quickConnectAsync_.connect(server, deviceId, requestToken);
     }
 
     void loadHomeAsync() {
@@ -7230,6 +7159,7 @@ private:
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
+    QuickConnectExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> quickConnectAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
