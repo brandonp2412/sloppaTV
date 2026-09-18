@@ -58,6 +58,15 @@ public:
         return completion;
     }
 
+    [[nodiscard]] SeerrDomainState::MutationOutcome completeDelete(const SeerrEndpoint& requestedEndpoint,
+                                                                  const SeerrEndpoint& currentEndpoint,
+                                                                  const std::string& itemId, int requestId, bool ok) {
+        const auto outcome =
+            domain_.completeDeleteRequest(requestedEndpoint, currentEndpoint, itemId, requestId, ok);
+        if (outcome == SeerrDomainState::MutationOutcome::Applied) domain_.markSearchUnrequested(itemId);
+        return outcome;
+    }
+
 private:
     SeerrDomainState& domain_;
     AsyncExecutor& async_;

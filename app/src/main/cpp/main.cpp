@@ -3634,15 +3634,14 @@ private:
         mutationLoading_ = false;
         if (screen_ != Screen::ItemMenu || detail_.id != completion.request.itemId) return;
         const auto outcome =
-            seerrDomain_.completeDeleteRequest(completion.endpoint, seerrEndpoint(), completion.request.itemId,
-                                               completion.request.requestId, completion.result.ok);
+            seerrRequest_.completeDelete(completion.endpoint, seerrEndpoint(), completion.request.itemId,
+                                         completion.request.requestId, completion.result.ok);
         if (outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
         if (outcome == SeerrDomainState::MutationOutcome::Failed) {
             error_ = "SEERR DELETE: " + completion.result.error;
             detailsState_.setDeleteConfirmation(false);
             return;
         }
-        seerrDomain_.markSearchUnrequested(completion.request.itemId);
         searchState_.refreshSeerrResults();
         syncSeerrHomeRowLocked();
         detail_ = {};
