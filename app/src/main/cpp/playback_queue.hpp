@@ -44,6 +44,66 @@ constexpr bool preferAvailableDuplicate(bool selectedAvailable, bool candidateAv
     return !selectedAvailable && candidateAvailable;
 }
 
+struct SeriesEpisodeSlot {
+    int season = 0;
+    int episode = 0;
+};
+
+struct SeriesPlaybackQueuePreparation {
+    std::vector<JellyfinItem> episodes;
+    std::vector<SeriesEpisodeSlot> unavailableDuplicateSlots;
+};
+
+template <typename Availability>
+SeriesPlaybackQueuePreparation prepareSeriesPlaybackQueue(std::vector<JellyfinItem> episodes,
+                                                          Availability&& staticStreamAvailable) {
+    const bool hasRegularEpisodes =
+        std::any_of(episodes.begin(), episodes.end(), [](const JellyfinItem& item) { return item.parentIndexNumber > 0; });
+    if (hasRegularEpisodes) {
+        episodes.erase(std::remove_if(episodes.begin(), episodes.end(),
+                                      [](const JellyfinItem& item) { return item.parentIndexNumber <= 0; }),
+                       episodes.end());
+    }
+
+    std::sort(episodes.begin(), episodes.end(), [](const JellyfinItem& left, const JellyfinItem& right) {
+        if (left.parentIndexNumber != right.parentIndexNumber) return left.parentIndexNumber < right.parentIndexNumber;
+        if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
+        return left.name < right.name;
+    });
+
+    SeriesPlaybackQueuePreparation result;
+    result.episodes.reserve(episodes.size());
+    for (size_t begin = 0; begin < episodes.size();) {
+        size_t end = begin + 1;
+        while (end < episodes.size() &&
+               sameEpisodeSlot(episodes[begin].parentIndexNumber, episodes[begin].indexNumber,
+                               episodes[end].parentIndexNumber, episodes[end].indexNumber)) {
+            ++end;
+        }
+
+        size_t selected = begin;
+        if (end - begin > 1) {
+            bool selectedAvailable = staticStreamAvailable(episodes[selected]);
+            for (size_t candidate = begin + 1; candidate < end && !selectedAvailable; ++candidate) {
+                const bool candidateAvailable = staticStreamAvailable(episodes[candidate]);
+                if (preferAvailableDuplicate(selectedAvailable, candidateAvailable)) {
+                    selected = candidate;
+                    selectedAvailable = true;
+                }
+            }
+            if (!selectedAvailable) {
+                result.unavailableDuplicateSlots.push_back({
+                    .season = episodes[begin].parentIndexNumber,
+                    .episode = episodes[begin].indexNumber,
+                });
+            }
+        }
+        result.episodes.push_back(std::move(episodes[selected]));
+        begin = end;
+    }
+    return result;
+}
+
 constexpr int queueDefaultSelection(int currentIndex, int size) {
     if (size <= 0) return 0;
     const int current = std::clamp(currentIndex, 0, size - 1);

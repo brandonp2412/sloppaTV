@@ -3819,63 +3819,21 @@ private:
                 return;
             }
 
-            const bool hasRegularEpisodes =
-                std::any_of(episodes.value.begin(), episodes.value.end(),
-                            [](const JellyfinItem& item) { return item.parentIndexNumber > 0; });
-            if (hasRegularEpisodes) {
-                episodes.value.erase(
-                    std::remove_if(episodes.value.begin(), episodes.value.end(),
-                                   [](const JellyfinItem& item) { return item.parentIndexNumber <= 0; }),
-                    episodes.value.end());
-            }
-            std::sort(episodes.value.begin(), episodes.value.end(),
-                      [](const JellyfinItem& left, const JellyfinItem& right) {
-                          if (left.parentIndexNumber != right.parentIndexNumber)
-                              return left.parentIndexNumber < right.parentIndexNumber;
-                          if (left.indexNumber != right.indexNumber) return left.indexNumber < right.indexNumber;
-                          return left.name < right.name;
-                      });
-
-            std::vector<JellyfinItem> deduplicated;
-            deduplicated.reserve(episodes.value.size());
-            for (size_t begin = 0; begin < episodes.value.size();) {
-                size_t end = begin + 1;
-                while (end < episodes.value.size() &&
-                       sameEpisodeSlot(episodes.value[begin].parentIndexNumber, episodes.value[begin].indexNumber,
-                                       episodes.value[end].parentIndexNumber, episodes.value[end].indexNumber)) {
-                    ++end;
+            auto prepared = prepareSeriesPlaybackQueue(std::move(episodes.value), [&](JellyfinItem& candidate) {
+                if (candidate.mediaSourceId.empty() || candidate.container.empty()) {
+                    auto detailed = api_.getItem(session, candidate.id);
+                    if (!detailed.ok) return false;
+                    candidate = std::move(detailed.value);
                 }
-
-                size_t selected = begin;
-                if (end - begin > 1) {
-                    const auto staticStreamAvailable = [&](size_t index) {
-                        auto& candidate = episodes.value[index];
-                        if (candidate.mediaSourceId.empty() || candidate.container.empty()) {
-                            auto detailed = api_.getItem(session, candidate.id);
-                            if (!detailed.ok) return false;
-                            candidate = std::move(detailed.value);
-                        }
-                        return api_.isStaticStreamAvailable(session, candidate);
-                    };
-                    bool selectedAvailable = staticStreamAvailable(selected);
-                    for (size_t candidate = begin + 1; candidate < end && !selectedAvailable; ++candidate) {
-                        const bool candidateAvailable = staticStreamAvailable(candidate);
-                        if (preferAvailableDuplicate(selectedAvailable, candidateAvailable)) {
-                            selected = candidate;
-                            selectedAvailable = true;
-                        }
-                    }
-                    if (!selectedAvailable) {
-                        __android_log_print(
-                            ANDROID_LOG_WARN, kTag,
-                            "No available source found for duplicate S%02dE%02d slot; retaining first server result",
-                            episodes.value[begin].parentIndexNumber, episodes.value[begin].indexNumber);
-                    }
-                }
-                deduplicated.push_back(std::move(episodes.value[selected]));
-                begin = end;
+                return api_.isStaticStreamAvailable(session, candidate);
+            });
+            for (const auto& slot : prepared.unavailableDuplicateSlots) {
+                __android_log_print(
+                    ANDROID_LOG_WARN, kTag,
+                    "No available source found for duplicate S%02dE%02d slot; retaining first server result",
+                    slot.season, slot.episode);
             }
-            episodes.value = std::move(deduplicated);
+            episodes.value = std::move(prepared.episodes);
             if (episodes.value.empty()) {
                 if (!requestEpochs_.playback.active(generation)) return;
                 asyncCompletions_.push(SeriesPlayAllCompletion{
