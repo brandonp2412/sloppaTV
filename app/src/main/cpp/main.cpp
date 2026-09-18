@@ -3710,21 +3710,21 @@ private:
     void applyAsyncCompletion(SeerrSearchCompletion& completion) {
         if (!requestEpochs_.seerrSearch.active(completion.generation)) return;
         if (screen_ != Screen::Search) {
-            seerrDomain_.stopSearchLoading();
+            seerrSearchCoordinator_.abandonCompletion();
             return;
         }
         auto& result = completion.result;
         if (!result.ok) {
-            if (seerrDomain_.failSearch(completion.query, result.error)) searchState_.refreshSeerrResults();
-            if (seerrDomain_.completeSearchFailure(result.error, !settings_.seerrSessionCookie.empty())) {
-                connectSeerrAsync(false);
-            }
+            const auto plan = seerrSearchCoordinator_.completeFailure(
+                completion.query, result.error, !settings_.seerrSessionCookie.empty());
+            if (plan.resultsChanged) searchState_.refreshSeerrResults();
+            if (plan.reconnect) connectSeerrAsync(false);
             return;
         }
-        if (seerrDomain_.completeSearchSuccess(result.value, std::chrono::steady_clock::now())) {
-            syncSeerrHomeRowLocked();
-        }
-        if (seerrDomain_.finishSearch(completion.query, std::move(result.value))) searchState_.refreshSeerrResults();
+        const auto plan = seerrSearchCoordinator_.completeSuccess(
+            completion.query, std::move(result.value), std::chrono::steady_clock::now());
+        if (plan.pendingChanged) syncSeerrHomeRowLocked();
+        if (plan.resultsChanged) searchState_.refreshSeerrResults();
     }
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {

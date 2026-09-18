@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 enum class SeerrSearchDispatchAction {
     None,
@@ -19,6 +20,12 @@ struct SeerrSearchDispatchPlan {
     std::string query;
 
     [[nodiscard]] bool ready() const { return action == SeerrSearchDispatchAction::Submit; }
+};
+
+struct SeerrSearchCompletionPlan {
+    bool resultsChanged = false;
+    bool pendingChanged = false;
+    bool reconnect = false;
 };
 
 template <typename AsyncExecutor> class SeerrSearchCoordinator {
@@ -74,6 +81,29 @@ public:
     void submit(SeerrSearchDispatchPlan plan, uint64_t generation) {
         if (!plan.ready()) return;
         async_.search(std::move(plan.endpoint), std::move(plan.query), generation);
+    }
+
+    void abandonCompletion() { domain_.stopSearchLoading(); }
+
+    [[nodiscard]] SeerrSearchCompletionPlan completeFailure(std::string_view query, std::string error,
+                                                            bool hasSessionCookie) {
+        const bool resultsChanged = domain_.failSearch(query, error);
+        return {
+            .resultsChanged = resultsChanged,
+            .pendingChanged = false,
+            .reconnect = domain_.completeSearchFailure(error, hasSessionCookie),
+        };
+    }
+
+    [[nodiscard]] SeerrSearchCompletionPlan completeSuccess(std::string_view query,
+                                                            std::vector<SeerrMediaItem> results,
+                                                            SeerrRequestState::TimePoint now) {
+        const bool pendingChanged = domain_.completeSearchSuccess(results, now);
+        return {
+            .resultsChanged = domain_.finishSearch(query, std::move(results)),
+            .pendingChanged = pendingChanged,
+            .reconnect = false,
+        };
     }
 
 private:

@@ -126,5 +126,53 @@ int main() {
         assert(async.submissions.back().generation == 27);
     }
 
+    {
+        SeerrDomainState domain;
+        FakeAsyncExecutor async;
+        SeerrSearchCoordinator coordinator(domain, async);
+        const auto start = SeerrSearchState::Clock::now();
+        assert(domain.beginImmediateSearch("arrival", true).started);
+
+        auto requested = media();
+        requested.requested = true;
+        requested.requestId = 42;
+        requested.status = "Queued";
+        const auto completion = coordinator.completeSuccess("arrival", {requested}, start);
+        assert(completion.resultsChanged);
+        assert(completion.pendingChanged);
+        assert(!completion.reconnect);
+        assert(!domain.searchLoading());
+        assert(domain.searchResults().size() == 1);
+        assert(domain.pendingRequests().size() == 1);
+        assert(domain.pendingRequests().front().requestId == 42);
+    }
+
+    {
+        SeerrDomainState domain;
+        FakeAsyncExecutor async;
+        SeerrSearchCoordinator coordinator(domain, async);
+        assert(domain.beginImmediateSearch("arrival", true).started);
+
+        const auto completion = coordinator.completeFailure("arrival", "HTTP 401 unauthorized", true);
+        assert(completion.resultsChanged);
+        assert(!completion.pendingChanged);
+        assert(completion.reconnect);
+        assert(!domain.searchLoading());
+        assert(domain.searchResults().empty());
+        const auto deferred = domain.takeDeferredConnectionWork();
+        assert(deferred.retrySearch);
+    }
+
+    {
+        SeerrDomainState domain;
+        FakeAsyncExecutor async;
+        SeerrSearchCoordinator coordinator(domain, async);
+        assert(domain.beginImmediateSearch("arrival", true).started);
+        assert(domain.searchLoading());
+
+        coordinator.abandonCompletion();
+        assert(!domain.searchLoading());
+    }
+
     return 0;
 }
