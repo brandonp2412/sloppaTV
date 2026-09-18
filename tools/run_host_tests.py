@@ -46,6 +46,7 @@ CPP_TESTS = [
     "home_image_disk_cache_test.cpp",
     "home_async_executor_test.cpp",
     "home_renderer_test.cpp",
+    "home_row_renderer_test.cpp",
     "home_screen_test.cpp",
     "item_menu_renderer_test.cpp",
     "item_mutation_executor_test.cpp",

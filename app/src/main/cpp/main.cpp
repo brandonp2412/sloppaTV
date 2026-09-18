@@ -27,6 +27,7 @@
 #include "external_player.hpp"
 #include "home_async_executor.hpp"
 #include "home_renderer.hpp"
+#include "home_row_renderer.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "item_menu_renderer.hpp"
@@ -5119,135 +5120,44 @@ private:
     }
 
     void renderHomeRow(const std::string& title, const std::vector<JellyfinItem>& items, int row, float top) {
-        if (items.empty()) return;
-        const auto now = std::chrono::steady_clock::now();
-        const int selected = homeState_.selection(row, static_cast<int>(items.size()));
-        const float imageOffset = homeRowImageOffset(settings_.uiTextSize);
-
-        if (title == "My Media") {
-            renderer_.text(72.0f, top, 3.05f, "My media", homeState_.row() == row ? kText : kSecondaryText, 420.0f);
-            constexpr float cardW = 420.0f;
-            constexpr float cardH = 225.0f;
-            constexpr float gap = 28.0f;
-            const float imageY = top + imageOffset;
-            float x = 72.0f;
-            const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 4);
-            for (int index = start; index < static_cast<int>(items.size()); ++index) {
-                if (x + cardW > 1885.0f && index > start) break;
-                const bool focused = homeState_.row() == row && index == selected;
-                const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, materialCardFocusScale());
-                const float cardRadius = material_tv::cornerSmall * bounds[3] / cardH;
-                const auto& item = items[static_cast<size_t>(index)];
-                const bool hasArtwork = drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
-                if (!hasArtwork) drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
-                if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
-                renderer_.text(x + 4.0f, imageY + cardH + 24.0f, 2.05f,
-                               fitTextLines(items[static_cast<size_t>(index)].name, 2.05f, cardW - 8.0f, 1),
-                               focused ? kText : kSecondaryText, cardW - 8.0f);
-                x += cardW + gap;
-            }
-            return;
-        }
-
-        renderer_.text(72.0f, top, 3.05f, fitTextLines(title, 3.05f, 900.0f, 1),
-                       homeState_.row() == row ? kText : kSecondaryText, 900.0f);
-        const int start = homeState_.firstVisibleItem(row, static_cast<int>(items.size()), 5);
-        constexpr float cardH = 202.0f;
-        constexpr float cardW = 350.0f;
-        constexpr float gap = 18.0f;
-        const float imageY = top + imageOffset;
-        float x = 72.0f;
-
-        auto singleLine = [&](std::string_view value, float scale, float width) {
-            return fitTextLines(value, scale, width, 1);
-        };
-
-        for (int index = start; index < static_cast<int>(items.size()); ++index) {
-            if (x + cardW > 1908.0f && index > start) break;
-            const auto& item = items[static_cast<size_t>(index)];
-            float itemAlpha = 1.0f;
-            if (title == "Next Up" && index == nextUpReplacementFadeIndex_ && item.id == nextUpReplacementFadeItemId_ &&
-                nextUpReplacementFadeStarted_ != std::chrono::steady_clock::time_point{}) {
-                const auto fadeElapsed =
-                    std::chrono::duration_cast<std::chrono::milliseconds>(now - nextUpReplacementFadeStarted_).count();
-                const float progress = std::clamp(static_cast<float>(fadeElapsed) / 300.0f, 0.0f, 1.0f);
-                itemAlpha = progress * progress * (3.0f - 2.0f * progress);
-            }
-            const auto faded = [itemAlpha](Color color) {
-                color.a *= itemAlpha;
-                return color;
-            };
-            const bool focused = homeState_.row() == row && index == selected;
-            const auto bounds = focusedBounds(x, imageY, cardW, cardH, focused, materialCardFocusScale());
-            const float cardRadius = material_tv::cornerSmall * bounds[3] / cardH;
-            const bool hasArtwork =
-                drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
-            if (!hasArtwork)
-                drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, itemAlpha);
-            if (item.externalProgressPercent >= 0) {
-                const double progress = std::clamp(static_cast<double>(item.externalProgressPercent) / 100.0, 0.0, 1.0);
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f,
-                                      faded(kTrack));
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
-                                      static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
-            } else if (item.positionTicks > 0 && item.runtimeTicks > 0) {
-                const double progress = std::clamp(
-                    static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f, bounds[2] - 16.0f, 4.0f, 2.0f,
-                                      faded(kTrack));
-                renderer_.roundedRect(bounds[0] + 8.0f, bounds[1] + bounds[3] - 10.0f,
-                                      static_cast<float>((bounds[2] - 16.0f) * progress), 4.0f, 2.0f, faded(kFocus));
-            }
-            if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], faded(kFocus), cardRadius);
-
-            std::string primary = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
-            primary = singleLine(primary, 2.45f, cardW - 18.0f);
-            const float titleY = imageY + cardH + 22.0f;
-            renderer_.text(x + 2.0f, titleY, 2.45f, primary, faded(focused ? kText : kSecondaryText), cardW - 4.0f);
-            if (isSeerrItem(item) && !item.externalStatus.empty()) {
-                const float secondaryY = titleY + 11.0f * 2.45f * uiTextScale(settings_.uiTextSize) + 4.0f;
-                if (item.externalProgressPercent >= 0 && !item.externalProgressLabel.empty()) {
-                    const std::string percentLabel = std::to_string(item.externalProgressPercent) + "%";
-                    const float percentWidth = std::ceil(renderer_.textWidth(1.16f, percentLabel));
-                    const float etaWidth =
-                        item.externalProgressEta.empty()
-                            ? 0.0f
-                            : std::round(std::clamp(
-                                  renderer_.textWidth(1.08f, materialLabel(item.externalProgressEta)) + 34.0f, 72.0f,
-                                  210.0f));
-                    constexpr float metadataGap = 12.0f;
-                    constexpr float statusToMetadataGap = 22.0f;
-                    const float rightEdge = x + cardW - 2.0f;
-                    const float etaX = rightEdge - etaWidth;
-                    const float percentX =
-                        item.externalProgressEta.empty() ? rightEdge - percentWidth : etaX - metadataGap - percentWidth;
-                    const float statusWidth = std::max(60.0f, percentX - (x + 2.0f) - statusToMetadataGap);
-                    renderer_.text(x + 2.0f, secondaryY, 1.48f,
-                                   singleLine(item.externalProgressLabel, 1.48f, statusWidth), faded(kMuted),
-                                   statusWidth);
-                    renderer_.textVerticallyCentered(percentX, secondaryY - 3.0f, 30.0f, 1.16f, percentLabel,
-                                                     kSecondaryText, percentWidth);
-                    if (!item.externalProgressEta.empty()) {
-                        drawChip(etaX, secondaryY - 3.0f, item.externalProgressEta, false, 1.08f, 30.0f, 210.0f);
-                    }
-                } else {
-                    renderer_.text(x + 2.0f, secondaryY, 1.58f, singleLine(item.externalStatus, 1.58f, cardW - 4.0f),
-                                   faded(kMuted), cardW - 4.0f);
-                }
-            } else if (item.type == "Episode") {
-                std::string episode = episodeNumberLabel(item);
-                if (!item.name.empty() && item.name != item.seriesName) {
-                    if (!episode.empty()) episode += "  |  ";
-                    episode += item.name;
-                }
-                if (!episode.empty()) {
-                    const float secondaryY = titleY + 11.0f * 2.45f * uiTextScale(settings_.uiTextSize) + 4.0f;
-                    renderer_.text(x + 2.0f, secondaryY, 1.58f, singleLine(episode, 1.58f, cardW - 4.0f), faded(kMuted),
-                                   cardW - 4.0f);
-                }
-            }
-            x += cardW + gap;
-        }
+        renderHomeRowContent(
+            renderer_, title, items, row, top, homeState_, settings_.uiTextSize,
+            HomeRowFadeState{
+                .itemIndex = nextUpReplacementFadeIndex_,
+                .itemId = nextUpReplacementFadeItemId_,
+                .started = nextUpReplacementFadeStarted_,
+                .now = std::chrono::steady_clock::now(),
+            },
+            HomeRowRenderStyle<Color>{
+                .cornerSmall = material_tv::cornerSmall,
+                .cardFocusScale = materialCardFocusScale(),
+                .text = kText,
+                .secondaryText = kSecondaryText,
+                .muted = kMuted,
+                .track = kTrack,
+                .focus = kFocus,
+            },
+            [this](float x, float y, float width, float height, bool focused, float focusScale) {
+                return focusedBounds(x, y, width, height, focused, focusScale);
+            },
+            [this](const JellyfinItem& item, float x, float y, float width, float height, float radius, float alpha) {
+                return drawHomeArtwork(item, x, y, width, height, radius, alpha);
+            },
+            [this](const JellyfinItem& item, float x, float y, float width, float height, float radius, float alpha) {
+                drawArtworkPlaceholder(item, x, y, width, height, radius, alpha);
+            },
+            [this](float x, float y, float width, float height, Color color, float radius) {
+                drawFocusHalo(x, y, width, height, color, radius);
+            },
+            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(value, scale, maxWidth, maxLines);
+            },
+            [this](float x, float y, const std::string& label, bool selected, float scale, float height,
+                   float maxWidth) {
+                return drawChip(x, y, label, selected, scale, height, maxWidth);
+            },
+            [](const JellyfinItem& item) { return isSeerrItem(item); },
+            [](const JellyfinItem& item) { return episodeNumberLabel(item); });
     }
 
     MediaCardRenderStyle<Color> mediaCardStyle() const {
