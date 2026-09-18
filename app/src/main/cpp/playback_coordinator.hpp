@@ -422,7 +422,13 @@ public:
 
     [[nodiscard]] const PlaybackSessionState& session() const { return sessionState_; }
 
+    [[nodiscard]] bool activeItemAvailable() const { return !sessionState_.activeItem().id.empty(); }
+
     [[nodiscard]] bool activeTargetAvailable() const { return !sessionState_.activeTarget().url.empty(); }
+
+    [[nodiscard]] bool activeTargetUsesDirectPlay() const {
+        return sessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay;
+    }
 
     [[nodiscard]] PlaybackTelemetryState& telemetry() { return telemetryState_; }
 

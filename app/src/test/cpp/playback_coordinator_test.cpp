@@ -24,7 +24,9 @@ int main() {
     coordinator.activate(coordinatedItem, coordinatedTarget, now - 11s);
     assert(coordinator.session().activeItem().id == coordinatedItem.id);
     assert(coordinator.session().activeTarget().url == coordinatedTarget.url);
+    assert(coordinator.activeItemAvailable());
     assert(coordinator.activeTargetAvailable());
+    assert(!coordinator.activeTargetUsesDirectPlay());
     assert(coordinator.session().lastPlaybackSummary() == "DirectStream");
     assert(coordinator.tickPlan(false, true, 35000, now).reportPlaybackStart);
     assert(coordinator.telemetry().markPlaybackStartReported());
@@ -257,6 +259,8 @@ int main() {
     playerStartTarget.audioStreamIndex = 5;
     playerStartTarget.subtitleStreamIndex = 11;
     playerStartCoordinator.activate(playerStartItem, playerStartTarget, now);
+    assert(playerStartCoordinator.activeItemAvailable());
+    assert(playerStartCoordinator.activeTargetUsesDirectPlay());
 
     auto playerStart = playerStartCoordinator.playerStartContext();
     assert(playerStart.url == playerStartTarget.url);
@@ -421,6 +425,8 @@ int main() {
     ownershipCoordinator.clearActivePlayback();
     assert(ownershipCoordinator.session().activeItem().id.empty());
     assert(ownershipCoordinator.session().activeTarget().url.empty());
+    assert(!ownershipCoordinator.activeItemAvailable());
+    assert(!ownershipCoordinator.activeTargetAvailable());
     assert(ownershipCoordinator.session().lastPlaybackSummary() == "EXTERNAL / VLC");
 
     lifecycleCoordinator.transition().setLoading(true);

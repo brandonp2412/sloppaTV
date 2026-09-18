@@ -2609,7 +2609,7 @@ private:
         api_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle ||
-            !playbackCoordinator_.session().activeItem().id.empty()) {
+            playbackCoordinator_.activeItemAvailable()) {
             releaseActivePlayback(true);
         }
 
@@ -3414,7 +3414,7 @@ private:
         }
 
         const Screen originScreen = screen_;
-        const bool replacingPlayer = screen_ == Screen::Player && !playbackCoordinator_.session().activeItem().id.empty();
+        const bool replacingPlayer = screen_ == Screen::Player && playbackCoordinator_.activeItemAvailable();
         if (replacingPlayer) releaseActivePlayback(true, replacingCompleted);
         const int previousQueueIndex = queueState_.currentIndex();
         queueState_.closeOverlay();
@@ -4006,7 +4006,7 @@ private:
             playerScreenState_.setPositionMs(playerScreenState_.durationMs());
         }
 
-        if (!playbackEnded && playbackCoordinator_.session().activeTarget().playMethod == PlaybackMethod::DirectPlay) {
+        if (!playbackEnded && playbackCoordinator_.activeTargetUsesDirectPlay()) {
             const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
             const int recoveryTargetMs =
                 pendingSeekTargetMs >= 0 ? pendingSeekTargetMs : playerScreenState_.recentSeekTargetMs();
