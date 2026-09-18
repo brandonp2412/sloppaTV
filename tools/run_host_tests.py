@@ -37,6 +37,7 @@ CPP_TESTS = [
     "http_retry_policy_test.cpp",
     "home_image_disk_cache_test.cpp",
     "home_screen_test.cpp",
+    "home_visibility_test.cpp",
     "launch_intent_test.cpp",
     "media_player_policy_test.cpp",
     "media_session_policy_test.cpp",

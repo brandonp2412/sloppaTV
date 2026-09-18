@@ -18,6 +18,7 @@
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
 #include "home_screen.hpp"
+#include "home_visibility.hpp"
 #include "image_decoder.hpp"
 #include "jellyfin.hpp"
 #include "jni_env.hpp"
@@ -3125,20 +3126,9 @@ private:
         });
     }
 
-    std::string hiddenHomeKey(const std::string& itemId) const {
-        return session_.server + "\n" + session_.userId + "\n" + itemId;
-    }
+    std::string hiddenHomeKey(const std::string& itemId) const { return homeVisibilityKey(session_, itemId); }
 
-    bool isHiddenFromHome(const JellyfinItem& item) const {
-        return !item.id.empty() && hiddenHomeItems_.contains(hiddenHomeKey(item.id));
-    }
-
-    void filterHiddenHomeItems(JellyfinHomeData& data) const {
-        for (auto& row : data.rows) {
-            if (row.title == "My Media") continue;
-            std::erase_if(row.items, [&](const JellyfinItem& item) { return isHiddenFromHome(item); });
-        }
-    }
+    bool isHiddenFromHome(const JellyfinItem& item) const { return homeItemHidden(session_, item, hiddenHomeItems_); }
 
     void clampHomeSelections() {
         std::vector<int> itemCounts;
@@ -3155,7 +3145,7 @@ private:
             hiddenHomeItems_.insert(key);
         else
             hiddenHomeItems_.erase(key);
-        filterHiddenHomeItems(home_);
+        filterHiddenHomeItems(home_, session_, hiddenHomeItems_);
         clampHomeSelections();
         saveSession(session_);
         showNotice(hiding ? "HIDDEN FROM HOME" : "HOME VISIBILITY RESTORED", 2s);
@@ -3462,21 +3452,24 @@ private:
         requestServerInfoNoticeAsync();
 
         HomeSelectionSnapshot homeSnapshot;
+        std::unordered_set<std::string> hiddenItems;
         {
             std::scoped_lock lock(stateMutex_);
             homeSnapshot = homeState_.snapshot(home_.rows);
+            hiddenItems = hiddenHomeItems_;
             homeLoading_ = true;
             homeRetryAt_ = {};
         }
 
         const uint64_t generation = requestEpochs_.home.begin();
         const auto homeLoadStarted = std::chrono::steady_clock::now();
-        tasks_.submit([this, session, generation, homeSnapshot = std::move(homeSnapshot), homeLoadStarted] {
+        tasks_.submit([this, session, generation, homeSnapshot = std::move(homeSnapshot),
+                       hiddenItems = std::move(hiddenItems), homeLoadStarted] {
             auto core = api_.loadHomeCore(session);
             HomeRestorePlan restorePlan;
             std::vector<JellyfinItem> views;
             if (core.ok) {
-                filterHiddenHomeItems(core.value);
+                filterHiddenHomeItems(core.value, session, hiddenItems);
                 views = core.value.views;
                 restorePlan = HomeScreenState::restorePlan(homeSnapshot, core.value.rows);
             }
@@ -5069,10 +5062,11 @@ private:
         const uint64_t generation = completion.generation;
         HomeSelectionSnapshot snapshot = completion.snapshot;
         const auto startedAt = completion.startedAt;
+        const auto hiddenItems = hiddenHomeItems_;
         tasks_.submit([this, session, generation, views = std::move(views), snapshot = std::move(snapshot),
-                       coreRestoredRow, startedAt]() mutable {
+                       hiddenItems, coreRestoredRow, startedAt]() mutable {
             auto secondary = api_.loadHomeSecondary(session, views);
-            if (secondary.ok) filterHiddenHomeItems(secondary.value);
+            if (secondary.ok) filterHiddenHomeItems(secondary.value, session, hiddenItems);
             asyncCompletions_.push(HomeSecondaryCompletion{
                 .generation = generation,
                 .snapshot = std::move(snapshot),
