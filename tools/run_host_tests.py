@@ -73,6 +73,7 @@ CPP_TESTS = [
     "series_playback_executor_test.cpp",
     "session_registry_test.cpp",
     "settings_screen_test.cpp",
+    "subtitle_load_executor_test.cpp",
     "subtitle_policy_test.cpp",
     "system_text_input_test.cpp",
     "trickplay_policy_test.cpp",
