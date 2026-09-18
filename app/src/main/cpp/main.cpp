@@ -3673,36 +3673,33 @@ private:
 
     void applyAsyncCompletion(SeerrStorageRefreshCompletion& completion) {
         auto& result = completion.result;
-        const auto domainCompletion = seerrDomain_.completeStorageRefresh(
+        const auto plan = seerrRefresh_.completeStorage(
             completion.endpoint, seerrEndpoint(), result.ok, std::move(result.value), result.error,
-            std::chrono::steady_clock::now());
-        if (domainCompletion.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
-        if (domainCompletion.outcome == SeerrDomainState::RefreshOutcome::Failed) {
+            settings_.seerrSelectDrive, std::chrono::steady_clock::now());
+        if (plan.domain.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
+        if (plan.domain.outcome == SeerrDomainState::RefreshOutcome::Failed) {
             __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
-            if (domainCompletion.reconnect) {
+            if (plan.domain.reconnect) {
                 connectSeerrAsync(false);
                 return;
             }
-            if (domainCompletion.clearedPendingRequest) showNotice("SEERR STORAGE: " + result.error, 5s);
+            if (plan.domain.clearedPendingRequest) showNotice("SEERR STORAGE: " + result.error, 5s);
             return;
         }
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
-                            seerrDomain_.storageTargets().size());
-        const auto pendingRequest = seerrDomain_.takePendingStorageRequest(settings_.seerrSelectDrive);
-        if (pendingRequest) openSeerrDrivePicker(*pendingRequest);
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets", plan.targetCount);
+        if (plan.pendingRequest) openSeerrDrivePicker(*plan.pendingRequest);
     }
 
     void applyAsyncCompletion(SeerrPendingRefreshCompletion& completion) {
         auto& result = completion.result;
-        const auto outcome = seerrDomain_.completePendingRefresh(
-            completion.endpoint, seerrEndpoint(), result.ok, std::move(result.value), std::chrono::steady_clock::now());
-        if (outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
-        if (outcome == SeerrDomainState::RefreshOutcome::Failed) {
+        const auto plan = seerrRefresh_.completePending(completion.endpoint, seerrEndpoint(), result.ok,
+                                                        std::move(result.value), std::chrono::steady_clock::now());
+        if (plan.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
+        if (plan.outcome == SeerrDomainState::RefreshOutcome::Failed) {
             __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
             return;
         }
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
-                            seerrDomain_.pendingRequests().size());
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests", plan.pendingCount);
         if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
             if (const SeerrMediaItem* current = seerrDomain_.findPendingRequest(detail_.id)) {
                 detail_ = jellyfinItemFromSeerrMedia(*current);

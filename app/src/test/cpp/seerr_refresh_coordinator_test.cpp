@@ -29,6 +29,23 @@ SeerrEndpoint configuredEndpoint() {
             },
     };
 }
+
+SeerrStorageTarget target(int serverId = 4) {
+    SeerrStorageTarget value;
+    value.mediaType = "movie";
+    value.serverId = serverId;
+    value.path = "/movies";
+    return value;
+}
+
+SeerrMediaItem media(std::string id = "seerr:movie:10") {
+    SeerrMediaItem item;
+    item.id = std::move(id);
+    item.name = "Requested";
+    item.mediaType = "movie";
+    item.tmdbId = 10;
+    return item;
+}
 } // namespace
 
 int main() {
@@ -79,6 +96,39 @@ int main() {
            SeerrDomainState::RefreshStartAction::Reset);
     assert(async.pending.size() == 1);
     assert(!domain.pendingRequestsLoading());
+
+    const auto requested = media();
+    assert(domain.storage().preparePicker(requested) == SeerrStorageState::PickerStatus::Loading);
+    auto storageCompletion =
+        coordinator.completeStorage(configuredEndpoint(), configuredEndpoint(), true, {target(9)}, "", true, start + 2s);
+    assert(storageCompletion.domain.outcome == SeerrDomainState::RefreshOutcome::Applied);
+    assert(storageCompletion.targetCount == 1);
+    assert(storageCompletion.pendingRequest);
+    assert(storageCompletion.pendingRequest->id == requested.id);
+    assert(!domain.storage().pendingRequest());
+
+    auto staleEndpoint = configuredEndpoint();
+    staleEndpoint.server = "https://other.example.nz";
+    storageCompletion =
+        coordinator.completeStorage(configuredEndpoint(), staleEndpoint, true, {target(10)}, "", true, start + 3s);
+    assert(storageCompletion.domain.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint);
+    assert(storageCompletion.targetCount == 0);
+    assert(!storageCompletion.pendingRequest);
+    assert(domain.storageTargets().size() == 1);
+    assert(domain.storageTargets().front().serverId == 9);
+
+    auto pendingCompletion =
+        coordinator.completePending(configuredEndpoint(), configuredEndpoint(), true, {media()}, start + 4s);
+    assert(pendingCompletion.outcome == SeerrDomainState::RefreshOutcome::Applied);
+    assert(pendingCompletion.pendingCount == 1);
+    assert(domain.pendingRequests().size() == 1);
+    assert(domain.pendingRequests().front().id == "seerr:movie:10");
+
+    pendingCompletion =
+        coordinator.completePending(configuredEndpoint(), staleEndpoint, true, {media("seerr:movie:11")}, start + 5s);
+    assert(pendingCompletion.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint);
+    assert(pendingCompletion.pendingCount == 0);
+    assert(domain.pendingRequests().size() == 1);
 
     return 0;
 }
