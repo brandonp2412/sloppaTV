@@ -37,6 +37,7 @@
 #include "jni_env.hpp"
 #include "launch_intent.hpp"
 #include "login_renderer.hpp"
+#include "media_card_renderer.hpp"
 #include "media_grid_renderer.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
@@ -5248,85 +5249,90 @@ private:
         }
     }
 
+    MediaCardRenderStyle<Color> mediaCardStyle() const {
+        return MediaCardRenderStyle<Color>{
+            .canvasHeight = Renderer::logicalHeight(),
+            .cornerSmall = material_tv::cornerSmall,
+            .cornerMedium = material_tv::cornerMedium,
+            .cardFocusScale = materialCardFocusScale(),
+            .labelScale = material_tv::type::label,
+            .panel = kPanel,
+            .panelAlt = kPanelAlt,
+            .panelElevated = kPanelElevated,
+            .tertiary = kTertiary,
+            .text = kText,
+            .muted = kMuted,
+            .track = kTrack,
+            .focus = kFocus,
+            .focusSoft = kFocusSoft,
+            .outline = kOutline,
+        };
+    }
+
     void renderMediaArtworkCard(const JellyfinItem& item, float x, float y, float slotWidth, bool focused,
                                 bool showState = true, bool preferSeriesCover = false, bool alignToPortraitBand = false,
                                 int titleLineLimit = 0) {
-        const bool seriesCoverForEpisode = preferSeriesCover && item.type == "Episode" && !item.seriesId.empty() &&
-                                           !item.seriesPrimaryImageTag.empty();
-        const bool landscape = usesLandscapeMediaCard(item.type) && !seriesCoverForEpisode;
-        const float imageWidth = landscape ? slotWidth : mediaPosterWidth();
-        const float imageHeight = landscape ? 180.0f : mediaPosterHeight();
-        const float artworkBandHeight = alignToPortraitBand ? mediaPosterHeight() : imageHeight;
-        const float imageX = x + (slotWidth - imageWidth) * 0.5f;
-        const float imageY = y + std::max(0.0f, (artworkBandHeight - imageHeight) * 0.5f);
-        const auto bounds = focusedBounds(imageX, imageY, imageWidth, imageHeight, focused, materialCardFocusScale());
-        const float cardRadius = material_tv::cornerSmall * bounds[3] / imageHeight;
-        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, kPanelAlt);
-        JellyfinItem cover = item;
-        if (seriesCoverForEpisode) {
-            cover.id = item.seriesId;
-            cover.imageTag = item.seriesPrimaryImageTag;
-            cover.type = "Series";
-        }
-        const bool hasArtwork = landscape
-                                    ? drawHomeArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius)
-                                    : drawArtwork(cover, bounds[0], bounds[1], bounds[2], bounds[3], 1.0f, cardRadius);
-        if (!hasArtwork) {
-            drawArtworkPlaceholder(item, bounds[0] + 1.0f, bounds[1] + 1.0f, bounds[2] - 2.0f, bounds[3] - 2.0f,
-                                   std::max(0.0f, cardRadius - 1.0f));
-        }
-        if (item.positionTicks > 0 && item.runtimeTicks > 0) {
-            const double fraction =
-                std::clamp(static_cast<double>(item.positionTicks) / static_cast<double>(item.runtimeTicks), 0.0, 1.0);
-            renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f, bounds[2] - 20.0f, 5.0f, 2.5f,
-                                  kTrack);
-            renderer_.roundedRect(bounds[0] + 10.0f, bounds[1] + bounds[3] - 14.0f,
-                                  static_cast<float>((bounds[2] - 20.0f) * fraction), 5.0f, 2.5f, kFocus);
-        }
-        if (showState && (item.favorite || (settings_.showWatchedIndicators && item.played))) {
-            const std::string label = item.favorite ? "Favorite" : "Watched";
-            const float badgeWidth = item.favorite ? 132.0f : 118.0f;
-            const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
-            const float badgeY = bounds[1] + 12.0f;
-            const Color badgeSurface = item.favorite ? kFocusSoft : kPanelElevated;
-            renderer_.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, badgeSurface);
-            renderer_.roundedOutline(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, 1.0f, item.favorite ? kFocus : kOutline);
-            drawCenteredSingleLineFit(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, kText, 10.0f, 3.0f);
-        }
-        if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
-
-        const float titleY = y + artworkBandHeight + 24.0f;
-        const int titleLines = titleLineLimit > 0 ? titleLineLimit : (landscape ? 1 : 2);
-        const std::string fittedTitle =
-            fitTextLines(item.name, material_tv::type::label, imageWidth - 4.0f, titleLines);
-        renderer_.text(imageX + 2.0f, titleY, material_tv::type::label, fittedTitle, kText, imageWidth - 4.0f);
-        const std::string secondary =
-            isSeerrItem(item) ? (item.externalRequested ? item.externalStatus : std::string("Press OK to request"))
-                              : episodeLabel(item);
-        if (!secondary.empty()) {
-            const int renderedTitleLines =
-                fittedTitle.empty() ? 0
-                                    : 1 + static_cast<int>(std::count(fittedTitle.begin(), fittedTitle.end(), '\n'));
-            const float titleLineHeight = 11.0f * material_tv::type::label * uiTextScale(settings_.uiTextSize);
-            const float secondaryY = titleY + titleLineHeight * static_cast<float>(renderedTitleLines) + 3.0f;
-            const float secondaryHeight = 10.0f * 1.45f * uiTextScale(settings_.uiTextSize);
-            if (secondaryY + secondaryHeight <= Renderer::logicalHeight() - 8.0f) {
-                renderer_.text(imageX + 2.0f, secondaryY, 1.45f, fitTextLines(secondary, 1.45f, imageWidth - 4.0f, 1),
-                               kMuted, imageWidth - 4.0f);
-            }
-        }
+        renderMediaArtworkCardContent(
+            renderer_, item, x, y, slotWidth, focused,
+            MediaArtworkCardRenderOptions{
+                .showState = showState,
+                .preferSeriesCover = preferSeriesCover,
+                .alignToPortraitBand = alignToPortraitBand,
+                .titleLineLimit = titleLineLimit,
+                .uiTextSize = settings_.uiTextSize,
+                .showWatchedIndicators = settings_.showWatchedIndicators,
+            },
+            mediaCardStyle(),
+            [this](float imageX, float imageY, float imageWidth, float imageHeight, bool isFocused, float focusScale) {
+                return focusedBounds(imageX, imageY, imageWidth, imageHeight, isFocused, focusScale);
+            },
+            [this](const JellyfinItem& source, bool seriesCoverForEpisode, bool landscape, float imageX, float imageY,
+                   float imageWidth, float imageHeight, float radius) {
+                JellyfinItem cover = source;
+                if (seriesCoverForEpisode) {
+                    cover.id = source.seriesId;
+                    cover.imageTag = source.seriesPrimaryImageTag;
+                    cover.type = "Series";
+                }
+                return landscape ? drawHomeArtwork(cover, imageX, imageY, imageWidth, imageHeight, radius)
+                                 : drawArtwork(cover, imageX, imageY, imageWidth, imageHeight, 1.0f, radius);
+            },
+            [this](const JellyfinItem& source, float imageX, float imageY, float imageWidth, float imageHeight,
+                   float radius) {
+                drawArtworkPlaceholder(source, imageX, imageY, imageWidth, imageHeight, radius);
+            },
+            [this](float imageX, float imageY, float imageWidth, float imageHeight, Color color, float radius) {
+                drawFocusHalo(imageX, imageY, imageWidth, imageHeight, color, radius);
+            },
+            [this](float centeredX, float centeredY, float centeredWidth, float centeredHeight, float scale,
+                   std::string_view value, Color color, float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(centeredX, centeredY, centeredWidth, centeredHeight, scale, value, color,
+                                          horizontalPadding, verticalPadding);
+            },
+            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(value, scale, maxWidth, maxLines);
+            },
+            [](const JellyfinItem& source) {
+                return isSeerrItem(source)
+                           ? (source.externalRequested ? source.externalStatus : std::string("Press OK to request"))
+                           : episodeLabel(source);
+            });
     }
 
     void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
-        const auto bounds = focusedBounds(x, y, width, height, focused, materialCardFocusScale());
-        const float tileRadius = material_tv::cornerMedium * bounds[3] / height;
-        renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], tileRadius,
-                              focused ? kPanelElevated : kPanel);
-        drawCenteredSingleLineFit(bounds[0] + 28.0f, bounds[1] + 18.0f, bounds[2] - 56.0f, 42.0f, 1.25f, item.type,
-                                  kTertiary, 8.0f, 3.0f);
-        drawCenteredSingleLineFit(bounds[0] + 28.0f, bounds[1] + 58.0f, bounds[2] - 56.0f, bounds[3] - 76.0f, 2.55f,
-                                  item.name, kText, 10.0f, 6.0f);
-        if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, tileRadius);
+        renderMediaTextTileContent(
+            renderer_, item, x, y, width, height, focused, mediaCardStyle(),
+            [this](float tileX, float tileY, float tileWidth, float tileHeight, bool isFocused, float focusScale) {
+                return focusedBounds(tileX, tileY, tileWidth, tileHeight, isFocused, focusScale);
+            },
+            [this](float centeredX, float centeredY, float centeredWidth, float centeredHeight, float scale,
+                   std::string_view value, Color color, float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(centeredX, centeredY, centeredWidth, centeredHeight, scale, value, color,
+                                          horizontalPadding, verticalPadding);
+            },
+            [this](float tileX, float tileY, float tileWidth, float tileHeight, Color color, float radius) {
+                drawFocusHalo(tileX, tileY, tileWidth, tileHeight, color, radius);
+            });
     }
 
     void renderBrowse() {

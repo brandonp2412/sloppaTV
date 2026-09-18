@@ -52,6 +52,7 @@ CPP_TESTS = [
     "keyboard_renderer_test.cpp",
     "launch_intent_test.cpp",
     "login_renderer_test.cpp",
+    "media_card_renderer_test.cpp",
     "media_grid_renderer_test.cpp",
     "media_player_policy_test.cpp",
     "media_session_policy_test.cpp",
