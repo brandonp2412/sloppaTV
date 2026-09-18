@@ -348,15 +348,11 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-struct PlayedCompletion {
-    JellyfinItem item;
-    bool desired = false;
+struct PlayedRollbackState {
+    std::string itemId;
     uint64_t sessionEpoch = 0;
-    int nextUpReplacementIndex = -1;
     JellyfinHomeData previousHome;
     HomeSelectionSnapshot previousHomeSelection;
-    std::optional<JellyfinItem> nextUpReplacement;
-    ApiResult result;
 };
 
 struct HomeCoreCompletion {
@@ -2490,6 +2486,7 @@ private:
         homeRetryAt_ = {};
         homeRetryAttempt_ = 0;
         mutationLoading_ = false;
+        playedRollback_.reset();
         error_.clear();
         notice_.clear();
         noticeUntil_ = {};
@@ -2734,6 +2731,12 @@ private:
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
+        playedRollback_ = PlayedRollbackState{
+            .itemId = item.id,
+            .sessionEpoch = sessionEpoch,
+            .previousHome = std::move(previousHome),
+            .previousHomeSelection = std::move(previousHomeSelection),
+        };
 
         JellyfinItem updated = item;
         updated.played = desired;
@@ -2750,30 +2753,7 @@ private:
             clampHomeSelections();
         }
 
-        tasks_.submit([this, session, item, desired, sessionEpoch, nextUpReplacementIndex,
-                       previousHome = std::move(previousHome),
-                       previousHomeSelection = std::move(previousHomeSelection)]() mutable {
-            auto result = api_.setPlayed(session, item, desired);
-            std::optional<JellyfinItem> nextUpReplacement;
-            if (result.ok && desired && nextUpReplacementIndex >= 0 && item.type == "Episode" &&
-                !item.seriesId.empty()) {
-                auto next = api_.getNextUpForSeries(session, item.seriesId);
-                if (next.ok && !next.value.id.empty() && next.value.id != item.id) {
-                    auto detailed = api_.getItem(session, next.value.id);
-                    nextUpReplacement = detailed.ok ? std::move(detailed.value) : std::move(next.value);
-                }
-            }
-            asyncCompletions_.push(PlayedCompletion{
-                .item = item,
-                .desired = desired,
-                .sessionEpoch = sessionEpoch,
-                .nextUpReplacementIndex = nextUpReplacementIndex,
-                .previousHome = std::move(previousHome),
-                .previousHomeSelection = std::move(previousHomeSelection),
-                .nextUpReplacement = std::move(nextUpReplacement),
-                .result = std::move(result),
-            });
-        });
+        itemMutationAsync_.setPlayed(session, item, desired, sessionEpoch, nextUpReplacementIndex);
     }
 
     void removeCachedItem(const std::string& itemId) {
@@ -3958,15 +3938,29 @@ private:
     }
 
     void applyAsyncCompletion(PlayedCompletion& completion) {
-        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
+        const bool rollbackMatches =
+            playedRollback_ && playedRollback_->sessionEpoch == completion.sessionEpoch &&
+            playedRollback_->itemId == completion.item.id;
+        if (!requestEpochs_.session.active(completion.sessionEpoch)) {
+            if (rollbackMatches) playedRollback_.reset();
+            return;
+        }
+        std::optional<PlayedRollbackState> rollback;
+        if (rollbackMatches) {
+            rollback = std::move(playedRollback_);
+            playedRollback_.reset();
+        }
         mutationLoading_ = false;
         if (!completion.result.ok) {
             updateCachedUserData(completion.item);
-            home_ = std::move(completion.previousHome);
-            HomeRestorePlan rollbackPlan = HomeScreenState::restorePlan(completion.previousHomeSelection, home_.rows);
-            homeState_.setSelections(std::move(rollbackPlan.selections));
-            homeState_.setRow(rollbackPlan.focusedRow);
-            homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+            if (rollback) {
+                home_ = std::move(rollback->previousHome);
+                HomeRestorePlan rollbackPlan =
+                    HomeScreenState::restorePlan(rollback->previousHomeSelection, home_.rows);
+                homeState_.setSelections(std::move(rollbackPlan.selections));
+                homeState_.setRow(rollbackPlan.focusedRow);
+                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+            }
             if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id)
                 detail_ = completion.item;
             error_ = completion.result.error;
@@ -4143,6 +4137,7 @@ private:
                 requestEpochs_.invalidateAll();
                 loading_ = false;
                 mutationLoading_ = false;
+                playedRollback_.reset();
                 searchState_.setLoading(false);
                 session_.token.clear();
                 session_.userId.clear();
@@ -6958,6 +6953,7 @@ private:
     std::chrono::steady_clock::time_point homeRetryAt_{};
     int homeRetryAttempt_ = 0;
     bool mutationLoading_ = false;
+    std::optional<PlayedRollbackState> playedRollback_;
     AppSettings settings_;
     SettingsScreenState settingsScreen_;
     std::vector<ExternalPlayerApp> externalPlayers_;
