@@ -24,6 +24,7 @@ add_library(sloppatv SHARED
     search_completion_controller.cpp
     search_navigation_controller.cpp
     seerr_drive_navigation_controller.cpp
+    server_info_completion_controller.cpp
     settings_navigation_controller.cpp
     system_text_input_controller.cpp
     discovery.cpp

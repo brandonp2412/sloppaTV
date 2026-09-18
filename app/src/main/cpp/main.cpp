@@ -102,6 +102,7 @@
 #include "seerr_refresh_coordinator.hpp"
 #include "seerr_request_coordinator.hpp"
 #include "seerr_search_coordinator.hpp"
+#include "server_info_completion_controller.hpp"
 #include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
@@ -3495,21 +3496,18 @@ private:
             detailsState_));
     }
 
+    void applyServerInfoCompletionEffects(ServerInfoCompletionEffects effects) {
+        if (effects.finishLoading) loading_ = false;
+        if (effects.finishNoticeLoading) serverInfoLoading_ = false;
+        if (effects.error) error_ = std::move(*effects.error);
+        if (effects.notice)
+            showNotice(std::move(effects.notice->message), effects.notice->duration, effects.notice->persistent);
+    }
+
     void applyAsyncCompletion(DiagnosticsCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::Diagnostics) return;
-        if (!completion.result.ok) {
-            error_ = "SERVER INFO: " + completion.result.error;
-            return;
-        }
-        serverInfo_ = std::move(completion.result.value);
-        const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
-        if (compatibility == ServerCompatibility::TooOld) {
-            error_ = "JELLYFIN " + serverInfo_.version + " IS BELOW THE TESTED 10.10+ BASELINE";
-        } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
-            error_ = "UNRECOGNIZED JELLYFIN VERSION: " + serverInfo_.version;
-        }
+        applyServerInfoCompletionEffects(ServerInfoCompletionController::applyDiagnostics(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Diagnostics,
+            serverInfo_));
     }
 
     void applyAsyncCompletion(SeasonsCompletion& completion) {
@@ -3541,19 +3539,10 @@ private:
     }
 
     void applyAsyncCompletion(ServerInfoNoticeCompletion& completion) {
-        serverInfoLoading_ = false;
-        if (!session_.valid() || session_.server != completion.server || session_.userId != completion.userId) return;
-        if (!completion.result.ok) return;
-        serverInfo_ = std::move(completion.result.value);
-        const auto compatibility = jellyfinServerCompatibility(serverInfo_.version);
-        if (compatibility == ServerCompatibility::TooOld) {
-            showNotice("JELLYFIN " + serverInfo_.version +
-                           " IS BELOW THE TESTED 10.10+ BASELINE - SERVER UPGRADE RECOMMENDED",
-                       6s, true);
-        } else if (compatibility == ServerCompatibility::Unknown && !serverInfo_.version.empty()) {
-            showNotice("UNRECOGNIZED JELLYFIN VERSION " + serverInfo_.version + " - PLAYBACK COMPATIBILITY MAY VARY",
-                       10s);
-        }
+        const bool activeSession =
+            session_.valid() && session_.server == completion.server && session_.userId == completion.userId;
+        applyServerInfoCompletionEffects(
+            ServerInfoCompletionController::applyNotice(completion, activeSession, serverInfo_));
     }
 
     void applyAsyncCompletion(FavoriteCompletion& completion) {
