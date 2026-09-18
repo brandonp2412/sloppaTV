@@ -181,6 +181,11 @@ struct PlaybackNextEpisodeRequest {
     std::string currentItemId;
 };
 
+struct PlaybackNextEpisodePlan {
+    bool queueContinuation = false;
+    std::optional<PlaybackNextEpisodeRequest> request;
+};
+
 struct PlaybackAdjacentEpisodeRequest {
     std::string currentItemId;
     std::string seriesId;
@@ -657,6 +662,19 @@ public:
             .seriesId = item.seriesId,
             .currentItemId = item.id,
         };
+    }
+
+    [[nodiscard]] PlaybackNextEpisodePlan beginNextEpisodePlan(const PlaybackQueueState& queueState,
+                                                               bool jellyfinSessionValid,
+                                                               PlaybackContinuationState::TimePoint now) {
+        PlaybackNextEpisodePlan plan;
+        if (useQueueContinuation(queueState)) {
+            plan.queueContinuation = true;
+            return plan;
+        }
+        if (!jellyfinSessionValid) return plan;
+        plan.request = beginNextEpisodeRequest(now);
+        return plan;
     }
 
     bool completeNextEpisodeRequest(std::string_view expectedItemId, JellyfinItem item) {

@@ -504,6 +504,28 @@ int main() {
     assert(continuationCoordinator.continuation().nextEpisodeRequested());
     assert(continuationCoordinator.continuation().nextItem()->id == queuedNext.id);
 
+    PlaybackCoordinator nextEpisodePlanCoordinator;
+    nextEpisodePlanCoordinator.activate(continuationEpisode, coordinatedTarget, now);
+    const auto queuedNextEpisodePlan = nextEpisodePlanCoordinator.beginNextEpisodePlan(continuationQueue, true, now);
+    assert(queuedNextEpisodePlan.queueContinuation);
+    assert(!queuedNextEpisodePlan.request);
+    assert(nextEpisodePlanCoordinator.continuation().nextEpisodeRequested());
+    assert(nextEpisodePlanCoordinator.continuation().nextItem());
+    assert(nextEpisodePlanCoordinator.continuation().nextItem()->id == queuedNext.id);
+    nextEpisodePlanCoordinator.continuation().clearNextEpisode();
+    PlaybackQueueState emptyContinuationQueue;
+    const auto invalidSessionPlan =
+        nextEpisodePlanCoordinator.beginNextEpisodePlan(emptyContinuationQueue, false, now);
+    assert(!invalidSessionPlan.queueContinuation);
+    assert(!invalidSessionPlan.request);
+    assert(!nextEpisodePlanCoordinator.continuation().nextEpisodeRequested());
+    const auto lookupNextEpisodePlan =
+        nextEpisodePlanCoordinator.beginNextEpisodePlan(emptyContinuationQueue, true, now);
+    assert(!lookupNextEpisodePlan.queueContinuation);
+    assert(lookupNextEpisodePlan.request);
+    assert(lookupNextEpisodePlan.request->seriesId == continuationEpisode.seriesId);
+    assert(lookupNextEpisodePlan.request->currentItemId == continuationEpisode.id);
+
     continuationCoordinator.continuation().clearNextEpisode();
     const auto nextEpisodeRequest = continuationCoordinator.beginNextEpisodeRequest(now);
     assert(nextEpisodeRequest);

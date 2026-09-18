@@ -3539,12 +3539,12 @@ private:
     }
 
     void requestNextEpisodeAsync() {
-        if (playbackCoordinator_.useQueueContinuation(queueState_)) return;
-        if (!session_.valid()) return;
-        const auto request = playbackCoordinator_.beginNextEpisodeRequest(std::chrono::steady_clock::now());
-        if (!request) return;
+        const PlaybackNextEpisodePlan plan = playbackCoordinator_.beginNextEpisodePlan(
+            queueState_, session_.valid(), std::chrono::steady_clock::now());
+        if (!plan.request) return;
         const JellyfinSession session = session_;
-        if (!playbackContinuationAsync_.requestNextEpisode(session, request->seriesId, request->currentItemId)) {
+        if (!playbackContinuationAsync_.requestNextEpisode(session, plan.request->seriesId,
+                                                           plan.request->currentItemId)) {
             playbackCoordinator_.failNextEpisodeSubmission(std::chrono::steady_clock::now());
         }
     }
