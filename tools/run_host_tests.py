@@ -30,6 +30,7 @@ CPP_TESTS = [
     "deep_link_test.cpp",
     "details_screen_test.cpp",
     "diagnostics_screen_test.cpp",
+    "external_playback_executor_test.cpp",
     "external_playback_state_test.cpp",
     "external_player_policy_test.cpp",
     "http_cache_policy_test.cpp",

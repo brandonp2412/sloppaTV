@@ -15,6 +15,7 @@
 #include "diagnostics_screen.hpp"
 #include "discovery.hpp"
 #include "display_mode.hpp"
+#include "external_playback_executor.hpp"
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
 #include "home_screen.hpp"
@@ -128,30 +129,6 @@ bool isTransientHomeLoadError(std::string_view error) {
            error.find("Unable to connect to server") != std::string_view::npos ||
            error.find("HTTP 408") != std::string_view::npos || error.find("HTTP 425") != std::string_view::npos ||
            error.find("HTTP 429") != std::string_view::npos || error.find("HTTP 5") != std::string_view::npos;
-}
-
-std::string externalSkipSegmentsJson(const std::vector<JellyfinMediaSegment>& segments) {
-    std::ostringstream json;
-    json << '[';
-    bool first = true;
-    for (const auto& segment : segments) {
-        if (segment.endTicks - segment.startTicks < 30000000) continue;
-        std::string type;
-        if (segment.type == "Intro")
-            type = "intro";
-        else if (segment.type == "Outro")
-            type = "outro";
-        else if (segment.type == "Recap")
-            type = "recap";
-        else
-            continue;
-        if (!first) json << ',';
-        first = false;
-        json << "{\"type\":\"" << type << "\",\"start\":" << (static_cast<double>(segment.startTicks) / 10000000.0)
-             << ",\"end\":" << (static_cast<double>(segment.endTicks) / 10000000.0) << '}';
-    }
-    json << ']';
-    return json.str();
 }
 
 std::string normalizeSubtitleDisplayText(const std::string& input) {
@@ -514,13 +491,6 @@ struct HomeSecondaryCompletion {
     ApiValueResult<JellyfinHomeData> result;
 };
 
-struct ExternalPlaybackCompletion {
-    uint64_t generation = 0;
-    JellyfinItem selectedItem;
-    std::optional<ExternalPlaybackLaunch> launch;
-    std::string error;
-};
-
 struct TrickplayTileCompletion {
     std::string itemId;
     int tileIndex = -1;
@@ -568,6 +538,17 @@ public:
               },
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
+              }),
+          externalPlaybackAsync_(
+              api_, tasks_, asyncCompletions_, requestEpochs_.playback,
+              [](const ExternalPlaybackDiagnostic& diagnostic) {
+                  if (diagnostic.kind == ExternalPlaybackDiagnosticKind::StopReport) {
+                      __android_log_print(ANDROID_LOG_WARN, kTag, "External playback stop report failed: %s",
+                                          diagnostic.error.c_str());
+                      return;
+                  }
+                  __android_log_print(ANDROID_LOG_WARN, kTag, "External playback media segments unavailable: %s",
+                                      diagnostic.error.c_str());
               }),
           playbackTelemetryAsync_(api_, tasks_, asyncCompletions_),
           playbackContinuationAsync_(api_, tasks_, asyncCompletions_),
@@ -2083,79 +2064,23 @@ private:
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const JellyfinItem selected = detail_;
         const auto subtitlePreference = trackState_.subtitleLanguagePreference();
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
-        if (!tasks_.submit([this, session, selected, player = *player, subtitlePreference, trackPolicy,
-                            generation]() mutable {
-                JellyfinItem playable = selected;
-                if (playable.type == "Series") {
-                    auto next = api_.getNextUpForSeries(session, playable.id);
-                    if (!next.ok) {
-                        if (!requestEpochs_.playback.active(generation)) return;
-                        asyncCompletions_.push(ExternalPlaybackCompletion{
-                            .generation = generation,
-                            .selectedItem = selected,
-                            .launch = std::nullopt,
-                            .error = "EXTERNAL PLAYER: " + next.error,
-                        });
-                        return;
-                    }
-                    playable = std::move(next.value);
-                }
-                auto detailed = api_.getItem(session, playable.id);
-                if (detailed.ok) playable = std::move(detailed.value);
-
-                std::string skipSegmentsJson;
-                if (player.packageName == "app.mpvnova.player") {
-                    auto segments = api_.getMediaSegments(session, playable.id);
-                    if (segments.ok) {
-                        skipSegmentsJson = externalSkipSegmentsJson(segments.value);
-                    } else {
-                        __android_log_print(ANDROID_LOG_WARN, kTag, "External playback media segments unavailable: %s",
-                                            segments.error.c_str());
-                    }
-                }
-
-                const std::string videoUrl = api_.staticVideoUrl(session, playable);
-                std::string subtitleUrl;
-                const auto tracks = selectPlaybackTracks(playable, std::nullopt, subtitlePreference, trackPolicy);
-                const int subtitleIndex = tracks.subtitleStreamIndex;
-                if (subtitleIndex >= 0) {
-                    const auto subtitle = std::find_if(
-                        playable.subtitles.begin(), playable.subtitles.end(),
-                        [&](const JellyfinSubtitleStream& candidate) { return candidate.index == subtitleIndex; });
-                    if (subtitle != playable.subtitles.end()) {
-                        // External players cannot reliably address Jellyfin's embedded stream index.
-                        // Hand them Jellyfin's SRT delivery URL for the selected stream instead.
-                        subtitleUrl = api_.subtitleSrtUrl(session, playable, subtitle->index);
-                    }
-                }
-
-                if (!requestEpochs_.playback.active(generation)) return;
-                if (videoUrl.empty()) {
-                    asyncCompletions_.push(ExternalPlaybackCompletion{
-                        .generation = generation,
-                        .selectedItem = selected,
-                        .launch = std::nullopt,
-                        .error = "EXTERNAL PLAYER: NO STATIC STREAM",
-                    });
-                    return;
-                }
-                asyncCompletions_.push(ExternalPlaybackCompletion{
-                    .generation = generation,
-                    .selectedItem = selected,
-                    .launch = ExternalPlaybackLaunch{
-                        .item = std::move(playable),
-                        .player = std::move(player),
-                        .url = videoUrl,
-                        .subtitleUrl = std::move(subtitleUrl),
-                        .skipSegmentsJson = std::move(skipSegmentsJson),
-                    },
-                    .error = {},
-                });
-            })) {
+        if (!externalPlaybackAsync_.prepare(
+                session, ExternalPlaybackRequest{
+                             .generation = generation,
+                             .selectedItemId = detail_.id,
+                             .selectedItemType = detail_.type,
+                             .seriesId = detail_.seriesId,
+                             .container = detail_.container,
+                             .mediaSourceId = detail_.mediaSourceId,
+                             .audios = detail_.audios,
+                             .subtitles = detail_.subtitles,
+                             .player = *player,
+                             .subtitlePreference = subtitlePreference,
+                             .trackPolicy = trackPolicy,
+                         })) {
             loading_ = false;
             error_ = "EXTERNAL PLAYER COULD NOT BE STARTED";
         }
@@ -4064,14 +3989,12 @@ private:
             }
         }
         const JellyfinSession reportSession = session_;
-        const JellyfinItem reportItem = completed.item;
-        tasks_.submit([this, reportSession, reportItem, positionTicks] {
-            const auto reported = api_.reportExternalPlaybackStopped(reportSession, reportItem, positionTicks);
-            if (!reported.ok) {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "External playback stop report failed: %s",
-                                    reported.error.c_str());
-            }
-        });
+        externalPlaybackAsync_.reportStopped(
+            reportSession, ExternalPlaybackReportRequest{
+                               .itemId = completed.item.id,
+                               .mediaSourceId = completed.item.mediaSourceId,
+                               .positionTicks = positionTicks,
+                           });
         std::scoped_lock lock(stateMutex_);
         error_.clear();
     }
@@ -4808,13 +4731,16 @@ private:
     void applyAsyncCompletion(ExternalPlaybackCompletion& completion) {
         if (!requestEpochs_.playback.active(completion.generation)) return;
         loading_ = false;
-        if (screen_ != Screen::Details || detail_.id != completion.selectedItem.id) return;
+        if (screen_ != Screen::Details || detail_.id != completion.selectedItemId) return;
         if (!completion.error.empty()) {
             error_ = std::move(completion.error);
             return;
         }
         if (!completion.launch) return;
-        restoreHomeVisibilityForPlayback(completion.selectedItem);
+        JellyfinItem selected;
+        selected.id = completion.selectedItemId;
+        selected.seriesId = completion.selectedSeriesId;
+        restoreHomeVisibilityForPlayback(selected);
         restoreHomeVisibilityForPlayback(completion.launch->item);
         externalPlaybackState_.stage(std::move(*completion.launch));
     }
@@ -7464,6 +7390,8 @@ private:
     TaskRunner tasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
+    ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
+        externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
     PlaybackContinuationExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         playbackContinuationAsync_;
