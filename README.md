@@ -33,4 +33,4 @@
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE.md](LICENSE.md).
+GPL-3.0-or-later. See [LICENSE](LICENSE).
