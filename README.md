@@ -1,10 +1,15 @@
 <p align="center">
-  <img src="docs/brand/sloppatv-theme.png" alt="sloppaTV caracal artwork" width="100%">
+  <img src="docs/brand/sloppatv-theme.png" alt="sloppaTV caracal artwork" width="240">
 </p>
 
 # sloppaTV
 
 A jellyfin Android client in C++
+
+<p>
+  <a href="https://play.google.com/store/apps/details?id=app.sloppatv"><img src="docs/brand/get-it-on-google-play.png" alt="Get sloppaTV on Google Play" height="80"></a>
+  <a href="https://github.com/brandonp2412/sloppaTV/releases/latest"><img src="docs/brand/get_it_on_github.svg" alt="Get sloppaTV on GitHub" height="80"></a>
+</p>
 
 Current status: **27/30 acceptance areas verified (90%)**. All in-scope areas are implemented; the remaining work is LAN discovery acceptance, real-microphone voice-search acceptance, and stable production signing in CI. The 30 acceptance areas are listed in [ROADMAP.md](ROADMAP.md).
 

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="536" height="160" viewBox="0 0 536 160" role="img" aria-labelledby="title desc">
+  <title id="title">Get sloppaTV on GitHub</title>
+  <desc id="desc">A custom sloppaTV download badge linking to GitHub Releases.</desc>
+  <defs>
+    <linearGradient id="bg" x1="20" y1="16" x2="516" y2="144" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#080B11"/>
+      <stop offset="0.56" stop-color="#101827"/>
+      <stop offset="1" stop-color="#1A2B43"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="36" y1="30" x2="126" y2="126" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4F1FF"/>
+      <stop offset="1" stop-color="#A7CEFF"/>
+    </linearGradient>
+    <filter id="shadow" x="-8%" y="-20%" width="116%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect x="8" y="8" width="520" height="144" rx="30" fill="url(#bg)" stroke="#A7CEFF" stroke-opacity="0.55" stroke-width="2" filter="url(#shadow)"/>
+
+  <g transform="translate(32 28)">
+    <rect width="104" height="104" rx="25" fill="#FFFFFF" fill-opacity="0.07"/>
+    <path d="M27 40L18 14L43 29C49 26 55 26 61 29L86 14L77 40C83 47 86 57 86 68C86 86 71 96 52 96C33 96 18 86 18 68C18 57 21 47 27 40Z" fill="url(#mark)"/>
+    <path d="M28 37L22 20L39 31M76 37L82 20L65 31" fill="none" stroke="#6FA7E8" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M36 61L43 64M68 61L61 64" stroke="#080B11" stroke-width="4" stroke-linecap="round"/>
+    <path d="M48 72L52 75L56 72" fill="none" stroke="#080B11" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M52 75V82M52 82C47 82 44 80 42 77M52 82C57 82 60 80 62 77" fill="none" stroke="#080B11" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g fill="#FFFFFF" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,Arial,sans-serif">
+    <text x="158" y="62" font-size="21" font-weight="700" letter-spacing="2.2" opacity="0.82">GET SLOPPATV ON</text>
+    <text x="158" y="111" font-size="42" font-weight="750" letter-spacing="-0.7">GitHub Releases</text>
+  </g>
+</svg>

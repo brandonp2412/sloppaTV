@@ -250,3 +250,63 @@ jobs:
           test -n "$release_aab"
           release_aab="$(realpath "$release_aab")"
           SLOPPATV_RELEASE_AAB="$release_aab" bundle exec fastlane android production_artifact
+
+  create-github-release:
+    name: Create GitHub release
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, publish-play-store]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out the tested source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Download tested Android build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sloppaTV-apks
+          path: artifacts/apks
+
+      - name: Prepare GitHub release
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version_name="$(sed -n 's/^SLOPPATV_VERSION_NAME=//p' gradle.properties)"
+          version_code=$((100000 + GITHUB_RUN_NUMBER))
+          tag_name="v${version_name}+${version_code}"
+          release_name="sloppaTV ${version_name} (build ${version_code})"
+
+          release_apk="$(find artifacts/apks -type f -path '*/apk/release/*.apk' -print -quit)"
+          release_aab="$(find artifacts/apks -type f -path '*/bundle/release/*.aab' -print -quit)"
+          test -n "$release_apk"
+          test -n "$release_aab"
+
+          mkdir -p release-assets
+          cp "$release_apk" "release-assets/sloppaTV-${version_name}.apk"
+          cp "$release_aab" "release-assets/sloppaTV-${version_name}.aab"
+
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+          echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ steps.release.outputs.tag_name }}
+          name: ${{ steps.release.outputs.release_name }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Automated Android release from main.
+
+            This is the same tested release build published to Google Play.
+          files: |
+            release-assets/*.apk
+            release-assets/*.aab
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
