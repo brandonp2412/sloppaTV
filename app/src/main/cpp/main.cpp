@@ -53,6 +53,7 @@
 #include "playback_telemetry_executor.hpp"
 #include "playback_track_selection.hpp"
 #include "playback_transition.hpp"
+#include "player_controls_renderer.hpp"
 #include "player_screen.hpp"
 #include "player_tracks.hpp"
 #include "profiles_renderer.hpp"
@@ -5696,78 +5697,23 @@ private:
         drawTrickplayPreview();
 
         if (playerScreenState_.controlsActive(now)) {
-            constexpr std::array<float, 5> controlWidths{112.0f, 112.0f, 112.0f, 300.0f, 340.0f};
-            constexpr float controlHeight = 66.0f;
-            constexpr float controlGap = 18.0f;
-            constexpr float controlY = 925.0f;
-            const float controlGroupWidth = std::accumulate(controlWidths.begin(), controlWidths.end(), 0.0f) +
-                                            controlGap * static_cast<float>(controlWidths.size() - 1);
-            float x = (Renderer::logicalWidth() - controlGroupWidth) * 0.5f;
-            for (size_t i = 0; i < controlWidths.size(); ++i) {
-                const bool selected = playerScreenState_.controlSelected(i);
-                const auto bounds = drawButtonSurface(x, controlY, controlWidths[i], controlHeight, selected, i == 1);
-                const float iconCenterX = std::round(bounds[0] + bounds[2] * 0.5f);
-                const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
-                if (i == 0 || i == 2) {
-                    const bool forward = i == 2;
-                    const float center = iconCenterX;
-                    if (forward) {
-                        renderer_.triangle(center - 12.0f, iconCenterY - 14.0f, center - 12.0f, iconCenterY + 14.0f,
-                                           center + 10.0f, iconCenterY, kText);
-                        renderer_.roundedRect(center + 13.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, kText);
-                    } else {
-                        renderer_.roundedRect(center - 17.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, kText);
-                        renderer_.triangle(center + 12.0f, iconCenterY - 14.0f, center + 12.0f, iconCenterY + 14.0f,
-                                           center - 10.0f, iconCenterY, kText);
-                    }
-                } else if (i == 1) {
-                    if (status == PlayerStatus::Paused) {
-                        const float playLeft = iconCenterX - 22.0f / 3.0f;
-                        renderer_.triangle(playLeft, iconCenterY - 13.0f, playLeft, iconCenterY + 13.0f,
-                                           playLeft + 22.0f, iconCenterY, kText);
-                    } else {
-                        const float pauseLeft = iconCenterX - 10.0f;
-                        renderer_.roundedRect(pauseLeft, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
-                        renderer_.roundedRect(pauseLeft + 13.0f, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, kText);
-                    }
-                } else if (i == 3) {
-                    constexpr float iconWidth = 36.0f;
-                    constexpr float gap = 14.0f;
-                    const std::string audioTrackLabel =
-                        playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Audio);
-                    const std::string label = "Audio  " + std::string(materialLabel(audioTrackLabel));
-                    const float textAvailableWidth = std::max(1.0f, bounds[2] - 78.0f);
-                    const float labelScale = fittedSingleLineScale(1.45f, label, textAvailableWidth, bounds[3] - 8.0f);
-                    const float textWidth = renderer_.textWidth(labelScale, label);
-                    const float groupWidth = iconWidth + gap + textWidth;
-                    const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
-                    renderer_.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, kText);
-                    renderer_.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f,
-                                       iconX + 20.0f, iconCenterY + 15.0f, kText);
-                    renderer_.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, kText);
-                    renderer_.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, kText);
-                    // Already fitted to one line; disabling maxWidth avoids atlas rounding wrapping the final glyph.
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
-                                                     kText);
-                } else {
-                    constexpr float iconWidth = 42.0f;
-                    constexpr float gap = 14.0f;
-                    const std::string subtitleTrackLabel =
-                        playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Subtitle);
-                    const std::string label = "Subtitles  " + std::string(materialLabel(subtitleTrackLabel));
-                    const float textAvailableWidth = std::max(1.0f, bounds[2] - 86.0f);
-                    const float labelScale = fittedSingleLineScale(1.45f, label, textAvailableWidth, bounds[3] - 8.0f);
-                    const float textWidth = renderer_.textWidth(labelScale, label);
-                    const float groupWidth = iconWidth + gap + textWidth;
-                    const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
-                    renderer_.roundedOutline(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 6.0f, 2.0f, kText);
-                    renderer_.textCentered(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 0.82f, "CC", kText);
-                    // Already fitted to one line; disabling maxWidth avoids atlas rounding wrapping the final glyph.
-                    renderer_.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
-                                                     kText);
-                }
-                x += controlWidths[i] + controlGap;
-            }
+            renderPlayerControls(
+                renderer_,
+                PlayerControlsRenderState{
+                    .paused = status == PlayerStatus::Paused,
+                    .selection = playerScreenState_.controlSelection(),
+                    .logicalWidth = Renderer::logicalWidth(),
+                    .audioTrackLabel = playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Audio),
+                    .subtitleTrackLabel = playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Subtitle),
+                },
+                PlayerControlsRenderStyle<Color>{.text = kText},
+                [this](float x, float y, float width, float height, bool focused, bool primary) {
+                    return drawButtonSurface(x, y, width, height, focused, primary);
+                },
+                [this](float scale, std::string_view value, float width, float height) {
+                    return fittedSingleLineScale(scale, value, width, height);
+                },
+                [](std::string_view value) { return materialLabel(value); });
         }
     }
 
