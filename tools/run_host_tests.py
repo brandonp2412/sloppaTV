@@ -102,6 +102,7 @@ CPP_TESTS = [
     "seerr_home_projection_test.cpp",
     "seerr_media_test.cpp",
     "seerr_quick_connect_test.cpp",
+    "seerr_refresh_coordinator_test.cpp",
     "seerr_request_state_test.cpp",
     "seerr_search_state_test.cpp",
     "seerr_storage_state_test.cpp",

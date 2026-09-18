@@ -86,6 +86,7 @@
 #include "seerr_drive_picker_screen.hpp"
 #include "seerr_home_projection.hpp"
 #include "seerr_jellyfin_adapter.hpp"
+#include "seerr_refresh_coordinator.hpp"
 #include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
@@ -442,6 +443,7 @@ public:
                                                : "Home artwork decode failed item=%s type=%s reason=%s",
                                            request.itemId.c_str(), request.itemType.c_str(), loaded.error.c_str());
                    }),
+          seerrRefresh_(seerrDomain_, seerrAsync_),
           searchState_(seerrDomain_.searchResults()) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
@@ -2854,11 +2856,7 @@ private:
     }
 
     void refreshSeerrStorageAsync(bool force = false) {
-        const SeerrEndpoint endpoint = seerrEndpoint();
-        const auto action =
-            seerrDomain_.prepareStorageRefresh(endpoint, force, std::chrono::steady_clock::now());
-        if (action != SeerrDomainState::RefreshStartAction::Submit) return;
-        seerrAsync_.refreshStorage(endpoint);
+        seerrRefresh_.refreshStorage(seerrEndpoint(), force, std::chrono::steady_clock::now());
     }
 
     void openSeerrDrivePicker(const SeerrMediaItem& item) {
@@ -2888,14 +2886,8 @@ private:
     }
 
     void refreshSeerrPendingAsync() {
-        const SeerrEndpoint endpoint = seerrEndpoint();
-        const auto action = seerrDomain_.preparePendingRefresh(endpoint);
-        if (action == SeerrDomainState::RefreshStartAction::Reset) {
-            syncSeerrHomeRowLocked();
-            return;
-        }
-        if (action != SeerrDomainState::RefreshStartAction::Submit) return;
-        seerrAsync_.refreshPending(endpoint);
+        const auto action = seerrRefresh_.refreshPending(seerrEndpoint());
+        if (action == SeerrDomainState::RefreshStartAction::Reset) syncSeerrHomeRowLocked();
     }
 
     void requestSeerrMediaAsync(const SeerrMediaItem& item, const SeerrStorageTarget* selectedTarget = nullptr,
@@ -6137,6 +6129,9 @@ private:
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
     SeerrDomainState seerrDomain_;
+    SeerrRefreshCoordinator<
+        SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
+        seerrRefresh_;
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;
