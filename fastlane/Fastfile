@@ -11,10 +11,13 @@ def metadata_path
 end
 
 def release_aab
-  ENV.fetch(
+  configured = ENV.fetch(
     "SLOPPATV_RELEASE_AAB",
     File.join(project_root, "app", "build", "outputs", "bundle", "release", "app-release.aab")
   )
+  return configured if Pathname.new(configured).absolute?
+
+  File.expand_path(configured, project_root)
 end
 
 def release_gradle_user_home

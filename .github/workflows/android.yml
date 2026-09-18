@@ -248,4 +248,5 @@ jobs:
           : "${SUPPLY_JSON_KEY_DATA:?GOOGLE_PLAY_JSON_KEY secret is required}"
           release_aab="$(find artifacts/apks -type f -name '*.aab' -print -quit)"
           test -n "$release_aab"
+          release_aab="$(realpath "$release_aab")"
           SLOPPATV_RELEASE_AAB="$release_aab" bundle exec fastlane android production_artifact
