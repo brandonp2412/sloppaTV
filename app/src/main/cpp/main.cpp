@@ -3513,16 +3513,9 @@ private:
             launchExternalPlaybackAsync();
             return;
         }
-        const bool continuingPlaybackChain = playbackCoordinator_.continuation().stillWatchingPrompt();
-        const bool continuingQueuedPrompt = continuingPlaybackChain && !queueState_.empty();
-        int queuedPlaybackIndex = -1;
-        playbackCoordinator_.beginUserPlayback(continuingPlaybackChain);
-        if (continuingQueuedPrompt) {
-            queuedPlaybackIndex = queueState_.findItemIndex(detail_.id);
-            if (queuedPlaybackIndex < 0) queueState_.reset();
-        } else {
-            queueState_.reset();
-        }
+        const PlaybackUserSelectionPlan selectionPlan =
+            playbackCoordinator_.beginUserPlaybackSelection(queueState_, detail_.id);
+        if (selectionPlan.resetQueue) queueState_.reset();
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -3531,7 +3524,7 @@ private:
         const uint64_t generation = requestEpochs_.playback.begin();
 
         playbackResolutionAsync_.resolveSelection(session, selected, std::move(resolutionOptions), generation,
-                                                  queuedPlaybackIndex);
+                                                  selectionPlan.queuedPlaybackIndex);
     }
 
     void requestMediaSegmentsAsync() {

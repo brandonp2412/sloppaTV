@@ -193,6 +193,11 @@ struct PlaybackAdjacentEpisodePlan {
     std::optional<PlaybackAdjacentEpisodeRequest> lookup;
 };
 
+struct PlaybackUserSelectionPlan {
+    int queuedPlaybackIndex = -1;
+    bool resetQueue = false;
+};
+
 inline std::string playbackSummary(const PlaybackTarget& target, const JellyfinItem& item) {
     std::string summary = playbackMethodName(target.playMethod);
     if (!item.videoCodec.empty()) summary += " / " + item.videoCodec;
@@ -534,6 +539,20 @@ public:
     void beginUserPlayback(bool continuingPlaybackChain) {
         resetContinuationPrompt();
         if (!continuingPlaybackChain) trackState_.clearLanguagePreferences();
+    }
+
+    [[nodiscard]] PlaybackUserSelectionPlan beginUserPlaybackSelection(const PlaybackQueueState& queueState,
+                                                                       const std::string& selectedItemId) {
+        const bool continuingPlaybackChain = continuationState_.stillWatchingPrompt();
+        PlaybackUserSelectionPlan plan;
+        if (continuingPlaybackChain && !queueState.empty()) {
+            plan.queuedPlaybackIndex = queueState.findItemIndex(selectedItemId);
+            plan.resetQueue = plan.queuedPlaybackIndex < 0;
+        } else {
+            plan.resetQueue = true;
+        }
+        beginUserPlayback(continuingPlaybackChain);
+        return plan;
     }
 
     void beginPlaybackResolution(bool showTransitionLoading) {

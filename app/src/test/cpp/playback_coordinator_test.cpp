@@ -826,6 +826,26 @@ int main() {
     assert(!resolutionCoordinator.tracks().subtitleLanguagePreference().has_value());
     assert(!resolutionCoordinator.continuation().stillWatchingPrompt());
 
+    PlaybackCoordinator selectionCoordinator;
+    selectionCoordinator.tracks().setAudioLanguagePreference(std::string{"eng"});
+    selectionCoordinator.continuation().setStillWatchingPrompt(true);
+    PlaybackQueueState selectionQueue;
+    JellyfinItem queuedSelection;
+    queuedSelection.id = "queued-selection";
+    selectionQueue.replace({queuedSelection}, 0);
+    const auto queuedSelectionPlan =
+        selectionCoordinator.beginUserPlaybackSelection(selectionQueue, queuedSelection.id);
+    assert(queuedSelectionPlan.queuedPlaybackIndex == 0);
+    assert(!queuedSelectionPlan.resetQueue);
+    assert(selectionCoordinator.tracks().audioLanguagePreference() == std::optional<std::string>{"eng"});
+    assert(!selectionCoordinator.continuation().stillWatchingPrompt());
+    selectionCoordinator.tracks().setAudioLanguagePreference(std::string{"eng"});
+    const auto freshSelectionPlan =
+        selectionCoordinator.beginUserPlaybackSelection(selectionQueue, queuedSelection.id);
+    assert(freshSelectionPlan.queuedPlaybackIndex == -1);
+    assert(freshSelectionPlan.resetQueue);
+    assert(!selectionCoordinator.tracks().audioLanguagePreference().has_value());
+
     resolutionCoordinator.continuation().setStillWatchingPrompt(true);
     resolutionCoordinator.beginPlaybackResolution(false);
     assert(!resolutionCoordinator.transition().loading());
