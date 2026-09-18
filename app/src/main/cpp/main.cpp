@@ -706,9 +706,9 @@ public:
                 if (!noticePersistent_ && !notice_.empty()) tightenTimeoutUntil(noticeUntil_);
                 if (!presentedError_.empty()) tightenTimeoutUntil(errorUntil_);
                 tightenTimeoutUntil(homeRetryAt_);
-                if (!seerrRequestState_.pendingLoading() &&
+                if (!seerrDomain_.pendingRequestsLoading() &&
                     (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
-                    tightenTimeoutUntil(seerrRequestState_.pendingRefreshDeadline());
+                    tightenTimeoutUntil(seerrDomain_.pendingRequestsRefreshDeadline());
                 }
                 if (screen_ == Screen::Search && !searchState_.keyboard() && !searchState_.results().empty()) {
                     // Search cards can contain a slow pixel-based marquee. Redraw near display
@@ -1504,7 +1504,7 @@ private:
             if (section.title == "My Media") {
                 openLibrary(selected);
             } else if (const auto* seerrMedia =
-                           findSeerrHomeMedia(section.title, selected.id, seerrRequestState_.pending())) {
+                           findSeerrHomeMedia(section.title, selected.id, seerrDomain_.pendingRequests())) {
                 if (!seerrMedia->jellyfinId.empty()) {
                     JellyfinItem available = selected;
                     available.id = seerrMedia->jellyfinId;
@@ -3297,19 +3297,19 @@ private:
             return;
         }
         if (status == SeerrStorageState::PickerStatus::Unavailable) {
-            showNotice(seerrStorageState_.error().empty() ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
-                                                          : "SEERR STORAGE: " + seerrStorageState_.error(),
+            showNotice(seerrDomain_.storageError().empty() ? "NO SEERR STORAGE TARGETS ARE AVAILABLE"
+                                                           : "SEERR STORAGE: " + seerrDomain_.storageError(),
                        5s);
             return;
         }
         __android_log_print(ANDROID_LOG_INFO, kTag, "Opening Seerr storage picker media=%s choices=%zu",
-                            item.mediaType.c_str(), seerrStorageState_.driveChoices().size());
+                            item.mediaType.c_str(), seerrDomain_.storageDriveChoices().size());
         if (screen_ != Screen::SeerrDrivePicker) pushScreen(Screen::SeerrDrivePicker);
     }
 
     void syncSeerrHomeRowLocked() {
         const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
-        projectSeerrHomeRow(home_.rows, seerrRequestState_.pending());
+        projectSeerrHomeRow(home_.rows, seerrDomain_.pendingRequests());
         HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home_.rows);
         homeState_.setSelections(std::move(restore.selections));
         homeState_.setRow(restore.focusedRow);
@@ -4210,7 +4210,7 @@ private:
             return;
         }
         __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets",
-                            seerrStorageState_.targets().size());
+                            seerrDomain_.storageTargets().size());
         const auto pendingRequest = seerrDomain_.takePendingStorageRequest(settings_.seerrSelectDrive);
         if (pendingRequest) openSeerrDrivePicker(*pendingRequest);
     }
@@ -4225,9 +4225,9 @@ private:
             return;
         }
         __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests",
-                            seerrRequestState_.pending().size());
+                            seerrDomain_.pendingRequests().size());
         if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
-            if (const SeerrMediaItem* current = seerrRequestState_.findPending(detail_.id)) {
+            if (const SeerrMediaItem* current = seerrDomain_.findPendingRequest(detail_.id)) {
                 detail_ = jellyfinItemFromSeerrMedia(*current);
             }
         }
@@ -6094,7 +6094,7 @@ private:
                 float badgeRight = 1848.0f;
                 int shownDrives = 0;
                 std::unordered_set<std::string> shownStorage;
-                const auto& storageTargets = seerrStorageState_.targets();
+                const auto& storageTargets = seerrDomain_.storageTargets();
                 for (auto it = storageTargets.rbegin(); it != storageTargets.rend() && shownDrives < 5; ++it) {
                     const std::string identity = it->path + ":" + std::to_string(it->totalSpace);
                     if (!shownStorage.insert(identity).second || it->totalSpace <= 0) continue;
@@ -6114,7 +6114,7 @@ private:
                     badgeRight = badgeX - 10.0f;
                     ++shownDrives;
                 }
-                if (seerrStorageState_.loading() && shownDrives == 0) {
+                if (seerrDomain_.storageLoading() && shownDrives == 0) {
                     renderer_.text(1635.0f, labelY + 1.0f, 1.30f, "Loading storage…", kMuted, 210.0f);
                 }
 
@@ -6194,8 +6194,8 @@ private:
 
     void renderSeerrDrivePicker() {
         const SeerrDrivePickerViewModel model =
-            seerrDrivePickerViewModel(seerrStorageState_.pendingRequest(), seerrStorageState_.driveChoices(),
-                                      seerrStorageState_.driveSelection());
+            seerrDrivePickerViewModel(seerrDomain_.pendingStorageRequest(), seerrDomain_.storageDriveChoices(),
+                                      seerrDomain_.storageDriveSelection());
         renderer_.text(80.0f, 56.0f, material_tv::type::headline, "Choose storage", kText, 760.0f);
         renderer_.text(82.0f, 125.0f, 1.55f, fitTextLines(model.subtitle, 1.55f, 1450.0f, 1), kMuted, 1450.0f);
 
@@ -7403,8 +7403,6 @@ private:
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
     SeerrDomainState seerrDomain_;
-    const SeerrRequestState& seerrRequestState_ = seerrDomain_.requests();
-    const SeerrStorageState& seerrStorageState_ = seerrDomain_.storage();
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

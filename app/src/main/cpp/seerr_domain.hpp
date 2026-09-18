@@ -83,6 +83,34 @@ public:
 
     [[nodiscard]] const SeerrStorageState& storage() const { return storage_; }
 
+    [[nodiscard]] bool pendingRequestsLoading() const { return requests_.pendingLoading(); }
+
+    [[nodiscard]] SeerrRequestState::TimePoint pendingRequestsRefreshDeadline() const {
+        return requests_.pendingRefreshDeadline();
+    }
+
+    [[nodiscard]] const std::vector<SeerrMediaItem>& pendingRequests() const { return requests_.pending(); }
+
+    [[nodiscard]] const SeerrMediaItem* findPendingRequest(std::string_view id) const {
+        return requests_.findPending(id);
+    }
+
+    [[nodiscard]] const std::string& storageError() const { return storage_.error(); }
+
+    [[nodiscard]] const std::vector<SeerrStorageTarget>& storageTargets() const { return storage_.targets(); }
+
+    [[nodiscard]] bool storageLoading() const { return storage_.loading(); }
+
+    [[nodiscard]] const std::optional<SeerrMediaItem>& pendingStorageRequest() const {
+        return storage_.pendingRequest();
+    }
+
+    [[nodiscard]] const std::vector<SeerrStorageTarget>& storageDriveChoices() const {
+        return storage_.driveChoices();
+    }
+
+    [[nodiscard]] int storageDriveSelection() const { return storage_.driveSelection(); }
+
     [[nodiscard]] ConnectAction prepareConnect(std::string_view server, bool jellyfinValid) {
         if (connection_.connecting()) return ConnectAction::AlreadyConnecting;
         if (server.empty()) return ConnectAction::MissingServer;

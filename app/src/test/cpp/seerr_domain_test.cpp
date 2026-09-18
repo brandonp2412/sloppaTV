@@ -144,7 +144,7 @@ int main() {
 
     auto requestedSearchItem = media("seerr:movie:19", true);
     assert(searchCompletions.completeSearchSuccess({requestedSearchItem}, start));
-    assert(searchCompletions.requests().findPending("seerr:movie:19"));
+    assert(searchCompletions.findPendingRequest("seerr:movie:19"));
     assert(!searchCompletions.completeSearchSuccess({media("seerr:movie:20")}, start));
 
     SeerrDomainState refreshStarts;
@@ -166,6 +166,9 @@ int main() {
     assert(!refreshStarts.requests().pendingLoading());
 
     refreshStarts.requests().finishPendingRefresh({}, start);
+    assert(!refreshStarts.pendingRequestsLoading());
+    assert(refreshStarts.pendingRequests().empty());
+    assert(refreshStarts.pendingRequestsRefreshDeadline() == start + SeerrRequestState::kPendingRefreshInterval);
     const auto pendingDue = start + SeerrRequestState::kPendingRefreshInterval;
     assert(!refreshStarts.consumePendingRefreshDue(pendingDue, false));
     assert(refreshStarts.requests().pendingRefreshDue(pendingDue));
@@ -174,8 +177,14 @@ int main() {
 
     SeerrDomainState deferredStorage;
     deferredStorage.storage().finishRefresh({target(9)}, start);
+    assert(deferredStorage.storageTargets().size() == 1);
+    assert(!deferredStorage.storageLoading());
+    assert(deferredStorage.storageError().empty());
     assert(deferredStorage.prepareStoragePicker(media("seerr:movie:21")) ==
            SeerrStorageState::PickerStatus::Ready);
+    assert(deferredStorage.pendingStorageRequest());
+    assert(deferredStorage.storageDriveChoices().size() == 1);
+    assert(deferredStorage.storageDriveSelection() == 0);
     assert(!deferredStorage.takePendingStorageRequest(false));
     assert(deferredStorage.storage().pendingRequest());
     const auto pendingStorage = deferredStorage.takePendingStorageRequest(true);
