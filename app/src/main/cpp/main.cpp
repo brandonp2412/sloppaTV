@@ -56,6 +56,7 @@
 #include "player_controls_renderer.hpp"
 #include "player_screen.hpp"
 #include "player_seek_feedback_renderer.hpp"
+#include "player_subtitle_renderer.hpp"
 #include "player_tracks.hpp"
 #include "profiles_renderer.hpp"
 #include "queue_overlay_renderer.hpp"
@@ -154,47 +155,6 @@ bool isTransientHomeLoadError(std::string_view error) {
            error.find("Unable to connect to server") != std::string_view::npos ||
            error.find("HTTP 408") != std::string_view::npos || error.find("HTTP 425") != std::string_view::npos ||
            error.find("HTTP 429") != std::string_view::npos || error.find("HTTP 5") != std::string_view::npos;
-}
-
-std::string normalizeSubtitleDisplayText(const std::string& input) {
-    const std::string displaySafe = displayText(input, '\0');
-    auto attachesToPrevious = [](std::string_view token) {
-        if (token.empty()) return false;
-        return std::all_of(token.begin(), token.end(), [](unsigned char c) {
-            switch (c) {
-            case '!':
-            case '?':
-            case '.':
-            case ',':
-            case ';':
-            case ':':
-            case '%':
-            case ')':
-            case ']':
-            case '}':
-                return true;
-            default:
-                return false;
-            }
-        });
-    };
-
-    std::istringstream words(displaySafe);
-    std::vector<std::string> tokens;
-    std::string word;
-    while (words >> word) {
-        if (!tokens.empty() && attachesToPrevious(word))
-            tokens.back() += word;
-        else
-            tokens.push_back(std::move(word));
-    }
-
-    std::string output;
-    for (const auto& token : tokens) {
-        if (!output.empty()) output += ' ';
-        output += token;
-    }
-    return output;
 }
 
 std::string episodeNumberLabel(const JellyfinItem& item) {
@@ -5524,41 +5484,28 @@ private:
         if (const SubtitleCue* cue = playbackCoordinator_.activeSubtitleCue(playerScreenState_.positionMs()))
             subtitleText = cue->text;
         if (!subtitleText.empty()) {
-            const float boxMaxWidth = subtitleBoxMaxWidth(skipSegment != nullptr);
-            constexpr float horizontalPadding = 32.0f;
-            constexpr float verticalPadding = 20.0f;
-            const float textMaxWidth = boxMaxWidth - horizontalPadding * 2.0f;
             const float textScale = subtitleTextScale(settings_.subtitleSize);
-            const std::string subtitle =
-                fitTextLines(normalizeSubtitleDisplayText(subtitleText), textScale, textMaxWidth, 3);
-            const float lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize);
-            std::istringstream stream(subtitle);
-            std::vector<std::string> lines;
-            std::string line;
-            float widest = 0.0f;
-            while (std::getline(stream, line)) {
-                if (line.empty()) continue;
-                widest = std::max(widest, renderer_.textWidth(textScale, line));
-                lines.push_back(line);
-            }
-            if (lines.empty()) lines.push_back(subtitle);
-            const float boxWidth = std::clamp(widest + horizontalPadding * 2.0f, 320.0f, boxMaxWidth);
-            const float boxHeight = verticalPadding * 2.0f + lineHeight * static_cast<float>(lines.size());
-            const float boxX = (Renderer::logicalWidth() - boxWidth) * 0.5f;
-            const float bottomY = subtitleBottomY(showOverlay, playerScreenState_.controlsActive(now),
-                                                  settings_.subtitlePosition, skipSegment != nullptr);
-            const float boxY = bottomY - boxHeight;
-            if (settings_.subtitleBackground) {
-                renderer_.roundedRect(boxX, boxY, boxWidth, boxHeight, material_tv::cornerMedium,
-                                      Color{0.0f, 0.0f, 0.0f, 0.80f});
-            }
-            for (size_t i = 0; i < lines.size(); ++i) {
-                const float width = renderer_.textWidth(textScale, lines[i]);
-                const float textX = (Renderer::logicalWidth() - width) * 0.5f;
-                const float textY = boxY + verticalPadding + static_cast<float>(i) * lineHeight;
-                // Each subtitle row is already fitted above; do not let the glyph renderer wrap it again.
-                renderer_.outlinedText(textX, textY, textScale, lines[i], kText, Color{0.0f, 0.0f, 0.0f, 0.92f}, 0.0f);
-            }
+            renderPlayerSubtitle(
+                renderer_,
+                PlayerSubtitleRenderState{
+                    .text = subtitleText,
+                    .boxMaxWidth = subtitleBoxMaxWidth(skipSegment != nullptr),
+                    .textScale = textScale,
+                    .lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize),
+                    .logicalWidth = Renderer::logicalWidth(),
+                    .bottomY = subtitleBottomY(showOverlay, playerScreenState_.controlsActive(now),
+                                               settings_.subtitlePosition, skipSegment != nullptr),
+                    .showBackground = settings_.subtitleBackground,
+                },
+                PlayerSubtitleRenderStyle<Color>{
+                    .cornerRadius = material_tv::cornerMedium,
+                    .text = kText,
+                    .background = Color{0.0f, 0.0f, 0.0f, 0.80f},
+                    .outline = Color{0.0f, 0.0f, 0.0f, 0.92f},
+                },
+                [this](std::string value, float scale, float maxWidth, int maxLines) {
+                    return fitTextLines(value, scale, maxWidth, maxLines);
+                });
         }
         if (skipSegment) {
             const auto bounds = drawButtonSurface(1480.0f, skipButtonY(showOverlay), 320.0f, 74.0f, true, true);
