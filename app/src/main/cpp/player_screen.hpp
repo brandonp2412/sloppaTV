@@ -24,12 +24,13 @@ enum class PlayerScreenInput {
 enum class PlayerScreenCommandType {
     None,
     StopPlayback,
-    ActivateControl,
     OpenQueue,
     PreviousEpisode,
     NextEpisode,
     ActivatePlayback,
     TogglePause,
+    CycleAudioTrack,
+    CycleSubtitleTrack,
     SeekBackward,
     SeekForward,
 };
@@ -165,7 +166,7 @@ public:
             else if (input == PlayerScreenInput::Right)
                 moveControl(1);
             else if (input == PlayerScreenInput::Activate)
-                return {.type = PlayerScreenCommandType::ActivateControl};
+                return selectedControlCommand();
             return {};
         }
 
@@ -269,6 +270,23 @@ public:
     }
 
 private:
+    [[nodiscard]] PlayerScreenCommand selectedControlCommand() const {
+        switch (controlSelection_) {
+        case 0:
+            return {.type = PlayerScreenCommandType::PreviousEpisode};
+        case 1:
+            return {.type = PlayerScreenCommandType::TogglePause};
+        case 2:
+            return {.type = PlayerScreenCommandType::NextEpisode};
+        case 3:
+            return {.type = PlayerScreenCommandType::CycleAudioTrack};
+        case 4:
+            return {.type = PlayerScreenCommandType::CycleSubtitleTrack};
+        default:
+            return {};
+        }
+    }
+
     bool controlsActive_ = false;
     int controlSelection_ = 1;
     TimePoint controlsUntil_{};

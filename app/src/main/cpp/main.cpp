@@ -2411,29 +2411,6 @@ private:
         return true;
     }
 
-    void activatePlayerControl() {
-        switch (playerScreenState_.controlSelection()) {
-        case 0:
-            playAdjacentEpisode(-1);
-            break;
-        case 1:
-            player_.togglePause();
-            reportProgressAsync(true);
-            break;
-        case 2:
-            playAdjacentEpisode(1);
-            break;
-        case 3:
-            cycleAudioTrack();
-            break;
-        case 4:
-            cycleSubtitleTrack();
-            break;
-        default:
-            break;
-        }
-    }
-
     void handleSeerrDrivePickerKey(int32_t key) {
         SeerrStorageState::PickerInput input = SeerrStorageState::PickerInput::None;
         if (key == AKEYCODE_BACK)
@@ -2492,9 +2469,6 @@ private:
         case PlayerScreenCommandType::StopPlayback:
             stopPlayback();
             return;
-        case PlayerScreenCommandType::ActivateControl:
-            activatePlayerControl();
-            return;
         case PlayerScreenCommandType::OpenQueue:
             openQueueOverlay();
             return;
@@ -2510,6 +2484,12 @@ private:
         case PlayerScreenCommandType::TogglePause:
             player_.togglePause();
             reportProgressAsync(true);
+            return;
+        case PlayerScreenCommandType::CycleAudioTrack:
+            cycleAudioTrack();
+            return;
+        case PlayerScreenCommandType::CycleSubtitleTrack:
+            cycleSubtitleTrack();
             return;
         case PlayerScreenCommandType::SeekBackward:
         case PlayerScreenCommandType::SeekForward: {
