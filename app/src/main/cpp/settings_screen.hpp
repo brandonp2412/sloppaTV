@@ -4,7 +4,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -32,6 +34,15 @@ struct SettingsScreenCommand {
     SettingsScreenCommandType type = SettingsScreenCommandType::None;
     SettingId setting = SettingId::UiTextSize;
     int direction = 0;
+};
+
+struct SettingsScreenRow {
+    SettingId setting = SettingId::UiTextSize;
+    std::string_view label;
+    std::string value;
+    bool focused = false;
+    bool action = false;
+    bool boolean = false;
 };
 
 class SettingsScreenState {
@@ -215,3 +226,33 @@ private:
     int subtitleLanguageSelection_ = 0;
     int subtitleLanguageFirstVisible_ = 0;
 };
+
+inline std::optional<SettingsScreenRow> settingsScreenRow(const SettingsScreenState& screen,
+                                                          const AppSettings& settings, int maxAudioOutputChannels,
+                                                          std::string_view externalPlayer, std::string_view username,
+                                                          bool seerrApiKeyTyping, int slot, int visibleRows = 6) {
+    const auto& matches = screen.matches();
+    if (matches.empty() || visibleRows <= 0 || slot < 0 || slot >= visibleRows) return std::nullopt;
+
+    const int first = std::clamp(screen.firstVisible(), 0, std::max(0, static_cast<int>(matches.size()) - visibleRows));
+    const int matchPosition = first + slot;
+    if (matchPosition >= static_cast<int>(matches.size())) return std::nullopt;
+
+    const SettingId setting = matches[static_cast<size_t>(matchPosition)];
+    std::string value =
+        settingValue(settings, setting, maxAudioOutputChannels, externalPlayer, username, screen.advanced());
+    if (setting == SettingId::SeerrApiKey && seerrApiKeyTyping) {
+        const size_t visibleMask = std::min<size_t>(settings.seerrApiKey.size(), 24);
+        value.assign(visibleMask, '*');
+        if (settings.seerrApiKey.size() > visibleMask) value += "…";
+        if (value.empty()) value = "Typing…";
+    }
+    return SettingsScreenRow{
+        .setting = setting,
+        .label = settingLabel(setting, screen.advanced()),
+        .value = std::move(value),
+        .focused = !screen.subtitleLanguagePicker() && !screen.searchFocused() && setting == screen.selection(),
+        .action = isActionSetting(setting),
+        .boolean = isBooleanSetting(setting),
+    };
+}

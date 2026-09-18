@@ -7237,43 +7237,32 @@ private:
 
         constexpr int visibleRows = 6;
         const float rowsTop = settingsRowsTop(settings_.uiTextSize);
-        const int maxFirst = std::max(0, static_cast<int>(matches.size()) - visibleRows);
-        const int first = std::clamp(settingsScreen_.firstVisible(), 0, maxFirst);
         for (int slot = 0; slot < visibleRows; ++slot) {
-            const int matchPosition = first + slot;
-            if (matchPosition >= static_cast<int>(matches.size())) break;
-            const SettingId setting = matches[static_cast<size_t>(matchPosition)];
+            const auto row = settingsScreenRow(settingsScreen_, settings_, maxAudioOutputChannels, externalPlayer,
+                                               session_.username, systemTextInputMode_ == kTextInputSeerrApiKey, slot,
+                                               visibleRows);
+            if (!row) break;
             const float y = rowsTop + static_cast<float>(slot) * 112.0f;
-            const bool focused = !settingsScreen_.subtitleLanguagePicker() && !settingsScreen_.searchFocused() &&
-                                 setting == settingsScreen_.selection();
-            const bool actionRow = isActionSetting(setting);
+            const bool focused = row->focused;
             // Settings use contained TV list rows, which remain readable at distance.
             constexpr float rowX = 110.0f;
             constexpr float rowWidth = 1700.0f;
             const auto rowBounds = drawListItemSurface(rowX, y - 8.0f, rowWidth, 88.0f, focused,
                                                        material_tv::cornerMedium, materialWideListItemFocusScale());
-            const std::string_view rowLabel = settingLabel(setting, settingsScreen_.advanced());
             renderer_.textVerticallyCentered(rowX + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
-                                             fitTextLines(materialLabel(std::string(rowLabel)), 2.20f, 900.0f, 1),
+                                             fitTextLines(materialLabel(std::string(row->label)), 2.20f, 900.0f, 1),
                                              focused ? kText : kSecondaryText, 900.0f);
-            std::string value = settingValue(settings_, setting, maxAudioOutputChannels, externalPlayer,
-                                             session_.username, settingsScreen_.advanced());
-            if (setting == SettingId::SeerrApiKey && systemTextInputMode_ == kTextInputSeerrApiKey) {
-                const size_t visibleMask = std::min<size_t>(settings_.seerrApiKey.size(), 24);
-                value.assign(visibleMask, '*');
-                if (settings_.seerrApiKey.size() > visibleMask) value += "…";
-                if (value.empty()) value = "Typing…";
-            }
+            const std::string& value = row->value;
             constexpr float valueRightInset = 45.0f;
             // Keep row content anchored while the focus surface grows around it.
             const float valueRight = std::round(rowX + rowWidth - valueRightInset);
-            if (actionRow) {
+            if (row->action) {
                 const float valueScale = 1.70f;
                 const std::string displayValue = fitTextLines(materialLabel(value), valueScale, 570.0f, 1);
                 const float valueWidth = renderer_.textWidth(valueScale, displayValue);
                 renderer_.textVerticallyCentered(std::max(1190.0f, valueRight - valueWidth), rowBounds[1], rowBounds[3],
                                                  valueScale, displayValue, focused ? kFocus : kText, 570.0f);
-            } else if (isBooleanSetting(setting)) {
+            } else if (row->boolean) {
                 constexpr float switchWidth = 112.0f;
                 drawSwitch(valueRight - switchWidth, y + 8.0f, value == "ON", focused);
             } else {

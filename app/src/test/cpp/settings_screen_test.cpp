@@ -106,6 +106,29 @@ int main() {
     assert(valueFor(SettingId::AdvancedToggle) == "SHOW TECHNICAL");
 
     screen.reset();
+    auto row = settingsScreenRow(screen, settings, 6, "MPV", "viewer", false, 0);
+    assert(row);
+    assert(row->setting == SettingId::UiTextSize);
+    assert(row->label == "UI TEXT SIZE");
+    assert(row->focused);
+    assert(!row->action);
+    assert(!row->boolean);
+    assert(settingsScreenRow(screen, settings, 6, "MPV", "viewer", false, 5));
+    assert(!settingsScreenRow(screen, settings, 6, "MPV", "viewer", false, 6));
+
+    screen.toggleAdvanced();
+    screen.setSearchText("Seerr API key");
+    row = settingsScreenRow(screen, settings, 6, "MPV", "viewer", true, 0);
+    assert(row);
+    assert(row->setting == SettingId::SeerrApiKey);
+    assert(row->label == "SEERR API KEY (LEGACY)");
+    assert(row->value == "******");
+    assert(!row->focused);
+    assert(row->action);
+    assert(!row->boolean);
+    assert(!settingsScreenRow(screen, settings, 6, "MPV", "viewer", true, 1));
+
+    screen.reset();
     screen.setSearchText("seerr");
     const auto seerrMatches = screen.matches();
     assert(seerrMatches.size() == 3);
