@@ -31,6 +31,7 @@
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
 #include "home_async_executor.hpp"
+#include "home_completion_controller.hpp"
 #include "home_navigation_controller.hpp"
 #include "home_renderer.hpp"
 #include "home_row_renderer.hpp"
@@ -179,14 +180,6 @@ void logPlaybackReportFailure(const char* stage, const std::string& itemId, cons
     if (result.ok) return;
     __android_log_print(ANDROID_LOG_WARN, kTag, "Playback %s report failed for %s: %s", stage, itemId.c_str(),
                         result.error.c_str());
-}
-
-bool isTransientHomeLoadError(std::string_view error) {
-    return error.find("Server hostname could not be resolved") != std::string_view::npos ||
-           error.find("Server connection timed out") != std::string_view::npos ||
-           error.find("Unable to connect to server") != std::string_view::npos ||
-           error.find("HTTP 408") != std::string_view::npos || error.find("HTTP 425") != std::string_view::npos ||
-           error.find("HTTP 429") != std::string_view::npos || error.find("HTTP 5") != std::string_view::npos;
 }
 
 std::string episodeNumberLabel(const JellyfinItem& item) {
@@ -3648,62 +3641,46 @@ private:
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
-        if (!requestEpochs_.home.active(completion.generation)) return;
-        homeLoading_ = false;
-        if (!completion.result.ok) {
-            const std::string& error = completion.result.error;
-            if (error.find("HTTP 401") != std::string::npos) {
-                homeRetryAt_ = {};
-                homeRetryAttempt_ = 0;
-                const JellyfinSession expired = session_;
-                artwork_.eraseProfile(expired, renderer_);
-                sessionRegistry_.removeIdentity(expired);
-                requestEpochs_.invalidateAll();
-                loading_ = false;
-                mutationLoading_ = false;
-                playedRollback_.reset();
-                searchState_.setLoading(false);
-                session_.token.clear();
-                session_.userId.clear();
-                settings_.seerrSessionCookie.clear();
-                seerrDomain_.invalidateStorageTargets();
-                resetNavigation(Screen::Login);
-                error_ = "SESSION EXPIRED - LOG IN AGAIN";
-                saveSession(session_);
-                return;
-            }
-            if (isTransientHomeLoadError(error)) {
-                const int delaySeconds = std::min(30, 1 << std::min(homeRetryAttempt_, 5));
-                ++homeRetryAttempt_;
-                homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(delaySeconds);
-                __android_log_print(ANDROID_LOG_WARN, kTag,
-                                    "Home load failed transiently; retrying in %d seconds: %s", delaySeconds,
-                                    error.c_str());
-            } else {
-                homeRetryAt_ = {};
-                homeRetryAttempt_ = 0;
-            }
-            if (screen_ == Screen::Home) error_ = error;
-            return;
+        const bool activeGeneration = requestEpochs_.home.active(completion.generation);
+        if (!activeGeneration) return;
+        if (completion.result.ok) filterHiddenHomeItems(completion.result.value);
+
+        HomeCoreCompletionEffects effects = HomeCompletionController::apply(
+            completion, activeGeneration, screen_ == Screen::Home, homeRetryAttempt_, home_, homeState_);
+        if (effects.finishLoading) homeLoading_ = false;
+        homeRetryAttempt_ = effects.nextRetryAttempt;
+        if (effects.resetRetry) homeRetryAt_ = {};
+        if (effects.retryDelaySeconds) {
+            homeRetryAt_ =
+                std::chrono::steady_clock::now() + std::chrono::seconds(*effects.retryDelaySeconds);
+            __android_log_print(ANDROID_LOG_WARN, kTag,
+                                "Home load failed transiently; retrying in %d seconds: %s",
+                                *effects.retryDelaySeconds, completion.result.error.c_str());
         }
 
-        filterHiddenHomeItems(completion.result.value);
-        std::vector<JellyfinItem> views = completion.result.value.views;
-        HomeRestorePlan restorePlan = HomeScreenState::restorePlan(completion.snapshot, completion.result.value.rows);
-        const int coreRestoredRow = restorePlan.focusedRow;
-        homeRetryAt_ = {};
-        homeRetryAttempt_ = 0;
-        home_ = std::move(completion.result.value);
-        homeState_.setSelections(std::move(restorePlan.selections));
-        homeState_.setRow(coreRestoredRow);
-        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-        syncSeerrHomeRowLocked();
-        if (screen_ == Screen::Home) error_ = home_.warning;
-        if (homeState_.row() >= 0) {
-            const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-            prefetchHomeWindow(homeState_.row(),
-                               homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+        if (effects.sessionExpired) {
+            const JellyfinSession expired = session_;
+            artwork_.eraseProfile(expired, renderer_);
+            sessionRegistry_.removeIdentity(expired);
+            requestEpochs_.invalidateAll();
+            loading_ = false;
+            mutationLoading_ = false;
+            playedRollback_.reset();
+            searchState_.setLoading(false);
+            session_.token.clear();
+            session_.userId.clear();
+            settings_.seerrSessionCookie.clear();
+            seerrDomain_.invalidateStorageTargets();
+            resetNavigation(Screen::Login);
+            error_ = "SESSION EXPIRED - LOG IN AGAIN";
+            saveSession(session_);
+            return;
         }
+        if (effects.updateVisibleError) error_ = std::move(effects.visibleError);
+        if (!effects.loaded) return;
+
+        syncSeerrHomeRowLocked();
+        if (effects.prefetch) prefetchHomeWindow(effects.prefetch->row, effects.prefetch->selection);
         const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                                 std::chrono::steady_clock::now() - completion.startedAt)
                                 .count();
@@ -3728,42 +3705,21 @@ private:
         }
 
         refreshSeerrPendingAsync();
-        homeAsync_.loadSecondary(session_, completion.generation, std::move(views), std::move(completion.snapshot),
-                                 coreRestoredRow, completion.startedAt);
+        homeAsync_.loadSecondary(session_, completion.generation, std::move(effects.secondaryViews),
+                                 std::move(completion.snapshot), effects.coreRestoredRow, completion.startedAt);
     }
 
     void applyAsyncCompletion(HomeSecondaryCompletion& completion) {
-        if (!requestEpochs_.home.active(completion.generation)) return;
-        if (!completion.result.ok) {
-            if (!home_.warning.empty()) home_.warning += " | ";
-            home_.warning += "SECONDARY HOME ROWS UNAVAILABLE";
-            if (screen_ == Screen::Home) error_ = home_.warning;
-            return;
-        }
+        const bool activeGeneration = requestEpochs_.home.active(completion.generation);
+        if (!activeGeneration) return;
+        if (completion.result.ok) filterHiddenHomeItems(completion.result.value);
 
-        filterHiddenHomeItems(completion.result.value);
-        const size_t baseRowCount = home_.rows.size();
-        for (auto& section : completion.result.value.rows) {
-            const int restoredSelection = HomeScreenState::restoredSelection(completion.snapshot, section);
-            const bool focusAppended = !completion.snapshot.toolbarFocused &&
-                                       section.title == completion.snapshot.focusedRowTitle &&
-                                       homeState_.row() == completion.coreRestoredRow;
-            home_.rows.push_back(std::move(section));
-            homeState_.appendSelection(restoredSelection);
-            if (focusAppended) homeState_.setRow(static_cast<int>(home_.rows.size()) - 1);
-        }
-        if (!completion.result.value.warning.empty()) {
-            if (!home_.warning.empty()) home_.warning += " | ";
-            home_.warning += completion.result.value.warning;
-            if (screen_ == Screen::Home) error_ = home_.warning;
-        }
-        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-        if (homeState_.row() >= static_cast<int>(baseRowCount) &&
-            homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
-            const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-            prefetchHomeWindow(homeState_.row(),
-                               homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
-        }
+        HomeSecondaryCompletionEffects effects = HomeCompletionController::apply(
+            completion, activeGeneration, screen_ == Screen::Home, home_, homeState_);
+        if (effects.updateVisibleError) error_ = std::move(effects.visibleError);
+        if (!completion.result.ok) return;
+        if (effects.prefetch) prefetchHomeWindow(effects.prefetch->row, effects.prefetch->selection);
+
         const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(
                                 std::chrono::steady_clock::now() - completion.startedAt)
                                 .count();

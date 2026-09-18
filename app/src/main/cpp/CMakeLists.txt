@@ -17,6 +17,7 @@ add_library(sloppatv SHARED
     browse_navigation_controller.cpp
     details_completion_controller.cpp
     details_navigation_controller.cpp
+    home_completion_controller.cpp
     home_navigation_controller.cpp
     playback_completion_controller.cpp
     player_completion_controller.cpp
