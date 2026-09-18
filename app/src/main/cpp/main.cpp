@@ -32,6 +32,7 @@
 #include "jni_env.hpp"
 #include "launch_intent.hpp"
 #include "login_renderer.hpp"
+#include "media_grid_renderer.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
@@ -6370,29 +6371,22 @@ private:
     }
 
     void renderMediaGrid(const std::string& title, const std::vector<JellyfinItem>& items, int selection) {
-        renderHeader(title);
-        if (items.empty()) {
-            renderEmptyState(loading_ ? "Loading titles" : "No titles available",
-                             loading_ ? "Fetching titles from Jellyfin" : "Press Back to return to your library.");
-            return;
-        }
-        constexpr int columns = mediaGridColumns();
-        constexpr float slotWidth = mediaCardWidth();
-        constexpr float xGap = 32.0f;
-        const bool hasPortraitCards = std::any_of(
-            items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
-        const float rowStep = searchMediaRowHeight(hasPortraitCards);
-        const int firstRow = mediaFirstVisibleRow(selection, 2);
-        for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
-            const int row = index / columns - firstRow;
-            const int col = index % columns;
-            if (row >= 2) break;
-            const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-            const float y = 195.0f + static_cast<float>(row) * rowStep;
-            renderMediaArtworkCard(items[static_cast<size_t>(index)], x, y, slotWidth, index == selection, true,
-                                   hasPortraitCards, hasPortraitCards,
-                                   mediaGridTitleLineLimit(row, settings_.uiTextSize, hasPortraitCards));
-        }
+        renderMediaGridScreen(
+            title, items,
+            MediaGridRenderState{
+                .loading = loading_,
+                .selection = selection,
+                .uiTextSize = settings_.uiTextSize,
+            },
+            [this](std::string_view heading) { renderHeader(std::string(heading)); },
+            [this](std::string_view emptyTitle, std::string_view message) {
+                renderEmptyState(std::string(emptyTitle), std::string(message));
+            },
+            [this](const JellyfinItem& item, const MediaGridCardPlacement& placement) {
+                renderMediaArtworkCard(item, placement.x, placement.y, placement.slotWidth, placement.focused,
+                                       placement.showState, placement.preferSeriesCover, placement.alignToPortraitBand,
+                                       placement.titleLineLimit);
+            });
     }
 
     JellyfinItem personArtworkItem(const JellyfinPerson& person) const {
