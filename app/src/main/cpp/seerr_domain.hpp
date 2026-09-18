@@ -13,6 +13,13 @@
 
 class SeerrDomainState {
 public:
+    enum class ConnectAction {
+        AlreadyConnecting,
+        MissingServer,
+        MissingJellyfin,
+        Submit,
+    };
+
     enum class RequestAction {
         Invalid,
         AlreadyRequested,
@@ -68,6 +75,13 @@ public:
     [[nodiscard]] SeerrStorageState& storage() { return storage_; }
 
     [[nodiscard]] const SeerrStorageState& storage() const { return storage_; }
+
+    [[nodiscard]] ConnectAction prepareConnect(std::string_view server, bool jellyfinValid) {
+        if (connection_.connecting()) return ConnectAction::AlreadyConnecting;
+        if (server.empty()) return ConnectAction::MissingServer;
+        if (!jellyfinValid) return ConnectAction::MissingJellyfin;
+        return connection_.beginConnect() ? ConnectAction::Submit : ConnectAction::AlreadyConnecting;
+    }
 
     [[nodiscard]] RequestPlan prepareRequest(const SeerrMediaItem& item, const SeerrEndpoint& endpoint,
                                              bool selectDrive, bool skipDrivePrompt,

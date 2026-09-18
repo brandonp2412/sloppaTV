@@ -3262,18 +3262,20 @@ private:
     [[nodiscard]] SeerrAuth seerrAuth() const { return seerrEndpoint().auth; }
 
     void connectSeerrAsync(bool announce = true) {
-        if (seerrConnectionState_.connecting()) return;
-        if (settings_.seerrServer.empty()) {
+        switch (seerrDomain_.prepareConnect(settings_.seerrServer, session_.valid())) {
+        case SeerrDomainState::ConnectAction::AlreadyConnecting:
+            return;
+        case SeerrDomainState::ConnectAction::MissingServer:
             if (announce) showNotice("SET THE SEERR SERVER FIRST", 4s);
             return;
-        }
-        if (!session_.valid()) {
+        case SeerrDomainState::ConnectAction::MissingJellyfin:
             if (announce) showNotice("JELLYFIN LOGIN REQUIRED", 4s);
             return;
+        case SeerrDomainState::ConnectAction::Submit:
+            break;
         }
         const std::string server = settings_.seerrServer;
         const JellyfinSession jellyfin = session_;
-        if (!seerrConnectionState_.beginConnect()) return;
         if (announce) {
             error_.clear();
             showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);

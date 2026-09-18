@@ -43,6 +43,19 @@ int main() {
     assert(isSeerrAuthError("request failed with HTTP 403"));
     assert(!isSeerrAuthError("HTTP 500"));
 
+    SeerrDomainState connectionStarts;
+    assert(connectionStarts.prepareConnect("", true) == SeerrDomainState::ConnectAction::MissingServer);
+    assert(!connectionStarts.connection().connecting());
+    assert(connectionStarts.prepareConnect("https://seerr.example.nz", false) ==
+           SeerrDomainState::ConnectAction::MissingJellyfin);
+    assert(!connectionStarts.connection().connecting());
+    assert(connectionStarts.prepareConnect("https://seerr.example.nz", true) ==
+           SeerrDomainState::ConnectAction::Submit);
+    assert(connectionStarts.connection().connecting());
+    assert(connectionStarts.prepareConnect("https://other.example.nz", true) ==
+           SeerrDomainState::ConnectAction::AlreadyConnecting);
+    connectionStarts.connection().endConnect();
+
     SeerrDomainState state;
     assert(state.prepareRequest({}, configured, false, false).action == SeerrDomainState::RequestAction::Invalid);
     assert(state.prepareRequest(media("seerr:movie:10", true), configured, false, false).action ==
