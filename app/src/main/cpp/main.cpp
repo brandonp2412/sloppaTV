@@ -52,6 +52,7 @@
 #include "navigation_stack.hpp"
 #include "playback_continuation.hpp"
 #include "playback_continuation_executor.hpp"
+#include "playback_completion_controller.hpp"
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
 #include "playback_resolution_executor.hpp"
@@ -4031,112 +4032,82 @@ private:
         playbackCoordinator_.markPlaybackStopReported();
     }
 
+    void applyPlaybackCompletionEffects(PlaybackCompletionEffects effects) {
+        if (effects.finishLoading) loading_ = false;
+        if (effects.popToDetails) popScreen(Screen::Details);
+        if (effects.detailUpdate) detail_ = std::move(*effects.detailUpdate);
+        if (effects.error) error_ = std::move(*effects.error);
+
+        for (const auto& restore : effects.restoreHomeVisibility) {
+            JellyfinItem item;
+            item.id = restore.itemId;
+            item.seriesId = restore.seriesId;
+            restoreHomeVisibilityForPlayback(item);
+        }
+
+        if (effects.stopPlayback) stopPlayback();
+        if (!effects.transition) return;
+
+        auto transition = std::move(*effects.transition);
+        switch (transition.kind) {
+        case PlaybackCompletionTransitionKind::Resolved:
+            playbackCoordinator_.stageResolvedPlayback(std::move(transition.target), std::move(transition.item));
+            break;
+        case PlaybackCompletionTransitionKind::StreamRestart:
+            playbackCoordinator_.stageStreamRestart(std::move(transition.target), std::move(transition.item),
+                                                    transition.restartPaused, transition.audioStreamIndex);
+            break;
+        case PlaybackCompletionTransitionKind::ResolvedFallback:
+            playbackCoordinator_.stageResolvedFallback(std::move(transition.target), std::move(transition.item),
+                                                       transition.audioStreamIndex);
+            break;
+        }
+    }
+
     void applyAsyncCompletion(QueuedPlaybackCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        loading_ = false;
-        playbackCoordinator_.finishPlaybackResolution();
-        if (screen_ != completion.originScreen || queueState_.currentIndex() != completion.previousQueueIndex ||
-            !queueState_.itemMatches(completion.index, completion.item.id)) {
-            return;
-        }
-        if (!completion.result.ok) {
-            if (completion.replacingPlayer && screen_ == Screen::Player) popScreen(Screen::Details);
-            error_ = "QUEUE: " + completion.result.error;
-            return;
-        }
-        queueState_.setCurrentIndex(completion.index);
-        queueState_.setItemAt(completion.index, completion.item);
-        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.item));
+        const bool activeQueueContext =
+            screen_ == completion.originScreen && queueState_.currentIndex() == completion.previousQueueIndex &&
+            queueState_.itemMatches(completion.index, completion.item.id);
+        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), activeQueueContext,
+            screen_ == Screen::Player, queueState_, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(PlayerItemPlaybackCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        loading_ = false;
-        playbackCoordinator_.finishPlaybackResolution();
-        if (screen_ != Screen::Player) return;
-        if (!completion.result.ok) {
-            error_ = "EPISODE: " + completion.result.error;
-            return;
-        }
-        detail_ = completion.item;
-        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.item));
+        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player,
+            playbackCoordinator_));
     }
 
     void applyAsyncCompletion(AutoplayPlaybackCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        loading_ = false;
-        playbackCoordinator_.finishPlaybackResolution();
-        if (!completion.result.ok) {
-            popScreen(Screen::Details);
-            error_ = "NEXT EPISODE: " + completion.result.error;
-            return;
-        }
-        if (completion.queuedNextIndex >= 0 && queueState_.currentIndex() + 1 == completion.queuedNextIndex &&
-            queueState_.itemMatches(completion.queuedNextIndex, completion.item.id)) {
-            queueState_.setCurrentIndex(completion.queuedNextIndex);
-            queueState_.setItemAt(completion.queuedNextIndex, completion.item);
-        }
-        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.item));
+        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), queueState_, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(StreamRestartCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        const bool sameItem = playbackCoordinator_.completeStreamRestartRequest(completion.item.id);
-        if (screen_ != Screen::Player || !sameItem) return;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
-        playbackCoordinator_.stageStreamRestart(std::move(completion.result.value), std::move(completion.item),
-                                                completion.wasPaused, completion.audioStreamIndex);
+        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player,
+            playbackCoordinator_));
     }
 
     void applyAsyncCompletion(FallbackPlaybackCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        loading_ = false;
-        const bool sameItem = playbackCoordinator_.completeFallbackResolution(completion.item.id);
-        if (screen_ != Screen::Player || !sameItem) return;
-        if (!completion.result.ok) {
-            error_ = "TRANSCODE FALLBACK: " + completion.result.error;
-            stopPlayback();
-            return;
-        }
-        playbackCoordinator_.stageResolvedFallback(std::move(completion.result.value), std::move(completion.item),
-                                                   completion.audioStreamIndex);
+        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player,
+            playbackCoordinator_));
     }
 
     void applyAsyncCompletion(BeginPlaybackCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::Details || detail_.id != completion.selected.id) return;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
-        if (completion.queuedPlaybackIndex >= 0 &&
-            queueState_.itemMatches(completion.queuedPlaybackIndex, completion.playable.id)) {
-            queueState_.setCurrentIndex(completion.queuedPlaybackIndex);
-            queueState_.setItemAt(completion.queuedPlaybackIndex, completion.playable);
-        }
-        restoreHomeVisibilityForPlayback(completion.selected);
-        restoreHomeVisibilityForPlayback(completion.playable);
-        playbackCoordinator_.stageResolvedPlayback(std::move(completion.result.value), std::move(completion.playable));
+        const bool activeDetailsSelection = screen_ == Screen::Details && detail_.id == completion.selected.id;
+        applyPlaybackCompletionEffects(
+            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
+                                                activeDetailsSelection, queueState_));
     }
 
     void applyAsyncCompletion(SeriesPlayAllCompletion& completion) {
-        if (!requestEpochs_.playback.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::Details || detail_.id != completion.series.id) return;
-        if (!completion.error.empty()) {
-            error_ = std::move(completion.error);
-            return;
-        }
-        if (!completion.target) return;
-        queueState_.replace(std::move(completion.episodes), 0);
-        queueState_.setItemAt(0, completion.first);
-        restoreHomeVisibilityForPlayback(completion.series);
-        restoreHomeVisibilityForPlayback(completion.first);
-        playbackCoordinator_.stageResolvedPlayback(std::move(*completion.target), std::move(completion.first));
+        const bool activeDetailsSelection = screen_ == Screen::Details && detail_.id == completion.series.id;
+        applyPlaybackCompletionEffects(
+            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
+                                                activeDetailsSelection, queueState_));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
