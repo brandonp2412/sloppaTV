@@ -88,6 +88,7 @@
 #include "seerr_home_projection.hpp"
 #include "seerr_jellyfin_adapter.hpp"
 #include "seerr_refresh_coordinator.hpp"
+#include "seerr_request_coordinator.hpp"
 #include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
@@ -446,6 +447,7 @@ public:
                    }),
           seerrConnection_(seerrDomain_, seerrAsync_),
           seerrRefresh_(seerrDomain_, seerrAsync_),
+          seerrRequest_(seerrDomain_, seerrAsync_),
           searchState_(seerrDomain_.searchResults()) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
@@ -2893,9 +2895,8 @@ private:
 
     void requestSeerrMediaAsync(const SeerrMediaItem& item, const SeerrStorageTarget* selectedTarget = nullptr,
                                 bool skipDrivePrompt = false) {
-        const SeerrEndpoint endpoint = seerrEndpoint();
         auto plan =
-            seerrDomain_.prepareRequest(item, endpoint, settings_.seerrSelectDrive, skipDrivePrompt, selectedTarget);
+            seerrRequest_.prepare(item, seerrEndpoint(), settings_.seerrSelectDrive, skipDrivePrompt, selectedTarget);
         switch (plan.action) {
         case SeerrDomainState::RequestAction::Invalid:
             return;
@@ -2920,7 +2921,7 @@ private:
         }
 
         mutationLoading_ = true;
-        seerrAsync_.requestMedia(endpoint, item, std::move(plan.target));
+        seerrRequest_.submit(std::move(plan));
     }
 
     void searchSeerrAsync(bool immediate) {
@@ -6136,6 +6137,9 @@ private:
     SeerrRefreshCoordinator<
         SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
         seerrRefresh_;
+    SeerrRequestCoordinator<
+        SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
+        seerrRequest_;
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

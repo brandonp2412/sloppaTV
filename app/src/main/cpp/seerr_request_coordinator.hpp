@@ -1,0 +1,52 @@
+#pragma once
+
+#include "seerr_domain.hpp"
+
+#include <optional>
+#include <utility>
+
+struct SeerrRequestDispatchPlan {
+    SeerrDomainState::RequestAction action = SeerrDomainState::RequestAction::Invalid;
+    bool refreshStorage = false;
+    SeerrEndpoint endpoint;
+    SeerrMediaItem item;
+    std::optional<SeerrStorageTarget> target;
+
+    [[nodiscard]] bool ready() const { return action == SeerrDomainState::RequestAction::Submit; }
+};
+
+template <typename AsyncExecutor> class SeerrRequestCoordinator {
+public:
+    SeerrRequestCoordinator(SeerrDomainState& domain, AsyncExecutor& async) : domain_(domain), async_(async) {}
+
+    [[nodiscard]] SeerrRequestDispatchPlan prepare(const SeerrMediaItem& item, SeerrEndpoint endpoint, bool selectDrive,
+                                                   bool skipDrivePrompt,
+                                                   const SeerrStorageTarget* selectedTarget = nullptr) {
+        auto domainPlan = domain_.prepareRequest(item, endpoint, selectDrive, skipDrivePrompt, selectedTarget);
+        if (domainPlan.action != SeerrDomainState::RequestAction::Submit) {
+            return {
+                .action = domainPlan.action,
+                .refreshStorage = domainPlan.refreshStorage,
+                .endpoint = {},
+                .item = {},
+                .target = std::nullopt,
+            };
+        }
+        return {
+            .action = domainPlan.action,
+            .refreshStorage = false,
+            .endpoint = std::move(endpoint),
+            .item = item,
+            .target = std::move(domainPlan.target),
+        };
+    }
+
+    void submit(SeerrRequestDispatchPlan plan) {
+        if (!plan.ready()) return;
+        async_.requestMedia(std::move(plan.endpoint), std::move(plan.item), std::move(plan.target));
+    }
+
+private:
+    SeerrDomainState& domain_;
+    AsyncExecutor& async_;
+};
