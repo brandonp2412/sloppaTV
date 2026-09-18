@@ -93,6 +93,7 @@
 #include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
 #include "system_text_input.hpp"
+#include "text_layout.hpp"
 #include "ui_theme.hpp"
 #include "ui_components.hpp"
 #include "ui_labels.hpp"
@@ -5913,73 +5914,11 @@ private:
 
     void drawLingeringTitle(float x, float y, float scale, std::string_view value, float maxWidth, Color color,
                             std::chrono::steady_clock::time_point now) {
-        const std::string displayValue = displayText(value);
-        if (displayValue.empty()) return;
-        const float titleWidth = renderer_.textWidth(scale, displayValue);
-        if (titleWidth <= maxWidth) {
-            renderer_.text(x, y, scale, displayValue, color, maxWidth);
-            return;
-        }
-
-        constexpr auto linger = 1200ms;
-        const auto marqueeStart = lastInteraction_ + linger;
-        if (now < marqueeStart) {
-            renderer_.text(x, y, scale, fitTextLines(displayValue, scale, maxWidth, 1), color, maxWidth);
-            return;
-        }
-
-        constexpr float speedPixelsPerSecond = 28.0f;
-        const std::string gap = "      ";
-        const float cycleWidth = titleWidth + renderer_.textWidth(scale, gap);
-        const float elapsedSeconds = std::chrono::duration<float>(now - marqueeStart).count();
-        const float offset = std::fmod(elapsedSeconds * speedPixelsPerSecond, cycleWidth);
-        const std::string track = displayValue + gap + displayValue;
-        renderer_.beginClipRect(x, y - 4.0f, maxWidth, 64.0f);
-        renderer_.text(x - offset, y, scale, track, color);
-        renderer_.endClipRect();
+        renderLingeringTitle(renderer_, x, y, scale, value, maxWidth, color, lastInteraction_, now);
     }
 
     std::string fitTextLines(std::string_view value, float scale, float maxWidth, int maxLines) const {
-        if (value.empty() || maxWidth <= 0.0f || maxLines <= 0) return {};
-        const std::string displayValue = displayText(value);
-        auto ellipsize = [&](std::string line) {
-            while (!line.empty() && renderer_.textWidth(scale, line + "...") > maxWidth) line.pop_back();
-            return line + "...";
-        };
-        std::istringstream words(displayValue);
-        std::string word;
-        std::string current;
-        std::string fitted;
-        int line = 1;
-        while (words >> word) {
-            const std::string candidate = current.empty() ? word : current + " " + word;
-            if (renderer_.textWidth(scale, candidate) <= maxWidth) {
-                current = candidate;
-                continue;
-            }
-            if (current.empty()) {
-                if (!fitted.empty()) fitted += '\n';
-                fitted += ellipsize(word);
-                if (line >= maxLines) return fitted;
-                ++line;
-                current.clear();
-                continue;
-            }
-            if (line >= maxLines) {
-                if (!fitted.empty()) fitted += '\n';
-                fitted += ellipsize(current);
-                return fitted;
-            }
-            if (!fitted.empty()) fitted += '\n';
-            fitted += current;
-            current = word;
-            ++line;
-        }
-        if (!current.empty()) {
-            if (!fitted.empty()) fitted += '\n';
-            fitted += renderer_.textWidth(scale, current) <= maxWidth ? current : ellipsize(current);
-        }
-        return fitted;
+        return fitRenderedTextLines(renderer_, value, scale, maxWidth, maxLines);
     }
 
     void renderMediaGrid(const std::string& title, const std::vector<JellyfinItem>& items, int selection) {

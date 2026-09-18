@@ -113,6 +113,7 @@ CPP_TESTS = [
     "subtitle_load_executor_test.cpp",
     "subtitle_policy_test.cpp",
     "system_text_input_test.cpp",
+    "text_layout_test.cpp",
     "trickplay_policy_test.cpp",
     "trickplay_tile_executor_test.cpp",
     "trickplay_preview_test.cpp",
