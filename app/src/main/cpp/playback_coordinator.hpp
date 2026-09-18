@@ -88,6 +88,14 @@ struct PlaybackFallbackPlan {
     bool forceTranscode = false;
 };
 
+struct PlaybackFallbackAttempt {
+    PlaybackFallbackPlan plan;
+    JellyfinItem item;
+    PlaybackTarget failedTarget;
+    int audioStreamIndex = -1;
+    int subtitleStreamIndex = kSubtitleOffIndex;
+};
+
 struct PlaybackSubtitleFallbackPlan {
     bool retry = false;
     int failedSubtitleStreamIndex = kSubtitleOffIndex;
@@ -705,6 +713,19 @@ public:
                                     jellyfinSessionValid, sessionState_.activeItem().id,
                                     sessionState_.activeTarget().url, sessionState_.activeTarget().fallbackTranscodeUrl,
                                     telemetryState_.playbackStartReported(), positionMs, preferServerStream);
+    }
+
+    [[nodiscard]] std::optional<PlaybackFallbackAttempt>
+    fallbackAttempt(bool jellyfinSessionValid, int positionMs, bool preferServerStream) const {
+        PlaybackFallbackAttempt attempt;
+        attempt.plan = fallbackPlan(jellyfinSessionValid, positionMs, preferServerStream);
+        if (!attempt.plan.retry) return std::nullopt;
+        attempt.item = sessionState_.activeItem();
+        attempt.item.positionTicks = attempt.plan.resumeTicks;
+        attempt.failedTarget = sessionState_.activeTarget();
+        attempt.audioStreamIndex = trackState_.selectedAudioServerIndex();
+        attempt.subtitleStreamIndex = trackState_.selectedSubtitleServerIndex();
+        return attempt;
     }
 
     void beginFallback() {

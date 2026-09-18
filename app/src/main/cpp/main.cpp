@@ -3787,16 +3787,18 @@ private:
         __android_log_print(ANDROID_LOG_WARN, kTag, "Benchmark build refusing Jellyfin server playback fallback");
         return false;
 #else
-        const PlaybackFallbackPlan fallbackPlan =
-            playbackCoordinator_.fallbackPlan(session_.valid(), playerScreenState_.positionMs(), preferServerStream);
-        if (!fallbackPlan.retry) return false;
+        auto fallbackAttempt =
+            playbackCoordinator_.fallbackAttempt(session_.valid(), playerScreenState_.positionMs(), preferServerStream);
+        if (!fallbackAttempt) return false;
 
-        const PlaybackTarget failedTarget = playbackSessionState_.activeTarget();
-        JellyfinItem item = playbackSessionState_.activeItem();
+        const PlaybackFallbackPlan fallbackPlan = fallbackAttempt->plan;
+        const PlaybackTarget failedTarget = std::move(fallbackAttempt->failedTarget);
+        JellyfinItem item = std::move(fallbackAttempt->item);
         const JellyfinSession session = session_;
         const int64_t resumeTicks = fallbackPlan.resumeTicks;
         const bool shouldReportPrevious = fallbackPlan.reportPrevious;
-        item.positionTicks = resumeTicks;
+        const int audioStreamIndex = fallbackAttempt->audioStreamIndex;
+        const int subtitleStreamIndex = fallbackAttempt->subtitleStreamIndex;
 
         player_.stop();
         videoSurface_.release();
@@ -3833,8 +3835,6 @@ private:
         fallbackOverrides.forceTranscode = fallbackPlan.forceTranscode;
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
-        const int audioStreamIndex = trackState_.selectedAudioServerIndex();
-        const int subtitleStreamIndex = trackState_.selectedSubtitleServerIndex();
         const uint64_t generation = requestEpochs_.playback.begin();
         loading_ = true;
         playbackCoordinator_.beginFallbackResolution();
