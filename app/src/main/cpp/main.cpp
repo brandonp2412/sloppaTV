@@ -81,6 +81,7 @@
 #include "seerr.hpp"
 #include "series_playback_executor.hpp"
 #include "seerr_async_executor.hpp"
+#include "seerr_connection_coordinator.hpp"
 #include "seerr_domain.hpp"
 #include "seerr_drive_picker_renderer.hpp"
 #include "seerr_drive_picker_screen.hpp"
@@ -443,6 +444,7 @@ public:
                                                : "Home artwork decode failed item=%s type=%s reason=%s",
                                            request.itemId.c_str(), request.itemType.c_str(), loaded.error.c_str());
                    }),
+          seerrConnection_(seerrDomain_, seerrAsync_),
           seerrRefresh_(seerrDomain_, seerrAsync_),
           searchState_(seerrDomain_.searchResults()) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
@@ -2834,7 +2836,8 @@ private:
     [[nodiscard]] SeerrAuth seerrAuth() const { return seerrEndpoint().auth; }
 
     void connectSeerrAsync(bool announce = true) {
-        switch (seerrDomain_.prepareConnect(settings_.seerrServer, session_.valid())) {
+        auto plan = seerrConnection_.prepare(settings_.seerrServer, session_);
+        switch (plan.action) {
         case SeerrDomainState::ConnectAction::AlreadyConnecting:
             return;
         case SeerrDomainState::ConnectAction::MissingServer:
@@ -2846,13 +2849,11 @@ private:
         case SeerrDomainState::ConnectAction::Submit:
             break;
         }
-        const std::string server = settings_.seerrServer;
-        const JellyfinSession jellyfin = session_;
         if (announce) {
             error_.clear();
             showNotice("CONNECTING SEERR WITH JELLYFIN…", 30s);
         }
-        seerrAsync_.connect(server, jellyfin, announce);
+        seerrConnection_.submit(std::move(plan), announce);
     }
 
     void refreshSeerrStorageAsync(bool force = false) {
@@ -6129,6 +6130,9 @@ private:
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
     SeerrDomainState seerrDomain_;
+    SeerrConnectionCoordinator<
+        SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
+        seerrConnection_;
     SeerrRefreshCoordinator<
         SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
         seerrRefresh_;
