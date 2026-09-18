@@ -2384,10 +2384,6 @@ private:
         playerScreenState_.beginSeek(targetMs, std::chrono::steady_clock::now());
     }
 
-    const SubtitleCue* activeSubtitleCue() const {
-        return playbackCoordinator_.tracks().activeSubtitleCue(playerScreenState_.positionMs());
-    }
-
     std::string mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
         if (segment.type == "Intro") return "Skip intro";
         if (segment.type == "Outro") return "Skip credits";
@@ -6185,7 +6181,8 @@ private:
                                        Color{0.0f, 0.0f, 0.0f, 0.90f});
         }
         std::string subtitleText = player_.subtitleText();
-        if (const SubtitleCue* cue = activeSubtitleCue()) subtitleText = cue->text;
+        if (const SubtitleCue* cue = playbackCoordinator_.activeSubtitleCue(playerScreenState_.positionMs()))
+            subtitleText = cue->text;
         if (!subtitleText.empty()) {
             const float boxMaxWidth = subtitleBoxMaxWidth(skipSegment != nullptr);
             constexpr float horizontalPadding = 32.0f;

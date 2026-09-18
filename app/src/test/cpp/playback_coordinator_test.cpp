@@ -291,6 +291,9 @@ int main() {
     loadedSubtitleLabelCoordinator.tracks().applySubtitle(
         5, "English", {{.startMs = 100, .endMs = 500, .text = "Hello"}});
     assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "ENGLISH 2/2");
+    assert(loadedSubtitleLabelCoordinator.activeSubtitleCue(99) == nullptr);
+    assert(loadedSubtitleLabelCoordinator.activeSubtitleCue(100)->text == "Hello");
+    assert(loadedSubtitleLabelCoordinator.activeSubtitleCue(500) == nullptr);
     loadedSubtitleLabelCoordinator.tracks().setSubtitleEnabled(false);
     assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "OFF");
     assert(loadedSubtitleLabelCoordinator.beginSubtitleLoadContext(preferenceItem.subtitles[1], {}));

@@ -780,6 +780,10 @@ public:
         return playbackTrackLabel(sessionState_.activeItem(), trackState_, kind);
     }
 
+    [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {
+        return trackState_.activeSubtitleCue(positionMs);
+    }
+
     [[nodiscard]] PlaybackLanguagePreferences languagePreferences() const {
         return {
             .audio = trackState_.audioLanguagePreference(),
