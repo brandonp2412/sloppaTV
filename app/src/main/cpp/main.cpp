@@ -89,6 +89,7 @@
 #include "seerr_jellyfin_adapter.hpp"
 #include "seerr_refresh_coordinator.hpp"
 #include "seerr_request_coordinator.hpp"
+#include "seerr_search_coordinator.hpp"
 #include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
@@ -448,6 +449,7 @@ public:
           seerrConnection_(seerrDomain_, seerrAsync_),
           seerrRefresh_(seerrDomain_, seerrAsync_),
           seerrRequest_(seerrDomain_, seerrAsync_),
+          seerrSearchCoordinator_(seerrDomain_, seerrAsync_),
           searchState_(seerrDomain_.searchResults()) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
@@ -2925,25 +2927,16 @@ private:
     }
 
     void searchSeerrAsync(bool immediate) {
-        if (seerrDomain_.deferSearchIfConnecting()) {
-            seerrDomain_.stopSearchLoading();
-            return;
-        }
-        const SeerrEndpoint endpoint = seerrEndpoint();
-        const std::string query = searchState_.query();
-        bool shouldStart = false;
-        if (immediate) {
-            const auto start = seerrDomain_.beginImmediateSearch(query, endpoint.configured());
-            if (start.resultsChanged) searchState_.refreshSeerrResults();
-            shouldStart = start.started;
-        } else {
-            shouldStart = seerrDomain_.beginDueSearch(std::chrono::steady_clock::now());
-        }
-        if (!shouldStart) return;
+        auto plan =
+            immediate
+                ? seerrSearchCoordinator_.prepareImmediate(seerrEndpoint(), searchState_.query())
+                : seerrSearchCoordinator_.prepareDue(seerrEndpoint(), searchState_.query(), std::chrono::steady_clock::now());
+        if (plan.resultsChanged) searchState_.refreshSeerrResults();
+        if (!plan.ready()) return;
 
         refreshSeerrStorageAsync();
         const uint64_t generation = requestEpochs_.seerrSearch.begin();
-        seerrAsync_.search(endpoint, query, generation);
+        seerrSearchCoordinator_.submit(std::move(plan), generation);
     }
 
     void searchAsync(bool includeSeerrImmediately = true) {
@@ -6140,6 +6133,9 @@ private:
     SeerrRequestCoordinator<
         SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
         seerrRequest_;
+    SeerrSearchCoordinator<
+        SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
+        seerrSearchCoordinator_;
     DecodedImage brandMarkDecoded_;
     GLuint brandMarkTexture_ = 0;
     uint64_t brandMarkTextureGeneration_ = 0;

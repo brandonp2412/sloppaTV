@@ -106,6 +106,7 @@ CPP_TESTS = [
     "seerr_refresh_coordinator_test.cpp",
     "seerr_request_coordinator_test.cpp",
     "seerr_request_state_test.cpp",
+    "seerr_search_coordinator_test.cpp",
     "seerr_search_state_test.cpp",
     "seerr_storage_state_test.cpp",
     "server_info_executor_test.cpp",
