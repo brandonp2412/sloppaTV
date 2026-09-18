@@ -9,6 +9,7 @@
 #include "artwork_provider.hpp"
 #include "async_completion_queue.hpp"
 #include "audio_policy.hpp"
+#include "browse_async_executor.hpp"
 #include "browse_screen.hpp"
 #include "details_screen.hpp"
 #include "details_async_executor.hpp"
@@ -378,14 +379,6 @@ struct EpisodesCompletion {
     ApiValueResult<std::vector<JellyfinItem>> result;
 };
 
-struct BrowsePageCompletion {
-    std::string containerId;
-    int startIndex = 0;
-    bool append = false;
-    uint64_t generation = 0;
-    ApiValueResult<std::vector<JellyfinItem>> result;
-};
-
 struct ServerInfoNoticeCompletion {
     std::string server;
     std::string userId;
@@ -498,6 +491,7 @@ public:
               }),
           quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_),
+          browseAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -2682,34 +2676,17 @@ private:
         const std::string genre = browseState_.genre();
         const std::string letter = browseState_.letter();
         const bool nested = browseState_.nested();
-        tasks_.submit([this, session, container, startIndex, append, generation, mode, genre, letter, nested] {
-            ApiValueResult<std::vector<JellyfinItem>> result;
-            if (nested || mode == BrowseContentMode::All) {
-                result = api_.browseLibrary(session, container.id, startIndex, kBrowsePageSize);
-                if (result.ok && result.value.empty() && startIndex == 0 && container.type == "BoxSet") {
-                    auto fallback = api_.browseCollectionMembersFallback(session, container);
-                    if (fallback.ok) result = std::move(fallback);
-                }
-            } else if (mode == BrowseContentMode::Favorites) {
-                result = api_.browseVideoFilter(session, container, startIndex, kBrowsePageSize, true);
-            } else if (mode == BrowseContentMode::Genres) {
-                result = api_.listGenres(session, container, 100);
-            } else if (mode == BrowseContentMode::GenreItems) {
-                result = api_.browseVideoFilter(session, container, startIndex, kBrowsePageSize, false, genre);
-            } else if (mode == BrowseContentMode::LetterItems) {
-                result = api_.browseVideoFilter(session, container, startIndex, kBrowsePageSize, false, {}, letter);
-            } else if (mode == BrowseContentMode::Collections) {
-                result = api_.browseCollections(session, startIndex, kBrowsePageSize);
-            } else {
-                result.ok = true;
-            }
-            asyncCompletions_.push(BrowsePageCompletion{
-                .containerId = container.id,
-                .startIndex = startIndex,
-                .append = append,
-                .generation = generation,
-                .result = std::move(result),
-            });
+        browseAsync_.load(BrowsePageRequest{
+            .session = session,
+            .container = container,
+            .startIndex = startIndex,
+            .append = append,
+            .generation = generation,
+            .mode = mode,
+            .genre = genre,
+            .letter = letter,
+            .nested = nested,
+            .pageSize = kBrowsePageSize,
         });
     }
 
@@ -7090,6 +7067,7 @@ private:
     RequestEpochs requestEpochs_;
     QuickConnectExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> quickConnectAsync_;
     DetailsAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> detailsAsync_;
+    BrowseAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> browseAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
