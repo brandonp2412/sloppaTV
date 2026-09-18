@@ -3283,12 +3283,9 @@ private:
 
     void refreshSeerrStorageAsync(bool force = false) {
         const SeerrEndpoint endpoint = seerrEndpoint();
-        if (!endpoint.configured()) {
-            seerrStorageState_.resetUnavailable();
-            return;
-        }
-        const auto now = std::chrono::steady_clock::now();
-        if (!seerrStorageState_.beginRefresh(force, now)) return;
+        const auto action =
+            seerrDomain_.prepareStorageRefresh(endpoint, force, std::chrono::steady_clock::now());
+        if (action != SeerrDomainState::RefreshStartAction::Submit) return;
         seerrAsync_.refreshStorage(endpoint);
     }
 
@@ -3320,12 +3317,12 @@ private:
 
     void refreshSeerrPendingAsync() {
         const SeerrEndpoint endpoint = seerrEndpoint();
-        if (!endpoint.configured()) {
-            seerrRequestState_.resetPending();
+        const auto action = seerrDomain_.preparePendingRefresh(endpoint);
+        if (action == SeerrDomainState::RefreshStartAction::Reset) {
             syncSeerrHomeRowLocked();
             return;
         }
-        if (!seerrRequestState_.beginPendingRefresh()) return;
+        if (action != SeerrDomainState::RefreshStartAction::Submit) return;
         seerrAsync_.refreshPending(endpoint);
     }
 

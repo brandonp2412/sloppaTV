@@ -79,6 +79,25 @@ int main() {
     assert(!state.deferSearchIfConnecting());
 
     const auto start = SeerrRequestState::Clock::now();
+
+    SeerrDomainState refreshStarts;
+    refreshStarts.storage().finishRefresh({target(4)}, start);
+    assert(refreshStarts.prepareStorageRefresh(disconnected, false, start) ==
+           SeerrDomainState::RefreshStartAction::Reset);
+    assert(refreshStarts.storage().targets().empty());
+    assert(!refreshStarts.storage().loading());
+    assert(refreshStarts.prepareStorageRefresh(configured, false, start) ==
+           SeerrDomainState::RefreshStartAction::Submit);
+    assert(refreshStarts.storage().loading());
+    assert(refreshStarts.prepareStorageRefresh(configured, true, start) ==
+           SeerrDomainState::RefreshStartAction::None);
+
+    assert(refreshStarts.preparePendingRefresh(configured) == SeerrDomainState::RefreshStartAction::Submit);
+    assert(refreshStarts.requests().pendingLoading());
+    assert(refreshStarts.preparePendingRefresh(configured) == SeerrDomainState::RefreshStartAction::None);
+    assert(refreshStarts.preparePendingRefresh(disconnected) == SeerrDomainState::RefreshStartAction::Reset);
+    assert(!refreshStarts.requests().pendingLoading());
+
     SeerrEndpoint rotated = configured;
     rotated.auth.sessionCookie = "rotated-session";
 

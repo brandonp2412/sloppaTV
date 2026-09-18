@@ -28,6 +28,12 @@ public:
         std::optional<SeerrStorageTarget> target;
     };
 
+    enum class RefreshStartAction {
+        None,
+        Reset,
+        Submit,
+    };
+
     enum class RefreshOutcome {
         StaleEndpoint,
         Failed,
@@ -106,6 +112,23 @@ public:
         if (!connection_.connecting()) return false;
         connection_.deferSearchRetry();
         return true;
+    }
+
+    [[nodiscard]] RefreshStartAction prepareStorageRefresh(const SeerrEndpoint& endpoint, bool force,
+                                                           SeerrStorageState::TimePoint now) {
+        if (!endpoint.configured()) {
+            storage_.resetUnavailable();
+            return RefreshStartAction::Reset;
+        }
+        return storage_.beginRefresh(force, now) ? RefreshStartAction::Submit : RefreshStartAction::None;
+    }
+
+    [[nodiscard]] RefreshStartAction preparePendingRefresh(const SeerrEndpoint& endpoint) {
+        if (!endpoint.configured()) {
+            requests_.resetPending();
+            return RefreshStartAction::Reset;
+        }
+        return requests_.beginPendingRefresh() ? RefreshStartAction::Submit : RefreshStartAction::None;
     }
 
     [[nodiscard]] MutationOutcome completeDeleteRequest(const SeerrEndpoint& requestedEndpoint,
