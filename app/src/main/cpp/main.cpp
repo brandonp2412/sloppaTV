@@ -942,7 +942,7 @@ private:
             lastInteraction_ = std::chrono::steady_clock::now();
             screensaverActive_ = false;
             const bool restoreCandidate = screen_ == Screen::Player && playerScreenState_.windowRestorePending() &&
-                                          renderer_.ready() && !playbackSessionState_.activeTarget().url.empty();
+                                          renderer_.ready() && !playbackCoordinator_.session().activeTarget().url.empty();
             const PlayerStatus restoreStatus = restoreCandidate ? player_.status() : PlayerStatus::Idle;
             const PlaybackWindowRestorePlan restorePlan = playbackCoordinator_.windowRestorePlan(
                 screen_ == Screen::Player, playerScreenState_.windowRestorePending(), renderer_.ready(),
@@ -951,8 +951,8 @@ private:
                     restoreStatus != PlayerStatus::Error,
                 playerScreenState_.resumeOnFocusRequested());
             if (restorePlan.restore) {
-                if (settings_.refreshRateSwitching && playbackSessionState_.activeItem().videoFrameRate > 0.0f) {
-                    displayMode_.matchVideo(app_->window, playbackSessionState_.activeItem().videoFrameRate);
+                if (settings_.refreshRateSwitching && playbackCoordinator_.session().activeItem().videoFrameRate > 0.0f) {
+                    displayMode_.matchVideo(app_->window, playbackCoordinator_.session().activeItem().videoFrameRate);
                 }
                 if (restorePlan.preservePlayer) {
                     if (restorePlan.resumePlayback) player_.play();
@@ -973,15 +973,15 @@ private:
                         break;
                     }
                     player_.startAsync(
-                        playbackSessionState_.activeTarget().url, videoSurface_.surface(),
+                        playbackCoordinator_.session().activeTarget().url, videoSurface_.surface(),
                         playerScreenState_.positionMs(), settings_.playbackBufferPreset,
-                        playerAudioOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
-                        playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay
-                            ? playbackSessionState_.activeTarget().subtitleStreamIndex
+                        playerAudioOrdinal(playbackCoordinator_.session().activeTarget(), playbackCoordinator_.session().activeItem()),
+                        playbackCoordinator_.session().activeTarget().playMethod == PlaybackMethod::DirectPlay
+                            ? playbackCoordinator_.session().activeTarget().subtitleStreamIndex
                             : kSubtitleOffIndex,
-                        playerSubtitleOrdinal(playbackSessionState_.activeTarget(), playbackSessionState_.activeItem()),
-                        directExternalSubtitleUrl(playbackSessionState_.activeTarget(),
-                                                  playbackSessionState_.activeItem()));
+                        playerSubtitleOrdinal(playbackCoordinator_.session().activeTarget(), playbackCoordinator_.session().activeItem()),
+                        directExternalSubtitleUrl(playbackCoordinator_.session().activeTarget(),
+                                                  playbackCoordinator_.session().activeItem()));
                     playbackCoordinator_.setPauseAfterRestart(restorePlan.pauseAfterRestart);
                     mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
                     __android_log_print(
@@ -995,7 +995,7 @@ private:
         }
         case APP_CMD_TERM_WINDOW: {
             const bool suspendCandidate =
-                screen_ == Screen::Player && !playbackSessionState_.activeTarget().url.empty();
+                screen_ == Screen::Player && !playbackCoordinator_.session().activeTarget().url.empty();
             const PlayerStatus status = suspendCandidate ? player_.status() : PlayerStatus::Idle;
             const PlaybackWindowSuspendPlan suspendPlan = playbackCoordinator_.windowSuspendPlan(
                 screen_ == Screen::Player, status == PlayerStatus::Playing || status == PlayerStatus::Preparing);
@@ -1683,7 +1683,7 @@ private:
     }
 
     std::vector<std::string> detailActions() const {
-        return detailsState_.actions(detail_, continuationState_.stillWatchingPrompt());
+        return detailsState_.actions(detail_, playbackCoordinator_.continuation().stillWatchingPrompt());
     }
 
     void refreshExternalPlayers() {
@@ -2069,7 +2069,7 @@ private:
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const auto subtitlePreference = trackState_.subtitleLanguagePreference();
+        const auto subtitlePreference = playbackCoordinator_.tracks().subtitleLanguagePreference();
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
         if (!externalPlaybackAsync_.prepare(
@@ -2151,59 +2151,59 @@ private:
     }
 
     std::string playerTrackLabel(int type) const {
-        if (type == 2 && !playbackSessionState_.activeItem().audios.empty()) {
+        if (type == 2 && !playbackCoordinator_.session().activeItem().audios.empty()) {
             const auto selected =
-                std::find_if(playbackSessionState_.activeItem().audios.begin(),
-                             playbackSessionState_.activeItem().audios.end(), [&](const JellyfinAudioStream& audio) {
-                                 return audio.index == trackState_.selectedAudioServerIndex();
+                std::find_if(playbackCoordinator_.session().activeItem().audios.begin(),
+                             playbackCoordinator_.session().activeItem().audios.end(), [&](const JellyfinAudioStream& audio) {
+                                 return audio.index == playbackCoordinator_.tracks().selectedAudioServerIndex();
                              });
-            const auto& audio = selected == playbackSessionState_.activeItem().audios.end()
-                                    ? playbackSessionState_.activeItem().audios.front()
+            const auto& audio = selected == playbackCoordinator_.session().activeItem().audios.end()
+                                    ? playbackCoordinator_.session().activeItem().audios.front()
                                     : *selected;
             std::string label = audio.language.empty() ? "AUDIO" : audio.language;
             std::transform(label.begin(), label.end(), label.begin(),
                            [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-            if (playbackSessionState_.activeItem().audios.size() > 1) {
+            if (playbackCoordinator_.session().activeItem().audios.size() > 1) {
                 label += " " +
-                         std::to_string(std::distance(playbackSessionState_.activeItem().audios.begin(),
-                                                      selected == playbackSessionState_.activeItem().audios.end()
-                                                          ? playbackSessionState_.activeItem().audios.begin()
+                         std::to_string(std::distance(playbackCoordinator_.session().activeItem().audios.begin(),
+                                                      selected == playbackCoordinator_.session().activeItem().audios.end()
+                                                          ? playbackCoordinator_.session().activeItem().audios.begin()
                                                           : selected) +
                                         1) +
-                         "/" + std::to_string(playbackSessionState_.activeItem().audios.size());
+                         "/" + std::to_string(playbackCoordinator_.session().activeItem().audios.size());
             }
             return label;
         }
-        if (type == 4 && trackState_.subtitleBusy()) return "LOADING";
-        if (type == 4 && trackState_.selectedSubtitleServerIndex() >= 0) {
-            const auto selected = std::find_if(playbackSessionState_.activeItem().subtitles.begin(),
-                                               playbackSessionState_.activeItem().subtitles.end(),
+        if (type == 4 && playbackCoordinator_.tracks().subtitleBusy()) return "LOADING";
+        if (type == 4 && playbackCoordinator_.tracks().selectedSubtitleServerIndex() >= 0) {
+            const auto selected = std::find_if(playbackCoordinator_.session().activeItem().subtitles.begin(),
+                                               playbackCoordinator_.session().activeItem().subtitles.end(),
                                                [&](const JellyfinSubtitleStream& subtitle) {
-                                                   return subtitle.index == trackState_.selectedSubtitleServerIndex();
+                                                   return subtitle.index == playbackCoordinator_.tracks().selectedSubtitleServerIndex();
                                                });
-            if (selected != playbackSessionState_.activeItem().subtitles.end()) {
+            if (selected != playbackCoordinator_.session().activeItem().subtitles.end()) {
                 std::string label = selected->language.empty() ? "ON" : selected->language;
                 std::transform(label.begin(), label.end(), label.begin(),
                                [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
                 return label;
             }
         }
-        if (type == 4 && !trackState_.subtitleCues().empty()) {
-            if (!trackState_.subtitleEnabled()) return "OFF";
-            std::string label = trackState_.subtitleLanguage().empty() ? "ON" : trackState_.subtitleLanguage();
+        if (type == 4 && !playbackCoordinator_.tracks().subtitleCues().empty()) {
+            if (!playbackCoordinator_.tracks().subtitleEnabled()) return "OFF";
+            std::string label = playbackCoordinator_.tracks().subtitleLanguage().empty() ? "ON" : playbackCoordinator_.tracks().subtitleLanguage();
             std::transform(label.begin(), label.end(), label.begin(),
                            [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-            const auto subtitle = std::find_if(playbackSessionState_.activeItem().subtitles.begin(),
-                                               playbackSessionState_.activeItem().subtitles.end(),
+            const auto subtitle = std::find_if(playbackCoordinator_.session().activeItem().subtitles.begin(),
+                                               playbackCoordinator_.session().activeItem().subtitles.end(),
                                                [&](const JellyfinSubtitleStream& candidate) {
-                                                   return candidate.index == trackState_.activeSubtitleServerIndex();
+                                                   return candidate.index == playbackCoordinator_.tracks().activeSubtitleServerIndex();
                                                });
-            if (subtitle != playbackSessionState_.activeItem().subtitles.end() &&
-                playbackSessionState_.activeItem().subtitles.size() > 1) {
+            if (subtitle != playbackCoordinator_.session().activeItem().subtitles.end() &&
+                playbackCoordinator_.session().activeItem().subtitles.size() > 1) {
                 label +=
                     " " +
-                    std::to_string(std::distance(playbackSessionState_.activeItem().subtitles.begin(), subtitle) + 1) +
-                    "/" + std::to_string(playbackSessionState_.activeItem().subtitles.size());
+                    std::to_string(std::distance(playbackCoordinator_.session().activeItem().subtitles.begin(), subtitle) + 1) +
+                    "/" + std::to_string(playbackCoordinator_.session().activeItem().subtitles.size());
             }
             return label;
         }
@@ -2241,7 +2241,7 @@ private:
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
         if (!session_.valid() || subtitle.index < 0 || !playbackCoordinator_.beginSubtitleLoad()) return;
         const JellyfinSession session = session_;
-        const auto& item = playbackSessionState_.activeItem();
+        const auto& item = playbackCoordinator_.session().activeItem();
         const std::string dataPath = dataPath_;
         const uint64_t generation = requestEpochs_.playback.snapshot();
         const int requestedSubtitleIndex = subtitle.index;
@@ -2263,8 +2263,8 @@ private:
     }
 
     void cycleSubtitleTrack() {
-        if (trackState_.subtitleBusy()) {
-            if (playbackSessionState_.activeItem().subtitles.empty()) error_ = "NO SUBTITLE TRACKS";
+        if (playbackCoordinator_.tracks().subtitleBusy()) {
+            if (playbackCoordinator_.session().activeItem().subtitles.empty()) error_ = "NO SUBTITLE TRACKS";
             return;
         }
 
@@ -2287,12 +2287,12 @@ private:
         }
 
         if (plan.subtitleStreamIndex >= 0 &&
-            playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay) {
+            playbackCoordinator_.session().activeTarget().playMethod == PlaybackMethod::DirectPlay) {
             const auto selected = std::find_if(
-                playbackSessionState_.activeItem().subtitles.begin(),
-                playbackSessionState_.activeItem().subtitles.end(),
+                playbackCoordinator_.session().activeItem().subtitles.begin(),
+                playbackCoordinator_.session().activeItem().subtitles.end(),
                 [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == plan.subtitleStreamIndex; });
-            if (selected != playbackSessionState_.activeItem().subtitles.end()) {
+            if (selected != playbackCoordinator_.session().activeItem().subtitles.end()) {
                 __android_log_print(ANDROID_LOG_INFO, kTag,
                                     "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
                                     plan.subtitleStreamIndex, selected->codec.c_str(), selected->isExternal ? 1 : 0,
@@ -2314,7 +2314,7 @@ private:
         }
 
         refreshPlaybackTelemetry(true);
-        restartPlaybackAt(playerScreenState_.positionMs(), trackState_.selectedAudioServerIndex(),
+        restartPlaybackAt(playerScreenState_.positionMs(), playbackCoordinator_.tracks().selectedAudioServerIndex(),
                           plan.subtitleStreamIndex);
     }
 
@@ -2361,23 +2361,23 @@ private:
     }
 
     void requestTrickplayPreview(int positionMs) {
-        const auto& info = playbackSessionState_.activeItem().trickplay;
-        if (!session_.valid() || playbackSessionState_.activeItem().id.empty() || !info.valid()) return;
+        const auto& info = playbackCoordinator_.session().activeItem().trickplay;
+        if (!session_.valid() || playbackCoordinator_.session().activeItem().id.empty() || !info.valid()) return;
         const TrickplayFrame frame = trickplayFrameForPosition(positionMs, info.intervalMs, info.thumbnailCount,
                                                                info.tileWidth, info.tileHeight);
         if (!frame.valid()) return;
 
         trickplayState_.showAt(positionMs, std::chrono::steady_clock::now());
-        if (trickplayState_.matchesTile(playbackSessionState_.activeItem().id, frame.tileIndex) &&
+        if (trickplayState_.matchesTile(playbackCoordinator_.session().activeItem().id, frame.tileIndex) &&
             !trickplayState_.failed())
             return;
 
         if (trickplayState_.texture() != 0 && trickplayState_.textureGeneration() == renderer_.generation()) {
             renderer_.deleteTexture(trickplayState_.texture());
         }
-        trickplayState_.beginTile(playbackSessionState_.activeItem().id, frame.tileIndex);
+        trickplayState_.beginTile(playbackCoordinator_.session().activeItem().id, frame.tileIndex);
         const JellyfinSession session = session_;
-        const JellyfinItem item = playbackSessionState_.activeItem();
+        const JellyfinItem item = playbackCoordinator_.session().activeItem();
         const int tileIndex = frame.tileIndex;
         if (!tasks_.submit([this, session, item, tileIndex] {
                 auto image = api_.downloadTrickplayTile(session, item, tileIndex);
@@ -2396,11 +2396,11 @@ private:
     }
 
     bool drawTrickplayPreview() {
-        if (!trickplayState_.visible(std::chrono::steady_clock::now(), playbackSessionState_.activeItem().id) ||
-            !playbackSessionState_.activeItem().trickplay.valid()) {
+        if (!trickplayState_.visible(std::chrono::steady_clock::now(), playbackCoordinator_.session().activeItem().id) ||
+            !playbackCoordinator_.session().activeItem().trickplay.valid()) {
             return false;
         }
-        const auto& info = playbackSessionState_.activeItem().trickplay;
+        const auto& info = playbackCoordinator_.session().activeItem().trickplay;
         const TrickplayFrame frame = trickplayFrameForPosition(trickplayState_.positionMs(), info.intervalMs,
                                                                info.thumbnailCount, info.tileWidth, info.tileHeight);
         if (!frame.valid() || frame.tileIndex != trickplayState_.tileIndex()) return false;
@@ -2446,12 +2446,12 @@ private:
     }
 
     const SubtitleCue* activeSubtitleCue() const {
-        return trackState_.activeSubtitleCue(playerScreenState_.positionMs());
+        return playbackCoordinator_.tracks().activeSubtitleCue(playerScreenState_.positionMs());
     }
 
     const JellyfinMediaSegment* activeSkippableSegment() const {
         const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
-        return playbackSessionState_.activeSkippableSegment(positionTicks);
+        return playbackCoordinator_.session().activeSkippableSegment(positionTicks);
     }
 
     std::string mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
@@ -2682,7 +2682,7 @@ private:
         api_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle ||
-            !playbackSessionState_.activeItem().id.empty()) {
+            !playbackCoordinator_.session().activeItem().id.empty()) {
             releaseActivePlayback(true);
         }
 
@@ -3487,7 +3487,7 @@ private:
         }
 
         const Screen originScreen = screen_;
-        const bool replacingPlayer = screen_ == Screen::Player && !playbackSessionState_.activeItem().id.empty();
+        const bool replacingPlayer = screen_ == Screen::Player && !playbackCoordinator_.session().activeItem().id.empty();
         if (replacingPlayer) releaseActivePlayback(true, replacingCompleted);
         const int previousQueueIndex = queueState_.currentIndex();
         queueState_.closeOverlay();
@@ -3501,8 +3501,8 @@ private:
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
             .maxAudioChannels = settings_.maxAudioChannels,
             .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = trackState_.audioLanguagePreference(),
-            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
+            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
             .trackPolicy = playbackTrackSelectionPolicy(),
         };
         const uint64_t generation = requestEpochs_.playback.begin();
@@ -3517,8 +3517,8 @@ private:
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
             .maxAudioChannels = settings_.maxAudioChannels,
             .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = trackState_.audioLanguagePreference(),
-            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
+            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
             .trackPolicy = playbackTrackSelectionPolicy(),
         };
 
@@ -3542,8 +3542,8 @@ private:
                 return;
             }
         }
-        if (direction > 0 && continuationState_.nextItem()) {
-            playPlayerItemAsync(*continuationState_.nextItem());
+        if (direction > 0 && playbackCoordinator_.continuation().nextItem()) {
+            playPlayerItemAsync(*playbackCoordinator_.continuation().nextItem());
             return;
         }
         if (!session_.valid()) return;
@@ -3620,7 +3620,7 @@ private:
             launchExternalPlaybackAsync();
             return;
         }
-        const bool continuingPlaybackChain = continuationState_.stillWatchingPrompt();
+        const bool continuingPlaybackChain = playbackCoordinator_.continuation().stillWatchingPrompt();
         const bool continuingQueuedPrompt = continuingPlaybackChain && !queueState_.empty();
         int queuedPlaybackIndex = -1;
         playbackCoordinator_.beginUserPlayback(continuingPlaybackChain);
@@ -3638,8 +3638,8 @@ private:
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
             .maxAudioChannels = settings_.maxAudioChannels,
             .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = trackState_.audioLanguagePreference(),
-            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
+            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
             .trackPolicy = playbackTrackSelectionPolicy(),
         };
         const uint64_t generation = requestEpochs_.playback.begin();
@@ -3715,8 +3715,8 @@ private:
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
             .maxAudioChannels = settings_.maxAudioChannels,
             .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = trackState_.audioLanguagePreference(),
-            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
+            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
             .trackPolicy = playbackTrackSelectionPolicy(),
         };
         const uint64_t generation = requestEpochs_.playback.begin();
@@ -3740,10 +3740,10 @@ private:
         const int startPositionMs = initialPlayerSeekMs(target.startTicks);
         playbackCoordinator_.beginPreparing(now);
         player_.startAsync(target.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
-                           playerAudioOrdinal(target, playbackSessionState_.activeItem()),
-                           playerSubtitleStreamIndex(target, playbackSessionState_.activeItem()),
-                           playerSubtitleOrdinal(target, playbackSessionState_.activeItem()),
-                           directExternalSubtitleUrl(target, playbackSessionState_.activeItem()));
+                           playerAudioOrdinal(target, playbackCoordinator_.session().activeItem()),
+                           playerSubtitleStreamIndex(target, playbackCoordinator_.session().activeItem()),
+                           playerSubtitleOrdinal(target, playbackCoordinator_.session().activeItem()),
+                           directExternalSubtitleUrl(target, playbackCoordinator_.session().activeItem()));
         if (startPositionMs > 0) playerScreenState_.beginSeek(startPositionMs, now);
     }
 
@@ -3838,7 +3838,7 @@ private:
             __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; using offered Jellyfin %s fallback",
                                 directStreamFallback ? "direct-stream" : "transcode");
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-            startResolvedPlaybackTarget(playbackSessionState_.activeTarget());
+            startResolvedPlaybackTarget(playbackCoordinator_.session().activeTarget());
             return true;
         }
 
@@ -3913,10 +3913,10 @@ private:
             static_cast<VideoZoomMode>(settings_.zoomMode), std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
         if (playbackPlan.resetContinuation) playbackCoordinator_.syncQueueContinuation(queueState_);
-        if (trackState_.selectedSubtitleServerIndex() >= 0) {
+        if (playbackCoordinator_.tracks().selectedSubtitleServerIndex() >= 0) {
             const auto selectedSubtitle =
                 std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-                    return subtitle.index == trackState_.selectedSubtitleServerIndex();
+                    return subtitle.index == playbackCoordinator_.tracks().selectedSubtitleServerIndex();
                 });
             if (selectedSubtitle != item.subtitles.end()) {
                 const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
@@ -4081,7 +4081,7 @@ private:
             playerScreenState_.setPositionMs(playerScreenState_.durationMs());
         }
 
-        if (!playbackEnded && playbackSessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay) {
+        if (!playbackEnded && playbackCoordinator_.session().activeTarget().playMethod == PlaybackMethod::DirectPlay) {
             const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
             const int recoveryTargetMs =
                 pendingSeekTargetMs >= 0 ? pendingSeekTargetMs : playerScreenState_.recentSeekTargetMs();
@@ -4112,7 +4112,7 @@ private:
         const auto now = std::chrono::steady_clock::now();
         const PlaybackTickPlan plan = playbackCoordinator_.consumeTickPlan(
             playbackEnded, status == PlayerStatus::Playing, playerScreenState_.positionMs(),
-            playbackSessionState_.activeItem().type, now);
+            playbackCoordinator_.session().activeItem().type, now);
         if (plan.refreshTelemetry) {
             refreshPlaybackTelemetry();
             mediaSession_.updateState(status == PlayerStatus::Playing ? MediaSessionState::Playing
@@ -4123,8 +4123,8 @@ private:
         if (plan.reportPlaybackStart) {
             const int64_t ticks = playbackTicksFromPositionMs(playerScreenState_.positionMs());
             const auto session = session_;
-            const auto itemCopy = playbackSessionState_.activeItem();
-            const auto targetCopy = playbackSessionState_.activeTarget();
+            const auto itemCopy = playbackCoordinator_.session().activeItem();
+            const auto targetCopy = playbackCoordinator_.session().activeTarget();
             playbackTelemetryAsync_.reportStart(session, itemCopy, targetCopy, ticks);
         }
         if (plan.reportProgress) reportProgressAsync(false);
@@ -4140,12 +4140,12 @@ private:
             playQueuedIndexAsync(continuationPlan.queueIndex, continuationPlan.repeatCurrentQueueItem, true);
             return;
         case PlaybackContinuationAction::AutoplayNext: {
-            const auto& nextItem = continuationState_.nextItem();
+            const auto& nextItem = playbackCoordinator_.continuation().nextItem();
             if (nextItem) queueAutoplayNext(*nextItem);
             return;
         }
         case PlaybackContinuationAction::ShowStillWatching: {
-            const auto& nextItem = continuationState_.nextItem();
+            const auto& nextItem = playbackCoordinator_.continuation().nextItem();
             if (nextItem) showStillWatching(*nextItem);
             return;
         }
@@ -4865,7 +4865,7 @@ private:
     void applyAsyncCompletion(StreamRestartCompletion& completion) {
         if (!requestEpochs_.playback.active(completion.generation)) return;
         playbackCoordinator_.finishStreamRestartRequest();
-        if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != completion.item.id) return;
+        if (screen_ != Screen::Player || playbackCoordinator_.session().activeItem().id != completion.item.id) return;
         if (!completion.result.ok) {
             error_ = completion.result.error;
             return;
@@ -4878,7 +4878,7 @@ private:
         if (!requestEpochs_.playback.active(completion.generation)) return;
         loading_ = false;
         playbackCoordinator_.finishFallbackResolution();
-        if (screen_ != Screen::Player || playbackSessionState_.activeItem().id != completion.item.id) return;
+        if (screen_ != Screen::Player || playbackCoordinator_.session().activeItem().id != completion.item.id) return;
         if (!completion.result.ok) {
             error_ = "TRANSCODE FALLBACK: " + completion.result.error;
             stopPlayback();
@@ -5024,8 +5024,8 @@ private:
             status == PlayerStatus::Paused, playerScreenState_.positionMs());
         if (!plan.report) return;
         const auto session = session_;
-        const auto item = playbackSessionState_.activeItem();
-        const auto target = playbackSessionState_.activeTarget();
+        const auto item = playbackCoordinator_.session().activeItem();
+        const auto target = playbackCoordinator_.session().activeTarget();
         playbackTelemetryAsync_.reportProgress(session, item, target, plan.ticks, plan.paused);
     }
 
@@ -6275,10 +6275,10 @@ private:
             float videoH = Renderer::logicalHeight();
             const int sourceWidth = player_.videoWidth();
             const int sourceHeight = player_.videoHeight();
-            if (sourceWidth > 0 && sourceHeight > 0 && playbackSessionState_.zoomMode() != VideoZoomMode::Stretch) {
+            if (sourceWidth > 0 && sourceHeight > 0 && playbackCoordinator_.session().zoomMode() != VideoZoomMode::Stretch) {
                 const float widthScale = Renderer::logicalWidth() / static_cast<float>(sourceWidth);
                 const float heightScale = Renderer::logicalHeight() / static_cast<float>(sourceHeight);
-                const float scale = playbackSessionState_.zoomMode() == VideoZoomMode::Fit
+                const float scale = playbackCoordinator_.session().zoomMode() == VideoZoomMode::Fit
                                         ? std::min(widthScale, heightScale)
                                         : std::max(widthScale, heightScale);
                 videoW = static_cast<float>(sourceWidth) * scale;
@@ -6295,7 +6295,7 @@ private:
                                     : 0;
         const auto skipSegment = activeSkippableSegment();
         const bool userOverlayVisible = playerScreenState_.overlayVisible(now);
-        const bool showNextUp = shouldShowNextUpCard(continuationState_.nextItem().has_value(), remainingMs,
+        const bool showNextUp = shouldShowNextUpCard(playbackCoordinator_.continuation().nextItem().has_value(), remainingMs,
                                                      userOverlayVisible, skipSegment != nullptr);
         const bool showOverlay = status == PlayerStatus::Preparing || status == PlayerStatus::Paused ||
                                  playbackCoordinator_.transitionLoading() || playbackCoordinator_.fallbackResolving() ||
@@ -6391,8 +6391,8 @@ private:
         }
         if (!showOverlay) return;
 
-        if (showNextUp && continuationState_.nextItem()) {
-            const auto& nextItem = *continuationState_.nextItem();
+        if (showNextUp && playbackCoordinator_.continuation().nextItem()) {
+            const auto& nextItem = *playbackCoordinator_.continuation().nextItem();
             constexpr float panelX = 1195.0f;
             constexpr float panelY = 185.0f;
             constexpr float panelWidth = 625.0f;
@@ -6418,21 +6418,21 @@ private:
             }
         }
 
-        const std::string heading = playbackSessionState_.activeItem().seriesName.empty()
-                                        ? playbackSessionState_.activeItem().name
-                                        : playbackSessionState_.activeItem().seriesName;
+        const std::string heading = playbackCoordinator_.session().activeItem().seriesName.empty()
+                                        ? playbackCoordinator_.session().activeItem().name
+                                        : playbackCoordinator_.session().activeItem().seriesName;
         const std::string playbackHeading = heading.empty() ? "Playback" : heading;
         const float playbackHeadingWidth = showNextUp ? 1040.0f : 1460.0f;
         renderer_.text(80.0f, 42.0f, material_tv::type::headline,
                        fitTextLines(playbackHeading, material_tv::type::headline, playbackHeadingWidth, 1), kText,
                        playbackHeadingWidth);
-        const std::string playerEpisodeNumber = episodeNumberLabel(playbackSessionState_.activeItem());
+        const std::string playerEpisodeNumber = episodeNumberLabel(playbackCoordinator_.session().activeItem());
         const std::string secondary =
-            playbackSessionState_.activeItem().seriesName.empty()
-                ? episodeLabel(playbackSessionState_.activeItem())
-                : playerEpisodeNumber + (playbackSessionState_.activeItem().name.empty()
+            playbackCoordinator_.session().activeItem().seriesName.empty()
+                ? episodeLabel(playbackCoordinator_.session().activeItem())
+                : playerEpisodeNumber + (playbackCoordinator_.session().activeItem().name.empty()
                                              ? ""
-                                             : "  |  " + playbackSessionState_.activeItem().name);
+                                             : "  |  " + playbackCoordinator_.session().activeItem().name);
         if (!secondary.empty() && secondary != heading) {
             const float secondaryY =
                 42.0f + 11.0f * material_tv::type::headline * uiTextScale(settings_.uiTextSize) + 8.0f;
@@ -6459,7 +6459,7 @@ private:
             playbackCoordinator_.fallbackResolving()
                 ? "Retrying playback"
                 : (playbackCoordinator_.transitionLoading()
-                       ? (playbackSessionState_.activeItem().id.empty() ? "Loading episode" : "Switching track")
+                       ? (playbackCoordinator_.session().activeItem().id.empty() ? "Loading episode" : "Switching track")
                        : (status == PlayerStatus::Preparing ? "Loading" : ""));
         if (!state.empty()) renderer_.text(80.0f, 772.0f, 2.0f, state, kSecondaryText, 580.0f);
 
@@ -6790,7 +6790,7 @@ private:
             .maxHevcWidth = codecs.maxHevcWidth,
             .maxHevcHeight = codecs.maxHevcHeight,
             .hdrFormats = std::move(hdr),
-            .lastPlaybackSummary = playbackSessionState_.lastPlaybackSummary(),
+            .lastPlaybackSummary = playbackCoordinator_.session().lastPlaybackSummary(),
         });
         auto renderPanel = [&](float x, float y, float width, float height, const std::string& title,
                                std::initializer_list<int> indices) {
@@ -7098,7 +7098,7 @@ private:
                                        formatLocalClock(std::time(nullptr), settings_.clock24Hour), kMuted, 210.0f);
         }
 
-        if (continuationState_.stillWatchingPrompt()) {
+        if (playbackCoordinator_.continuation().stillWatchingPrompt()) {
             constexpr float promptX = 820.0f;
             constexpr float promptWidth = 800.0f;
             renderer_.roundedRect(promptX, 54.0f, promptWidth, 54.0f, material_tv::cornerLarge, kPanelElevated);
@@ -7448,9 +7448,6 @@ private:
 
     ExternalPlaybackState externalPlaybackState_;
     PlaybackCoordinator playbackCoordinator_;
-    PlaybackContinuationState& continuationState_ = playbackCoordinator_.continuation();
-    PlaybackSessionState& playbackSessionState_ = playbackCoordinator_.session();
-    PlayerTrackState& trackState_ = playbackCoordinator_.tracks();
     PlayerScreenState playerScreenState_;
     TrickplayPreviewState trickplayState_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
