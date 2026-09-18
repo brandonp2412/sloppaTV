@@ -7201,23 +7201,21 @@ private:
         const int maxAudioOutputChannels = api_.deviceCodecSupport().maxAudioOutputChannels;
         const std::string externalPlayer = externalPlayerLabel();
 
+        const bool systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch;
+        const auto presentation = settingsScreenPresentation(settingsScreen_, systemSettingsInputActive);
         const auto settingsSearchBounds = drawInputSurface(
             1070.0f, 52.0f, 760.0f, 58.0f, settingsScreen_.searchFocused(), materialWideInputFocusScale());
-        const std::string settingsSearchDisplay =
-            settingsScreen_.searchQuery().empty() ? "Search settings" : settingsScreen_.searchQuery();
         constexpr float settingsSearchTextWidth = 520.0f;
         renderer_.textVerticallyCentered(1102.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
-                                         fitTextLines(settingsSearchDisplay, 2.20f, settingsSearchTextWidth, 1),
-                                         settingsScreen_.searchQuery().empty() ? kMuted : kText,
-                                         settingsSearchTextWidth);
-        const bool systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch;
+                                         fitTextLines(presentation.searchText, 2.20f, settingsSearchTextWidth, 1),
+                                         presentation.searchPlaceholder ? kMuted : kText, settingsSearchTextWidth);
         drawCenteredSingleLineFit(1640.0f, settingsSearchBounds[1], 170.0f, settingsSearchBounds[3], 1.60f,
-                                  systemSettingsInputActive ? "Typing…" : "Search",
+                                  std::string(presentation.searchActionLabel),
                                   settingsScreen_.searchFocused() ? kFocus : kMuted, 10.0f, 4.0f);
 
         const auto matches = settingsScreen_.matches();
         if (matches.empty()) {
-            if (systemSettingsInputActive) {
+            if (presentation.showTypingFilterHint) {
                 drawCenteredSingleLineFit(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to filter settings", kMuted,
                                           16.0f, 5.0f);
             } else {
@@ -7226,14 +7224,10 @@ private:
             return;
         }
 
-        renderer_.text(120.0f, 165.0f, 2.10f, settingsScreen_.advanced() ? "Advanced settings" : "Common settings",
-                       kSecondaryText, 620.0f);
-        const std::string settingsDescription = settingsScreen_.advanced()
-                                                    ? "Codec overrides, compatibility and device-level controls"
-                                                    : "The settings you are most likely to change";
+        renderer_.text(120.0f, 165.0f, 2.10f, std::string(presentation.sectionTitle), kSecondaryText, 620.0f);
         const float descriptionY = settingsDescriptionY(settings_.uiTextSize);
-        renderer_.text(120.0f, descriptionY, 1.40f, fitTextLines(settingsDescription, 1.40f, 920.0f, 1), kMuted,
-                       920.0f);
+        renderer_.text(120.0f, descriptionY, 1.40f,
+                       fitTextLines(std::string(presentation.sectionDescription), 1.40f, 920.0f, 1), kMuted, 920.0f);
 
         constexpr int visibleRows = 6;
         const float rowsTop = settingsRowsTop(settings_.uiTextSize);

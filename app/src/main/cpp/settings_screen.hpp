@@ -51,6 +51,15 @@ struct SubtitleLanguageScreenRow {
     bool selected = false;
 };
 
+struct SettingsScreenPresentation {
+    std::string searchText;
+    std::string_view searchActionLabel;
+    std::string_view sectionTitle;
+    std::string_view sectionDescription;
+    bool searchPlaceholder = false;
+    bool showTypingFilterHint = false;
+};
+
 class SettingsScreenState {
 public:
     void reset() {
@@ -232,6 +241,20 @@ private:
     int subtitleLanguageSelection_ = 0;
     int subtitleLanguageFirstVisible_ = 0;
 };
+
+inline SettingsScreenPresentation settingsScreenPresentation(const SettingsScreenState& screen,
+                                                              bool systemSettingsInputActive) {
+    const bool searchPlaceholder = screen.searchQuery().empty();
+    return {
+        .searchText = searchPlaceholder ? "Search settings" : screen.searchQuery(),
+        .searchActionLabel = systemSettingsInputActive ? "Typing…" : "Search",
+        .sectionTitle = screen.advanced() ? "Advanced settings" : "Common settings",
+        .sectionDescription = screen.advanced() ? "Codec overrides, compatibility and device-level controls"
+                                                : "The settings you are most likely to change",
+        .searchPlaceholder = searchPlaceholder,
+        .showTypingFilterHint = screen.matches().empty() && systemSettingsInputActive,
+    };
+}
 
 inline std::optional<SubtitleLanguageScreenRow> subtitleLanguageScreenRow(const SettingsScreenState& screen,
                                                                           const AppSettings& settings, int slot,

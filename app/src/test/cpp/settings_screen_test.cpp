@@ -127,12 +127,32 @@ int main() {
     assert(!settingsScreenRow(screen, settings, 6, "MPV", "viewer", true, 1));
 
     screen.reset();
+    auto presentation = settingsScreenPresentation(screen, false);
+    assert(presentation.searchText == "Search settings");
+    assert(presentation.searchActionLabel == "Search");
+    assert(presentation.sectionTitle == "Common settings");
+    assert(presentation.sectionDescription == "The settings you are most likely to change");
+    assert(presentation.searchPlaceholder);
+    assert(!presentation.showTypingFilterHint);
+
     screen.setSearchText("seerr");
+    presentation = settingsScreenPresentation(screen, true);
+    assert(presentation.searchText == "seerr");
+    assert(presentation.searchActionLabel == "Typing…");
+    assert(!presentation.searchPlaceholder);
     const auto seerrMatches = screen.matches();
     assert(seerrMatches.size() == 3);
     assert(seerrMatches[0] == SettingId::SeerrServer);
     assert(seerrMatches[1] == SettingId::SeerrConnection);
     assert(seerrMatches[2] == SettingId::SeerrDriveSelection);
+
+    screen.setSearchText("definitely unmatched");
+    presentation = settingsScreenPresentation(screen, true);
+    assert(presentation.showTypingFilterHint);
+    screen.toggleAdvanced();
+    presentation = settingsScreenPresentation(screen, false);
+    assert(presentation.sectionTitle == "Advanced settings");
+    assert(presentation.sectionDescription == "Codec overrides, compatibility and device-level controls");
 
     screen.openSubtitleLanguagePicker();
     assert(screen.subtitleLanguagePicker());
