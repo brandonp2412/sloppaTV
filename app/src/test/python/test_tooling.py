@@ -314,7 +314,7 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("ruby-version: \"3.4\"", workflow)
         self.assertIn("secrets.SLOPPATV_KEYSTORE_BASE64", workflow)
         self.assertNotIn("secrets.ANDROID_KEYSTORE_BASE64", workflow)
-        self.assertIn('expected_sha1="63D1345BF11526974C5D73F535578E51018D9B61"', workflow)
+        self.assertIn('expected_sha1="108F6DFFAD1F2307495808AFF7D89E07B1892DEF"', workflow)
         self.assertIn('release_aab="$(realpath "$release_aab")"', workflow)
         self.assertIn("bundle exec fastlane android production_artifact", workflow)
         fastfile = (ROOT / "fastlane" / "Fastfile").read_text(encoding="utf-8")
