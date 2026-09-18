@@ -29,6 +29,7 @@
 #include "playback_continuation.hpp"
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
+#include "playback_resolver.hpp"
 #include "playback_session.hpp"
 #include "playback_telemetry.hpp"
 #include "playback_track_selection.hpp"
@@ -3742,21 +3743,18 @@ private:
         const JellyfinSession session = session_;
         JellyfinItem queued = *queueState_.itemAt(index);
         if (restartCurrent) queued.positionTicks = 0;
-        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
-        const int maxAudioChannels = settings_.maxAudioChannels;
-        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        const auto audioPreference = trackState_.audioLanguagePreference();
-        const auto subtitlePreference = trackState_.subtitleLanguagePreference();
-        const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
+        PlaybackResolutionOptions resolutionOptions{
+            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
+            .maxAudioChannels = settings_.maxAudioChannels,
+            .overrides = playbackOverridesFor(settings_),
+            .audioLanguagePreference = trackState_.audioLanguagePreference(),
+            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .trackPolicy = playbackTrackSelectionPolicy(),
+        };
         const uint64_t generation = requestEpochs_.playback.begin();
         tasks_.submit([this, session, queued = std::move(queued), index, previousQueueIndex, originScreen,
-                       replacingPlayer, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference,
-                       subtitlePreference, trackPolicy, generation]() mutable {
-            auto detailed = api_.getItem(session, queued.id);
-            if (detailed.ok) queued = std::move(detailed.value);
-            const auto tracks = selectPlaybackTracks(queued, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(session, queued, maxStreamingBitrate, maxAudioChannels,
-                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
+                       replacingPlayer, resolutionOptions = std::move(resolutionOptions), generation]() mutable {
+            auto resolved = resolvePreferredPlayback(api_, session, std::move(queued), resolutionOptions);
             if (!requestEpochs_.playback.active(generation)) return;
             asyncCompletions_.push(QueuedPlaybackCompletion{
                 .generation = generation,
@@ -3764,8 +3762,8 @@ private:
                 .index = index,
                 .previousQueueIndex = previousQueueIndex,
                 .replacingPlayer = replacingPlayer,
-                .item = std::move(queued),
-                .result = std::move(target),
+                .item = std::move(resolved.item),
+                .result = std::move(resolved.target),
             });
         });
     }
@@ -3773,12 +3771,14 @@ private:
     void playPlayerItemAsync(JellyfinItem selected) {
         if (loading_ || screen_ != Screen::Player || !session_.valid() || selected.id.empty()) return;
         const JellyfinSession session = session_;
-        const auto audioPreference = trackState_.audioLanguagePreference();
-        const auto subtitlePreference = trackState_.subtitleLanguagePreference();
-        const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
-        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
-        const int maxAudioChannels = settings_.maxAudioChannels;
-        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
+        PlaybackResolutionOptions resolutionOptions{
+            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
+            .maxAudioChannels = settings_.maxAudioChannels,
+            .overrides = playbackOverridesFor(settings_),
+            .audioLanguagePreference = trackState_.audioLanguagePreference(),
+            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .trackPolicy = playbackTrackSelectionPolicy(),
+        };
 
         queueState_.reset();
         releaseActivePlayback(true, false);
@@ -3786,18 +3786,14 @@ private:
         playbackCoordinator_.beginPlaybackResolution(true);
         error_.clear();
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, selected = std::move(selected), audioPreference, subtitlePreference, trackPolicy,
-                       maxStreamingBitrate, maxAudioChannels, playbackOverrides, generation]() mutable {
-            auto detailed = api_.getItem(session, selected.id);
-            if (detailed.ok) selected = std::move(detailed.value);
-            const auto tracks = selectPlaybackTracks(selected, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(session, selected, maxStreamingBitrate, maxAudioChannels,
-                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
+        tasks_.submit([this, session, selected = std::move(selected), resolutionOptions = std::move(resolutionOptions),
+                       generation]() mutable {
+            auto resolved = resolvePreferredPlayback(api_, session, std::move(selected), resolutionOptions);
             if (!requestEpochs_.playback.active(generation)) return;
             asyncCompletions_.push(PlayerItemPlaybackCompletion{
                 .generation = generation,
-                .item = std::move(selected),
-                .result = std::move(target),
+                .item = std::move(resolved.item),
+                .result = std::move(resolved.target),
             });
         });
     }
@@ -4159,27 +4155,24 @@ private:
         detail_ = nextItem;
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         const JellyfinSession session = session_;
-        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
-        const int maxAudioChannels = settings_.maxAudioChannels;
-        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        const auto audioPreference = trackState_.audioLanguagePreference();
-        const auto subtitlePreference = trackState_.subtitleLanguagePreference();
-        const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
+        PlaybackResolutionOptions resolutionOptions{
+            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
+            .maxAudioChannels = settings_.maxAudioChannels,
+            .overrides = playbackOverridesFor(settings_),
+            .audioLanguagePreference = trackState_.audioLanguagePreference(),
+            .subtitleLanguagePreference = trackState_.subtitleLanguagePreference(),
+            .trackPolicy = playbackTrackSelectionPolicy(),
+        };
         const uint64_t generation = requestEpochs_.playback.begin();
-        tasks_.submit([this, session, maxStreamingBitrate, maxAudioChannels, playbackOverrides, audioPreference,
-                       subtitlePreference, trackPolicy, nextItem = std::move(nextItem), queuedNextIndex,
-                       generation]() mutable {
-            auto detailed = api_.getItem(session, nextItem.id);
-            if (detailed.ok) nextItem = std::move(detailed.value);
-            const auto tracks = selectPlaybackTracks(nextItem, audioPreference, subtitlePreference, trackPolicy);
-            auto target = api_.resolvePlayback(session, nextItem, maxStreamingBitrate, maxAudioChannels,
-                                               playbackOverrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
+        tasks_.submit([this, session, resolutionOptions = std::move(resolutionOptions), nextItem = std::move(nextItem),
+                       queuedNextIndex, generation]() mutable {
+            auto resolved = resolvePreferredPlayback(api_, session, std::move(nextItem), resolutionOptions);
             if (!requestEpochs_.playback.active(generation)) return;
             asyncCompletions_.push(AutoplayPlaybackCompletion{
                 .generation = generation,
                 .queuedNextIndex = queuedNextIndex,
-                .item = std::move(nextItem),
-                .result = std::move(target),
+                .item = std::move(resolved.item),
+                .result = std::move(resolved.target),
             });
         });
     }
