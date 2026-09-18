@@ -89,6 +89,7 @@
 #include "task_runner.hpp"
 #include "trickplay_policy.hpp"
 #include "trickplay_preview.hpp"
+#include "trickplay_tile_executor.hpp"
 #include "video_surface.hpp"
 #include "version_policy.hpp"
 
@@ -371,13 +372,6 @@ struct PlayedRollbackState {
     HomeSelectionSnapshot previousHomeSelection;
 };
 
-struct TrickplayTileCompletion {
-    std::string itemId;
-    int tileIndex = -1;
-    DecodedImage decoded;
-    std::string error;
-};
-
 using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
 
 using AsyncCompletion = std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion,
@@ -462,6 +456,7 @@ public:
                                       diagnostic.itemId.c_str(), diagnostic.subtitleIndex, diagnostic.codec.c_str(),
                                       diagnostic.reason.c_str());
               }),
+          trickplayTileAsync_(api_, imageDecoder_, tasks_, asyncCompletions_),
           seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
@@ -2189,20 +2184,12 @@ private:
         }
         trickplayState_.beginTile(playbackCoordinator_.session().activeItem().id, frame.tileIndex);
         const JellyfinSession session = session_;
-        const JellyfinItem item = playbackCoordinator_.session().activeItem();
-        const int tileIndex = frame.tileIndex;
-        if (!tasks_.submit([this, session, item, tileIndex] {
-                auto image = api_.downloadTrickplayTile(session, item, tileIndex);
-                DecodedImage decoded;
-                std::string decodeError;
-                if (image.ok) decoded = imageDecoder_.decode(image.value, decodeError);
-                asyncCompletions_.push(TrickplayTileCompletion{
-                    .itemId = item.id,
-                    .tileIndex = tileIndex,
-                    .decoded = std::move(decoded),
-                    .error = image.ok ? std::move(decodeError) : std::move(image.error),
-                });
-            })) {
+        if (!trickplayTileAsync_.load(
+                session, TrickplayTileRequest{
+                             .itemId = playbackCoordinator_.session().activeItem().id,
+                             .trickplay = info,
+                             .tileIndex = frame.tileIndex,
+                         })) {
             trickplayState_.markFailed();
         }
     }
@@ -6358,6 +6345,8 @@ private:
         seriesPlaybackAsync_;
     SubtitleLoadExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         subtitleLoadAsync_;
+    TrickplayTileExecutor<JellyfinClient, JniImageDecoder, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
+        trickplayTileAsync_;
     SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         seerrAsync_;
 
