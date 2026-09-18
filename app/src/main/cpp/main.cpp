@@ -23,6 +23,7 @@
 #include "external_player.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
+#include "item_mutation_executor.hpp"
 #include "jellyfin.hpp"
 #include "jellyfin_search_executor.hpp"
 #include "jni_env.hpp"
@@ -347,13 +348,6 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-struct FavoriteCompletion {
-    JellyfinItem item;
-    bool desired = false;
-    uint64_t sessionEpoch = 0;
-    ApiResult result;
-};
-
 struct PlayedCompletion {
     JellyfinItem item;
     bool desired = false;
@@ -362,17 +356,6 @@ struct PlayedCompletion {
     JellyfinHomeData previousHome;
     HomeSelectionSnapshot previousHomeSelection;
     std::optional<JellyfinItem> nextUpReplacement;
-    ApiResult result;
-};
-
-struct MetadataRefreshCompletion {
-    uint64_t sessionEpoch = 0;
-    ApiResult result;
-};
-
-struct DeleteItemCompletion {
-    JellyfinItem item;
-    uint64_t sessionEpoch = 0;
     ApiResult result;
 };
 
@@ -447,6 +430,7 @@ public:
           browseAsync_(api_, tasks_, asyncCompletions_),
           jellyfinSearchAsync_(api_, tasks_, asyncCompletions_),
           serverInfoAsync_(api_, tasks_, asyncCompletions_),
+          itemMutationAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -2727,15 +2711,7 @@ private:
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, desired, sessionEpoch] {
-            auto result = api_.setFavorite(session, item, desired);
-            asyncCompletions_.push(FavoriteCompletion{
-                .item = item,
-                .desired = desired,
-                .sessionEpoch = sessionEpoch,
-                .result = std::move(result),
-            });
-        });
+        itemMutationAsync_.setFavorite(session, item, desired, sessionEpoch);
     }
 
     void togglePlayedAsync() {
@@ -2814,17 +2790,11 @@ private:
     void refreshCurrentItemMetadataAsync() {
         if (loading_ || mutationLoading_ || detail_.id.empty()) return;
         const JellyfinSession session = session_;
-        const JellyfinItem item = detail_;
+        const std::string itemId = detail_.id;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, sessionEpoch] {
-            auto result = api_.refreshMetadata(session, item);
-            asyncCompletions_.push(MetadataRefreshCompletion{
-                .sessionEpoch = sessionEpoch,
-                .result = std::move(result),
-            });
-        });
+        itemMutationAsync_.refreshMetadata(session, itemId, sessionEpoch);
     }
 
     void deleteSeerrRequestAsync() {
@@ -2851,18 +2821,11 @@ private:
     void deleteCurrentItemAsync() {
         if (loading_ || mutationLoading_ || detail_.id.empty() || !detail_.canDelete) return;
         const JellyfinSession session = session_;
-        const JellyfinItem item = detail_;
+        const std::string itemId = detail_.id;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
-        tasks_.submit([this, session, item, sessionEpoch] {
-            auto result = api_.deleteItem(session, item);
-            asyncCompletions_.push(DeleteItemCompletion{
-                .item = item,
-                .sessionEpoch = sessionEpoch,
-                .result = std::move(result),
-            });
-        });
+        itemMutationAsync_.deleteItem(session, itemId, sessionEpoch);
     }
 
     void openSearch() {
@@ -4048,9 +4011,9 @@ private:
 
     void applyAsyncCompletion(DeleteItemCompletion& completion) {
         if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
-        if (completion.result.ok) removeCachedItem(completion.item.id);
+        if (completion.result.ok) removeCachedItem(completion.itemId);
         mutationLoading_ = false;
-        if (screen_ != Screen::ItemMenu || detail_.id != completion.item.id) return;
+        if (screen_ != Screen::ItemMenu || detail_.id != completion.itemId) return;
         if (!completion.result.ok) {
             error_ = completion.result.error;
             detailsState_.setDeleteConfirmation(false);
@@ -6966,6 +6929,7 @@ private:
     BrowseAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> browseAsync_;
     JellyfinSearchExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> jellyfinSearchAsync_;
     ServerInfoExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> serverInfoAsync_;
+    ItemMutationExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> itemMutationAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
