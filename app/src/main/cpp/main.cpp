@@ -70,6 +70,7 @@
 #include "session_registry.hpp"
 #include "session_store.hpp"
 #include "settings_screen.hpp"
+#include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
 #include "system_text_input.hpp"
 #include "ui_theme.hpp"
@@ -6643,33 +6644,11 @@ private:
 
     void renderStatus() {
         const auto now = std::chrono::steady_clock::now();
-        if (loading_ || homeLoading_ || mutationLoading_) {
-            constexpr float loadingX = 1600.0f;
-            constexpr float loadingY = 120.0f;
-            constexpr float loadingWidth = 210.0f;
-            constexpr float loadingHeight = 48.0f;
-            renderer_.roundedRect(loadingX, loadingY, loadingWidth, loadingHeight, loadingHeight * 0.5f,
-                                  kPanelElevated);
-            renderer_.roundedRect(loadingX + 18.0f, loadingY + 16.0f, 16.0f, 16.0f, 8.0f, kFocus);
-            renderer_.textVerticallyCentered(loadingX + 52.0f, loadingY, loadingHeight, 1.60f, "Loading…", kText,
-                                             loadingWidth - 70.0f);
-        }
         if (!noticePersistent_ && !notice_.empty() && now >= noticeUntil_) {
             notice_.clear();
             noticeUntil_ = {};
         }
         const bool noticeVisible = !notice_.empty() && (noticePersistent_ || now < noticeUntil_);
-        if (noticeVisible) {
-            const bool playerNotice = screen_ == Screen::Player;
-            const float noticeY = playerNotice ? 670.0f : 914.0f;
-            const float noticeWidth = playerNotice ? 1160.0f : 1320.0f;
-            const float noticeX = playerNotice ? 80.0f : (1920.0f - noticeWidth) * 0.5f;
-            renderer_.roundedRect(noticeX, noticeY, noticeWidth, 68.0f, material_tv::cornerMedium, kPanelElevated);
-            renderer_.roundedRect(noticeX + 18.0f, noticeY + 18.0f, 7.0f, 32.0f, 3.5f, kFocus);
-            renderer_.textVerticallyCentered(noticeX + 46.0f, noticeY, 68.0f, 1.65f,
-                                             fitTextLines(notice_, 1.65f, noticeWidth - 74.0f, 1), kText,
-                                             noticeWidth - 74.0f);
-        }
 
         if (error_.empty()) {
             presentedError_.clear();
@@ -6681,19 +6660,30 @@ private:
         if (!presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now >= errorUntil_) {
             errorUntil_ = {};
         }
-        if (!presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now < errorUntil_) {
-            const bool playerError = screen_ == Screen::Player;
-            const float errorY = playerError ? (noticeVisible ? 588.0f : 670.0f) : (noticeVisible ? 834.0f : 914.0f);
-            const float errorWidth = playerError ? 1160.0f : 1320.0f;
-            const float errorX = playerError ? 80.0f : (1920.0f - errorWidth) * 0.5f;
-            renderer_.roundedRect(errorX, errorY, errorWidth, 68.0f, material_tv::cornerMedium, kPanelElevated);
-            renderer_.roundedRect(errorX + 18.0f, errorY + 18.0f, 7.0f, 32.0f, 3.5f, kError);
-            renderer_.roundedOutline(errorX, errorY, errorWidth, 68.0f, material_tv::cornerMedium, 1.5f,
-                                     Color{kError.r, kError.g, kError.b, 0.55f});
-            renderer_.textVerticallyCentered(errorX + 46.0f, errorY, 68.0f, 1.55f,
-                                             fitTextLines(presentedError_, 1.55f, errorWidth - 74.0f, 1), kText,
-                                             errorWidth - 74.0f);
-        }
+        const bool errorVisible =
+            !presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now < errorUntil_;
+
+        renderStatusOverlay(
+            renderer_,
+            StatusOverlayRenderState{
+                .loading = loading_ || homeLoading_ || mutationLoading_,
+                .playerScreen = screen_ == Screen::Player,
+                .noticeVisible = noticeVisible,
+                .notice = notice_,
+                .errorVisible = errorVisible,
+                .error = presentedError_,
+            },
+            StatusOverlayRenderStyle<Color>{
+                .cornerMedium = material_tv::cornerMedium,
+                .panelElevated = kPanelElevated,
+                .focus = kFocus,
+                .error = kError,
+                .errorOutline = Color{kError.r, kError.g, kError.b, 0.55f},
+                .text = kText,
+            },
+            [this](std::string_view value, float scale, float width, int lines) {
+                return fitTextLines(value, scale, width, lines);
+            });
     }
 
     void loadSession() {
