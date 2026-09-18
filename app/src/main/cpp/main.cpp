@@ -1255,8 +1255,6 @@ private:
         detailsAsync_.loadItemMenuDetail(session, itemId);
     }
 
-    int homeVisibleItemCount(const JellyfinHomeRow& row) const { return row.title == "My Media" ? 4 : 5; }
-
     void beginHomeRowSlide(int fromFirst, int toFirst) {
         if (fromFirst == toFirst) return;
         const auto now = std::chrono::steady_clock::now();
@@ -1267,71 +1265,50 @@ private:
     }
 
     void handleHomeKey(int32_t key) {
-        if (key == AKEYCODE_BACK) {
+        HomeScreenInput input = HomeScreenInput::None;
+        if (key == AKEYCODE_BACK)
+            input = HomeScreenInput::Back;
+        else if (key == AKEYCODE_SEARCH)
+            input = HomeScreenInput::Search;
+        else if (key == AKEYCODE_DPAD_LEFT)
+            input = HomeScreenInput::Left;
+        else if (key == AKEYCODE_DPAD_RIGHT)
+            input = HomeScreenInput::Right;
+        else if (key == AKEYCODE_DPAD_UP)
+            input = HomeScreenInput::Up;
+        else if (key == AKEYCODE_DPAD_DOWN)
+            input = HomeScreenInput::Down;
+        else if (isItemContextKey(key))
+            input = HomeScreenInput::Context;
+        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
+            input = HomeScreenInput::Activate;
+
+        const int previousFirstVisibleRow = homeState_.firstVisibleRow();
+        const HomeScreenCommand command = homeState_.handleInput(input, home_.rows);
+        if (command.type == HomeScreenCommandType::FinishActivity) {
             ANativeActivity_finish(app_->activity);
             return;
         }
-        if (key == AKEYCODE_SEARCH) {
+        if (command.type == HomeScreenCommandType::OpenProfiles) {
+            openProfiles();
+            return;
+        }
+        if (command.type == HomeScreenCommandType::OpenSearch) {
             openSearch();
             return;
         }
-        if (homeState_.row() < 0) {
-            HomeToolbarInput input = HomeToolbarInput::None;
-            if (key == AKEYCODE_DPAD_LEFT)
-                input = HomeToolbarInput::Left;
-            else if (key == AKEYCODE_DPAD_RIGHT)
-                input = HomeToolbarInput::Right;
-            else if (key == AKEYCODE_DPAD_DOWN)
-                input = HomeToolbarInput::Down;
-            else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-                input = HomeToolbarInput::Activate;
-
-            const HomeToolbarCommand command =
-                homeState_.handleToolbarInput(input, static_cast<int>(home_.rows.size()));
-            if (command.type == HomeToolbarCommandType::OpenProfiles)
-                openProfiles();
-            else if (command.type == HomeToolbarCommandType::OpenSearch)
-                openSearch();
-            else if (command.type == HomeToolbarCommandType::OpenSettings)
-                openSettings();
-            homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+        if (command.type == HomeScreenCommandType::OpenSettings) {
+            openSettings();
             return;
         }
-        if (home_.rows.empty() || homeState_.row() >= static_cast<int>(home_.rows.size())) {
-            homeState_.focusToolbar(homeState_.navIndex());
+        if (command.type == HomeScreenCommandType::OpenContext) {
+            const auto& items = home_.rows[static_cast<size_t>(command.rowIndex)].items;
+            openItemMenuForItem(items[static_cast<size_t>(command.itemIndex)]);
             return;
         }
-
-        const int rowIndex = homeState_.row();
-        const int previousFirstVisibleRow = homeState_.firstVisibleRow();
-        auto& section = home_.rows[static_cast<size_t>(rowIndex)];
-        auto& items = section.items;
-
-        HomeRowInput input = HomeRowInput::None;
-        if (key == AKEYCODE_DPAD_LEFT)
-            input = HomeRowInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = HomeRowInput::Right;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = HomeRowInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = HomeRowInput::Down;
-        else if (isItemContextKey(key))
-            input = HomeRowInput::Context;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = HomeRowInput::Activate;
-
-        const HomeRowCommand command =
-            homeState_.handleRowInput(input, static_cast<int>(home_.rows.size()), static_cast<int>(items.size()),
-                                      section.title != "My Media");
-        if (command.type == HomeRowCommandType::OpenContext) {
-            const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
-            openItemMenuForItem(items[static_cast<size_t>(selection)]);
-            return;
-        }
-        if (command.type == HomeRowCommandType::OpenSelected) {
-            const int selection = homeState_.selection(rowIndex, static_cast<int>(items.size()));
-            const auto& selected = items[static_cast<size_t>(selection)];
+        if (command.type == HomeScreenCommandType::OpenSelected) {
+            const auto& section = home_.rows[static_cast<size_t>(command.rowIndex)];
+            const auto& selected = section.items[static_cast<size_t>(command.itemIndex)];
             if (section.title == "My Media") {
                 openLibrary(selected);
             } else if (const auto* seerrMedia =
@@ -1349,12 +1326,11 @@ private:
             }
             return;
         }
-        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+        if (!command.finalizeRowNavigation) return;
+
         beginHomeRowSlide(previousFirstVisibleRow, homeState_.firstVisibleRow());
         if (homeState_.row() >= 0 && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
             const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-            homeState_.updateItemViewport(homeState_.row(), static_cast<int>(row.items.size()),
-                                          homeVisibleItemCount(row));
             prefetchHomeWindow(homeState_.row(),
                                homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
         }

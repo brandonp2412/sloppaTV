@@ -137,6 +137,59 @@ int main() {
     rowCommand = inputState.handleRowInput(HomeRowInput::Up, 2, 3, true);
     assert(inputState.row() == -1);
 
+    JellyfinHomeRow myMedia;
+    myMedia.title = "My Media";
+    myMedia.items = {JellyfinItem{}, JellyfinItem{}};
+    myMedia.items[0].id = "library-1";
+    myMedia.items[1].id = "library-2";
+    JellyfinHomeRow latest;
+    latest.title = "Latest Movies";
+    latest.items = {JellyfinItem{}, JellyfinItem{}, JellyfinItem{}};
+    latest.items[0].id = "movie-1";
+    latest.items[1].id = "movie-2";
+    latest.items[2].id = "movie-3";
+    const std::vector<JellyfinHomeRow> unifiedRows{myMedia, latest};
+
+    HomeScreenState unifiedState;
+    unifiedState.reset();
+    unifiedState.setSelections({0, 0});
+    unifiedState.focusToolbar(3);
+    auto screenCommand = unifiedState.handleInput(HomeScreenInput::Activate, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::OpenSettings);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Search, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::OpenSearch);
+
+    unifiedState.focusToolbar(1);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Down, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::None);
+    assert(!screenCommand.finalizeRowNavigation);
+    assert(unifiedState.row() == 0);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Context, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::None);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Right, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::None);
+    assert(screenCommand.finalizeRowNavigation);
+    assert(unifiedState.selection(0, 2) == 1);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Activate, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::OpenSelected);
+    assert(screenCommand.rowIndex == 0);
+    assert(screenCommand.itemIndex == 1);
+
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Down, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::None);
+    assert(unifiedState.row() == 1);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Context, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::OpenContext);
+    assert(screenCommand.rowIndex == 1);
+    assert(screenCommand.itemIndex == 0);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::Back, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::FinishActivity);
+
+    unifiedState.setRow(9);
+    screenCommand = unifiedState.handleInput(HomeScreenInput::None, unifiedRows);
+    assert(screenCommand.type == HomeScreenCommandType::None);
+    assert(unifiedState.row() == -1);
+
     JellyfinHomeRow continueWatching;
     continueWatching.title = "Continue Watching";
     continueWatching.items = {JellyfinItem{}, JellyfinItem{}, JellyfinItem{}};

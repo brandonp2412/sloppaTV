@@ -70,6 +70,35 @@ struct HomeRowCommand {
     HomeRowCommandType type = HomeRowCommandType::None;
 };
 
+enum class HomeScreenInput {
+    None,
+    Back,
+    Search,
+    Left,
+    Right,
+    Up,
+    Down,
+    Context,
+    Activate,
+};
+
+enum class HomeScreenCommandType {
+    None,
+    FinishActivity,
+    OpenProfiles,
+    OpenSearch,
+    OpenSettings,
+    OpenContext,
+    OpenSelected,
+};
+
+struct HomeScreenCommand {
+    HomeScreenCommandType type = HomeScreenCommandType::None;
+    int rowIndex = -1;
+    int itemIndex = -1;
+    bool finalizeRowNavigation = false;
+};
+
 constexpr int homeFirstVisibleRow(int currentFirst, int focusedRow, int totalRows, int visibleRows = 2) {
     if (totalRows <= 0 || visibleRows <= 0) return 0;
     const int maxFirst = std::max(0, totalRows - visibleRows);
@@ -184,6 +213,79 @@ public:
             return {.type = HomeRowCommandType::OpenSelected};
         }
         return {};
+    }
+
+    [[nodiscard]] HomeScreenCommand handleInput(HomeScreenInput input, const std::vector<JellyfinHomeRow>& rows) {
+        if (input == HomeScreenInput::Back) return {.type = HomeScreenCommandType::FinishActivity};
+        if (input == HomeScreenInput::Search) return {.type = HomeScreenCommandType::OpenSearch};
+
+        const int totalRows = static_cast<int>(rows.size());
+        if (row_ < 0) {
+            HomeToolbarInput toolbarInput = HomeToolbarInput::None;
+            if (input == HomeScreenInput::Left)
+                toolbarInput = HomeToolbarInput::Left;
+            else if (input == HomeScreenInput::Right)
+                toolbarInput = HomeToolbarInput::Right;
+            else if (input == HomeScreenInput::Down)
+                toolbarInput = HomeToolbarInput::Down;
+            else if (input == HomeScreenInput::Activate)
+                toolbarInput = HomeToolbarInput::Activate;
+
+            const HomeToolbarCommand command = handleToolbarInput(toolbarInput, totalRows);
+            updateViewport(totalRows);
+            if (command.type == HomeToolbarCommandType::OpenProfiles)
+                return {.type = HomeScreenCommandType::OpenProfiles};
+            if (command.type == HomeToolbarCommandType::OpenSearch) return {.type = HomeScreenCommandType::OpenSearch};
+            if (command.type == HomeToolbarCommandType::OpenSettings)
+                return {.type = HomeScreenCommandType::OpenSettings};
+            return {};
+        }
+
+        if (rows.empty() || row_ >= totalRows) {
+            focusToolbar(navIndex_);
+            return {};
+        }
+
+        const int rowIndex = row_;
+        const auto& section = rows[static_cast<size_t>(rowIndex)];
+        const int itemCount = static_cast<int>(section.items.size());
+
+        HomeRowInput rowInput = HomeRowInput::None;
+        if (input == HomeScreenInput::Left)
+            rowInput = HomeRowInput::Left;
+        else if (input == HomeScreenInput::Right)
+            rowInput = HomeRowInput::Right;
+        else if (input == HomeScreenInput::Up)
+            rowInput = HomeRowInput::Up;
+        else if (input == HomeScreenInput::Down)
+            rowInput = HomeRowInput::Down;
+        else if (input == HomeScreenInput::Context)
+            rowInput = HomeRowInput::Context;
+        else if (input == HomeScreenInput::Activate)
+            rowInput = HomeRowInput::Activate;
+
+        const HomeRowCommand command = handleRowInput(rowInput, totalRows, itemCount, section.title != "My Media");
+        if (command.type == HomeRowCommandType::OpenContext) {
+            return {
+                .type = HomeScreenCommandType::OpenContext,
+                .rowIndex = rowIndex,
+                .itemIndex = selection(rowIndex, itemCount),
+            };
+        }
+        if (command.type == HomeRowCommandType::OpenSelected) {
+            return {
+                .type = HomeScreenCommandType::OpenSelected,
+                .rowIndex = rowIndex,
+                .itemIndex = selection(rowIndex, itemCount),
+            };
+        }
+
+        updateViewport(totalRows);
+        if (row_ >= 0 && row_ < totalRows) {
+            const auto& focusedRow = rows[static_cast<size_t>(row_)];
+            updateItemViewport(row_, static_cast<int>(focusedRow.items.size()), focusedRow.title == "My Media" ? 4 : 5);
+        }
+        return {.finalizeRowNavigation = true};
     }
 
     void moveRow(int direction, int totalRows) {
