@@ -21,6 +21,7 @@
 #include "external_playback_executor.hpp"
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
+#include "home_async_executor.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "item_mutation_executor.hpp"
@@ -355,23 +356,6 @@ struct PlayedRollbackState {
     HomeSelectionSnapshot previousHomeSelection;
 };
 
-struct HomeCoreCompletion {
-    uint64_t generation = 0;
-    HomeSelectionSnapshot snapshot;
-    HomeRestorePlan restorePlan;
-    std::vector<JellyfinItem> views;
-    std::chrono::steady_clock::time_point startedAt;
-    ApiValueResult<JellyfinHomeData> result;
-};
-
-struct HomeSecondaryCompletion {
-    uint64_t generation = 0;
-    HomeSelectionSnapshot snapshot;
-    int coreRestoredRow = -1;
-    std::chrono::steady_clock::time_point startedAt;
-    ApiValueResult<JellyfinHomeData> result;
-};
-
 struct TrickplayTileCompletion {
     std::string itemId;
     int tileIndex = -1;
@@ -427,6 +411,7 @@ public:
           jellyfinSearchAsync_(api_, tasks_, asyncCompletions_),
           serverInfoAsync_(api_, tasks_, asyncCompletions_),
           itemMutationAsync_(api_, tasks_, asyncCompletions_),
+          homeAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -2868,24 +2853,7 @@ private:
 
         const uint64_t generation = requestEpochs_.home.begin();
         const auto homeLoadStarted = std::chrono::steady_clock::now();
-        tasks_.submit([this, session, generation, homeSnapshot = std::move(homeSnapshot), homeLoadStarted] {
-            auto core = api_.loadHomeCore(session);
-            HomeRestorePlan restorePlan;
-            std::vector<JellyfinItem> views;
-            if (core.ok) {
-                filterHiddenHomeItems(core.value);
-                views = core.value.views;
-                restorePlan = HomeScreenState::restorePlan(homeSnapshot, core.value.rows);
-            }
-            asyncCompletions_.push(HomeCoreCompletion{
-                .generation = generation,
-                .snapshot = std::move(homeSnapshot),
-                .restorePlan = std::move(restorePlan),
-                .views = std::move(views),
-                .startedAt = homeLoadStarted,
-                .result = std::move(core),
-            });
-        });
+        homeAsync_.loadCore(session, generation, std::move(homeSnapshot), homeLoadStarted);
     }
 
     [[nodiscard]] SeerrEndpoint seerrEndpoint() const {
@@ -4163,12 +4131,14 @@ private:
             return;
         }
 
-        std::vector<JellyfinItem> views = std::move(completion.views);
-        const int coreRestoredRow = completion.restorePlan.focusedRow;
+        filterHiddenHomeItems(completion.result.value);
+        std::vector<JellyfinItem> views = completion.result.value.views;
+        HomeRestorePlan restorePlan = HomeScreenState::restorePlan(completion.snapshot, completion.result.value.rows);
+        const int coreRestoredRow = restorePlan.focusedRow;
         homeRetryAt_ = {};
         homeRetryAttempt_ = 0;
         home_ = std::move(completion.result.value);
-        homeState_.setSelections(std::move(completion.restorePlan.selections));
+        homeState_.setSelections(std::move(restorePlan.selections));
         homeState_.setRow(coreRestoredRow);
         homeState_.updateViewport(static_cast<int>(home_.rows.size()));
         syncSeerrHomeRowLocked();
@@ -4202,22 +4172,8 @@ private:
         }
 
         refreshSeerrPendingAsync();
-        const JellyfinSession session = session_;
-        const uint64_t generation = completion.generation;
-        HomeSelectionSnapshot snapshot = completion.snapshot;
-        const auto startedAt = completion.startedAt;
-        tasks_.submit([this, session, generation, views = std::move(views), snapshot = std::move(snapshot),
-                       coreRestoredRow, startedAt]() mutable {
-            auto secondary = api_.loadHomeSecondary(session, views);
-            if (secondary.ok) filterHiddenHomeItems(secondary.value);
-            asyncCompletions_.push(HomeSecondaryCompletion{
-                .generation = generation,
-                .snapshot = std::move(snapshot),
-                .coreRestoredRow = coreRestoredRow,
-                .startedAt = startedAt,
-                .result = std::move(secondary),
-            });
-        });
+        homeAsync_.loadSecondary(session_, completion.generation, std::move(views), std::move(completion.snapshot),
+                                 coreRestoredRow, completion.startedAt);
     }
 
     void applyAsyncCompletion(HomeSecondaryCompletion& completion) {
@@ -4229,6 +4185,7 @@ private:
             return;
         }
 
+        filterHiddenHomeItems(completion.result.value);
         const size_t baseRowCount = home_.rows.size();
         for (auto& section : completion.result.value.rows) {
             const int restoredSelection = HomeScreenState::restoredSelection(completion.snapshot, section);
@@ -6925,6 +6882,7 @@ private:
     JellyfinSearchExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> jellyfinSearchAsync_;
     ServerInfoExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> serverInfoAsync_;
     ItemMutationExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> itemMutationAsync_;
+    HomeAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> homeAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;

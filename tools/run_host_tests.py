@@ -40,6 +40,7 @@ CPP_TESTS = [
     "http_error_policy_test.cpp",
     "http_retry_policy_test.cpp",
     "home_image_disk_cache_test.cpp",
+    "home_async_executor_test.cpp",
     "home_screen_test.cpp",
     "item_mutation_executor_test.cpp",
     "launch_intent_test.cpp",
