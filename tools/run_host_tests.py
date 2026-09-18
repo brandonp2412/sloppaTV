@@ -65,6 +65,7 @@ CPP_TESTS = [
     "player_screen_test.cpp",
     "player_tracks_test.cpp",
     "profiles_renderer_test.cpp",
+    "queue_overlay_renderer_test.cpp",
     "queue_overlay_screen_test.cpp",
     "quick_connect_executor_test.cpp",
     "ui_policy_test.cpp",
