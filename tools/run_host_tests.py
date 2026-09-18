@@ -29,6 +29,7 @@ CPP_TESTS = [
     "artwork_texture_cache_test.cpp",
     "browse_screen_test.cpp",
     "browse_async_executor_test.cpp",
+    "cast_renderer_test.cpp",
     "deep_link_test.cpp",
     "details_screen_test.cpp",
     "details_async_executor_test.cpp",

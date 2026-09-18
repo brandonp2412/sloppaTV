@@ -12,6 +12,7 @@
 #include "audio_policy.hpp"
 #include "browse_async_executor.hpp"
 #include "browse_screen.hpp"
+#include "cast_renderer.hpp"
 #include "details_screen.hpp"
 #include "details_async_executor.hpp"
 #include "deep_link.hpp"
@@ -6483,49 +6484,42 @@ private:
     }
 
     void renderCast() {
-        const std::string heading = detail_.name.empty() ? "Cast" : detail_.name + " | Cast";
-        renderHeader(heading);
-        if (detail_.people.empty()) {
-            renderEmptyState("No cast information", "Jellyfin has no cast information for this title.");
-            return;
-        }
-        constexpr int columns = 5;
-        constexpr float slotWidth = mediaCardWidth();
-        constexpr float xGap = 32.0f;
-        constexpr float imageWidth = 190.0f;
-        constexpr float imageHeight = 285.0f;
-        const float rowStep = castRowStep(settings_.uiTextSize);
-        const int firstRow = mediaFirstVisibleRow(detailsState_.castSelection(), 2);
-        for (int index = firstRow * columns; index < static_cast<int>(detail_.people.size()); ++index) {
-            const int row = index / columns - firstRow;
-            const int col = index % columns;
-            if (row >= 2) break;
-            const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
-            const float y = 195.0f + static_cast<float>(row) * rowStep;
-            const bool focused = index == detailsState_.castSelection();
-            const float imageX = x + (slotWidth - imageWidth) * 0.5f;
-            const auto bounds = focusedBounds(imageX, y, imageWidth, imageHeight, focused);
-            const float cardRadius = material_tv::cornerSmall * bounds[3] / imageHeight;
-            renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], cardRadius, kPanelAlt);
-            const auto& person = detail_.people[static_cast<size_t>(index)];
-            const JellyfinItem artworkItem = personArtworkItem(person);
-            if (!drawArtwork(artworkItem, bounds[0], bounds[1], bounds[2], bounds[3], 1.0f, cardRadius)) {
-                drawArtworkPlaceholder(artworkItem, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
-            }
-            if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], kFocus, cardRadius);
-            const float personTitleY = y + imageHeight + 24.0f;
-            renderer_.text(imageX, personTitleY, material_tv::type::label,
-                           fitTextLines(person.name, material_tv::type::label, imageWidth, 1), kText, imageWidth);
-            if (!person.role.empty()) {
-                const float roleY =
-                    personTitleY + 11.0f * material_tv::type::label * uiTextScale(settings_.uiTextSize) + 4.0f;
-                renderer_.text(imageX, roleY, material_tv::type::supporting,
-                               fitTextLines(person.role, material_tv::type::supporting, imageWidth, 1), kMuted,
-                               imageWidth);
-            }
-        }
-        drawCenteredSingleLineFit(500.0f, 1032.0f, 920.0f, 40.0f, 1.55f,
-                                  "Press OK to explore titles featuring this person", kTertiary, 12.0f, 2.0f);
+        renderCastScreen(
+            renderer_, detail_.name, detail_.people, detailsState_.castSelection(), settings_.uiTextSize,
+            CastRenderStyle<Color>{
+                .cornerSmall = material_tv::cornerSmall,
+                .labelScale = material_tv::type::label,
+                .supportingScale = material_tv::type::supporting,
+                .panelAlt = kPanelAlt,
+                .focus = kFocus,
+                .text = kText,
+                .muted = kMuted,
+                .tertiary = kTertiary,
+            },
+            [this](std::string_view heading) { renderHeader(std::string(heading)); },
+            [this](std::string_view title, std::string_view message) {
+                renderEmptyState(std::string(title), std::string(message));
+            },
+            [this](float x, float y, float width, float height, bool focused) {
+                return focusedBounds(x, y, width, height, focused);
+            },
+            [this](const JellyfinPerson& person, float x, float y, float width, float height, float radius) {
+                const JellyfinItem artworkItem = personArtworkItem(person);
+                if (!drawArtwork(artworkItem, x, y, width, height, 1.0f, radius)) {
+                    drawArtworkPlaceholder(artworkItem, x, y, width, height, radius);
+                }
+            },
+            [this](float x, float y, float width, float height, Color color, float radius) {
+                drawFocusHalo(x, y, width, height, color, radius);
+            },
+            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
+                return fitTextLines(value, scale, maxWidth, maxLines);
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                   float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
+                                          verticalPadding);
+            });
     }
 
     void renderPersonItems() {
