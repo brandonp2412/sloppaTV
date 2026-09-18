@@ -59,6 +59,7 @@
 #include "player_seek_feedback_renderer.hpp"
 #include "player_skip_button_renderer.hpp"
 #include "player_subtitle_renderer.hpp"
+#include "player_trickplay_renderer.hpp"
 #include "player_tracks.hpp"
 #include "profiles_renderer.hpp"
 #include "queue_overlay_renderer.hpp"
@@ -2174,32 +2175,30 @@ private:
         }
         if (trickplayState_.texture() == 0) return false;
 
-        constexpr float previewWidth = 420.0f;
-        const float previewHeight =
-            std::clamp(previewWidth * static_cast<float>(info.height) / static_cast<float>(info.width), 180.0f, 270.0f);
-        const double progress =
-            playerScreenState_.durationMs() > 0
-                ? std::clamp(static_cast<double>(trickplayState_.positionMs()) / playerScreenState_.durationMs(), 0.0,
-                             1.0)
-                : 0.5;
-        const float centerX = 155.0f + static_cast<float>(1610.0 * progress);
-        const float x =
-            std::clamp(centerX - previewWidth * 0.5f, 80.0f, Renderer::logicalWidth() - 80.0f - previewWidth);
-        constexpr float y = 555.0f;
         const auto& decoded = trickplayState_.decoded();
-        const TrickplayUvRegion uv = trickplayUvRegion(frame, info.width, info.height, decoded.width, decoded.height);
-        if (!uv.valid()) return false;
-
-        constexpr float previewRadius = material_tv::cornerSmall;
-        renderer_.roundedRect(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, previewRadius + 7.0f,
-                              Color{0.0f, 0.0f, 0.0f, 0.90f});
-        renderer_.roundedOutline(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, previewRadius + 7.0f,
-                                 4.0f, kFocus);
-        renderer_.roundedImageRegion(trickplayState_.texture(), x, y, previewWidth, previewHeight, previewRadius, uv.u0,
-                                     uv.v0, uv.u1, uv.v1);
-        drawLeftAlignedSingleLineFit(x + 14.0f, y + previewHeight + 7.0f, previewWidth - 28.0f, 44.0f, 1.65f,
-                                     formatPlaybackTime(trickplayState_.positionMs()), kText);
-        return true;
+        const std::string positionLabel = formatPlaybackTime(trickplayState_.positionMs());
+        return renderPlayerTrickplay(
+            renderer_,
+            PlayerTrickplayRenderState{
+                .texture = trickplayState_.texture(),
+                .frame = frame,
+                .info = info,
+                .decodedWidth = decoded.width,
+                .decodedHeight = decoded.height,
+                .positionMs = trickplayState_.positionMs(),
+                .durationMs = playerScreenState_.durationMs(),
+                .logicalWidth = Renderer::logicalWidth(),
+                .positionLabel = positionLabel,
+            },
+            PlayerTrickplayRenderStyle<Color>{
+                .previewRadius = material_tv::cornerSmall,
+                .backdrop = Color{0.0f, 0.0f, 0.0f, 0.90f},
+                .focus = kFocus,
+                .text = kText,
+            },
+            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
+                drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
+            });
     }
 
     void seekPlaybackTo(int positionMs) {
