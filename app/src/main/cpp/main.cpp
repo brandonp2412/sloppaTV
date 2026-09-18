@@ -25,6 +25,7 @@
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
 #include "home_async_executor.hpp"
+#include "home_renderer.hpp"
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "item_menu_renderer.hpp"
@@ -5087,113 +5088,65 @@ private:
     }
 
     void renderHome() {
-        bool backdropVisible = false;
-        if (settings_.backdropMode > 0 && !home_.rows.empty()) {
-            const int backdropRow = std::clamp(homeState_.row() >= 0 ? homeState_.row() : homeState_.firstVisibleRow(),
-                                               0, static_cast<int>(home_.rows.size()) - 1);
-            const auto& row = home_.rows[static_cast<size_t>(backdropRow)];
-            if (!row.items.empty() && backdropRow < static_cast<int>(homeState_.selectionCount())) {
-                const int selection = homeState_.selection(backdropRow, static_cast<int>(row.items.size()));
-                backdropVisible = drawBackdrop(row.items[static_cast<size_t>(selection)], 0.24f);
-            }
-        }
-        if (!backdropVisible) {
-            renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), kBackground);
-        } else {
-            renderer_.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(),
-                           Color{0.01f, 0.012f, 0.018f, 0.34f});
-        }
-
-        const bool toolbarFocused = homeState_.row() < 0;
-        const bool hasBrandMark = drawBrandMark(72.0f, 27.0f, 72.0f);
-        renderer_.text(hasBrandMark ? 160.0f : 72.0f, 42.0f, 3.0f, "sloppaTV", kText, 430.0f);
-        renderer_.roundedRect(hasBrandMark ? 160.0f : 72.0f, 120.0f, 86.0f, 3.0f, 1.5f, kBrandGold);
-
-        const std::array<std::string, 3> navLabels{"Home", "Search", "Settings"};
-        const std::array<int, 3> navIndices{1, 2, 3};
-        const std::array<float, 3> navMinWidths{138.0f, 158.0f, 178.0f};
-        float navX = 960.0f;
-        for (size_t i = 0; i < navLabels.size(); ++i) {
-            const bool focused = toolbarFocused && homeState_.navIndex() == navIndices[i];
-            const bool active = navIndices[i] == 1;
-            const float navWidth =
-                std::round(std::max(navMinWidths[i], renderer_.textWidth(2.0f, navLabels[i]) + 44.0f));
-            if (focused) {
-                const auto bounds = drawTabSurface(navX, 40.0f, navWidth, 54.0f, true, active);
-                drawCenteredSingleLineFit(bounds[0], bounds[1], bounds[2], bounds[3], 2.0f, navLabels[i], kText, 12.0f,
-                                          4.0f);
-            } else {
-                if (active) renderer_.roundedRect(navX, 40.0f, navWidth, 54.0f, material_tv::cornerLarge, kFocusSoft);
-                drawCenteredSingleLineFit(navX, 40.0f, navWidth, 54.0f, 2.0f, navLabels[i], active ? kText : kMuted,
-                                          12.0f, 4.0f);
-            }
-            navX += navWidth + 12.0f;
-        }
-
-        const float profileX = 1660.0f;
-        const float profileY = 36.0f;
-        const float profileSize = 62.0f;
-        const bool profileFocused = toolbarFocused && homeState_.navIndex() == 0;
-        const auto profileBounds =
-            focusedBounds(profileX, profileY, profileSize, profileSize, profileFocused, materialButtonFocusScale());
-        const float profileRadius = profileBounds[3] * 0.5f;
-        renderer_.roundedRect(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], profileRadius,
-                              profileFocused ? kPanelElevated : kPanelAlt);
-        if (!drawProfileArtwork(session_, profileBounds[0], profileBounds[1], profileBounds[2])) {
-            const std::string initial =
-                session_.username.empty()
-                    ? "U"
-                    : std::string(
-                          1, static_cast<char>(std::toupper(static_cast<unsigned char>(session_.username.front()))));
-            drawCenteredSingleLineFit(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], 2.35f,
-                                      initial, kText, 6.0f, 6.0f);
-        }
-        if (profileFocused)
-            drawFocusHalo(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], kFocus,
-                          profileRadius);
-
-        if (settings_.showClock) {
-            drawRightAlignedSingleLine(1900.0f, 53.0f, 2.10f,
-                                       formatLocalClock(std::time(nullptr), settings_.clock24Hour),
-                                       Color{kMuted.r, kMuted.g, kMuted.b, 0.82f}, 150.0f);
-        }
-
-        if (home_.rows.empty()) {
-            renderEmptyState(homeLoading_ ? "Loading your library" : "Your library is empty",
-                             homeLoading_ ? "Connecting to your Jellyfin server"
-                                          : "Check your server connection and available libraries.");
-            return;
-        }
-
-        const int firstVisibleRow =
-            homeFirstVisibleRow(homeState_.firstVisibleRow(), homeState_.row(), static_cast<int>(home_.rows.size()), 2);
-        int renderFirstRow = firstVisibleRow;
-        float slideOffset = 0.0f;
-        int renderRowCount = 2;
-        const auto now = std::chrono::steady_clock::now();
-        constexpr auto slideDuration = 220ms;
-        const float rowStep = homeRowStep(settings_.uiTextSize);
-        if (homeSlideStarted_ != std::chrono::steady_clock::time_point{} && homeSlideToFirst_ == firstVisibleRow &&
-            now < homeSlideStarted_ + slideDuration) {
-            const float elapsed = static_cast<float>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(now - homeSlideStarted_).count());
-            const float progress = std::clamp(elapsed / 220.0f, 0.0f, 1.0f);
-            const float eased = progress * progress * (3.0f - 2.0f * progress);
-            renderRowCount = 3;
-            if (homeSlideToFirst_ > homeSlideFromFirst_) {
-                renderFirstRow = homeSlideFromFirst_;
-                slideOffset = -rowStep * eased;
-            } else {
-                renderFirstRow = homeSlideToFirst_;
-                slideOffset = -rowStep * (1.0f - eased);
-            }
-        }
-        for (int visible = 0; visible < renderRowCount; ++visible) {
-            const int row = renderFirstRow + visible;
-            if (row < 0 || row >= static_cast<int>(home_.rows.size())) continue;
-            renderHomeRow(home_.rows[static_cast<size_t>(row)].title, home_.rows[static_cast<size_t>(row)].items, row,
-                          150.0f + static_cast<float>(visible) * rowStep + slideOffset);
-        }
+        renderHomeScreen(
+            renderer_, home_.rows, homeState_, session_,
+            HomeRenderConfig{
+                .backdropMode = settings_.backdropMode,
+                .showClock = settings_.showClock,
+                .clock24Hour = settings_.clock24Hour,
+                .uiTextSize = settings_.uiTextSize,
+                .loading = homeLoading_,
+            },
+            HomeSlideState{
+                .fromFirst = homeSlideFromFirst_,
+                .toFirst = homeSlideToFirst_,
+                .started = homeSlideStarted_,
+            },
+            HomeRenderStyle<Color>{
+                .canvasWidth = Renderer::logicalWidth(),
+                .canvasHeight = Renderer::logicalHeight(),
+                .cornerLarge = material_tv::cornerLarge,
+                .buttonFocusScale = materialButtonFocusScale(),
+                .background = kBackground,
+                .backdropScrim = Color{0.01f, 0.012f, 0.018f, 0.34f},
+                .text = kText,
+                .muted = kMuted,
+                .clockMuted = Color{kMuted.r, kMuted.g, kMuted.b, 0.82f},
+                .brandGold = kBrandGold,
+                .focusSoft = kFocusSoft,
+                .panelElevated = kPanelElevated,
+                .panelAlt = kPanelAlt,
+                .focus = kFocus,
+            },
+            [&](const JellyfinItem& item, float alpha) { return drawBackdrop(item, alpha); },
+            [&](float x, float y, float size) { return drawBrandMark(x, y, size); },
+            [&](float x, float y, float width, float height, bool focused, bool selected) {
+                return drawTabSurface(x, y, width, height, focused, selected);
+            },
+            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color,
+                float horizontalPadding, float verticalPadding) {
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
+            },
+            [&](float x, float y, float width, float height, bool focused, float focusScale) {
+                return focusedBounds(x, y, width, height, focused, focusScale);
+            },
+            [&](const JellyfinSession& saved, float x, float y, float size) {
+                return drawProfileArtwork(saved, x, y, size);
+            },
+            [&](float x, float y, float width, float height, Color color, float radius) {
+                drawFocusHalo(x, y, width, height, color, radius);
+            },
+            [&](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
+                drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
+            },
+            [](bool clock24Hour) { return formatLocalClock(std::time(nullptr), clock24Hour); },
+            [&](std::string_view title, std::string_view message) {
+                renderEmptyState(std::string(title), std::string(message));
+            },
+            [&](std::string_view title, const std::vector<JellyfinItem>& items, int row, float top) {
+                renderHomeRow(std::string(title), items, row, top);
+            },
+            [] { return std::chrono::steady_clock::now(); });
     }
 
     void renderHomeRow(const std::string& title, const std::vector<JellyfinItem>& items, int row, float top) {
