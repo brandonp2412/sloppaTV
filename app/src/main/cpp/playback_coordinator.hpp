@@ -610,6 +610,16 @@ public:
         return true;
     }
 
+    [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int positionMs) const {
+        return sessionState_.activeSkippableSegment(playbackTicksFromPositionMs(positionMs));
+    }
+
+    [[nodiscard]] std::optional<int> activeSkippableSegmentEndMs(int positionMs) const {
+        const auto* segment = activeSkippableSegment(positionMs);
+        if (segment == nullptr) return std::nullopt;
+        return playbackPositionMsFromTicks(segment->endTicks);
+    }
+
     [[nodiscard]] std::optional<PlaybackNextEpisodeRequest>
     beginNextEpisodeRequest(PlaybackContinuationState::TimePoint now) {
         const JellyfinItem& item = sessionState_.activeItem();

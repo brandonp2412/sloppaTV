@@ -2388,11 +2388,6 @@ private:
         return playbackCoordinator_.tracks().activeSubtitleCue(playerScreenState_.positionMs());
     }
 
-    const JellyfinMediaSegment* activeSkippableSegment() const {
-        const int64_t positionTicks = static_cast<int64_t>(playerScreenState_.positionMs()) * 10000;
-        return playbackCoordinator_.session().activeSkippableSegment(positionTicks);
-    }
-
     std::string mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
         if (segment.type == "Intro") return "Skip intro";
         if (segment.type == "Outro") return "Skip credits";
@@ -2403,10 +2398,9 @@ private:
     }
 
     bool skipActiveMediaSegment() {
-        const auto segment = activeSkippableSegment();
-        if (!segment) return false;
-        const int targetMs = static_cast<int>(segment->endTicks / 10000);
-        seekPlaybackTo(targetMs);
+        const auto targetMs = playbackCoordinator_.activeSkippableSegmentEndMs(playerScreenState_.positionMs());
+        if (!targetMs) return false;
+        seekPlaybackTo(*targetMs);
         reportProgressAsync(false);
         return true;
     }
@@ -6177,7 +6171,7 @@ private:
         const int remainingMs = playerScreenState_.durationMs() > 0
                                     ? std::max(0, playerScreenState_.durationMs() - playerScreenState_.positionMs())
                                     : 0;
-        const auto skipSegment = activeSkippableSegment();
+        const auto skipSegment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs());
         const bool userOverlayVisible = playerScreenState_.overlayVisible(now);
         const bool showNextUp = shouldShowNextUpCard(playbackCoordinator_.continuation().nextItem().has_value(), remainingMs,
                                                      userOverlayVisible, skipSegment != nullptr);

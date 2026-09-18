@@ -93,6 +93,14 @@ int main() {
         coordinatedItem.id, {{.type = "Intro", .startTicks = 10'000'000, .endTicks = 50'000'000}}));
     assert(coordinator.session().mediaSegments().size() == 1);
     assert(coordinator.session().mediaSegments().front().type == "Intro");
+    assert(coordinator.activeSkippableSegment(999) == nullptr);
+    const auto* activeSegment = coordinator.activeSkippableSegment(1000);
+    assert(activeSegment != nullptr);
+    assert(activeSegment->type == "Intro");
+    assert(coordinator.activeSkippableSegmentEndMs(1000) == std::optional<int>{5000});
+    assert(coordinator.activeSkippableSegment(4499) != nullptr);
+    assert(coordinator.activeSkippableSegment(4500) == nullptr);
+    assert(!coordinator.activeSkippableSegmentEndMs(4500));
 
     PlaybackCoordinator mediaSegmentsFailureCoordinator;
     mediaSegmentsFailureCoordinator.activate(coordinatedItem, coordinatedTarget, now);
