@@ -5,7 +5,6 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
-#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -29,6 +28,12 @@ struct FakeTaskRunner {
         queued.erase(queued.begin());
         task();
     }
+};
+
+struct CompletionSink {
+    std::vector<ArtworkLoadCompletion> queued;
+
+    void push(ArtworkLoadCompletion completion) { queued.push_back(std::move(completion)); }
 };
 
 struct FakeRenderer {
@@ -159,10 +164,16 @@ int main() {
     FakeSeerr seerr;
     FakeDecoder decoder;
     FakeTaskRunner tasks;
-    std::recursive_mutex stateMutex;
+    CompletionSink completions;
     FakeRenderer renderer;
-    ArtworkProvider<FakeJellyfin, FakeSeerr, FakeDecoder, FakeTaskRunner, std::recursive_mutex> artwork(
-        jellyfin, seerr, decoder, tasks, stateMutex, observeHome);
+    ArtworkProvider<FakeJellyfin, FakeSeerr, FakeDecoder, FakeTaskRunner, CompletionSink> artwork(
+        jellyfin, seerr, decoder, tasks, completions, observeHome);
+    const auto applyNext = [&] {
+        assert(!completions.queued.empty());
+        auto completion = std::move(completions.queued.front());
+        completions.queued.erase(completions.queued.begin());
+        artwork.applyCompletion(std::move(completion));
+    };
 
     const std::filesystem::path cacheRoot = std::filesystem::temp_directory_path() / "sloppatv-artwork-provider-test";
     std::error_code error;
@@ -179,6 +190,7 @@ int main() {
     assert(artwork.posterTexture(session, item, false, renderer) == nullptr);
     assert(tasks.queued.size() == 1);
     tasks.runNext();
+    applyNext();
     assert(jellyfin.posterDownloads == 1);
     assert(renderer.createCalls == 0);
     ArtworkEntry* poster = artwork.posterTexture(session, item, false, renderer);
@@ -187,6 +199,7 @@ int main() {
 
     assert(artwork.requestHome(session, item, false, renderer));
     tasks.runNext();
+    applyNext();
     assert(jellyfin.homeDownloads == 1);
     assert(homeObservations == 1);
     ArtworkEntry* home = artwork.homeTexture(session, item, false, renderer);
@@ -194,6 +207,7 @@ int main() {
 
     assert(artwork.profileTexture(session, renderer) == nullptr);
     tasks.runNext();
+    applyNext();
     assert(jellyfin.profileDownloads == 1);
     ArtworkEntry* profile = artwork.profileTexture(session, renderer);
     assert(profile && profile->texture == 103);
@@ -202,12 +216,14 @@ int main() {
     assert(tasks.queued.empty());
     assert(artwork.backdropTexture(session, item, 2, renderer) == nullptr);
     tasks.runNext();
+    applyNext();
     assert(jellyfin.backdropDownloads == 1);
     ArtworkEntry* backdrop = artwork.backdropTexture(session, item, 2, renderer);
     assert(backdrop && backdrop->texture == 104);
 
     assert(artwork.logoTexture(session, item, renderer) == nullptr);
     tasks.runNext();
+    applyNext();
     assert(jellyfin.logoDownloads == 1);
     ArtworkEntry* logo = artwork.logoTexture(session, item, renderer);
     assert(logo && logo->texture == 105);
@@ -216,6 +232,7 @@ int main() {
     external.externalPosterUrl = "https://images.example/poster.jpg";
     assert(artwork.posterTexture(session, external, true, renderer) == nullptr);
     tasks.runNext();
+    applyNext();
     assert(jellyfin.posterDownloads == 1);
     assert(seerr.downloads == 1);
     assert(seerr.lastUrl == external.externalPosterUrl);

@@ -7,14 +7,14 @@
 #include <string>
 #include <utility>
 
-template <typename JellyfinLike, typename SeerrLike, typename DecoderLike, typename TaskRunnerLike, typename MutexLike>
+template <typename JellyfinLike, typename SeerrLike, typename DecoderLike, typename TaskRunnerLike, typename CompletionSink>
 class ArtworkProvider {
 public:
     using HomeLoadObserver = void (*)(const HomeArtworkRequest&, const ArtworkLoadResult&);
 
     ArtworkProvider(JellyfinLike& jellyfin, SeerrLike& seerr, DecoderLike& decoder, TaskRunnerLike& tasks,
-                    MutexLike& stateMutex, HomeLoadObserver homeLoadObserver = nullptr)
-        : loader_(jellyfin, seerr, decoder), coordinator_(tasks, stateMutex), homeLoadObserver_(homeLoadObserver) {}
+                    CompletionSink& completions, HomeLoadObserver homeLoadObserver = nullptr)
+        : loader_(jellyfin, seerr, decoder), coordinator_(tasks, completions), homeLoadObserver_(homeLoadObserver) {}
 
     void setDataPath(std::string dataPath) { loader_.setDataPath(std::move(dataPath)); }
 
@@ -81,6 +81,8 @@ public:
 
     template <typename RendererLike> void clearSession(RendererLike& renderer) { coordinator_.clearSession(renderer); }
 
+    void applyCompletion(ArtworkLoadCompletion completion) { coordinator_.applyCompletion(std::move(completion)); }
+
 private:
     template <typename RendererLike>
     bool queuePoster(const JellyfinSession& session, PosterArtworkRequest request, RendererLike& renderer) {
@@ -130,6 +132,6 @@ private:
     }
 
     ArtworkLoader<JellyfinLike, SeerrLike, DecoderLike> loader_;
-    ArtworkCoordinator<TaskRunnerLike, MutexLike> coordinator_;
+    ArtworkCoordinator<TaskRunnerLike, CompletionSink> coordinator_;
     HomeLoadObserver homeLoadObserver_ = nullptr;
 };

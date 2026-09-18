@@ -361,7 +361,8 @@ using AsyncCompletion = std::variant<SystemTextInputEvent, SeerrDeleteCompletion
                                      QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
                                      QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
                                      ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion,
-                                     MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion,
+                                     ArtworkLoadCompletion, MediaSegmentsCompletion, NextEpisodeCompletion,
+                                     PlaybackAdjacentCompletion,
                                      PlaybackReportCompletion, QueuedPlaybackCompletion, PlayerItemPlaybackCompletion,
                                      AutoplayPlaybackCompletion, StreamRestartCompletion, FallbackPlaybackCompletion,
                                      BeginPlaybackCompletion, SeriesPlayAllCompletion>;
@@ -432,7 +433,7 @@ public:
               }),
           trickplayTileAsync_(api_, imageDecoder_, tasks_, asyncCompletions_),
           seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
-          artwork_(api_, seerr_, imageDecoder_, tasks_, stateMutex_,
+          artwork_(api_, seerr_, imageDecoder_, tasks_, asyncCompletions_,
                    [](const HomeArtworkRequest& request, const ArtworkLoadResult& loaded) {
                        if (loaded.ok()) return;
                        __android_log_print(ANDROID_LOG_WARN, kTag,
@@ -4221,6 +4222,10 @@ private:
         trickplayState_.applyDecoded(std::move(completion.decoded));
     }
 
+    void applyAsyncCompletion(ArtworkLoadCompletion& completion) {
+        artwork_.applyCompletion(std::move(completion));
+    }
+
     void applyAsyncCompletion(MediaSegmentsCompletion& completion) {
         if (screen_ != Screen::Player) return;
         if (!completion.ok) {
@@ -6096,7 +6101,8 @@ private:
         seerrAsync_;
 
     mutable std::recursive_mutex stateMutex_;
-    ArtworkProvider<JellyfinClient, SeerrClient, JniImageDecoder, TaskRunner, std::recursive_mutex> artwork_;
+    ArtworkProvider<JellyfinClient, SeerrClient, JniImageDecoder, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
+        artwork_;
     std::string dataPath_;
     std::string deviceId_;
 

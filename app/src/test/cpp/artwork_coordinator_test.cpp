@@ -4,7 +4,6 @@
 #include <cassert>
 #include <cstdint>
 #include <functional>
-#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -38,6 +37,12 @@ struct FakeTaskRunner {
     }
 };
 
+struct CompletionSink {
+    std::vector<ArtworkLoadCompletion> queued;
+
+    void push(ArtworkLoadCompletion completion) { queued.push_back(std::move(completion)); }
+};
+
 struct FakeRenderer {
     uint64_t textureGeneration = 9;
     int createCalls = 0;
@@ -59,9 +64,15 @@ struct FakeRenderer {
 
 int main() {
     FakeTaskRunner tasks;
-    std::recursive_mutex stateMutex;
-    ArtworkCoordinator<FakeTaskRunner, std::recursive_mutex> artwork(tasks, stateMutex);
+    CompletionSink completions;
+    ArtworkCoordinator<FakeTaskRunner, CompletionSink> artwork(tasks, completions);
     FakeRenderer renderer;
+    const auto applyNext = [&] {
+        assert(!completions.queued.empty());
+        auto completion = std::move(completions.queued.front());
+        completions.queued.erase(completions.queued.begin());
+        artwork.applyCompletion(std::move(completion));
+    };
 
     int posterLoads = 0;
     const auto posterLoad = [&] {
@@ -78,6 +89,10 @@ int main() {
     assert(missingRequests == 0);
 
     tasks.runNext();
+    assert(completions.queued.size() == 1);
+    assert(artwork.posterTexture("poster", renderer, [&] { ++missingRequests; }) == nullptr);
+    assert(missingRequests == 0);
+    applyNext();
     ArtworkEntry* poster = artwork.posterTexture("poster", renderer, [&] { ++missingRequests; });
     assert(poster && poster->texture == 101);
     assert(posterLoads == 1);
@@ -89,6 +104,7 @@ int main() {
         return result;
     }));
     tasks.runNext();
+    applyNext();
     ArtworkEntry* profile = artwork.profileTexture("profile", renderer, [&] { ++missingRequests; });
     assert(profile && profile->texture == 102);
 
@@ -106,6 +122,8 @@ int main() {
             assert(loaded.source == ArtworkLoadSource::Network);
         }));
     tasks.runNext();
+    assert(homeObserved == 1);
+    applyNext();
     ArtworkEntry* home = artwork.homeTexture("home", renderer, [&] { ++missingRequests; });
     assert(home && home->texture == 103);
     assert(homeObserved == 1);
