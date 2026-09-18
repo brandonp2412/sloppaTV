@@ -71,56 +71,56 @@ jobs:
       - name: Configure Play signing identity
         shell: bash
         env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          SLOPPATV_KEYSTORE_BASE64: ${{ secrets.SLOPPATV_KEYSTORE_BASE64 }}
+          SLOPPATV_STORE_PASSWORD: ${{ secrets.SLOPPATV_STORE_PASSWORD }}
+          SLOPPATV_KEY_ALIAS: ${{ secrets.SLOPPATV_KEY_ALIAS }}
+          SLOPPATV_KEY_PASSWORD: ${{ secrets.SLOPPATV_KEY_PASSWORD }}
         run: |
           set -euo pipefail
 
-          : "${ANDROID_KEYSTORE_BASE64:?ANDROID_KEYSTORE_BASE64 secret is required}"
-          : "${ANDROID_STORE_PASSWORD:?ANDROID_STORE_PASSWORD secret is required}"
-          : "${ANDROID_KEY_ALIAS:?ANDROID_KEY_ALIAS secret is required}"
-          : "${ANDROID_KEY_PASSWORD:?ANDROID_KEY_PASSWORD secret is required}"
+          : "${SLOPPATV_KEYSTORE_BASE64:?SLOPPATV_KEYSTORE_BASE64 secret is required}"
+          : "${SLOPPATV_STORE_PASSWORD:?SLOPPATV_STORE_PASSWORD secret is required}"
+          : "${SLOPPATV_KEY_ALIAS:?SLOPPATV_KEY_ALIAS secret is required}"
+          : "${SLOPPATV_KEY_PASSWORD:?SLOPPATV_KEY_PASSWORD secret is required}"
 
-          CI_KEYSTORE="$RUNNER_TEMP/sloppatv-release.p12"
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$CI_KEYSTORE"
+          CI_KEYSTORE="$RUNNER_TEMP/sloppatv-play-upload.p12"
+          printf '%s' "$SLOPPATV_KEYSTORE_BASE64" | base64 --decode > "$CI_KEYSTORE"
 
           keytool -list \
             -keystore "$CI_KEYSTORE" \
-            -storepass "$ANDROID_STORE_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS" >/dev/null
+            -storepass "$SLOPPATV_STORE_PASSWORD" \
+            -alias "$SLOPPATV_KEY_ALIAS" >/dev/null
 
           keytool -certreq \
             -keystore "$CI_KEYSTORE" \
-            -storepass "$ANDROID_STORE_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS" \
-            -keypass "$ANDROID_KEY_PASSWORD" \
+            -storepass "$SLOPPATV_STORE_PASSWORD" \
+            -alias "$SLOPPATV_KEY_ALIAS" \
+            -keypass "$SLOPPATV_KEY_PASSWORD" \
             -file "$RUNNER_TEMP/sloppatv-signing-check.csr" >/dev/null
 
           actual_sha1="$(
             keytool -list -v \
               -keystore "$CI_KEYSTORE" \
-              -storepass "$ANDROID_STORE_PASSWORD" \
-              -alias "$ANDROID_KEY_ALIAS" \
+              -storepass "$SLOPPATV_STORE_PASSWORD" \
+              -alias "$SLOPPATV_KEY_ALIAS" \
               | sed -n 's/^[[:space:]]*SHA1: //p' \
               | tr -d ':' \
               | tr '[:lower:]' '[:upper:]'
           )"
-          expected_sha1="108F6DFFAD1F2307495808AFF7D89E07B1892DEF"
+          expected_sha1="63D1345BF11526974C5D73F535578E51018D9B61"
           echo "Signing SHA-1: $actual_sha1"
           test "$actual_sha1" = "$expected_sha1" || {
-            echo "::error::Signing secret does not match Flexify F-Droid signing key."
-            echo "::error::Expected SHA-1 10:8F:6D:FF:AD:1F:23:07:49:58:08:AF:F7:D8:9E:07:B1:89:2D:EF."
+            echo "::error::Signing secret is not the Google Play upload key for sloppaTV."
+            echo "::error::Expected SHA-1 63:D1:34:5B:F1:15:26:97:4C:5D:73:F5:35:57:8E:51:01:8D:9B:61."
             echo "::error::Actual SHA-1 $actual_sha1."
             exit 1
           }
 
           {
             printf 'storeFile=%s\n' "$CI_KEYSTORE"
-            printf 'storePassword=%s\n' "$ANDROID_STORE_PASSWORD"
-            printf 'keyAlias=%s\n' "$ANDROID_KEY_ALIAS"
-            printf 'keyPassword=%s\n' "$ANDROID_KEY_PASSWORD"
+            printf 'storePassword=%s\n' "$SLOPPATV_STORE_PASSWORD"
+            printf 'keyAlias=%s\n' "$SLOPPATV_KEY_ALIAS"
+            printf 'keyPassword=%s\n' "$SLOPPATV_KEY_PASSWORD"
           } > key.properties
 
       - name: Run host policy tests
