@@ -29,6 +29,7 @@ CPP_TESTS = [
     "browse_screen_test.cpp",
     "deep_link_test.cpp",
     "details_screen_test.cpp",
+    "details_async_executor_test.cpp",
     "diagnostics_screen_test.cpp",
     "external_playback_executor_test.cpp",
     "external_playback_state_test.cpp",

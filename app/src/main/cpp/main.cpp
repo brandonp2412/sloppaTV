@@ -11,6 +11,7 @@
 #include "audio_policy.hpp"
 #include "browse_screen.hpp"
 #include "details_screen.hpp"
+#include "details_async_executor.hpp"
 #include "deep_link.hpp"
 #include "diagnostics_screen.hpp"
 #include "discovery.hpp"
@@ -430,31 +431,6 @@ struct LoginCompletion {
     ApiValueResult<JellyfinSession> result;
 };
 
-struct DetailsItemCompletion {
-    std::string itemId;
-    uint64_t generation = 0;
-    ApiValueResult<JellyfinItem> result;
-};
-
-struct DetailsSimilarCompletion {
-    std::string itemId;
-    uint64_t generation = 0;
-    std::vector<JellyfinItem> items;
-};
-
-struct EpisodeSeriesContextRequestCompletion {
-    JellyfinSession session;
-    EpisodeSeriesContextRequest request;
-    uint64_t generation = 0;
-};
-
-struct EpisodeSeriesContextCompletion {
-    std::string itemId;
-    uint64_t generation = 0;
-    JellyfinItem series;
-    std::vector<JellyfinItem> seasons;
-};
-
 struct HomeCoreCompletion {
     uint64_t generation = 0;
     HomeSelectionSnapshot snapshot;
@@ -521,6 +497,7 @@ public:
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
           quickConnectAsync_(api_, tasks_, asyncCompletions_),
+          detailsAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -3257,42 +3234,7 @@ private:
         const JellyfinSession session = session_;
         const std::string id = item.id;
         const RequestEpoch::Token requestToken = requestEpochs_.content.beginToken();
-        tasks_.submit([this, session, id, requestToken] {
-            auto result = api_.getItem(session, id);
-            if (!requestToken.active()) return;
-            if (!result.ok) {
-                asyncCompletions_.push(DetailsItemCompletion{
-                    .itemId = id,
-                    .generation = requestToken.value(),
-                    .result = std::move(result),
-                });
-                return;
-            }
-
-            auto contextRequest = episodeSeriesContextRequest(result.value);
-            asyncCompletions_.push(DetailsItemCompletion{
-                .itemId = id,
-                .generation = requestToken.value(),
-                .result = std::move(result),
-            });
-
-            auto similar = api_.getSimilar(session, id, 18);
-            if (!requestToken.active()) return;
-            if (similar.ok) {
-                asyncCompletions_.push(DetailsSimilarCompletion{
-                    .itemId = id,
-                    .generation = requestToken.value(),
-                    .items = std::move(similar.value),
-                });
-            }
-
-            if (!contextRequest) return;
-            asyncCompletions_.push(EpisodeSeriesContextRequestCompletion{
-                .session = session,
-                .request = std::move(*contextRequest),
-                .generation = requestToken.value(),
-            });
-        });
+        detailsAsync_.load(session, id, requestToken);
     }
 
     void shuffleRemainingQueue() {
@@ -4307,21 +4249,8 @@ private:
         if (!requestEpochs_.content.active(completion.generation)) return;
         if (screen_ != Screen::Details || !completion.request.matches(detail_)) return;
 
-        const JellyfinSession session = std::move(completion.session);
-        const std::string itemId = std::move(completion.request.itemId);
-        const std::string seriesId = std::move(completion.request.seriesId);
         const RequestEpoch::Token requestToken = requestEpochs_.content.token(completion.generation);
-        tasks_.submit([this, session, itemId, seriesId, requestToken] {
-            auto series = api_.getItem(session, seriesId);
-            auto seasons = api_.getSeasons(session, seriesId);
-            if (!requestToken.active() || !series.ok || !seasons.ok) return;
-            asyncCompletions_.push(EpisodeSeriesContextCompletion{
-                .itemId = itemId,
-                .generation = requestToken.value(),
-                .series = std::move(series.value),
-                .seasons = std::move(seasons.value),
-            });
-        });
+        detailsAsync_.loadSeriesContext(std::move(completion.session), std::move(completion.request), requestToken);
     }
 
     void applyAsyncCompletion(EpisodeSeriesContextCompletion& completion) {
@@ -7160,6 +7089,7 @@ private:
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
     QuickConnectExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> quickConnectAsync_;
+    DetailsAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> detailsAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
