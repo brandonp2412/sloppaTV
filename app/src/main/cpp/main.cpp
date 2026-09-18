@@ -2063,7 +2063,7 @@ private:
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const auto subtitlePreference = playbackCoordinator_.tracks().subtitleLanguagePreference();
+        const PlaybackLanguagePreferences preferences = playbackCoordinator_.languagePreferences();
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
         if (!externalPlaybackAsync_.prepare(
@@ -2077,7 +2077,7 @@ private:
                              .audios = detail_.audios,
                              .subtitles = detail_.subtitles,
                              .player = *player,
-                             .subtitlePreference = subtitlePreference,
+                             .subtitlePreference = preferences.subtitle,
                              .trackPolicy = trackPolicy,
                          })) {
             loading_ = false;
@@ -2169,6 +2169,18 @@ private:
             .autoSubtitleLanguage = settings_.autoSubtitleLanguage,
             .autoSubtitleSourceLanguage = settings_.autoSubtitleSourceLanguage,
             .allowedSubtitleLanguages = settings_.subtitleLanguages,
+        };
+    }
+
+    PlaybackResolutionOptions playbackResolutionOptions() const {
+        const PlaybackLanguagePreferences preferences = playbackCoordinator_.languagePreferences();
+        return {
+            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
+            .maxAudioChannels = settings_.maxAudioChannels,
+            .overrides = playbackOverridesFor(settings_),
+            .audioLanguagePreference = preferences.audio,
+            .subtitleLanguagePreference = preferences.subtitle,
+            .trackPolicy = playbackTrackSelectionPolicy(),
         };
     }
 
@@ -3424,14 +3436,7 @@ private:
         const JellyfinSession session = session_;
         JellyfinItem queued = *queueState_.itemAt(index);
         if (restartCurrent) queued.positionTicks = 0;
-        PlaybackResolutionOptions resolutionOptions{
-            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-            .maxAudioChannels = settings_.maxAudioChannels,
-            .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
-            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
-            .trackPolicy = playbackTrackSelectionPolicy(),
-        };
+        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
         const uint64_t generation = requestEpochs_.playback.begin();
         playbackResolutionAsync_.resolveQueued(session, std::move(queued), std::move(resolutionOptions), generation,
                                                originScreen, index, previousQueueIndex, replacingPlayer);
@@ -3440,14 +3445,7 @@ private:
     void playPlayerItemAsync(JellyfinItem selected) {
         if (loading_ || screen_ != Screen::Player || !session_.valid() || selected.id.empty()) return;
         const JellyfinSession session = session_;
-        PlaybackResolutionOptions resolutionOptions{
-            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-            .maxAudioChannels = settings_.maxAudioChannels,
-            .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
-            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
-            .trackPolicy = playbackTrackSelectionPolicy(),
-        };
+        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
 
         queueState_.reset();
         releaseActivePlayback(true, false);
@@ -3561,14 +3559,7 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const JellyfinItem selected = detail_;
-        PlaybackResolutionOptions resolutionOptions{
-            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-            .maxAudioChannels = settings_.maxAudioChannels,
-            .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
-            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
-            .trackPolicy = playbackTrackSelectionPolicy(),
-        };
+        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
         const uint64_t generation = requestEpochs_.playback.begin();
 
         playbackResolutionAsync_.resolveSelection(session, selected, std::move(resolutionOptions), generation,
@@ -3638,14 +3629,7 @@ private:
         detail_ = nextItem;
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         const JellyfinSession session = session_;
-        PlaybackResolutionOptions resolutionOptions{
-            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-            .maxAudioChannels = settings_.maxAudioChannels,
-            .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = playbackCoordinator_.tracks().audioLanguagePreference(),
-            .subtitleLanguagePreference = playbackCoordinator_.tracks().subtitleLanguagePreference(),
-            .trackPolicy = playbackTrackSelectionPolicy(),
-        };
+        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
         const uint64_t generation = requestEpochs_.playback.begin();
         playbackResolutionAsync_.resolveAutoplay(session, std::move(nextItem), std::move(resolutionOptions), generation,
                                                  queuedNextIndex);

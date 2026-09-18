@@ -91,6 +91,11 @@ struct PlaybackPlayerStartContext {
     std::string externalSubtitleUrl;
 };
 
+struct PlaybackLanguagePreferences {
+    std::optional<std::string> audio;
+    std::optional<std::string> subtitle;
+};
+
 struct PlaybackSubtitleCycleContext {
     PlaybackSubtitleCyclePlan plan;
     int audioStreamIndex = -1;
@@ -763,6 +768,13 @@ public:
 
     [[nodiscard]] std::string trackLabel(PlaybackTrackLabelKind kind) const {
         return playbackTrackLabel(sessionState_.activeItem(), trackState_, kind);
+    }
+
+    [[nodiscard]] PlaybackLanguagePreferences languagePreferences() const {
+        return {
+            .audio = trackState_.audioLanguagePreference(),
+            .subtitle = trackState_.subtitleLanguagePreference(),
+        };
     }
 
     [[nodiscard]] PlaybackAudioCyclePlan audioTrackCyclePlan(const PlaybackTrackSelectionPolicy& policy) const {

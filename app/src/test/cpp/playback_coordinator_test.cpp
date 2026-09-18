@@ -315,14 +315,21 @@ int main() {
 
     preferenceCoordinator.rememberAudioLanguagePreference(2);
     assert(preferenceCoordinator.tracks().audioLanguagePreference() == std::optional<std::string>{"en"});
+    auto languagePreferences = preferenceCoordinator.languagePreferences();
+    assert(languagePreferences.audio == std::optional<std::string>{"en"});
+    assert(!languagePreferences.subtitle.has_value());
     preferenceCoordinator.rememberAudioLanguagePreference(3);
     assert(!preferenceCoordinator.tracks().audioLanguagePreference().has_value());
     preferenceCoordinator.rememberSubtitleLanguagePreference(4);
     assert(preferenceCoordinator.tracks().subtitleLanguagePreference() == std::optional<std::string>{"eng"});
+    languagePreferences = preferenceCoordinator.languagePreferences();
+    assert(!languagePreferences.audio.has_value());
+    assert(languagePreferences.subtitle == std::optional<std::string>{"eng"});
     preferenceCoordinator.rememberSubtitleLanguagePreference(5);
     assert(!preferenceCoordinator.tracks().subtitleLanguagePreference().has_value());
     preferenceCoordinator.rememberSubtitleLanguagePreference(kSubtitleOffIndex);
     assert(preferenceCoordinator.tracks().subtitleLanguagePreference() == std::optional<std::string>{""});
+    assert(preferenceCoordinator.languagePreferences().subtitle == std::optional<std::string>{""});
 
     PlaybackCoordinator subtitleLoadCoordinator;
     subtitleLoadCoordinator.activate(preferenceItem, coordinatedTarget, now);
