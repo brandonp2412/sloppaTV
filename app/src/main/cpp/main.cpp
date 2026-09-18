@@ -111,6 +111,7 @@
 #include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
 #include "system_text_input.hpp"
+#include "system_text_input_controller.hpp"
 #include "text_layout.hpp"
 #include "ui_theme.hpp"
 #include "ui_components.hpp"
@@ -257,13 +258,6 @@ struct VirtualKey {
     std::string value;
     KeyAction action = KeyAction::Insert;
 };
-
-constexpr int kTextInputSearch = 1;
-constexpr int kTextInputSettingsSearch = 2;
-constexpr int kTextInputLoginServer = 10;
-constexpr int kTextInputLoginPassword = 12;
-constexpr int kTextInputSeerrServer = 20;
-constexpr int kTextInputSeerrApiKey = 21;
 
 const std::vector<std::vector<VirtualKey>>& keyboardRows() {
     static const std::vector<std::vector<VirtualKey>> rows = {
@@ -666,7 +660,7 @@ public:
         const auto now = std::chrono::steady_clock::now();
         {
             std::scoped_lock lock(stateMutex_);
-            if (systemTextInputMode_ >= 0) return;
+            if (systemTextInputController_.active()) return;
             renderBurstUntil_ = now + 150ms;
             lastInteraction_ = now;
             if (screensaverActive_) {
@@ -733,78 +727,35 @@ private:
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
-    void applySystemTextInputChanged(int mode, const std::string& text) {
-        if (mode == kTextInputSearch) {
-            searchState_.setQuery(text);
-            searchState_.setKeyboard(false);
-            scheduleLiveSearch();
-        } else if (mode == kTextInputSettingsSearch) {
-            settingsScreen_.setSearchText(text);
-        } else if (mode == kTextInputSeerrServer) {
-            settings_.seerrServer = text;
-        } else if (mode == kTextInputSeerrApiKey) {
-            settings_.seerrApiKey = text;
-        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            accountState_.setField(mode - kTextInputLoginServer, text);
-        }
-        systemTextInputMode_ = mode;
-        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
-    }
+    void applySystemTextInputEffects(const SystemTextInputEffects& effects) {
+        if (effects.scheduleSearch) scheduleLiveSearch();
+        if (effects.cancelSeerrSearch) seerrSearchCoordinator_.cancel();
+        if (effects.submitSearch) searchAsync();
+        if (effects.invalidateSeerrStorage) seerrDomain_.invalidateStorageTargets();
+        if (effects.saveSession) saveSession(session_);
 
-    void applySystemTextInputCancelled(int mode, const std::string& text) {
-        systemTextInputMode_ = -1;
-        if (mode == kTextInputSearch) {
-            searchState_.setQuery(text);
-            searchState_.setKeyboard(false);
-            scheduleLiveSearch();
-        } else if (mode == kTextInputSettingsSearch) {
-            settingsScreen_.setSearchText(text);
-        } else if (mode == kTextInputSeerrServer) {
-            settings_.seerrServer = systemTextInputOriginal_;
-            systemTextInputOriginal_.clear();
-        } else if (mode == kTextInputSeerrApiKey) {
-            settings_.seerrApiKey = systemTextInputOriginal_;
-            systemTextInputOriginal_.clear();
-        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            accountState_.setField(mode - kTextInputLoginServer, text);
+        switch (effects.notice) {
+        case SystemTextInputNotice::None:
+            break;
+        case SystemTextInputNotice::SeerrDisconnected:
+            showNotice("SEERR DISCONNECTED", 3s);
+            break;
+        case SystemTextInputNotice::SeerrServerSaved:
+            showNotice("SEERR SERVER SAVED", 3s);
+            break;
+        case SystemTextInputNotice::SeerrApiKeyCleared:
+            showNotice("SEERR API KEY CLEARED", 3s);
+            break;
+        case SystemTextInputNotice::SeerrApiKeySaved:
+            showNotice("SEERR API KEY SAVED", 3s);
+            break;
         }
-        renderBurstUntil_ = std::chrono::steady_clock::now() + 300ms;
-    }
 
-    void applySystemTextInputDone(int mode, const std::string& text) {
-        systemTextInputMode_ = -1;
-        if (mode == kTextInputSearch) {
-            searchState_.setQuery(text);
-            searchState_.setKeyboard(false);
-            searchState_.cancelPending();
-            seerrSearchCoordinator_.cancel();
-            searchAsync();
-        } else if (mode == kTextInputSettingsSearch) {
-            settingsScreen_.setSearchText(text);
-        } else if (mode == kTextInputSeerrServer) {
-            const bool changed = settings_.seerrServer != text;
-            settings_.seerrServer = text;
-            if (changed) {
-                settings_.seerrSessionCookie.clear();
-                seerrDomain_.invalidateStorageTargets();
-            }
-            systemTextInputOriginal_.clear();
-            saveSession(session_);
-            showNotice(settings_.seerrServer.empty() ? "SEERR DISCONNECTED" : "SEERR SERVER SAVED", 3s);
+        if (effects.refreshSeerr) {
             refreshSeerrPendingAsync();
             refreshSeerrStorageAsync(true);
-        } else if (mode == kTextInputSeerrApiKey) {
-            settings_.seerrApiKey = text;
-            systemTextInputOriginal_.clear();
-            saveSession(session_);
-            showNotice(settings_.seerrApiKey.empty() ? "SEERR API KEY CLEARED" : "SEERR API KEY SAVED", 3s);
-            refreshSeerrPendingAsync();
-            refreshSeerrStorageAsync(true);
-        } else if (mode >= kTextInputLoginServer && mode <= kTextInputLoginPassword) {
-            const int field = mode - kTextInputLoginServer;
-            accountState_.finishTextField(field, text);
         }
-        renderBurstUntil_ = std::chrono::steady_clock::now() + 500ms;
+        if (effects.renderBurst.count() > 0) renderBurstUntil_ = std::chrono::steady_clock::now() + effects.renderBurst;
     }
 
     void onAppCommand(int32_t command) {
@@ -924,7 +875,7 @@ private:
         const auto inputNow = std::chrono::steady_clock::now();
         renderBurstUntil_ = inputNow + 150ms;
         std::scoped_lock lock(stateMutex_);
-        if (systemTextInputMode_ >= 0) return 0;
+        if (systemTextInputController_.active()) return 0;
 
         if (action == AKEY_EVENT_ACTION_UP) {
             // NativeActivity may apply its own BACK handling if the release is left
@@ -1102,17 +1053,12 @@ private:
         if (jHint) env->DeleteLocalRef(jHint);
         if (jInitial) env->DeleteLocalRef(jInitial);
         if (activityClass) env->DeleteLocalRef(activityClass);
-        if (shown == JNI_TRUE) {
-            systemTextInputMode_ = mode;
-            if (mode == kTextInputSeerrServer || mode == kTextInputSeerrApiKey) {
-                systemTextInputOriginal_ = initial;
-            }
-        }
+        if (shown == JNI_TRUE) systemTextInputController_.begin(mode, initial);
         return shown == JNI_TRUE;
     }
 
     void hideSystemTextInput() {
-        systemTextInputMode_ = -1;
+        systemTextInputController_.hide();
         if (!app_ || !app_->activity || !app_->activity->vm || !app_->activity->clazz) return;
         ScopedJniEnv scoped(app_->activity->vm);
         JNIEnv* env = scoped.get();
@@ -3433,17 +3379,8 @@ private:
     }
 
     void applyAsyncCompletion(SystemTextInputEvent& event) {
-        switch (event.phase) {
-        case SystemTextInputPhase::Changed:
-            applySystemTextInputChanged(event.mode, event.value);
-            return;
-        case SystemTextInputPhase::Done:
-            applySystemTextInputDone(event.mode, event.value);
-            return;
-        case SystemTextInputPhase::Cancelled:
-            applySystemTextInputCancelled(event.mode, event.value);
-            return;
-        }
+        applySystemTextInputEffects(
+            systemTextInputController_.apply(event, searchState_, settingsScreen_, settings_, accountState_));
     }
 
     void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
@@ -4962,8 +4899,8 @@ private:
     void renderSearch() {
         renderSearchScreen(
             renderer_, searchState_, SeerrClient::configured(settings_.seerrServer, seerrAuth()),
-            systemTextInputMode_ == kTextInputSearch, seerrDomain_.searchLoading(), seerrDomain_.searchError(),
-            seerrDomain_.storageLoading(), seerrDomain_.storageTargets(),
+            systemTextInputController_.mode() == kTextInputSearch, seerrDomain_.searchLoading(),
+            seerrDomain_.searchError(), seerrDomain_.storageLoading(), seerrDomain_.storageTargets(),
             SearchRenderStyle<Color>{
                 .headlineScale = material_tv::type::headline,
                 .cornerSmall = material_tv::cornerSmall,
@@ -5351,8 +5288,8 @@ private:
                 .maxAudioOutputChannels = api_.deviceCodecSupport().maxAudioOutputChannels,
                 .externalPlayer = externalPlayer,
                 .username = session_.username,
-                .systemSettingsInputActive = systemTextInputMode_ == kTextInputSettingsSearch,
-                .seerrApiKeyTyping = systemTextInputMode_ == kTextInputSeerrApiKey,
+                .systemSettingsInputActive = systemTextInputController_.mode() == kTextInputSettingsSearch,
+                .seerrApiKeyTyping = systemTextInputController_.mode() == kTextInputSeerrApiKey,
             },
             SettingsRenderStyle<Color>{
                 .headlineScale = material_tv::type::headline,
@@ -5848,8 +5785,7 @@ private:
     std::chrono::steady_clock::time_point nextUpReplacementFadeStarted_{};
     BrowseScreenState browseState_;
 
-    int systemTextInputMode_ = -1;
-    std::string systemTextInputOriginal_;
+    SystemTextInputController systemTextInputController_;
 
     SearchScreenState searchState_;
 
