@@ -4007,16 +4007,12 @@ private:
         case PlaybackContinuationAction::PlayQueueIndex:
             playQueuedIndexAsync(continuationPlan.queueIndex, continuationPlan.repeatCurrentQueueItem, true);
             return;
-        case PlaybackContinuationAction::AutoplayNext: {
-            const auto& nextItem = playbackCoordinator_.continuation().nextItem();
-            if (nextItem) queueAutoplayNext(*nextItem);
+        case PlaybackContinuationAction::AutoplayNext:
+            if (continuationPlan.nextItem) queueAutoplayNext(*continuationPlan.nextItem);
             return;
-        }
-        case PlaybackContinuationAction::ShowStillWatching: {
-            const auto& nextItem = playbackCoordinator_.continuation().nextItem();
-            if (nextItem) showStillWatching(*nextItem);
+        case PlaybackContinuationAction::ShowStillWatching:
+            if (continuationPlan.nextItem) showStillWatching(*continuationPlan.nextItem);
             return;
-        }
         case PlaybackContinuationAction::Stop:
             stopPlayback(true);
             if (continuationPlan.resetAutoplayChain) playbackCoordinator_.resetAutoplayChain();

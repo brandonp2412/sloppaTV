@@ -42,6 +42,7 @@ struct PlaybackTickPlan {
 struct PlaybackContinuationPlan {
     PlaybackContinuationAction action = PlaybackContinuationAction::None;
     int queueIndex = -1;
+    std::optional<JellyfinItem> nextItem;
     bool repeatCurrentQueueItem = false;
     bool resetAutoplayChain = false;
 };
@@ -410,6 +411,7 @@ inline PlaybackContinuationPlan planPlaybackContinuation(bool playbackEnded, int
             shouldAutoplayNextEpisode(autoplayNext, continuationState.autoplayChainCount(), stillWatchingAfter)
                 ? PlaybackContinuationAction::AutoplayNext
                 : PlaybackContinuationAction::ShowStillWatching;
+        plan.nextItem = continuationState.nextItem();
         return plan;
     }
 

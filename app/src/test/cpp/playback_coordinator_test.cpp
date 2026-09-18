@@ -923,16 +923,21 @@ int main() {
     continuation.setNextItem(episode2);
     continuationPlan = planPlaybackContinuation(false, 119500, 120000, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::AutoplayNext);
+    assert(continuationPlan.nextItem);
+    assert(continuationPlan.nextItem->id == episode2.id);
 
     continuation.incrementAutoplayChain();
     continuation.incrementAutoplayChain();
     continuation.incrementAutoplayChain();
     continuationPlan = planPlaybackContinuation(false, 119500, 120000, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::ShowStillWatching);
+    assert(continuationPlan.nextItem);
+    assert(continuationPlan.nextItem->id == episode2.id);
 
     continuation.clearNextItem();
     continuationPlan = planPlaybackContinuation(true, 0, 0, queue, continuation, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::Stop);
+    assert(!continuationPlan.nextItem);
     assert(continuationPlan.resetAutoplayChain);
 
     queue.reset();
@@ -943,6 +948,8 @@ int main() {
     coordinator.continuation().setNextItem(episode2);
     continuationPlan = coordinator.continuationPlan(true, 120000, 120000, queue, true, 3);
     assert(continuationPlan.action == PlaybackContinuationAction::AutoplayNext);
+    assert(continuationPlan.nextItem);
+    assert(continuationPlan.nextItem->id == episode2.id);
 
     return 0;
 }
