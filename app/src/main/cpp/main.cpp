@@ -972,16 +972,11 @@ private:
                         error_ = surfaceError.empty() ? "VIDEO SURFACE COULD NOT BE RESTORED" : surfaceError;
                         break;
                     }
-                    player_.startAsync(
-                        playbackCoordinator_.session().activeTarget().url, videoSurface_.surface(),
-                        playerScreenState_.positionMs(), settings_.playbackBufferPreset,
-                        playerAudioOrdinal(playbackCoordinator_.session().activeTarget(), playbackCoordinator_.session().activeItem()),
-                        playbackCoordinator_.session().activeTarget().playMethod == PlaybackMethod::DirectPlay
-                            ? playbackCoordinator_.session().activeTarget().subtitleStreamIndex
-                            : kSubtitleOffIndex,
-                        playerSubtitleOrdinal(playbackCoordinator_.session().activeTarget(), playbackCoordinator_.session().activeItem()),
-                        directExternalSubtitleUrl(playbackCoordinator_.session().activeTarget(),
-                                                  playbackCoordinator_.session().activeItem()));
+                    const PlaybackPlayerStartContext start =
+                        playbackCoordinator_.playerStartContext(PlaybackPlayerStartMode::WindowRestore);
+                    player_.startAsync(start.url, videoSurface_.surface(), playerScreenState_.positionMs(),
+                                       settings_.playbackBufferPreset, start.audioOrdinal, start.subtitleStreamIndex,
+                                       start.subtitleOrdinal, start.externalSubtitleUrl);
                     playbackCoordinator_.setPauseAfterRestart(restorePlan.pauseAfterRestart);
                     mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
                     __android_log_print(
@@ -3668,16 +3663,14 @@ private:
         error_.clear();
     }
 
-    void startResolvedPlaybackTarget(const PlaybackTarget& target) {
+    void startResolvedPlaybackTarget() {
         const auto now = std::chrono::steady_clock::now();
-        const int startPositionMs = initialPlayerSeekMs(target.startTicks);
+        const PlaybackPlayerStartContext start = playbackCoordinator_.playerStartContext();
         playbackCoordinator_.beginPreparing(now);
-        player_.startAsync(target.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
-                           playerAudioOrdinal(target, playbackCoordinator_.session().activeItem()),
-                           playerSubtitleStreamIndex(target, playbackCoordinator_.session().activeItem()),
-                           playerSubtitleOrdinal(target, playbackCoordinator_.session().activeItem()),
-                           directExternalSubtitleUrl(target, playbackCoordinator_.session().activeItem()));
-        if (startPositionMs > 0) playerScreenState_.beginSeek(startPositionMs, now);
+        player_.startAsync(start.url, videoSurface_.surface(), start.startPositionMs, settings_.playbackBufferPreset,
+                           start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
+                           start.externalSubtitleUrl);
+        if (start.startPositionMs > 0) playerScreenState_.beginSeek(start.startPositionMs, now);
     }
 
     bool retryPlaybackWithoutSubtitle() {
@@ -3771,7 +3764,7 @@ private:
             __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; using offered Jellyfin %s fallback",
                                 directStreamFallback ? "direct-stream" : "transcode");
             playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-            startResolvedPlaybackTarget(playbackCoordinator_.session().activeTarget());
+            startResolvedPlaybackTarget();
             return true;
         }
 
@@ -3962,7 +3955,7 @@ private:
         mediaSession_.updateMetadata(item.name, episodeLabel(item), playbackPositionMsFromTicks(item.runtimeTicks));
         mediaSession_.updateState(MediaSessionState::Buffering, playbackPositionMsFromTicks(target.startTicks));
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-        startResolvedPlaybackTarget(target);
+        startResolvedPlaybackTarget();
         return true;
     }
 

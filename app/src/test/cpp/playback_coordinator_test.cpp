@@ -221,6 +221,53 @@ int main() {
     assert(preferenceCoordinator.trackLabel(PlaybackTrackLabelKind::Audio) == "AUDIO 2/2");
     preferenceCoordinator.selectAudioStream(2);
 
+    PlaybackCoordinator playerStartCoordinator;
+    JellyfinItem playerStartItem;
+    playerStartItem.id = "player-start";
+    playerStartItem.audios = {
+        {.index = 2, .channels = 2, .codec = "aac", .language = "eng", .title = "English", .isDefault = true},
+        {.index = 5, .channels = 6, .codec = "ac3", .language = "eng", .title = "Surround", .isDefault = false},
+    };
+    playerStartItem.subtitles = {
+        {.index = 11,
+         .codec = "pgs",
+         .language = "eng",
+         .title = "PGS",
+         .forced = false,
+         .isDefault = true,
+         .isExternal = false},
+        {.index = 12,
+         .codec = "srt",
+         .language = "eng",
+         .title = "Text",
+         .forced = false,
+         .isDefault = false,
+         .isExternal = false},
+    };
+    PlaybackTarget playerStartTarget;
+    playerStartTarget.url = "https://media.example/player-start";
+    playerStartTarget.startTicks = 12'340'000;
+    playerStartTarget.playMethod = PlaybackMethod::DirectPlay;
+    playerStartTarget.audioStreamIndex = 5;
+    playerStartTarget.subtitleStreamIndex = 11;
+    playerStartCoordinator.activate(playerStartItem, playerStartTarget, now);
+
+    auto playerStart = playerStartCoordinator.playerStartContext();
+    assert(playerStart.url == playerStartTarget.url);
+    assert(playerStart.startPositionMs == 1234);
+    assert(playerStart.audioOrdinal == 1);
+    assert(playerStart.subtitleStreamIndex == 11);
+    assert(playerStart.subtitleOrdinal == 0);
+    assert(playerStart.externalSubtitleUrl.empty());
+
+    playerStartCoordinator.selectSubtitleStream(12);
+    playerStart = playerStartCoordinator.playerStartContext();
+    assert(playerStart.subtitleStreamIndex == kSubtitleOffIndex);
+    assert(playerStart.subtitleOrdinal == -1);
+    playerStart = playerStartCoordinator.playerStartContext(PlaybackPlayerStartMode::WindowRestore);
+    assert(playerStart.subtitleStreamIndex == 12);
+    assert(playerStart.subtitleOrdinal == -1);
+
     PlaybackCoordinator loadedSubtitleLabelCoordinator;
     loadedSubtitleLabelCoordinator.activate(preferenceItem, coordinatedTarget, now);
     loadedSubtitleLabelCoordinator.tracks().applySubtitle(

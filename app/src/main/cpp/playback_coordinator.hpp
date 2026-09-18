@@ -77,6 +77,20 @@ struct PlaybackStartContext {
     PlaybackTarget target;
 };
 
+enum class PlaybackPlayerStartMode {
+    Resolved,
+    WindowRestore,
+};
+
+struct PlaybackPlayerStartContext {
+    std::string url;
+    int startPositionMs = 0;
+    int audioOrdinal = -1;
+    int subtitleStreamIndex = kSubtitleOffIndex;
+    int subtitleOrdinal = -1;
+    std::string externalSubtitleUrl;
+};
+
 struct PlaybackSubtitleCycleContext {
     PlaybackSubtitleCyclePlan plan;
     int audioStreamIndex = -1;
@@ -651,6 +665,23 @@ public:
             .ticks = playbackTicksFromPositionMs(positionMs),
             .item = sessionState_.activeItem(),
             .target = sessionState_.activeTarget(),
+        };
+    }
+
+    [[nodiscard]] PlaybackPlayerStartContext
+    playerStartContext(PlaybackPlayerStartMode mode = PlaybackPlayerStartMode::Resolved) const {
+        const auto& item = sessionState_.activeItem();
+        const auto& target = sessionState_.activeTarget();
+        return PlaybackPlayerStartContext{
+            .url = target.url,
+            .startPositionMs = initialPlayerSeekMs(target.startTicks),
+            .audioOrdinal = playerAudioOrdinal(target, item),
+            .subtitleStreamIndex =
+                mode == PlaybackPlayerStartMode::WindowRestore && target.playMethod == PlaybackMethod::DirectPlay
+                    ? target.subtitleStreamIndex
+                    : playerSubtitleStreamIndex(target, item),
+            .subtitleOrdinal = playerSubtitleOrdinal(target, item),
+            .externalSubtitleUrl = directExternalSubtitleUrl(target, item),
         };
     }
 
