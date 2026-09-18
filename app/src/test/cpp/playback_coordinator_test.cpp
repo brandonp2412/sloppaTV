@@ -261,22 +261,30 @@ int main() {
     assert(!subtitleLoadCoordinator.tracks().subtitleBusy());
     assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == kSubtitleOffIndex);
 
+    PlaybackCoordinator emptyRestartCoordinator;
+    assert(!emptyRestartCoordinator.beginStreamRestart(1000));
+    assert(!emptyRestartCoordinator.tracks().subtitleBusy());
+    assert(!emptyRestartCoordinator.transitionLoading());
+
     PlaybackCoordinator restartCoordinator;
     restartCoordinator.activate(coordinatedItem, coordinatedTarget, now);
     assert(restartCoordinator.telemetry().markPlaybackStartReported());
-    auto restartPlan = restartCoordinator.beginStreamRestart();
+    auto restartPlan = restartCoordinator.beginStreamRestart(12345);
     assert(restartPlan);
+    assert(restartPlan->item.id == coordinatedItem.id);
+    assert(restartPlan->item.positionTicks == 123'450'000);
     assert(restartPlan->reportPrevious);
     assert(restartPlan->previousTarget.url == coordinatedTarget.url);
     assert(!restartCoordinator.telemetry().playbackStartReported());
     assert(restartCoordinator.tracks().subtitleBusy());
     assert(restartCoordinator.transitionLoading());
-    assert(!restartCoordinator.beginStreamRestart());
+    assert(!restartCoordinator.beginStreamRestart(20000));
     restartCoordinator.finishStreamRestartRequest();
     assert(!restartCoordinator.tracks().subtitleBusy());
     assert(!restartCoordinator.transitionLoading());
-    restartPlan = restartCoordinator.beginStreamRestart();
+    restartPlan = restartCoordinator.beginStreamRestart(-100);
     assert(restartPlan);
+    assert(restartPlan->item.positionTicks == 0);
     assert(!restartPlan->reportPrevious);
     restartCoordinator.finishStreamRestartRequest();
 

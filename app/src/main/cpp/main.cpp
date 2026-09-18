@@ -2314,17 +2314,16 @@ private:
     }
 
     void restartPlaybackAt(int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
-        if (!session_.valid() || playbackSessionState_.activeItem().id.empty()) return;
+        if (!session_.valid()) return;
         const int targetPositionMs = std::max(0, positionMs);
         const bool wasPaused = player_.status() == PlayerStatus::Paused;
         const JellyfinSession session = session_;
-        JellyfinItem item = playbackSessionState_.activeItem();
-        item.positionTicks = playbackTicksFromPositionMs(targetPositionMs);
         const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        auto restartPlan = playbackCoordinator_.beginStreamRestart();
+        auto restartPlan = playbackCoordinator_.beginStreamRestart(targetPositionMs);
         if (!restartPlan) return;
+        JellyfinItem item = std::move(restartPlan->item);
         const PlaybackTarget previousTarget = std::move(restartPlan->previousTarget);
         const bool shouldReportPrevious = restartPlan->reportPrevious;
         const uint64_t generation = requestEpochs_.playback.begin();

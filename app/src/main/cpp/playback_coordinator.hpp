@@ -95,6 +95,7 @@ struct PlaybackSubtitleFallbackPlan {
 };
 
 struct PlaybackStreamRestartPlan {
+    JellyfinItem item;
     PlaybackTarget previousTarget;
     bool reportPrevious = false;
 };
@@ -677,9 +678,11 @@ public:
         trackState_.applySubtitle(streamIndex, std::move(language), std::move(cues));
     }
 
-    [[nodiscard]] std::optional<PlaybackStreamRestartPlan> beginStreamRestart() {
-        if (!trackState_.beginSubtitleWork()) return std::nullopt;
+    [[nodiscard]] std::optional<PlaybackStreamRestartPlan> beginStreamRestart(int positionMs) {
+        if (sessionState_.activeItem().id.empty() || !trackState_.beginSubtitleWork()) return std::nullopt;
         PlaybackStreamRestartPlan plan;
+        plan.item = sessionState_.activeItem();
+        plan.item.positionTicks = playbackTicksFromPositionMs(std::max(0, positionMs));
         plan.previousTarget = sessionState_.activeTarget();
         plan.reportPrevious = telemetryState_.playbackStartReported() && !plan.previousTarget.url.empty();
         transitionState_.setLoading(true);
