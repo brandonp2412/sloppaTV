@@ -77,6 +77,12 @@ struct PlaybackStartContext {
     PlaybackTarget target;
 };
 
+struct PlaybackSubtitleCycleContext {
+    PlaybackSubtitleCyclePlan plan;
+    int audioStreamIndex = -1;
+    bool busy = false;
+};
+
 struct PlaybackTelemetryReadPlan {
     bool read = false;
     bool probeDuration = false;
@@ -716,10 +722,15 @@ public:
                                            sessionState_.activeTarget().playMethod, policy);
     }
 
-    [[nodiscard]] PlaybackSubtitleCyclePlan
-    subtitleTrackCyclePlan(const std::vector<std::string>& allowedLanguages) const {
-        return planPlaybackSubtitleTrackCycle(sessionState_.activeItem(), trackState_.selectedSubtitleServerIndex(),
-                                              sessionState_.activeTarget().playMethod, allowedLanguages);
+    [[nodiscard]] PlaybackSubtitleCycleContext
+    subtitleTrackCycleContext(const std::vector<std::string>& allowedLanguages) const {
+        return {
+            .plan = planPlaybackSubtitleTrackCycle(sessionState_.activeItem(),
+                                                   trackState_.selectedSubtitleServerIndex(),
+                                                   sessionState_.activeTarget().playMethod, allowedLanguages),
+            .audioStreamIndex = trackState_.selectedAudioServerIndex(),
+            .busy = trackState_.subtitleBusy(),
+        };
     }
 
     [[nodiscard]] std::vector<JellyfinSubtitleStream>

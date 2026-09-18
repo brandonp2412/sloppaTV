@@ -245,9 +245,13 @@ int main() {
     assert(audioCyclePlan.audioStreamIndex == 3);
     assert(audioCyclePlan.subtitleStreamIndex == 4);
     assert(audioCyclePlan.tryEmbeddedSwitch);
-    auto subtitleCyclePlan = preferenceCoordinator.subtitleTrackCyclePlan({});
-    assert(subtitleCyclePlan.action == PlaybackSubtitleCycleAction::LoadNative);
-    assert(subtitleCyclePlan.subtitleStreamIndex == 5);
+    auto subtitleCycle = preferenceCoordinator.subtitleTrackCycleContext({});
+    assert(!subtitleCycle.busy);
+    assert(subtitleCycle.audioStreamIndex == 2);
+    assert(subtitleCycle.plan.action == PlaybackSubtitleCycleAction::LoadNative);
+    assert(subtitleCycle.plan.subtitleStreamIndex == 5);
+    assert(subtitleCycle.plan.directPlayStream);
+    assert(subtitleCycle.plan.directPlayStream->index == 5);
     preferenceCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectStream;
     audioCyclePlan = preferenceCoordinator.audioTrackCyclePlan(cyclePolicy);
     assert(!audioCyclePlan.tryEmbeddedSwitch);
@@ -271,6 +275,7 @@ int main() {
     assert(!subtitleLoadCoordinator.tracks().subtitleEnabled());
     assert(subtitleLoadCoordinator.beginSubtitleLoad());
     assert(subtitleLoadCoordinator.tracks().subtitleBusy());
+    assert(subtitleLoadCoordinator.subtitleTrackCycleContext({}).busy);
     assert(subtitleLoadCoordinator.subtitleLoadMatches(preferenceItem.id, 4));
     assert(!subtitleLoadCoordinator.subtitleLoadMatches("other-item", 4));
     assert(!subtitleLoadCoordinator.subtitleLoadMatches(preferenceItem.id, 5));

@@ -169,6 +169,8 @@ int main() {
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::LoadNative);
     assert(subtitleCycle.subtitleStreamIndex == 6);
     assert(subtitleCycle.strategy == SubtitleStrategy::ClientText);
+    assert(subtitleCycle.directPlayStream);
+    assert(subtitleCycle.directPlayStream->index == 6);
 
     subtitleCycle =
         planPlaybackSubtitleTrackCycle(item, 6, PlaybackMethod::DirectPlay, carriedPolicy.allowedSubtitleLanguages);
@@ -184,6 +186,7 @@ int main() {
         planPlaybackSubtitleTrackCycle(item, 7, PlaybackMethod::DirectStream, carriedPolicy.allowedSubtitleLanguages);
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     assert(subtitleCycle.subtitleStreamIndex == kSubtitleOffIndex);
+    assert(!subtitleCycle.directPlayStream);
 
     subtitleCycle = planPlaybackSubtitleTrackCycle(item, kSubtitleOffIndex, PlaybackMethod::DirectPlay, {"deu"});
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::NoAllowedTracks);
@@ -256,6 +259,8 @@ int main() {
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     assert(subtitleCycle.subtitleStreamIndex == 11);
     assert(subtitleCycle.strategy == SubtitleStrategy::ClientEmbedded);
+    assert(subtitleCycle.directPlayStream);
+    assert(subtitleCycle.directPlayStream->index == 11);
 
     JellyfinItem fallbackAudio;
     fallbackAudio.audios = {{

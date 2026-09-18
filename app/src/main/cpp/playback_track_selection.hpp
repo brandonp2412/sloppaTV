@@ -42,6 +42,7 @@ struct PlaybackSubtitleCyclePlan {
     PlaybackSubtitleCycleAction action = PlaybackSubtitleCycleAction::NoSubtitles;
     int subtitleStreamIndex = kSubtitleOffIndex;
     SubtitleStrategy strategy = SubtitleStrategy::ServerTranscode;
+    std::optional<JellyfinSubtitleStream> directPlayStream;
 };
 
 inline int playbackAudioIndexForItem(const JellyfinItem& item, const std::optional<std::string>& languagePreference) {
@@ -291,9 +292,12 @@ inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackCycle(const JellyfinIt
             });
         if (selected != item.subtitles.end()) {
             plan.strategy = subtitleStrategy(selected->codec);
-            if (playbackMethod == PlaybackMethod::DirectPlay && useNativeSubtitleRenderer(plan.strategy, true)) {
-                plan.action = PlaybackSubtitleCycleAction::LoadNative;
-                return plan;
+            if (playbackMethod == PlaybackMethod::DirectPlay) {
+                plan.directPlayStream = *selected;
+                if (useNativeSubtitleRenderer(plan.strategy, true)) {
+                    plan.action = PlaybackSubtitleCycleAction::LoadNative;
+                    return plan;
+                }
             }
         }
     }

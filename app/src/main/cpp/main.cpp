@@ -2203,12 +2203,13 @@ private:
     }
 
     void cycleSubtitleTrack() {
-        if (playbackCoordinator_.tracks().subtitleBusy()) {
-            if (playbackCoordinator_.session().activeItem().subtitles.empty()) error_ = "NO SUBTITLE TRACKS";
+        const PlaybackSubtitleCycleContext cycle =
+            playbackCoordinator_.subtitleTrackCycleContext(settings_.subtitleLanguages);
+        const PlaybackSubtitleCyclePlan& plan = cycle.plan;
+        if (cycle.busy) {
+            if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) error_ = "NO SUBTITLE TRACKS";
             return;
         }
-
-        const PlaybackSubtitleCyclePlan plan = playbackCoordinator_.subtitleTrackCyclePlan(settings_.subtitleLanguages);
         if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) {
             error_ = "NO SUBTITLE TRACKS";
             return;
@@ -2226,36 +2227,29 @@ private:
             return;
         }
 
-        if (plan.subtitleStreamIndex >= 0 &&
-            playbackCoordinator_.session().activeTarget().playMethod == PlaybackMethod::DirectPlay) {
-            const auto selected = std::find_if(
-                playbackCoordinator_.session().activeItem().subtitles.begin(),
-                playbackCoordinator_.session().activeItem().subtitles.end(),
-                [&](const JellyfinSubtitleStream& subtitle) { return subtitle.index == plan.subtitleStreamIndex; });
-            if (selected != playbackCoordinator_.session().activeItem().subtitles.end()) {
+        if (plan.directPlayStream) {
+            const JellyfinSubtitleStream& selected = *plan.directPlayStream;
+            __android_log_print(ANDROID_LOG_INFO, kTag,
+                                "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
+                                plan.subtitleStreamIndex, selected.codec.c_str(), selected.isExternal ? 1 : 0,
+                                static_cast<int>(plan.strategy));
+            if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
+                player_.disableSubtitles();
+                playbackCoordinator_.prepareNativeSubtitleLoad(plan.subtitleStreamIndex);
+                loadSubtitleAsync(selected);
+                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
+                reportProgressAsync(false);
+                return;
+            }
+            if (plan.strategy == SubtitleStrategy::ClientEmbedded) {
                 __android_log_print(ANDROID_LOG_INFO, kTag,
-                                    "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
-                                    plan.subtitleStreamIndex, selected->codec.c_str(), selected->isExternal ? 1 : 0,
-                                    static_cast<int>(plan.strategy));
-                if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
-                    player_.disableSubtitles();
-                    playbackCoordinator_.prepareNativeSubtitleLoad(plan.subtitleStreamIndex);
-                    loadSubtitleAsync(*selected);
-                    playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                    reportProgressAsync(false);
-                    return;
-                }
-                if (plan.strategy == SubtitleStrategy::ClientEmbedded) {
-                    __android_log_print(ANDROID_LOG_INFO, kTag,
-                                        "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
-                                        plan.subtitleStreamIndex);
-                }
+                                    "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
+                                    plan.subtitleStreamIndex);
             }
         }
 
         refreshPlaybackTelemetry(true);
-        restartPlaybackAt(playerScreenState_.positionMs(), playbackCoordinator_.tracks().selectedAudioServerIndex(),
-                          plan.subtitleStreamIndex);
+        restartPlaybackAt(playerScreenState_.positionMs(), cycle.audioStreamIndex, plan.subtitleStreamIndex);
     }
 
     void restartPlaybackAt(int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
