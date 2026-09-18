@@ -3792,17 +3792,11 @@ private:
             static_cast<VideoZoomMode>(settings_.zoomMode), std::chrono::steady_clock::now());
         playerScreenState_.beginPlayback(playbackPlan.startPositionMs, playbackPlan.durationMs);
         if (playbackPlan.resetContinuation) playbackCoordinator_.syncQueueContinuation(queueState_);
-        if (playbackCoordinator_.tracks().selectedSubtitleServerIndex() >= 0) {
-            const auto selectedSubtitle =
-                std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-                    return subtitle.index == playbackCoordinator_.tracks().selectedSubtitleServerIndex();
-                });
-            if (selectedSubtitle != item.subtitles.end()) {
-                const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
-                if (useNativeSubtitleRenderer(strategy, true)) {
-                    loadSubtitleAsync(*selectedSubtitle,
-                                      strategy == SubtitleStrategy::ClientText ? target.subtitleUrl : std::string{});
-                }
+        if (const auto* selectedSubtitle = playbackCoordinator_.selectedSubtitleStream()) {
+            const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
+            if (useNativeSubtitleRenderer(strategy, true)) {
+                loadSubtitleAsync(*selectedSubtitle,
+                                  strategy == SubtitleStrategy::ClientText ? target.subtitleUrl : std::string{});
             }
         }
         if (!streamRestart) {

@@ -231,11 +231,17 @@ int main() {
     preferenceCoordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
     preferenceCoordinator.selectAudioStream(2);
     preferenceCoordinator.selectSubtitleStream(4);
+    assert(preferenceCoordinator.selectedSubtitleStream() != nullptr);
+    assert(preferenceCoordinator.selectedSubtitleStream()->index == 4);
+    assert(preferenceCoordinator.selectedSubtitleStream()->title == "English");
     assert(preferenceCoordinator.trackLabel(PlaybackTrackLabelKind::Audio) == "EN 1/2");
     assert(preferenceCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "ENGLISH");
     preferenceCoordinator.selectAudioStream(3);
     assert(preferenceCoordinator.trackLabel(PlaybackTrackLabelKind::Audio) == "AUDIO 2/2");
     preferenceCoordinator.selectAudioStream(2);
+    preferenceCoordinator.selectSubtitleStream(kSubtitleOffIndex);
+    assert(preferenceCoordinator.selectedSubtitleStream() == nullptr);
+    preferenceCoordinator.selectSubtitleStream(4);
 
     PlaybackCoordinator playerStartCoordinator;
     JellyfinItem playerStartItem;

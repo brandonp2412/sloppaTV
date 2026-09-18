@@ -784,6 +784,17 @@ public:
         return trackState_.activeSubtitleCue(positionMs);
     }
 
+    [[nodiscard]] const JellyfinSubtitleStream* selectedSubtitleStream() const {
+        const int selectedIndex = trackState_.selectedSubtitleServerIndex();
+        if (selectedIndex < 0) return nullptr;
+        const auto& subtitles = sessionState_.activeItem().subtitles;
+        const auto selected = std::find_if(subtitles.begin(), subtitles.end(),
+                                           [selectedIndex](const JellyfinSubtitleStream& subtitle) {
+                                               return subtitle.index == selectedIndex;
+                                           });
+        return selected == subtitles.end() ? nullptr : &*selected;
+    }
+
     [[nodiscard]] PlaybackLanguagePreferences languagePreferences() const {
         return {
             .audio = trackState_.audioLanguagePreference(),
