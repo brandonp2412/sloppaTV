@@ -55,6 +55,7 @@
 #include "playback_transition.hpp"
 #include "player_controls_renderer.hpp"
 #include "player_screen.hpp"
+#include "player_seek_feedback_renderer.hpp"
 #include "player_tracks.hpp"
 #include "profiles_renderer.hpp"
 #include "queue_overlay_renderer.hpp"
@@ -5579,29 +5580,13 @@ private:
                                              kText, labelWidth);
         }
         if (playerScreenState_.seekFeedbackVisible(now)) {
-            const int seconds = playerScreenState_.seekFeedbackSeconds();
-            const bool forward = seconds > 0;
-            const float fade = playerScreenState_.seekFeedbackAlpha(now);
-            const Color wash{1.0f, 1.0f, 1.0f, 0.09f * fade};
-            const Color glyph{1.0f, 1.0f, 1.0f, 0.72f * fade};
-            constexpr float ovalWidth = 420.0f;
-            constexpr float ovalHeight = 300.0f;
-            const float ovalX = forward ? 1675.0f : -175.0f;
-            constexpr float ovalY = 350.0f;
-            renderer_.roundedRect(ovalX, ovalY, ovalWidth, ovalHeight, ovalHeight * 0.5f, wash);
-            const float centerX = forward ? 1740.0f : 180.0f;
-            constexpr float centerY = 500.0f;
-            constexpr float arrowGap = 20.0f;
-            for (int arrow = 0; arrow < 2; ++arrow) {
-                const float offset = (static_cast<float>(arrow) - 0.5f) * arrowGap;
-                if (forward) {
-                    const float x = centerX + 54.0f + offset;
-                    renderer_.triangle(x - 8.0f, centerY - 13.0f, x - 8.0f, centerY + 13.0f, x + 9.0f, centerY, glyph);
-                } else {
-                    const float x = centerX - 54.0f + offset;
-                    renderer_.triangle(x + 8.0f, centerY - 13.0f, x + 8.0f, centerY + 13.0f, x - 9.0f, centerY, glyph);
-                }
-            }
+            renderPlayerSeekFeedback(
+                renderer_,
+                PlayerSeekFeedbackRenderState{
+                    .seconds = playerScreenState_.seekFeedbackSeconds(),
+                    .fade = playerScreenState_.seekFeedbackAlpha(now),
+                },
+                [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
         }
         if (!showOverlay) return;
 
