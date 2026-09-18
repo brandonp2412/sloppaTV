@@ -4379,10 +4379,10 @@ private:
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
         auto& result = completion.result;
-        const bool currentRequest =
-            settings_.seerrServer == completion.server && session_.userId == completion.jellyfinUserId;
-        const auto action = seerrDomain_.completeConnect(
-            result.ok, result.failedStage == SeerrQuickConnectStage::AuthenticateSeerr, currentRequest);
+        auto plan = seerrConnection_.complete(
+            result.ok, result.failedStage == SeerrQuickConnectStage::AuthenticateSeerr, completion.server,
+            completion.jellyfinUserId, settings_.seerrServer, session_.userId);
+        const auto action = plan.action;
         if (action == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed) {
             if (completion.announce) {
                 notice_.clear();
@@ -4417,9 +4417,8 @@ private:
         __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
         refreshSeerrPendingAsync();
         refreshSeerrStorageAsync(true);
-        auto deferred = seerrDomain_.takeDeferredConnectionWork();
-        if (deferred.request) requestSeerrMediaAsync(*deferred.request);
-        if (deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
+        if (plan.deferred.request) requestSeerrMediaAsync(*plan.deferred.request);
+        if (plan.deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
             if (seerrDomain_.scheduleSearch(searchState_.query(), std::chrono::steady_clock::now(), false)) {
                 searchState_.refreshSeerrResults();
             }

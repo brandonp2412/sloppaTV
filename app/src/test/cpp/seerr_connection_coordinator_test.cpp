@@ -72,5 +72,41 @@ int main() {
     coordinator.submit(std::move(duplicate), false);
     assert(async.submissions.size() == 1);
 
+    auto completion = coordinator.complete(false, false, "https://seerr.example.nz", "user-1",
+                                           "https://seerr.example.nz", "user-1");
+    assert(completion.action == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed);
+    assert(!completion.deferred.request);
+    assert(!completion.deferred.retrySearch);
+    assert(!domain.connection().connecting());
+
+    plan = coordinator.prepare("https://seerr.example.nz", session());
+    assert(plan.ready());
+    completion = coordinator.complete(true, false, "https://seerr.example.nz", "user-1",
+                                      "https://other.example.nz", "user-1");
+    assert(completion.action == SeerrDomainState::ConnectCompletionAction::Stale);
+    assert(!domain.connection().connecting());
+
+    plan = coordinator.prepare("https://seerr.example.nz", session());
+    assert(plan.ready());
+    completion = coordinator.complete(false, true, "https://seerr.example.nz", "user-1",
+                                      "https://seerr.example.nz", "user-1");
+    assert(completion.action == SeerrDomainState::ConnectCompletionAction::AuthenticationFailed);
+    assert(!domain.connection().connecting());
+
+    plan = coordinator.prepare("https://seerr.example.nz", session());
+    assert(plan.ready());
+    SeerrMediaItem deferredRequest;
+    deferredRequest.id = "seerr:movie:42";
+    deferredRequest.mediaType = "movie";
+    deferredRequest.tmdbId = 42;
+    domain.connection().deferRequest(deferredRequest);
+    domain.connection().deferSearchRetry();
+    completion = coordinator.complete(true, false, "https://seerr.example.nz", "user-1",
+                                      "https://seerr.example.nz", "user-1");
+    assert(completion.action == SeerrDomainState::ConnectCompletionAction::Connected);
+    assert(completion.deferred.request && completion.deferred.request->id == "seerr:movie:42");
+    assert(completion.deferred.retrySearch);
+    assert(!domain.connection().connecting());
+
     return 0;
 }
