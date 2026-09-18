@@ -54,6 +54,7 @@
 #include "playback_track_selection.hpp"
 #include "playback_transition.hpp"
 #include "player_controls_renderer.hpp"
+#include "player_next_up_renderer.hpp"
 #include "player_screen.hpp"
 #include "player_seek_feedback_renderer.hpp"
 #include "player_skip_button_renderer.hpp"
@@ -5536,30 +5537,31 @@ private:
         if (!showOverlay) return;
 
         if (showNextUp && playbackCoordinator_.continuation().nextItem()) {
-            const auto& nextItem = *playbackCoordinator_.continuation().nextItem();
-            constexpr float panelX = 1195.0f;
-            constexpr float panelY = 185.0f;
-            constexpr float panelWidth = 625.0f;
-            constexpr float panelHeight = 205.0f;
-            constexpr float contentY = 214.0f;
-            constexpr float artworkX = 1210.0f;
-            constexpr float artworkWidth = 240.0f;
-            constexpr float artworkHeight = 146.0f;
-            constexpr float textX = 1478.0f;
-            constexpr float textWidth = 312.0f;
-            drawModalSurface(panelX, panelY, panelWidth, panelHeight, material_tv::cornerMedium);
-            if (!drawHomeArtwork(nextItem, artworkX, contentY, artworkWidth, artworkHeight,
-                                 material_tv::cornerExtraSmall)) {
-                drawArtworkPlaceholder(nextItem, artworkX, contentY, artworkWidth, artworkHeight,
-                                       material_tv::cornerExtraSmall);
-            }
-            const std::string nextHeading = "Up next  |  " + std::to_string(std::max(0, remainingMs / 1000)) + "s";
-            drawLeftAlignedSingleLineFit(textX, contentY, textWidth, 34.0f, 1.55f, nextHeading, kFocus);
-            drawLeftAlignedSingleLineFit(textX, contentY + 38.0f, textWidth, 58.0f, 2.05f, nextItem.name, kText);
-            const std::string nextLabel = episodeLabel(nextItem);
-            if (!nextLabel.empty()) {
-                drawLeftAlignedSingleLineFit(textX, contentY + 100.0f, textWidth, 46.0f, 1.45f, nextLabel, kMuted);
-            }
+            renderPlayerNextUp(
+                PlayerNextUpRenderState{
+                    .item = *playbackCoordinator_.continuation().nextItem(),
+                    .remainingMs = remainingMs,
+                },
+                PlayerNextUpRenderStyle<Color>{
+                    .panelCornerRadius = material_tv::cornerMedium,
+                    .artworkCornerRadius = material_tv::cornerExtraSmall,
+                    .focus = kFocus,
+                    .text = kText,
+                    .muted = kMuted,
+                },
+                [this](float x, float y, float width, float height, float radius) {
+                    drawModalSurface(x, y, width, height, radius);
+                },
+                [this](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
+                    return drawHomeArtwork(item, x, y, width, height, radius);
+                },
+                [this](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
+                    drawArtworkPlaceholder(item, x, y, width, height, radius);
+                },
+                [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
+                    drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
+                },
+                [](const JellyfinItem& item) { return episodeLabel(item); });
         }
 
         const std::string heading = playbackCoordinator_.session().activeItem().seriesName.empty()
