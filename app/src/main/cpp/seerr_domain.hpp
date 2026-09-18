@@ -41,6 +41,13 @@ public:
         Submit,
     };
 
+    enum class ConnectCompletionAction {
+        PreAuthenticationFailed,
+        Stale,
+        AuthenticationFailed,
+        Connected,
+    };
+
     enum class RefreshOutcome {
         StaleEndpoint,
         Failed,
@@ -126,6 +133,26 @@ public:
         if (!connection_.connecting()) return false;
         connection_.deferSearchRetry();
         return true;
+    }
+
+    [[nodiscard]] ConnectCompletionAction completeConnect(bool ok, bool authenticationStageFailure,
+                                                          bool currentRequest) {
+        if (!ok && !authenticationStageFailure) {
+            connection_.failConnect();
+            return ConnectCompletionAction::PreAuthenticationFailed;
+        }
+
+        connection_.endConnect();
+        if (!currentRequest) return ConnectCompletionAction::Stale;
+        if (!ok) {
+            connection_.failConnect();
+            return ConnectCompletionAction::AuthenticationFailed;
+        }
+        return ConnectCompletionAction::Connected;
+    }
+
+    [[nodiscard]] SeerrConnectionState::DeferredWork takeDeferredConnectionWork() {
+        return connection_.takeDeferredWork();
     }
 
     [[nodiscard]] RefreshStartAction prepareStorageRefresh(const SeerrEndpoint& endpoint, bool force,

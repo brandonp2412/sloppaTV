@@ -4910,8 +4910,11 @@ private:
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
         auto& result = completion.result;
-        if (!result.ok && result.failedStage != SeerrQuickConnectStage::AuthenticateSeerr) {
-            seerrConnectionState_.failConnect();
+        const bool currentRequest =
+            settings_.seerrServer == completion.server && session_.userId == completion.jellyfinUserId;
+        const auto action = seerrDomain_.completeConnect(
+            result.ok, result.failedStage == SeerrQuickConnectStage::AuthenticateSeerr, currentRequest);
+        if (action == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed) {
             if (completion.announce) {
                 notice_.clear();
                 error_ =
@@ -4926,16 +4929,14 @@ private:
             }
             return;
         }
-        seerrConnectionState_.endConnect();
         if (completion.announce) notice_.clear();
-        if (settings_.seerrServer != completion.server || session_.userId != completion.jellyfinUserId) return;
-        if (!result.ok) {
+        if (action == SeerrDomainState::ConnectCompletionAction::Stale) return;
+        if (action == SeerrDomainState::ConnectCompletionAction::AuthenticationFailed) {
             if (completion.announce)
                 error_ = "SEERR QUICK CONNECT: " + result.error;
             else
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s",
                                     result.error.c_str());
-            seerrConnectionState_.failConnect();
             return;
         }
         settings_.seerrSessionCookie = std::move(result.sessionCookie);
@@ -4947,7 +4948,7 @@ private:
         __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
         refreshSeerrPendingAsync();
         refreshSeerrStorageAsync(true);
-        auto deferred = seerrConnectionState_.takeDeferredWork();
+        auto deferred = seerrDomain_.takeDeferredConnectionWork();
         if (deferred.request) requestSeerrMediaAsync(*deferred.request);
         if (deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
             (void)searchState_.scheduleSeerrDebounce(std::chrono::steady_clock::now(), false);

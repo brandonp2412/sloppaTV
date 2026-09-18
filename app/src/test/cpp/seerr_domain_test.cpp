@@ -56,6 +56,47 @@ int main() {
            SeerrDomainState::ConnectAction::AlreadyConnecting);
     connectionStarts.connection().endConnect();
 
+    SeerrDomainState preAuthFailure;
+    assert(preAuthFailure.prepareConnect("https://seerr.example.nz", true) ==
+           SeerrDomainState::ConnectAction::Submit);
+    preAuthFailure.connection().deferRequest(media("seerr:movie:1"));
+    auto connectCompletion = preAuthFailure.completeConnect(false, false, true);
+    assert(connectCompletion == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed);
+    assert(!preAuthFailure.connection().connecting());
+    assert(!preAuthFailure.connection().takeDeferredWork().request);
+
+    SeerrDomainState authConnectFailure;
+    assert(authConnectFailure.prepareConnect("https://seerr.example.nz", true) ==
+           SeerrDomainState::ConnectAction::Submit);
+    authConnectFailure.connection().deferRequest(media("seerr:movie:2"));
+    connectCompletion = authConnectFailure.completeConnect(false, true, true);
+    assert(connectCompletion == SeerrDomainState::ConnectCompletionAction::AuthenticationFailed);
+    assert(!authConnectFailure.connection().connecting());
+    assert(!authConnectFailure.connection().takeDeferredWork().request);
+
+    SeerrDomainState staleCompletion;
+    assert(staleCompletion.prepareConnect("https://seerr.example.nz", true) ==
+           SeerrDomainState::ConnectAction::Submit);
+    staleCompletion.connection().deferRequest(media("seerr:movie:3"));
+    connectCompletion = staleCompletion.completeConnect(false, true, false);
+    assert(connectCompletion == SeerrDomainState::ConnectCompletionAction::Stale);
+    assert(!staleCompletion.connection().connecting());
+    auto staleDeferred = staleCompletion.connection().takeDeferredWork();
+    assert(staleDeferred.request && staleDeferred.request->id == "seerr:movie:3");
+
+    SeerrDomainState successfulConnect;
+    assert(successfulConnect.prepareConnect("https://seerr.example.nz", true) ==
+           SeerrDomainState::ConnectAction::Submit);
+    successfulConnect.connection().deferRequest(media("seerr:movie:4"));
+    successfulConnect.connection().deferSearchRetry();
+    connectCompletion = successfulConnect.completeConnect(true, false, true);
+    assert(connectCompletion == SeerrDomainState::ConnectCompletionAction::Connected);
+    assert(!successfulConnect.connection().connecting());
+    const auto successfulDeferred = successfulConnect.takeDeferredConnectionWork();
+    assert(successfulDeferred.request && successfulDeferred.request->id == "seerr:movie:4");
+    assert(successfulDeferred.retrySearch);
+    assert(!successfulConnect.takeDeferredConnectionWork().request);
+
     SeerrDomainState state;
     assert(state.prepareRequest({}, configured, false, false).action == SeerrDomainState::RequestAction::Invalid);
     assert(state.prepareRequest(media("seerr:movie:10", true), configured, false, false).action ==
