@@ -11,6 +11,7 @@
 #include "async_completion_queue.hpp"
 #include "audio_policy.hpp"
 #include "browse_async_executor.hpp"
+#include "browse_navigation_controller.hpp"
 #include "browse_renderer.hpp"
 #include "browse_screen.hpp"
 #include "cast_renderer.hpp"
@@ -27,6 +28,7 @@
 #include "external_playback_state.hpp"
 #include "external_player.hpp"
 #include "home_async_executor.hpp"
+#include "home_navigation_controller.hpp"
 #include "home_renderer.hpp"
 #include "home_row_renderer.hpp"
 #include "home_screen.hpp"
@@ -77,6 +79,7 @@
 #include "screensaver_policy.hpp"
 #include "screensaver_renderer.hpp"
 #include "screen_chrome_renderer.hpp"
+#include "search_navigation_controller.hpp"
 #include "search_renderer.hpp"
 #include "search_screen.hpp"
 #include "seerr.hpp"
@@ -1234,6 +1237,19 @@ private:
 
     bool isItemContextKey(int32_t key) const { return key == AKEYCODE_MENU || key == AKEYCODE_INFO; }
 
+    ScreenNavigationKey screenNavigationKeyForKey(int32_t key) const {
+        if (key == AKEYCODE_BACK) return ScreenNavigationKey::Back;
+        if (key == AKEYCODE_SEARCH) return ScreenNavigationKey::Search;
+        if (isItemContextKey(key)) return ScreenNavigationKey::Context;
+        if (key == AKEYCODE_DPAD_LEFT) return ScreenNavigationKey::Left;
+        if (key == AKEYCODE_DPAD_RIGHT) return ScreenNavigationKey::Right;
+        if (key == AKEYCODE_DPAD_UP) return ScreenNavigationKey::Up;
+        if (key == AKEYCODE_DPAD_DOWN) return ScreenNavigationKey::Down;
+        if (key == AKEYCODE_DPAD_CENTER) return ScreenNavigationKey::Activate;
+        if (key == AKEYCODE_ENTER) return ScreenNavigationKey::Submit;
+        return ScreenNavigationKey::None;
+    }
+
     DetailsNavigationKey detailsNavigationKeyForKey(int32_t key) const {
         if (key == AKEYCODE_BACK) return DetailsNavigationKey::Back;
         if (isItemContextKey(key)) return DetailsNavigationKey::Context;
@@ -1272,74 +1288,36 @@ private:
     }
 
     void handleHomeKey(int32_t key) {
-        HomeScreenInput input = HomeScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = HomeScreenInput::Back;
-        else if (key == AKEYCODE_SEARCH)
-            input = HomeScreenInput::Search;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = HomeScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = HomeScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = HomeScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = HomeScreenInput::Down;
-        else if (isItemContextKey(key))
-            input = HomeScreenInput::Context;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = HomeScreenInput::Activate;
-
-        const int previousFirstVisibleRow = homeState_.firstVisibleRow();
-        const HomeScreenCommand command = homeState_.handleInput(input, home_.rows);
-        if (command.type == HomeScreenCommandType::FinishActivity) {
+        const HomeNavigationAction navigation = HomeNavigationController::handle(
+            homeState_, screenNavigationKeyForKey(key), home_.rows, seerrDomain_.pendingRequests());
+        switch (navigation.type) {
+        case HomeNavigationActionType::None:
+            return;
+        case HomeNavigationActionType::FinishActivity:
             ANativeActivity_finish(app_->activity);
             return;
-        }
-        if (command.type == HomeScreenCommandType::OpenProfiles) {
+        case HomeNavigationActionType::OpenProfiles:
             openProfiles();
             return;
-        }
-        if (command.type == HomeScreenCommandType::OpenSearch) {
+        case HomeNavigationActionType::OpenSearch:
             openSearch();
             return;
-        }
-        if (command.type == HomeScreenCommandType::OpenSettings) {
+        case HomeNavigationActionType::OpenSettings:
             openSettings();
             return;
-        }
-        if (command.type == HomeScreenCommandType::OpenContext) {
-            const auto& items = home_.rows[static_cast<size_t>(command.rowIndex)].items;
-            openItemMenuForItem(items[static_cast<size_t>(command.itemIndex)]);
+        case HomeNavigationActionType::OpenContext:
+            if (navigation.item) openItemMenuForItem(*navigation.item);
             return;
-        }
-        if (command.type == HomeScreenCommandType::OpenSelected) {
-            const auto& section = home_.rows[static_cast<size_t>(command.rowIndex)];
-            const auto& selected = section.items[static_cast<size_t>(command.itemIndex)];
-            if (section.title == "My Media") {
-                openLibrary(selected);
-            } else if (const auto* seerrMedia =
-                           findSeerrHomeMedia(section.title, selected.id, seerrDomain_.pendingRequests())) {
-                if (!seerrMedia->jellyfinId.empty()) {
-                    JellyfinItem available = selected;
-                    available.id = seerrMedia->jellyfinId;
-                    available.externalSource.clear();
-                    openDetails(available);
-                } else {
-                    openItemMenuForItem(selected);
-                }
-            } else {
-                openDetails(selected);
-            }
+        case HomeNavigationActionType::OpenLibrary:
+            if (navigation.item) openLibrary(*navigation.item);
             return;
-        }
-        if (!command.finalizeRowNavigation) return;
-
-        beginHomeRowSlide(previousFirstVisibleRow, homeState_.firstVisibleRow());
-        if (homeState_.row() >= 0 && homeState_.row() < static_cast<int>(homeState_.selectionCount())) {
-            const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
-            prefetchHomeWindow(homeState_.row(),
-                               homeState_.selection(homeState_.row(), static_cast<int>(row.items.size())));
+        case HomeNavigationActionType::OpenDetails:
+            if (navigation.item) openDetails(*navigation.item);
+            return;
+        case HomeNavigationActionType::FinalizeNavigation:
+            beginHomeRowSlide(navigation.previousFirstVisibleRow, navigation.currentFirstVisibleRow);
+            if (navigation.prefetchRow >= 0) prefetchHomeWindow(navigation.prefetchRow, navigation.prefetchSelection);
+            return;
         }
     }
 
@@ -1350,109 +1328,53 @@ private:
     }
 
     void handleBrowseKey(int32_t key) {
-        BrowseScreenInput input = BrowseScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = BrowseScreenInput::Back;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = BrowseScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = BrowseScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = BrowseScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = BrowseScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = BrowseScreenInput::Activate;
-        else if (isItemContextKey(key))
-            input = BrowseScreenInput::Context;
+        const ScreenNavigationKey navigationKey = screenNavigationKeyForKey(key);
+        if (navigationKey == ScreenNavigationKey::Back) cancelContentLoadForNavigation();
 
-        if (input == BrowseScreenInput::Back) cancelContentLoadForNavigation();
         constexpr int columns = mediaGridColumns();
-        const BrowseScreenCommand command = browseState_.handleInput(input, columns);
-
-        if (command.type == BrowseScreenCommandType::Back) {
-            if (command.backAction == BrowseBackAction::Reload)
-                loadBrowsePageAsync(false);
-            else if (command.backAction == BrowseBackAction::LocalPage) {
-                loading_ = false;
-                error_.clear();
-            } else if (command.backAction == BrowseBackAction::Exit) {
-                popScreen(Screen::Home);
-                if (screen_ == Screen::Home) homeState_.focusToolbar(1);
-            }
+        const BrowseNavigationAction navigation =
+            BrowseNavigationController::handle(browseState_, navigationKey, columns, loading_);
+        switch (navigation.type) {
+        case BrowseNavigationActionType::None:
             return;
-        }
-        if (command.type == BrowseScreenCommandType::ApplyFilter) {
-            applyBrowseFilter(browseState_.filterSelection());
-            return;
-        }
-        if (command.type == BrowseScreenCommandType::OpenContext) {
-            const auto& selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
-            if (supportsItemContextMenu(selected)) openItemMenuForItem(selected);
-            return;
-        }
-        if (command.type == BrowseScreenCommandType::SelectGenre) {
-            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
-            browseState_.selectGenre(selected.name);
+        case BrowseNavigationActionType::ReloadPage:
             loadBrowsePageAsync(false);
             return;
-        }
-        if (command.type == BrowseScreenCommandType::SelectLetter) {
-            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
-            browseState_.selectLetter(selected.name);
-            loadBrowsePageAsync(false);
+        case BrowseNavigationActionType::LocalPage:
+            loading_ = false;
+            error_.clear();
             return;
-        }
-        if (command.type == BrowseScreenCommandType::OpenContainer) {
-            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
-            openBrowseContainer(selected, true);
+        case BrowseNavigationActionType::Exit:
+            popScreen(Screen::Home);
+            if (screen_ == Screen::Home) homeState_.focusToolbar(1);
             return;
-        }
-        if (command.type == BrowseScreenCommandType::OpenDetails) {
-            const auto selected = browseState_.items()[static_cast<size_t>(browseState_.selection())];
-            openDetails(selected);
+        case BrowseNavigationActionType::ApplyFilter:
+            applyBrowseFilter(navigation.filterSelection);
             return;
-        }
-        if (command.type == BrowseScreenCommandType::SelectionChanged) {
-            const auto& items = browseState_.items();
+        case BrowseNavigationActionType::OpenContext:
+            if (navigation.item) openItemMenuForItem(*navigation.item);
+            return;
+        case BrowseNavigationActionType::OpenContainer:
+            if (navigation.item) openBrowseContainer(*navigation.item, true);
+            return;
+        case BrowseNavigationActionType::OpenDetails:
+            if (navigation.item) openDetails(*navigation.item);
+            return;
+        case BrowseNavigationActionType::SelectionChanged:
             prefetchBrowseArtworkAhead();
-            if (browseState_.hasMore() && !loading_ &&
-                browseState_.selection() >= static_cast<int>(items.size()) - 12) {
-                loadMoreBrowseAsync();
-            }
+            if (navigation.loadMore) loadMoreBrowseAsync();
+            return;
         }
     }
 
     void handleSearchKey(int32_t key) {
-        SearchScreenInput input = SearchScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = SearchScreenInput::Back;
-        else if (key == AKEYCODE_SEARCH)
-            input = SearchScreenInput::Search;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = SearchScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = SearchScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = SearchScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = SearchScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_CENTER)
-            input = SearchScreenInput::Activate;
-        else if (key == AKEYCODE_ENTER)
-            input = SearchScreenInput::Submit;
-        else if (isItemContextKey(key))
-            input = SearchScreenInput::Context;
-        else
-            return;
-
         constexpr int columns = mediaGridColumns();
-        const SearchScreenCommand command = searchState_.handleInput(input, columns);
-        switch (command.type) {
-        case SearchScreenCommandType::None:
+        const SearchNavigationAction navigation =
+            SearchNavigationController::handle(searchState_, screenNavigationKeyForKey(key), columns);
+        switch (navigation.type) {
+        case SearchNavigationActionType::None:
             return;
-        case SearchScreenCommandType::Exit:
-            searchState_.cancelPending();
+        case SearchNavigationActionType::Exit:
             seerrSearchCoordinator_.cancel();
             requestEpochs_.search.invalidate();
             requestEpochs_.seerrSearch.invalidate();
@@ -1463,33 +1385,28 @@ private:
                 homeState_.updateViewport(static_cast<int>(home_.rows.size()));
             }
             return;
-        case SearchScreenCommandType::SubmitSearch:
+        case SearchNavigationActionType::SubmitSearch:
             searchAsync();
             return;
-        case SearchScreenCommandType::MoveKeyboard:
-            moveKeyboard(command.dx, command.dy);
+        case SearchNavigationActionType::MoveKeyboard:
+            moveKeyboard(navigation.dx, navigation.dy);
             return;
-        case SearchScreenCommandType::ActivateKeyboard:
+        case SearchNavigationActionType::ActivateKeyboard:
             activateKeyboardKey(true);
             return;
-        case SearchScreenCommandType::OpenTextInput:
+        case SearchNavigationActionType::OpenTextInput:
             searchState_.setKeyboard(
                 !showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
             if (searchState_.keyboard()) keyboardRow_ = keyboardCol_ = 0;
             return;
-        case SearchScreenCommandType::OpenContext: {
-            const auto& results = searchState_.results();
-            const auto& selected = results[static_cast<size_t>(searchState_.selection())];
-            openItemMenuForItem(selected);
+        case SearchNavigationActionType::OpenContext:
+            if (navigation.item) openItemMenuForItem(*navigation.item);
             return;
-        }
-        case SearchScreenCommandType::OpenDetails: {
-            const auto& results = searchState_.results();
-            openDetails(results[static_cast<size_t>(searchState_.selection())]);
+        case SearchNavigationActionType::OpenDetails:
+            if (navigation.item) openDetails(*navigation.item);
             return;
-        }
-        case SearchScreenCommandType::RequestSeerr:
-            if (const auto* seerrItem = searchState_.selectedSeerrResult()) requestSeerrMediaAsync(*seerrItem);
+        case SearchNavigationActionType::RequestSeerr:
+            if (navigation.seerrItem) requestSeerrMediaAsync(*navigation.seerrItem);
             return;
         }
     }
