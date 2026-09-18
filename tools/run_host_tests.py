@@ -64,6 +64,7 @@ CPP_TESTS = [
     "request_epoch_test.cpp",
     "screensaver_policy_test.cpp",
     "search_screen_test.cpp",
+    "jellyfin_search_executor_test.cpp",
     "seerr_async_executor_test.cpp",
     "seerr_connection_state_test.cpp",
     "seerr_domain_test.cpp",

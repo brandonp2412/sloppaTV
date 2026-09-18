@@ -23,6 +23,7 @@
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "jellyfin.hpp"
+#include "jellyfin_search_executor.hpp"
 #include "jni_env.hpp"
 #include "launch_intent.hpp"
 #include "media_player.hpp"
@@ -344,12 +345,6 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-struct JellyfinSearchCompletion {
-    std::string query;
-    uint64_t generation = 0;
-    ApiValueResult<std::vector<JellyfinItem>> result;
-};
-
 struct ItemMenuDetailCompletion {
     std::string itemId;
     ApiValueResult<JellyfinItem> result;
@@ -479,6 +474,7 @@ public:
           quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_),
           browseAsync_(api_, tasks_, asyncCompletions_),
+          jellyfinSearchAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -3159,14 +3155,7 @@ private:
         const std::string query = searchState_.query();
         error_.clear();
         const uint64_t generation = requestEpochs_.search.begin();
-        tasks_.submit([this, session, query, generation] {
-            auto result = api_.search(session, query);
-            asyncCompletions_.push(JellyfinSearchCompletion{
-                .query = query,
-                .generation = generation,
-                .result = std::move(result),
-            });
-        });
+        jellyfinSearchAsync_.search(session, query, generation);
         if (includeSeerrImmediately) searchSeerrAsync(true);
     }
 
@@ -7040,6 +7029,7 @@ private:
     QuickConnectExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> quickConnectAsync_;
     DetailsAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> detailsAsync_;
     BrowseAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> browseAsync_;
+    JellyfinSearchExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> jellyfinSearchAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
     PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
