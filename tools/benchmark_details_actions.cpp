@@ -15,15 +15,17 @@ int main(int argc, char** argv) {
     item.canDelete = true;
     item.people.push_back({});
 
+    const size_t expectedPerIteration =
+        state.actions(item, false).size() + state.itemMenuActions(item, true, true, false, false).size();
     size_t checksum = 0;
     const auto started = std::chrono::steady_clock::now();
     for (int iteration = 0; iteration < iterations; ++iteration) {
         checksum += state.actions(item, false).size();
-        checksum += state.itemMenuActions(item, true, true, false).size();
+        checksum += state.itemMenuActions(item, true, true, false, false).size();
     }
     const double elapsedMs =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
     std::cout << std::fixed << std::setprecision(3) << "iterations=" << iterations << " elapsed_ms=" << elapsedMs
               << " checksum=" << checksum << '\n';
-    return checksum == static_cast<size_t>(iterations) * 16 ? 0 : 1;
+    return checksum == static_cast<size_t>(iterations) * expectedPerIteration ? 0 : 1;
 }

@@ -12,6 +12,7 @@ endif()
 add_library(sloppatv SHARED
     ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
     main.cpp
+    account_flow.cpp
     account_completion_controller.cpp
     account_navigation_controller.cpp
     browse_completion_controller.cpp

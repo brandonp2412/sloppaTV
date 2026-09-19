@@ -93,6 +93,7 @@ CPP_TESTS = [
     "screen_chrome_renderer_test.cpp",
     "search_renderer_test.cpp",
     "search_screen_test.cpp",
+    "search_flow_test.cpp",
     "jellyfin_search_executor_test.cpp",
     "seerr_async_executor_test.cpp",
     "seerr_connection_coordinator_test.cpp",
@@ -130,6 +131,12 @@ CPP_TESTS = [
 
 LINKED_CPP_TESTS = [
     ("account_completion_controller_test.cpp", ["account_completion_controller.cpp"], []),
+    ("account_flow_test.cpp", [
+        "account_flow.cpp",
+        "account_completion_controller.cpp",
+        "account_navigation_controller.cpp",
+        "session_store.cpp",
+    ], []),
     ("browse_completion_controller_test.cpp", ["browse_completion_controller.cpp"], []),
     ("details_completion_controller_test.cpp", ["details_completion_controller.cpp"], []),
     ("details_navigation_controller_test.cpp", ["details_navigation_controller.cpp"], []),

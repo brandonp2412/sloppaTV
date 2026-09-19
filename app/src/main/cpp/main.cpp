@@ -5,11 +5,10 @@
 #include <android_native_app_glue.h>
 
 #include "account_async_executor.hpp"
-#include "account_completion_controller.hpp"
-#include "account_navigation_controller.hpp"
-#include "account_screen.hpp"
+#include "account_flow.hpp"
 #include "app_screen.hpp"
 #include "app_settings.hpp"
+#include "app_screen_presentation.hpp"
 #include "artwork_provider.hpp"
 #include "async_completion_queue.hpp"
 #include "audio_policy.hpp"
@@ -18,7 +17,9 @@
 #include "browse_navigation_controller.hpp"
 #include "browse_renderer.hpp"
 #include "browse_screen.hpp"
+#include "brand_mark.hpp"
 #include "cast_renderer.hpp"
+#include "content_screen_presentation.hpp"
 #include "details_completion_controller.hpp"
 #include "details_flow.hpp"
 #include "details_renderer.hpp"
@@ -97,6 +98,7 @@
 #include "screen_presentation.hpp"
 #include "screen_chrome_renderer.hpp"
 #include "search_completion_controller.hpp"
+#include "search_flow.hpp"
 #include "search_navigation_controller.hpp"
 #include "search_renderer.hpp"
 #include "search_screen.hpp"
@@ -171,19 +173,6 @@ using namespace std::chrono_literals;
 
 namespace {
 constexpr const char* kTag = "sloppaTV";
-
-constexpr Color kPanel = material_tv::surface;
-constexpr Color kPanelAlt = material_tv::surfaceContainer;
-constexpr Color kPanelElevated = material_tv::surfaceContainerHigh;
-constexpr Color kText = material_tv::onSurface;
-constexpr Color kSecondaryText = material_tv::onSurfaceSecondary;
-constexpr Color kMuted = material_tv::onSurfaceVariant;
-constexpr Color kTertiary = material_tv::onSurfaceDisabled;
-constexpr Color kFocus = material_tv::primary;
-constexpr Color kFocusSoft = material_tv::primaryContainer;
-constexpr Color kOutline = material_tv::outline;
-constexpr Color kTrack = material_tv::track;
-constexpr Color kError = material_tv::error;
 
 void logPlaybackReportFailure(const char* stage, const std::string& itemId, const ApiResult& result) {
     if (result.ok) return;
@@ -298,13 +287,14 @@ public:
                    }),
           uiPresentation_(renderer_, artwork_), seerrConnection_(seerrDomain_, seerrAsync_),
           seerrRefresh_(seerrDomain_, seerrAsync_), seerrRequest_(seerrDomain_, seerrAsync_),
-          seerrSearchCoordinator_(seerrDomain_, seerrAsync_), searchState_(seerrDomain_.searchResults()),
+          searchFlow_(seerrDomain_, seerrAsync_, jellyfinSearchAsync_, requestEpochs_.search,
+                      requestEpochs_.seerrSearch),
           playbackRuntime_(playbackCoordinator_, playerScreenState_, player_, videoSurface_, session_, settings_,
                            requestEpochs_.playback, loading_, error_, dataPath_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         artwork_.setDataPath(dataPath_);
-        loadBundledBrandMark();
+        brandMark_.load(app_ && app_->activity ? app_->activity->assetManager : nullptr, imageDecoder_);
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
@@ -357,7 +347,7 @@ public:
         similarPrefetchTasks_.shutdown();
         tasks_.shutdown();
         stopPlayback();
-        if (brandMarkTexture_ != 0 && renderer_.ready()) renderer_.deleteTexture(brandMarkTexture_);
+        brandMark_.release(renderer_);
         renderer_.shutdown();
     }
 
@@ -386,8 +376,8 @@ public:
                     timeoutMs = 0;
                 else if (screensaverActive_)
                     timeoutMs = 30000;
-                else if (loading_ || homeLoading_ || mutationLoading_ || searchState_.loading() ||
-                         seerrDomain_.searchLoading() || accountState_.quickConnectActive())
+                else if (loading_ || homeLoading_ || mutationLoading_ || searchFlow_.state().loading() ||
+                         seerrDomain_.searchLoading() || accountFlow_.state().quickConnectActive())
                     timeoutMs = 100;
                 else {
                     const int64_t delayMs = screensaverDelayMs(settings_.screensaverMinutes);
@@ -397,10 +387,10 @@ public:
                         timeoutMs = static_cast<int>(std::clamp<int64_t>(delayMs - idleMs, 0, delayMs));
                     }
                 }
-                if (searchState_.debouncePending()) {
-                    const int64_t searchDelayMs =
-                        std::chrono::duration_cast<std::chrono::milliseconds>(searchState_.debounceDeadline() - pollNow)
-                            .count();
+                if (searchFlow_.state().debouncePending()) {
+                    const int64_t searchDelayMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                                      searchFlow_.state().debounceDeadline() - pollNow)
+                                                      .count();
                     const int searchTimeoutMs = static_cast<int>(std::max<int64_t>(0, searchDelayMs));
                     timeoutMs = timeoutMs < 0 ? searchTimeoutMs : std::min(timeoutMs, searchTimeoutMs);
                 }
@@ -429,7 +419,8 @@ public:
                     (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detailsFlow_.item())))) {
                     tightenTimeoutUntil(seerrDomain_.pendingRequestsRefreshDeadline());
                 }
-                if (screen_ == Screen::Search && !searchState_.keyboard() && !searchState_.results().empty()) {
+                if (screen_ == Screen::Search && !searchFlow_.state().keyboard() &&
+                    !searchFlow_.state().results().empty()) {
                     // Search cards can contain a slow pixel-based marquee. Redraw near display
                     // cadence without busy-spinning the looper when the search screen is idle.
                     timeoutMs = timeoutMs < 0 ? 16 : std::min(timeoutMs, 16);
@@ -468,8 +459,8 @@ public:
                         std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInteraction_).count();
                     screensaverActive_ = shouldActivateScreensaver(
                         settings_.screensaverMinutes, idleMs, false,
-                        loading_ || homeLoading_ || mutationLoading_ || searchState_.loading() ||
-                            seerrDomain_.searchLoading() || accountState_.quickConnectActive());
+                        loading_ || homeLoading_ || mutationLoading_ || searchFlow_.state().loading() ||
+                            seerrDomain_.searchLoading() || accountFlow_.state().quickConnectActive());
                 }
                 screensaver = screensaverActive_;
             }
@@ -529,7 +520,7 @@ private:
 
     void applySystemTextInputEffects(const SystemTextInputEffects& effects) {
         if (effects.scheduleSearch) scheduleLiveSearch();
-        if (effects.cancelSeerrSearch) seerrSearchCoordinator_.cancel();
+        if (effects.cancelSeerrSearch) searchFlow_.cancelSeerrSearch();
         if (effects.submitSearch) searchAsync();
         if (effects.invalidateSeerrStorage) seerrDomain_.invalidateStorageTargets();
         if (effects.saveSession) saveSession(session_);
@@ -778,7 +769,8 @@ private:
             }
         }
 
-        const TextEntryResult textEntry = handlePhysicalTextInput(screen_, accountState_, searchState_, key, meta);
+        const TextEntryResult textEntry =
+            handlePhysicalTextInput(screen_, accountFlow_.state(), searchFlow_.state(), key, meta);
         if (textEntry.searchChanged) scheduleLiveSearch();
         if (textEntry.handled) return 1;
 
@@ -787,28 +779,16 @@ private:
     }
 
     void scheduleLiveSearch() {
-        const auto now = std::chrono::steady_clock::now();
-        requestEpochs_.search.invalidate();
-        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth());
-        const auto seerrPlan = seerrSearchCoordinator_.schedule(searchState_.query(), now, seerrConfigured);
-        if (seerrPlan.resultsChanged) searchState_.refreshSeerrResults();
-        if (seerrPlan.invalidateRequest) requestEpochs_.seerrSearch.invalidate();
-        if (!searchState_.scheduleDebounce(now)) error_.clear();
+        const SearchScheduleEffects effects = searchFlow_.scheduleLive(
+            std::chrono::steady_clock::now(), SeerrClient::configured(settings_.seerrServer, seerrAuth()));
+        if (effects.clearError) error_.clear();
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     void runDueLiveSearch() {
         std::scoped_lock lock(stateMutex_);
-        if (screen_ != Screen::Search) {
-            searchState_.cancelPending();
-            seerrSearchCoordinator_.cancel();
-            requestEpochs_.search.invalidate();
-            requestEpochs_.seerrSearch.invalidate();
-            return;
-        }
-        const auto now = std::chrono::steady_clock::now();
-        if (searchState_.debounceDue(now)) searchAsync(false);
-        if (seerrSearchCoordinator_.debounceDue(now)) searchSeerrAsync(false);
+        applySearchDispatchEffects(
+            searchFlow_.runDue(screen_ == Screen::Search, session_, seerrEndpoint(), std::chrono::steady_clock::now()));
     }
 
     bool showSystemTextInput(const std::string& initial, const std::string& hint, int mode, bool password = false) {
@@ -872,36 +852,35 @@ private:
         if (forSearch) {
             switch (key.action) {
             case KeyAction::Insert:
-                for (char value : key.value) searchState_.append(value);
+                for (char value : key.value) searchFlow_.state().append(value);
                 scheduleLiveSearch();
                 break;
             case KeyAction::Backspace:
-                if (searchState_.backspace()) scheduleLiveSearch();
+                if (searchFlow_.state().backspace()) scheduleLiveSearch();
                 break;
             case KeyAction::Done:
-                searchState_.setKeyboard(false);
+                searchFlow_.state().setKeyboard(false);
                 searchAsync();
                 break;
             }
             return;
         }
-        if (accountState_.loginFocus() < 0 || accountState_.loginFocus() >= 3) return;
+        if (accountFlow_.state().loginFocus() < 0 || accountFlow_.state().loginFocus() >= 3) return;
         switch (key.action) {
         case KeyAction::Insert:
-            for (char value : key.value) accountState_.appendToFocusedField(value);
+            for (char value : key.value) accountFlow_.state().appendToFocusedField(value);
             break;
         case KeyAction::Backspace:
-            accountState_.backspaceFocusedField();
+            accountFlow_.state().backspaceFocusedField();
             break;
         case KeyAction::Done:
-            accountState_.setKeyboardActive(false);
+            accountFlow_.state().setKeyboardActive(false);
             break;
         }
     }
 
     void handleLoginKey(int32_t key) {
-        const AccountNavigationAction navigation = AccountNavigationController::handleLogin(
-            accountState_, screenNavigationKeyForAndroidKey(key), !sessionRegistry_.empty());
+        const AccountNavigationAction navigation = accountFlow_.handleLogin(screenNavigationKeyForAndroidKey(key));
         switch (navigation.type) {
         case AccountNavigationActionType::None:
             return;
@@ -925,10 +904,10 @@ private:
             const int mode = kTextInputLoginServer + field;
             static constexpr std::array<const char*, 3> hints{"Jellyfin server URL", "Jellyfin username",
                                                               "Jellyfin password"};
-            accountState_.setKeyboardActive(!showSystemTextInput(accountState_.field(field),
-                                                                 hints[static_cast<size_t>(field)], mode,
-                                                                 field == AccountScreenState::kPasswordField));
-            if (accountState_.keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
+            accountFlow_.state().setKeyboardActive(!showSystemTextInput(accountFlow_.state().field(field),
+                                                                        hints[static_cast<size_t>(field)], mode,
+                                                                        field == AccountScreenState::kPasswordField));
+            if (accountFlow_.state().keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
             return;
         }
         case AccountNavigationActionType::Login:
@@ -952,22 +931,36 @@ private:
     }
 
     void handleProfilesKey(int32_t key) {
-        const AccountNavigationAction navigation = AccountNavigationController::handleProfiles(
-            accountState_, screenNavigationKeyForAndroidKey(key), static_cast<int>(sessionRegistry_.size()));
-        switch (navigation.type) {
-        case AccountNavigationActionType::ProfilesBack:
+        AccountProfileCommand command = accountFlow_.handleProfiles(screenNavigationKeyForAndroidKey(key), session_);
+        switch (command.action) {
+        case AccountProfileAction::None:
+            return;
+        case AccountProfileAction::Back:
             popScreen(Screen::Login);
             return;
-        case AccountNavigationActionType::AddAccount:
+        case AccountProfileAction::AddAccount:
             startAddAccount();
             return;
-        case AccountNavigationActionType::SwitchSession:
-            switchSavedSession(static_cast<size_t>(navigation.index));
+        case AccountProfileAction::SwitchSession:
+            if (!command.session) return;
+            clearCurrentSessionUi();
+            session_ = std::move(*command.session);
+            accountFlow_.activateSession(session_);
+            resetNavigation(Screen::Home);
+            homeState_.setRow(0);
+            homeState_.setFirstVisibleRow(0);
+            saveSession(session_);
+            loadHomeAsync();
             return;
-        case AccountNavigationActionType::ForgetSession:
-            forgetSavedSession(static_cast<size_t>(navigation.index));
-            return;
-        default:
+        case AccountProfileAction::ForgetSession:
+            if (!command.removedSession) return;
+            artwork_.eraseProfile(*command.removedSession, renderer_);
+            if (command.removedCurrent) {
+                clearCurrentSessionUi();
+                resetNavigation(Screen::Profiles);
+            }
+            saveSession(session_);
+            if (command.sessionsEmpty) startAddAccount();
             return;
         }
     }
@@ -1096,19 +1089,12 @@ private:
     void handleSearchKey(int32_t key) {
         constexpr int columns = mediaGridColumns();
         const SearchNavigationAction navigation =
-            SearchNavigationController::handle(searchState_, screenNavigationKeyForAndroidKey(key), columns);
-        const auto& results = searchState_.results();
-        if (!searchState_.keyboard() && searchState_.selection() >= 0 &&
-            searchState_.selection() < static_cast<int>(results.size())) {
-            scheduleSimilarPrefetch(results[static_cast<size_t>(searchState_.selection())]);
-        }
+            searchFlow_.handleNavigation(screenNavigationKeyForAndroidKey(key), columns);
+        if (const JellyfinItem* selected = searchFlow_.selectedResult()) scheduleSimilarPrefetch(*selected);
         switch (navigation.type) {
         case SearchNavigationActionType::None:
             return;
         case SearchNavigationActionType::Exit:
-            seerrSearchCoordinator_.cancel();
-            requestEpochs_.search.invalidate();
-            requestEpochs_.seerrSearch.invalidate();
             hideSystemTextInput();
             popScreen(Screen::Home);
             if (screen_ == Screen::Home) {
@@ -1126,9 +1112,9 @@ private:
             activateKeyboardKey(true);
             return;
         case SearchNavigationActionType::OpenTextInput:
-            searchState_.setKeyboard(
-                !showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
-            if (searchState_.keyboard()) keyboardRow_ = keyboardCol_ = 0;
+            searchFlow_.state().setKeyboard(
+                !showSystemTextInput(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch));
+            if (searchFlow_.state().keyboard()) keyboardRow_ = keyboardCol_ = 0;
             return;
         case SearchNavigationActionType::OpenContext:
             if (navigation.item) openItemMenuForItem(*navigation.item);
@@ -1557,13 +1543,12 @@ private:
         home_ = {};
         homeState_.reset();
         browseState_.clear();
-        seerrSearchCoordinator_.reset();
-        searchState_.reset();
+        searchFlow_.reset();
         detailsFlow_.item() = {};
         detailsFlow_.state().reset();
 
         artwork_.clearSession(renderer_);
-        accountState_.clearSessionUi();
+        accountFlow_.state().clearSessionUi();
         loading_ = false;
         homeLoading_ = false;
         homeRetryAt_ = {};
@@ -1577,51 +1562,20 @@ private:
     }
 
     void openProfiles() {
-        if (sessionRegistry_.empty()) {
+        if (!accountFlow_.beginProfiles()) {
             startAddAccount();
             return;
         }
         pushScreen(Screen::Profiles);
-        accountState_.beginProfiles(static_cast<int>(sessionRegistry_.size()));
         error_.clear();
     }
 
     void startAddAccount() {
         const std::string existingServer = session_.server;
         clearCurrentSessionUi();
-        accountState_.beginAddAccount(existingServer);
+        accountFlow_.beginAddAccount(existingServer);
         resetNavigation(Screen::Login);
         saveSession(session_);
-    }
-
-    void switchSavedSession(size_t index) {
-        const JellyfinSession* saved = sessionRegistry_.at(index);
-        if (!saved) return;
-        clearCurrentSessionUi();
-        session_ = *saved;
-        session_.deviceId = deviceId_;
-        accountState_.setAuthenticatedAccount(session_.server, session_.username);
-        resetNavigation(Screen::Home);
-        homeState_.setRow(0);
-        homeState_.setFirstVisibleRow(0);
-        saveSession(session_);
-        loadHomeAsync();
-    }
-
-    void forgetSavedSession(size_t index) {
-        const JellyfinSession* saved = sessionRegistry_.at(index);
-        if (!saved) return;
-        const JellyfinSession removed = *saved;
-        const bool removedCurrent = SessionRegistry::sameIdentity(session_, removed);
-        artwork_.eraseProfile(removed, renderer_);
-        sessionRegistry_.eraseAt(index);
-        if (removedCurrent) {
-            clearCurrentSessionUi();
-            resetNavigation(Screen::Profiles);
-        }
-        accountState_.beginProfiles(static_cast<int>(sessionRegistry_.size()));
-        saveSession(session_);
-        if (sessionRegistry_.empty()) startAddAccount();
     }
 
     static constexpr int kBrowsePageSize = 60;
@@ -1767,8 +1721,8 @@ private:
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         const bool hiddenFromHome = isHiddenFromHome(detailsFlow_.item());
         PlayedMutationPreparation preparation = ItemMutationController::preparePlayedToggle(
-            home_, homeState_, browseState_, searchState_, detailsFlow_.state(), queueState_, detailsFlow_.item(),
-            hiddenFromHome, sessionEpoch);
+            home_, homeState_, browseState_, searchFlow_.state(), detailsFlow_.state(), queueState_,
+            detailsFlow_.item(), hiddenFromHome, sessionEpoch);
         mutationLoading_ = true;
         error_.clear();
         playedRollback_ = std::move(preparation.rollback);
@@ -1819,47 +1773,38 @@ private:
 
     void openSearch() {
         pushScreen(Screen::Search);
-        searchState_.setKeyboard(
-            !showSystemTextInput(searchState_.query(), "Search Jellyfin & Seerr", kTextInputSearch));
+        searchFlow_.state().setKeyboard(
+            !showSystemTextInput(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch));
         keyboardRow_ = keyboardCol_ = 0;
         error_.clear();
     }
 
     void discoverServersAsync() {
-        if (loading_) return;
+        if (!accountFlow_.beginDiscovery(loading_)) return;
         loading_ = true;
         error_.clear();
-        accountState_.setDiscoveryStatus("SEARCHING LOCAL NETWORK...");
-        const uint64_t generation = requestEpochs_.auth.begin();
-        accountAsync_.discover(generation, 1600);
+        accountAsync_.discover(requestEpochs_.auth.begin(), 1600);
     }
 
     void loginAsync() {
-        if (loading_) return;
+        auto fields = accountFlow_.beginLogin(loading_);
+        if (!fields) return;
         loading_ = true;
         error_.clear();
-        const auto fields = accountState_.fields();
-        const std::string deviceId = deviceId_;
-        const uint64_t generation = requestEpochs_.auth.begin();
-        accountAsync_.login(fields, deviceId, generation);
+        accountAsync_.login(std::move(*fields), accountFlow_.deviceId(), requestEpochs_.auth.begin());
     }
 
     void quickConnectAsync() {
-        if (loading_ || accountState_.quickConnectActive()) return;
-        if (accountState_.field(AccountScreenState::kServerField).empty()) {
-            error_ = "ENTER THE JELLYFIN SERVER ADDRESS FIRST";
-            accountState_.setLoginFocus(AccountScreenState::kServerField);
+        AccountQuickConnectPlan plan = accountFlow_.beginQuickConnect(loading_);
+        if (plan.error) {
+            error_ = std::move(*plan.error);
             return;
         }
+        if (!plan.ready()) return;
 
-        const std::string server = accountState_.field(AccountScreenState::kServerField);
-        const std::string deviceId = deviceId_;
         loading_ = true;
-        accountState_.beginQuickConnect();
         error_.clear();
-        const RequestEpoch::Token requestToken = requestEpochs_.auth.beginToken();
-
-        quickConnectAsync_.connect(server, deviceId, requestToken);
+        quickConnectAsync_.connect(std::move(plan.server), accountFlow_.deviceId(), requestEpochs_.auth.beginToken());
     }
 
     void loadHomeAsync() {
@@ -1980,30 +1925,14 @@ private:
         seerrRequest_.submit(std::move(plan));
     }
 
-    void searchSeerrAsync(bool immediate) {
-        auto plan = immediate ? seerrSearchCoordinator_.prepareImmediate(seerrEndpoint(), searchState_.query())
-                              : seerrSearchCoordinator_.prepareDue(seerrEndpoint(), searchState_.query(),
-                                                                   std::chrono::steady_clock::now());
-        if (plan.resultsChanged) searchState_.refreshSeerrResults();
-        if (!plan.ready()) return;
-
-        refreshSeerrStorageAsync();
-        const uint64_t generation = requestEpochs_.seerrSearch.begin();
-        seerrSearchCoordinator_.submit(std::move(plan), generation);
+    void applySearchDispatchEffects(const SearchDispatchEffects& effects) {
+        if (effects.clearError) error_.clear();
+        if (effects.refreshSeerrStorage) refreshSeerrStorageAsync();
     }
 
     void searchAsync(bool includeSeerrImmediately = true) {
-        if (searchState_.query().empty()) {
-            seerrSearchCoordinator_.reset();
-            searchState_.refreshSeerrResults();
-        }
-        if (!session_.valid() || !searchState_.beginSearch()) return;
-        const JellyfinSession session = session_;
-        const std::string query = searchState_.query();
-        error_.clear();
-        const uint64_t generation = requestEpochs_.search.begin();
-        jellyfinSearchAsync_.search(session, query, generation);
-        if (includeSeerrImmediately) searchSeerrAsync(true);
+        applySearchDispatchEffects(
+            searchFlow_.search(session_, seerrEndpoint(), includeSeerrImmediately, std::chrono::steady_clock::now()));
     }
 
     void scheduleSimilarPrefetch(const JellyfinItem& item) {
@@ -2200,7 +2129,7 @@ private:
             JellyfinItem updated = item;
             updated.positionTicks = releasePlan.cachedPositionTicks;
             if (releasePlan.markPlayed) updated.played = true;
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_,
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchFlow_.state(),
                                                          detailsFlow_.state(), queueState_, updated,
                                                          isHiddenFromHome(updated));
             if (detailsFlow_.item().id == item.id) {
@@ -2257,7 +2186,7 @@ private:
         requestEpochs_.invalidateTransient();
         loading_ = false;
         homeLoading_ = false;
-        accountState_.endQuickConnect();
+        accountFlow_.state().endQuickConnect();
         hideSystemTextInput();
         if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle) {
             releaseActivePlayback(true);
@@ -2276,8 +2205,8 @@ private:
                                 linked.id.c_str());
             openDetails(linked);
         } else if (!request.searchQuery.empty()) {
-            searchState_.setQuery(request.searchQuery);
-            searchState_.setKeyboard(false);
+            searchFlow_.state().setQuery(request.searchQuery);
+            searchFlow_.state().setKeyboard(false);
             pushScreen(Screen::Search);
             __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_SEARCH query");
             searchAsync();
@@ -2368,7 +2297,7 @@ private:
                 updated.positionTicks = 0;
             }
             std::scoped_lock lock(stateMutex_);
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_,
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchFlow_.state(),
                                                          detailsFlow_.state(), queueState_, updated,
                                                          isHiddenFromHome(updated));
             if (detailsFlow_.item().id == completed.item.id) {
@@ -2442,8 +2371,8 @@ private:
     }
 
     void applyAsyncCompletion(SystemTextInputEvent& event) {
-        applySystemTextInputEffects(
-            systemTextInputController_.apply(event, searchState_, settingsScreen_, settings_, accountState_));
+        applySystemTextInputEffects(systemTextInputController_.apply(event, searchFlow_.state(), settingsScreen_,
+                                                                     settings_, accountFlow_.state()));
     }
 
     void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
@@ -2458,7 +2387,7 @@ private:
             detailsFlow_.state().setDeleteConfirmation(false);
             return;
         }
-        searchState_.refreshSeerrResults();
+        searchFlow_.state().refreshSeerrResults();
         syncSeerrHomeRowLocked();
         detailsFlow_.item() = {};
         detailsFlow_.state().setDeleteConfirmation(false);
@@ -2479,7 +2408,7 @@ private:
             return;
         }
 
-        searchState_.refreshSeerrResults();
+        searchFlow_.state().refreshSeerrResults();
         syncSeerrHomeRowLocked();
         showNotice("REQUEST SENT TO SEERR", 4s);
         error_.clear();
@@ -2531,15 +2460,13 @@ private:
     }
 
     void applyAsyncCompletion(SeerrSearchCompletion& completion) {
-        applySearchCompletionEffects(
-            SearchCompletionController::apply(completion, requestEpochs_.seerrSearch.active(completion.generation),
-                                              screen_ == Screen::Search, !settings_.seerrSessionCookie.empty(),
-                                              searchState_, seerrSearchCoordinator_, std::chrono::steady_clock::now()));
+        applySearchCompletionEffects(searchFlow_.complete(completion, screen_ == Screen::Search,
+                                                          !settings_.seerrSessionCookie.empty(),
+                                                          std::chrono::steady_clock::now()));
     }
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
-        applySearchCompletionEffects(SearchCompletionController::apply(
-            completion, requestEpochs_.search.active(completion.generation), screen_ == Screen::Search, searchState_));
+        applySearchCompletionEffects(searchFlow_.complete(completion, screen_ == Screen::Search));
     }
 
     void applyDetailsCompletionEffects(DetailsCompletionEffects effects) {
@@ -2607,13 +2534,13 @@ private:
     void applyItemMutationCompletionEffects(ItemMutationCompletionEffects effects) {
         if (effects.finishLoading) mutationLoading_ = false;
         if (effects.cacheUpdate) {
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_,
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchFlow_.state(),
                                                          detailsFlow_.state(), queueState_, *effects.cacheUpdate,
                                                          isHiddenFromHome(*effects.cacheUpdate));
         }
         ItemMutationController::restorePlayedRollback(effects, home_, homeState_);
         if (effects.removeCachedItemId) {
-            ItemMutationController::removeCachedItem(home_, browseState_, searchState_, detailsFlow_.state(),
+            ItemMutationController::removeCachedItem(home_, browseState_, searchFlow_.state(), detailsFlow_.state(),
                                                      *effects.removeCachedItemId);
         }
         if (effects.error) error_ = std::move(*effects.error);
@@ -2672,13 +2599,13 @@ private:
     }
 
     void applyAsyncCompletion(DiscoveryCompletion& completion) {
-        applyAccountCompletionEffects(AccountCompletionController::apply(
-            completion, requestEpochs_.auth.active(completion.generation), accountState_));
+        applyAccountCompletionEffects(
+            accountFlow_.complete(completion, requestEpochs_.auth.active(completion.generation)));
     }
 
     void applyAsyncCompletion(LoginCompletion& completion) {
-        applyAccountCompletionEffects(AccountCompletionController::apply(
-            completion, requestEpochs_.auth.active(completion.generation), accountState_));
+        applyAccountCompletionEffects(
+            accountFlow_.complete(completion, requestEpochs_.auth.active(completion.generation)));
     }
 
     void applyAsyncCompletion(DetailsItemCompletion& completion) {
@@ -2716,23 +2643,23 @@ private:
     }
 
     void applyAsyncCompletion(QuickConnectStartedCompletion& completion) {
-        applyAccountCompletionEffects(AccountCompletionController::apply(
-            completion, requestEpochs_.auth.active(completion.generation), accountState_));
+        applyAccountCompletionEffects(
+            accountFlow_.complete(completion, requestEpochs_.auth.active(completion.generation)));
     }
 
     void applyAsyncCompletion(QuickConnectFailedCompletion& completion) {
-        applyAccountCompletionEffects(AccountCompletionController::apply(
-            completion, requestEpochs_.auth.active(completion.generation), accountState_));
+        applyAccountCompletionEffects(
+            accountFlow_.complete(completion, requestEpochs_.auth.active(completion.generation)));
     }
 
     void applyAsyncCompletion(QuickConnectAuthenticatedCompletion& completion) {
-        applyAccountCompletionEffects(AccountCompletionController::apply(
-            completion, requestEpochs_.auth.active(completion.generation), accountState_));
+        applyAccountCompletionEffects(
+            accountFlow_.complete(completion, requestEpochs_.auth.active(completion.generation)));
     }
 
     void applyAsyncCompletion(QuickConnectTimedOutCompletion& completion) {
-        applyAccountCompletionEffects(AccountCompletionController::apply(
-            completion, requestEpochs_.auth.active(completion.generation), accountState_));
+        applyAccountCompletionEffects(
+            accountFlow_.complete(completion, requestEpochs_.auth.active(completion.generation)));
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
@@ -2754,12 +2681,12 @@ private:
         if (effects.sessionExpired) {
             const JellyfinSession expired = session_;
             artwork_.eraseProfile(expired, renderer_);
-            sessionRegistry_.removeIdentity(expired);
+            (void)accountFlow_.removeIdentity(expired);
             requestEpochs_.invalidateAll();
             loading_ = false;
             mutationLoading_ = false;
             playedRollback_.reset();
-            searchState_.setLoading(false);
+            searchFlow_.state().setLoading(false);
             session_.token.clear();
             session_.userId.clear();
             settings_.seerrSessionCookie.clear();
@@ -2789,9 +2716,9 @@ private:
             return;
         }
         if (!pendingSearchQuery_.empty()) {
-            searchState_.setQuery(std::move(pendingSearchQuery_));
+            searchFlow_.state().setQuery(std::move(pendingSearchQuery_));
             pendingSearchQuery_.clear();
-            searchState_.setKeyboard(false);
+            searchFlow_.state().setKeyboard(false);
             pushScreen(Screen::Search);
             __android_log_print(ANDROID_LOG_INFO, kTag, "Opening ACTION_SEARCH query");
             searchAsync();
@@ -3026,11 +2953,10 @@ private:
         refreshSeerrPendingAsync();
         refreshSeerrStorageAsync(true);
         if (plan.deferred.request) requestSeerrMediaAsync(*plan.deferred.request);
-        if (plan.deferred.retrySearch && screen_ == Screen::Search && !searchState_.query().empty()) {
-            if (seerrSearchCoordinator_.prepareReconnectRetry(searchState_.query(), std::chrono::steady_clock::now())) {
-                searchState_.refreshSeerrResults();
-            }
-            searchSeerrAsync(true);
+        if (plan.deferred.retrySearch && screen_ == Screen::Search && !searchFlow_.state().query().empty()) {
+            const auto now = std::chrono::steady_clock::now();
+            (void)searchFlow_.prepareReconnectRetry(now);
+            applySearchDispatchEffects(searchFlow_.searchSeerr(seerrEndpoint(), true, now));
         }
     }
 
@@ -3094,462 +3020,80 @@ private:
     void render() {
         std::scoped_lock lock(stateMutex_);
         renderer_.beginFrame();
-        if (screensaverActive_) {
-            renderer_.setUiTransform(0.0f, 1.0f);
-            renderScreensaver();
-            renderer_.endFrame();
-            return;
+
+        DeviceCodecSupport codecSupport;
+        if (screen_ == Screen::Settings || screen_ == Screen::Diagnostics) {
+            codecSupport = api_.deviceCodecSupport();
         }
-        renderer_.setUiTransform(uiSafeAreaFraction(settings_.safeAreaPercent), uiTextScale(settings_.uiTextSize));
-        uiPresentation_.beginFrame(session_, settings_, lastInteraction_,
-                                   screen_ == Screen::Home && homeState_.centerPending());
-        auto renderScreen = [&](Screen target) {
-            switch (target) {
-            case Screen::Login:
-                renderLogin();
-                break;
-            case Screen::Profiles:
-                renderProfiles();
-                break;
-            case Screen::Home:
-                renderHome();
-                break;
-            case Screen::Browse:
-                renderBrowse();
-                break;
-            case Screen::Search:
-                renderSearch();
-                break;
-            case Screen::Settings:
-                renderSettings();
-                break;
-            case Screen::Diagnostics:
-                renderDiagnostics();
-                break;
-            case Screen::Details:
-                renderDetails();
-                break;
-            case Screen::Cast:
-                renderCast();
-                break;
-            case Screen::PersonItems:
-                renderPersonItems();
-                break;
-            case Screen::ItemMenu:
-                renderDetails();
-                break;
-            case Screen::Seasons:
-                renderSeasons();
-                break;
-            case Screen::Episodes:
-                renderEpisodes();
-                break;
-            case Screen::SeerrDrivePicker:
-                renderSeerrDrivePicker();
-                break;
-            case Screen::Player:
-                renderPlayer();
-                break;
-            }
-        };
-        if (screen_ == Screen::ItemMenu) {
-            renderScreen(navigation_.previousOr(Screen::Details));
-            renderItemMenu();
-        } else {
-            renderScreen(screen_);
-        }
-        if (queueState_.overlayActive()) renderQueueOverlay();
-        renderStatus();
+
+        renderAppScreenFrame(AppScreenPresentationFrame<decltype(uiPresentation_), decltype(artwork_)>{
+            .screen = screen_,
+            .backgroundScreen = navigation_.previousOr(Screen::Details),
+            .screensaverActive = screensaverActive_,
+            .loading = loading_,
+            .homeLoading = homeLoading_,
+            .mutationLoading = mutationLoading_,
+            .seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth()),
+            .systemSearchInputActive = systemTextInputController_.mode() == kTextInputSearch,
+            .systemSettingsSearchActive = systemTextInputController_.mode() == kTextInputSettingsSearch,
+            .systemSeerrApiKeyActive = systemTextInputController_.mode() == kTextInputSeerrApiKey,
+            .itemHiddenFromHome = isHiddenFromHome(detailsFlow_.item()),
+            .keyboardRow = keyboardRow_,
+            .keyboardCol = keyboardCol_,
+            .homeSlideFromFirst = homeSlideFromFirst_,
+            .homeSlideToFirst = homeSlideToFirst_,
+            .homeSlideStarted = homeSlideStarted_,
+            .nextUpReplacementFadeIndex = nextUpReplacementFadeIndex_,
+            .nextUpReplacementFadeItemId = nextUpReplacementFadeItemId_,
+            .nextUpReplacementFadeStarted = nextUpReplacementFadeStarted_,
+            .lastInteraction = lastInteraction_,
+            .appVersion = SLOPPATV_VERSION_NAME,
+            .error = error_,
+            .renderer = renderer_,
+            .ui = uiPresentation_,
+            .artwork = artwork_,
+            .brandMark = brandMark_,
+            .accountFlow = accountFlow_,
+            .home = home_,
+            .homeState = homeState_,
+            .session = session_,
+            .settings = settings_,
+            .browseState = browseState_,
+            .searchState = searchFlow_.state(),
+            .seerrDomain = seerrDomain_,
+            .settingsScreen = settingsScreen_,
+            .externalPlayers = externalPlayers_,
+            .deviceCodecSupport = codecSupport,
+            .serverInfo = serverInfo_,
+            .detailsFlow = detailsFlow_,
+            .player = player_,
+            .videoSurface = videoSurface_,
+            .playbackCoordinator = playbackCoordinator_,
+            .playerScreenState = playerScreenState_,
+            .trickplayState = trickplayState_,
+            .queueState = queueState_,
+            .statusOverlayState = statusOverlayState_,
+        });
+
         renderer_.endFrame();
     }
 
-    void renderLogin() {
-        renderLoginPresentation(renderer_, uiPresentation_, accountState_, loading_,
-                                static_cast<int>(sessionRegistry_.size()), Renderer::logicalWidth(),
-                                Renderer::logicalHeight(), [this](float top) { renderKeyboard(top); });
-    }
-
-    void renderProfiles() {
-        renderProfilesPresentation(renderer_, uiPresentation_, static_cast<int>(sessionRegistry_.size()),
-                                   accountState_.profileSelection(), accountState_.profileAction(),
-                                   [this](int index) { return sessionRegistry_.at(static_cast<size_t>(index)); });
-    }
-
-    void renderKeyboard(float top) {
-        renderKeyboardPresentation(renderer_, uiPresentation_, keyboardRows(), keyboardRow_, keyboardCol_, top,
-                                   Renderer::logicalHeight());
-    }
-
-    void loadBundledBrandMark() {
-        AAssetManager* manager = app_ && app_->activity ? app_->activity->assetManager : nullptr;
-        if (!manager) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark asset manager unavailable");
-            return;
-        }
-        AAsset* asset = AAssetManager_open(manager, "sloppatv_brand_mark.png", AASSET_MODE_BUFFER);
-        if (!asset) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark asset unavailable");
-            return;
-        }
-        const off_t length = AAsset_getLength(asset);
-        std::string encoded(length > 0 ? static_cast<size_t>(length) : 0, '\0');
-        const int bytesRead = encoded.empty() ? 0 : AAsset_read(asset, encoded.data(), encoded.size());
-        AAsset_close(asset);
-        if (bytesRead <= 0) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark asset was empty");
-            return;
-        }
-        encoded.resize(static_cast<size_t>(bytesRead));
-        std::string decodeError;
-        brandMarkDecoded_ = imageDecoder_.decode(encoded, decodeError);
-        if (!brandMarkDecoded_.valid()) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Brand mark decode failed: %s", decodeError.c_str());
-        }
-    }
-
-    bool drawBrandMark(float x, float y, float size) {
-        if (!brandMarkDecoded_.valid() || !renderer_.ready()) return false;
-        if (brandMarkTextureGeneration_ != renderer_.generation()) {
-            brandMarkTexture_ = 0;
-            brandMarkTextureGeneration_ = renderer_.generation();
-        }
-        if (brandMarkTexture_ == 0) {
-            brandMarkTexture_ = renderer_.createTexture(brandMarkDecoded_.width, brandMarkDecoded_.height,
-                                                        brandMarkDecoded_.rgba.data());
-        }
-        if (brandMarkTexture_ == 0) return false;
-        renderer_.image(brandMarkTexture_, x, y, size, size);
-        return true;
-    }
-
-    void renderHome() {
-        renderHomePresentation(
-            renderer_, uiPresentation_, home_.rows, homeState_, session_, settings_, homeLoading_, homeSlideFromFirst_,
-            homeSlideToFirst_, homeSlideStarted_, Renderer::logicalWidth(), Renderer::logicalHeight(),
-            [this](float x, float y, float size) { return drawBrandMark(x, y, size); },
-            [this](std::string_view title, const std::vector<JellyfinItem>& items, int row, float top) {
-                renderHomeRow(std::string(title), items, row, top);
-            });
-    }
-
-    void renderHomeRow(const std::string& title, const std::vector<JellyfinItem>& items, int row, float top) {
-        renderHomeRowContent(
-            renderer_, title, items, row, top, homeState_, settings_.uiTextSize,
-            HomeRowFadeState{
-                .itemIndex = nextUpReplacementFadeIndex_,
-                .itemId = nextUpReplacementFadeItemId_,
-                .started = nextUpReplacementFadeStarted_,
-                .now = std::chrono::steady_clock::now(),
-            },
-            HomeRowRenderStyle<Color>{
-                .cornerSmall = material_tv::cornerSmall,
-                .cardFocusScale = materialCardFocusScale(),
-                .text = kText,
-                .secondaryText = kSecondaryText,
-                .muted = kMuted,
-                .track = kTrack,
-                .focus = kFocus,
-            },
-            [this](float x, float y, float width, float height, bool focused, float focusScale) {
-                return uiPresentation_.focusedBounds(x, y, width, height, focused, focusScale);
-            },
-            [this](const JellyfinItem& item, float x, float y, float width, float height, float radius, float alpha) {
-                return uiPresentation_.drawHomeArtwork(item, x, y, width, height, radius, alpha);
-            },
-            [this](const JellyfinItem& item, float x, float y, float width, float height, float radius, float alpha) {
-                uiPresentation_.drawArtworkPlaceholder(item, x, y, width, height, radius, alpha);
-            },
-            [this](float x, float y, float width, float height, Color color, float radius) {
-                uiPresentation_.drawFocusHalo(x, y, width, height, color, radius);
-            },
-            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
-                return uiPresentation_.fitTextLines(value, scale, maxWidth, maxLines);
-            },
-            [this](float x, float y, const std::string& label, bool selected, float scale, float height,
-                   float maxWidth) { return uiPresentation_.drawChip(x, y, label, selected, scale, height, maxWidth); },
-            [](const JellyfinItem& item) { return isSeerrItem(item); },
-            [](const JellyfinItem& item) { return episodeNumberLabel(item); });
-    }
-
-    MediaCardRenderStyle<Color> mediaCardStyle() const {
-        return MediaCardRenderStyle<Color>{
-            .canvasHeight = Renderer::logicalHeight(),
-            .cornerSmall = material_tv::cornerSmall,
-            .cornerMedium = material_tv::cornerMedium,
-            .cardFocusScale = materialCardFocusScale(),
-            .labelScale = material_tv::type::label,
-            .panel = kPanel,
-            .panelAlt = kPanelAlt,
-            .panelElevated = kPanelElevated,
-            .tertiary = kTertiary,
-            .text = kText,
-            .muted = kMuted,
-            .track = kTrack,
-            .focus = kFocus,
-            .focusSoft = kFocusSoft,
-            .outline = kOutline,
-        };
-    }
-
-    void renderMediaArtworkCard(const JellyfinItem& item, float x, float y, float slotWidth, bool focused,
-                                bool showState = true, bool preferSeriesCover = false, bool alignToPortraitBand = false,
-                                int titleLineLimit = 0) {
-        renderMediaArtworkCardContent(
-            renderer_, item, x, y, slotWidth, focused,
-            MediaArtworkCardRenderOptions{
-                .showState = showState,
-                .preferSeriesCover = preferSeriesCover,
-                .alignToPortraitBand = alignToPortraitBand,
-                .titleLineLimit = titleLineLimit,
-                .uiTextSize = settings_.uiTextSize,
-                .showWatchedIndicators = settings_.showWatchedIndicators,
-            },
-            mediaCardStyle(),
-            [this](float imageX, float imageY, float imageWidth, float imageHeight, bool isFocused, float focusScale) {
-                return uiPresentation_.focusedBounds(imageX, imageY, imageWidth, imageHeight, isFocused, focusScale);
-            },
-            [this](const JellyfinItem& source, bool seriesCoverForEpisode, bool landscape, float imageX, float imageY,
-                   float imageWidth, float imageHeight, float radius) {
-                JellyfinItem cover = source;
-                if (seriesCoverForEpisode) {
-                    cover.id = source.seriesId;
-                    cover.imageTag = source.seriesPrimaryImageTag;
-                    cover.type = "Series";
-                }
-                return landscape
-                           ? uiPresentation_.drawHomeArtwork(cover, imageX, imageY, imageWidth, imageHeight, radius)
-                           : uiPresentation_.drawArtwork(cover, imageX, imageY, imageWidth, imageHeight, 1.0f, radius);
-            },
-            [this](const JellyfinItem& source, float imageX, float imageY, float imageWidth, float imageHeight,
-                   float radius) {
-                uiPresentation_.drawArtworkPlaceholder(source, imageX, imageY, imageWidth, imageHeight, radius);
-            },
-            [this](float imageX, float imageY, float imageWidth, float imageHeight, Color color, float radius) {
-                uiPresentation_.drawFocusHalo(imageX, imageY, imageWidth, imageHeight, color, radius);
-            },
-            [this](float centeredX, float centeredY, float centeredWidth, float centeredHeight, float scale,
-                   std::string_view value, Color color, float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(centeredX, centeredY, centeredWidth, centeredHeight, scale,
-                                                          value, color, horizontalPadding, verticalPadding);
-            },
-            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
-                return uiPresentation_.fitTextLines(value, scale, maxWidth, maxLines);
-            },
-            [](const JellyfinItem& source) {
-                return isSeerrItem(source)
-                           ? (source.externalRequested ? source.externalStatus : std::string("Press OK to request"))
-                           : episodeLabel(source);
-            });
-    }
-
-    void renderTextTile(const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
-        renderMediaTextTileContent(
-            renderer_, item, x, y, width, height, focused, mediaCardStyle(),
-            [this](float tileX, float tileY, float tileWidth, float tileHeight, bool isFocused, float focusScale) {
-                return uiPresentation_.focusedBounds(tileX, tileY, tileWidth, tileHeight, isFocused, focusScale);
-            },
-            [this](float centeredX, float centeredY, float centeredWidth, float centeredHeight, float scale,
-                   std::string_view value, Color color, float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(centeredX, centeredY, centeredWidth, centeredHeight, scale,
-                                                          value, color, horizontalPadding, verticalPadding);
-            },
-            [this](float tileX, float tileY, float tileWidth, float tileHeight, Color color, float radius) {
-                uiPresentation_.drawFocusHalo(tileX, tileY, tileWidth, tileHeight, color, radius);
-            });
-    }
-
-    void renderBrowse() {
-        renderBrowsePresentation(
-            renderer_, uiPresentation_, browseState_, loading_,
-            [this](const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
-                renderTextTile(item, x, y, width, height, focused);
-            },
-            [this](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
-                   bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
-                renderMediaArtworkCard(item, x, y, width, focused, showState, seriesCoverForEpisode, alignMixedHeights,
-                                       titleLineLimit);
-            });
-    }
-
-    void renderSearch() {
-        renderSearchPresentation(
-            renderer_, uiPresentation_, searchState_, SeerrClient::configured(settings_.seerrServer, seerrAuth()),
-            systemTextInputController_.mode() == kTextInputSearch, seerrDomain_.searchLoading(),
-            seerrDomain_.searchError(), seerrDomain_.storageLoading(), seerrDomain_.storageTargets(),
-            [this](float top) { renderKeyboard(top); },
-            [this](float x, float y, float scale, std::string_view value, float maxWidth, Color color,
-                   std::chrono::steady_clock::time_point now) {
-                drawLingeringTitle(x, y, scale, value, maxWidth, color, now);
-            },
-            [this](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
-                   bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
-                renderMediaArtworkCard(item, x, y, width, focused, showState, seriesCoverForEpisode, alignMixedHeights,
-                                       titleLineLimit);
-            });
-    }
-
-    void renderSeerrDrivePicker() {
-        const SeerrDrivePickerViewModel model =
-            seerrDrivePickerViewModel(seerrDomain_.pendingStorageRequest(), seerrDomain_.storageDriveChoices(),
-                                      seerrDomain_.storageDriveSelection());
-        renderSeerrDrivePickerScreen(
-            renderer_, model,
-            SeerrDrivePickerRenderStyle<Color>{
-                .headlineScale = material_tv::type::headline,
-                .cornerMedium = material_tv::cornerMedium,
-                .focusScale = materialWideListItemFocusScale(),
-                .text = kText,
-                .muted = kMuted,
-                .secondaryText = kSecondaryText,
-                .focus = kFocus,
-                .focusSoft = kFocusSoft,
-                .panelElevated = kPanelElevated,
-                .error = kError,
-            },
-            [this](float x, float y, float width, float height, bool focused, float radius, float focusScale) {
-                uiPresentation_.drawListItemSurface(x, y, width, height, focused, radius, focusScale);
-            },
-            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
-                return uiPresentation_.fitTextLines(value, scale, maxWidth, maxLines);
-            },
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                   float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                                          verticalPadding);
-            },
-            [this](const std::string& title, const std::string& message) {
-                uiPresentation_.renderEmptyState(title, message);
-            });
-    }
-
-    void renderPlayer() {
-        renderPlayerPresentation(renderer_, player_, videoSurface_, playbackCoordinator_, playerScreenState_,
-                                 trickplayState_, settings_, session_, artwork_, lastInteraction_);
-    }
-
-    void renderQueueOverlay() { renderQueueOverlayPresentation(renderer_, uiPresentation_, queueState_); }
-
-    void renderScreensaver() {
-        renderScreensaverPresentation(renderer_, uiPresentation_, settings_.clock24Hour, Renderer::logicalWidth(),
-                                      Renderer::logicalHeight());
-    }
-
-    void renderSettings() {
-        const std::string externalPlayer = externalPlayerLabel();
-        renderSettingsPresentation(renderer_, uiPresentation_, settingsScreen_, settings_,
-                                   api_.deviceCodecSupport().maxAudioOutputChannels, externalPlayer, session_.username,
-                                   systemTextInputController_.mode() == kTextInputSettingsSearch,
-                                   systemTextInputController_.mode() == kTextInputSeerrApiKey);
-    }
-
-    void renderDiagnostics() {
-        renderDiagnosticsPresentation(renderer_, uiPresentation_, api_.deviceCodecSupport(), SLOPPATV_VERSION_NAME,
-                                      session_.server, serverInfo_.name, serverInfo_.version, loading_,
-                                      playbackCoordinator_.session().lastPlaybackSummary());
-    }
-
-    void renderItemMenu() {
-        std::vector<std::string> actions;
-        if (!detailsFlow_.state().deleteConfirmation()) actions = itemMenuActions();
-        renderItemMenuPresentation(renderer_, uiPresentation_, detailsFlow_.item(), detailsFlow_.state(), actions,
-                                   Renderer::logicalWidth(), Renderer::logicalHeight());
-    }
-
-    void drawLingeringTitle(float x, float y, float scale, std::string_view value, float maxWidth, Color color,
-                            std::chrono::steady_clock::time_point now) {
-        renderLingeringTitle(renderer_, x, y, scale, value, maxWidth, color, lastInteraction_, now);
-    }
-
-    void renderMediaGrid(const std::string& title, const std::vector<JellyfinItem>& items, int selection) {
-        renderMediaGridPresentation(title, items, loading_, selection, settings_.uiTextSize, uiPresentation_,
-                                    [this](const JellyfinItem& item, const MediaGridCardPlacement& placement) {
-                                        renderMediaArtworkCard(item, placement.x, placement.y, placement.slotWidth,
-                                                               placement.focused, placement.showState,
-                                                               placement.preferSeriesCover,
-                                                               placement.alignToPortraitBand, placement.titleLineLimit);
-                                    });
-    }
-
-    void renderCast() {
-        renderCastPresentation(renderer_, uiPresentation_, detailsFlow_.item(), detailsFlow_.state(),
-                               settings_.uiTextSize);
-    }
-
-    void renderPersonItems() {
-        const auto& person = detailsFlow_.state().selectedPerson();
-        const std::string heading = person.name.empty() ? "Person" : "Featuring " + person.name;
-        renderMediaGrid(heading, detailsFlow_.state().personItems(), detailsFlow_.state().personItemSelection());
-    }
-
-    void renderSeasons() {
-        const auto& series = detailsFlow_.state().seriesDetail();
-        renderMediaGrid(series.name.empty() ? "Seasons" : series.name + " | Seasons", detailsFlow_.state().seasons(),
-                        detailsFlow_.state().seasonSelection());
-    }
-
-    void renderEpisodes() {
-        const auto& series = detailsFlow_.state().seriesDetail();
-        const auto& season = detailsFlow_.state().selectedSeason();
-        const std::string heading = season.name.empty() ? "Episodes" : series.name + " - " + season.name;
-        renderMediaGrid(heading, detailsFlow_.state().episodes(), detailsFlow_.state().episodeSelection());
-    }
-
-    void renderDetails() {
-        renderDetailsPresentation(renderer_, uiPresentation_, detailsFlow_.item(), detailsFlow_.state(),
-                                  detailActions(), settings_, playbackCoordinator_.continuation().stillWatchingPrompt(),
-                                  screen_ == Screen::ItemMenu, Renderer::logicalWidth(), Renderer::logicalHeight());
-    }
-
-    void renderStatus() {
-        const StatusOverlayRenderState state =
-            statusOverlayState_.renderState(error_, loading_ || homeLoading_ || mutationLoading_,
-                                            screen_ == Screen::Player, std::chrono::steady_clock::now());
-        renderStatusOverlay(renderer_, state,
-                            StatusOverlayRenderStyle<Color>{
-                                .cornerMedium = material_tv::cornerMedium,
-                                .panelElevated = kPanelElevated,
-                                .focus = kFocus,
-                                .error = kError,
-                                .errorOutline = Color{kError.r, kError.g, kError.b, 0.55f},
-                                .text = kText,
-                            },
-                            [this](std::string_view value, float scale, float width, int lines) {
-                                return uiPresentation_.fitTextLines(value, scale, width, lines);
-                            });
-    }
-
     void loadSession() {
-        std::string warning;
-        StoredSessionState stored = loadSessionState(dataPath_, generateDeviceId(), warning);
-        if (!warning.empty()) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to read session: %s", warning.c_str());
+        AccountPersistedState restored = accountFlow_.restore(dataPath_);
+        if (!restored.warning.empty()) {
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to read session: %s", restored.warning.c_str());
         }
-        deviceId_ = std::move(stored.deviceId);
-        session_ = SessionRegistry::fromStored(stored.currentSession, deviceId_);
-        sessionRegistry_.importStored(stored.savedSessions, deviceId_);
-        hiddenHomeItems_ = std::move(stored.hiddenHomeItems);
-        settings_ = std::move(stored.settings);
-        if (session_.valid()) {
-            artwork_.eraseProfile(session_, renderer_);
-            sessionRegistry_.remember(session_, deviceId_);
-        }
+        session_ = std::move(restored.session);
+        hiddenHomeItems_ = std::move(restored.hiddenHomeItems);
+        settings_ = std::move(restored.settings);
+        if (session_.valid()) artwork_.eraseProfile(session_, renderer_);
         playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
-        accountState_.setAuthenticatedAccount(session_.server, session_.username);
     }
 
     void saveSession(const JellyfinSession& session) {
-        if (session.valid()) {
-            artwork_.eraseProfile(session, renderer_);
-            sessionRegistry_.remember(session, deviceId_);
-        }
-        StoredSessionState stored;
-        stored.deviceId = deviceId_;
-        stored.currentSession = SessionRegistry::toStored(session);
-        stored.savedSessions = sessionRegistry_.exportStored();
-        stored.hiddenHomeItems = hiddenHomeItems_;
-        stored.settings = settings_;
+        if (session.valid()) artwork_.eraseProfile(session, renderer_);
         std::string warning;
-        if (!saveSessionState(dataPath_, stored, warning) && !warning.empty()) {
+        if (!accountFlow_.persist(dataPath_, session, hiddenHomeItems_, settings_, warning) && !warning.empty()) {
             __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to save session: %s", warning.c_str());
         }
     }
@@ -3602,7 +3146,6 @@ private:
         artwork_;
     UiPresentation<decltype(artwork_)> uiPresentation_;
     std::string dataPath_;
-    std::string deviceId_;
 
     Screen screen_ = Screen::Login;
     NavigationStack<Screen> navigation_{Screen::Login};
@@ -3625,8 +3168,7 @@ private:
     std::string pendingDeepLinkItemId_;
     std::string pendingSearchQuery_;
     std::optional<LaunchRequest> pendingRuntimeLaunchRequest_;
-    SessionRegistry sessionRegistry_;
-    AccountScreenState accountState_;
+    AccountFlow accountFlow_;
     JellyfinServerInfo serverInfo_;
     bool serverInfoLoading_ = false;
     JellyfinHomeData home_;
@@ -3640,12 +3182,11 @@ private:
     SeerrRequestCoordinator<
         SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
         seerrRequest_;
-    SeerrSearchCoordinator<
-        SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
-        seerrSearchCoordinator_;
-    DecodedImage brandMarkDecoded_;
-    GLuint brandMarkTexture_ = 0;
-    uint64_t brandMarkTextureGeneration_ = 0;
+    SearchFlow<
+        SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>,
+        JellyfinSearchExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>
+        searchFlow_;
+    BrandMark brandMark_;
     HomeScreenState homeState_;
     std::unordered_set<std::string> hiddenHomeItems_;
     int nextUpReplacementFadeIndex_ = -1;
@@ -3655,7 +3196,6 @@ private:
 
     SystemTextInputController systemTextInputController_;
 
-    SearchScreenState searchState_;
     SimilarPrefetchController similarPrefetch_;
 
     int keyboardRow_ = 0;
