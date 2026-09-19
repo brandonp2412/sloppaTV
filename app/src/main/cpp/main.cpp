@@ -154,6 +154,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -194,6 +195,18 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
+struct SimilarPrefetchEntry {
+    std::vector<JellyfinItem> items;
+    std::chrono::steady_clock::time_point loadedAt{};
+};
+
+struct SimilarPrefetchCompletion {
+    JellyfinSession session;
+    std::string itemId;
+    std::string key;
+    ApiValueResult<std::vector<JellyfinItem>> result;
+};
+
 using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
 
 using AsyncCompletion =
@@ -202,7 +215,7 @@ using AsyncCompletion =
                  ItemMenuDetailCompletion, PersonItemsCompletion, DiagnosticsCompletion, SeasonsCompletion,
                  EpisodesCompletion, BrowsePageCompletion, ServerInfoNoticeCompletion, FavoriteCompletion,
                  PlayedCompletion, MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
-                 LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
+                 LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion, SimilarPrefetchCompletion,
                  EpisodeSeriesContextRequestCompletion, EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
                  QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion, QuickConnectTimedOutCompletion,
                  HomeCoreCompletion, HomeSecondaryCompletion, ExternalPlaybackCompletion, SubtitleLoadCompletion,
@@ -219,7 +232,8 @@ class SloppaApp {
 public:
     explicit SloppaApp(android_app* app)
         : app_(app), renderer_(app->activity->vm, app->activity->clazz), api_(app->activity->vm, app->activity->clazz),
-          seerr_(app->activity->vm, app->activity->clazz), seerrSearch_(app->activity->vm, app->activity->clazz),
+          similarPrefetchApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
+          seerrSearch_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
           externalPlayer_(app->activity->vm, app->activity->clazz), imageDecoder_(app->activity->vm),
@@ -231,6 +245,14 @@ public:
               },
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
+              }),
+          similarPrefetchTasks_(
+              1,
+              [app] {
+                  if (app && app->looper) ALooper_wake(app->looper);
+              },
+              [](const std::string& error) {
+                  __android_log_print(ANDROID_LOG_ERROR, kTag, "Similar prefetch exception: %s", error.c_str());
               }),
           accountAsync_(api_, tasks_, asyncCompletions_), quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_), browseAsync_(api_, tasks_, asyncCompletions_),
@@ -335,9 +357,11 @@ public:
 
     ~SloppaApp() {
         api_.cancelPendingRequests();
+        similarPrefetchApi_.cancelPendingRequests();
         seerr_.cancelPendingRequests();
         seerrSearch_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
+        similarPrefetchTasks_.shutdown();
         tasks_.shutdown();
         stopPlayback();
         if (brandMarkTexture_ != 0 && renderer_.ready()) renderer_.deleteTexture(brandMarkTexture_);
@@ -407,6 +431,7 @@ public:
                 };
                 tightenTimeoutUntil(statusOverlayState_.wakeDeadline());
                 tightenTimeoutUntil(homeRetryAt_);
+                tightenTimeoutUntil(similarPrefetchDue_);
                 if (!seerrDomain_.pendingRequestsLoading() &&
                     (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
                     tightenTimeoutUntil(seerrDomain_.pendingRequestsRefreshDeadline());
@@ -1098,9 +1123,17 @@ private:
             return;
         case HomeNavigationActionType::FinalizeNavigation:
             beginHomeRowSlide(navigation.previousFirstVisibleRow, navigation.currentFirstVisibleRow);
-            if (navigation.prefetchRow >= 0)
+            if (navigation.prefetchRow >= 0) {
                 uiPresentation_.prefetchHomeWindow(session_, home_, navigation.prefetchRow,
                                                    navigation.prefetchSelection);
+                if (navigation.prefetchRow < static_cast<int>(home_.rows.size())) {
+                    const auto& items = home_.rows[static_cast<size_t>(navigation.prefetchRow)].items;
+                    if (navigation.prefetchSelection >= 0 &&
+                        navigation.prefetchSelection < static_cast<int>(items.size())) {
+                        scheduleSimilarPrefetch(items[static_cast<size_t>(navigation.prefetchSelection)]);
+                    }
+                }
+            }
             return;
         }
     }
@@ -1144,10 +1177,15 @@ private:
         case BrowseNavigationActionType::OpenDetails:
             if (navigation.item) openDetails(*navigation.item);
             return;
-        case BrowseNavigationActionType::SelectionChanged:
+        case BrowseNavigationActionType::SelectionChanged: {
             uiPresentation_.prefetchBrowseArtworkAhead(session_, browseState_);
+            const auto& items = browseState_.items();
+            if (browseState_.selection() >= 0 && browseState_.selection() < static_cast<int>(items.size())) {
+                scheduleSimilarPrefetch(items[static_cast<size_t>(browseState_.selection())]);
+            }
             if (navigation.loadMore) loadMoreBrowseAsync();
             return;
+        }
         }
     }
 
@@ -1155,6 +1193,11 @@ private:
         constexpr int columns = mediaGridColumns();
         const SearchNavigationAction navigation =
             SearchNavigationController::handle(searchState_, screenNavigationKeyForKey(key), columns);
+        const auto& results = searchState_.results();
+        if (!searchState_.keyboard() && searchState_.selection() >= 0 &&
+            searchState_.selection() < static_cast<int>(results.size())) {
+            scheduleSimilarPrefetch(results[static_cast<size_t>(searchState_.selection())]);
+        }
         switch (navigation.type) {
         case SearchNavigationActionType::None:
             return;
@@ -1280,6 +1323,9 @@ private:
     void handleDetailsKey(int32_t key) {
         const DetailsNavigationAction navigation =
             DetailsNavigationController::handleDetails(detailsState_, detailsNavigationKeyForKey(key), detail_);
+        if (detailsState_.similarFocused()) {
+            if (const auto* selected = detailsState_.selectedSimilar()) scheduleSimilarPrefetch(*selected);
+        }
         if (navigation.type == DetailsNavigationActionType::Back) {
             cancelContentLoadForNavigation();
             playbackCoordinator_.resetContinuationPrompt();
@@ -2372,6 +2418,114 @@ private:
         if (includeSeerrImmediately) searchSeerrAsync(true);
     }
 
+    static std::string similarPrefetchKey(const JellyfinSession& session, const std::string& itemId) {
+        return session.server + "\n" + session.userId + "\n" + itemId;
+    }
+
+    bool supportsSimilarPrefetch(const JellyfinItem& item) const {
+        if (!session_.valid() || item.id.empty() || isSeerrItem(item)) return false;
+        return item.type != "Folder" && item.type != "BoxSet" && item.type != "CollectionFolder" &&
+               item.type != "Genre" && item.type != "Letter" && item.type != "Person";
+    }
+
+    std::optional<std::vector<JellyfinItem>> cachedSimilarPrefetch(const JellyfinSession& session,
+                                                                   const std::string& itemId) {
+        std::scoped_lock lock(stateMutex_);
+        const std::string key = similarPrefetchKey(session, itemId);
+        const auto found = similarPrefetchCache_.find(key);
+        if (found == similarPrefetchCache_.end()) return std::nullopt;
+        if (std::chrono::steady_clock::now() - found->second.loadedAt > 5min) {
+            similarPrefetchCache_.erase(found);
+            return std::nullopt;
+        }
+        return found->second.items;
+    }
+
+    void storeSimilarPrefetch(const JellyfinSession& session, const std::string& itemId,
+                              std::vector<JellyfinItem> items) {
+        std::scoped_lock lock(stateMutex_);
+        const std::string key = similarPrefetchKey(session, itemId);
+        if (!similarPrefetchCache_.contains(key) && similarPrefetchCache_.size() >= 8) {
+            similarPrefetchCache_.erase(similarPrefetchCache_.begin());
+        }
+        SimilarPrefetchEntry entry{
+            .items = std::move(items),
+            .loadedAt = std::chrono::steady_clock::now(),
+        };
+        if (screen_ == Screen::Details && detail_.id == itemId && detailsState_.similar().empty()) {
+            detailsState_.setSimilar(entry.items);
+        }
+        similarPrefetchCache_.insert_or_assign(key, std::move(entry));
+    }
+
+    void scheduleSimilarPrefetch(const JellyfinItem& item) {
+        std::scoped_lock lock(stateMutex_);
+        if (!supportsSimilarPrefetch(item)) {
+            similarPrefetchCandidateId_.clear();
+            similarPrefetchCandidateKey_.clear();
+            similarPrefetchDue_ = {};
+            return;
+        }
+        const std::string key = similarPrefetchKey(session_, item.id);
+        const auto cached = similarPrefetchCache_.find(key);
+        if (cached != similarPrefetchCache_.end() &&
+            std::chrono::steady_clock::now() - cached->second.loadedAt <= 5min) {
+            similarPrefetchCandidateId_.clear();
+            similarPrefetchCandidateKey_.clear();
+            similarPrefetchDue_ = {};
+            return;
+        }
+        if (similarPrefetchInFlight_.contains(key)) return;
+        similarPrefetchCandidateId_ = item.id;
+        similarPrefetchCandidateKey_ = key;
+        similarPrefetchDue_ = std::chrono::steady_clock::now() + 350ms;
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
+    void runDueSimilarPrefetch() {
+        JellyfinSession session;
+        std::string itemId;
+        std::string key;
+        {
+            std::scoped_lock lock(stateMutex_);
+            const auto now = std::chrono::steady_clock::now();
+            if (similarPrefetchDue_ == std::chrono::steady_clock::time_point{} || now < similarPrefetchDue_) return;
+            if (screen_ != Screen::Home && screen_ != Screen::Browse && screen_ != Screen::Search &&
+                screen_ != Screen::Details) {
+                similarPrefetchCandidateId_.clear();
+                similarPrefetchCandidateKey_.clear();
+                similarPrefetchDue_ = {};
+                return;
+            }
+            session = session_;
+            itemId = similarPrefetchCandidateId_;
+            key = similarPrefetchCandidateKey_;
+            similarPrefetchCandidateId_.clear();
+            similarPrefetchCandidateKey_.clear();
+            similarPrefetchDue_ = {};
+            if (!session.valid() || itemId.empty() || key != similarPrefetchKey(session, itemId) ||
+                similarPrefetchInFlight_.contains(key)) {
+                return;
+            }
+            const auto cached = similarPrefetchCache_.find(key);
+            if (cached != similarPrefetchCache_.end() && now - cached->second.loadedAt <= 5min) return;
+            similarPrefetchInFlight_.insert(key);
+        }
+
+        if (!similarPrefetchTasks_.submit([this, session, itemId, key] {
+                auto result = similarPrefetchApi_.getSimilar(session, itemId, 18);
+                asyncCompletions_.push(SimilarPrefetchCompletion{
+                    .session = session,
+                    .itemId = itemId,
+                    .key = key,
+                    .result = std::move(result),
+                });
+            })) {
+            std::scoped_lock lock(stateMutex_);
+            similarPrefetchInFlight_.erase(key);
+        }
+    }
+
     void openDetails(const JellyfinItem& item, bool replaceCurrent = false) {
         if (replaceCurrent)
             replaceScreen(Screen::Details);
@@ -2380,12 +2534,17 @@ private:
         playbackCoordinator_.dismissStillWatchingPrompt();
         detail_ = item;
         detailsState_.beginDetails();
-        loading_ = true;
-        error_.clear();
         const JellyfinSession session = session_;
         const std::string id = item.id;
+        const auto prefetchedSimilar = cachedSimilarPrefetch(session, id);
+        if (prefetchedSimilar) detailsState_.setSimilar(*prefetchedSimilar);
+        similarPrefetchCandidateId_.clear();
+        similarPrefetchCandidateKey_.clear();
+        similarPrefetchDue_ = {};
+        loading_ = true;
+        error_.clear();
         const RequestEpoch::Token requestToken = requestEpochs_.content.beginToken();
-        detailsAsync_.load(session, id, requestToken);
+        detailsAsync_.load(session, id, requestToken, !prefetchedSimilar.has_value());
     }
 
     void shuffleRemainingQueue() {
@@ -3261,6 +3420,12 @@ private:
                                                screen_ == Screen::Details, detail_, detailsState_));
     }
 
+    void applyAsyncCompletion(SimilarPrefetchCompletion& completion) {
+        similarPrefetchInFlight_.erase(completion.key);
+        if (!completion.result.ok) return;
+        storeSimilarPrefetch(completion.session, completion.itemId, std::move(completion.result.value));
+    }
+
     void applyAsyncCompletion(EpisodeSeriesContextRequestCompletion& completion) {
         if (!requestEpochs_.content.active(completion.generation)) return;
         if (screen_ != Screen::Details || !completion.request.matches(detail_)) return;
@@ -3602,6 +3767,7 @@ private:
 
     void tick() {
         applyAsyncCompletions();
+        runDueSimilarPrefetch();
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
         applyPendingRuntimeLaunchRequest();
@@ -4122,6 +4288,7 @@ private:
     android_app* app_ = nullptr;
     Renderer renderer_;
     JellyfinClient api_;
+    JellyfinClient similarPrefetchApi_;
     SeerrClient seerr_;
     SeerrClient seerrSearch_;
     DisplayModeController displayMode_;
@@ -4131,6 +4298,7 @@ private:
     JniImageDecoder imageDecoder_;
     VideoSurface videoSurface_;
     TaskRunner tasks_;
+    TaskRunner similarPrefetchTasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
     AccountAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> accountAsync_;
@@ -4219,6 +4387,11 @@ private:
     SystemTextInputController systemTextInputController_;
 
     SearchScreenState searchState_;
+    std::unordered_map<std::string, SimilarPrefetchEntry> similarPrefetchCache_;
+    std::unordered_set<std::string> similarPrefetchInFlight_;
+    std::string similarPrefetchCandidateId_;
+    std::string similarPrefetchCandidateKey_;
+    std::chrono::steady_clock::time_point similarPrefetchDue_{};
 
     int keyboardRow_ = 0;
     int keyboardCol_ = 0;

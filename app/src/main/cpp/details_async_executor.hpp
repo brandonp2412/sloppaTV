@@ -64,9 +64,9 @@ public:
     DetailsAsyncExecutor(Client& client, TaskRunner& tasks, CompletionSink& completions)
         : client_(client), tasks_(tasks), completions_(completions) {}
 
-    bool load(JellyfinSession session, std::string itemId, RequestEpoch::Token requestToken) {
+    bool load(JellyfinSession session, std::string itemId, RequestEpoch::Token requestToken, bool loadSimilar = true) {
         return tasks_.submit(
-            [this, session = std::move(session), itemId = std::move(itemId), requestToken]() mutable {
+            [this, session = std::move(session), itemId = std::move(itemId), requestToken, loadSimilar]() mutable {
                 auto result = client_.getItem(session, itemId);
                 if (!requestToken.active()) return;
                 if (!result.ok) {
@@ -85,17 +85,19 @@ public:
                     .result = std::move(result),
                 });
 
-                auto similar = client_.getSimilar(session, itemId, 18);
-                if (!requestToken.active()) return;
-                if (similar.ok) {
-                    completions_.push(DetailsSimilarCompletion{
-                        .itemId = itemId,
-                        .generation = requestToken.value(),
-                        .items = std::move(similar.value),
-                    });
+                if (loadSimilar) {
+                    auto similar = client_.getSimilar(session, itemId, 18);
+                    if (!requestToken.active()) return;
+                    if (similar.ok) {
+                        completions_.push(DetailsSimilarCompletion{
+                            .itemId = itemId,
+                            .generation = requestToken.value(),
+                            .items = std::move(similar.value),
+                        });
+                    }
                 }
 
-                if (!contextRequest) return;
+                if (!requestToken.active() || !contextRequest) return;
                 completions_.push(EpisodeSeriesContextRequestCompletion{
                     .session = std::move(session),
                     .request = std::move(*contextRequest),
