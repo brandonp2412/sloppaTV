@@ -120,6 +120,7 @@
 #include "settings_action_controller.hpp"
 #include "settings_navigation_controller.hpp"
 #include "settings_screen.hpp"
+#include "similar_prefetch_controller.hpp"
 #include "settings_renderer.hpp"
 #include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
@@ -157,7 +158,6 @@
 #include <random>
 #include <sstream>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -196,18 +196,6 @@ struct PendingTickWork {
     std::optional<ExternalPlaybackLaunch> completedExternalPlayback;
     std::optional<ExternalPlaybackLaunch> externalLaunch;
     std::optional<PendingPlaybackTransition> playbackTransition;
-};
-
-struct SimilarPrefetchEntry {
-    std::vector<JellyfinItem> items;
-    std::chrono::steady_clock::time_point loadedAt{};
-};
-
-struct SimilarPrefetchCompletion {
-    JellyfinSession session;
-    std::string itemId;
-    std::string key;
-    ApiValueResult<std::vector<JellyfinItem>> result;
 };
 
 using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
@@ -436,7 +424,7 @@ public:
                 };
                 tightenTimeoutUntil(statusOverlayState_.wakeDeadline());
                 tightenTimeoutUntil(homeRetryAt_);
-                tightenTimeoutUntil(similarPrefetchDue_);
+                tightenTimeoutUntil(similarPrefetch_.dueDeadline());
                 if (!seerrDomain_.pendingRequestsLoading() &&
                     (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detailsFlow_.item())))) {
                     tightenTimeoutUntil(seerrDomain_.pendingRequestsRefreshDeadline());
@@ -2018,111 +2006,28 @@ private:
         if (includeSeerrImmediately) searchSeerrAsync(true);
     }
 
-    static std::string similarPrefetchKey(const JellyfinSession& session, const std::string& itemId) {
-        return session.server + "\n" + session.userId + "\n" + itemId;
-    }
-
-    bool supportsSimilarPrefetch(const JellyfinItem& item) const {
-        if (!session_.valid() || item.id.empty() || isSeerrItem(item)) return false;
-        return item.type != "Folder" && item.type != "BoxSet" && item.type != "CollectionFolder" &&
-               item.type != "Genre" && item.type != "Letter" && item.type != "Person";
-    }
-
-    std::optional<std::vector<JellyfinItem>> cachedSimilarPrefetch(const JellyfinSession& session,
-                                                                   const std::string& itemId) {
-        std::scoped_lock lock(stateMutex_);
-        const std::string key = similarPrefetchKey(session, itemId);
-        const auto found = similarPrefetchCache_.find(key);
-        if (found == similarPrefetchCache_.end()) return std::nullopt;
-        if (std::chrono::steady_clock::now() - found->second.loadedAt > 5min) {
-            similarPrefetchCache_.erase(found);
-            return std::nullopt;
-        }
-        return found->second.items;
-    }
-
-    void storeSimilarPrefetch(const JellyfinSession& session, const std::string& itemId,
-                              std::vector<JellyfinItem> items) {
-        std::scoped_lock lock(stateMutex_);
-        const std::string key = similarPrefetchKey(session, itemId);
-        if (!similarPrefetchCache_.contains(key) && similarPrefetchCache_.size() >= 8) {
-            similarPrefetchCache_.erase(similarPrefetchCache_.begin());
-        }
-        SimilarPrefetchEntry entry{
-            .items = std::move(items),
-            .loadedAt = std::chrono::steady_clock::now(),
-        };
-        if (screen_ == Screen::Details && detailsFlow_.item().id == itemId && detailsFlow_.state().similar().empty()) {
-            detailsFlow_.state().setSimilar(entry.items);
-        }
-        similarPrefetchCache_.insert_or_assign(key, std::move(entry));
-    }
-
     void scheduleSimilarPrefetch(const JellyfinItem& item) {
-        std::scoped_lock lock(stateMutex_);
-        if (!supportsSimilarPrefetch(item)) {
-            similarPrefetchCandidateId_.clear();
-            similarPrefetchCandidateKey_.clear();
-            similarPrefetchDue_ = {};
-            return;
-        }
-        const std::string key = similarPrefetchKey(session_, item.id);
-        const auto cached = similarPrefetchCache_.find(key);
-        if (cached != similarPrefetchCache_.end() &&
-            std::chrono::steady_clock::now() - cached->second.loadedAt <= 5min) {
-            similarPrefetchCandidateId_.clear();
-            similarPrefetchCandidateKey_.clear();
-            similarPrefetchDue_ = {};
-            return;
-        }
-        if (similarPrefetchInFlight_.contains(key)) return;
-        similarPrefetchCandidateId_ = item.id;
-        similarPrefetchCandidateKey_ = key;
-        similarPrefetchDue_ = std::chrono::steady_clock::now() + 350ms;
-        if (app_ && app_->looper) ALooper_wake(app_->looper);
+        if (similarPrefetch_.schedule(session_, item) && app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     void runDueSimilarPrefetch() {
-        JellyfinSession session;
-        std::string itemId;
-        std::string key;
-        {
-            std::scoped_lock lock(stateMutex_);
-            const auto now = std::chrono::steady_clock::now();
-            if (similarPrefetchDue_ == std::chrono::steady_clock::time_point{} || now < similarPrefetchDue_) return;
-            if (screen_ != Screen::Home && screen_ != Screen::Browse && screen_ != Screen::Search &&
-                screen_ != Screen::Details) {
-                similarPrefetchCandidateId_.clear();
-                similarPrefetchCandidateKey_.clear();
-                similarPrefetchDue_ = {};
-                return;
-            }
-            session = session_;
-            itemId = similarPrefetchCandidateId_;
-            key = similarPrefetchCandidateKey_;
-            similarPrefetchCandidateId_.clear();
-            similarPrefetchCandidateKey_.clear();
-            similarPrefetchDue_ = {};
-            if (!session.valid() || itemId.empty() || key != similarPrefetchKey(session, itemId) ||
-                similarPrefetchInFlight_.contains(key)) {
-                return;
-            }
-            const auto cached = similarPrefetchCache_.find(key);
-            if (cached != similarPrefetchCache_.end() && now - cached->second.loadedAt <= 5min) return;
-            similarPrefetchInFlight_.insert(key);
-        }
+        const bool eligible = screen_ == Screen::Home || screen_ == Screen::Browse || screen_ == Screen::Search ||
+                              screen_ == Screen::Details;
+        auto work = similarPrefetch_.takeDue(session_, eligible);
+        if (!work) return;
 
-        if (!similarPrefetchTasks_.submit([this, session, itemId, key] {
-                auto result = similarPrefetchApi_.getSimilar(session, itemId, 18);
+        SimilarPrefetchWork request = std::move(*work);
+        const std::string key = request.key;
+        if (!similarPrefetchTasks_.submit([this, request = std::move(request)]() mutable {
+                auto result = similarPrefetchApi_.getSimilar(request.session, request.itemId, 18);
                 asyncCompletions_.push(SimilarPrefetchCompletion{
-                    .session = session,
-                    .itemId = itemId,
-                    .key = key,
+                    .session = std::move(request.session),
+                    .itemId = std::move(request.itemId),
+                    .key = std::move(request.key),
                     .result = std::move(result),
                 });
             })) {
-            std::scoped_lock lock(stateMutex_);
-            similarPrefetchInFlight_.erase(key);
+            similarPrefetch_.submissionFailed(key);
         }
     }
 
@@ -2135,11 +2040,9 @@ private:
         detailsFlow_.beginDetails(item);
         const JellyfinSession session = session_;
         const std::string id = item.id;
-        const auto prefetchedSimilar = cachedSimilarPrefetch(session, id);
+        const auto prefetchedSimilar = similarPrefetch_.cached(session, id);
         if (prefetchedSimilar) detailsFlow_.state().setSimilar(*prefetchedSimilar);
-        similarPrefetchCandidateId_.clear();
-        similarPrefetchCandidateKey_.clear();
-        similarPrefetchDue_ = {};
+        similarPrefetch_.clearPending();
         loading_ = true;
         error_.clear();
         const RequestEpoch::Token requestToken = requestEpochs_.content.beginToken();
@@ -2791,9 +2694,11 @@ private:
     }
 
     void applyAsyncCompletion(SimilarPrefetchCompletion& completion) {
-        similarPrefetchInFlight_.erase(completion.key);
-        if (!completion.result.ok) return;
-        storeSimilarPrefetch(completion.session, completion.itemId, std::move(completion.result.value));
+        auto items = similarPrefetch_.complete(completion);
+        if (!items || screen_ != Screen::Details || detailsFlow_.item().id != completion.itemId ||
+            !detailsFlow_.state().similar().empty())
+            return;
+        detailsFlow_.state().setSimilar(std::move(*items));
     }
 
     void applyAsyncCompletion(EpisodeSeriesContextRequestCompletion& completion) {
@@ -3751,11 +3656,7 @@ private:
     SystemTextInputController systemTextInputController_;
 
     SearchScreenState searchState_;
-    std::unordered_map<std::string, SimilarPrefetchEntry> similarPrefetchCache_;
-    std::unordered_set<std::string> similarPrefetchInFlight_;
-    std::string similarPrefetchCandidateId_;
-    std::string similarPrefetchCandidateKey_;
-    std::chrono::steady_clock::time_point similarPrefetchDue_{};
+    SimilarPrefetchController similarPrefetch_;
 
     int keyboardRow_ = 0;
     int keyboardCol_ = 0;
