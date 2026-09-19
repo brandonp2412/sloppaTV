@@ -20,6 +20,7 @@
 #include "browse_screen.hpp"
 #include "cast_renderer.hpp"
 #include "details_completion_controller.hpp"
+#include "details_flow.hpp"
 #include "details_renderer.hpp"
 #include "details_screen.hpp"
 #include "details_navigation_controller.hpp"
@@ -38,6 +39,7 @@
 #include "home_renderer.hpp"
 #include "home_row_renderer.hpp"
 #include "home_screen.hpp"
+#include "input_navigation.hpp"
 #include "image_decoder.hpp"
 #include "item_menu_renderer.hpp"
 #include "item_mutation_controller.hpp"
@@ -61,6 +63,7 @@
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
 #include "playback_resolution_executor.hpp"
+#include "playback_runtime_controller.hpp"
 #include "playback_resolver.hpp"
 #include "playback_session.hpp"
 #include "playback_stream_executor.hpp"
@@ -307,7 +310,9 @@ public:
                    }),
           uiPresentation_(renderer_, artwork_), seerrConnection_(seerrDomain_, seerrAsync_),
           seerrRefresh_(seerrDomain_, seerrAsync_), seerrRequest_(seerrDomain_, seerrAsync_),
-          seerrSearchCoordinator_(seerrDomain_, seerrAsync_), searchState_(seerrDomain_.searchResults()) {
+          seerrSearchCoordinator_(seerrDomain_, seerrAsync_), searchState_(seerrDomain_.searchResults()),
+          playbackRuntime_(playbackCoordinator_, playerScreenState_, player_, videoSurface_, session_, settings_,
+                           requestEpochs_.playback, loading_, error_, dataPath_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         artwork_.setDataPath(dataPath_);
@@ -433,7 +438,7 @@ public:
                 tightenTimeoutUntil(homeRetryAt_);
                 tightenTimeoutUntil(similarPrefetchDue_);
                 if (!seerrDomain_.pendingRequestsLoading() &&
-                    (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
+                    (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detailsFlow_.item())))) {
                     tightenTimeoutUntil(seerrDomain_.pendingRequestsRefreshDeadline());
                 }
                 if (screen_ == Screen::Search && !searchState_.keyboard() && !searchState_.results().empty()) {
@@ -522,52 +527,7 @@ public:
             } else if (screen_ == Screen::Player) {
                 handlePlayerKey(AKEYCODE_BACK);
             } else {
-                switch (screen_) {
-                case Screen::Login:
-                    handleLoginKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Profiles:
-                    handleProfilesKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Home:
-                    handleHomeKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Browse:
-                    handleBrowseKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Search:
-                    handleSearchKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Settings:
-                    handleSettingsKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Diagnostics:
-                    handleDiagnosticsKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Details:
-                    handleDetailsKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Cast:
-                    handleCastKey(AKEYCODE_BACK);
-                    break;
-                case Screen::PersonItems:
-                    handlePersonItemsKey(AKEYCODE_BACK);
-                    break;
-                case Screen::ItemMenu:
-                    handleItemMenuKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Seasons:
-                    handleSeasonsKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Episodes:
-                    handleEpisodesKey(AKEYCODE_BACK);
-                    break;
-                case Screen::SeerrDrivePicker:
-                    handleSeerrDrivePickerKey(AKEYCODE_BACK);
-                    break;
-                case Screen::Player:
-                    break;
-                }
+                dispatchScreenKey(AKEYCODE_BACK);
             }
         }
         if (app_ && app_->looper) ALooper_wake(app_->looper);
@@ -676,10 +636,10 @@ private:
             const PlaybackWindowSuspendPlan suspendPlan = playbackCoordinator_.windowSuspendPlan(
                 screen_ == Screen::Player, status == PlayerStatus::Playing || status == PlayerStatus::Preparing);
             if (suspendPlan.suspend) {
-                refreshPlaybackTelemetry(true);
+                playbackRuntime_.refreshTelemetry(true);
                 playerScreenState_.beginWindowRestore(suspendPlan.resumePlayback);
                 if (suspendPlan.resumePlayback) player_.pause();
-                reportProgressAsync(true);
+                playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
                 displayMode_.restore();
                 mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
             }
@@ -711,6 +671,55 @@ private:
             break;
         }
         default:
+            break;
+        }
+    }
+
+    void dispatchScreenKey(int32_t key) {
+        switch (screen_) {
+        case Screen::Login:
+            handleLoginKey(key);
+            break;
+        case Screen::Profiles:
+            handleProfilesKey(key);
+            break;
+        case Screen::Home:
+            handleHomeKey(key);
+            break;
+        case Screen::Browse:
+            handleBrowseKey(key);
+            break;
+        case Screen::Search:
+            handleSearchKey(key);
+            break;
+        case Screen::Settings:
+            handleSettingsKey(key);
+            break;
+        case Screen::Diagnostics:
+            handleDiagnosticsKey(key);
+            break;
+        case Screen::Details:
+            handleDetailsKey(key);
+            break;
+        case Screen::Cast:
+            handleCastKey(key);
+            break;
+        case Screen::PersonItems:
+            handlePersonItemsKey(key);
+            break;
+        case Screen::ItemMenu:
+            handleItemMenuKey(key);
+            break;
+        case Screen::Seasons:
+            handleSeasonsKey(key);
+            break;
+        case Screen::Episodes:
+            handleEpisodesKey(key);
+            break;
+        case Screen::SeerrDrivePicker:
+            handleSeerrDrivePickerKey(key);
+            break;
+        case Screen::Player:
             break;
         }
     }
@@ -781,79 +790,12 @@ private:
             }
         }
 
-        const char typed = keyCodeToChar(key, meta);
-        if (typed != 0 && handleTypedCharacter(typed)) return 1;
-        if (key == AKEYCODE_DEL && handleBackspace()) return 1;
+        const TextEntryResult textEntry = handlePhysicalTextInput(screen_, accountState_, searchState_, key, meta);
+        if (textEntry.searchChanged) scheduleLiveSearch();
+        if (textEntry.handled) return 1;
 
-        switch (screen_) {
-        case Screen::Login:
-            handleLoginKey(key);
-            break;
-        case Screen::Profiles:
-            handleProfilesKey(key);
-            break;
-        case Screen::Home:
-            handleHomeKey(key);
-            break;
-        case Screen::Browse:
-            handleBrowseKey(key);
-            break;
-        case Screen::Search:
-            handleSearchKey(key);
-            break;
-        case Screen::Settings:
-            handleSettingsKey(key);
-            break;
-        case Screen::Diagnostics:
-            handleDiagnosticsKey(key);
-            break;
-        case Screen::Details:
-            handleDetailsKey(key);
-            break;
-        case Screen::Cast:
-            handleCastKey(key);
-            break;
-        case Screen::PersonItems:
-            handlePersonItemsKey(key);
-            break;
-        case Screen::ItemMenu:
-            handleItemMenuKey(key);
-            break;
-        case Screen::Seasons:
-            handleSeasonsKey(key);
-            break;
-        case Screen::Episodes:
-            handleEpisodesKey(key);
-            break;
-        case Screen::SeerrDrivePicker:
-            handleSeerrDrivePickerKey(key);
-            break;
-        case Screen::Player:
-            break;
-        }
+        dispatchScreenKey(key);
         return 1;
-    }
-
-    bool handleTypedCharacter(char c) {
-        if (screen_ == Screen::Login && accountState_.loginFocus() >= 0 && accountState_.loginFocus() < 3) {
-            accountState_.appendToFocusedField(c);
-            return true;
-        }
-        if (screen_ == Screen::Search) {
-            searchState_.append(c);
-            scheduleLiveSearch();
-            return true;
-        }
-        return false;
-    }
-
-    bool handleBackspace() {
-        if (screen_ == Screen::Login && accountState_.backspaceFocusedField()) return true;
-        if (screen_ == Screen::Search && searchState_.backspace()) {
-            scheduleLiveSearch();
-            return true;
-        }
-        return false;
     }
 
     void scheduleLiveSearch() {
@@ -971,7 +913,7 @@ private:
 
     void handleLoginKey(int32_t key) {
         const AccountNavigationAction navigation = AccountNavigationController::handleLogin(
-            accountState_, screenNavigationKeyForKey(key), !sessionRegistry_.empty());
+            accountState_, screenNavigationKeyForAndroidKey(key), !sessionRegistry_.empty());
         switch (navigation.type) {
         case AccountNavigationActionType::None:
             return;
@@ -1023,7 +965,7 @@ private:
 
     void handleProfilesKey(int32_t key) {
         const AccountNavigationAction navigation = AccountNavigationController::handleProfiles(
-            accountState_, screenNavigationKeyForKey(key), static_cast<int>(sessionRegistry_.size()));
+            accountState_, screenNavigationKeyForAndroidKey(key), static_cast<int>(sessionRegistry_.size()));
         switch (navigation.type) {
         case AccountNavigationActionType::ProfilesBack:
             popScreen(Screen::Login);
@@ -1042,41 +984,15 @@ private:
         }
     }
 
-    bool isItemContextKey(int32_t key) const { return key == AKEYCODE_MENU || key == AKEYCODE_INFO; }
-
-    ScreenNavigationKey screenNavigationKeyForKey(int32_t key) const {
-        if (key == AKEYCODE_BACK) return ScreenNavigationKey::Back;
-        if (key == AKEYCODE_SEARCH) return ScreenNavigationKey::Search;
-        if (isItemContextKey(key)) return ScreenNavigationKey::Context;
-        if (key == AKEYCODE_DPAD_LEFT) return ScreenNavigationKey::Left;
-        if (key == AKEYCODE_DPAD_RIGHT) return ScreenNavigationKey::Right;
-        if (key == AKEYCODE_DPAD_UP) return ScreenNavigationKey::Up;
-        if (key == AKEYCODE_DPAD_DOWN) return ScreenNavigationKey::Down;
-        if (key == AKEYCODE_DPAD_CENTER) return ScreenNavigationKey::Activate;
-        if (key == AKEYCODE_ENTER) return ScreenNavigationKey::Submit;
-        return ScreenNavigationKey::None;
-    }
-
-    DetailsNavigationKey detailsNavigationKeyForKey(int32_t key) const {
-        if (key == AKEYCODE_BACK) return DetailsNavigationKey::Back;
-        if (isItemContextKey(key)) return DetailsNavigationKey::Context;
-        if (key == AKEYCODE_DPAD_LEFT) return DetailsNavigationKey::Left;
-        if (key == AKEYCODE_DPAD_RIGHT) return DetailsNavigationKey::Right;
-        if (key == AKEYCODE_DPAD_UP) return DetailsNavigationKey::Up;
-        if (key == AKEYCODE_DPAD_DOWN) return DetailsNavigationKey::Down;
-        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) return DetailsNavigationKey::Activate;
-        return DetailsNavigationKey::None;
-    }
-
     bool supportsItemContextMenu(const JellyfinItem& item) const {
         return item.type == "Movie" || item.type == "Series" || item.type == "Episode" || item.type == "BoxSet";
     }
 
     void openItemMenuForItem(const JellyfinItem& item) {
         if (item.id.empty() || !supportsItemContextMenu(item)) return;
-        detail_ = item;
+        detailsFlow_.item() = item;
         pushScreen(Screen::ItemMenu);
-        detailsState_.beginItemMenu();
+        detailsFlow_.state().beginItemMenu();
         error_.clear();
         if (isSeerrItem(item)) return;
 
@@ -1096,7 +1012,7 @@ private:
 
     void handleHomeKey(int32_t key) {
         const HomeNavigationAction navigation = HomeNavigationController::handle(
-            homeState_, screenNavigationKeyForKey(key), home_.rows, seerrDomain_.pendingRequests());
+            homeState_, screenNavigationKeyForAndroidKey(key), home_.rows, seerrDomain_.pendingRequests());
         switch (navigation.type) {
         case HomeNavigationActionType::None:
             return;
@@ -1145,7 +1061,7 @@ private:
     }
 
     void handleBrowseKey(int32_t key) {
-        const ScreenNavigationKey navigationKey = screenNavigationKeyForKey(key);
+        const ScreenNavigationKey navigationKey = screenNavigationKeyForAndroidKey(key);
         if (navigationKey == ScreenNavigationKey::Back) cancelContentLoadForNavigation();
 
         constexpr int columns = mediaGridColumns();
@@ -1192,7 +1108,7 @@ private:
     void handleSearchKey(int32_t key) {
         constexpr int columns = mediaGridColumns();
         const SearchNavigationAction navigation =
-            SearchNavigationController::handle(searchState_, screenNavigationKeyForKey(key), columns);
+            SearchNavigationController::handle(searchState_, screenNavigationKeyForAndroidKey(key), columns);
         const auto& results = searchState_.results();
         if (!searchState_.keyboard() && searchState_.selection() >= 0 &&
             searchState_.selection() < static_cast<int>(results.size())) {
@@ -1239,7 +1155,7 @@ private:
     }
 
     std::vector<std::string> detailActions() const {
-        return detailsState_.actions(detail_, playbackCoordinator_.continuation().stillWatchingPrompt());
+        return detailsFlow_.detailActions(playbackCoordinator_.continuation().stillWatchingPrompt());
     }
 
     void refreshExternalPlayers() {
@@ -1298,7 +1214,7 @@ private:
 
     void handleSettingsKey(int32_t key) {
         const SettingsNavigationAction navigation =
-            SettingsNavigationController::handle(settingsScreen_, settings_, screenNavigationKeyForKey(key));
+            SettingsNavigationController::handle(settingsScreen_, settings_, screenNavigationKeyForAndroidKey(key));
         applySettingsActionEffects(
             SettingsActionController::apply(navigation, settingsScreen_, settings_, externalPlayers_));
     }
@@ -1320,87 +1236,108 @@ private:
         popScreen(Screen::Settings);
     }
 
-    void handleDetailsKey(int32_t key) {
-        const DetailsNavigationAction navigation =
-            DetailsNavigationController::handleDetails(detailsState_, detailsNavigationKeyForKey(key), detail_);
-        if (detailsState_.similarFocused()) {
-            if (const auto* selected = detailsState_.selectedSimilar()) scheduleSimilarPrefetch(*selected);
+    void applyDetailsFlowCommand(DetailsFlowCommand command) {
+        if (command.cancelContentLoad) cancelContentLoadForNavigation();
+        if (command.resetContinuationPrompt) playbackCoordinator_.resetContinuationPrompt();
+        if (command.closeItemMenu) {
+            popScreen(Screen::Details);
+            if ((command.action == DetailsFlowAction::BeginSeriesPlayAll ||
+                 command.action == DetailsFlowAction::PlayExternal) &&
+                screen_ != Screen::Details) {
+                pushScreen(Screen::Details);
+            }
         }
-        if (navigation.type == DetailsNavigationActionType::Back) {
-            cancelContentLoadForNavigation();
-            playbackCoordinator_.resetContinuationPrompt();
+
+        switch (command.action) {
+        case DetailsFlowAction::None:
+            return;
+        case DetailsFlowAction::ExitDetails:
             popScreen(Screen::Home);
             return;
-        }
-        if (navigation.type == DetailsNavigationActionType::OpenContext) {
+        case DetailsFlowAction::OpenItemMenu:
             openItemMenu();
             return;
-        }
-        if (navigation.type == DetailsNavigationActionType::OpenEpisodeSeries && navigation.item) {
-            openDetails(*navigation.item, true);
+        case DetailsFlowAction::OpenDetails:
+            if (command.item) openDetails(*command.item, command.replaceCurrentDetails);
             return;
-        }
-        if (navigation.type == DetailsNavigationActionType::OpenEpisodeSeason && navigation.item) {
-            openEpisodes(*navigation.item);
+        case DetailsFlowAction::OpenEpisodes:
+            if (command.item) openEpisodes(*command.item);
             return;
-        }
-        if (navigation.type == DetailsNavigationActionType::OpenSimilar && navigation.item) {
-            openDetails(*navigation.item);
-            return;
-        }
-        if (navigation.type != DetailsNavigationActionType::ActivateDetailAction || !navigation.detailAction) return;
-
-        switch (*navigation.detailAction) {
-        case DetailsAction::StartPlayback:
+        case DetailsFlowAction::BeginPlayback:
             beginPlayback();
             return;
-        case DetailsAction::OpenEpisodes:
+        case DetailsFlowAction::OpenSeasons:
             openSeasons();
             return;
-        case DetailsAction::PlayAll:
+        case DetailsFlowAction::BeginSeriesPlayAll:
             beginSeriesPlayAll();
             return;
-        case DetailsAction::ToggleFavorite:
+        case DetailsFlowAction::ToggleFavorite:
             toggleFavoriteAsync();
             return;
-        case DetailsAction::TogglePlayed:
+        case DetailsFlowAction::TogglePlayed:
             togglePlayedAsync();
             return;
-        case DetailsAction::OpenCast:
+        case DetailsFlowAction::OpenCast:
             openCast();
             return;
-        case DetailsAction::OpenItemMenu:
-            openItemMenu();
+        case DetailsFlowAction::BackToDetails:
+            popScreen(Screen::Details);
             return;
-        case DetailsAction::Back:
-            playbackCoordinator_.resetContinuationPrompt();
-            popScreen(Screen::Home);
+        case DetailsFlowAction::OpenPersonItems:
+            if (command.person) openPersonItems(*command.person);
+            return;
+        case DetailsFlowAction::BackToCast:
+            popScreen(Screen::Cast);
+            return;
+        case DetailsFlowAction::OpenItemContext:
+            if (command.item) openItemMenuForItem(*command.item);
+            return;
+        case DetailsFlowAction::ConfirmDeleteMedia:
+            deleteCurrentItemAsync();
+            return;
+        case DetailsFlowAction::ConfirmDeleteRequest:
+            deleteSeerrRequestAsync();
+            return;
+        case DetailsFlowAction::PlayExternal:
+            launchExternalPlaybackAsync();
+            return;
+        case DetailsFlowAction::ViewQueue:
+            openQueueOverlay();
+            return;
+        case DetailsFlowAction::ToggleHomeVisibility:
+            toggleHiddenFromHome();
+            return;
+        case DetailsFlowAction::RefreshMetadata:
+            refreshCurrentItemMetadataAsync();
+            return;
+        case DetailsFlowAction::BackToSeasons:
+            popScreen(Screen::Seasons);
             return;
         }
     }
 
+    void handleDetailsKey(int32_t key) {
+        const DetailsFlowCommand command = detailsFlow_.handleDetails(detailsNavigationKeyForAndroidKey(key));
+        if (detailsFlow_.state().similarFocused()) {
+            if (const auto* selected = detailsFlow_.state().selectedSimilar()) scheduleSimilarPrefetch(*selected);
+        }
+        applyDetailsFlowCommand(command);
+    }
+
     void openCast() {
-        if (detail_.people.empty()) return;
+        if (!detailsFlow_.beginCast()) return;
         pushScreen(Screen::Cast);
-        detailsState_.resetCastSelection();
         error_.clear();
     }
 
     void handleCastKey(int32_t key) {
-        constexpr int columns = mediaGridColumns();
-        const DetailsNavigationAction navigation = DetailsNavigationController::handleCast(
-            detailsState_, detailsNavigationKeyForKey(key), detail_.people, columns);
-        if (navigation.type == DetailsNavigationActionType::Back) {
-            popScreen(Screen::Details);
-        } else if (navigation.type == DetailsNavigationActionType::OpenPerson && navigation.person) {
-            openPersonItems(*navigation.person);
-        }
+        applyDetailsFlowCommand(detailsFlow_.handleCast(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
     }
 
     void openPersonItems(const JellyfinPerson& person) {
-        if (!session_.valid() || person.id.empty()) return;
+        if (!session_.valid() || !detailsFlow_.beginPerson(person)) return;
         pushScreen(Screen::PersonItems);
-        detailsState_.beginPerson(person);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
@@ -1410,92 +1347,29 @@ private:
     }
 
     void handlePersonItemsKey(int32_t key) {
-        constexpr int columns = mediaGridColumns();
-        const DetailsNavigationAction navigation =
-            DetailsNavigationController::handlePersonItems(detailsState_, detailsNavigationKeyForKey(key), columns);
-        if (navigation.type == DetailsNavigationActionType::Back) {
-            cancelContentLoadForNavigation();
-            popScreen(Screen::Cast);
-        } else if (navigation.type == DetailsNavigationActionType::OpenPersonItemContext && navigation.item) {
-            openItemMenuForItem(*navigation.item);
-        } else if (navigation.type == DetailsNavigationActionType::OpenPersonItem && navigation.item) {
-            openDetails(*navigation.item);
-        }
+        applyDetailsFlowCommand(
+            detailsFlow_.handlePersonItems(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
     }
 
     std::vector<std::string> itemMenuActions() const {
-        return detailsState_.itemMenuActions(detail_, isSeerrItem(detail_), selectedExternalPlayer().has_value(),
-                                             !queueState_.empty(), isHiddenFromHome(detail_));
+        return detailsFlow_.itemMenuActions(isSeerrItem(detailsFlow_.item()), selectedExternalPlayer().has_value(),
+                                            !queueState_.empty(), isHiddenFromHome(detailsFlow_.item()));
     }
 
     void openItemMenu() {
-        if (detail_.id.empty()) return;
+        if (!detailsFlow_.beginItemMenu()) return;
         pushScreen(Screen::ItemMenu);
-        detailsState_.beginItemMenu();
         error_.clear();
     }
 
     void handleItemMenuKey(int32_t key) {
-        const bool seerrRequest = isSeerrItem(detail_);
-        const DetailsNavigationAction navigation = DetailsNavigationController::handleItemMenu(
-            detailsState_, detailsNavigationKeyForKey(key), detail_, seerrRequest, selectedExternalPlayer().has_value(),
-            !queueState_.empty());
-        if (navigation.type == DetailsNavigationActionType::Back) {
-            popScreen(Screen::Details);
-            return;
-        }
-        if (navigation.type == DetailsNavigationActionType::ConfirmDelete) {
-            if (seerrRequest)
-                deleteSeerrRequestAsync();
-            else
-                deleteCurrentItemAsync();
-            return;
-        }
-        if (navigation.type != DetailsNavigationActionType::ActivateItemMenuAction || !navigation.itemMenuAction)
-            return;
-
-        switch (*navigation.itemMenuAction) {
-        case ItemMenuAction::PlayAll:
-            popScreen(Screen::Details);
-            if (screen_ != Screen::Details) pushScreen(Screen::Details);
-            beginSeriesPlayAll();
-            return;
-        case ItemMenuAction::PlayExternal:
-            popScreen(Screen::Details);
-            if (screen_ != Screen::Details) pushScreen(Screen::Details);
-            launchExternalPlaybackAsync();
-            return;
-        case ItemMenuAction::ViewQueue:
-            popScreen(Screen::Details);
-            openQueueOverlay();
-            return;
-        case ItemMenuAction::ToggleFavorite:
-            popScreen(Screen::Details);
-            toggleFavoriteAsync();
-            return;
-        case ItemMenuAction::TogglePlayed:
-            popScreen(Screen::Details);
-            togglePlayedAsync();
-            return;
-        case ItemMenuAction::ToggleHomeVisibility:
-            popScreen(Screen::Details);
-            toggleHiddenFromHome();
-            return;
-        case ItemMenuAction::RefreshMetadata:
-            popScreen(Screen::Details);
-            refreshCurrentItemMetadataAsync();
-            return;
-        case ItemMenuAction::DeleteMedia:
-        case ItemMenuAction::DeleteRequest:
-            return;
-        case ItemMenuAction::Back:
-            popScreen(Screen::Details);
-            return;
-        }
+        applyDetailsFlowCommand(
+            detailsFlow_.handleItemMenu(detailsNavigationKeyForAndroidKey(key), isSeerrItem(detailsFlow_.item()),
+                                        selectedExternalPlayer().has_value(), !queueState_.empty()));
     }
 
     void launchExternalPlaybackAsync() {
-        if (loading_ || !session_.valid() || detail_.id.empty()) return;
+        if (loading_ || !session_.valid() || detailsFlow_.item().id.empty()) return;
         const auto player = selectedExternalPlayer();
         if (!player) {
             error_ = "EXTERNAL PLAYER IS NOT CONFIGURED";
@@ -1506,17 +1380,17 @@ private:
         error_.clear();
         const JellyfinSession session = session_;
         const PlaybackLanguagePreferences preferences = playbackCoordinator_.languagePreferences();
-        const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
+        const PlaybackTrackSelectionPolicy trackPolicy = playbackRuntime_.trackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
         if (!externalPlaybackAsync_.prepare(session, ExternalPlaybackRequest{
                                                          .generation = generation,
-                                                         .selectedItemId = detail_.id,
-                                                         .selectedItemType = detail_.type,
-                                                         .seriesId = detail_.seriesId,
-                                                         .container = detail_.container,
-                                                         .mediaSourceId = detail_.mediaSourceId,
-                                                         .audios = detail_.audios,
-                                                         .subtitles = detail_.subtitles,
+                                                         .selectedItemId = detailsFlow_.item().id,
+                                                         .selectedItemType = detailsFlow_.item().type,
+                                                         .seriesId = detailsFlow_.item().seriesId,
+                                                         .container = detailsFlow_.item().container,
+                                                         .mediaSourceId = detailsFlow_.item().mediaSourceId,
+                                                         .audios = detailsFlow_.item().audios,
+                                                         .subtitles = detailsFlow_.item().subtitles,
                                                          .player = *player,
                                                          .subtitlePreference = preferences.subtitle,
                                                          .trackPolicy = trackPolicy,
@@ -1526,209 +1400,29 @@ private:
         }
     }
 
-    void moveGridSelectionByCount(int32_t key, int itemCount, int& selection) {
-        int dx = 0;
-        int dy = 0;
-        if (key == AKEYCODE_DPAD_LEFT)
-            dx = -1;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            dx = 1;
-        else if (key == AKEYCODE_DPAD_UP)
-            dy = -1;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            dy = 1;
-        else
-            return;
-        selection = gridSelectionAfterMove(selection, itemCount, dx, dy, mediaGridColumns());
-    }
-
-    void moveGridSelection(int32_t key, const std::vector<JellyfinItem>& items, int& selection) {
-        moveGridSelectionByCount(key, static_cast<int>(items.size()), selection);
-    }
-
     void handleSeasonsKey(int32_t key) {
-        constexpr int columns = mediaGridColumns();
-        const DetailsNavigationAction navigation =
-            DetailsNavigationController::handleSeasons(detailsState_, detailsNavigationKeyForKey(key), columns);
-        if (navigation.type == DetailsNavigationActionType::Back) {
-            cancelContentLoadForNavigation();
-            if (navigation.item) detail_ = *navigation.item;
-            popScreen(Screen::Details);
-        } else if (navigation.type == DetailsNavigationActionType::OpenSeason && navigation.item) {
-            openEpisodes(*navigation.item);
-        }
+        applyDetailsFlowCommand(detailsFlow_.handleSeasons(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
     }
 
     void handleEpisodesKey(int32_t key) {
-        constexpr int columns = mediaGridColumns();
-        const DetailsNavigationAction navigation =
-            DetailsNavigationController::handleEpisodes(detailsState_, detailsNavigationKeyForKey(key), columns);
-        if (navigation.type == DetailsNavigationActionType::Back) {
-            cancelContentLoadForNavigation();
-            popScreen(Screen::Seasons);
-        } else if (navigation.type == DetailsNavigationActionType::OpenEpisodeContext && navigation.item) {
-            openItemMenuForItem(*navigation.item);
-        } else if (navigation.type == DetailsNavigationActionType::OpenEpisode && navigation.item) {
-            openDetails(*navigation.item);
-        }
-    }
-
-    void refreshPlaybackTelemetry(bool force = false) {
-        const auto now = std::chrono::steady_clock::now();
-        const PlaybackTelemetryReadPlan plan =
-            playbackCoordinator_.consumeTelemetryRead(now, force, playerScreenState_.durationMs());
-        if (!plan.read) return;
-        playerScreenState_.applyObservedPosition(player_.positionMs(), now);
-        if (plan.knownDurationMs > 0) {
-            playerScreenState_.setDurationMs(plan.knownDurationMs);
-        } else if (plan.probeDuration) {
-            const int duration = player_.durationMs();
-            if (duration > 0) playerScreenState_.setDurationMs(duration);
-        }
+        applyDetailsFlowCommand(
+            detailsFlow_.handleEpisodes(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
     }
 
     void cycleAudioTrack() {
-        const PlaybackAudioCyclePlan plan = playbackCoordinator_.beginAudioTrackCycle(playbackTrackSelectionPolicy());
-        if (!plan.available) {
-            error_ = "ONLY ONE AUDIO TRACK";
-            return;
-        }
-
-        refreshPlaybackTelemetry(true);
-        const int switchPositionMs = playerScreenState_.positionMs();
-        if (plan.tryEmbeddedSwitch && player_.selectEmbeddedAudioStream(plan.audioStreamIndex, plan.audioOrdinal)) {
-            playbackCoordinator_.selectAudioStream(plan.audioStreamIndex);
-            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-            reportProgressAsync(false);
-            return;
-        }
-        restartPlaybackAt(switchPositionMs, plan.audioStreamIndex, plan.subtitleStreamIndex);
-    }
-
-    PlaybackTrackSelectionPolicy playbackTrackSelectionPolicy() const {
-        return {
-            .autoSubtitles = settings_.autoSubtitles,
-            .autoSubtitleLanguage = settings_.autoSubtitleLanguage,
-            .autoSubtitleSourceLanguage = settings_.autoSubtitleSourceLanguage,
-            .allowedSubtitleLanguages = settings_.subtitleLanguages,
-        };
-    }
-
-    PlaybackResolutionOptions playbackResolutionOptions() const {
-        const PlaybackLanguagePreferences preferences = playbackCoordinator_.languagePreferences();
-        return {
-            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-            .maxAudioChannels = settings_.maxAudioChannels,
-            .overrides = playbackOverridesFor(settings_),
-            .audioLanguagePreference = preferences.audio,
-            .subtitleLanguagePreference = preferences.subtitle,
-            .trackPolicy = playbackTrackSelectionPolicy(),
-        };
+        playbackRuntime_.cycleAudioTrack(playbackStreamAsync_, playbackTelemetryAsync_, screen_ == Screen::Player);
     }
 
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
-        if (!session_.valid()) return;
-        auto context = playbackCoordinator_.beginSubtitleLoadContext(subtitle, settings_.subtitleLanguages);
-        if (!context) return;
-        const JellyfinSession session = session_;
-        const std::string dataPath = dataPath_;
-        const uint64_t generation = requestEpochs_.playback.snapshot();
-
-        if (!subtitleLoadAsync_.load(session, SubtitleLoadRequest{
-                                                  .generation = generation,
-                                                  .itemId = std::move(context->itemId),
-                                                  .mediaSourceId = std::move(context->mediaSourceId),
-                                                  .requestedSubtitleIndex = context->requestedSubtitleStreamIndex,
-                                                  .candidates = std::move(context->candidates),
-                                                  .deliveryUrl = deliveryUrl,
-                                                  .dataPath = dataPath,
-                                              })) {
-            playbackCoordinator_.failSubtitleLoad();
+        if (!playbackRuntime_.loadSubtitle(subtitleLoadAsync_, subtitle, deliveryUrl))
             showNotice("SUBTITLES COULD NOT BE STARTED");
-        }
     }
 
     void cycleSubtitleTrack() {
-        const PlaybackSubtitleCycleContext cycle =
-            playbackCoordinator_.beginSubtitleTrackCycle(settings_.subtitleLanguages);
-        const PlaybackSubtitleCyclePlan& plan = cycle.plan;
-        if (cycle.busy) {
-            if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) error_ = "NO SUBTITLE TRACKS";
-            return;
-        }
-        if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) {
-            error_ = "NO SUBTITLE TRACKS";
-            return;
-        }
-        if (plan.action == PlaybackSubtitleCycleAction::NoAllowedTracks) {
-            error_ = "NO ALLOWED SUBTITLE TRACKS";
-            return;
-        }
-
-        if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer && player_.disableSubtitles()) {
-            playbackCoordinator_.disableSubtitleRendering();
-            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-            reportProgressAsync(false);
-            return;
-        }
-
-        if (plan.directPlayStream) {
-            const JellyfinSubtitleStream& selected = *plan.directPlayStream;
-            __android_log_print(ANDROID_LOG_INFO, kTag, "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
-                                plan.subtitleStreamIndex, selected.codec.c_str(), selected.isExternal ? 1 : 0,
-                                static_cast<int>(plan.strategy));
-            if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
-                player_.disableSubtitles();
-                playbackCoordinator_.prepareNativeSubtitleLoad(plan.subtitleStreamIndex);
-                loadSubtitleAsync(selected);
-                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                reportProgressAsync(false);
-                return;
-            }
-            if (plan.strategy == SubtitleStrategy::ClientEmbedded) {
-                __android_log_print(ANDROID_LOG_INFO, kTag,
-                                    "Bitmap subtitle stream=%d requires server burn-in with mediacodec_embed",
-                                    plan.subtitleStreamIndex);
-            }
-        }
-
-        refreshPlaybackTelemetry(true);
-        restartPlaybackAt(playerScreenState_.positionMs(), cycle.audioStreamIndex, plan.subtitleStreamIndex);
-    }
-
-    void restartPlaybackAt(int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
-        if (!session_.valid()) return;
-        const int targetPositionMs = std::max(0, positionMs);
-        const bool wasPaused = player_.status() == PlayerStatus::Paused;
-        const JellyfinSession session = session_;
-        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
-        const int maxAudioChannels = settings_.maxAudioChannels;
-        const PlaybackOverrides playbackOverrides = playbackOverridesFor(settings_);
-        auto restartPlan = playbackCoordinator_.beginStreamRestart(targetPositionMs);
-        if (!restartPlan) return;
-        JellyfinItem item = std::move(restartPlan->item);
-        const PlaybackTarget previousTarget = std::move(restartPlan->previousTarget);
-        const bool shouldReportPrevious = restartPlan->reportPrevious;
-        const uint64_t generation = requestEpochs_.playback.begin();
-
-        // A Jellyfin server-stream change is a real playback-session handoff. Resolve the
-        // replacement only after closing/reporting the old session: asking Jellyfin for a
-        // second transcode while the first one is still active has produced stalled HLS
-        // sessions (and, on some servers, PlaybackInfo HTTP 500 responses).
-        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
-        playerScreenState_.setPositionMs(targetPositionMs);
-        player_.stop();
-        videoSurface_.release();
-
-        PlaybackStreamResolutionOptions options{
-            .maxStreamingBitrate = maxStreamingBitrate,
-            .maxAudioChannels = maxAudioChannels,
-            .overrides = playbackOverrides,
-            .audioStreamIndex = audioStreamIndex,
-            .subtitleStreamIndex = subtitleStreamIndex,
-        };
-        playbackStreamAsync_.restart(session, std::move(item), previousTarget, shouldReportPrevious, std::move(options),
-                                     wasPaused, generation);
+        if (playbackRuntime_.cycleSubtitleTrack(subtitleLoadAsync_, playbackStreamAsync_, playbackTelemetryAsync_,
+                                                screen_ == Screen::Player) ==
+            PlaybackRuntimeNotice::SubtitleStartFailed)
+            showNotice("SUBTITLES COULD NOT BE STARTED");
     }
 
     void clearTrickplayPreview() {
@@ -1764,23 +1458,9 @@ private:
         }
     }
 
-    void seekPlaybackTo(int positionMs) {
-        const int targetMs = std::max(0, positionMs);
-        player_.seekTo(targetMs);
-        playerScreenState_.beginSeek(targetMs, std::chrono::steady_clock::now());
-    }
-
-    bool skipActiveMediaSegment() {
-        const auto targetMs = playbackCoordinator_.activeSkippableSegmentEndMs(playerScreenState_.positionMs());
-        if (!targetMs) return false;
-        seekPlaybackTo(*targetMs);
-        reportProgressAsync(false);
-        return true;
-    }
-
     void handleSeerrDrivePickerKey(int32_t key) {
         SeerrDriveNavigationAction navigation =
-            SeerrDriveNavigationController::handle(seerrDomain_.storage(), screenNavigationKeyForKey(key));
+            SeerrDriveNavigationController::handle(seerrDomain_.storage(), screenNavigationKeyForAndroidKey(key));
         if (navigation.type == SeerrDriveNavigationActionType::Back) {
             popScreen(Screen::Search);
             return;
@@ -1837,11 +1517,11 @@ private:
             playAdjacentEpisode(1);
             return;
         case PlayerScreenCommandType::ActivatePlayback:
-            if (skipActiveMediaSegment()) return;
+            if (playbackRuntime_.skipActiveMediaSegment(playbackTelemetryAsync_, screen_ == Screen::Player)) return;
             [[fallthrough]];
         case PlayerScreenCommandType::TogglePause:
             player_.togglePause();
-            reportProgressAsync(true);
+            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
             return;
         case PlayerScreenCommandType::CycleAudioTrack:
             cycleAudioTrack();
@@ -1858,8 +1538,8 @@ private:
                                                         playerScreenState_.durationMs());
             playerScreenState_.showSeekFeedback(static_cast<int>((forward ? deltaMs : -deltaMs) / 1000), now);
             requestTrickplayPreview(targetMs);
-            seekPlaybackTo(targetMs);
-            reportProgressAsync(false);
+            playbackRuntime_.seekTo(targetMs);
+            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
             return;
         }
         }
@@ -1870,11 +1550,11 @@ private:
         switch (command.type) {
         case MediaSessionCommandType::Play:
             player_.play();
-            reportProgressAsync(true);
+            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
             break;
         case MediaSessionCommandType::Pause:
             player_.pause();
-            reportProgressAsync(true);
+            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
             break;
         case MediaSessionCommandType::Stop:
             stopPlayback();
@@ -1885,8 +1565,8 @@ private:
                                             : static_cast<int64_t>(std::numeric_limits<int>::max());
             const int positionMs = static_cast<int>(std::clamp<int64_t>(command.positionMs, 0, maxPosition));
             requestTrickplayPreview(positionMs);
-            seekPlaybackTo(positionMs);
-            reportProgressAsync(false);
+            playbackRuntime_.seekTo(positionMs);
+            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
             break;
         }
         case MediaSessionCommandType::Next:
@@ -1900,8 +1580,8 @@ private:
                 playQueuedIndexAsync(queueState_.currentIndex() - 1);
             } else {
                 requestTrickplayPreview(0);
-                seekPlaybackTo(0);
-                reportProgressAsync(false);
+                playbackRuntime_.seekTo(0);
+                playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
             }
             break;
         }
@@ -1969,8 +1649,8 @@ private:
         browseState_.clear();
         seerrSearchCoordinator_.reset();
         searchState_.reset();
-        detail_ = {};
-        detailsState_.reset();
+        detailsFlow_.item() = {};
+        detailsFlow_.state().reset();
 
         artwork_.clearSession(renderer_);
         accountState_.clearSessionUi();
@@ -2092,25 +1772,23 @@ private:
     }
 
     void openSeasons() {
-        if (loading_ || detail_.id.empty() || detail_.type != "Series") return;
-        detailsState_.beginSeries(detail_);
+        if (loading_ || !detailsFlow_.beginSeries()) return;
         pushScreen(Screen::Seasons);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const std::string seriesId = detailsState_.seriesDetail().id;
+        const std::string seriesId = detailsFlow_.state().seriesDetail().id;
         const uint64_t generation = requestEpochs_.content.begin();
         detailsAsync_.loadSeasons(session, seriesId, generation);
     }
 
     void openEpisodes(const JellyfinItem& season) {
-        if (loading_ || detailsState_.seriesDetail().id.empty() || season.id.empty()) return;
-        detailsState_.beginSeason(season);
+        if (loading_ || !detailsFlow_.beginSeason(season)) return;
         pushScreen(Screen::Episodes);
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const std::string seriesId = detailsState_.seriesDetail().id;
+        const std::string seriesId = detailsFlow_.state().seriesDetail().id;
         const std::string seasonId = season.id;
         const uint64_t generation = requestEpochs_.content.begin();
         detailsAsync_.loadEpisodes(session, seriesId, seasonId, generation);
@@ -2139,8 +1817,8 @@ private:
     }
 
     void toggleHiddenFromHome() {
-        if (detail_.id.empty()) return;
-        const std::string key = hiddenHomeKey(detail_.id);
+        if (detailsFlow_.item().id.empty()) return;
+        const std::string key = hiddenHomeKey(detailsFlow_.item().id);
         const bool hiding = !hiddenHomeItems_.contains(key);
         if (hiding)
             hiddenHomeItems_.insert(key);
@@ -2163,10 +1841,10 @@ private:
     }
 
     void toggleFavoriteAsync() {
-        if (loading_ || mutationLoading_ || detail_.id.empty()) return;
-        const bool desired = !detail_.favorite;
+        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty()) return;
+        const bool desired = !detailsFlow_.item().favorite;
         const JellyfinSession session = session_;
-        const JellyfinItem item = detail_;
+        const JellyfinItem item = detailsFlow_.item();
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
@@ -2174,13 +1852,13 @@ private:
     }
 
     void togglePlayedAsync() {
-        if (loading_ || mutationLoading_ || detail_.id.empty()) return;
+        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty()) return;
         const JellyfinSession session = session_;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
-        const bool hiddenFromHome = isHiddenFromHome(detail_);
-        PlayedMutationPreparation preparation =
-            ItemMutationController::preparePlayedToggle(home_, homeState_, browseState_, searchState_, detailsState_,
-                                                        queueState_, detail_, hiddenFromHome, sessionEpoch);
+        const bool hiddenFromHome = isHiddenFromHome(detailsFlow_.item());
+        PlayedMutationPreparation preparation = ItemMutationController::preparePlayedToggle(
+            home_, homeState_, browseState_, searchState_, detailsFlow_.state(), queueState_, detailsFlow_.item(),
+            hiddenFromHome, sessionEpoch);
         mutationLoading_ = true;
         error_.clear();
         playedRollback_ = std::move(preparation.rollback);
@@ -2189,9 +1867,9 @@ private:
     }
 
     void refreshCurrentItemMetadataAsync() {
-        if (loading_ || mutationLoading_ || detail_.id.empty()) return;
+        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty()) return;
         const JellyfinSession session = session_;
-        const std::string itemId = detail_.id;
+        const std::string itemId = detailsFlow_.item().id;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
@@ -2199,18 +1877,18 @@ private:
     }
 
     void deleteSeerrRequestAsync() {
-        const auto deleteRequest = seerrDeleteRequestFromJellyfinItem(detail_);
+        const auto deleteRequest = seerrDeleteRequestFromJellyfinItem(detailsFlow_.item());
         if (loading_ || mutationLoading_ || !deleteRequest) {
-            if (isSeerrItem(detail_) && detail_.externalRequestId <= 0) {
+            if (isSeerrItem(detailsFlow_.item()) && detailsFlow_.item().externalRequestId <= 0) {
                 error_ = "SEERR REQUEST ID IS NOT AVAILABLE YET";
-                detailsState_.setDeleteConfirmation(false);
+                detailsFlow_.state().setDeleteConfirmation(false);
             }
             return;
         }
         const SeerrEndpoint endpoint = seerrEndpoint();
         if (!endpoint.configured()) {
             error_ = "SEERR IS NOT CONNECTED";
-            detailsState_.setDeleteConfirmation(false);
+            detailsFlow_.state().setDeleteConfirmation(false);
             return;
         }
         const SeerrDeleteRequest request = *deleteRequest;
@@ -2220,9 +1898,9 @@ private:
     }
 
     void deleteCurrentItemAsync() {
-        if (loading_ || mutationLoading_ || detail_.id.empty() || !detail_.canDelete) return;
+        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty() || !detailsFlow_.item().canDelete) return;
         const JellyfinSession session = session_;
-        const std::string itemId = detail_.id;
+        const std::string itemId = detailsFlow_.item().id;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
         mutationLoading_ = true;
         error_.clear();
@@ -2452,8 +2130,8 @@ private:
             .items = std::move(items),
             .loadedAt = std::chrono::steady_clock::now(),
         };
-        if (screen_ == Screen::Details && detail_.id == itemId && detailsState_.similar().empty()) {
-            detailsState_.setSimilar(entry.items);
+        if (screen_ == Screen::Details && detailsFlow_.item().id == itemId && detailsFlow_.state().similar().empty()) {
+            detailsFlow_.state().setSimilar(entry.items);
         }
         similarPrefetchCache_.insert_or_assign(key, std::move(entry));
     }
@@ -2532,12 +2210,11 @@ private:
         else
             pushScreen(Screen::Details);
         playbackCoordinator_.dismissStillWatchingPrompt();
-        detail_ = item;
-        detailsState_.beginDetails();
+        detailsFlow_.beginDetails(item);
         const JellyfinSession session = session_;
         const std::string id = item.id;
         const auto prefetchedSimilar = cachedSimilarPrefetch(session, id);
-        if (prefetchedSimilar) detailsState_.setSimilar(*prefetchedSimilar);
+        if (prefetchedSimilar) detailsFlow_.state().setSimilar(*prefetchedSimilar);
         similarPrefetchCandidateId_.clear();
         similarPrefetchCandidateKey_.clear();
         similarPrefetchDue_ = {};
@@ -2580,7 +2257,7 @@ private:
         const JellyfinSession session = session_;
         JellyfinItem queued = *queueState_.itemAt(index);
         if (restartCurrent) queued.positionTicks = 0;
-        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
+        PlaybackResolutionOptions resolutionOptions = playbackRuntime_.resolutionOptions();
         const uint64_t generation = requestEpochs_.playback.begin();
         playbackResolutionAsync_.resolveQueued(session, std::move(queued), std::move(resolutionOptions), generation,
                                                originScreen, index, previousQueueIndex, replacingPlayer);
@@ -2589,7 +2266,7 @@ private:
     void playPlayerItemAsync(JellyfinItem selected) {
         if (loading_ || screen_ != Screen::Player || !session_.valid() || selected.id.empty()) return;
         const JellyfinSession session = session_;
-        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
+        PlaybackResolutionOptions resolutionOptions = playbackRuntime_.resolutionOptions();
 
         queueState_.reset();
         releaseActivePlayback(true, false);
@@ -2630,7 +2307,7 @@ private:
 
     void handleQueueOverlayKey(int32_t key) {
         const QueueNavigationAction navigation =
-            QueueNavigationController::handle(queueState_, screenNavigationKeyForKey(key));
+            QueueNavigationController::handle(queueState_, screenNavigationKeyForAndroidKey(key));
         switch (navigation.type) {
         case QueueNavigationActionType::None:
             return;
@@ -2647,12 +2324,13 @@ private:
     }
 
     void beginSeriesPlayAll() {
-        if (loading_ || detail_.type != "Series" || detail_.id.empty() || !session_.valid()) return;
+        if (loading_ || detailsFlow_.item().type != "Series" || detailsFlow_.item().id.empty() || !session_.valid())
+            return;
         loading_ = true;
         error_.clear();
         playbackCoordinator_.beginUserPlayback(false);
         const JellyfinSession session = session_;
-        const JellyfinItem series = detail_;
+        const JellyfinItem series = detailsFlow_.item();
         SeriesPlayAllOptions options{
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
             .maxAudioChannels = settings_.maxAudioChannels,
@@ -2663,51 +2341,29 @@ private:
     }
 
     void beginPlayback() {
-        if (loading_ || detail_.id.empty()) return;
+        if (loading_ || detailsFlow_.item().id.empty()) return;
         if (selectedExternalPlayer()) {
             launchExternalPlaybackAsync();
             return;
         }
         const PlaybackUserSelectionPlan selectionPlan =
-            playbackCoordinator_.beginUserPlaybackSelection(queueState_, detail_.id);
+            playbackCoordinator_.beginUserPlaybackSelection(queueState_, detailsFlow_.item().id);
         if (selectionPlan.resetQueue) queueState_.reset();
         loading_ = true;
         error_.clear();
         const JellyfinSession session = session_;
-        const JellyfinItem selected = detail_;
-        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
+        const JellyfinItem selected = detailsFlow_.item();
+        PlaybackResolutionOptions resolutionOptions = playbackRuntime_.resolutionOptions();
         const uint64_t generation = requestEpochs_.playback.begin();
 
         playbackResolutionAsync_.resolveSelection(session, selected, std::move(resolutionOptions), generation,
                                                   selectionPlan.queuedPlaybackIndex);
     }
 
-    void requestMediaSegmentsAsync() {
-        if (!session_.valid()) return;
-        const auto request = playbackCoordinator_.beginMediaSegmentsRequest(std::chrono::steady_clock::now());
-        if (!request) return;
-        const JellyfinSession session = session_;
-        const std::string itemId = *request;
-        if (!playbackContinuationAsync_.requestMediaSegments(session, itemId)) {
-            playbackCoordinator_.failMediaSegmentsRequest(itemId, std::chrono::steady_clock::now());
-        }
-    }
-
-    void requestNextEpisodeAsync() {
-        const PlaybackNextEpisodePlan plan =
-            playbackCoordinator_.beginNextEpisodePlan(queueState_, session_.valid(), std::chrono::steady_clock::now());
-        if (!plan.request) return;
-        const JellyfinSession session = session_;
-        if (!playbackContinuationAsync_.requestNextEpisode(session, plan.request->seriesId,
-                                                           plan.request->currentItemId)) {
-            playbackCoordinator_.failNextEpisodeSubmission(std::chrono::steady_clock::now());
-        }
-    }
-
     void releaseActivePlayback(bool reportStop, bool completed = false) {
         requestEpochs_.playback.invalidate();
         if (player_.status() == PlayerStatus::Playing || player_.status() == PlayerStatus::Paused) {
-            refreshPlaybackTelemetry(true);
+            playbackRuntime_.refreshTelemetry(true);
         }
         const auto session = session_;
         const PlaybackReleaseContext release = playbackCoordinator_.releaseContext(
@@ -2719,11 +2375,12 @@ private:
             JellyfinItem updated = item;
             updated.positionTicks = releasePlan.cachedPositionTicks;
             if (releasePlan.markPlayed) updated.played = true;
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_, detailsState_,
-                                                         queueState_, updated, isHiddenFromHome(updated));
-            if (detail_.id == item.id) {
-                detail_.played = updated.played;
-                detail_.positionTicks = updated.positionTicks;
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_,
+                                                         detailsFlow_.state(), queueState_, updated,
+                                                         isHiddenFromHome(updated));
+            if (detailsFlow_.item().id == item.id) {
+                detailsFlow_.item().played = updated.played;
+                detailsFlow_.item().positionTicks = updated.positionTicks;
             }
         }
         player_.stop();
@@ -2743,10 +2400,10 @@ private:
         releaseActivePlayback(true, true);
         playbackCoordinator_.beginAutoplayResolution();
         loading_ = true;
-        detail_ = nextItem;
+        detailsFlow_.item() = nextItem;
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
         const JellyfinSession session = session_;
-        PlaybackResolutionOptions resolutionOptions = playbackResolutionOptions();
+        PlaybackResolutionOptions resolutionOptions = playbackRuntime_.resolutionOptions();
         const uint64_t generation = requestEpochs_.playback.begin();
         playbackResolutionAsync_.resolveAutoplay(session, std::move(nextItem), std::move(resolutionOptions), generation,
                                                  queuedNextIndex);
@@ -2756,31 +2413,11 @@ private:
         releaseActivePlayback(true, true);
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
-        detail_ = std::move(nextItem);
-        detailsState_.beginDetails();
+        detailsFlow_.item() = std::move(nextItem);
+        detailsFlow_.state().beginDetails();
         popScreen(Screen::Details);
         playbackCoordinator_.showStillWatchingPrompt();
         error_.clear();
-    }
-
-    void startResolvedPlaybackTarget() {
-        const auto now = std::chrono::steady_clock::now();
-        const PlaybackPlayerStartContext start = playbackCoordinator_.playerStartContext();
-        playbackCoordinator_.beginPreparing(now);
-        player_.startAsync(start.url, videoSurface_.surface(), start.startPositionMs, settings_.playbackBufferPreset,
-                           start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
-                           start.externalSubtitleUrl);
-        if (start.startPositionMs > 0) playerScreenState_.beginSeek(start.startPositionMs, now);
-    }
-
-    bool retryPlaybackWithoutSubtitle() {
-        const PlaybackSubtitleFallbackPlan plan = playbackCoordinator_.subtitleFallbackPlan();
-        if (!plan.retry) return false;
-        __android_log_print(ANDROID_LOG_WARN, kTag,
-                            "Subtitle-selected transcode failed; retrying item without subtitles (stream %d)",
-                            plan.failedSubtitleStreamIndex);
-        restartPlaybackAt(playerScreenState_.positionMs(), plan.audioStreamIndex, kSubtitleOffIndex);
-        return true;
     }
 
     void applyRuntimeLaunchRequest(const LaunchRequest& request) {
@@ -2820,88 +2457,6 @@ private:
             __android_log_print(ANDROID_LOG_INFO, kTag, "Opening runtime ACTION_SEARCH query");
             searchAsync();
         }
-    }
-
-    bool retryPlaybackWithTranscodeFallback(bool preferServerStream = false) {
-#ifdef SLOPPATV_BENCHMARK
-        (void)preferServerStream;
-        __android_log_print(ANDROID_LOG_WARN, kTag, "Benchmark build refusing Jellyfin server playback fallback");
-        return false;
-#else
-        auto fallbackAttempt =
-            playbackCoordinator_.fallbackAttempt(session_.valid(), playerScreenState_.positionMs(), preferServerStream);
-        if (!fallbackAttempt) return false;
-
-        const PlaybackFallbackPlan fallbackPlan = fallbackAttempt->plan;
-        const PlaybackTarget failedTarget = std::move(fallbackAttempt->failedTarget);
-        JellyfinItem item = std::move(fallbackAttempt->item);
-        const JellyfinSession session = session_;
-        const int64_t resumeTicks = fallbackPlan.resumeTicks;
-        const bool shouldReportPrevious = fallbackPlan.reportPrevious;
-        const int audioStreamIndex = fallbackAttempt->audioStreamIndex;
-        const int subtitleStreamIndex = fallbackAttempt->subtitleStreamIndex;
-
-        player_.stop();
-        videoSurface_.release();
-        playbackCoordinator_.beginFallback();
-        playerScreenState_.setPositionMs(playbackPositionMsFromTicks(resumeTicks));
-        playerScreenState_.setDurationMs(playbackPositionMsFromTicks(item.runtimeTicks));
-
-        // Some PlaybackInfo responses include a TranscodingUrl beside DirectPlay. Use
-        // that immediately when available; it avoids a second round-trip to Jellyfin.
-        if (fallbackPlan.useOfferedTarget) {
-            if (shouldReportPrevious) {
-                playbackStreamAsync_.reportPreviousStop(session, item, failedTarget, resumeTicks, "stop-after-failure");
-            }
-            playbackCoordinator_.useOfferedFallback(fallbackPlan);
-            const bool directStreamFallback = fallbackPlan.offeredDirectStream;
-
-            std::string surfaceError;
-            if (!renderer_.ready() || !videoSurface_.create(surfaceError)) {
-                error_ = surfaceError.empty() ? "VIDEO FALLBACK SURFACE IS NOT AVAILABLE" : surfaceError;
-                return false;
-            }
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Direct play failed; using offered Jellyfin %s fallback",
-                                directStreamFallback ? "direct-stream" : "transcode");
-            playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-            startResolvedPlaybackTarget();
-            return true;
-        }
-
-        // Jellyfin commonly omits TranscodingUrl when it selected DirectPlay, even when
-        // SupportsTranscoding=true. Re-negotiate asynchronously with direct paths disabled
-        // instead of abandoning playback after an embedded-player prepare failure.
-        PlaybackOverrides fallbackOverrides = playbackOverridesFor(settings_);
-        fallbackOverrides.forceServerStream = fallbackPlan.forceServerStream;
-        fallbackOverrides.forceTranscode = fallbackPlan.forceTranscode;
-        const int maxStreamingBitrate = settings_.maxBitrateMbps * 1000000;
-        const int maxAudioChannels = settings_.maxAudioChannels;
-        const uint64_t generation = requestEpochs_.playback.begin();
-        loading_ = true;
-        playbackCoordinator_.beginFallbackResolution();
-        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
-        __android_log_print(ANDROID_LOG_WARN, kTag,
-                            "Direct play failed without fallback URL; forcing Jellyfin %s negotiation",
-                            preferServerStream ? "server-stream" : "transcode");
-
-        PlaybackStreamResolutionOptions fallbackOptions{
-            .maxStreamingBitrate = maxStreamingBitrate,
-            .maxAudioChannels = maxAudioChannels,
-            .overrides = fallbackOverrides,
-            .audioStreamIndex = audioStreamIndex,
-            .subtitleStreamIndex = subtitleStreamIndex,
-        };
-        const bool submitted =
-            playbackStreamAsync_.resolveFallback(session, std::move(item), failedTarget, shouldReportPrevious,
-                                                 resumeTicks, std::move(fallbackOptions), generation);
-        if (!submitted) {
-            loading_ = false;
-            playbackCoordinator_.finishFallbackResolution();
-            error_ = "TRANSCODE FALLBACK COULD NOT BE STARTED";
-            return false;
-        }
-        return true;
-#endif
     }
 
     void applyPendingRuntimeLaunchRequest() {
@@ -2988,11 +2543,12 @@ private:
                 updated.positionTicks = 0;
             }
             std::scoped_lock lock(stateMutex_);
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_, detailsState_,
-                                                         queueState_, updated, isHiddenFromHome(updated));
-            if (detail_.id == completed.item.id) {
-                detail_.played = updated.played;
-                detail_.positionTicks = updated.positionTicks;
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_,
+                                                         detailsFlow_.state(), queueState_, updated,
+                                                         isHiddenFromHome(updated));
+            if (detailsFlow_.item().id == completed.item.id) {
+                detailsFlow_.item().played = updated.played;
+                detailsFlow_.item().positionTicks = updated.positionTicks;
             }
         }
         const JellyfinSession reportSession = session_;
@@ -3049,7 +2605,7 @@ private:
         mediaSession_.updateMetadata(item.name, episodeLabel(item), playbackPositionMsFromTicks(item.runtimeTicks));
         mediaSession_.updateState(MediaSessionState::Buffering, playbackPositionMsFromTicks(target.startTicks));
         playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-        startResolvedPlaybackTarget();
+        playbackRuntime_.startResolvedTarget();
         return true;
     }
 
@@ -3065,7 +2621,8 @@ private:
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Playback prepare timed out after %lld ms (%s)",
                                     static_cast<long long>(preparePlan.elapsedMs),
                                     preparePlan.transcoding ? "transcode" : "direct");
-                if (preparePlan.retryWithTranscodeFallback && retryPlaybackWithTranscodeFallback()) {
+                if (preparePlan.retryWithTranscodeFallback &&
+                    playbackRuntime_.retryWithFallback(playbackStreamAsync_, renderer_.ready())) {
                     error_.clear();
                     return;
                 }
@@ -3083,11 +2640,11 @@ private:
         if (status == PlayerStatus::Error) {
             std::scoped_lock lock(stateMutex_);
             const std::string playerError = player_.error();
-            if (retryPlaybackWithoutSubtitle()) {
+            if (playbackRuntime_.retryWithoutSubtitle(playbackStreamAsync_)) {
                 error_.clear();
                 return;
             }
-            if (retryPlaybackWithTranscodeFallback()) {
+            if (playbackRuntime_.retryWithFallback(playbackStreamAsync_, renderer_.ready())) {
                 error_.clear();
                 return;
             }
@@ -3121,7 +2678,7 @@ private:
                         ANDROID_LOG_WARN, kTag,
                         "Direct-play seek failed target=%d observed=%d seekable=%d; using Jellyfin stream fallback",
                         recoveryTargetMs, observedPositionMs, mediaSeekable);
-                    if (retryPlaybackWithTranscodeFallback(true)) {
+                    if (playbackRuntime_.retryWithFallback(playbackStreamAsync_, renderer_.ready(), true)) {
                         error_.clear();
                         return;
                     }
@@ -3133,19 +2690,20 @@ private:
         const PlaybackTickPlan plan = playbackCoordinator_.consumeTickPlan(
             playbackEnded, status == PlayerStatus::Playing, playerScreenState_.positionMs(), now);
         if (plan.refreshTelemetry) {
-            refreshPlaybackTelemetry();
+            playbackRuntime_.refreshTelemetry();
             mediaSession_.updateState(status == PlayerStatus::Playing ? MediaSessionState::Playing
                                                                       : MediaSessionState::Paused,
                                       playerScreenState_.positionMs());
         }
-        if (plan.requestMediaSegments) requestMediaSegmentsAsync();
+        if (plan.requestMediaSegments) playbackRuntime_.requestMediaSegments(playbackContinuationAsync_);
         if (plan.reportPlaybackStart) {
             const PlaybackStartContext start =
                 playbackCoordinator_.playbackStartContext(playerScreenState_.positionMs());
             playbackTelemetryAsync_.reportStart(session_, start.item, start.target, start.ticks);
         }
-        if (plan.reportProgress) reportProgressAsync(false);
-        if (plan.requestNextEpisode) requestNextEpisodeAsync();
+        if (plan.reportProgress)
+            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
+        if (plan.requestNextEpisode) playbackRuntime_.requestNextEpisode(playbackContinuationAsync_, queueState_);
 
         const PlaybackContinuationPlan continuationPlan = playbackCoordinator_.continuationPlan(
             playbackEnded, playerScreenState_.positionMs(), playerScreenState_.durationMs(), queueState_,
@@ -3176,20 +2734,20 @@ private:
 
     void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
         mutationLoading_ = false;
-        if (screen_ != Screen::ItemMenu || detail_.id != completion.request.itemId) return;
+        if (screen_ != Screen::ItemMenu || detailsFlow_.item().id != completion.request.itemId) return;
         const auto outcome =
             seerrRequest_.completeDelete(completion.endpoint, seerrEndpoint(), completion.request.itemId,
                                          completion.request.requestId, completion.result.ok);
         if (outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
         if (outcome == SeerrDomainState::MutationOutcome::Failed) {
             error_ = "SEERR DELETE: " + completion.result.error;
-            detailsState_.setDeleteConfirmation(false);
+            detailsFlow_.state().setDeleteConfirmation(false);
             return;
         }
         searchState_.refreshSeerrResults();
         syncSeerrHomeRowLocked();
-        detail_ = {};
-        detailsState_.setDeleteConfirmation(false);
+        detailsFlow_.item() = {};
+        detailsFlow_.state().setDeleteConfirmation(false);
         popScreen(Screen::Home);
         if (screen_ != Screen::Home) resetNavigation(Screen::Home);
         showNotice("SEERR REQUEST DELETED", 4s);
@@ -3243,9 +2801,9 @@ private:
             return;
         }
         __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests", plan.pendingCount);
-        if (screen_ == Screen::ItemMenu && isSeerrItem(detail_)) {
-            if (const SeerrMediaItem* current = seerrDomain_.findPendingRequest(detail_.id)) {
-                detail_ = jellyfinItemFromSeerrMedia(*current);
+        if (screen_ == Screen::ItemMenu && isSeerrItem(detailsFlow_.item())) {
+            if (const SeerrMediaItem* current = seerrDomain_.findPendingRequest(detailsFlow_.item().id)) {
+                detailsFlow_.item() = jellyfinItemFromSeerrMedia(*current);
             }
         }
         syncSeerrHomeRowLocked();
@@ -3277,13 +2835,13 @@ private:
 
     void applyAsyncCompletion(ItemMenuDetailCompletion& completion) {
         applyDetailsCompletionEffects(
-            DetailsCompletionController::apply(completion, screen_ == Screen::ItemMenu, detail_));
+            DetailsCompletionController::apply(completion, screen_ == Screen::ItemMenu, detailsFlow_.item()));
     }
 
     void applyAsyncCompletion(PersonItemsCompletion& completion) {
         applyDetailsCompletionEffects(
             DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
-                                               screen_ == Screen::PersonItems, detailsState_));
+                                               screen_ == Screen::PersonItems, detailsFlow_.state()));
     }
 
     void applyServerInfoCompletionEffects(ServerInfoCompletionEffects effects) {
@@ -3303,13 +2861,13 @@ private:
     void applyAsyncCompletion(SeasonsCompletion& completion) {
         applyDetailsCompletionEffects(
             DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
-                                               screen_ == Screen::Seasons, detailsState_));
+                                               screen_ == Screen::Seasons, detailsFlow_.state()));
     }
 
     void applyAsyncCompletion(EpisodesCompletion& completion) {
         applyDetailsCompletionEffects(
             DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
-                                               screen_ == Screen::Episodes, detailsState_));
+                                               screen_ == Screen::Episodes, detailsFlow_.state()));
     }
 
     void applyBrowseCompletionEffects(BrowseCompletionEffects effects) {
@@ -3335,13 +2893,13 @@ private:
     void applyItemMutationCompletionEffects(ItemMutationCompletionEffects effects) {
         if (effects.finishLoading) mutationLoading_ = false;
         if (effects.cacheUpdate) {
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_, detailsState_,
-                                                         queueState_, *effects.cacheUpdate,
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_,
+                                                         detailsFlow_.state(), queueState_, *effects.cacheUpdate,
                                                          isHiddenFromHome(*effects.cacheUpdate));
         }
         ItemMutationController::restorePlayedRollback(effects, home_, homeState_);
         if (effects.removeCachedItemId) {
-            ItemMutationController::removeCachedItem(home_, browseState_, searchState_, detailsState_,
+            ItemMutationController::removeCachedItem(home_, browseState_, searchState_, detailsFlow_.state(),
                                                      *effects.removeCachedItemId);
         }
         if (effects.error) error_ = std::move(*effects.error);
@@ -3360,9 +2918,9 @@ private:
     }
 
     void applyAsyncCompletion(FavoriteCompletion& completion) {
-        applyItemMutationCompletionEffects(
-            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
-                                          screen_ == Screen::Details || screen_ == Screen::ItemMenu, detail_));
+        applyItemMutationCompletionEffects(ItemMutationController::apply(
+            completion, requestEpochs_.session.active(completion.sessionEpoch),
+            screen_ == Screen::Details || screen_ == Screen::ItemMenu, detailsFlow_.item()));
     }
 
     void applyAsyncCompletion(PlayedCompletion& completion) {
@@ -3370,7 +2928,7 @@ private:
         applyItemMutationCompletionEffects(
             ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
                                           screen_ == Screen::Details || screen_ == Screen::ItemMenu, replacementHidden,
-                                          playedRollback_, home_, homeState_, detail_));
+                                          playedRollback_, home_, homeState_, detailsFlow_.item()));
     }
 
     void applyAsyncCompletion(MetadataRefreshCompletion& completion) {
@@ -3381,7 +2939,7 @@ private:
     void applyAsyncCompletion(DeleteItemCompletion& completion) {
         applyItemMutationCompletionEffects(
             ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
-                                          screen_ == Screen::ItemMenu, detail_, detailsState_));
+                                          screen_ == Screen::ItemMenu, detailsFlow_.item(), detailsFlow_.state()));
     }
 
     void applyAccountCompletionEffects(AccountCompletionEffects effects) {
@@ -3410,14 +2968,15 @@ private:
     }
 
     void applyAsyncCompletion(DetailsItemCompletion& completion) {
-        applyDetailsCompletionEffects(DetailsCompletionController::apply(
-            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Details, detail_));
+        applyDetailsCompletionEffects(
+            DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
+                                               screen_ == Screen::Details, detailsFlow_.item()));
     }
 
     void applyAsyncCompletion(DetailsSimilarCompletion& completion) {
         applyDetailsCompletionEffects(
             DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
-                                               screen_ == Screen::Details, detail_, detailsState_));
+                                               screen_ == Screen::Details, detailsFlow_.item(), detailsFlow_.state()));
     }
 
     void applyAsyncCompletion(SimilarPrefetchCompletion& completion) {
@@ -3428,7 +2987,7 @@ private:
 
     void applyAsyncCompletion(EpisodeSeriesContextRequestCompletion& completion) {
         if (!requestEpochs_.content.active(completion.generation)) return;
-        if (screen_ != Screen::Details || !completion.request.matches(detail_)) return;
+        if (screen_ != Screen::Details || !completion.request.matches(detailsFlow_.item())) return;
 
         const RequestEpoch::Token requestToken = requestEpochs_.content.token(completion.generation);
         detailsAsync_.loadSeriesContext(std::move(completion.session), std::move(completion.request), requestToken);
@@ -3437,7 +2996,7 @@ private:
     void applyAsyncCompletion(EpisodeSeriesContextCompletion& completion) {
         applyDetailsCompletionEffects(
             DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
-                                               screen_ == Screen::Details, detail_, detailsState_));
+                                               screen_ == Screen::Details, detailsFlow_.item(), detailsFlow_.state()));
     }
 
     void applyAsyncCompletion(QuickConnectStartedCompletion& completion) {
@@ -3550,7 +3109,7 @@ private:
     void applyAsyncCompletion(ExternalPlaybackCompletion& completion) {
         if (!requestEpochs_.playback.active(completion.generation)) return;
         loading_ = false;
-        if (screen_ != Screen::Details || detail_.id != completion.selectedItemId) return;
+        if (screen_ != Screen::Details || detailsFlow_.item().id != completion.selectedItemId) return;
         if (!completion.error.empty()) {
             error_ = std::move(completion.error);
             return;
@@ -3588,7 +3147,8 @@ private:
         }
         if (effects.notice) showNotice(std::move(effects.notice->text), effects.notice->duration);
         if (effects.showSubtitleOverlay) playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-        if (effects.reportProgress) reportProgressAsync(false);
+        if (effects.reportProgress)
+            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
         if (effects.playItem) playPlayerItemAsync(std::move(*effects.playItem));
     }
 
@@ -3635,7 +3195,7 @@ private:
     void applyPlaybackCompletionEffects(PlaybackCompletionEffects effects) {
         if (effects.finishLoading) loading_ = false;
         if (effects.popToDetails) popScreen(Screen::Details);
-        if (effects.detailUpdate) detail_ = std::move(*effects.detailUpdate);
+        if (effects.detailUpdate) detailsFlow_.item() = std::move(*effects.detailUpdate);
         if (effects.error) error_ = std::move(*effects.error);
 
         for (const auto& restore : effects.restoreHomeVisibility) {
@@ -3697,13 +3257,15 @@ private:
     }
 
     void applyAsyncCompletion(BeginPlaybackCompletion& completion) {
-        const bool activeDetailsSelection = screen_ == Screen::Details && detail_.id == completion.selected.id;
+        const bool activeDetailsSelection =
+            screen_ == Screen::Details && detailsFlow_.item().id == completion.selected.id;
         applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
             completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection, queueState_));
     }
 
     void applyAsyncCompletion(SeriesPlayAllCompletion& completion) {
-        const bool activeDetailsSelection = screen_ == Screen::Details && detail_.id == completion.series.id;
+        const bool activeDetailsSelection =
+            screen_ == Screen::Details && detailsFlow_.item().id == completion.series.id;
         applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
             completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection, queueState_));
     }
@@ -3789,7 +3351,7 @@ private:
             }
             const bool seerrRefreshEligible =
                 SeerrClient::configured(settings_.seerrServer, seerrAuth()) &&
-                (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)));
+                (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detailsFlow_.item())));
             if (seerrDomain_.consumePendingRefreshDue(now, seerrRefreshEligible)) refreshSeerr = true;
         }
         if (retryHome || refreshHomeAfterPlaybackStop) loadHomeAsync();
@@ -3800,16 +3362,6 @@ private:
         if (launchPendingExternalPlayback(work)) return;
         if (startPendingPlaybackTransition(work)) return;
         tickActivePlayer();
-    }
-
-    void reportProgressAsync(bool immediate) {
-        const PlayerStatus status = player_.status();
-        const PlaybackProgressContext progress = playbackCoordinator_.progressContext(
-            screen_ == Screen::Player, session_.valid(), immediate, status == PlayerStatus::Preparing,
-            status == PlayerStatus::Paused, playerScreenState_.positionMs());
-        if (!progress.plan.report) return;
-        playbackTelemetryAsync_.reportProgress(session_, progress.item, progress.target, progress.plan.ticks,
-                                               progress.plan.paused);
     }
 
     void stopPlayback(bool completed = false) {
@@ -4182,8 +3734,8 @@ private:
 
     void renderItemMenu() {
         std::vector<std::string> actions;
-        if (!detailsState_.deleteConfirmation()) actions = itemMenuActions();
-        renderItemMenuPresentation(renderer_, uiPresentation_, detail_, detailsState_, actions,
+        if (!detailsFlow_.state().deleteConfirmation()) actions = itemMenuActions();
+        renderItemMenuPresentation(renderer_, uiPresentation_, detailsFlow_.item(), detailsFlow_.state(), actions,
                                    Renderer::logicalWidth(), Renderer::logicalHeight());
     }
 
@@ -4203,31 +3755,32 @@ private:
     }
 
     void renderCast() {
-        renderCastPresentation(renderer_, uiPresentation_, detail_, detailsState_, settings_.uiTextSize);
+        renderCastPresentation(renderer_, uiPresentation_, detailsFlow_.item(), detailsFlow_.state(),
+                               settings_.uiTextSize);
     }
 
     void renderPersonItems() {
-        const auto& person = detailsState_.selectedPerson();
+        const auto& person = detailsFlow_.state().selectedPerson();
         const std::string heading = person.name.empty() ? "Person" : "Featuring " + person.name;
-        renderMediaGrid(heading, detailsState_.personItems(), detailsState_.personItemSelection());
+        renderMediaGrid(heading, detailsFlow_.state().personItems(), detailsFlow_.state().personItemSelection());
     }
 
     void renderSeasons() {
-        const auto& series = detailsState_.seriesDetail();
-        renderMediaGrid(series.name.empty() ? "Seasons" : series.name + " | Seasons", detailsState_.seasons(),
-                        detailsState_.seasonSelection());
+        const auto& series = detailsFlow_.state().seriesDetail();
+        renderMediaGrid(series.name.empty() ? "Seasons" : series.name + " | Seasons", detailsFlow_.state().seasons(),
+                        detailsFlow_.state().seasonSelection());
     }
 
     void renderEpisodes() {
-        const auto& series = detailsState_.seriesDetail();
-        const auto& season = detailsState_.selectedSeason();
+        const auto& series = detailsFlow_.state().seriesDetail();
+        const auto& season = detailsFlow_.state().selectedSeason();
         const std::string heading = season.name.empty() ? "Episodes" : series.name + " - " + season.name;
-        renderMediaGrid(heading, detailsState_.episodes(), detailsState_.episodeSelection());
+        renderMediaGrid(heading, detailsFlow_.state().episodes(), detailsFlow_.state().episodeSelection());
     }
 
     void renderDetails() {
-        renderDetailsPresentation(renderer_, uiPresentation_, detail_, detailsState_, detailActions(), settings_,
-                                  playbackCoordinator_.continuation().stillWatchingPrompt(),
+        renderDetailsPresentation(renderer_, uiPresentation_, detailsFlow_.item(), detailsFlow_.state(),
+                                  detailActions(), settings_, playbackCoordinator_.continuation().stillWatchingPrompt(),
                                   screen_ == Screen::ItemMenu, Renderer::logicalWidth(), Renderer::logicalHeight());
     }
 
@@ -4396,8 +3949,7 @@ private:
     int keyboardRow_ = 0;
     int keyboardCol_ = 0;
 
-    JellyfinItem detail_;
-    DetailsScreenState detailsState_;
+    DetailsFlow detailsFlow_;
 
     PlaybackQueueState queueState_;
 
@@ -4405,6 +3957,7 @@ private:
     PlaybackCoordinator playbackCoordinator_;
     PlayerScreenState playerScreenState_;
     TrickplayPreviewState trickplayState_;
+    PlaybackRuntimeController playbackRuntime_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;

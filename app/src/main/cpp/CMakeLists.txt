@@ -18,6 +18,7 @@ add_library(sloppatv SHARED
     browse_navigation_controller.cpp
     details_completion_controller.cpp
     details_navigation_controller.cpp
+    details_flow.cpp
     item_mutation_controller.cpp
     home_completion_controller.cpp
     home_navigation_controller.cpp
