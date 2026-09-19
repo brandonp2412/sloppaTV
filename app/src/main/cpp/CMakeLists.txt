@@ -21,9 +21,12 @@ add_library(sloppatv SHARED
     details_navigation_controller.cpp
     details_flow.cpp
     item_mutation_controller.cpp
+    content_mutation_flow.cpp
     home_completion_controller.cpp
+    home_completion_flow.cpp
     home_navigation_controller.cpp
     playback_completion_controller.cpp
+    playback_completion_flow.cpp
     player_completion_controller.cpp
     queue_navigation_controller.cpp
     search_completion_controller.cpp

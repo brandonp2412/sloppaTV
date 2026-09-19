@@ -20,6 +20,7 @@
 #include "brand_mark.hpp"
 #include "cast_renderer.hpp"
 #include "content_screen_presentation.hpp"
+#include "content_mutation_flow.hpp"
 #include "details_completion_controller.hpp"
 #include "details_flow.hpp"
 #include "details_renderer.hpp"
@@ -36,10 +37,12 @@
 #include "external_player.hpp"
 #include "home_async_executor.hpp"
 #include "home_completion_controller.hpp"
+#include "home_completion_flow.hpp"
 #include "home_navigation_controller.hpp"
 #include "home_renderer.hpp"
 #include "home_row_renderer.hpp"
 #include "home_screen.hpp"
+#include "home_visibility.hpp"
 #include "input_navigation.hpp"
 #include "image_decoder.hpp"
 #include "item_menu_renderer.hpp"
@@ -61,9 +64,13 @@
 #include "playback_continuation.hpp"
 #include "playback_continuation_executor.hpp"
 #include "playback_completion_controller.hpp"
+#include "playback_completion_flow.hpp"
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
 #include "playback_resolution_executor.hpp"
+#include "playback_request_flow.hpp"
+#include "playback_release_flow.hpp"
+#include "playback_lifecycle_flow.hpp"
 #include "playback_runtime_controller.hpp"
 #include "playback_resolver.hpp"
 #include "playback_session.hpp"
@@ -106,6 +113,7 @@
 #include "series_playback_executor.hpp"
 #include "seerr_async_executor.hpp"
 #include "seerr_connection_coordinator.hpp"
+#include "seerr_completion_flow.hpp"
 #include "seerr_domain.hpp"
 #include "seerr_drive_picker_renderer.hpp"
 #include "seerr_drive_navigation_controller.hpp"
@@ -119,8 +127,7 @@
 #include "server_info_executor.hpp"
 #include "session_registry.hpp"
 #include "session_store.hpp"
-#include "settings_action_controller.hpp"
-#include "settings_navigation_controller.hpp"
+#include "settings_flow.hpp"
 #include "settings_screen.hpp"
 #include "similar_prefetch_controller.hpp"
 #include "settings_renderer.hpp"
@@ -187,7 +194,7 @@ struct PendingTickWork {
     std::optional<PendingPlaybackTransition> playbackTransition;
 };
 
-using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
+using QueuedPlaybackCompletion = AppQueuedPlaybackCompletion;
 
 using AsyncCompletion =
     std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
@@ -285,12 +292,26 @@ public:
                                                : "Home artwork decode failed item=%s type=%s reason=%s",
                                            request.itemId.c_str(), request.itemType.c_str(), loaded.error.c_str());
                    }),
-          uiPresentation_(renderer_, artwork_), seerrConnection_(seerrDomain_, seerrAsync_),
+          uiPresentation_(renderer_, artwork_), settingsFlow_(settings_), seerrConnection_(seerrDomain_, seerrAsync_),
           seerrRefresh_(seerrDomain_, seerrAsync_), seerrRequest_(seerrDomain_, seerrAsync_),
           searchFlow_(seerrDomain_, seerrAsync_, jellyfinSearchAsync_, requestEpochs_.search,
                       requestEpochs_.seerrSearch),
+          homeVisibility_(session_, hiddenHomeItems_),
+          homeCompletionFlow_(homeVisibility_, home_, homeState_, homeLoading_, homeRetryAt_, homeRetryAttempt_),
+          seerrCompletionFlow_(seerrDomain_, contentMutationFlow_, searchFlow_.state(), detailsFlow_, settings_,
+                               session_, seerrConnection_, seerrRequest_, seerrRefresh_),
+          playbackCompletionFlow_(playbackCoordinator_, queueState_, detailsFlow_, playerScreenState_),
+          playbackRequestFlow_(queueState_, playbackCoordinator_, playerScreenState_, detailsFlow_, session_, settings_,
+                               requestEpochs_.playback, screen_, loading_, error_),
           playbackRuntime_(playbackCoordinator_, playerScreenState_, player_, videoSurface_, session_, settings_,
-                           requestEpochs_.playback, loading_, error_, dataPath_) {
+                           requestEpochs_.playback, loading_, error_, dataPath_),
+          playbackReleaseFlow_(requestEpochs_.playback, player_, videoSurface_, displayMode_, mediaSession_,
+                               playbackCoordinator_, playerScreenState_, session_, home_, homeState_, browseState_,
+                               searchFlow_.state(), detailsFlow_, queueState_, playbackTelemetryAsync_,
+                               hiddenHomeItems_, renderer_, trickplayState_),
+          playbackLifecycleFlow_(renderer_, player_, mediaSession_, videoSurface_, displayMode_, playbackCoordinator_,
+                                 playerScreenState_, playbackRuntime_, screen_, session_, settings_, browseState_,
+                                 loading_, error_, lastInteraction_, screensaverActive_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         artwork_.setDataPath(dataPath_);
@@ -299,7 +320,8 @@ public:
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
         loadSession();
-        if (!settings_.externalPlayerComponent.empty()) refreshExternalPlayers();
+        if (!settings_.externalPlayerComponent.empty())
+            settingsFlow_.refreshExternalPlayers(externalPlayer_.availablePlayers());
         __android_log_print(ANDROID_LOG_INFO, kTag,
                             "Startup init: session loaded valid=%d seerrConfigured=%d seerrSession=%d drivePicker=%d",
                             session_.valid() ? 1 : 0, !settings_.seerrServer.empty() ? 1 : 0,
@@ -376,7 +398,7 @@ public:
                     timeoutMs = 0;
                 else if (screensaverActive_)
                     timeoutMs = 30000;
-                else if (loading_ || homeLoading_ || mutationLoading_ || searchFlow_.state().loading() ||
+                else if (loading_ || homeLoading_ || contentMutationFlow_.loading() || searchFlow_.state().loading() ||
                          seerrDomain_.searchLoading() || accountFlow_.state().quickConnectActive())
                     timeoutMs = 100;
                 else {
@@ -459,7 +481,7 @@ public:
                         std::chrono::duration_cast<std::chrono::milliseconds>(now - lastInteraction_).count();
                     screensaverActive_ = shouldActivateScreensaver(
                         settings_.screensaverMinutes, idleMs, false,
-                        loading_ || homeLoading_ || mutationLoading_ || searchFlow_.state().loading() ||
+                        loading_ || homeLoading_ || contentMutationFlow_.loading() || searchFlow_.state().loading() ||
                             seerrDomain_.searchLoading() || accountFlow_.state().quickConnectActive());
                 }
                 screensaver = screensaverActive_;
@@ -552,103 +574,20 @@ private:
     void onAppCommand(int32_t command) {
         std::scoped_lock lock(stateMutex_);
         switch (command) {
-        case APP_CMD_INIT_WINDOW: {
-            bool reusedRendererContext = false;
-            if (app_->window) {
-                if (renderer_.contextReady() && !renderer_.ready()) {
-                    reusedRendererContext = renderer_.attachWindow(app_->window);
-                }
-                if (!renderer_.ready()) renderer_.init(app_->window);
-            }
-            lastInteraction_ = std::chrono::steady_clock::now();
-            screensaverActive_ = false;
-            const bool restoreCandidate = screen_ == Screen::Player && playerScreenState_.windowRestorePending() &&
-                                          renderer_.ready() && playbackCoordinator_.activeTargetAvailable();
-            const PlayerStatus restoreStatus = restoreCandidate ? player_.status() : PlayerStatus::Idle;
-            const PlaybackWindowRestorePlan restorePlan = playbackCoordinator_.windowRestorePlan(
-                screen_ == Screen::Player, playerScreenState_.windowRestorePending(), renderer_.ready(),
-                reusedRendererContext, videoSurface_.ready(),
-                restoreStatus != PlayerStatus::Idle && restoreStatus != PlayerStatus::Ended &&
-                    restoreStatus != PlayerStatus::Error,
-                playerScreenState_.resumeOnFocusRequested());
-            if (restorePlan.restore) {
-                if (settings_.refreshRateSwitching && restorePlan.videoFrameRate > 0.0f) {
-                    displayMode_.matchVideo(app_->window, restorePlan.videoFrameRate);
-                }
-                if (restorePlan.preservePlayer) {
-                    if (restorePlan.resumePlayback) player_.play();
-                    mediaSession_.updateState(restorePlan.resumePlayback ? MediaSessionState::Playing
-                                                                         : MediaSessionState::Paused,
-                                              playerScreenState_.positionMs());
-                    __android_log_print(ANDROID_LOG_INFO, kTag,
-                                        "Restored playback with preserved libmpv and GLES context");
-                } else {
-                    // libmpv must release MediaCodec before its Android Surface is destroyed.
-                    // Releasing VideoSurface first can make mediacodec_embed observe wid=0 while
-                    // the decoder is still active and abort inside vo_mediacodec_embed.
-                    player_.stop();
-                    videoSurface_.release();
-                    std::string surfaceError;
-                    if (!videoSurface_.create(surfaceError)) {
-                        error_ = surfaceError.empty() ? "VIDEO SURFACE COULD NOT BE RESTORED" : surfaceError;
-                        break;
-                    }
-                    const PlaybackPlayerStartContext start =
-                        playbackCoordinator_.playerStartContext(PlaybackPlayerStartMode::WindowRestore);
-                    player_.startAsync(start.url, videoSurface_.surface(), playerScreenState_.positionMs(),
-                                       settings_.playbackBufferPreset, start.audioOrdinal, start.subtitleStreamIndex,
-                                       start.subtitleOrdinal, start.externalSubtitleUrl);
-                    playbackCoordinator_.setPauseAfterRestart(restorePlan.pauseAfterRestart);
-                    mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
-                    __android_log_print(
-                        ANDROID_LOG_WARN, kTag,
-                        "GLES context was not reusable during window restore; recreated playback surface");
-                }
-                playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
-                playerScreenState_.completeWindowRestore();
-            }
+        case APP_CMD_INIT_WINDOW:
+            (void)playbackLifecycleFlow_.initializeWindow(app_->window);
+            break;
+        case APP_CMD_TERM_WINDOW:
+            playbackLifecycleFlow_.terminateWindow(playbackTelemetryAsync_);
+            break;
+        case APP_CMD_GAINED_FOCUS: {
+            const PlaybackLifecycleEffects effects = playbackLifecycleFlow_.gainedFocus();
+            if (effects.reloadBrowse) loadBrowsePageAsync(false);
             break;
         }
-        case APP_CMD_TERM_WINDOW: {
-            const bool suspendCandidate = screen_ == Screen::Player && playbackCoordinator_.activeTargetAvailable();
-            const PlayerStatus status = suspendCandidate ? player_.status() : PlayerStatus::Idle;
-            const PlaybackWindowSuspendPlan suspendPlan = playbackCoordinator_.windowSuspendPlan(
-                screen_ == Screen::Player, status == PlayerStatus::Playing || status == PlayerStatus::Preparing);
-            if (suspendPlan.suspend) {
-                playbackRuntime_.refreshTelemetry(true);
-                playerScreenState_.beginWindowRestore(suspendPlan.resumePlayback);
-                if (suspendPlan.resumePlayback) player_.pause();
-                playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
-                displayMode_.restore();
-                mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
-            }
-            if (!renderer_.detachWindow()) renderer_.shutdown();
+        case APP_CMD_LOST_FOCUS:
+            playbackLifecycleFlow_.lostFocus();
             break;
-        }
-        case APP_CMD_GAINED_FOCUS:
-            lastInteraction_ = std::chrono::steady_clock::now();
-            screensaverActive_ = false;
-            if (screen_ == Screen::Player && playerScreenState_.takeResumeOnFocus()) {
-                player_.play();
-                mediaSession_.updateState(MediaSessionState::Playing, playerScreenState_.positionMs());
-                __android_log_print(ANDROID_LOG_INFO, kTag, "Resumed playback after focus restoration");
-            } else if (screen_ == Screen::Browse && session_.valid() && !loading_ &&
-                       !browseState_.activeContainer().id.empty()) {
-                loadBrowsePageAsync(false);
-            }
-            break;
-        case APP_CMD_LOST_FOCUS: {
-            screensaverActive_ = false;
-            const bool playerScreenActive = screen_ == Screen::Player;
-            const PlayerStatus status = playerScreenActive ? player_.status() : PlayerStatus::Idle;
-            if (shouldPausePlaybackForFocusLoss(playerScreenActive,
-                                                status == PlayerStatus::Playing || status == PlayerStatus::Preparing)) {
-                playerScreenState_.requestResumeOnFocus();
-                player_.pause();
-                mediaSession_.updateState(MediaSessionState::Paused, playerScreenState_.positionMs());
-            }
-            break;
-        }
         default:
             break;
         }
@@ -833,50 +772,11 @@ private:
         if (activityClass) env->DeleteLocalRef(activityClass);
     }
 
-    void moveKeyboard(int dx, int dy) {
-        const auto& rows = keyboardRows();
-        if (dy != 0) {
-            keyboardRow_ = std::clamp(keyboardRow_ + dy, 0, static_cast<int>(rows.size()) - 1);
-            keyboardCol_ =
-                std::clamp(keyboardCol_, 0, static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size()) - 1);
-        }
-        if (dx != 0) {
-            const int columns = static_cast<int>(rows[static_cast<size_t>(keyboardRow_)].size());
-            keyboardCol_ = wrappedIndex(keyboardCol_, dx, columns);
-        }
-    }
-
     void activateKeyboardKey(bool forSearch) {
-        const auto& rows = keyboardRows();
-        const auto& key = rows[static_cast<size_t>(keyboardRow_)][static_cast<size_t>(keyboardCol_)];
-        if (forSearch) {
-            switch (key.action) {
-            case KeyAction::Insert:
-                for (char value : key.value) searchFlow_.state().append(value);
-                scheduleLiveSearch();
-                break;
-            case KeyAction::Backspace:
-                if (searchFlow_.state().backspace()) scheduleLiveSearch();
-                break;
-            case KeyAction::Done:
-                searchFlow_.state().setKeyboard(false);
-                searchAsync();
-                break;
-            }
-            return;
-        }
-        if (accountFlow_.state().loginFocus() < 0 || accountFlow_.state().loginFocus() >= 3) return;
-        switch (key.action) {
-        case KeyAction::Insert:
-            for (char value : key.value) accountFlow_.state().appendToFocusedField(value);
-            break;
-        case KeyAction::Backspace:
-            accountFlow_.state().backspaceFocusedField();
-            break;
-        case KeyAction::Done:
-            accountFlow_.state().setKeyboardActive(false);
-            break;
-        }
+        const VirtualKeyboardEffects effects =
+            virtualKeyboard_.activate(forSearch, searchFlow_.state(), accountFlow_.state());
+        if (effects.searchChanged) scheduleLiveSearch();
+        if (effects.submitSearch) searchAsync();
     }
 
     void handleLoginKey(int32_t key) {
@@ -894,7 +794,7 @@ private:
             error_.clear();
             return;
         case AccountNavigationActionType::MoveKeyboard:
-            moveKeyboard(navigation.dx, navigation.dy);
+            virtualKeyboard_.move(navigation.dx, navigation.dy);
             return;
         case AccountNavigationActionType::ActivateKeyboard:
             activateKeyboardKey(false);
@@ -907,7 +807,7 @@ private:
             accountFlow_.state().setKeyboardActive(!showSystemTextInput(accountFlow_.state().field(field),
                                                                         hints[static_cast<size_t>(field)], mode,
                                                                         field == AccountScreenState::kPasswordField));
-            if (accountFlow_.state().keyboardActive()) keyboardRow_ = keyboardCol_ = 0;
+            if (accountFlow_.state().keyboardActive()) virtualKeyboard_.reset();
             return;
         }
         case AccountNavigationActionType::Login:
@@ -1106,7 +1006,7 @@ private:
             searchAsync();
             return;
         case SearchNavigationActionType::MoveKeyboard:
-            moveKeyboard(navigation.dx, navigation.dy);
+            virtualKeyboard_.move(navigation.dx, navigation.dy);
             return;
         case SearchNavigationActionType::ActivateKeyboard:
             activateKeyboardKey(true);
@@ -1114,7 +1014,7 @@ private:
         case SearchNavigationActionType::OpenTextInput:
             searchFlow_.state().setKeyboard(
                 !showSystemTextInput(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch));
-            if (searchFlow_.state().keyboard()) keyboardRow_ = keyboardCol_ = 0;
+            if (searchFlow_.state().keyboard()) virtualKeyboard_.reset();
             return;
         case SearchNavigationActionType::OpenContext:
             if (navigation.item) openItemMenuForItem(*navigation.item);
@@ -1130,19 +1030,6 @@ private:
 
     std::vector<std::string> detailActions() const {
         return detailsFlow_.detailActions(playbackCoordinator_.continuation().stillWatchingPrompt());
-    }
-
-    void refreshExternalPlayers() {
-        externalPlayers_ = externalPlayer_.availablePlayers();
-        SettingsActionController::reconcileExternalPlayer(settings_, externalPlayers_);
-    }
-
-    std::string externalPlayerLabel() const {
-        return SettingsActionController::externalPlayerLabel(settings_, externalPlayers_);
-    }
-
-    std::optional<ExternalPlayerApp> selectedExternalPlayer() const {
-        return SettingsActionController::selectedExternalPlayer(settings_, externalPlayers_);
     }
 
     void applySettingsActionEffects(const SettingsActionEffects& effects) {
@@ -1166,7 +1053,7 @@ private:
             if (screen_ == Screen::Home) homeState_.focusToolbar(3);
             return;
         case SettingsHostAction::EditSearch:
-            showSystemTextInput(settingsScreen_.searchQuery(), "Search settings", kTextInputSettingsSearch);
+            showSystemTextInput(settingsFlow_.state().searchQuery(), "Search settings", kTextInputSettingsSearch);
             return;
         case SettingsHostAction::OpenDiagnostics:
             openDiagnostics();
@@ -1187,10 +1074,7 @@ private:
     }
 
     void handleSettingsKey(int32_t key) {
-        const SettingsNavigationAction navigation =
-            SettingsNavigationController::handle(settingsScreen_, settings_, screenNavigationKeyForAndroidKey(key));
-        applySettingsActionEffects(
-            SettingsActionController::apply(navigation, settingsScreen_, settings_, externalPlayers_));
+        applySettingsActionEffects(settingsFlow_.handle(screenNavigationKeyForAndroidKey(key)));
     }
 
     void handleDiagnosticsKey(int32_t key) {
@@ -1326,8 +1210,9 @@ private:
     }
 
     std::vector<std::string> itemMenuActions() const {
-        return detailsFlow_.itemMenuActions(isSeerrItem(detailsFlow_.item()), selectedExternalPlayer().has_value(),
-                                            !queueState_.empty(), isHiddenFromHome(detailsFlow_.item()));
+        return detailsFlow_.itemMenuActions(isSeerrItem(detailsFlow_.item()),
+                                            settingsFlow_.selectedExternalPlayer().has_value(), !queueState_.empty(),
+                                            homeVisibility_.isHidden(detailsFlow_.item()));
     }
 
     void openItemMenu() {
@@ -1339,12 +1224,12 @@ private:
     void handleItemMenuKey(int32_t key) {
         applyDetailsFlowCommand(
             detailsFlow_.handleItemMenu(detailsNavigationKeyForAndroidKey(key), isSeerrItem(detailsFlow_.item()),
-                                        selectedExternalPlayer().has_value(), !queueState_.empty()));
+                                        settingsFlow_.selectedExternalPlayer().has_value(), !queueState_.empty()));
     }
 
     void launchExternalPlaybackAsync() {
         if (loading_ || !session_.valid() || detailsFlow_.item().id.empty()) return;
-        const auto player = selectedExternalPlayer();
+        const auto player = settingsFlow_.selectedExternalPlayer();
         if (!player) {
             error_ = "EXTERNAL PLAYER IS NOT CONFIGURED";
             return;
@@ -1498,9 +1383,9 @@ private:
     }
 
     void openSettings() {
-        refreshExternalPlayers();
+        settingsFlow_.refreshExternalPlayers(externalPlayer_.availablePlayers());
         pushScreen(Screen::Settings);
-        settingsScreen_.reset();
+        settingsFlow_.reset();
         error_.clear();
     }
 
@@ -1553,8 +1438,7 @@ private:
         homeLoading_ = false;
         homeRetryAt_ = {};
         homeRetryAttempt_ = 0;
-        mutationLoading_ = false;
-        playedRollback_.reset();
+        contentMutationFlow_.reset();
         error_.clear();
         statusOverlayState_.clearNotice();
         screensaverActive_ = false;
@@ -1658,91 +1542,55 @@ private:
         detailsAsync_.loadEpisodes(session, seriesId, seasonId, generation);
     }
 
-    std::string hiddenHomeKey(const std::string& itemId) const {
-        return session_.server + "\n" + session_.userId + "\n" + itemId;
-    }
-
-    bool isHiddenFromHome(const JellyfinItem& item) const {
-        return !item.id.empty() && hiddenHomeItems_.contains(hiddenHomeKey(item.id));
-    }
-
-    void filterHiddenHomeItems(JellyfinHomeData& data) const {
-        for (auto& row : data.rows) {
-            if (row.title == "My Media") continue;
-            std::erase_if(row.items, [&](const JellyfinItem& item) { return isHiddenFromHome(item); });
-        }
-    }
-
-    void clampHomeSelections() {
-        std::vector<int> itemCounts;
-        itemCounts.reserve(home_.rows.size());
-        for (const auto& row : home_.rows) itemCounts.push_back(static_cast<int>(row.items.size()));
-        homeState_.clampSelections(itemCounts);
-    }
-
     void toggleHiddenFromHome() {
-        if (detailsFlow_.item().id.empty()) return;
-        const std::string key = hiddenHomeKey(detailsFlow_.item().id);
-        const bool hiding = !hiddenHomeItems_.contains(key);
-        if (hiding)
-            hiddenHomeItems_.insert(key);
-        else
-            hiddenHomeItems_.erase(key);
-        filterHiddenHomeItems(home_);
-        clampHomeSelections();
+        const auto hiding = homeVisibility_.toggle(detailsFlow_.item(), home_, homeState_);
+        if (!hiding) return;
         saveSession(session_);
-        showNotice(hiding ? "HIDDEN FROM HOME" : "HOME VISIBILITY RESTORED", 2s);
+        showNotice(*hiding ? "HIDDEN FROM HOME" : "HOME VISIBILITY RESTORED", 2s);
     }
 
     void restoreHomeVisibilityForPlayback(const JellyfinItem& item) {
-        bool changed = false;
-        auto restore = [&](const std::string& itemId) {
-            if (!itemId.empty()) changed = hiddenHomeItems_.erase(hiddenHomeKey(itemId)) > 0 || changed;
-        };
-        restore(item.id);
-        restore(item.seriesId);
-        if (changed) saveSession(session_);
+        if (homeVisibility_.restoreForPlayback(item)) saveSession(session_);
     }
 
     void toggleFavoriteAsync() {
-        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty()) return;
+        if (loading_ || contentMutationFlow_.loading() || detailsFlow_.item().id.empty()) return;
         const bool desired = !detailsFlow_.item().favorite;
         const JellyfinSession session = session_;
         const JellyfinItem item = detailsFlow_.item();
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
-        mutationLoading_ = true;
+        contentMutationFlow_.begin();
         error_.clear();
         itemMutationAsync_.setFavorite(session, item, desired, sessionEpoch);
     }
 
     void togglePlayedAsync() {
-        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty()) return;
+        if (loading_ || contentMutationFlow_.loading() || detailsFlow_.item().id.empty()) return;
         const JellyfinSession session = session_;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
-        const bool hiddenFromHome = isHiddenFromHome(detailsFlow_.item());
-        PlayedMutationPreparation preparation = ItemMutationController::preparePlayedToggle(
+        const bool hiddenFromHome = homeVisibility_.isHidden(detailsFlow_.item());
+        PlayedMutationPreparation preparation = contentMutationFlow_.preparePlayedToggle(
             home_, homeState_, browseState_, searchFlow_.state(), detailsFlow_.state(), queueState_,
             detailsFlow_.item(), hiddenFromHome, sessionEpoch);
-        mutationLoading_ = true;
+        contentMutationFlow_.begin();
         error_.clear();
-        playedRollback_ = std::move(preparation.rollback);
         itemMutationAsync_.setPlayed(session, std::move(preparation.item), preparation.desired, sessionEpoch,
                                      preparation.nextUpReplacementIndex);
     }
 
     void refreshCurrentItemMetadataAsync() {
-        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty()) return;
+        if (loading_ || contentMutationFlow_.loading() || detailsFlow_.item().id.empty()) return;
         const JellyfinSession session = session_;
         const std::string itemId = detailsFlow_.item().id;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
-        mutationLoading_ = true;
+        contentMutationFlow_.begin();
         error_.clear();
         itemMutationAsync_.refreshMetadata(session, itemId, sessionEpoch);
     }
 
     void deleteSeerrRequestAsync() {
         const auto deleteRequest = seerrDeleteRequestFromJellyfinItem(detailsFlow_.item());
-        if (loading_ || mutationLoading_ || !deleteRequest) {
+        if (loading_ || contentMutationFlow_.loading() || !deleteRequest) {
             if (isSeerrItem(detailsFlow_.item()) && detailsFlow_.item().externalRequestId <= 0) {
                 error_ = "SEERR REQUEST ID IS NOT AVAILABLE YET";
                 detailsFlow_.state().setDeleteConfirmation(false);
@@ -1756,17 +1604,19 @@ private:
             return;
         }
         const SeerrDeleteRequest request = *deleteRequest;
-        mutationLoading_ = true;
+        contentMutationFlow_.begin();
         error_.clear();
         seerrAsync_.deleteRequest(endpoint, request);
     }
 
     void deleteCurrentItemAsync() {
-        if (loading_ || mutationLoading_ || detailsFlow_.item().id.empty() || !detailsFlow_.item().canDelete) return;
+        if (loading_ || contentMutationFlow_.loading() || detailsFlow_.item().id.empty() ||
+            !detailsFlow_.item().canDelete)
+            return;
         const JellyfinSession session = session_;
         const std::string itemId = detailsFlow_.item().id;
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
-        mutationLoading_ = true;
+        contentMutationFlow_.begin();
         error_.clear();
         itemMutationAsync_.deleteItem(session, itemId, sessionEpoch);
     }
@@ -1775,7 +1625,7 @@ private:
         pushScreen(Screen::Search);
         searchFlow_.state().setKeyboard(
             !showSystemTextInput(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch));
-        keyboardRow_ = keyboardCol_ = 0;
+        virtualKeyboard_.reset();
         error_.clear();
     }
 
@@ -1921,7 +1771,7 @@ private:
             break;
         }
 
-        mutationLoading_ = true;
+        contentMutationFlow_.begin();
         seerrRequest_.submit(std::move(plan));
     }
 
@@ -1978,175 +1828,50 @@ private:
         detailsAsync_.load(session, id, requestToken, !prefetchedSimilar.has_value());
     }
 
-    void shuffleRemainingQueue() {
-        static thread_local std::mt19937 generator(std::random_device{}());
-        if (!queueState_.shuffleRemaining(generator)) return;
-        playbackCoordinator_.syncQueueContinuation(queueState_);
-    }
+    void shuffleRemainingQueue() { playbackRequestFlow_.shuffleRemaining(); }
 
-    void openQueueOverlay() {
-        if (!queueState_.openOverlay()) {
-            error_.clear();
-            return;
-        }
-        error_.clear();
-        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 10s);
-    }
+    void openQueueOverlay() { playbackRequestFlow_.openQueue(); }
 
     void playQueuedIndexAsync(int index, bool restartCurrent = false, bool replacingCompleted = false) {
-        if (loading_ || index < 0 || index >= queueState_.size() || !session_.valid()) return;
-        if (index == queueState_.currentIndex() && screen_ == Screen::Player && !restartCurrent) {
-            queueState_.closeOverlay();
-            return;
-        }
-
-        const Screen originScreen = screen_;
-        const bool replacingPlayer = screen_ == Screen::Player && playbackCoordinator_.activeItemAvailable();
-        if (replacingPlayer) releaseActivePlayback(true, replacingCompleted);
-        const int previousQueueIndex = queueState_.currentIndex();
-        queueState_.closeOverlay();
-        loading_ = true;
-        playbackCoordinator_.beginPlaybackResolution(replacingPlayer);
-        error_.clear();
-        const JellyfinSession session = session_;
-        JellyfinItem queued = *queueState_.itemAt(index);
-        if (restartCurrent) queued.positionTicks = 0;
-        PlaybackResolutionOptions resolutionOptions = playbackRuntime_.resolutionOptions();
-        const uint64_t generation = requestEpochs_.playback.begin();
-        playbackResolutionAsync_.resolveQueued(session, std::move(queued), std::move(resolutionOptions), generation,
-                                               originScreen, index, previousQueueIndex, replacingPlayer);
+        playbackRequestFlow_.playQueued(
+            index, restartCurrent, replacingCompleted,
+            [this](bool reportStop, bool completed) { releaseActivePlayback(reportStop, completed); }, playbackRuntime_,
+            playbackResolutionAsync_);
     }
 
     void playPlayerItemAsync(JellyfinItem selected) {
-        if (loading_ || screen_ != Screen::Player || !session_.valid() || selected.id.empty()) return;
-        const JellyfinSession session = session_;
-        PlaybackResolutionOptions resolutionOptions = playbackRuntime_.resolutionOptions();
-
-        queueState_.reset();
-        releaseActivePlayback(true, false);
-        loading_ = true;
-        playbackCoordinator_.beginPlaybackResolution(true);
-        error_.clear();
-        const uint64_t generation = requestEpochs_.playback.begin();
-        playbackResolutionAsync_.resolvePlayerItem(session, std::move(selected), std::move(resolutionOptions),
-                                                   generation);
+        playbackRequestFlow_.playPlayerItem(
+            std::move(selected),
+            [this](bool reportStop, bool completed) { releaseActivePlayback(reportStop, completed); }, playbackRuntime_,
+            playbackResolutionAsync_);
     }
 
     void playAdjacentEpisode(int direction) {
-        if (direction == 0 || loading_ || screen_ != Screen::Player) return;
-        const int currentQueueIndex = queueState_.currentIndex();
-        if (currentQueueIndex >= 0) {
-            const int targetIndex = direction > 0 ? queueState_.nextIndex(true) : currentQueueIndex - 1;
-            if (targetIndex >= 0 && targetIndex < queueState_.size()) {
-                playQueuedIndexAsync(targetIndex);
-                return;
-            }
-        }
-        if (!session_.valid()) return;
-        PlaybackAdjacentEpisodePlan plan = playbackCoordinator_.beginAdjacentEpisodePlan(direction);
-        if (plan.nextItem) {
-            playPlayerItemAsync(std::move(*plan.nextItem));
-            return;
-        }
-        if (!plan.lookup) return;
-        const JellyfinSession session = session_;
-        const std::string currentItemId = plan.lookup->currentItemId;
-        const std::string seriesId = plan.lookup->seriesId;
-        const int currentSeason = plan.lookup->currentSeason;
-        const int currentEpisode = plan.lookup->currentEpisode;
-        playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 5s);
-        playbackContinuationAsync_.requestAdjacentEpisode(session, seriesId, currentItemId, currentSeason,
-                                                          currentEpisode, direction);
+        playbackRequestFlow_.playAdjacent(
+            direction, [this](bool reportStop, bool completed) { releaseActivePlayback(reportStop, completed); },
+            playbackRuntime_, playbackResolutionAsync_, playbackContinuationAsync_);
     }
 
     void handleQueueOverlayKey(int32_t key) {
-        const QueueNavigationAction navigation =
-            QueueNavigationController::handle(queueState_, screenNavigationKeyForAndroidKey(key));
-        switch (navigation.type) {
-        case QueueNavigationActionType::None:
-            return;
-        case QueueNavigationActionType::PlayIndex:
-            playQueuedIndexAsync(navigation.index);
-            return;
-        case QueueNavigationActionType::QueueChanged:
-            playbackCoordinator_.syncQueueContinuation(queueState_);
-            return;
-        case QueueNavigationActionType::Shuffle:
-            shuffleRemainingQueue();
-            return;
-        }
+        playbackRequestFlow_.handleQueue(
+            screenNavigationKeyForAndroidKey(key),
+            [this](bool reportStop, bool completed) { releaseActivePlayback(reportStop, completed); }, playbackRuntime_,
+            playbackResolutionAsync_);
     }
 
-    void beginSeriesPlayAll() {
-        if (loading_ || detailsFlow_.item().type != "Series" || detailsFlow_.item().id.empty() || !session_.valid())
-            return;
-        loading_ = true;
-        error_.clear();
-        playbackCoordinator_.beginUserPlayback(false);
-        const JellyfinSession session = session_;
-        const JellyfinItem series = detailsFlow_.item();
-        SeriesPlayAllOptions options{
-            .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-            .maxAudioChannels = settings_.maxAudioChannels,
-            .overrides = playbackOverridesFor(settings_),
-        };
-        const uint64_t generation = requestEpochs_.playback.begin();
-        seriesPlaybackAsync_.playAll(session, series, std::move(options), generation);
-    }
+    void beginSeriesPlayAll() { playbackRequestFlow_.beginSeriesPlayAll(seriesPlaybackAsync_); }
 
     void beginPlayback() {
         if (loading_ || detailsFlow_.item().id.empty()) return;
-        if (selectedExternalPlayer()) {
+        if (settingsFlow_.selectedExternalPlayer()) {
             launchExternalPlaybackAsync();
             return;
         }
-        const PlaybackUserSelectionPlan selectionPlan =
-            playbackCoordinator_.beginUserPlaybackSelection(queueState_, detailsFlow_.item().id);
-        if (selectionPlan.resetQueue) queueState_.reset();
-        loading_ = true;
-        error_.clear();
-        const JellyfinSession session = session_;
-        const JellyfinItem selected = detailsFlow_.item();
-        PlaybackResolutionOptions resolutionOptions = playbackRuntime_.resolutionOptions();
-        const uint64_t generation = requestEpochs_.playback.begin();
-
-        playbackResolutionAsync_.resolveSelection(session, selected, std::move(resolutionOptions), generation,
-                                                  selectionPlan.queuedPlaybackIndex);
+        playbackRequestFlow_.beginPlayback(playbackRuntime_, playbackResolutionAsync_);
     }
 
     void releaseActivePlayback(bool reportStop, bool completed = false) {
-        requestEpochs_.playback.invalidate();
-        if (player_.status() == PlayerStatus::Playing || player_.status() == PlayerStatus::Paused) {
-            playbackRuntime_.refreshTelemetry(true);
-        }
-        const auto session = session_;
-        const PlaybackReleaseContext release = playbackCoordinator_.releaseContext(
-            reportStop, completed, session.valid(), playerScreenState_.positionMs());
-        const PlaybackReleasePlan releasePlan = release.plan;
-        const auto& item = release.item;
-        const auto& target = release.target;
-        if (!item.id.empty()) {
-            JellyfinItem updated = item;
-            updated.positionTicks = releasePlan.cachedPositionTicks;
-            if (releasePlan.markPlayed) updated.played = true;
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchFlow_.state(),
-                                                         detailsFlow_.state(), queueState_, updated,
-                                                         isHiddenFromHome(updated));
-            if (detailsFlow_.item().id == item.id) {
-                detailsFlow_.item().played = updated.played;
-                detailsFlow_.item().positionTicks = updated.positionTicks;
-            }
-        }
-        player_.stop();
-        videoSurface_.release();
-        displayMode_.restore();
-        mediaSession_.clear();
-        clearTrickplayPreview();
-        playbackCoordinator_.finishRelease();
-        playerScreenState_.resetPosition();
-        if (releasePlan.reportStop) {
-            playbackTelemetryAsync_.reportStop(session, item, target, releasePlan.reportTicks);
-        }
+        playbackReleaseFlow_.release(reportStop, completed, playbackRuntime_);
     }
 
     void queueAutoplayNext(JellyfinItem nextItem) {
@@ -2268,49 +1993,29 @@ private:
 
     void finishExternalPlayback(const PendingTickWork& work) {
         if (!work.externalResult || !work.completedExternalPlayback) return;
-        const auto& result = *work.externalResult;
         const auto& completed = *work.completedExternalPlayback;
-        if (!result.success) {
+        const ExternalPlaybackFinishPlan plan = planExternalPlaybackFinish(completed, *work.externalResult);
+        if (plan.failed) {
             std::scoped_lock lock(stateMutex_);
             error_ = "EXTERNAL PLAYER REPORTED PLAYBACK FAILURE";
             return;
         }
 
-        const bool playbackCompleted = result.completionKnown && result.completed;
-        std::optional<int64_t> positionTicks;
-        if (result.positionMs >= 0) {
-            positionTicks = static_cast<int64_t>(result.positionMs) * 10000;
-        } else if (playbackCompleted && completed.item.runtimeTicks > 0) {
-            positionTicks = completed.item.runtimeTicks;
-        }
-        if (positionTicks || playbackCompleted) {
-            JellyfinItem updated = completed.item;
-            if (positionTicks) {
-                const int64_t boundedTicks = completed.item.runtimeTicks > 0
-                                                 ? std::clamp<int64_t>(*positionTicks, 0, completed.item.runtimeTicks)
-                                                 : std::max<int64_t>(0, *positionTicks);
-                positionTicks = boundedTicks;
-                updated.positionTicks = boundedTicks;
-            }
-            if (playbackCompleted) {
-                updated.played = true;
-                updated.positionTicks = 0;
-            }
+        if (plan.updatedItem) {
             std::scoped_lock lock(stateMutex_);
             ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchFlow_.state(),
-                                                         detailsFlow_.state(), queueState_, updated,
-                                                         isHiddenFromHome(updated));
+                                                         detailsFlow_.state(), queueState_, *plan.updatedItem,
+                                                         homeVisibility_.isHidden(*plan.updatedItem));
             if (detailsFlow_.item().id == completed.item.id) {
-                detailsFlow_.item().played = updated.played;
-                detailsFlow_.item().positionTicks = updated.positionTicks;
+                detailsFlow_.item().played = plan.updatedItem->played;
+                detailsFlow_.item().positionTicks = plan.updatedItem->positionTicks;
             }
         }
-        const JellyfinSession reportSession = session_;
-        externalPlaybackAsync_.reportStopped(reportSession, ExternalPlaybackReportRequest{
-                                                                .itemId = completed.item.id,
-                                                                .mediaSourceId = completed.item.mediaSourceId,
-                                                                .positionTicks = positionTicks,
-                                                            });
+        externalPlaybackAsync_.reportStopped(session_, ExternalPlaybackReportRequest{
+                                                           .itemId = completed.item.id,
+                                                           .mediaSourceId = completed.item.mediaSourceId,
+                                                           .positionTicks = plan.positionTicks,
+                                                       });
         std::scoped_lock lock(stateMutex_);
         error_.clear();
     }
@@ -2371,85 +2076,56 @@ private:
     }
 
     void applyAsyncCompletion(SystemTextInputEvent& event) {
-        applySystemTextInputEffects(systemTextInputController_.apply(event, searchFlow_.state(), settingsScreen_,
+        applySystemTextInputEffects(systemTextInputController_.apply(event, searchFlow_.state(), settingsFlow_.state(),
                                                                      settings_, accountFlow_.state()));
     }
 
-    void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
-        mutationLoading_ = false;
-        if (screen_ != Screen::ItemMenu || detailsFlow_.item().id != completion.request.itemId) return;
-        const auto outcome =
-            seerrRequest_.completeDelete(completion.endpoint, seerrEndpoint(), completion.request.itemId,
-                                         completion.request.requestId, completion.result.ok);
-        if (outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
-        if (outcome == SeerrDomainState::MutationOutcome::Failed) {
-            error_ = "SEERR DELETE: " + completion.result.error;
-            detailsFlow_.state().setDeleteConfirmation(false);
-            return;
+    void applySeerrCompletionHostEffects(SeerrCompletionHostEffects effects) {
+        if (effects.clearNotice) statusOverlayState_.clearNotice();
+        if (effects.error) error_ = std::move(*effects.error);
+        if (effects.clearError) error_.clear();
+        if (effects.log) {
+            const int priority =
+                effects.log->level == SeerrCompletionLogLevel::Warning ? ANDROID_LOG_WARN : ANDROID_LOG_INFO;
+            __android_log_print(priority, kTag, "%s", effects.log->message.c_str());
         }
-        searchFlow_.state().refreshSeerrResults();
-        syncSeerrHomeRowLocked();
-        detailsFlow_.item() = {};
-        detailsFlow_.state().setDeleteConfirmation(false);
-        popScreen(Screen::Home);
-        if (screen_ != Screen::Home) resetNavigation(Screen::Home);
-        showNotice("SEERR REQUEST DELETED", 4s);
-        error_.clear();
+        if (effects.syncHome) syncSeerrHomeRowLocked();
+        if (effects.closeItem) {
+            popScreen(Screen::Home);
+            if (screen_ != Screen::Home) resetNavigation(Screen::Home);
+        }
+        if (effects.notice) showNotice(std::move(*effects.notice), std::chrono::seconds(effects.noticeSeconds));
+        if (effects.reconnect) connectSeerrAsync(false);
+        if (effects.openDrivePicker) openSeerrDrivePicker(*effects.openDrivePicker);
+        if (effects.saveSession) saveSession(session_);
+        if (effects.refreshPending) refreshSeerrPendingAsync();
+        if (effects.refreshStorage) refreshSeerrStorageAsync(true);
+        if (effects.deferredRequest) requestSeerrMediaAsync(*effects.deferredRequest);
+        if (effects.retrySearch && screen_ == Screen::Search && !searchFlow_.state().query().empty()) {
+            const auto now = std::chrono::steady_clock::now();
+            (void)searchFlow_.prepareReconnectRetry(now);
+            applySearchDispatchEffects(searchFlow_.searchSeerr(seerrEndpoint(), true, now));
+        }
+    }
+
+    void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
+        applySeerrCompletionHostEffects(
+            seerrCompletionFlow_.complete(completion, seerrEndpoint(), screen_ == Screen::ItemMenu));
     }
 
     void applyAsyncCompletion(const SeerrRequestCompletion& completion) {
-        mutationLoading_ = false;
-        const auto domainCompletion =
-            seerrRequest_.complete(completion.endpoint, seerrEndpoint(), completion.requestedItem,
-                                   completion.result.value, completion.result.ok, std::chrono::steady_clock::now());
-        if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
-        if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::Failed) {
-            error_ = "SEERR REQUEST: " + completion.result.error;
-            return;
-        }
-
-        searchFlow_.state().refreshSeerrResults();
-        syncSeerrHomeRowLocked();
-        showNotice("REQUEST SENT TO SEERR", 4s);
-        error_.clear();
-        refreshSeerrStorageAsync(true);
+        applySeerrCompletionHostEffects(
+            seerrCompletionFlow_.complete(completion, seerrEndpoint(), std::chrono::steady_clock::now()));
     }
 
     void applyAsyncCompletion(SeerrStorageRefreshCompletion& completion) {
-        auto& result = completion.result;
-        const auto plan =
-            seerrRefresh_.completeStorage(completion.endpoint, seerrEndpoint(), result.ok, std::move(result.value),
-                                          result.error, settings_.seerrSelectDrive, std::chrono::steady_clock::now());
-        if (plan.domain.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
-        if (plan.domain.outcome == SeerrDomainState::RefreshOutcome::Failed) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
-            if (plan.domain.reconnect) {
-                connectSeerrAsync(false);
-                return;
-            }
-            if (plan.domain.clearedPendingRequest) showNotice("SEERR STORAGE: " + result.error, 5s);
-            return;
-        }
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage refresh found %zu targets", plan.targetCount);
-        if (plan.pendingRequest) openSeerrDrivePicker(*plan.pendingRequest);
+        applySeerrCompletionHostEffects(seerrCompletionFlow_.complete(
+            completion, seerrEndpoint(), settings_.seerrSelectDrive, std::chrono::steady_clock::now()));
     }
 
     void applyAsyncCompletion(SeerrPendingRefreshCompletion& completion) {
-        auto& result = completion.result;
-        const auto plan = seerrRefresh_.completePending(completion.endpoint, seerrEndpoint(), result.ok,
-                                                        std::move(result.value), std::chrono::steady_clock::now());
-        if (plan.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
-        if (plan.outcome == SeerrDomainState::RefreshOutcome::Failed) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr pending requests unavailable: %s", result.error.c_str());
-            return;
-        }
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr pending refresh found %zu requests", plan.pendingCount);
-        if (screen_ == Screen::ItemMenu && isSeerrItem(detailsFlow_.item())) {
-            if (const SeerrMediaItem* current = seerrDomain_.findPendingRequest(detailsFlow_.item().id)) {
-                detailsFlow_.item() = jellyfinItemFromSeerrMedia(*current);
-            }
-        }
-        syncSeerrHomeRowLocked();
+        applySeerrCompletionHostEffects(seerrCompletionFlow_.complete(
+            completion, seerrEndpoint(), screen_ == Screen::ItemMenu, std::chrono::steady_clock::now()));
     }
 
     void applySearchCompletionEffects(SearchCompletionEffects effects) {
@@ -2531,24 +2207,11 @@ private:
             ServerInfoCompletionController::applyNotice(completion, activeSession, serverInfo_));
     }
 
-    void applyItemMutationCompletionEffects(ItemMutationCompletionEffects effects) {
-        if (effects.finishLoading) mutationLoading_ = false;
-        if (effects.cacheUpdate) {
-            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchFlow_.state(),
-                                                         detailsFlow_.state(), queueState_, *effects.cacheUpdate,
-                                                         isHiddenFromHome(*effects.cacheUpdate));
-        }
-        ItemMutationController::restorePlayedRollback(effects, home_, homeState_);
-        if (effects.removeCachedItemId) {
-            ItemMutationController::removeCachedItem(home_, browseState_, searchFlow_.state(), detailsFlow_.state(),
-                                                     *effects.removeCachedItemId);
-        }
+    void applyContentMutationHostEffects(ContentMutationHostEffects effects) {
         if (effects.error) error_ = std::move(*effects.error);
-        if (effects.nextUpAnimation) {
-            nextUpReplacementFadeIndex_ = effects.nextUpAnimation->index;
-            nextUpReplacementFadeItemId_ = std::move(effects.nextUpAnimation->itemId);
-            nextUpReplacementFadeStarted_ = std::chrono::steady_clock::now();
-            renderBurstUntil_ = std::max(renderBurstUntil_, nextUpReplacementFadeStarted_ + 320ms);
+        if (effects.renderAnimationStarted) {
+            renderBurstUntil_ =
+                std::max(renderBurstUntil_, contentMutationFlow_.nextUpReplacementFadeStarted() + 320ms);
             if (app_ && app_->looper) ALooper_wake(app_->looper);
         }
         if (effects.closeDeletedItem) {
@@ -2559,28 +2222,31 @@ private:
     }
 
     void applyAsyncCompletion(FavoriteCompletion& completion) {
-        applyItemMutationCompletionEffects(ItemMutationController::apply(
+        applyContentMutationHostEffects(contentMutationFlow_.complete(
             completion, requestEpochs_.session.active(completion.sessionEpoch),
-            screen_ == Screen::Details || screen_ == Screen::ItemMenu, detailsFlow_.item()));
+            screen_ == Screen::Details || screen_ == Screen::ItemMenu, homeVisibility_.isHidden(completion.item), home_,
+            homeState_, browseState_, searchFlow_.state(), detailsFlow_.state(), queueState_, detailsFlow_.item()));
     }
 
     void applyAsyncCompletion(PlayedCompletion& completion) {
-        const bool replacementHidden = completion.nextUpReplacement && isHiddenFromHome(*completion.nextUpReplacement);
-        applyItemMutationCompletionEffects(
-            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
+        const bool replacementHidden =
+            completion.nextUpReplacement && homeVisibility_.isHidden(*completion.nextUpReplacement);
+        applyContentMutationHostEffects(
+            contentMutationFlow_.complete(completion, requestEpochs_.session.active(completion.sessionEpoch),
                                           screen_ == Screen::Details || screen_ == Screen::ItemMenu, replacementHidden,
-                                          playedRollback_, home_, homeState_, detailsFlow_.item()));
+                                          homeVisibility_.isHidden(completion.item), home_, homeState_, browseState_,
+                                          searchFlow_.state(), detailsFlow_.state(), queueState_, detailsFlow_.item()));
     }
 
     void applyAsyncCompletion(MetadataRefreshCompletion& completion) {
-        applyItemMutationCompletionEffects(
-            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch)));
+        applyContentMutationHostEffects(
+            contentMutationFlow_.complete(completion, requestEpochs_.session.active(completion.sessionEpoch)));
     }
 
     void applyAsyncCompletion(DeleteItemCompletion& completion) {
-        applyItemMutationCompletionEffects(
-            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
-                                          screen_ == Screen::ItemMenu, detailsFlow_.item(), detailsFlow_.state()));
+        applyContentMutationHostEffects(contentMutationFlow_.complete(
+            completion, requestEpochs_.session.active(completion.sessionEpoch), screen_ == Screen::ItemMenu, home_,
+            homeState_, browseState_, searchFlow_.state(), detailsFlow_.state(), queueState_, detailsFlow_.item()));
     }
 
     void applyAccountCompletionEffects(AccountCompletionEffects effects) {
@@ -2663,17 +2329,11 @@ private:
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
-        const bool activeGeneration = requestEpochs_.home.active(completion.generation);
-        if (!activeGeneration) return;
-        if (completion.result.ok) filterHiddenHomeItems(completion.result.value);
-
-        HomeCoreCompletionEffects effects = HomeCompletionController::apply(
-            completion, activeGeneration, screen_ == Screen::Home, homeRetryAttempt_, home_, homeState_);
-        if (effects.finishLoading) homeLoading_ = false;
-        homeRetryAttempt_ = effects.nextRetryAttempt;
-        if (effects.resetRetry) homeRetryAt_ = {};
+        HomeCoreFlowEffects effects =
+            homeCompletionFlow_.complete(completion, requestEpochs_.home.active(completion.generation),
+                                         screen_ == Screen::Home, std::chrono::steady_clock::now());
+        if (!effects.active) return;
         if (effects.retryDelaySeconds) {
-            homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(*effects.retryDelaySeconds);
             __android_log_print(ANDROID_LOG_WARN, kTag, "Home load failed transiently; retrying in %d seconds: %s",
                                 *effects.retryDelaySeconds, completion.result.error.c_str());
         }
@@ -2684,8 +2344,7 @@ private:
             (void)accountFlow_.removeIdentity(expired);
             requestEpochs_.invalidateAll();
             loading_ = false;
-            mutationLoading_ = false;
-            playedRollback_.reset();
+            contentMutationFlow_.reset();
             searchFlow_.state().setLoading(false);
             session_.token.clear();
             session_.userId.clear();
@@ -2696,7 +2355,7 @@ private:
             saveSession(session_);
             return;
         }
-        if (effects.updateVisibleError) error_ = std::move(effects.visibleError);
+        if (effects.visibleError) error_ = std::move(*effects.visibleError);
         if (!effects.loaded) return;
 
         syncSeerrHomeRowLocked();
@@ -2731,14 +2390,11 @@ private:
     }
 
     void applyAsyncCompletion(HomeSecondaryCompletion& completion) {
-        const bool activeGeneration = requestEpochs_.home.active(completion.generation);
-        if (!activeGeneration) return;
-        if (completion.result.ok) filterHiddenHomeItems(completion.result.value);
-
-        HomeSecondaryCompletionEffects effects =
-            HomeCompletionController::apply(completion, activeGeneration, screen_ == Screen::Home, home_, homeState_);
-        if (effects.updateVisibleError) error_ = std::move(effects.visibleError);
-        if (!completion.result.ok) return;
+        HomeSecondaryFlowEffects effects = homeCompletionFlow_.complete(
+            completion, requestEpochs_.home.active(completion.generation), screen_ == Screen::Home);
+        if (!effects.active) return;
+        if (effects.visibleError) error_ = std::move(*effects.visibleError);
+        if (!effects.loaded) return;
         if (effects.prefetch)
             uiPresentation_.prefetchHomeWindow(session_, home_, effects.prefetch->row, effects.prefetch->selection);
 
@@ -2766,7 +2422,19 @@ private:
         externalPlaybackState_.stage(std::move(*completion.launch));
     }
 
-    void applyPlayerCompletionEffects(PlayerCompletionEffects effects) {
+    void applyPlaybackCompletionHostEffects(PlaybackCompletionHostEffects effects) {
+        if (effects.finishLoading) loading_ = false;
+        if (effects.popToDetails) popScreen(Screen::Details);
+        if (effects.error) error_ = std::move(*effects.error);
+
+        for (const auto& restore : effects.restoreHomeVisibility) {
+            JellyfinItem item;
+            item.id = restore.itemId;
+            item.seriesId = restore.seriesId;
+            restoreHomeVisibilityForPlayback(item);
+        }
+
+        if (effects.stopPlayback) stopPlayback();
         if (effects.diagnostic) {
             const auto& diagnostic = *effects.diagnostic;
             switch (diagnostic.kind) {
@@ -2789,15 +2457,14 @@ private:
             }
         }
         if (effects.notice) showNotice(std::move(effects.notice->text), effects.notice->duration);
-        if (effects.showSubtitleOverlay) playerScreenState_.showOverlayFor(std::chrono::steady_clock::now(), 4s);
         if (effects.reportProgress)
             playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
         if (effects.playItem) playPlayerItemAsync(std::move(*effects.playItem));
     }
 
     void applyAsyncCompletion(SubtitleLoadCompletion& completion) {
-        applyPlayerCompletionEffects(PlayerCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(
+            playbackCompletionFlow_.complete(completion, requestEpochs_.playback.active(completion.generation)));
     }
 
     void applyAsyncCompletion(TrickplayTileCompletion& completion) {
@@ -2814,18 +2481,15 @@ private:
     void applyAsyncCompletion(ArtworkLoadCompletion& completion) { artwork_.applyCompletion(std::move(completion)); }
 
     void applyAsyncCompletion(MediaSegmentsCompletion& completion) {
-        applyPlayerCompletionEffects(
-            PlayerCompletionController::apply(completion, screen_ == Screen::Player, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(completion, screen_ == Screen::Player));
     }
 
     void applyAsyncCompletion(NextEpisodeCompletion& completion) {
-        applyPlayerCompletionEffects(
-            PlayerCompletionController::apply(completion, screen_ == Screen::Player, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(completion, screen_ == Screen::Player));
     }
 
     void applyAsyncCompletion(PlaybackAdjacentCompletion& completion) {
-        applyPlayerCompletionEffects(
-            PlayerCompletionController::apply(completion, screen_ == Screen::Player, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(completion, screen_ == Screen::Player));
     }
 
     void applyAsyncCompletion(const PlaybackReportCompletion& completion) {
@@ -2835,129 +2499,47 @@ private:
                                           playbackCoordinator_);
     }
 
-    void applyPlaybackCompletionEffects(PlaybackCompletionEffects effects) {
-        if (effects.finishLoading) loading_ = false;
-        if (effects.popToDetails) popScreen(Screen::Details);
-        if (effects.detailUpdate) detailsFlow_.item() = std::move(*effects.detailUpdate);
-        if (effects.error) error_ = std::move(*effects.error);
-
-        for (const auto& restore : effects.restoreHomeVisibility) {
-            JellyfinItem item;
-            item.id = restore.itemId;
-            item.seriesId = restore.seriesId;
-            restoreHomeVisibilityForPlayback(item);
-        }
-
-        if (effects.stopPlayback) stopPlayback();
-        if (!effects.transition) return;
-
-        auto transition = std::move(*effects.transition);
-        switch (transition.kind) {
-        case PlaybackCompletionTransitionKind::Resolved:
-            playbackCoordinator_.stageResolvedPlayback(std::move(transition.target), std::move(transition.item));
-            break;
-        case PlaybackCompletionTransitionKind::StreamRestart:
-            playbackCoordinator_.stageStreamRestart(std::move(transition.target), std::move(transition.item),
-                                                    transition.restartPaused, transition.audioStreamIndex);
-            break;
-        case PlaybackCompletionTransitionKind::ResolvedFallback:
-            playbackCoordinator_.stageResolvedFallback(std::move(transition.target), std::move(transition.item),
-                                                       transition.audioStreamIndex);
-            break;
-        }
-    }
-
     void applyAsyncCompletion(QueuedPlaybackCompletion& completion) {
-        const bool activeQueueContext = screen_ == completion.originScreen &&
-                                        queueState_.currentIndex() == completion.previousQueueIndex &&
-                                        queueState_.itemMatches(completion.index, completion.item.id);
-        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), activeQueueContext,
-            screen_ == Screen::Player, queueState_, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(
+            completion, requestEpochs_.playback.active(completion.generation), screen_));
     }
 
     void applyAsyncCompletion(PlayerItemPlaybackCompletion& completion) {
-        applyPlaybackCompletionEffects(
-            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
-                                                screen_ == Screen::Player, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(
+            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player));
     }
 
     void applyAsyncCompletion(AutoplayPlaybackCompletion& completion) {
-        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), queueState_, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(
+            playbackCompletionFlow_.complete(completion, requestEpochs_.playback.active(completion.generation)));
     }
 
     void applyAsyncCompletion(StreamRestartCompletion& completion) {
-        applyPlaybackCompletionEffects(
-            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
-                                                screen_ == Screen::Player, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(
+            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player));
     }
 
     void applyAsyncCompletion(FallbackPlaybackCompletion& completion) {
-        applyPlaybackCompletionEffects(
-            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
-                                                screen_ == Screen::Player, playbackCoordinator_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(
+            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player));
     }
 
     void applyAsyncCompletion(BeginPlaybackCompletion& completion) {
         const bool activeDetailsSelection =
             screen_ == Screen::Details && detailsFlow_.item().id == completion.selected.id;
-        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection, queueState_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(
+            completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection));
     }
 
     void applyAsyncCompletion(SeriesPlayAllCompletion& completion) {
         const bool activeDetailsSelection =
             screen_ == Screen::Details && detailsFlow_.item().id == completion.series.id;
-        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection, queueState_));
+        applyPlaybackCompletionHostEffects(playbackCompletionFlow_.complete(
+            completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
-        auto& result = completion.result;
-        auto plan = seerrConnection_.complete(
-            result.ok, result.failedStage == SeerrQuickConnectStage::AuthenticateSeerr, completion.server,
-            completion.jellyfinUserId, settings_.seerrServer, session_.userId);
-        const auto action = plan.action;
-        if (action == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed) {
-            if (completion.announce) {
-                statusOverlayState_.clearNotice();
-                error_ = (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin ? "JELLYFIN QUICK CONNECT: "
-                                                                                          : "SEERR QUICK CONNECT: ") +
-                         result.error;
-            } else if (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin) {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s",
-                                    result.error.c_str());
-            } else {
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr reconnect failed: %s", result.error.c_str());
-            }
-            return;
-        }
-        if (completion.announce) statusOverlayState_.clearNotice();
-        if (action == SeerrDomainState::ConnectCompletionAction::Stale) return;
-        if (action == SeerrDomainState::ConnectCompletionAction::AuthenticationFailed) {
-            if (completion.announce)
-                error_ = "SEERR QUICK CONNECT: " + result.error;
-            else
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Seerr authentication failed: %s",
-                                    result.error.c_str());
-            return;
-        }
-        settings_.seerrSessionCookie = std::move(result.sessionCookie);
-        saveSession(session_);
-        if (completion.announce) {
-            error_.clear();
-            showNotice("SEERR CONNECTED WITH JELLYFIN", 4s);
-        }
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr session refreshed");
-        refreshSeerrPendingAsync();
-        refreshSeerrStorageAsync(true);
-        if (plan.deferred.request) requestSeerrMediaAsync(*plan.deferred.request);
-        if (plan.deferred.retrySearch && screen_ == Screen::Search && !searchFlow_.state().query().empty()) {
-            const auto now = std::chrono::steady_clock::now();
-            (void)searchFlow_.prepareReconnectRetry(now);
-            applySearchDispatchEffects(searchFlow_.searchSeerr(seerrEndpoint(), true, now));
-        }
+        applySeerrCompletionHostEffects(seerrCompletionFlow_.complete(completion));
     }
 
     void applyAsyncCompletions() {
@@ -3032,20 +2614,20 @@ private:
             .screensaverActive = screensaverActive_,
             .loading = loading_,
             .homeLoading = homeLoading_,
-            .mutationLoading = mutationLoading_,
+            .mutationLoading = contentMutationFlow_.loading(),
             .seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrAuth()),
             .systemSearchInputActive = systemTextInputController_.mode() == kTextInputSearch,
             .systemSettingsSearchActive = systemTextInputController_.mode() == kTextInputSettingsSearch,
             .systemSeerrApiKeyActive = systemTextInputController_.mode() == kTextInputSeerrApiKey,
-            .itemHiddenFromHome = isHiddenFromHome(detailsFlow_.item()),
-            .keyboardRow = keyboardRow_,
-            .keyboardCol = keyboardCol_,
+            .itemHiddenFromHome = homeVisibility_.isHidden(detailsFlow_.item()),
+            .keyboardRow = virtualKeyboard_.row(),
+            .keyboardCol = virtualKeyboard_.column(),
             .homeSlideFromFirst = homeSlideFromFirst_,
             .homeSlideToFirst = homeSlideToFirst_,
             .homeSlideStarted = homeSlideStarted_,
-            .nextUpReplacementFadeIndex = nextUpReplacementFadeIndex_,
-            .nextUpReplacementFadeItemId = nextUpReplacementFadeItemId_,
-            .nextUpReplacementFadeStarted = nextUpReplacementFadeStarted_,
+            .nextUpReplacementFadeIndex = contentMutationFlow_.nextUpReplacementFadeIndex(),
+            .nextUpReplacementFadeItemId = contentMutationFlow_.nextUpReplacementFadeItemId(),
+            .nextUpReplacementFadeStarted = contentMutationFlow_.nextUpReplacementFadeStarted(),
             .lastInteraction = lastInteraction_,
             .appVersion = SLOPPATV_VERSION_NAME,
             .error = error_,
@@ -3061,8 +2643,8 @@ private:
             .browseState = browseState_,
             .searchState = searchFlow_.state(),
             .seerrDomain = seerrDomain_,
-            .settingsScreen = settingsScreen_,
-            .externalPlayers = externalPlayers_,
+            .settingsScreen = settingsFlow_.state(),
+            .externalPlayers = settingsFlow_.externalPlayers(),
             .deviceCodecSupport = codecSupport,
             .serverInfo = serverInfo_,
             .detailsFlow = detailsFlow_,
@@ -3153,11 +2735,9 @@ private:
     bool homeLoading_ = false;
     std::chrono::steady_clock::time_point homeRetryAt_{};
     int homeRetryAttempt_ = 0;
-    bool mutationLoading_ = false;
-    std::optional<PlayedRollbackState> playedRollback_;
+    ContentMutationFlow contentMutationFlow_;
     AppSettings settings_;
-    SettingsScreenState settingsScreen_;
-    std::vector<ExternalPlayerApp> externalPlayers_;
+    SettingsFlow settingsFlow_;
     std::string error_;
     StatusOverlayState statusOverlayState_;
     int homeSlideFromFirst_ = 0;
@@ -3189,27 +2769,31 @@ private:
     BrandMark brandMark_;
     HomeScreenState homeState_;
     std::unordered_set<std::string> hiddenHomeItems_;
-    int nextUpReplacementFadeIndex_ = -1;
-    std::string nextUpReplacementFadeItemId_;
-    std::chrono::steady_clock::time_point nextUpReplacementFadeStarted_{};
+    HomeVisibility homeVisibility_;
+    HomeCompletionFlow homeCompletionFlow_;
     BrowseScreenState browseState_;
 
     SystemTextInputController systemTextInputController_;
 
     SimilarPrefetchController similarPrefetch_;
 
-    int keyboardRow_ = 0;
-    int keyboardCol_ = 0;
+    VirtualKeyboardState virtualKeyboard_;
 
     DetailsFlow detailsFlow_;
+    SeerrCompletionFlow<decltype(seerrConnection_), decltype(seerrRequest_), decltype(seerrRefresh_)>
+        seerrCompletionFlow_;
 
     PlaybackQueueState queueState_;
 
     ExternalPlaybackState externalPlaybackState_;
     PlaybackCoordinator playbackCoordinator_;
     PlayerScreenState playerScreenState_;
+    PlaybackCompletionFlow playbackCompletionFlow_;
+    PlaybackRequestFlow playbackRequestFlow_;
     TrickplayPreviewState trickplayState_;
     PlaybackRuntimeController playbackRuntime_;
+    PlaybackReleaseFlow<decltype(playbackTelemetryAsync_)> playbackReleaseFlow_;
+    PlaybackLifecycleFlow playbackLifecycleFlow_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;

@@ -2,6 +2,9 @@
 
 #include <android/input.h>
 
+#include "account_screen.hpp"
+#include "search_screen.hpp"
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -101,3 +104,73 @@ inline char keyCodeToChar(int32_t keyCode, int32_t metaState) {
         return 0;
     }
 }
+
+struct VirtualKeyboardEffects {
+    bool searchChanged = false;
+    bool submitSearch = false;
+};
+
+class VirtualKeyboardState {
+public:
+    void reset() {
+        row_ = 0;
+        column_ = 0;
+    }
+
+    void move(int dx, int dy) {
+        const auto& rows = keyboardRows();
+        if (dy != 0) {
+            row_ = std::clamp(row_ + dy, 0, static_cast<int>(rows.size()) - 1);
+            column_ = std::clamp(column_, 0, static_cast<int>(rows[static_cast<size_t>(row_)].size()) - 1);
+        }
+        if (dx != 0) {
+            const int columns = static_cast<int>(rows[static_cast<size_t>(row_)].size());
+            column_ = (column_ + dx) % columns;
+            if (column_ < 0) column_ += columns;
+        }
+    }
+
+    [[nodiscard]] VirtualKeyboardEffects activate(bool forSearch, SearchScreenState& search,
+                                                  AccountScreenState& account) {
+        const auto& key = keyboardRows()[static_cast<size_t>(row_)][static_cast<size_t>(column_)];
+        VirtualKeyboardEffects effects;
+        if (forSearch) {
+            switch (key.action) {
+            case KeyAction::Insert:
+                for (char value : key.value) search.append(value);
+                effects.searchChanged = true;
+                break;
+            case KeyAction::Backspace:
+                effects.searchChanged = search.backspace();
+                break;
+            case KeyAction::Done:
+                search.setKeyboard(false);
+                effects.submitSearch = true;
+                break;
+            }
+            return effects;
+        }
+
+        if (account.loginFocus() < 0 || account.loginFocus() >= 3) return effects;
+        switch (key.action) {
+        case KeyAction::Insert:
+            for (char value : key.value) account.appendToFocusedField(value);
+            break;
+        case KeyAction::Backspace:
+            account.backspaceFocusedField();
+            break;
+        case KeyAction::Done:
+            account.setKeyboardActive(false);
+            break;
+        }
+        return effects;
+    }
+
+    [[nodiscard]] int row() const { return row_; }
+
+    [[nodiscard]] int column() const { return column_; }
+
+private:
+    int row_ = 0;
+    int column_ = 0;
+};

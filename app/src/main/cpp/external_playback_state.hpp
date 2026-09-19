@@ -3,6 +3,8 @@
 #include "external_player_types.hpp"
 #include "jellyfin_types.hpp"
 
+#include <algorithm>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
@@ -14,6 +16,41 @@ struct ExternalPlaybackLaunch {
     std::string subtitleUrl;
     std::string skipSegmentsJson;
 };
+
+struct ExternalPlaybackFinishPlan {
+    bool failed = false;
+    bool completed = false;
+    std::optional<int64_t> positionTicks;
+    std::optional<JellyfinItem> updatedItem;
+};
+
+inline ExternalPlaybackFinishPlan planExternalPlaybackFinish(const ExternalPlaybackLaunch& launch,
+                                                             const ExternalPlayerResult& result) {
+    ExternalPlaybackFinishPlan plan;
+    plan.failed = !result.success;
+    if (plan.failed) return plan;
+    plan.completed = result.completionKnown && result.completed;
+    if (result.positionMs >= 0)
+        plan.positionTicks = static_cast<int64_t>(result.positionMs) * 10000;
+    else if (plan.completed && launch.item.runtimeTicks > 0)
+        plan.positionTicks = launch.item.runtimeTicks;
+
+    if (!plan.positionTicks && !plan.completed) return plan;
+    JellyfinItem updated = launch.item;
+    if (plan.positionTicks) {
+        const int64_t bounded = launch.item.runtimeTicks > 0
+                                    ? std::clamp<int64_t>(*plan.positionTicks, 0, launch.item.runtimeTicks)
+                                    : std::max<int64_t>(0, *plan.positionTicks);
+        plan.positionTicks = bounded;
+        updated.positionTicks = bounded;
+    }
+    if (plan.completed) {
+        updated.played = true;
+        updated.positionTicks = 0;
+    }
+    plan.updatedItem = std::move(updated);
+    return plan;
+}
 
 class ExternalPlaybackState {
 public:
