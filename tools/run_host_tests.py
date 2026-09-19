@@ -115,6 +115,7 @@ CPP_TESTS = [
     "settings_renderer_test.cpp",
     "settings_screen_test.cpp",
     "status_overlay_renderer_test.cpp",
+    "status_overlay_state_test.cpp",
     "subtitle_load_executor_test.cpp",
     "subtitle_policy_test.cpp",
     "system_text_input_test.cpp",
@@ -129,8 +130,10 @@ CPP_TESTS = [
 
 LINKED_CPP_TESTS = [
     ("account_completion_controller_test.cpp", ["account_completion_controller.cpp"], []),
+    ("browse_completion_controller_test.cpp", ["browse_completion_controller.cpp"], []),
     ("details_completion_controller_test.cpp", ["details_completion_controller.cpp"], []),
     ("details_navigation_controller_test.cpp", ["details_navigation_controller.cpp"], []),
+    ("item_mutation_controller_test.cpp", ["item_mutation_controller.cpp"], []),
     ("home_completion_controller_test.cpp", ["home_completion_controller.cpp"], []),
     ("search_completion_controller_test.cpp", ["search_completion_controller.cpp"], []),
     ("server_info_completion_controller_test.cpp", ["server_info_completion_controller.cpp"], []),

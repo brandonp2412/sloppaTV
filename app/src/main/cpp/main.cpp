@@ -14,6 +14,7 @@
 #include "async_completion_queue.hpp"
 #include "audio_policy.hpp"
 #include "browse_async_executor.hpp"
+#include "browse_completion_controller.hpp"
 #include "browse_navigation_controller.hpp"
 #include "browse_renderer.hpp"
 #include "browse_screen.hpp"
@@ -39,6 +40,7 @@
 #include "home_screen.hpp"
 #include "image_decoder.hpp"
 #include "item_menu_renderer.hpp"
+#include "item_mutation_controller.hpp"
 #include "item_mutation_executor.hpp"
 #include "jellyfin.hpp"
 #include "keyboard_renderer.hpp"
@@ -191,13 +193,6 @@ struct PendingTickWork {
     std::optional<ExternalPlaybackLaunch> completedExternalPlayback;
     std::optional<ExternalPlaybackLaunch> externalLaunch;
     std::optional<PendingPlaybackTransition> playbackTransition;
-};
-
-struct PlayedRollbackState {
-    std::string itemId;
-    uint64_t sessionEpoch = 0;
-    JellyfinHomeData previousHome;
-    HomeSelectionSnapshot previousHomeSelection;
 };
 
 using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
@@ -411,8 +406,7 @@ public:
                     const int statusTimeoutMs = static_cast<int>(std::max<int64_t>(1, remaining));
                     timeoutMs = timeoutMs < 0 ? statusTimeoutMs : std::min(timeoutMs, statusTimeoutMs);
                 };
-                if (!noticePersistent_ && !notice_.empty()) tightenTimeoutUntil(noticeUntil_);
-                if (!presentedError_.empty()) tightenTimeoutUntil(errorUntil_);
+                tightenTimeoutUntil(statusOverlayState_.wakeDeadline());
                 tightenTimeoutUntil(homeRetryAt_);
                 if (!seerrDomain_.pendingRequestsLoading() &&
                     (screen_ == Screen::Home || (screen_ == Screen::ItemMenu && isSeerrItem(detail_)))) {
@@ -1868,9 +1862,7 @@ private:
 
     void showNotice(std::string message, std::chrono::seconds duration = 6s, bool persistent = false) {
         const auto now = std::chrono::steady_clock::now();
-        notice_ = std::move(message);
-        noticePersistent_ = persistent;
-        noticeUntil_ = persistent ? std::chrono::steady_clock::time_point::max() : now + duration;
+        statusOverlayState_.showNotice(std::move(message), duration, persistent, now);
         renderBurstUntil_ = std::max(renderBurstUntil_, now + 350ms);
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
@@ -1942,9 +1934,7 @@ private:
         mutationLoading_ = false;
         playedRollback_.reset();
         error_.clear();
-        notice_.clear();
-        noticeUntil_ = {};
-        noticePersistent_ = false;
+        statusOverlayState_.clearNotice();
         screensaverActive_ = false;
         lastInteraction_ = std::chrono::steady_clock::now();
     }
@@ -2125,35 +2115,6 @@ private:
         if (changed) saveSession(session_);
     }
 
-    void updateCachedUserData(const JellyfinItem& updated) {
-        auto apply = [&](JellyfinItem& item) {
-            if (item.id != updated.id) return;
-            item.favorite = updated.favorite;
-            item.played = updated.played;
-            item.positionTicks = updated.positionTicks;
-        };
-        for (auto& row : home_.rows)
-            for (auto& item : row.items) apply(item);
-        for (auto& item : browseState_.items()) apply(item);
-        for (auto& item : searchState_.results()) apply(item);
-        detailsState_.updateCachedUserData(updated);
-        queueState_.updateCachedUserData(updated);
-
-        for (auto& row : home_.rows) {
-            if (row.title == "Favorites") {
-                const auto existing = std::find_if(row.items.begin(), row.items.end(),
-                                                   [&](const JellyfinItem& item) { return item.id == updated.id; });
-                if (updated.favorite && existing == row.items.end() && !isHiddenFromHome(updated))
-                    row.items.push_back(updated);
-                else if (!updated.favorite && existing != row.items.end())
-                    row.items.erase(existing);
-            } else if (row.title == "Continue Watching" && updated.played) {
-                std::erase_if(row.items, [&](const JellyfinItem& item) { return item.id == updated.id; });
-            }
-        }
-        clampHomeSelections();
-    }
-
     void toggleFavoriteAsync() {
         if (loading_ || mutationLoading_ || detail_.id.empty()) return;
         const bool desired = !detail_.favorite;
@@ -2167,58 +2128,17 @@ private:
 
     void togglePlayedAsync() {
         if (loading_ || mutationLoading_ || detail_.id.empty()) return;
-        const bool desired = !detail_.played;
         const JellyfinSession session = session_;
-        const JellyfinItem item = detail_;
-        JellyfinHomeData previousHome = home_;
-        HomeSelectionSnapshot previousHomeSelection = homeState_.snapshot(home_.rows);
-        int nextUpReplacementIndex = -1;
-        for (const auto& row : home_.rows) {
-            if (row.title != "Next Up") continue;
-            const auto current = std::find_if(row.items.begin(), row.items.end(),
-                                              [&](const JellyfinItem& homeItem) { return homeItem.id == item.id; });
-            if (current != row.items.end()) {
-                nextUpReplacementIndex = static_cast<int>(std::distance(row.items.begin(), current));
-            }
-            break;
-        }
         const uint64_t sessionEpoch = requestEpochs_.session.snapshot();
+        const bool hiddenFromHome = isHiddenFromHome(detail_);
+        PlayedMutationPreparation preparation =
+            ItemMutationController::preparePlayedToggle(home_, homeState_, browseState_, searchState_, detailsState_,
+                                                        queueState_, detail_, hiddenFromHome, sessionEpoch);
         mutationLoading_ = true;
         error_.clear();
-        playedRollback_ = PlayedRollbackState{
-            .itemId = item.id,
-            .sessionEpoch = sessionEpoch,
-            .previousHome = std::move(previousHome),
-            .previousHomeSelection = std::move(previousHomeSelection),
-        };
-
-        JellyfinItem updated = item;
-        updated.played = desired;
-        if (desired) updated.positionTicks = 0;
-        updateCachedUserData(updated);
-        detail_.played = desired;
-        if (desired) detail_.positionTicks = 0;
-        if (desired) {
-            for (auto& row : home_.rows) {
-                if (!homeRowDropsItemWhenPlayed(row.title)) continue;
-                if (row.title == "Next Up" && nextUpReplacementIndex >= 0) continue;
-                std::erase_if(row.items, [&](const JellyfinItem& homeItem) { return homeItem.id == item.id; });
-            }
-            clampHomeSelections();
-        }
-
-        itemMutationAsync_.setPlayed(session, item, desired, sessionEpoch, nextUpReplacementIndex);
-    }
-
-    void removeCachedItem(const std::string& itemId) {
-        if (itemId.empty()) return;
-        auto remove = [&](auto& items) {
-            std::erase_if(items, [&](const JellyfinItem& item) { return item.id == itemId; });
-        };
-        for (auto& row : home_.rows) remove(row.items);
-        browseState_.removeItem(itemId);
-        searchState_.removeItem(itemId);
-        detailsState_.removeItem(itemId);
+        playedRollback_ = std::move(preparation.rollback);
+        itemMutationAsync_.setPlayed(session, std::move(preparation.item), preparation.desired, sessionEpoch,
+                                     preparation.nextUpReplacementIndex);
     }
 
     void refreshCurrentItemMetadataAsync() {
@@ -2639,7 +2559,8 @@ private:
             JellyfinItem updated = item;
             updated.positionTicks = releasePlan.cachedPositionTicks;
             if (releasePlan.markPlayed) updated.played = true;
-            updateCachedUserData(updated);
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_, detailsState_,
+                                                         queueState_, updated, isHiddenFromHome(updated));
             if (detail_.id == item.id) {
                 detail_.played = updated.played;
                 detail_.positionTicks = updated.positionTicks;
@@ -2907,7 +2828,8 @@ private:
                 updated.positionTicks = 0;
             }
             std::scoped_lock lock(stateMutex_);
-            updateCachedUserData(updated);
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_, detailsState_,
+                                                         queueState_, updated, isHiddenFromHome(updated));
             if (detail_.id == completed.item.id) {
                 detail_.played = updated.played;
                 detail_.positionTicks = updated.positionTicks;
@@ -3230,20 +3152,17 @@ private:
                                                screen_ == Screen::Episodes, detailsState_));
     }
 
+    void applyBrowseCompletionEffects(BrowseCompletionEffects effects) {
+        if (effects.finishLoading) loading_ = false;
+        if (effects.error) error_ = std::move(*effects.error);
+        if (effects.clearError) error_.clear();
+        if (effects.prefetchArtwork) prefetchBrowseArtworkAhead();
+    }
+
     void applyAsyncCompletion(BrowsePageCompletion& completion) {
-        if (!requestEpochs_.content.active(completion.generation)) return;
-        loading_ = false;
-        if (screen_ != Screen::Browse || browseState_.activeContainer().id != completion.containerId) return;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
-        if (completion.append)
-            browseState_.appendPage(std::move(completion.result.value), completion.startIndex, kBrowsePageSize);
-        else
-            browseState_.replacePage(std::move(completion.result.value), kBrowsePageSize);
-        prefetchBrowseArtworkAhead();
-        error_.clear();
+        applyBrowseCompletionEffects(BrowseCompletionController::apply(
+            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Browse,
+            browseState_.activeContainer().id, browseState_, kBrowsePageSize));
     }
 
     void applyAsyncCompletion(ServerInfoNoticeCompletion& completion) {
@@ -3253,102 +3172,56 @@ private:
             ServerInfoCompletionController::applyNotice(completion, activeSession, serverInfo_));
     }
 
+    void applyItemMutationCompletionEffects(ItemMutationCompletionEffects effects) {
+        if (effects.finishLoading) mutationLoading_ = false;
+        if (effects.cacheUpdate) {
+            ItemMutationController::updateCachedUserData(home_, homeState_, browseState_, searchState_, detailsState_,
+                                                         queueState_, *effects.cacheUpdate,
+                                                         isHiddenFromHome(*effects.cacheUpdate));
+        }
+        ItemMutationController::restorePlayedRollback(effects, home_, homeState_);
+        if (effects.removeCachedItemId) {
+            ItemMutationController::removeCachedItem(home_, browseState_, searchState_, detailsState_,
+                                                     *effects.removeCachedItemId);
+        }
+        if (effects.error) error_ = std::move(*effects.error);
+        if (effects.nextUpAnimation) {
+            nextUpReplacementFadeIndex_ = effects.nextUpAnimation->index;
+            nextUpReplacementFadeItemId_ = std::move(effects.nextUpAnimation->itemId);
+            nextUpReplacementFadeStarted_ = std::chrono::steady_clock::now();
+            renderBurstUntil_ = std::max(renderBurstUntil_, nextUpReplacementFadeStarted_ + 320ms);
+            if (app_ && app_->looper) ALooper_wake(app_->looper);
+        }
+        if (effects.closeDeletedItem) {
+            popScreen(Screen::Home);
+            if (screen_ == Screen::Details) popScreen(Screen::Home);
+        }
+        if (effects.notice) showNotice(std::move(*effects.notice));
+    }
+
     void applyAsyncCompletion(FavoriteCompletion& completion) {
-        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
-        if (completion.result.ok) {
-            JellyfinItem updated = completion.item;
-            updated.favorite = completion.desired;
-            updateCachedUserData(updated);
-        }
-        mutationLoading_ = false;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
-        if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id) {
-            detail_.favorite = completion.desired;
-        }
+        applyItemMutationCompletionEffects(
+            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
+                                          screen_ == Screen::Details || screen_ == Screen::ItemMenu, detail_));
     }
 
     void applyAsyncCompletion(PlayedCompletion& completion) {
-        const bool rollbackMatches = playedRollback_ && playedRollback_->sessionEpoch == completion.sessionEpoch &&
-                                     playedRollback_->itemId == completion.item.id;
-        if (!requestEpochs_.session.active(completion.sessionEpoch)) {
-            if (rollbackMatches) playedRollback_.reset();
-            return;
-        }
-        std::optional<PlayedRollbackState> rollback;
-        if (rollbackMatches) {
-            rollback = std::move(playedRollback_);
-            playedRollback_.reset();
-        }
-        mutationLoading_ = false;
-        if (!completion.result.ok) {
-            updateCachedUserData(completion.item);
-            if (rollback) {
-                home_ = std::move(rollback->previousHome);
-                HomeRestorePlan rollbackPlan =
-                    HomeScreenState::restorePlan(rollback->previousHomeSelection, home_.rows);
-                homeState_.setSelections(std::move(rollbackPlan.selections));
-                homeState_.setRow(rollbackPlan.focusedRow);
-                homeState_.updateViewport(static_cast<int>(home_.rows.size()));
-            }
-            if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id)
-                detail_ = completion.item;
-            error_ = completion.result.error;
-            return;
-        }
-        const auto nextUpRow = std::find_if(home_.rows.begin(), home_.rows.end(), [](const JellyfinHomeRow& candidate) {
-            return candidate.title == "Next Up";
-        });
-        if (completion.nextUpReplacementIndex >= 0 && nextUpRow != home_.rows.end()) {
-            const size_t replacementIndex = static_cast<size_t>(completion.nextUpReplacementIndex);
-            const bool slotStillMatches = replacementIndex < nextUpRow->items.size() &&
-                                          nextUpRow->items[replacementIndex].id == completion.item.id;
-            if (completion.nextUpReplacement && slotStillMatches && !isHiddenFromHome(*completion.nextUpReplacement)) {
-                const std::string replacementId = completion.nextUpReplacement->id;
-                nextUpRow->items[replacementIndex] = std::move(*completion.nextUpReplacement);
-                nextUpReplacementFadeIndex_ = completion.nextUpReplacementIndex;
-                nextUpReplacementFadeItemId_ = replacementId;
-                nextUpReplacementFadeStarted_ = std::chrono::steady_clock::now();
-                renderBurstUntil_ = std::max(renderBurstUntil_, nextUpReplacementFadeStarted_ + 320ms);
-                if (app_ && app_->looper) ALooper_wake(app_->looper);
-            } else if (slotStillMatches) {
-                nextUpRow->items.erase(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(replacementIndex));
-                clampHomeSelections();
-            }
-        }
-        if ((screen_ == Screen::Details || screen_ == Screen::ItemMenu) && detail_.id == completion.item.id) {
-            detail_.played = completion.desired;
-            if (completion.desired) detail_.positionTicks = 0;
-        }
+        const bool replacementHidden = completion.nextUpReplacement && isHiddenFromHome(*completion.nextUpReplacement);
+        applyItemMutationCompletionEffects(
+            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
+                                          screen_ == Screen::Details || screen_ == Screen::ItemMenu, replacementHidden,
+                                          playedRollback_, home_, homeState_, detail_));
     }
 
     void applyAsyncCompletion(MetadataRefreshCompletion& completion) {
-        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
-        mutationLoading_ = false;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            return;
-        }
-        showNotice("METADATA REFRESH REQUESTED");
+        applyItemMutationCompletionEffects(
+            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch)));
     }
 
     void applyAsyncCompletion(DeleteItemCompletion& completion) {
-        if (!requestEpochs_.session.active(completion.sessionEpoch)) return;
-        if (completion.result.ok) removeCachedItem(completion.itemId);
-        mutationLoading_ = false;
-        if (screen_ != Screen::ItemMenu || detail_.id != completion.itemId) return;
-        if (!completion.result.ok) {
-            error_ = completion.result.error;
-            detailsState_.setDeleteConfirmation(false);
-            return;
-        }
-        detail_ = {};
-        detailsState_.setDeleteConfirmation(false);
-        popScreen(Screen::Home);
-        if (screen_ == Screen::Details) popScreen(Screen::Home);
-        showNotice("MEDIA DELETED");
+        applyItemMutationCompletionEffects(
+            ItemMutationController::apply(completion, requestEpochs_.session.active(completion.sessionEpoch),
+                                          screen_ == Screen::ItemMenu, detail_, detailsState_));
     }
 
     void applyAccountCompletionEffects(AccountCompletionEffects effects) {
@@ -3675,7 +3548,7 @@ private:
         const auto action = plan.action;
         if (action == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed) {
             if (completion.announce) {
-                notice_.clear();
+                statusOverlayState_.clearNotice();
                 error_ = (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin ? "JELLYFIN QUICK CONNECT: "
                                                                                           : "SEERR QUICK CONNECT: ") +
                          result.error;
@@ -3687,7 +3560,7 @@ private:
             }
             return;
         }
-        if (completion.announce) notice_.clear();
+        if (completion.announce) statusOverlayState_.clearNotice();
         if (action == SeerrDomainState::ConnectCompletionAction::Stale) return;
         if (action == SeerrDomainState::ConnectCompletionAction::AuthenticationFailed) {
             if (completion.announce)
@@ -5032,35 +4905,10 @@ private:
     }
 
     void renderStatus() {
-        const auto now = std::chrono::steady_clock::now();
-        if (!noticePersistent_ && !notice_.empty() && now >= noticeUntil_) {
-            notice_.clear();
-            noticeUntil_ = {};
-        }
-        const bool noticeVisible = !notice_.empty() && (noticePersistent_ || now < noticeUntil_);
-
-        if (error_.empty()) {
-            presentedError_.clear();
-            errorUntil_ = {};
-        } else if (error_ != presentedError_) {
-            presentedError_ = error_;
-            errorUntil_ = now + 6s;
-        }
-        if (!presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now >= errorUntil_) {
-            errorUntil_ = {};
-        }
-        const bool errorVisible =
-            !presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now < errorUntil_;
-
-        renderStatusOverlay(renderer_,
-                            StatusOverlayRenderState{
-                                .loading = loading_ || homeLoading_ || mutationLoading_,
-                                .playerScreen = screen_ == Screen::Player,
-                                .noticeVisible = noticeVisible,
-                                .notice = notice_,
-                                .errorVisible = errorVisible,
-                                .error = presentedError_,
-                            },
+        const StatusOverlayRenderState state =
+            statusOverlayState_.renderState(error_, loading_ || homeLoading_ || mutationLoading_,
+                                            screen_ == Screen::Player, std::chrono::steady_clock::now());
+        renderStatusOverlay(renderer_, state,
                             StatusOverlayRenderStyle<Color>{
                                 .cornerMedium = material_tv::cornerMedium,
                                 .panelElevated = kPanelElevated,
@@ -5169,11 +5017,7 @@ private:
     SettingsScreenState settingsScreen_;
     std::vector<ExternalPlayerApp> externalPlayers_;
     std::string error_;
-    std::string presentedError_;
-    std::chrono::steady_clock::time_point errorUntil_{};
-    std::string notice_;
-    std::chrono::steady_clock::time_point noticeUntil_{};
-    bool noticePersistent_ = false;
+    StatusOverlayState statusOverlayState_;
     int homeSlideFromFirst_ = 0;
     int homeSlideToFirst_ = 0;
     std::chrono::steady_clock::time_point homeSlideStarted_{};
