@@ -8,6 +8,7 @@
 #include "account_completion_controller.hpp"
 #include "account_navigation_controller.hpp"
 #include "account_screen.hpp"
+#include "app_screen.hpp"
 #include "app_settings.hpp"
 #include "artwork_provider.hpp"
 #include "async_completion_queue.hpp"
@@ -46,6 +47,7 @@
 #include "launch_intent.hpp"
 #include "login_renderer.hpp"
 #include "media_card_renderer.hpp"
+#include "media_display_text.hpp"
 #include "media_grid_renderer.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
@@ -68,6 +70,7 @@
 #include "player_controls_renderer.hpp"
 #include "player_header_renderer.hpp"
 #include "player_next_up_renderer.hpp"
+#include "player_presentation.hpp"
 #include "player_progress_renderer.hpp"
 #include "player_screen.hpp"
 #include "player_seek_feedback_renderer.hpp"
@@ -128,6 +131,7 @@
 #include "trickplay_tile_executor.hpp"
 #include "video_surface.hpp"
 #include "version_policy.hpp"
+#include "virtual_keyboard.hpp"
 
 #include <algorithm>
 #include <array>
@@ -182,162 +186,6 @@ void logPlaybackReportFailure(const char* stage, const std::string& itemId, cons
                         result.error.c_str());
 }
 
-std::string episodeNumberLabel(const JellyfinItem& item) {
-    if (item.type != "Episode") return {};
-    std::string result;
-    if (item.parentIndexNumber >= 0) result += "S" + std::to_string(item.parentIndexNumber);
-    if (item.indexNumber >= 0) result += "E" + std::to_string(item.indexNumber);
-    return result;
-}
-
-std::string episodeLabel(const JellyfinItem& item) {
-    std::string result = item.seriesName;
-    const std::string number = episodeNumberLabel(item);
-    if (!number.empty()) {
-        if (!result.empty()) result += " - ";
-        result += number;
-    }
-    return result;
-}
-
-std::string formatLocalClock(std::time_t instant, bool clock24Hour) {
-    std::tm local{};
-    localtime_r(&instant, &local);
-    std::ostringstream out;
-    out << std::put_time(&local, clock24Hour ? "%H:%M" : "%I:%M %p");
-    std::string value = out.str();
-    if (!clock24Hour && !value.empty() && value.front() == '0') value.erase(value.begin());
-    return value;
-}
-
-std::string formatPlaybackTime(int milliseconds) {
-    const int totalSeconds = std::max(0, milliseconds / 1000);
-    const int hours = totalSeconds / 3600;
-    const int minutes = (totalSeconds / 60) % 60;
-    const int seconds = totalSeconds % 60;
-    std::ostringstream out;
-    if (hours > 0)
-        out << hours << ':' << std::setw(2) << std::setfill('0') << minutes;
-    else
-        out << minutes;
-    out << ':' << std::setw(2) << std::setfill('0') << seconds;
-    return out.str();
-}
-
-enum class Screen {
-    Login,
-    Profiles,
-    Home,
-    Browse,
-    Search,
-    Settings,
-    Diagnostics,
-    Details,
-    Cast,
-    PersonItems,
-    ItemMenu,
-    Seasons,
-    Episodes,
-    SeerrDrivePicker,
-    Player,
-};
-
-enum class KeyAction {
-    Insert,
-    Backspace,
-    Done,
-};
-
-struct VirtualKey {
-    std::string label;
-    std::string value;
-    KeyAction action = KeyAction::Insert;
-};
-
-const std::vector<std::vector<VirtualKey>>& keyboardRows() {
-    static const std::vector<std::vector<VirtualKey>> rows = {
-        {{"A", "A"},
-         {"B", "B"},
-         {"C", "C"},
-         {"D", "D"},
-         {"E", "E"},
-         {"F", "F"},
-         {"G", "G"},
-         {"H", "H"},
-         {"I", "I"},
-         {"J", "J"}},
-        {{"K", "K"},
-         {"L", "L"},
-         {"M", "M"},
-         {"N", "N"},
-         {"O", "O"},
-         {"P", "P"},
-         {"Q", "Q"},
-         {"R", "R"},
-         {"S", "S"},
-         {"T", "T"}},
-        {{"U", "U"},
-         {"V", "V"},
-         {"W", "W"},
-         {"X", "X"},
-         {"Y", "Y"},
-         {"Z", "Z"},
-         {"0", "0"},
-         {"1", "1"},
-         {"2", "2"},
-         {"3", "3"}},
-        {{"4", "4"},
-         {"5", "5"},
-         {"6", "6"},
-         {"7", "7"},
-         {"8", "8"},
-         {"9", "9"},
-         {".", "."},
-         {"-", "-"},
-         {"_", "_"},
-         {"/", "/"}},
-        {{":", ":"}, {"@", "@"}, {"SPACE", " "}, {"BACK", "", KeyAction::Backspace}, {"DONE", "", KeyAction::Done}},
-    };
-    return rows;
-}
-
-char keyCodeToChar(int32_t keyCode, int32_t metaState) {
-    const bool shift = (metaState & AMETA_SHIFT_ON) != 0;
-    if (keyCode >= AKEYCODE_A && keyCode <= AKEYCODE_Z) {
-        const char base = static_cast<char>('a' + (keyCode - AKEYCODE_A));
-        return shift ? static_cast<char>(base - 'a' + 'A') : base;
-    }
-    if (keyCode >= AKEYCODE_0 && keyCode <= AKEYCODE_9) {
-        static constexpr char shifted[] = ")!@#$%^&*(";
-        const int index = keyCode - AKEYCODE_0;
-        return shift ? shifted[index] : static_cast<char>('0' + index);
-    }
-    switch (keyCode) {
-    case AKEYCODE_SPACE:
-        return ' ';
-    case AKEYCODE_PERIOD:
-        return shift ? '>' : '.';
-    case AKEYCODE_COMMA:
-        return shift ? '<' : ',';
-    case AKEYCODE_SLASH:
-        return shift ? '?' : '/';
-    case AKEYCODE_BACKSLASH:
-        return shift ? '|' : '\\';
-    case AKEYCODE_MINUS:
-        return shift ? '_' : '-';
-    case AKEYCODE_EQUALS:
-        return shift ? '+' : '=';
-    case AKEYCODE_SEMICOLON:
-        return shift ? ':' : ';';
-    case AKEYCODE_APOSTROPHE:
-        return shift ? '"' : '\'';
-    case AKEYCODE_AT:
-        return '@';
-    default:
-        return 0;
-    }
-}
-
 struct PendingTickWork {
     std::optional<ExternalPlayerResult> externalResult;
     std::optional<ExternalPlaybackLaunch> completedExternalPlayback;
@@ -354,24 +202,20 @@ struct PlayedRollbackState {
 
 using QueuedPlaybackCompletion = QueuedPlaybackResolutionCompletion<Screen>;
 
-using AsyncCompletion = std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion,
-                                     SeerrStorageRefreshCompletion,
-                                     SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
-                                     JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion,
-                                     DiagnosticsCompletion, SeasonsCompletion, EpisodesCompletion, BrowsePageCompletion,
-                                     ServerInfoNoticeCompletion, FavoriteCompletion, PlayedCompletion,
-                                     MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
-                                     LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
-                                     EpisodeSeriesContextRequestCompletion, EpisodeSeriesContextCompletion,
-                                     QuickConnectStartedCompletion,
-                                     QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion,
-                                     QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
-                                     ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion,
-                                     ArtworkLoadCompletion, MediaSegmentsCompletion, NextEpisodeCompletion,
-                                     PlaybackAdjacentCompletion,
-                                     PlaybackReportCompletion, QueuedPlaybackCompletion, PlayerItemPlaybackCompletion,
-                                     AutoplayPlaybackCompletion, StreamRestartCompletion, FallbackPlaybackCompletion,
-                                     BeginPlaybackCompletion, SeriesPlayAllCompletion>;
+using AsyncCompletion =
+    std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
+                 SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion, JellyfinSearchCompletion,
+                 ItemMenuDetailCompletion, PersonItemsCompletion, DiagnosticsCompletion, SeasonsCompletion,
+                 EpisodesCompletion, BrowsePageCompletion, ServerInfoNoticeCompletion, FavoriteCompletion,
+                 PlayedCompletion, MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
+                 LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion,
+                 EpisodeSeriesContextRequestCompletion, EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
+                 QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion, QuickConnectTimedOutCompletion,
+                 HomeCoreCompletion, HomeSecondaryCompletion, ExternalPlaybackCompletion, SubtitleLoadCompletion,
+                 TrickplayTileCompletion, ArtworkLoadCompletion, MediaSegmentsCompletion, NextEpisodeCompletion,
+                 PlaybackAdjacentCompletion, PlaybackReportCompletion, QueuedPlaybackCompletion,
+                 PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, StreamRestartCompletion,
+                 FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -394,14 +238,10 @@ public:
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Background task exception: %s", error.c_str());
               }),
-          accountAsync_(api_, tasks_, asyncCompletions_),
-          quickConnectAsync_(api_, tasks_, asyncCompletions_),
-          detailsAsync_(api_, tasks_, asyncCompletions_),
-          browseAsync_(api_, tasks_, asyncCompletions_),
-          jellyfinSearchAsync_(api_, tasks_, asyncCompletions_),
-          serverInfoAsync_(api_, tasks_, asyncCompletions_),
-          itemMutationAsync_(api_, tasks_, asyncCompletions_),
-          homeAsync_(api_, tasks_, asyncCompletions_),
+          accountAsync_(api_, tasks_, asyncCompletions_), quickConnectAsync_(api_, tasks_, asyncCompletions_),
+          detailsAsync_(api_, tasks_, asyncCompletions_), browseAsync_(api_, tasks_, asyncCompletions_),
+          jellyfinSearchAsync_(api_, tasks_, asyncCompletions_), serverInfoAsync_(api_, tasks_, asyncCompletions_),
+          itemMutationAsync_(api_, tasks_, asyncCompletions_), homeAsync_(api_, tasks_, asyncCompletions_),
           externalPlaybackAsync_(
               api_, tasks_, asyncCompletions_, requestEpochs_.playback,
               [](const ExternalPlaybackDiagnostic& diagnostic) {
@@ -418,25 +258,26 @@ public:
           playbackResolutionAsync_(api_, tasks_, asyncCompletions_, requestEpochs_.playback),
           playbackStreamAsync_(api_, tasks_, asyncCompletions_, requestEpochs_.playback, logPlaybackReportFailure),
           seriesPlaybackAsync_(
-              api_, tasks_, asyncCompletions_, requestEpochs_.playback, [](const SeriesEpisodeSlot& slot) {
+              api_, tasks_, asyncCompletions_, requestEpochs_.playback,
+              [](const SeriesEpisodeSlot& slot) {
                   __android_log_print(
                       ANDROID_LOG_WARN, kTag,
                       "No available source found for duplicate S%02dE%02d slot; retaining first server result",
                       slot.season, slot.episode);
               }),
-          subtitleLoadAsync_(
-              api_, tasks_, asyncCompletions_, requestEpochs_.playback, [](const SubtitleLoadDiagnostic& diagnostic) {
-                  if (diagnostic.kind == SubtitleLoadDiagnosticKind::Fallback) {
-                      __android_log_print(ANDROID_LOG_INFO, kTag,
-                                          "Subtitle stream %d unavailable; using fallback stream %d",
-                                          diagnostic.requestedSubtitleIndex, diagnostic.subtitleIndex);
-                      return;
-                  }
-                  __android_log_print(ANDROID_LOG_WARN, kTag,
-                                      "Subtitle load failed item=%s stream=%d codec=%s reason=%s",
-                                      diagnostic.itemId.c_str(), diagnostic.subtitleIndex, diagnostic.codec.c_str(),
-                                      diagnostic.reason.c_str());
-              }),
+          subtitleLoadAsync_(api_, tasks_, asyncCompletions_, requestEpochs_.playback,
+                             [](const SubtitleLoadDiagnostic& diagnostic) {
+                                 if (diagnostic.kind == SubtitleLoadDiagnosticKind::Fallback) {
+                                     __android_log_print(ANDROID_LOG_INFO, kTag,
+                                                         "Subtitle stream %d unavailable; using fallback stream %d",
+                                                         diagnostic.requestedSubtitleIndex, diagnostic.subtitleIndex);
+                                     return;
+                                 }
+                                 __android_log_print(ANDROID_LOG_WARN, kTag,
+                                                     "Subtitle load failed item=%s stream=%d codec=%s reason=%s",
+                                                     diagnostic.itemId.c_str(), diagnostic.subtitleIndex,
+                                                     diagnostic.codec.c_str(), diagnostic.reason.c_str());
+                             }),
           trickplayTileAsync_(api_, imageDecoder_, tasks_, asyncCompletions_),
           seerrAsync_(seerr_, seerrSearch_, api_, tasks_, asyncCompletions_),
           artwork_(api_, seerr_, imageDecoder_, tasks_, asyncCompletions_,
@@ -448,10 +289,8 @@ public:
                                                : "Home artwork decode failed item=%s type=%s reason=%s",
                                            request.itemId.c_str(), request.itemType.c_str(), loaded.error.c_str());
                    }),
-          seerrConnection_(seerrDomain_, seerrAsync_),
-          seerrRefresh_(seerrDomain_, seerrAsync_),
-          seerrRequest_(seerrDomain_, seerrAsync_),
-          seerrSearchCoordinator_(seerrDomain_, seerrAsync_),
+          seerrConnection_(seerrDomain_, seerrAsync_), seerrRefresh_(seerrDomain_, seerrAsync_),
+          seerrRequest_(seerrDomain_, seerrAsync_), seerrSearchCoordinator_(seerrDomain_, seerrAsync_),
           searchState_(seerrDomain_.searchResults()) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
@@ -1508,8 +1347,8 @@ private:
 
     void handleCastKey(int32_t key) {
         constexpr int columns = mediaGridColumns();
-        const DetailsNavigationAction navigation =
-            DetailsNavigationController::handleCast(detailsState_, detailsNavigationKeyForKey(key), detail_.people, columns);
+        const DetailsNavigationAction navigation = DetailsNavigationController::handleCast(
+            detailsState_, detailsNavigationKeyForKey(key), detail_.people, columns);
         if (navigation.type == DetailsNavigationActionType::Back) {
             popScreen(Screen::Details);
         } else if (navigation.type == DetailsNavigationActionType::OpenPerson && navigation.person) {
@@ -1558,8 +1397,8 @@ private:
     void handleItemMenuKey(int32_t key) {
         const bool seerrRequest = isSeerrItem(detail_);
         const DetailsNavigationAction navigation = DetailsNavigationController::handleItemMenu(
-            detailsState_, detailsNavigationKeyForKey(key), detail_, seerrRequest,
-            selectedExternalPlayer().has_value(), !queueState_.empty());
+            detailsState_, detailsNavigationKeyForKey(key), detail_, seerrRequest, selectedExternalPlayer().has_value(),
+            !queueState_.empty());
         if (navigation.type == DetailsNavigationActionType::Back) {
             popScreen(Screen::Details);
             return;
@@ -1571,7 +1410,8 @@ private:
                 deleteCurrentItemAsync();
             return;
         }
-        if (navigation.type != DetailsNavigationActionType::ActivateItemMenuAction || !navigation.itemMenuAction) return;
+        if (navigation.type != DetailsNavigationActionType::ActivateItemMenuAction || !navigation.itemMenuAction)
+            return;
 
         switch (*navigation.itemMenuAction) {
         case ItemMenuAction::PlayAll:
@@ -1627,20 +1467,19 @@ private:
         const PlaybackLanguagePreferences preferences = playbackCoordinator_.languagePreferences();
         const PlaybackTrackSelectionPolicy trackPolicy = playbackTrackSelectionPolicy();
         const uint64_t generation = requestEpochs_.playback.begin();
-        if (!externalPlaybackAsync_.prepare(
-                session, ExternalPlaybackRequest{
-                             .generation = generation,
-                             .selectedItemId = detail_.id,
-                             .selectedItemType = detail_.type,
-                             .seriesId = detail_.seriesId,
-                             .container = detail_.container,
-                             .mediaSourceId = detail_.mediaSourceId,
-                             .audios = detail_.audios,
-                             .subtitles = detail_.subtitles,
-                             .player = *player,
-                             .subtitlePreference = preferences.subtitle,
-                             .trackPolicy = trackPolicy,
-                         })) {
+        if (!externalPlaybackAsync_.prepare(session, ExternalPlaybackRequest{
+                                                         .generation = generation,
+                                                         .selectedItemId = detail_.id,
+                                                         .selectedItemType = detail_.type,
+                                                         .seriesId = detail_.seriesId,
+                                                         .container = detail_.container,
+                                                         .mediaSourceId = detail_.mediaSourceId,
+                                                         .audios = detail_.audios,
+                                                         .subtitles = detail_.subtitles,
+                                                         .player = *player,
+                                                         .subtitlePreference = preferences.subtitle,
+                                                         .trackPolicy = trackPolicy,
+                                                     })) {
             loading_ = false;
             error_ = "EXTERNAL PLAYER COULD NOT BE STARTED";
         }
@@ -1754,16 +1593,15 @@ private:
         const std::string dataPath = dataPath_;
         const uint64_t generation = requestEpochs_.playback.snapshot();
 
-        if (!subtitleLoadAsync_.load(
-                session, SubtitleLoadRequest{
-                             .generation = generation,
-                             .itemId = std::move(context->itemId),
-                             .mediaSourceId = std::move(context->mediaSourceId),
-                             .requestedSubtitleIndex = context->requestedSubtitleStreamIndex,
-                             .candidates = std::move(context->candidates),
-                             .deliveryUrl = deliveryUrl,
-                             .dataPath = dataPath,
-                         })) {
+        if (!subtitleLoadAsync_.load(session, SubtitleLoadRequest{
+                                                  .generation = generation,
+                                                  .itemId = std::move(context->itemId),
+                                                  .mediaSourceId = std::move(context->mediaSourceId),
+                                                  .requestedSubtitleIndex = context->requestedSubtitleStreamIndex,
+                                                  .candidates = std::move(context->candidates),
+                                                  .deliveryUrl = deliveryUrl,
+                                                  .dataPath = dataPath,
+                                              })) {
             playbackCoordinator_.failSubtitleLoad();
             showNotice("SUBTITLES COULD NOT BE STARTED");
         }
@@ -1795,8 +1633,7 @@ private:
 
         if (plan.directPlayStream) {
             const JellyfinSubtitleStream& selected = *plan.directPlayStream;
-            __android_log_print(ANDROID_LOG_INFO, kTag,
-                                "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
                                 plan.subtitleStreamIndex, selected.codec.c_str(), selected.isExternal ? 1 : 0,
                                 static_cast<int>(plan.strategy));
             if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
@@ -1877,71 +1714,19 @@ private:
         }
         trickplayState_.beginTile(playbackCoordinator_.session().activeItem().id, frame.tileIndex);
         const JellyfinSession session = session_;
-        if (!trickplayTileAsync_.load(
-                session, TrickplayTileRequest{
-                             .itemId = playbackCoordinator_.session().activeItem().id,
-                             .trickplay = info,
-                             .tileIndex = frame.tileIndex,
-                         })) {
+        if (!trickplayTileAsync_.load(session, TrickplayTileRequest{
+                                                   .itemId = playbackCoordinator_.session().activeItem().id,
+                                                   .trickplay = info,
+                                                   .tileIndex = frame.tileIndex,
+                                               })) {
             trickplayState_.markFailed();
         }
-    }
-
-    bool drawTrickplayPreview() {
-        if (!trickplayState_.visible(std::chrono::steady_clock::now(), playbackCoordinator_.session().activeItem().id) ||
-            !playbackCoordinator_.session().activeItem().trickplay.valid()) {
-            return false;
-        }
-        const auto& info = playbackCoordinator_.session().activeItem().trickplay;
-        const TrickplayFrame frame = trickplayFrameForPosition(trickplayState_.positionMs(), info.intervalMs,
-                                                               info.thumbnailCount, info.tileWidth, info.tileHeight);
-        if (!frame.valid() || frame.tileIndex != trickplayState_.tileIndex()) return false;
-        if (trickplayState_.texture() == 0 || trickplayState_.textureGeneration() != renderer_.generation()) {
-            const auto& decoded = trickplayState_.decoded();
-            trickplayState_.setTexture(renderer_.createTexture(decoded.width, decoded.height, decoded.rgba.data()),
-                                       renderer_.generation());
-        }
-        if (trickplayState_.texture() == 0) return false;
-
-        const auto& decoded = trickplayState_.decoded();
-        const std::string positionLabel = formatPlaybackTime(trickplayState_.positionMs());
-        return renderPlayerTrickplay(
-            renderer_,
-            PlayerTrickplayRenderState{
-                .texture = trickplayState_.texture(),
-                .frame = frame,
-                .info = info,
-                .decodedWidth = decoded.width,
-                .decodedHeight = decoded.height,
-                .positionMs = trickplayState_.positionMs(),
-                .durationMs = playerScreenState_.durationMs(),
-                .logicalWidth = Renderer::logicalWidth(),
-                .positionLabel = positionLabel,
-            },
-            PlayerTrickplayRenderStyle<Color>{
-                .previewRadius = material_tv::cornerSmall,
-                .backdrop = Color{0.0f, 0.0f, 0.0f, 0.90f},
-                .focus = kFocus,
-                .text = kText,
-            },
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
-                drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
-            });
     }
 
     void seekPlaybackTo(int positionMs) {
         const int targetMs = std::max(0, positionMs);
         player_.seekTo(targetMs);
         playerScreenState_.beginSeek(targetMs, std::chrono::steady_clock::now());
-    }
-
-    std::string mediaSegmentSkipLabel(const JellyfinMediaSegment& segment) const {
-        if (segment.type == "Intro") return "Skip intro";
-        if (segment.type == "Outro") return "Skip credits";
-        if (segment.type == "Recap") return "Skip recap";
-        if (segment.type == "Preview") return "Skip preview";
-        if (segment.type == "Commercial") return "Skip commercial";
-        return "Skip";
     }
 
     bool skipActiveMediaSegment() {
@@ -2641,10 +2426,9 @@ private:
     }
 
     void searchSeerrAsync(bool immediate) {
-        auto plan =
-            immediate
-                ? seerrSearchCoordinator_.prepareImmediate(seerrEndpoint(), searchState_.query())
-                : seerrSearchCoordinator_.prepareDue(seerrEndpoint(), searchState_.query(), std::chrono::steady_clock::now());
+        auto plan = immediate ? seerrSearchCoordinator_.prepareImmediate(seerrEndpoint(), searchState_.query())
+                              : seerrSearchCoordinator_.prepareDue(seerrEndpoint(), searchState_.query(),
+                                                                   std::chrono::steady_clock::now());
         if (plan.resultsChanged) searchState_.refreshSeerrResults();
         if (!plan.ready()) return;
 
@@ -2830,8 +2614,8 @@ private:
     }
 
     void requestNextEpisodeAsync() {
-        const PlaybackNextEpisodePlan plan = playbackCoordinator_.beginNextEpisodePlan(
-            queueState_, session_.valid(), std::chrono::steady_clock::now());
+        const PlaybackNextEpisodePlan plan =
+            playbackCoordinator_.beginNextEpisodePlan(queueState_, session_.valid(), std::chrono::steady_clock::now());
         if (!plan.request) return;
         const JellyfinSession session = session_;
         if (!playbackContinuationAsync_.requestNextEpisode(session, plan.request->seriesId,
@@ -2846,8 +2630,8 @@ private:
             refreshPlaybackTelemetry(true);
         }
         const auto session = session_;
-        const PlaybackReleaseContext release =
-            playbackCoordinator_.releaseContext(reportStop, completed, session.valid(), playerScreenState_.positionMs());
+        const PlaybackReleaseContext release = playbackCoordinator_.releaseContext(
+            reportStop, completed, session.valid(), playerScreenState_.positionMs());
         const PlaybackReleasePlan releasePlan = release.plan;
         const auto& item = release.item;
         const auto& target = release.target;
@@ -3026,9 +2810,9 @@ private:
             .audioStreamIndex = audioStreamIndex,
             .subtitleStreamIndex = subtitleStreamIndex,
         };
-        const bool submitted = playbackStreamAsync_.resolveFallback(
-            session, std::move(item), failedTarget, shouldReportPrevious, resumeTicks, std::move(fallbackOptions),
-            generation);
+        const bool submitted =
+            playbackStreamAsync_.resolveFallback(session, std::move(item), failedTarget, shouldReportPrevious,
+                                                 resumeTicks, std::move(fallbackOptions), generation);
         if (!submitted) {
             loading_ = false;
             playbackCoordinator_.finishFallbackResolution();
@@ -3130,12 +2914,11 @@ private:
             }
         }
         const JellyfinSession reportSession = session_;
-        externalPlaybackAsync_.reportStopped(
-            reportSession, ExternalPlaybackReportRequest{
-                               .itemId = completed.item.id,
-                               .mediaSourceId = completed.item.mediaSourceId,
-                               .positionTicks = positionTicks,
-                           });
+        externalPlaybackAsync_.reportStopped(reportSession, ExternalPlaybackReportRequest{
+                                                                .itemId = completed.item.id,
+                                                                .mediaSourceId = completed.item.mediaSourceId,
+                                                                .positionTicks = positionTicks,
+                                                            });
         std::scoped_lock lock(stateMutex_);
         error_.clear();
     }
@@ -3334,8 +3117,8 @@ private:
     void applyAsyncCompletion(const SeerrRequestCompletion& completion) {
         mutationLoading_ = false;
         const auto domainCompletion =
-            seerrRequest_.complete(completion.endpoint, seerrEndpoint(), completion.requestedItem, completion.result.value,
-                                   completion.result.ok, std::chrono::steady_clock::now());
+            seerrRequest_.complete(completion.endpoint, seerrEndpoint(), completion.requestedItem,
+                                   completion.result.value, completion.result.ok, std::chrono::steady_clock::now());
         if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::StaleEndpoint) return;
         if (domainCompletion.outcome == SeerrDomainState::MutationOutcome::Failed) {
             error_ = "SEERR REQUEST: " + completion.result.error;
@@ -3351,9 +3134,9 @@ private:
 
     void applyAsyncCompletion(SeerrStorageRefreshCompletion& completion) {
         auto& result = completion.result;
-        const auto plan = seerrRefresh_.completeStorage(
-            completion.endpoint, seerrEndpoint(), result.ok, std::move(result.value), result.error,
-            settings_.seerrSelectDrive, std::chrono::steady_clock::now());
+        const auto plan =
+            seerrRefresh_.completeStorage(completion.endpoint, seerrEndpoint(), result.ok, std::move(result.value),
+                                          result.error, settings_.seerrSelectDrive, std::chrono::steady_clock::now());
         if (plan.domain.outcome == SeerrDomainState::RefreshOutcome::StaleEndpoint) return;
         if (plan.domain.outcome == SeerrDomainState::RefreshOutcome::Failed) {
             __android_log_print(ANDROID_LOG_WARN, kTag, "Seerr storage refresh failed: %s", result.error.c_str());
@@ -3394,10 +3177,10 @@ private:
     }
 
     void applyAsyncCompletion(SeerrSearchCompletion& completion) {
-        applySearchCompletionEffects(SearchCompletionController::apply(
-            completion, requestEpochs_.seerrSearch.active(completion.generation), screen_ == Screen::Search,
-            !settings_.seerrSessionCookie.empty(), searchState_, seerrSearchCoordinator_,
-            std::chrono::steady_clock::now()));
+        applySearchCompletionEffects(
+            SearchCompletionController::apply(completion, requestEpochs_.seerrSearch.active(completion.generation),
+                                              screen_ == Screen::Search, !settings_.seerrSessionCookie.empty(),
+                                              searchState_, seerrSearchCoordinator_, std::chrono::steady_clock::now()));
     }
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
@@ -3416,9 +3199,9 @@ private:
     }
 
     void applyAsyncCompletion(PersonItemsCompletion& completion) {
-        applyDetailsCompletionEffects(DetailsCompletionController::apply(
-            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::PersonItems,
-            detailsState_));
+        applyDetailsCompletionEffects(
+            DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
+                                               screen_ == Screen::PersonItems, detailsState_));
     }
 
     void applyServerInfoCompletionEffects(ServerInfoCompletionEffects effects) {
@@ -3436,15 +3219,15 @@ private:
     }
 
     void applyAsyncCompletion(SeasonsCompletion& completion) {
-        applyDetailsCompletionEffects(DetailsCompletionController::apply(
-            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Seasons,
-            detailsState_));
+        applyDetailsCompletionEffects(
+            DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
+                                               screen_ == Screen::Seasons, detailsState_));
     }
 
     void applyAsyncCompletion(EpisodesCompletion& completion) {
-        applyDetailsCompletionEffects(DetailsCompletionController::apply(
-            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Episodes,
-            detailsState_));
+        applyDetailsCompletionEffects(
+            DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
+                                               screen_ == Screen::Episodes, detailsState_));
     }
 
     void applyAsyncCompletion(BrowsePageCompletion& completion) {
@@ -3488,9 +3271,8 @@ private:
     }
 
     void applyAsyncCompletion(PlayedCompletion& completion) {
-        const bool rollbackMatches =
-            playedRollback_ && playedRollback_->sessionEpoch == completion.sessionEpoch &&
-            playedRollback_->itemId == completion.item.id;
+        const bool rollbackMatches = playedRollback_ && playedRollback_->sessionEpoch == completion.sessionEpoch &&
+                                     playedRollback_->itemId == completion.item.id;
         if (!requestEpochs_.session.active(completion.sessionEpoch)) {
             if (rollbackMatches) playedRollback_.reset();
             return;
@@ -3516,15 +3298,14 @@ private:
             error_ = completion.result.error;
             return;
         }
-        const auto nextUpRow =
-            std::find_if(home_.rows.begin(), home_.rows.end(),
-                         [](const JellyfinHomeRow& candidate) { return candidate.title == "Next Up"; });
+        const auto nextUpRow = std::find_if(home_.rows.begin(), home_.rows.end(), [](const JellyfinHomeRow& candidate) {
+            return candidate.title == "Next Up";
+        });
         if (completion.nextUpReplacementIndex >= 0 && nextUpRow != home_.rows.end()) {
             const size_t replacementIndex = static_cast<size_t>(completion.nextUpReplacementIndex);
             const bool slotStillMatches = replacementIndex < nextUpRow->items.size() &&
                                           nextUpRow->items[replacementIndex].id == completion.item.id;
-            if (completion.nextUpReplacement && slotStillMatches &&
-                !isHiddenFromHome(*completion.nextUpReplacement)) {
+            if (completion.nextUpReplacement && slotStillMatches && !isHiddenFromHome(*completion.nextUpReplacement)) {
                 const std::string replacementId = completion.nextUpReplacement->id;
                 nextUpRow->items[replacementIndex] = std::move(*completion.nextUpReplacement);
                 nextUpReplacementFadeIndex_ = completion.nextUpReplacementIndex;
@@ -3601,9 +3382,9 @@ private:
     }
 
     void applyAsyncCompletion(DetailsSimilarCompletion& completion) {
-        applyDetailsCompletionEffects(DetailsCompletionController::apply(
-            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Details, detail_,
-            detailsState_));
+        applyDetailsCompletionEffects(
+            DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
+                                               screen_ == Screen::Details, detail_, detailsState_));
     }
 
     void applyAsyncCompletion(EpisodeSeriesContextRequestCompletion& completion) {
@@ -3615,9 +3396,9 @@ private:
     }
 
     void applyAsyncCompletion(EpisodeSeriesContextCompletion& completion) {
-        applyDetailsCompletionEffects(DetailsCompletionController::apply(
-            completion, requestEpochs_.content.active(completion.generation), screen_ == Screen::Details, detail_,
-            detailsState_));
+        applyDetailsCompletionEffects(
+            DetailsCompletionController::apply(completion, requestEpochs_.content.active(completion.generation),
+                                               screen_ == Screen::Details, detail_, detailsState_));
     }
 
     void applyAsyncCompletion(QuickConnectStartedCompletion& completion) {
@@ -3651,10 +3432,8 @@ private:
         homeRetryAttempt_ = effects.nextRetryAttempt;
         if (effects.resetRetry) homeRetryAt_ = {};
         if (effects.retryDelaySeconds) {
-            homeRetryAt_ =
-                std::chrono::steady_clock::now() + std::chrono::seconds(*effects.retryDelaySeconds);
-            __android_log_print(ANDROID_LOG_WARN, kTag,
-                                "Home load failed transiently; retrying in %d seconds: %s",
+            homeRetryAt_ = std::chrono::steady_clock::now() + std::chrono::seconds(*effects.retryDelaySeconds);
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Home load failed transiently; retrying in %d seconds: %s",
                                 *effects.retryDelaySeconds, completion.result.error.c_str());
         }
 
@@ -3681,8 +3460,8 @@ private:
 
         syncSeerrHomeRowLocked();
         if (effects.prefetch) prefetchHomeWindow(effects.prefetch->row, effects.prefetch->selection);
-        const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now() - completion.startedAt)
+        const auto coreMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                                  completion.startedAt)
                                 .count();
         __android_log_print(ANDROID_LOG_INFO, kTag, "Home primary rows ready in %lld ms",
                             static_cast<long long>(coreMs));
@@ -3714,14 +3493,14 @@ private:
         if (!activeGeneration) return;
         if (completion.result.ok) filterHiddenHomeItems(completion.result.value);
 
-        HomeSecondaryCompletionEffects effects = HomeCompletionController::apply(
-            completion, activeGeneration, screen_ == Screen::Home, home_, homeState_);
+        HomeSecondaryCompletionEffects effects =
+            HomeCompletionController::apply(completion, activeGeneration, screen_ == Screen::Home, home_, homeState_);
         if (effects.updateVisibleError) error_ = std::move(effects.visibleError);
         if (!completion.result.ok) return;
         if (effects.prefetch) prefetchHomeWindow(effects.prefetch->row, effects.prefetch->selection);
 
-        const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now() - completion.startedAt)
+        const auto fullMs = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                                  completion.startedAt)
                                 .count();
         __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms",
                             static_cast<long long>(fullMs));
@@ -3756,15 +3535,13 @@ private:
                                     diagnostic.count);
                 break;
             case PlayerCompletionDiagnosticKind::MediaSegmentsUnavailable:
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s",
-                                    diagnostic.error.c_str());
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Media segments unavailable: %s", diagnostic.error.c_str());
                 break;
             case PlayerCompletionDiagnosticKind::MediaSegmentsLoaded:
                 __android_log_print(ANDROID_LOG_INFO, kTag, "Loaded %zu media segments", diagnostic.count);
                 break;
             case PlayerCompletionDiagnosticKind::NextEpisodeUnavailable:
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s",
-                                    diagnostic.error.c_str());
+                __android_log_print(ANDROID_LOG_WARN, kTag, "Next episode lookup failed: %s", diagnostic.error.c_str());
                 break;
             }
         }
@@ -3790,9 +3567,7 @@ private:
         trickplayState_.applyDecoded(std::move(completion.decoded));
     }
 
-    void applyAsyncCompletion(ArtworkLoadCompletion& completion) {
-        artwork_.applyCompletion(std::move(completion));
-    }
+    void applyAsyncCompletion(ArtworkLoadCompletion& completion) { artwork_.applyCompletion(std::move(completion)); }
 
     void applyAsyncCompletion(MediaSegmentsCompletion& completion) {
         applyPlayerCompletionEffects(
@@ -3849,18 +3624,18 @@ private:
     }
 
     void applyAsyncCompletion(QueuedPlaybackCompletion& completion) {
-        const bool activeQueueContext =
-            screen_ == completion.originScreen && queueState_.currentIndex() == completion.previousQueueIndex &&
-            queueState_.itemMatches(completion.index, completion.item.id);
+        const bool activeQueueContext = screen_ == completion.originScreen &&
+                                        queueState_.currentIndex() == completion.previousQueueIndex &&
+                                        queueState_.itemMatches(completion.index, completion.item.id);
         applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
             completion, requestEpochs_.playback.active(completion.generation), activeQueueContext,
             screen_ == Screen::Player, queueState_, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(PlayerItemPlaybackCompletion& completion) {
-        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player,
-            playbackCoordinator_));
+        applyPlaybackCompletionEffects(
+            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
+                                                screen_ == Screen::Player, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(AutoplayPlaybackCompletion& completion) {
@@ -3869,29 +3644,27 @@ private:
     }
 
     void applyAsyncCompletion(StreamRestartCompletion& completion) {
-        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player,
-            playbackCoordinator_));
+        applyPlaybackCompletionEffects(
+            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
+                                                screen_ == Screen::Player, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(FallbackPlaybackCompletion& completion) {
-        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
-            completion, requestEpochs_.playback.active(completion.generation), screen_ == Screen::Player,
-            playbackCoordinator_));
+        applyPlaybackCompletionEffects(
+            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
+                                                screen_ == Screen::Player, playbackCoordinator_));
     }
 
     void applyAsyncCompletion(BeginPlaybackCompletion& completion) {
         const bool activeDetailsSelection = screen_ == Screen::Details && detail_.id == completion.selected.id;
-        applyPlaybackCompletionEffects(
-            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
-                                                activeDetailsSelection, queueState_));
+        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection, queueState_));
     }
 
     void applyAsyncCompletion(SeriesPlayAllCompletion& completion) {
         const bool activeDetailsSelection = screen_ == Screen::Details && detail_.id == completion.series.id;
-        applyPlaybackCompletionEffects(
-            PlaybackCompletionController::apply(completion, requestEpochs_.playback.active(completion.generation),
-                                                activeDetailsSelection, queueState_));
+        applyPlaybackCompletionEffects(PlaybackCompletionController::apply(
+            completion, requestEpochs_.playback.active(completion.generation), activeDetailsSelection, queueState_));
     }
 
     void applyAsyncCompletion(SeerrConnectCompletion& completion) {
@@ -3903,10 +3676,9 @@ private:
         if (action == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed) {
             if (completion.announce) {
                 notice_.clear();
-                error_ =
-                    (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin ? "JELLYFIN QUICK CONNECT: "
-                                                                                     : "SEERR QUICK CONNECT: ") +
-                    result.error;
+                error_ = (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin ? "JELLYFIN QUICK CONNECT: "
+                                                                                          : "SEERR QUICK CONNECT: ") +
+                         result.error;
             } else if (result.failedStage == SeerrQuickConnectStage::AuthorizeJellyfin) {
                 __android_log_print(ANDROID_LOG_WARN, kTag, "Silent Jellyfin Quick Connect authorization failed: %s",
                                     result.error.c_str());
@@ -4398,12 +4170,12 @@ private:
     }
 
     void renderEmptyState(const std::string& title, const std::string& message) {
-        renderScreenEmptyState(
-            renderer_, title, message, screenChromeStyle(),
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                   float horizontalPadding, float verticalPadding) {
-                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
-            });
+        renderScreenEmptyState(renderer_, title, message, screenChromeStyle(),
+                               [this](float x, float y, float width, float height, float scale, std::string_view value,
+                                      Color color, float horizontalPadding, float verticalPadding) {
+                                   drawCenteredSingleLineFit(x, y, width, height, scale, value, color,
+                                                             horizontalPadding, verticalPadding);
+                               });
     }
 
     void renderLogin() {
@@ -4439,8 +4211,7 @@ private:
             },
             [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
                    float horizontalPadding, float verticalPadding) {
-                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                          verticalPadding);
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
             },
             [this](float x, float y, float width, float height) { drawModalSurface(x, y, width, height); },
             [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
@@ -4482,8 +4253,7 @@ private:
             },
             [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
                    float horizontalPadding, float verticalPadding) {
-                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                          verticalPadding);
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
             },
             [this](int index) { return sessionRegistry_.at(static_cast<size_t>(index)); },
             [this](const auto& saved, float x, float y, float size) { return drawProfileArtwork(saved, x, y, size); },
@@ -4648,9 +4418,7 @@ private:
                 return fitTextLines(value, scale, maxWidth, maxLines);
             },
             [this](float x, float y, const std::string& label, bool selected, float scale, float height,
-                   float maxWidth) {
-                return drawChip(x, y, label, selected, scale, height, maxWidth);
-            },
+                   float maxWidth) { return drawChip(x, y, label, selected, scale, height, maxWidth); },
             [](const JellyfinItem& item) { return isSeerrItem(item); },
             [](const JellyfinItem& item) { return episodeNumberLabel(item); });
     }
@@ -4704,9 +4472,7 @@ private:
                                  : drawArtwork(cover, imageX, imageY, imageWidth, imageHeight, 1.0f, radius);
             },
             [this](const JellyfinItem& source, float imageX, float imageY, float imageWidth, float imageHeight,
-                   float radius) {
-                drawArtworkPlaceholder(source, imageX, imageY, imageWidth, imageHeight, radius);
-            },
+                   float radius) { drawArtworkPlaceholder(source, imageX, imageY, imageWidth, imageHeight, radius); },
             [this](float imageX, float imageY, float imageWidth, float imageHeight, Color color, float radius) {
                 drawFocusHalo(imageX, imageY, imageWidth, imageHeight, color, radius);
             },
@@ -4861,229 +4627,14 @@ private:
             },
             [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
                    float horizontalPadding, float verticalPadding) {
-                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                          verticalPadding);
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
             },
             [this](const std::string& title, const std::string& message) { renderEmptyState(title, message); });
     }
 
     void renderPlayer() {
-        const PlayerStatus status = player_.status();
-        std::string videoError;
-        if (videoSurface_.ready()) {
-            videoSurface_.update(videoError);
-            renderPlayerVideo(
-                renderer_,
-                PlayerVideoRenderState{
-                    .texture = videoSurface_.texture(),
-                    .sourceWidth = player_.videoWidth(),
-                    .sourceHeight = player_.videoHeight(),
-                    .zoomMode = playbackCoordinator_.session().zoomMode(),
-                    .logicalWidth = Renderer::logicalWidth(),
-                    .logicalHeight = Renderer::logicalHeight(),
-                },
-                videoSurface_.transform());
-        }
-
-        const auto now = std::chrono::steady_clock::now();
-        const int remainingMs = playerScreenState_.durationMs() > 0
-                                    ? std::max(0, playerScreenState_.durationMs() - playerScreenState_.positionMs())
-                                    : 0;
-        const auto skipSegment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs());
-        const bool userOverlayVisible = playerScreenState_.overlayVisible(now);
-        const bool showNextUp = shouldShowNextUpCard(playbackCoordinator_.continuation().nextItem().has_value(), remainingMs,
-                                                     userOverlayVisible, skipSegment != nullptr);
-        const bool showOverlay = status == PlayerStatus::Preparing || status == PlayerStatus::Paused ||
-                                 playbackCoordinator_.transitionLoading() || playbackCoordinator_.fallbackResolving() ||
-                                 userOverlayVisible;
-        if (showOverlay) {
-            renderer_.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f, Color{0.0f, 0.0f, 0.0f, 0.74f},
-                                       Color{0.0f, 0.0f, 0.0f, 0.0f});
-            renderer_.verticalGradient(0.0f, 650.0f, 1920.0f, 430.0f, Color{0.0f, 0.0f, 0.0f, 0.0f},
-                                       Color{0.0f, 0.0f, 0.0f, 0.90f});
-        }
-        std::string subtitleText = player_.subtitleText();
-        if (const SubtitleCue* cue = playbackCoordinator_.activeSubtitleCue(playerScreenState_.positionMs()))
-            subtitleText = cue->text;
-        if (!subtitleText.empty()) {
-            const float textScale = subtitleTextScale(settings_.subtitleSize);
-            renderPlayerSubtitle(
-                renderer_,
-                PlayerSubtitleRenderState{
-                    .text = subtitleText,
-                    .boxMaxWidth = subtitleBoxMaxWidth(skipSegment != nullptr),
-                    .textScale = textScale,
-                    .lineHeight = 11.0f * textScale * uiTextScale(settings_.uiTextSize),
-                    .logicalWidth = Renderer::logicalWidth(),
-                    .bottomY = subtitleBottomY(showOverlay, playerScreenState_.controlsActive(now),
-                                               settings_.subtitlePosition, skipSegment != nullptr),
-                    .showBackground = settings_.subtitleBackground,
-                },
-                PlayerSubtitleRenderStyle<Color>{
-                    .cornerRadius = material_tv::cornerMedium,
-                    .text = kText,
-                    .background = Color{0.0f, 0.0f, 0.0f, 0.80f},
-                    .outline = Color{0.0f, 0.0f, 0.0f, 0.92f},
-                },
-                [this](std::string value, float scale, float maxWidth, int maxLines) {
-                    return fitTextLines(value, scale, maxWidth, maxLines);
-                });
-        }
-        if (skipSegment) {
-            const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
-            renderPlayerSkipButton(
-                renderer_,
-                PlayerSkipButtonRenderState{
-                    .label = skipLabel,
-                    .y = skipButtonY(showOverlay),
-                },
-                PlayerSkipButtonRenderStyle<Color>{.text = kText},
-                [this](float x, float y, float width, float height, bool focused, bool primary) {
-                    return drawButtonSurface(x, y, width, height, focused, primary);
-                },
-                [this](std::string_view value, float scale, float maxWidth, int maxLines) {
-                    return fitTextLines(value, scale, maxWidth, maxLines);
-                });
-        }
-        if (playerScreenState_.seekFeedbackVisible(now)) {
-            renderPlayerSeekFeedback(
-                renderer_,
-                PlayerSeekFeedbackRenderState{
-                    .seconds = playerScreenState_.seekFeedbackSeconds(),
-                    .fade = playerScreenState_.seekFeedbackAlpha(now),
-                },
-                [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
-        }
-        if (!showOverlay) return;
-
-        if (showNextUp && playbackCoordinator_.continuation().nextItem()) {
-            renderPlayerNextUp(
-                PlayerNextUpRenderState{
-                    .item = *playbackCoordinator_.continuation().nextItem(),
-                    .remainingMs = remainingMs,
-                },
-                PlayerNextUpRenderStyle<Color>{
-                    .panelCornerRadius = material_tv::cornerMedium,
-                    .artworkCornerRadius = material_tv::cornerExtraSmall,
-                    .focus = kFocus,
-                    .text = kText,
-                    .muted = kMuted,
-                },
-                [this](float x, float y, float width, float height, float radius) {
-                    drawModalSurface(x, y, width, height, radius);
-                },
-                [this](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
-                    return drawHomeArtwork(item, x, y, width, height, radius);
-                },
-                [this](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
-                    drawArtworkPlaceholder(item, x, y, width, height, radius);
-                },
-                [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
-                    drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
-                },
-                [](const JellyfinItem& item) { return episodeLabel(item); });
-        }
-
-        const std::string heading = playbackCoordinator_.session().activeItem().seriesName.empty()
-                                        ? playbackCoordinator_.session().activeItem().name
-                                        : playbackCoordinator_.session().activeItem().seriesName;
-        const std::string playerEpisodeNumber = episodeNumberLabel(playbackCoordinator_.session().activeItem());
-        const std::string secondary =
-            playbackCoordinator_.session().activeItem().seriesName.empty()
-                ? episodeLabel(playbackCoordinator_.session().activeItem())
-                : playerEpisodeNumber + (playbackCoordinator_.session().activeItem().name.empty()
-                                             ? ""
-                                             : "  |  " + playbackCoordinator_.session().activeItem().name);
-        renderPlayerHeader(
-            renderer_,
-            PlayerHeaderRenderState{
-                .heading = heading,
-                .secondary = secondary,
-                .showNextUp = showNextUp,
-                .headlineScale = material_tv::type::headline,
-                .secondaryY = 42.0f + 11.0f * material_tv::type::headline * uiTextScale(settings_.uiTextSize) + 8.0f,
-            },
-            PlayerHeaderRenderStyle<Color>{
-                .text = kText,
-                .muted = kMuted,
-            },
-            [this](std::string_view value, float scale, float maxWidth, int maxLines) {
-                return fitTextLines(value, scale, maxWidth, maxLines);
-            });
-
-        const int position = playerScreenState_.positionMs();
-        const int duration = playerScreenState_.durationMs();
-        std::string clockText;
-        std::string finishLabel;
-        if (settings_.showClock) {
-            const std::time_t wallNow = std::time(nullptr);
-            clockText = formatLocalClock(wallNow, settings_.clock24Hour);
-            if (remainingMs > 0 && status == PlayerStatus::Playing && !skipSegment) {
-                const std::time_t finishAt = wallNow + static_cast<std::time_t>((remainingMs + 999) / 1000);
-                finishLabel = "Ends " + formatLocalClock(finishAt, settings_.clock24Hour);
-            }
-        }
-        const std::string state =
-            playbackCoordinator_.fallbackResolving()
-                ? "Retrying playback"
-                : (playbackCoordinator_.transitionLoading()
-                       ? (playbackCoordinator_.session().activeItem().id.empty() ? "Loading episode" : "Switching track")
-                       : (status == PlayerStatus::Preparing ? "Loading" : ""));
-        renderPlayerStatus(
-            renderer_,
-            PlayerStatusRenderState{
-                .clockText = clockText,
-                .finishText = finishLabel,
-                .statusText = state,
-            },
-            PlayerStatusRenderStyle<Color>{
-                .muted = kMuted,
-                .secondary = kSecondaryText,
-            },
-            [this](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
-                drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
-            });
-
-        const std::string positionText = formatPlaybackTime(position);
-        const std::string durationText = formatPlaybackTime(duration);
-        renderPlayerProgress(
-            renderer_,
-            PlayerProgressRenderState{
-                .positionMs = position,
-                .durationMs = duration,
-                .skipButtonVisible = skipSegment != nullptr,
-                .positionText = positionText,
-                .durationText = durationText,
-            },
-            PlayerProgressRenderStyle<Color>{
-                .text = kText,
-                .track = kTrack,
-                .focus = kFocus,
-            },
-            [this](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
-                drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
-            });
-        drawTrickplayPreview();
-
-        if (playerScreenState_.controlsActive(now)) {
-            renderPlayerControls(
-                renderer_,
-                PlayerControlsRenderState{
-                    .paused = status == PlayerStatus::Paused,
-                    .selection = playerScreenState_.controlSelection(),
-                    .logicalWidth = Renderer::logicalWidth(),
-                    .audioTrackLabel = playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Audio),
-                    .subtitleTrackLabel = playbackCoordinator_.trackLabel(PlaybackTrackLabelKind::Subtitle),
-                },
-                PlayerControlsRenderStyle<Color>{.text = kText},
-                [this](float x, float y, float width, float height, bool focused, bool primary) {
-                    return drawButtonSurface(x, y, width, height, focused, primary);
-                },
-                [this](float scale, std::string_view value, float width, float height) {
-                    return fittedSingleLineScale(scale, value, width, height);
-                },
-                [](std::string_view value) { return materialLabel(value); });
-        }
+        renderPlayerPresentation(renderer_, player_, videoSurface_, playbackCoordinator_, playerScreenState_,
+                                 trickplayState_, settings_, session_, artwork_, lastInteraction_);
     }
 
     void renderQueueOverlay() {
@@ -5150,8 +4701,7 @@ private:
             },
             [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
                    float horizontalPadding, float verticalPadding) {
-                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                          verticalPadding);
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
             });
     }
 
@@ -5302,8 +4852,7 @@ private:
             },
             [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
                    float horizontalPadding, float verticalPadding) {
-                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                          verticalPadding);
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
             },
             [this](std::string_view value, float scale, float width, int lines) {
                 return fitTextLines(value, scale, width, lines);
@@ -5388,8 +4937,7 @@ private:
             },
             [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
                    float horizontalPadding, float verticalPadding) {
-                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                          verticalPadding);
+                drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
             });
     }
 
@@ -5504,27 +5052,26 @@ private:
         const bool errorVisible =
             !presentedError_.empty() && errorUntil_ != std::chrono::steady_clock::time_point{} && now < errorUntil_;
 
-        renderStatusOverlay(
-            renderer_,
-            StatusOverlayRenderState{
-                .loading = loading_ || homeLoading_ || mutationLoading_,
-                .playerScreen = screen_ == Screen::Player,
-                .noticeVisible = noticeVisible,
-                .notice = notice_,
-                .errorVisible = errorVisible,
-                .error = presentedError_,
-            },
-            StatusOverlayRenderStyle<Color>{
-                .cornerMedium = material_tv::cornerMedium,
-                .panelElevated = kPanelElevated,
-                .focus = kFocus,
-                .error = kError,
-                .errorOutline = Color{kError.r, kError.g, kError.b, 0.55f},
-                .text = kText,
-            },
-            [this](std::string_view value, float scale, float width, int lines) {
-                return fitTextLines(value, scale, width, lines);
-            });
+        renderStatusOverlay(renderer_,
+                            StatusOverlayRenderState{
+                                .loading = loading_ || homeLoading_ || mutationLoading_,
+                                .playerScreen = screen_ == Screen::Player,
+                                .noticeVisible = noticeVisible,
+                                .notice = notice_,
+                                .errorVisible = errorVisible,
+                                .error = presentedError_,
+                            },
+                            StatusOverlayRenderStyle<Color>{
+                                .cornerMedium = material_tv::cornerMedium,
+                                .panelElevated = kPanelElevated,
+                                .focus = kFocus,
+                                .error = kError,
+                                .errorOutline = Color{kError.r, kError.g, kError.b, 0.55f},
+                                .text = kText,
+                            },
+                            [this](std::string_view value, float scale, float width, int lines) {
+                                return fitTextLines(value, scale, width, lines);
+                            });
     }
 
     void loadSession() {
@@ -5587,7 +5134,8 @@ private:
     HomeAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> homeAsync_;
     ExternalPlaybackExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
         externalPlaybackAsync_;
-    PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> playbackTelemetryAsync_;
+    PlaybackTelemetryExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
+        playbackTelemetryAsync_;
     PlaybackContinuationExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>
         playbackContinuationAsync_;
     PlaybackResolutionExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>, RequestEpoch>
