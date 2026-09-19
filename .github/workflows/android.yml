@@ -132,6 +132,10 @@ jobs:
       - name: Build debug, benchmark and release artifacts
         run: ./gradlew --no-daemon test assembleDebug assembleBenchmark assembleRelease bundleRelease
 
+      - name: Build architecture release APKs
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./gradlew --no-daemon -PSLOPPATV_SPLIT_APKS=true assembleRelease
+
       - name: Run C++ quality gates
         continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         run: ./tools/cpp_quality.py check
@@ -274,8 +278,8 @@ jobs:
 
   create-github-release:
     name: Create GitHub release
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.publish-play-store.outputs.published == 'true'
-    needs: [build, publish-play-store]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -304,14 +308,17 @@ jobs:
           tag_name="v${version_name}+${version_code}"
           release_name="sloppaTV ${version_name} (build ${version_code})"
 
-          release_apk="$(find artifacts/apks -type f -path '*/apk/release/*.apk' -print -quit)"
-          release_aab="$(find artifacts/apks -type f -path '*/bundle/release/*.aab' -print -quit)"
-          test -n "$release_apk"
-          test -n "$release_aab"
+          armv7_apk="$(find artifacts/apks -type f -name '*armeabi-v7a-release.apk' -print -quit)"
+          arm64_apk="$(find artifacts/apks -type f -name '*arm64-v8a-release.apk' -print -quit)"
+          x86_64_apk="$(find artifacts/apks -type f -name '*x86_64-release.apk' -print -quit)"
+          test -n "$armv7_apk"
+          test -n "$arm64_apk"
+          test -n "$x86_64_apk"
 
           mkdir -p release-assets
-          cp "$release_apk" "release-assets/sloppaTV-${version_name}.apk"
-          cp "$release_aab" "release-assets/sloppaTV-${version_name}.aab"
+          cp "$armv7_apk" "release-assets/sloppaTV-${version_name}-armeabi-v7a.apk"
+          cp "$arm64_apk" "release-assets/sloppaTV-${version_name}-arm64-v8a.apk"
+          cp "$x86_64_apk" "release-assets/sloppaTV-${version_name}-x86_64.apk"
 
           echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
           echo "release_name=$release_name" >> "$GITHUB_OUTPUT"
@@ -323,11 +330,7 @@ jobs:
           name: ${{ steps.release.outputs.release_name }}
           target_commitish: ${{ github.sha }}
           body: |
-            Automated Android release from main.
-
-            This is the same tested release build published to Google Play.
-          files: |
-            release-assets/*.apk
-            release-assets/*.aab
+            Automated Android release from main with per-architecture APKs.
+          files: release-assets/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -6,6 +6,10 @@ plugins {
 
 val sloppaVersionCode = providers.gradleProperty("SLOPPATV_VERSION_CODE").get().toInt()
 val sloppaVersionName = providers.gradleProperty("SLOPPATV_VERSION_NAME").get()
+val splitReleaseApks = providers.gradleProperty("SLOPPATV_SPLIT_APKS")
+    .orNull
+    ?.toBooleanStrictOrNull()
+    ?: false
 
 val releaseSigningPropertiesFile = rootProject.file("key.properties")
 val releaseSigningProperties = Properties().apply {
@@ -44,7 +48,18 @@ android {
             }
         }
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+            if (!splitReleaseApks) {
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+            }
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = splitReleaseApks
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
+            isUniversalApk = false
         }
     }
 
