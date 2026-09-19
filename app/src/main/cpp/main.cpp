@@ -1409,19 +1409,8 @@ private:
             detailsFlow_.handleEpisodes(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
     }
 
-    void cycleAudioTrack() {
-        playbackRuntime_.cycleAudioTrack(playbackStreamAsync_, playbackTelemetryAsync_, screen_ == Screen::Player);
-    }
-
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
         if (!playbackRuntime_.loadSubtitle(subtitleLoadAsync_, subtitle, deliveryUrl))
-            showNotice("SUBTITLES COULD NOT BE STARTED");
-    }
-
-    void cycleSubtitleTrack() {
-        if (playbackRuntime_.cycleSubtitleTrack(subtitleLoadAsync_, playbackStreamAsync_, playbackTelemetryAsync_,
-                                                screen_ == Screen::Player) ==
-            PlaybackRuntimeNotice::SubtitleStartFailed)
             showNotice("SUBTITLES COULD NOT BE STARTED");
     }
 
@@ -1474,117 +1463,50 @@ private:
         requestSeerrMediaAsync(selected.item, &selected.target, true);
     }
 
-    void handlePlayerKey(int32_t key, int repeatCount = 0) {
-        PlayerScreenInput input = PlayerScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = PlayerScreenInput::Back;
-        else if (key == AKEYCODE_DPAD_UP)
-            input = PlayerScreenInput::Up;
-        else if (key == AKEYCODE_DPAD_DOWN)
-            input = PlayerScreenInput::Down;
-        else if (key == AKEYCODE_DPAD_LEFT)
-            input = PlayerScreenInput::Left;
-        else if (key == AKEYCODE_DPAD_RIGHT)
-            input = PlayerScreenInput::Right;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = PlayerScreenInput::Activate;
-        else if (key == AKEYCODE_MEDIA_PLAY_PAUSE)
-            input = PlayerScreenInput::PlayPause;
-        else if (key == AKEYCODE_MEDIA_PREVIOUS)
-            input = PlayerScreenInput::Previous;
-        else if (key == AKEYCODE_MEDIA_NEXT)
-            input = PlayerScreenInput::Next;
-        else if (key == AKEYCODE_MEDIA_REWIND)
-            input = PlayerScreenInput::Rewind;
-        else if (key == AKEYCODE_MEDIA_FAST_FORWARD)
-            input = PlayerScreenInput::FastForward;
-
-        const auto now = std::chrono::steady_clock::now();
-        const PlayerScreenCommand command = playerScreenState_.handleInput(input, now);
-        switch (command.type) {
-        case PlayerScreenCommandType::None:
+    void applyPlaybackHostEffect(PlaybackHostEffect effect) {
+        switch (effect.type) {
+        case PlaybackHostEffectType::None:
             return;
-        case PlayerScreenCommandType::StopPlayback:
-            stopPlayback();
+        case PlaybackHostEffectType::StopPlayback:
+            stopPlayback(effect.completed);
+            if (effect.resetAutoplayChain) playbackCoordinator_.resetAutoplayChain();
             return;
-        case PlayerScreenCommandType::OpenQueue:
+        case PlaybackHostEffectType::OpenQueue:
             openQueueOverlay();
             return;
-        case PlayerScreenCommandType::PreviousEpisode:
-            playAdjacentEpisode(-1);
+        case PlaybackHostEffectType::PlayAdjacentEpisode:
+            playAdjacentEpisode(effect.episodeDirection);
             return;
-        case PlayerScreenCommandType::NextEpisode:
-            playAdjacentEpisode(1);
-            return;
-        case PlayerScreenCommandType::ActivatePlayback:
-            if (playbackRuntime_.skipActiveMediaSegment(playbackTelemetryAsync_, screen_ == Screen::Player)) return;
-            [[fallthrough]];
-        case PlayerScreenCommandType::TogglePause:
-            player_.togglePause();
-            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
-            return;
-        case PlayerScreenCommandType::CycleAudioTrack:
-            cycleAudioTrack();
-            return;
-        case PlayerScreenCommandType::CycleSubtitleTrack:
-            cycleSubtitleTrack();
-            return;
-        case PlayerScreenCommandType::SeekBackward:
-        case PlayerScreenCommandType::SeekForward: {
-            const bool forward = command.type == PlayerScreenCommandType::SeekForward;
-            const int64_t deltaMs =
-                heldSeekDeltaMs(forward ? settings_.seekForwardSeconds : settings_.seekBackSeconds, repeatCount);
-            const int targetMs = relativeSeekPositionMs(playerScreenState_.positionMs(), forward ? deltaMs : -deltaMs,
-                                                        playerScreenState_.durationMs());
-            playerScreenState_.showSeekFeedback(static_cast<int>((forward ? deltaMs : -deltaMs) / 1000), now);
-            requestTrickplayPreview(targetMs);
-            playbackRuntime_.seekTo(targetMs);
+        case PlaybackHostEffectType::SeekWithTrickplay:
+            requestTrickplayPreview(effect.positionMs);
+            playbackRuntime_.seekTo(effect.positionMs);
             playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
             return;
+        case PlaybackHostEffectType::PlayQueueIndex:
+            playQueuedIndexAsync(effect.queueIndex, effect.restartCurrent, effect.replacingCompleted);
+            return;
+        case PlaybackHostEffectType::QueueAutoplayNext:
+            if (effect.item) queueAutoplayNext(*effect.item);
+            return;
+        case PlaybackHostEffectType::ShowStillWatching:
+            if (effect.item) showStillWatching(*effect.item);
+            return;
+        case PlaybackHostEffectType::SubtitleStartFailed:
+            showNotice("SUBTITLES COULD NOT BE STARTED");
+            return;
         }
-        }
+    }
+
+    void handlePlayerKey(int32_t key, int repeatCount = 0) {
+        applyPlaybackHostEffect(playbackRuntime_.handlePlayerInput(playerScreenInputForAndroidKey(key), repeatCount,
+                                                                   subtitleLoadAsync_, playbackStreamAsync_,
+                                                                   playbackTelemetryAsync_, screen_ == Screen::Player));
     }
 
     void handleMediaSessionCommand(const MediaSessionCommand& command) {
         if (screen_ != Screen::Player) return;
-        switch (command.type) {
-        case MediaSessionCommandType::Play:
-            player_.play();
-            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
-            break;
-        case MediaSessionCommandType::Pause:
-            player_.pause();
-            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, true);
-            break;
-        case MediaSessionCommandType::Stop:
-            stopPlayback();
-            break;
-        case MediaSessionCommandType::SeekTo: {
-            const int64_t maxPosition = playerScreenState_.durationMs() > 0
-                                            ? playerScreenState_.durationMs()
-                                            : static_cast<int64_t>(std::numeric_limits<int>::max());
-            const int positionMs = static_cast<int>(std::clamp<int64_t>(command.positionMs, 0, maxPosition));
-            requestTrickplayPreview(positionMs);
-            playbackRuntime_.seekTo(positionMs);
-            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
-            break;
-        }
-        case MediaSessionCommandType::Next:
-            if (queueState_.currentIndex() >= 0) {
-                const int next = queueState_.nextIndex(true);
-                if (next >= 0) playQueuedIndexAsync(next);
-            }
-            break;
-        case MediaSessionCommandType::Previous:
-            if (queueState_.currentIndex() > 0) {
-                playQueuedIndexAsync(queueState_.currentIndex() - 1);
-            } else {
-                requestTrickplayPreview(0);
-                playbackRuntime_.seekTo(0);
-                playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
-            }
-            break;
-        }
+        applyPlaybackHostEffect(
+            playbackRuntime_.handleMediaSessionCommand(command, queueState_, playbackTelemetryAsync_));
     }
 
     void showNotice(std::string message, std::chrono::seconds duration = 6s, bool persistent = false) {
@@ -2611,120 +2533,9 @@ private:
 
     void tickActivePlayer() {
         if (screen_ != Screen::Player) return;
-        PlayerStatus status = player_.status();
-        if (status == PlayerStatus::Preparing) {
-            mediaSession_.updateState(MediaSessionState::Buffering, playerScreenState_.positionMs());
-            const auto now = std::chrono::steady_clock::now();
-            const PlaybackPreparePlan preparePlan = playbackCoordinator_.preparePlan(now);
-            if (preparePlan.timedOut) {
-                std::scoped_lock lock(stateMutex_);
-                __android_log_print(ANDROID_LOG_WARN, kTag, "Playback prepare timed out after %lld ms (%s)",
-                                    static_cast<long long>(preparePlan.elapsedMs),
-                                    preparePlan.transcoding ? "transcode" : "direct");
-                if (preparePlan.retryWithTranscodeFallback &&
-                    playbackRuntime_.retryWithFallback(playbackStreamAsync_, renderer_.ready())) {
-                    error_.clear();
-                    return;
-                }
-                error_ = "PLAYBACK TOOK TOO LONG TO START";
-                stopPlayback();
-                return;
-            }
-        } else {
-            playbackCoordinator_.finishPreparing();
-        }
-        if (playbackCoordinator_.consumePauseAfterRestart(status == PlayerStatus::Playing)) {
-            player_.togglePause();
-            status = player_.status();
-        }
-        if (status == PlayerStatus::Error) {
-            std::scoped_lock lock(stateMutex_);
-            const std::string playerError = player_.error();
-            if (playbackRuntime_.retryWithoutSubtitle(playbackStreamAsync_)) {
-                error_.clear();
-                return;
-            }
-            if (playbackRuntime_.retryWithFallback(playbackStreamAsync_, renderer_.ready())) {
-                error_.clear();
-                return;
-            }
-            error_ = playerError;
-            stopPlayback();
-            return;
-        }
-        const bool playbackEnded = status == PlayerStatus::Ended;
-        if (!playbackEnded && status != PlayerStatus::Playing && status != PlayerStatus::Paused) return;
-        if (playbackEnded && playerScreenState_.durationMs() > 0) {
-            playerScreenState_.setPositionMs(playerScreenState_.durationMs());
-        }
-
-        if (!playbackEnded && playbackCoordinator_.activeTargetUsesDirectPlay()) {
-            const int pendingSeekTargetMs = playerScreenState_.pendingSeekTargetMs();
-            const int recoveryTargetMs =
-                pendingSeekTargetMs >= 0 ? pendingSeekTargetMs : playerScreenState_.recentSeekTargetMs();
-            if (recoveryTargetMs >= 0) {
-                const auto now = std::chrono::steady_clock::now();
-                const int observedPositionMs = player_.positionMs();
-                const bool mediaSeekable = player_.seekable();
-                const bool seekFailureMatured =
-                    pendingSeekTargetMs >= 0 ? playerScreenState_.pendingSeekAppearsFailed(observedPositionMs, now)
-                                             : playerScreenState_.recentSeekAppearsFailed(observedPositionMs, now);
-                const bool failedSeek = shouldFallbackAfterUnseekableSeek(mediaSeekable, observedPositionMs,
-                                                                          recoveryTargetMs, seekFailureMatured);
-                if (failedSeek) {
-                    std::scoped_lock lock(stateMutex_);
-                    playerScreenState_.setPositionMs(recoveryTargetMs);
-                    __android_log_print(
-                        ANDROID_LOG_WARN, kTag,
-                        "Direct-play seek failed target=%d observed=%d seekable=%d; using Jellyfin stream fallback",
-                        recoveryTargetMs, observedPositionMs, mediaSeekable);
-                    if (playbackRuntime_.retryWithFallback(playbackStreamAsync_, renderer_.ready(), true)) {
-                        error_.clear();
-                        return;
-                    }
-                }
-            }
-        }
-
-        const auto now = std::chrono::steady_clock::now();
-        const PlaybackTickPlan plan = playbackCoordinator_.consumeTickPlan(
-            playbackEnded, status == PlayerStatus::Playing, playerScreenState_.positionMs(), now);
-        if (plan.refreshTelemetry) {
-            playbackRuntime_.refreshTelemetry();
-            mediaSession_.updateState(status == PlayerStatus::Playing ? MediaSessionState::Playing
-                                                                      : MediaSessionState::Paused,
-                                      playerScreenState_.positionMs());
-        }
-        if (plan.requestMediaSegments) playbackRuntime_.requestMediaSegments(playbackContinuationAsync_);
-        if (plan.reportPlaybackStart) {
-            const PlaybackStartContext start =
-                playbackCoordinator_.playbackStartContext(playerScreenState_.positionMs());
-            playbackTelemetryAsync_.reportStart(session_, start.item, start.target, start.ticks);
-        }
-        if (plan.reportProgress)
-            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
-        if (plan.requestNextEpisode) playbackRuntime_.requestNextEpisode(playbackContinuationAsync_, queueState_);
-
-        const PlaybackContinuationPlan continuationPlan = playbackCoordinator_.continuationPlan(
-            playbackEnded, playerScreenState_.positionMs(), playerScreenState_.durationMs(), queueState_,
-            settings_.autoplayNext, settings_.stillWatchingAfter);
-        switch (continuationPlan.action) {
-        case PlaybackContinuationAction::None:
-            return;
-        case PlaybackContinuationAction::PlayQueueIndex:
-            playQueuedIndexAsync(continuationPlan.queueIndex, continuationPlan.repeatCurrentQueueItem, true);
-            return;
-        case PlaybackContinuationAction::AutoplayNext:
-            if (continuationPlan.nextItem) queueAutoplayNext(*continuationPlan.nextItem);
-            return;
-        case PlaybackContinuationAction::ShowStillWatching:
-            if (continuationPlan.nextItem) showStillWatching(*continuationPlan.nextItem);
-            return;
-        case PlaybackContinuationAction::Stop:
-            stopPlayback(true);
-            if (continuationPlan.resetAutoplayChain) playbackCoordinator_.resetAutoplayChain();
-            return;
-        }
+        applyPlaybackHostEffect(playbackRuntime_.tickActivePlayer(playbackStreamAsync_, playbackTelemetryAsync_,
+                                                                  playbackContinuationAsync_, mediaSession_,
+                                                                  queueState_, renderer_.ready(), stateMutex_));
     }
 
     void applyAsyncCompletion(SystemTextInputEvent& event) {

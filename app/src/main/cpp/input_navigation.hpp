@@ -3,6 +3,7 @@
 #include "account_screen.hpp"
 #include "app_screen.hpp"
 #include "details_navigation_controller.hpp"
+#include "player_screen.hpp"
 #include "search_screen.hpp"
 #include "virtual_keyboard.hpp"
 #include "screen_navigation_key.hpp"
@@ -24,6 +25,21 @@ inline ScreenNavigationKey screenNavigationKeyForAndroidKey(int32_t key) {
     if (key == AKEYCODE_DPAD_CENTER) return ScreenNavigationKey::Activate;
     if (key == AKEYCODE_ENTER) return ScreenNavigationKey::Submit;
     return ScreenNavigationKey::None;
+}
+
+inline PlayerScreenInput playerScreenInputForAndroidKey(int32_t key) {
+    if (key == AKEYCODE_BACK) return PlayerScreenInput::Back;
+    if (key == AKEYCODE_DPAD_UP) return PlayerScreenInput::Up;
+    if (key == AKEYCODE_DPAD_DOWN) return PlayerScreenInput::Down;
+    if (key == AKEYCODE_DPAD_LEFT) return PlayerScreenInput::Left;
+    if (key == AKEYCODE_DPAD_RIGHT) return PlayerScreenInput::Right;
+    if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) return PlayerScreenInput::Activate;
+    if (key == AKEYCODE_MEDIA_PLAY_PAUSE) return PlayerScreenInput::PlayPause;
+    if (key == AKEYCODE_MEDIA_PREVIOUS) return PlayerScreenInput::Previous;
+    if (key == AKEYCODE_MEDIA_NEXT) return PlayerScreenInput::Next;
+    if (key == AKEYCODE_MEDIA_REWIND) return PlayerScreenInput::Rewind;
+    if (key == AKEYCODE_MEDIA_FAST_FORWARD) return PlayerScreenInput::FastForward;
+    return PlayerScreenInput::None;
 }
 
 inline DetailsNavigationKey detailsNavigationKeyForAndroidKey(int32_t key) {

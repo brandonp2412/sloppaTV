@@ -3,6 +3,7 @@
 #include "app_settings.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
+#include "media_session_policy.hpp"
 #include "playback_continuation_executor.hpp"
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
@@ -19,12 +20,78 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
+#include <optional>
+#include <mutex>
+#include <limits>
 #include <string>
 #include <utility>
 
 enum class PlaybackRuntimeNotice {
     None,
     SubtitleStartFailed,
+};
+
+enum class PlaybackHostEffectType {
+    None,
+    StopPlayback,
+    OpenQueue,
+    PlayAdjacentEpisode,
+    SeekWithTrickplay,
+    PlayQueueIndex,
+    QueueAutoplayNext,
+    ShowStillWatching,
+    SubtitleStartFailed,
+};
+
+struct PlaybackHostEffect {
+    PlaybackHostEffectType type = PlaybackHostEffectType::None;
+    int positionMs = 0;
+    int queueIndex = -1;
+    int episodeDirection = 0;
+    bool restartCurrent = false;
+    bool replacingCompleted = false;
+    bool completed = false;
+    bool resetAutoplayChain = false;
+    std::optional<JellyfinItem> item;
+
+    static PlaybackHostEffect simple(PlaybackHostEffectType type) {
+        PlaybackHostEffect effect;
+        effect.type = type;
+        return effect;
+    }
+
+    static PlaybackHostEffect adjacentEpisode(int direction) {
+        PlaybackHostEffect effect = simple(PlaybackHostEffectType::PlayAdjacentEpisode);
+        effect.episodeDirection = direction;
+        return effect;
+    }
+
+    static PlaybackHostEffect seekWithTrickplay(int positionMs) {
+        PlaybackHostEffect effect = simple(PlaybackHostEffectType::SeekWithTrickplay);
+        effect.positionMs = positionMs;
+        return effect;
+    }
+
+    static PlaybackHostEffect playQueueIndex(int index, bool restartCurrent = false, bool replacingCompleted = false) {
+        PlaybackHostEffect effect = simple(PlaybackHostEffectType::PlayQueueIndex);
+        effect.queueIndex = index;
+        effect.restartCurrent = restartCurrent;
+        effect.replacingCompleted = replacingCompleted;
+        return effect;
+    }
+
+    static PlaybackHostEffect withItem(PlaybackHostEffectType type, std::optional<JellyfinItem> item) {
+        PlaybackHostEffect effect = simple(type);
+        effect.item = std::move(item);
+        return effect;
+    }
+
+    static PlaybackHostEffect stop(bool completed = false, bool resetAutoplayChain = false) {
+        PlaybackHostEffect effect = simple(PlaybackHostEffectType::StopPlayback);
+        effect.completed = completed;
+        effect.resetAutoplayChain = resetAutoplayChain;
+        return effect;
+    }
 };
 
 class PlaybackRuntimeController {
@@ -331,6 +398,200 @@ public:
         if (!continuation.requestNextEpisode(session_, plan.request->seriesId, plan.request->currentItemId)) {
             coordinator_.failNextEpisodeSubmission(std::chrono::steady_clock::now());
         }
+    }
+
+    template <typename SubtitleExecutor, typename StreamExecutor, typename TelemetryExecutor>
+    PlaybackHostEffect handlePlayerInput(PlayerScreenInput input, int repeatCount, SubtitleExecutor& subtitles,
+                                         StreamExecutor& stream, TelemetryExecutor& telemetry,
+                                         bool playerScreenActive = true) {
+        const auto now = std::chrono::steady_clock::now();
+        const PlayerScreenCommand command = screenState_.handleInput(input, now);
+        switch (command.type) {
+        case PlayerScreenCommandType::None:
+            return {};
+        case PlayerScreenCommandType::StopPlayback:
+            return PlaybackHostEffect::stop();
+        case PlayerScreenCommandType::OpenQueue:
+            return PlaybackHostEffect::simple(PlaybackHostEffectType::OpenQueue);
+        case PlayerScreenCommandType::PreviousEpisode:
+            return PlaybackHostEffect::adjacentEpisode(-1);
+        case PlayerScreenCommandType::NextEpisode:
+            return PlaybackHostEffect::adjacentEpisode(1);
+        case PlayerScreenCommandType::ActivatePlayback:
+            if (skipActiveMediaSegment(telemetry, playerScreenActive)) return {};
+            [[fallthrough]];
+        case PlayerScreenCommandType::TogglePause:
+            player_.togglePause();
+            reportProgress(telemetry, playerScreenActive, true);
+            return {};
+        case PlayerScreenCommandType::CycleAudioTrack:
+            cycleAudioTrack(stream, telemetry, playerScreenActive);
+            return {};
+        case PlayerScreenCommandType::CycleSubtitleTrack:
+            if (cycleSubtitleTrack(subtitles, stream, telemetry, playerScreenActive) ==
+                PlaybackRuntimeNotice::SubtitleStartFailed) {
+                return PlaybackHostEffect::simple(PlaybackHostEffectType::SubtitleStartFailed);
+            }
+            return {};
+        case PlayerScreenCommandType::SeekBackward:
+        case PlayerScreenCommandType::SeekForward: {
+            const bool forward = command.type == PlayerScreenCommandType::SeekForward;
+            const int64_t deltaMs =
+                heldSeekDeltaMs(forward ? settings_.seekForwardSeconds : settings_.seekBackSeconds, repeatCount);
+            const int targetMs = relativeSeekPositionMs(screenState_.positionMs(), forward ? deltaMs : -deltaMs,
+                                                        screenState_.durationMs());
+            screenState_.showSeekFeedback(static_cast<int>((forward ? deltaMs : -deltaMs) / 1000), now);
+            return PlaybackHostEffect::seekWithTrickplay(targetMs);
+        }
+        }
+        return {};
+    }
+
+    template <typename TelemetryExecutor>
+    PlaybackHostEffect handleMediaSessionCommand(const MediaSessionCommand& command, PlaybackQueueState& queue,
+                                                 TelemetryExecutor& telemetry, bool playerScreenActive = true) {
+        switch (command.type) {
+        case MediaSessionCommandType::Play:
+            player_.play();
+            reportProgress(telemetry, playerScreenActive, true);
+            return {};
+        case MediaSessionCommandType::Pause:
+            player_.pause();
+            reportProgress(telemetry, playerScreenActive, true);
+            return {};
+        case MediaSessionCommandType::Stop:
+            return PlaybackHostEffect::stop();
+        case MediaSessionCommandType::SeekTo: {
+            const int64_t maxPosition =
+                screenState_.durationMs() > 0 ? screenState_.durationMs() : std::numeric_limits<int>::max();
+            return PlaybackHostEffect::seekWithTrickplay(
+                static_cast<int>(std::clamp<int64_t>(command.positionMs, 0, maxPosition)));
+        }
+        case MediaSessionCommandType::Next:
+            if (queue.currentIndex() >= 0) {
+                const int next = queue.nextIndex(true);
+                if (next >= 0) return PlaybackHostEffect::playQueueIndex(next);
+            }
+            return {};
+        case MediaSessionCommandType::Previous:
+            if (queue.currentIndex() > 0) {
+                return PlaybackHostEffect::playQueueIndex(queue.currentIndex() - 1);
+            }
+            return PlaybackHostEffect::seekWithTrickplay(0);
+        }
+        return {};
+    }
+
+    template <typename StreamExecutor, typename TelemetryExecutor, typename ContinuationExecutor, typename MediaSession,
+              typename StateMutex>
+    PlaybackHostEffect tickActivePlayer(StreamExecutor& stream, TelemetryExecutor& telemetry,
+                                        ContinuationExecutor& continuation, MediaSession& mediaSession,
+                                        const PlaybackQueueState& queue, bool rendererReady, StateMutex& stateMutex) {
+        PlayerStatus status = player_.status();
+        if (status == PlayerStatus::Preparing) {
+            mediaSession.updateState(MediaSessionState::Buffering, screenState_.positionMs());
+            const auto now = std::chrono::steady_clock::now();
+            const PlaybackPreparePlan preparePlan = coordinator_.preparePlan(now);
+            if (preparePlan.timedOut) {
+                std::scoped_lock lock(stateMutex);
+                __android_log_print(ANDROID_LOG_WARN, "SloppaTV", "Playback prepare timed out after %lld ms (%s)",
+                                    static_cast<long long>(preparePlan.elapsedMs),
+                                    preparePlan.transcoding ? "transcode" : "direct");
+                if (preparePlan.retryWithTranscodeFallback && retryWithFallback(stream, rendererReady)) {
+                    error_.clear();
+                    return {};
+                }
+                error_ = "PLAYBACK TOOK TOO LONG TO START";
+                return PlaybackHostEffect::stop();
+            }
+        } else {
+            coordinator_.finishPreparing();
+        }
+
+        if (coordinator_.consumePauseAfterRestart(status == PlayerStatus::Playing)) {
+            player_.togglePause();
+            status = player_.status();
+        }
+
+        if (status == PlayerStatus::Error) {
+            std::scoped_lock lock(stateMutex);
+            const std::string playerError = player_.error();
+            if (retryWithoutSubtitle(stream) || retryWithFallback(stream, rendererReady)) {
+                error_.clear();
+                return {};
+            }
+            error_ = playerError;
+            return PlaybackHostEffect::stop();
+        }
+
+        const bool playbackEnded = status == PlayerStatus::Ended;
+        if (!playbackEnded && status != PlayerStatus::Playing && status != PlayerStatus::Paused) return {};
+        if (playbackEnded && screenState_.durationMs() > 0) {
+            screenState_.setPositionMs(screenState_.durationMs());
+        }
+
+        if (!playbackEnded && coordinator_.activeTargetUsesDirectPlay()) {
+            const int pendingSeekTargetMs = screenState_.pendingSeekTargetMs();
+            const int recoveryTargetMs =
+                pendingSeekTargetMs >= 0 ? pendingSeekTargetMs : screenState_.recentSeekTargetMs();
+            if (recoveryTargetMs >= 0) {
+                const auto now = std::chrono::steady_clock::now();
+                const int observedPositionMs = player_.positionMs();
+                const bool mediaSeekable = player_.seekable();
+                const bool seekFailureMatured = pendingSeekTargetMs >= 0
+                                                    ? screenState_.pendingSeekAppearsFailed(observedPositionMs, now)
+                                                    : screenState_.recentSeekAppearsFailed(observedPositionMs, now);
+                const bool failedSeek = shouldFallbackAfterUnseekableSeek(mediaSeekable, observedPositionMs,
+                                                                          recoveryTargetMs, seekFailureMatured);
+                if (failedSeek) {
+                    std::scoped_lock lock(stateMutex);
+                    screenState_.setPositionMs(recoveryTargetMs);
+                    __android_log_print(
+                        ANDROID_LOG_WARN, "SloppaTV",
+                        "Direct-play seek failed target=%d observed=%d seekable=%d; using Jellyfin stream fallback",
+                        recoveryTargetMs, observedPositionMs, mediaSeekable);
+                    if (retryWithFallback(stream, rendererReady, true)) {
+                        error_.clear();
+                        return {};
+                    }
+                }
+            }
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        const PlaybackTickPlan plan = coordinator_.consumeTickPlan(playbackEnded, status == PlayerStatus::Playing,
+                                                                   screenState_.positionMs(), now);
+        if (plan.refreshTelemetry) {
+            refreshTelemetry();
+            mediaSession.updateState(status == PlayerStatus::Playing ? MediaSessionState::Playing
+                                                                     : MediaSessionState::Paused,
+                                     screenState_.positionMs());
+        }
+        if (plan.requestMediaSegments) requestMediaSegments(continuation);
+        if (plan.reportPlaybackStart) {
+            const PlaybackStartContext start = coordinator_.playbackStartContext(screenState_.positionMs());
+            telemetry.reportStart(session_, start.item, start.target, start.ticks);
+        }
+        if (plan.reportProgress) reportProgress(telemetry, true, false);
+        if (plan.requestNextEpisode) requestNextEpisode(continuation, queue);
+
+        const PlaybackContinuationPlan continuationPlan =
+            coordinator_.continuationPlan(playbackEnded, screenState_.positionMs(), screenState_.durationMs(), queue,
+                                          settings_.autoplayNext, settings_.stillWatchingAfter);
+        switch (continuationPlan.action) {
+        case PlaybackContinuationAction::None:
+            return {};
+        case PlaybackContinuationAction::PlayQueueIndex:
+            return PlaybackHostEffect::playQueueIndex(continuationPlan.queueIndex,
+                                                      continuationPlan.repeatCurrentQueueItem, true);
+        case PlaybackContinuationAction::AutoplayNext:
+            return PlaybackHostEffect::withItem(PlaybackHostEffectType::QueueAutoplayNext, continuationPlan.nextItem);
+        case PlaybackContinuationAction::ShowStillWatching:
+            return PlaybackHostEffect::withItem(PlaybackHostEffectType::ShowStillWatching, continuationPlan.nextItem);
+        case PlaybackContinuationAction::Stop:
+            return PlaybackHostEffect::stop(true, continuationPlan.resetAutoplayChain);
+        }
+        return {};
     }
 
 private:
