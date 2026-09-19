@@ -75,6 +75,7 @@
 #include "player_presentation.hpp"
 #include "player_progress_renderer.hpp"
 #include "player_screen.hpp"
+#include "primary_screen_presentation.hpp"
 #include "player_seek_feedback_renderer.hpp"
 #include "player_skip_button_renderer.hpp"
 #include "player_status_renderer.hpp"
@@ -167,7 +168,6 @@ using namespace std::chrono_literals;
 namespace {
 constexpr const char* kTag = "sloppaTV";
 
-constexpr Color kBackground = material_tv::background;
 constexpr Color kPanel = material_tv::surface;
 constexpr Color kPanelAlt = material_tv::surfaceContainer;
 constexpr Color kPanelElevated = material_tv::surfaceContainerHigh;
@@ -178,9 +178,7 @@ constexpr Color kTertiary = material_tv::onSurfaceDisabled;
 constexpr Color kFocus = material_tv::primary;
 constexpr Color kFocusSoft = material_tv::primaryContainer;
 constexpr Color kOutline = material_tv::outline;
-constexpr Color kDivider = material_tv::outlineVariant;
 constexpr Color kTrack = material_tv::track;
-constexpr Color kBrandGold = material_tv::tertiary;
 constexpr Color kError = material_tv::error;
 
 void logPlaybackReportFailure(const char* stage, const std::string& itemId, const ApiResult& result) {
@@ -3732,112 +3730,20 @@ private:
     }
 
     void renderLogin() {
-        renderLoginScreen(
-            renderer_, Renderer::logicalWidth(), Renderer::logicalHeight(),
-            LoginRenderState{
-                .quickConnectActive = accountState_.quickConnectActive(),
-                .quickConnectCode = accountState_.quickConnectCode(),
-                .loading = loading_,
-                .savedUserCount = static_cast<int>(sessionRegistry_.size()),
-                .keyboardActive = accountState_.keyboardActive(),
-                .loginFocus = accountState_.loginFocus(),
-                .fields = {accountState_.field(0), accountState_.field(1), accountState_.field(2)},
-                .discoveryStatus = accountState_.discoveryStatus(),
-            },
-            LoginRenderStyle<Color>{
-                .cornerLarge = material_tv::cornerLarge,
-                .cornerMedium = material_tv::cornerMedium,
-                .displayScale = material_tv::type::display,
-                .bodyScale = material_tv::type::body,
-                .wideInputFocusScale = materialWideInputFocusScale(),
-                .background = kBackground,
-                .surfaceContainerHigh = material_tv::surfaceContainerHigh,
-                .text = kText,
-                .muted = kMuted,
-                .secondaryText = kSecondaryText,
-                .panelElevated = kPanelElevated,
-                .outline = kOutline,
-                .panelAlt = kPanelAlt,
-                .focusSoft = kFocusSoft,
-                .tertiary = kTertiary,
-                .focus = kFocus,
-            },
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                   float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                                          verticalPadding);
-            },
-            [this](float x, float y, float width, float height) {
-                uiPresentation_.drawModalSurface(x, y, width, height);
-            },
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
-                uiPresentation_.drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
-            },
-            [this](float x, float y, float width, float height, bool focused, float focusScale) {
-                return uiPresentation_.drawInputSurface(x, y, width, height, focused, focusScale);
-            },
-            [this](float x, float y, float width, float height, bool focused, bool primary) {
-                return uiPresentation_.drawButtonSurface(x, y, width, height, focused, primary);
-            },
-            [this](float x, float y, float width, float height, bool focused) {
-                return uiPresentation_.drawFocusedSurface(x, y, width, height, focused);
-            },
-            [this](std::string_view value, float scale, float width, int lines) {
-                return uiPresentation_.fitTextLines(value, scale, width, lines);
-            },
-            [this](float top) { renderKeyboard(top); });
+        renderLoginPresentation(renderer_, uiPresentation_, accountState_, loading_,
+                                static_cast<int>(sessionRegistry_.size()), Renderer::logicalWidth(),
+                                Renderer::logicalHeight(), [this](float top) { renderKeyboard(top); });
     }
 
     void renderProfiles() {
-        renderProfilesScreen(
-            renderer_, static_cast<int>(sessionRegistry_.size()), accountState_.profileSelection(),
-            accountState_.profileAction(),
-            ProfilesRenderStyle<Color>{
-                .cornerMedium = material_tv::cornerMedium,
-                .text = kText,
-                .muted = kMuted,
-                .focus = kFocus,
-                .panelElevated = kPanelElevated,
-                .panelAlt = kPanelAlt,
-            },
-            [this](std::string_view title) { uiPresentation_.renderHeader(std::string(title)); },
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
-                uiPresentation_.drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
-            },
-            [this](float x, float y, float width, float height, bool focused, bool primary) {
-                return uiPresentation_.drawFocusedSurface(x, y, width, height, focused, primary);
-            },
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                   float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                                          verticalPadding);
-            },
-            [this](int index) { return sessionRegistry_.at(static_cast<size_t>(index)); },
-            [this](const auto& saved, float x, float y, float size) {
-                return uiPresentation_.drawProfileArtwork(saved, x, y, size);
-            },
-            [this](float x, float y, float width, float height, bool focused, bool primary, bool destructive) {
-                return uiPresentation_.drawButtonSurface(x, y, width, height, focused, primary, destructive);
-            });
+        renderProfilesPresentation(renderer_, uiPresentation_, static_cast<int>(sessionRegistry_.size()),
+                                   accountState_.profileSelection(), accountState_.profileAction(),
+                                   [this](int index) { return sessionRegistry_.at(static_cast<size_t>(index)); });
     }
 
     void renderKeyboard(float top) {
-        renderVirtualKeyboard(
-            renderer_, keyboardRows(), keyboardRow_, keyboardCol_, top,
-            KeyboardRenderStyle<Color>{
-                .canvasHeight = Renderer::logicalHeight(),
-                .cornerLarge = material_tv::cornerLarge,
-                .surfaceContainerHigh = material_tv::surfaceContainerHigh,
-                .text = kText,
-            },
-            [this](float x, float y, float width, float height, bool focused, bool primary) {
-                return uiPresentation_.drawButtonSurface(x, y, width, height, focused, primary);
-            },
-            [this](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                   float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                                          verticalPadding);
-            });
+        renderKeyboardPresentation(renderer_, uiPresentation_, keyboardRows(), keyboardRow_, keyboardCol_, top,
+                                   Renderer::logicalHeight());
     }
 
     void loadBundledBrandMark() {
@@ -3883,66 +3789,13 @@ private:
     }
 
     void renderHome() {
-        renderHomeScreen(
-            renderer_, home_.rows, homeState_, session_,
-            HomeRenderConfig{
-                .backdropMode = settings_.backdropMode,
-                .showClock = settings_.showClock,
-                .clock24Hour = settings_.clock24Hour,
-                .uiTextSize = settings_.uiTextSize,
-                .loading = homeLoading_,
-            },
-            HomeSlideState{
-                .fromFirst = homeSlideFromFirst_,
-                .toFirst = homeSlideToFirst_,
-                .started = homeSlideStarted_,
-            },
-            HomeRenderStyle<Color>{
-                .canvasWidth = Renderer::logicalWidth(),
-                .canvasHeight = Renderer::logicalHeight(),
-                .cornerLarge = material_tv::cornerLarge,
-                .buttonFocusScale = materialButtonFocusScale(),
-                .background = kBackground,
-                .backdropScrim = Color{0.01f, 0.012f, 0.018f, 0.34f},
-                .text = kText,
-                .muted = kMuted,
-                .clockMuted = Color{kMuted.r, kMuted.g, kMuted.b, 0.82f},
-                .brandGold = kBrandGold,
-                .focusSoft = kFocusSoft,
-                .panelElevated = kPanelElevated,
-                .panelAlt = kPanelAlt,
-                .focus = kFocus,
-            },
-            [&](const JellyfinItem& item, float alpha) { return uiPresentation_.drawBackdrop(item, alpha); },
-            [&](float x, float y, float size) { return drawBrandMark(x, y, size); },
-            [&](float x, float y, float width, float height, bool focused, bool selected) {
-                return uiPresentation_.drawTabSurface(x, y, width, height, focused, selected);
-            },
-            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                                          verticalPadding);
-            },
-            [&](float x, float y, float width, float height, bool focused, float focusScale) {
-                return uiPresentation_.focusedBounds(x, y, width, height, focused, focusScale);
-            },
-            [&](const JellyfinSession& saved, float x, float y, float size) {
-                return uiPresentation_.drawProfileArtwork(saved, x, y, size);
-            },
-            [&](float x, float y, float width, float height, Color color, float radius) {
-                uiPresentation_.drawFocusHalo(x, y, width, height, color, radius);
-            },
-            [&](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
-                uiPresentation_.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
-            },
-            [](bool clock24Hour) { return formatLocalClock(std::time(nullptr), clock24Hour); },
-            [&](std::string_view title, std::string_view message) {
-                uiPresentation_.renderEmptyState(std::string(title), std::string(message));
-            },
-            [&](std::string_view title, const std::vector<JellyfinItem>& items, int row, float top) {
+        renderHomePresentation(
+            renderer_, uiPresentation_, home_.rows, homeState_, session_, settings_, homeLoading_, homeSlideFromFirst_,
+            homeSlideToFirst_, homeSlideStarted_, Renderer::logicalWidth(), Renderer::logicalHeight(),
+            [this](float x, float y, float size) { return drawBrandMark(x, y, size); },
+            [this](std::string_view title, const std::vector<JellyfinItem>& items, int row, float top) {
                 renderHomeRow(std::string(title), items, row, top);
-            },
-            [] { return std::chrono::steady_clock::now(); });
+            });
     }
 
     void renderHomeRow(const std::string& title, const std::vector<JellyfinItem>& items, int row, float top) {
@@ -4072,99 +3925,33 @@ private:
     }
 
     void renderBrowse() {
-        renderBrowseScreen(
-            renderer_, browseState_, loading_,
-            BrowseRenderStyle<Color>{
-                .cornerLarge = material_tv::cornerLarge,
-                .focusSoft = kFocusSoft,
-                .panel = kPanel,
-                .outline = kOutline,
-                .text = kText,
-                .muted = kMuted,
-            },
-            [&](std::string_view heading) { uiPresentation_.renderHeader(std::string(heading)); },
-            [&](std::string_view title, std::string_view message) {
-                uiPresentation_.renderEmptyState(std::string(title), std::string(message));
-            },
-            [&](float x, float y, float width, float height, bool focused, bool selected) {
-                return uiPresentation_.drawTabSurface(x, y, width, height, focused, selected);
-            },
-            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                                          verticalPadding);
-            },
-            [&](const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
+        renderBrowsePresentation(
+            renderer_, uiPresentation_, browseState_, loading_,
+            [this](const JellyfinItem& item, float x, float y, float width, float height, bool focused) {
                 renderTextTile(item, x, y, width, height, focused);
             },
-            [&](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
-                bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
+            [this](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
+                   bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
                 renderMediaArtworkCard(item, x, y, width, focused, showState, seriesCoverForEpisode, alignMixedHeights,
                                        titleLineLimit);
             });
     }
 
     void renderSearch() {
-        renderSearchScreen(
-            renderer_, searchState_, SeerrClient::configured(settings_.seerrServer, seerrAuth()),
+        renderSearchPresentation(
+            renderer_, uiPresentation_, searchState_, SeerrClient::configured(settings_.seerrServer, seerrAuth()),
             systemTextInputController_.mode() == kTextInputSearch, seerrDomain_.searchLoading(),
             seerrDomain_.searchError(), seerrDomain_.storageLoading(), seerrDomain_.storageTargets(),
-            SearchRenderStyle<Color>{
-                .headlineScale = material_tv::type::headline,
-                .cornerSmall = material_tv::cornerSmall,
-                .wideInputFocusScale = materialWideInputFocusScale(),
-                .cardFocusScale = materialCardFocusScale(),
-                .text = kText,
-                .muted = kMuted,
-                .secondaryText = kSecondaryText,
-                .focus = kFocus,
-                .divider = kDivider,
-                .panel = kPanel,
-                .panelAlt = kPanelAlt,
-                .panelElevated = kPanelElevated,
-                .error = kError,
-            },
-            [&](float x, float y, float width, float height, bool focused, float focusScale) {
-                return uiPresentation_.drawInputSurface(x, y, width, height, focused, focusScale);
-            },
-            [&](std::string_view value, float scale, float maxWidth, int maxLines) {
-                return uiPresentation_.fitTextLines(value, scale, maxWidth, maxLines);
-            },
-            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color) {
-                uiPresentation_.drawLeftAlignedSingleLineFit(x, y, width, height, scale, value, color);
-            },
-            [&](float x, float y, float width, float height, float scale, std::string_view value, Color color,
-                float horizontalPadding, float verticalPadding) {
-                uiPresentation_.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding,
-                                                          verticalPadding);
-            },
-            [&](float top) { renderKeyboard(top); },
-            [&](std::string_view title, std::string_view message) {
-                uiPresentation_.renderEmptyState(std::string(title), std::string(message));
-            },
-            [&](float x, float y, float width, float height, bool focused, float focusScale) {
-                return uiPresentation_.focusedBounds(x, y, width, height, focused, focusScale);
-            },
-            [&](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
-                return uiPresentation_.drawHomeArtwork(item, x, y, width, height, radius);
-            },
-            [&](const JellyfinItem& item, float x, float y, float width, float height, float radius) {
-                uiPresentation_.drawArtworkPlaceholder(item, x, y, width, height, radius);
-            },
-            [&](float x, float y, float width, float height, Color color, float radius) {
-                uiPresentation_.drawFocusHalo(x, y, width, height, color, radius);
-            },
-            [&](float x, float y, float scale, std::string_view value, float maxWidth, Color color,
-                std::chrono::steady_clock::time_point now) {
+            [this](float top) { renderKeyboard(top); },
+            [this](float x, float y, float scale, std::string_view value, float maxWidth, Color color,
+                   std::chrono::steady_clock::time_point now) {
                 drawLingeringTitle(x, y, scale, value, maxWidth, color, now);
             },
-            [&](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
-                bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
+            [this](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
+                   bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
                 renderMediaArtworkCard(item, x, y, width, focused, showState, seriesCoverForEpisode, alignMixedHeights,
                                        titleLineLimit);
-            },
-            [] { return std::chrono::steady_clock::now(); },
-            [](Color color, float alpha) { return Color{color.r, color.g, color.b, alpha}; });
+            });
     }
 
     void renderSeerrDrivePicker() {
