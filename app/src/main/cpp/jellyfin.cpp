@@ -2,6 +2,7 @@
 #include "audio_policy.hpp"
 #include "home_screen.hpp"
 #include "jellyfin_item_parser.hpp"
+#include "json_boolean.hpp"
 #include "jellyfin_media_segment_parser.hpp"
 #include "jni_env.hpp"
 #include "media_player_policy.hpp"
@@ -275,7 +276,12 @@ ApiValueResult<QuickConnectRequest> JellyfinClient::initiateQuickConnect(std::st
         result.error = apiError(enabled);
         return result;
     }
-    if (enabled.body.find("true") == std::string::npos) {
+    const auto quickConnectEnabled = parseJsonBoolean(enabled.body);
+    if (!quickConnectEnabled.has_value()) {
+        result.error = "Invalid Quick Connect enabled response";
+        return result;
+    }
+    if (!*quickConnectEnabled) {
         result.error = "Quick Connect is disabled on this Jellyfin server";
         return result;
     }
@@ -341,7 +347,12 @@ ApiValueResult<bool> JellyfinClient::authorizeQuickConnectCode(const JellyfinSes
         result.error = apiError(response);
         return result;
     }
-    result.value = response.body.empty() || response.body.find("true") != std::string::npos;
+    const auto authorized = parseJsonBoolean(response.body);
+    if (!authorized.has_value()) {
+        result.error = "Invalid Quick Connect authorization response";
+        return result;
+    }
+    result.value = *authorized;
     result.ok = result.value;
     if (!result.ok) result.error = "Jellyfin rejected the Seerr Quick Connect code";
     return result;
