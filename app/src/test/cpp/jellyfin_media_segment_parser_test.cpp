@@ -13,7 +13,8 @@ int main() {
             {"Type":"BrokenType","StartTicks":"soon","EndTicks":300000000},
             {"Type":17,"StartTicks":400000000,"EndTicks":500000000},
             {"Type":"Negative","StartTicks":-1,"EndTicks":500000000},
-            {"Type":"Backwards","StartTicks":600000000,"EndTicks":500000000}
+            {"Type":"Backwards","StartTicks":600000000,"EndTicks":500000000},
+            {"Type":"Overflow","StartTicks":0,"EndTicks":18446744073709551615}
         ]
     })");
     assert(result.ok);

@@ -43,8 +43,8 @@ public:
     bool restart(JellyfinSession session, JellyfinItem item, PlaybackTarget previousTarget, bool reportPrevious,
                  PlaybackStreamResolutionOptions options, bool wasPaused, uint64_t generation) {
         return tasks_.submit([this, session = std::move(session), item = std::move(item),
-                              previousTarget = std::move(previousTarget), reportPrevious, options = std::move(options),
-                              wasPaused, generation]() mutable {
+                              previousTarget = std::move(previousTarget), reportPrevious, options, wasPaused,
+                              generation]() mutable {
             reportStopIfNeeded("stop", session, item, previousTarget, item.positionTicks, reportPrevious);
             auto target = resolve(session, item, options);
             if (!epoch_.active(generation)) return;
@@ -61,8 +61,8 @@ public:
     bool resolveFallback(JellyfinSession session, JellyfinItem item, PlaybackTarget failedTarget, bool reportPrevious,
                          int64_t resumeTicks, PlaybackStreamResolutionOptions options, uint64_t generation) {
         return tasks_.submit([this, session = std::move(session), item = std::move(item),
-                              failedTarget = std::move(failedTarget), reportPrevious, resumeTicks,
-                              options = std::move(options), generation]() mutable {
+                              failedTarget = std::move(failedTarget), reportPrevious, resumeTicks, options,
+                              generation]() mutable {
             reportStopIfNeeded("stop-after-failure", session, item, failedTarget, resumeTicks, reportPrevious);
             auto target = resolve(session, item, options);
             if (!epoch_.active(generation)) return;

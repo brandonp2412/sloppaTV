@@ -30,6 +30,7 @@ import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.TextView;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -49,11 +50,13 @@ public final class SloppaNativeActivity extends NativeActivity {
     private static final int MEDIA_COMMAND_NEXT = 5;
     private static final int MEDIA_COMMAND_PREVIOUS = 6;
     private EditText nativeTextInput;
+    private TextView nativeAccessibilitySummary;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         hideSystemBars();
+        installAccessibilitySummary();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                 android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
@@ -113,9 +116,45 @@ public final class SloppaNativeActivity extends NativeActivity {
         String method,
         String url,
         String[] headerPairs,
-        byte[] requestBody
+        byte[] requestBody,
+        long requestId
     ) {
-        return HttpBridge.perform(method, url, headerPairs, requestBody);
+        return HttpBridge.perform(method, url, headerPairs, requestBody, 45_000, requestId);
+    }
+
+    public void registerHttpRequestBridge(long requestId) {
+        HttpBridge.register(requestId);
+    }
+
+    public void unregisterHttpRequestBridge(long requestId) {
+        HttpBridge.unregister(requestId);
+    }
+
+    public void cancelHttpRequestBridge(long requestId) {
+        HttpBridge.cancel(requestId);
+    }
+
+    /** Receives the current native-GLES screen semantics for TalkBack and switch access. */
+    public void setAccessibilitySummaryBridge(String summary) {
+        if (summary == null || summary.isEmpty()) return;
+        runOnUiThread(() -> {
+            if (nativeAccessibilitySummary == null) installAccessibilitySummary();
+            if (summary.contentEquals(nativeAccessibilitySummary.getText())) return;
+            nativeAccessibilitySummary.setText(summary);
+        });
+    }
+
+    private void installAccessibilitySummary() {
+        if (nativeAccessibilitySummary != null) return;
+        TextView summary = new TextView(this);
+        summary.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
+        summary.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+        summary.setText(getString(R.string.accessibility_loading));
+        summary.setTextColor(Color.TRANSPARENT);
+        summary.setBackgroundColor(Color.TRANSPARENT);
+        FrameLayout.LayoutParams layout = new FrameLayout.LayoutParams(1, 1);
+        addContentView(summary, layout);
+        nativeAccessibilitySummary = summary;
     }
 
     @Override

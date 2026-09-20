@@ -13,18 +13,16 @@ val splitReleaseApks = providers.gradleProperty("SLOPPATV_SPLIT_APKS")
 
 val releaseSigningPropertiesFile = rootProject.file("key.properties")
 val releaseSigningProperties = Properties().apply {
-    require(releaseSigningPropertiesFile.isFile) {
-        "Signing requires ${releaseSigningPropertiesFile.path}; copy key.properties.example and supply the production key details"
+    if (releaseSigningPropertiesFile.isFile) {
+        releaseSigningPropertiesFile.inputStream().use(::load)
     }
-    releaseSigningPropertiesFile.inputStream().use(::load)
 }
 val releaseSigningValues = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
     .map { releaseSigningProperties.getProperty(it)?.trim() }
 val releaseSigningConfigured = releaseSigningValues.all { !it.isNullOrBlank() }
-require(releaseSigningConfigured) {
+require(!releaseSigningPropertiesFile.isFile || releaseSigningConfigured) {
     "Signing requires non-empty storeFile, storePassword, keyAlias and keyPassword entries in ${releaseSigningPropertiesFile.path}"
 }
-
 android {
     namespace = "app.sloppatv"
     compileSdk = 36
@@ -77,18 +75,21 @@ android {
     buildTypes {
         getByName("debug") {
             versionNameSuffix = "-debug"
-            signingConfig = signingConfigs.getByName("release")
+            // A local key.properties deliberately makes debug and release use the same
+            // identity, so home devices can upgrade either build in place. A clean
+            // checkout still gets Android's normal debug signing configuration.
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
         }
         getByName("release") {
             isMinifyEnabled = false
             isDebuggable = false
-            signingConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
         }
         create("benchmark") {
             initWith(getByName("release"))
             versionNameSuffix = "-benchmark"
             isDebuggable = false
-            signingConfig = signingConfigs.getByName("release")
+            if (releaseSigningConfigured) signingConfig = signingConfigs.getByName("release")
             matchingFallbacks += listOf("release")
             externalNativeBuild {
                 cmake {
@@ -111,6 +112,22 @@ android {
     }
 }
 
+
+val signedArtifactTaskNames = setOf(
+    "assembleRelease",
+    "bundleRelease",
+    "packageRelease",
+    "assembleBenchmark",
+    "packageBenchmark",
+)
+gradle.taskGraph.whenReady {
+    val signedArtifactRequested = allTasks.any { task ->
+        task.project == project && task.name in signedArtifactTaskNames
+    }
+    require(!signedArtifactRequested || releaseSigningConfigured) {
+        "Release and benchmark builds require ${releaseSigningPropertiesFile.path}; copy key.properties.example and supply the signing key details"
+    }
+}
 
 dependencies {
     implementation(files("libs/mpv-core-no-vulkan.aar"))

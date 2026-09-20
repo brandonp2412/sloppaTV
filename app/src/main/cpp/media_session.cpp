@@ -128,8 +128,8 @@ void NativeMediaSession::updateMetadata(const std::string& title, const std::str
     jobject builder = env->NewObject(builderClass, ctor);
     auto putStringValue = [&](const char* key, const std::string& value) {
         if (!builder || value.empty()) return;
-        jstring jKey = env->NewStringUTF(key);
-        jstring jValue = env->NewStringUTF(value.c_str());
+        jstring jKey = jniNewString(env, key);
+        jstring jValue = jniNewString(env, value);
         if (jKey && jValue) env->CallObjectMethod(builder, putString, jKey, jValue);
         if (jKey) env->DeleteLocalRef(jKey);
         if (jValue) env->DeleteLocalRef(jValue);
@@ -138,7 +138,7 @@ void NativeMediaSession::updateMetadata(const std::string& title, const std::str
     putStringValue("android.media.metadata.DISPLAY_TITLE", title);
     putStringValue("android.media.metadata.DISPLAY_SUBTITLE", subtitle);
     if (builder && durationMs > 0) {
-        jstring key = env->NewStringUTF("android.media.metadata.DURATION");
+        jstring key = jniNewString(env, "android.media.metadata.DURATION");
         if (key) {
             env->CallObjectMethod(builder, putLong, key, static_cast<jlong>(durationMs));
             env->DeleteLocalRef(key);

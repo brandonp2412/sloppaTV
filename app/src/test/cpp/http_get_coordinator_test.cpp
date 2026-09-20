@@ -8,6 +8,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <stdexcept>
 
 namespace {
 HttpResponse ok(std::string body) {
@@ -106,6 +107,50 @@ int main() {
     assert(ownerResponse.body == "shared");
     assert(joinedResponse.body == "shared");
     assert(dedupFetches.load() == 1);
+
+    HttpGetCoordinator throwing;
+    std::mutex throwingMutex;
+    std::condition_variable throwingCondition;
+    bool throwingOwnerStarted = false;
+    bool releaseThrowingOwner = false;
+    std::atomic<int> throwingFetches{0};
+    HttpResponse throwingOwnerResponse;
+    HttpResponse throwingJoinerResponse;
+    std::thread throwingOwner([&] {
+        throwingOwnerResponse = throwing.request("throwing", false, [&]() -> HttpResponse {
+            ++throwingFetches;
+            std::unique_lock lock(throwingMutex);
+            throwingOwnerStarted = true;
+            throwingCondition.notify_all();
+            throwingCondition.wait(lock, [&] { return releaseThrowingOwner; });
+            throw std::runtime_error("fixture failure");
+        });
+    });
+    {
+        std::unique_lock lock(throwingMutex);
+        throwingCondition.wait(lock, [&] { return throwingOwnerStarted; });
+    }
+    std::atomic<bool> throwingJoinerStarted{false};
+    std::thread throwingJoiner([&] {
+        throwingJoinerStarted = true;
+        throwingJoinerResponse = throwing.request("throwing", false, [&] {
+            ++throwingFetches;
+            return ok("unexpected");
+        });
+    });
+    while (!throwingJoinerStarted.load()) std::this_thread::yield();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    assert(throwingFetches.load() == 1);
+    {
+        std::scoped_lock lock(throwingMutex);
+        releaseThrowingOwner = true;
+    }
+    throwingCondition.notify_all();
+    throwingOwner.join();
+    throwingJoiner.join();
+    assert(throwingOwnerResponse.error == "HTTP request failed: fixture failure");
+    assert(throwingJoinerResponse.error == "HTTP request failed: fixture failure");
+    assert(throwingFetches.load() == 1);
 
     HttpGetCoordinator generations;
     std::mutex generationMutex;

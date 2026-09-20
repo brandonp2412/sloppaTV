@@ -11,6 +11,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <unordered_set>
 
 class JniHttpClient {
 public:
@@ -26,7 +27,11 @@ private:
     HttpResponse requestWithRetry(const std::string& method, const std::string& url,
                                   const std::map<std::string, std::string>& headers, const std::string& body) const;
     HttpResponse requestOnce(const std::string& method, const std::string& url,
-                             const std::map<std::string, std::string>& headers, const std::string& body) const;
+                             const std::map<std::string, std::string>& headers, const std::string& body,
+                             uint64_t requestId, uint64_t generation) const;
+    bool registerRequest(uint64_t requestId) const;
+    void unregisterRequest(uint64_t requestId) const;
+    void cancelRequest(uint64_t requestId) const;
 
     JavaVM* vm_ = nullptr;
     jobject activity_ = nullptr;
@@ -34,4 +39,6 @@ private:
     mutable std::atomic<uint64_t> cancelGeneration_{0};
     mutable std::mutex retryMutex_;
     mutable std::condition_variable retryWake_;
+    mutable std::mutex activeRequestsMutex_;
+    mutable std::unordered_set<uint64_t> activeRequestIds_;
 };

@@ -51,7 +51,7 @@ LaunchRequest readLaunchRequest(android_app* app) {
     const std::string data = jniString(env, dataValue);
     std::string query;
     if (action == "android.intent.action.SEARCH") {
-        jstring queryKey = env->NewStringUTF("query");
+        jstring queryKey = jniNewString(env, "query");
         auto queryValue =
             queryKey ? static_cast<jstring>(env->CallObjectMethod(intent, getStringExtra, queryKey)) : nullptr;
         query = jniString(env, queryValue);

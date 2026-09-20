@@ -2,6 +2,8 @@
 
 #include <cassert>
 #include <chrono>
+#include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -45,6 +47,17 @@ int main() {
     assert(!state.loading());
     assert(state.targets().size() == 4);
     assert(state.targets().front().usedPercent() == 75);
+    SeerrStorageTarget huge = target("movie", 99);
+    huge.totalSpace = std::numeric_limits<int64_t>::max();
+    huge.freeSpace = 0;
+    assert(huge.usedPercent() == 100);
+    huge.freeSpace = std::numeric_limits<int64_t>::max();
+    assert(huge.usedPercent() == 0);
+    huge.freeSpace = -1;
+    assert(huge.usedPercent() == 100);
+    huge.freeSpace = std::numeric_limits<int64_t>::max();
+    huge.totalSpace = 100;
+    assert(huge.usedPercent() == 0);
     assert(!state.beginRefresh(false, start + 59s));
     assert(state.beginRefresh(true, start + 59s));
     state.invalidateRefresh();

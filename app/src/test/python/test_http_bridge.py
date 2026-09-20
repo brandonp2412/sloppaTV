@@ -70,6 +70,52 @@ public final class HttpBridgeHarness {
     }
 
     public static void main(String[] args) {
+        if (args[0].equals("CANCEL") || args[0].equals("CANCEL_REUSE")) {
+            final HttpBridge.Result[] result = new HttpBridge.Result[1];
+            HttpBridge.register(42);
+            Thread request = new Thread(() -> result[0] = HttpBridge.perform(
+                "GET", args[1], null, new byte[0], 10_000, 42
+            ));
+            request.start();
+            try {
+                Thread.sleep(50);
+                HttpBridge.cancel(42);
+                request.join(2_000);
+            } catch (InterruptedException exception) {
+                throw new RuntimeException(exception);
+            }
+            if (request.isAlive()) throw new RuntimeException("request did not cancel");
+            if (args[0].equals("CANCEL_REUSE")) {
+                HttpBridge.register(42);
+                result[0] = HttpBridge.perform("GET", args[2], null, new byte[0], 10_000, 42);
+            }
+            System.out.println(result[0].status);
+            System.out.println(Base64.getEncoder().encodeToString(result[0].body));
+            System.out.println(encode(result[0].error));
+            System.out.println(encode(result[0].setCookie));
+            return;
+        }
+        if (args[0].equals("PRECANCEL")) {
+            HttpBridge.register(43);
+            HttpBridge.cancel(43);
+            HttpBridge.Result result = HttpBridge.perform("GET", args[1], null, new byte[0], 10_000, 43);
+            System.out.println(result.status);
+            System.out.println(Base64.getEncoder().encodeToString(result.body));
+            System.out.println(encode(result.error));
+            System.out.println(encode(result.setCookie));
+            return;
+        }
+        if (args[0].equals("UNREGISTER")) {
+            HttpBridge.register(44);
+            HttpBridge.unregister(44);
+            HttpBridge.cancel(44);
+            HttpBridge.Result result = HttpBridge.perform("GET", args[1], null, new byte[0], 10_000, 44);
+            System.out.println(result.status);
+            System.out.println(Base64.getEncoder().encodeToString(result.body));
+            System.out.println(encode(result.error));
+            System.out.println(encode(result.setCookie));
+            return;
+        }
         byte[] body = args.length > 2 ? args[2].getBytes(StandardCharsets.UTF_8) : new byte[0];
         HttpBridge.Result result = args.length > 3
             ? HttpBridge.perform(
@@ -175,6 +221,39 @@ public final class HttpBridgeHarness {
         self.assertEqual(body, b"")
         self.assertEqual(error, "java.util.concurrent.TimeoutException")
         self.assertEqual(cookies, "")
+
+    def test_cancels_an_active_request(self) -> None:
+        started = time.monotonic()
+        status, body, error, cookies = self._request("CANCEL", self.base_url + "/slow")
+        self.assertLess(time.monotonic() - started, 1.0)
+        self.assertEqual(status, 0)
+        self.assertEqual(body, b"")
+        self.assertNotEqual(error, "")
+        self.assertEqual(cookies, "")
+
+    def test_cancelled_request_id_does_not_poison_reuse(self) -> None:
+        status, body, error, cookies = self._request("CANCEL_REUSE", self.base_url + "/slow", self.base_url + "/final")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, b"redirected")
+        self.assertEqual(error, "")
+        self.assertIn("first=one; Path=/", cookies)
+        self.assertIn("second=two; Path=/", cookies)
+
+    def test_cancel_before_connection_registration_is_honoured(self) -> None:
+        started = time.monotonic()
+        status, body, error, cookies = self._request("PRECANCEL", self.base_url + "/slow")
+        self.assertLess(time.monotonic() - started, 0.5)
+        self.assertEqual(status, 0)
+        self.assertEqual(body, b"")
+        self.assertEqual(error, "Request cancelled")
+        self.assertEqual(cookies, "")
+
+    def test_unregister_removes_request_state(self) -> None:
+        status, body, error, cookies = self._request("UNREGISTER", self.base_url + "/final")
+        self.assertEqual(status, 200)
+        self.assertEqual(body, b"redirected")
+        self.assertEqual(error, "")
+        self.assertIn("second=two; Path=/", cookies)
 
     def test_returns_transport_errors_as_result(self) -> None:
         status, body, error, cookies = self._request("GET", "not-a-url")

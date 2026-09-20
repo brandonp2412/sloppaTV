@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -39,16 +40,17 @@ inline std::string seerrCompactTimeLeft(std::string value) {
         }
     }
     if (parts.size() != 3) return {};
-    const int totalSeconds = days * 86400 + parts[0] * 3600 + parts[1] * 60 + parts[2];
+    const int64_t totalSeconds = static_cast<int64_t>(days) * 86400 + static_cast<int64_t>(parts[0]) * 3600 +
+                                 static_cast<int64_t>(parts[1]) * 60 + parts[2];
     if (totalSeconds <= 0) return {};
     if (totalSeconds >= 86400) {
-        const int d = totalSeconds / 86400;
-        const int h = (totalSeconds % 86400) / 3600;
+        const int64_t d = totalSeconds / 86400;
+        const int64_t h = (totalSeconds % 86400) / 3600;
         return h > 0 ? std::to_string(d) + "d " + std::to_string(h) + "h left" : std::to_string(d) + "d left";
     }
     if (totalSeconds >= 3600) {
-        const int h = totalSeconds / 3600;
-        const int m = (totalSeconds % 3600) / 60;
+        const int64_t h = totalSeconds / 3600;
+        const int64_t m = (totalSeconds % 3600) / 60;
         return m > 0 ? std::to_string(h) + "h " + std::to_string(m) + "m left" : std::to_string(h) + "h left";
     }
     if (totalSeconds >= 60) return std::to_string(totalSeconds / 60) + "m left";

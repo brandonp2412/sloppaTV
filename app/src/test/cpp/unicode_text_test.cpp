@@ -36,5 +36,21 @@ int main() {
     assert(displayText("\xE2\x99\xAA") == "~");
     assert(displayText("\xE3\x81\x82") == "?");
     assert(displayText("\xE3\x81\x82", '\0').empty());
+
+    const std::string utf8 = "caf\xC3\xA9 \xE6\x98\xA0\xE7\x94\xBB \xF0\x9F\x93\xBA";
+    const std::u16string utf16 = u"café 映画 📺";
+    assert(utf8ToUtf16(utf8) == utf16);
+    assert(utf16ToUtf8(utf16) == utf8);
+
+    const std::string withNull{"A\0B", 3};
+    const std::u16string withNull16{u'A', u'\0', u'B'};
+    assert(utf8ToUtf16(withNull) == withNull16);
+    assert(utf16ToUtf8(withNull16) == withNull);
+
+    assert(utf8ToUtf16("\xC0\xAF") == u"\uFFFD\uFFFD");
+    assert(utf8ToUtf16("\xED\xA0\x80") == u"\uFFFD\uFFFD\uFFFD");
+    assert(utf8ToUtf16("\xF4\x90\x80\x80") == u"\uFFFD\uFFFD\uFFFD\uFFFD");
+    assert(utf16ToUtf8(std::u16string{static_cast<char16_t>(0xD800)}) == "\xEF\xBF\xBD");
+    assert(utf16ToUtf8(std::u16string{static_cast<char16_t>(0xDC00)}) == "\xEF\xBF\xBD");
     return 0;
 }

@@ -8,9 +8,12 @@
 
 #include <array>
 #include <chrono>
+#include <limits>
+#include <vector>
 
 namespace {
 constexpr const char* kTag = "sloppaTV/http";
+std::atomic<uint64_t> gNextHttpRequestId{1};
 
 using ScopedEnv = ScopedJniEnv;
 
@@ -52,7 +55,7 @@ std::string requestUrlForLog(const std::string& url) {
 }
 
 jstring toJString(JNIEnv* env, const std::string& value) {
-    return env->NewStringUTF(value.c_str());
+    return jniNewString(env, value);
 }
 
 } // namespace
@@ -78,6 +81,12 @@ void JniHttpClient::invalidateGetCache() const {
 
 void JniHttpClient::cancelPending() const {
     cancelGeneration_.fetch_add(1, std::memory_order_relaxed);
+    std::vector<uint64_t> activeRequests;
+    {
+        std::scoped_lock lock(activeRequestsMutex_);
+        activeRequests.assign(activeRequestIds_.begin(), activeRequestIds_.end());
+    }
+    for (const uint64_t requestId : activeRequests) cancelRequest(requestId);
     retryWake_.notify_all();
 }
 
@@ -110,7 +119,13 @@ HttpResponse JniHttpClient::requestWithRetry(const std::string& method, const st
             response.error = "Request cancelled";
             return response;
         }
-        response = requestOnce(method, url, headers, body);
+        const uint64_t requestId = gNextHttpRequestId.fetch_add(1, std::memory_order_relaxed);
+        response = requestOnce(method, url, headers, body, requestId, generation);
+        if (cancelGeneration_.load(std::memory_order_relaxed) != generation) {
+            response = {};
+            response.error = "Request cancelled";
+            return response;
+        }
         const bool retryable = shouldRetryTransientHttpResponse(method, response.status, !response.error.empty());
         if (!retryable || attempt == retryCount) return response;
         const std::string failure = response.status != 0 ? "HTTP " + std::to_string(response.status) : response.error;
@@ -128,8 +143,8 @@ HttpResponse JniHttpClient::requestWithRetry(const std::string& method, const st
 }
 
 HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::string& url,
-                                        const std::map<std::string, std::string>& headers,
-                                        const std::string& body) const {
+                                        const std::map<std::string, std::string>& headers, const std::string& body,
+                                        uint64_t requestId, uint64_t generation) const {
     HttpResponse response;
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
@@ -139,11 +154,11 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
     }
 
     jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID performRequest = activityClass
-                                   ? env->GetMethodID(activityClass, "performHttpRequestBridge",
-                                                      "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[B)Lapp/"
-                                                      "sloppatv/HttpBridge$Result;")
-                                   : nullptr;
+    jmethodID performRequest =
+        activityClass ? env->GetMethodID(activityClass, "performHttpRequestBridge",
+                                         "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[BJ)Lapp/"
+                                         "sloppatv/HttpBridge$Result;")
+                      : nullptr;
     if (clearException(env, "HTTP bridge lookup", response.error) || !activityClass || !performRequest) {
         if (activityClass) env->DeleteLocalRef(activityClass);
         return response;
@@ -155,21 +170,70 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
         return response;
     }
 
+    constexpr size_t maxJniArrayLength = static_cast<size_t>(std::numeric_limits<jsize>::max());
+    if (headers.size() > maxJniArrayLength / 2 || body.size() > maxJniArrayLength) {
+        response.error = "HTTP request exceeds the Android bridge size limit";
+        env->DeleteLocalRef(stringClass);
+        env->DeleteLocalRef(activityClass);
+        return response;
+    }
+
     jstring jMethod = toJString(env, method);
     jstring jUrl = toJString(env, url);
     jobjectArray jHeaders = env->NewObjectArray(static_cast<jsize>(headers.size() * 2), stringClass, nullptr);
+    if (clearException(env, "HTTP bridge request strings", response.error) || !jMethod || !jUrl || !jHeaders) {
+        if (response.error.empty()) response.error = "Unable to allocate Android HTTP request strings";
+        if (jHeaders) env->DeleteLocalRef(jHeaders);
+        if (jUrl) env->DeleteLocalRef(jUrl);
+        if (jMethod) env->DeleteLocalRef(jMethod);
+        env->DeleteLocalRef(stringClass);
+        env->DeleteLocalRef(activityClass);
+        return response;
+    }
     jsize headerIndex = 0;
+    bool headerSetupFailed = false;
     for (const auto& [key, value] : headers) {
         jstring jKey = toJString(env, key);
         jstring jValue = toJString(env, value);
+        if (!jKey || !jValue || env->ExceptionCheck()) {
+            if (jKey) env->DeleteLocalRef(jKey);
+            if (jValue) env->DeleteLocalRef(jValue);
+            headerSetupFailed = true;
+            break;
+        }
         env->SetObjectArrayElement(jHeaders, headerIndex++, jKey);
-        env->SetObjectArrayElement(jHeaders, headerIndex++, jValue);
+        if (!env->ExceptionCheck()) env->SetObjectArrayElement(jHeaders, headerIndex++, jValue);
         env->DeleteLocalRef(jKey);
         env->DeleteLocalRef(jValue);
+        if (env->ExceptionCheck()) {
+            headerSetupFailed = true;
+            break;
+        }
+    }
+
+    if (headerSetupFailed) {
+        clearException(env, "HTTP bridge request headers", response.error);
+        if (response.error.empty()) response.error = "Unable to populate Android HTTP request headers";
+        env->DeleteLocalRef(jHeaders);
+        env->DeleteLocalRef(jUrl);
+        env->DeleteLocalRef(jMethod);
+        env->DeleteLocalRef(stringClass);
+        env->DeleteLocalRef(activityClass);
+        return response;
     }
 
     jbyteArray jBody = env->NewByteArray(static_cast<jsize>(body.size()));
-    if (jBody && !body.empty()) {
+    if (!jBody) {
+        clearException(env, "HTTP bridge request body", response.error);
+        if (response.error.empty()) response.error = "Unable to allocate Android HTTP request body";
+        env->DeleteLocalRef(jHeaders);
+        env->DeleteLocalRef(jUrl);
+        env->DeleteLocalRef(jMethod);
+        env->DeleteLocalRef(stringClass);
+        env->DeleteLocalRef(activityClass);
+        return response;
+    }
+    if (!body.empty()) {
         env->SetByteArrayRegion(jBody, 0, static_cast<jsize>(body.size()), reinterpret_cast<const jbyte*>(body.data()));
     }
     if (clearException(env, "HTTP bridge request setup", response.error)) {
@@ -182,8 +246,27 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
         return response;
     }
 
-    jobject result = env->CallObjectMethod(activity_, performRequest, jMethod, jUrl, jHeaders, jBody);
-    if (clearException(env, "HTTP bridge request", response.error) || !result) {
+    const bool registered = registerRequest(requestId);
+    if (!registered) {
+        response.error = "Unable to register Android HTTP request";
+    } else {
+        {
+            std::scoped_lock lock(activeRequestsMutex_);
+            activeRequestIds_.insert(requestId);
+        }
+        if (cancelGeneration_.load(std::memory_order_relaxed) != generation) cancelRequest(requestId);
+    }
+    jobject result = response.error.empty() ? env->CallObjectMethod(activity_, performRequest, jMethod, jUrl, jHeaders,
+                                                                    jBody, static_cast<jlong>(requestId))
+                                            : nullptr;
+    const bool requestThrew = clearException(env, "HTTP bridge request", response.error);
+    if (registered) unregisterRequest(requestId);
+    {
+        std::scoped_lock lock(activeRequestsMutex_);
+        activeRequestIds_.erase(requestId);
+    }
+    if (requestThrew || !result) {
+        if (!result && response.error.empty()) response.error = "Android HTTP bridge returned no result";
         const std::string safeUrl = requestUrlForLog(url);
         __android_log_print(ANDROID_LOG_ERROR, kTag, "%s %s failed before HTTP status: %s", method.c_str(),
                             safeUrl.c_str(), response.error.c_str());
@@ -221,6 +304,8 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
                 }
                 env->DeleteLocalRef(errorText);
             }
+        } else if (response.error.empty()) {
+            response.error = "Android HTTP bridge returned an invalid result";
         }
         if (resultClass) env->DeleteLocalRef(resultClass);
         env->DeleteLocalRef(result);
@@ -233,4 +318,46 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
     env->DeleteLocalRef(stringClass);
     env->DeleteLocalRef(activityClass);
     return response;
+}
+
+bool JniHttpClient::registerRequest(uint64_t requestId) const {
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (!env || !activity_) return false;
+    jclass activityClass = env->GetObjectClass(activity_);
+    jmethodID registerRequest =
+        activityClass ? env->GetMethodID(activityClass, "registerHttpRequestBridge", "(J)V") : nullptr;
+    bool ok = registerRequest != nullptr && !env->ExceptionCheck();
+    if (ok) {
+        env->CallVoidMethod(activity_, registerRequest, static_cast<jlong>(requestId));
+        ok = !env->ExceptionCheck();
+    }
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (activityClass) env->DeleteLocalRef(activityClass);
+    return ok;
+}
+
+void JniHttpClient::unregisterRequest(uint64_t requestId) const {
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (!env || !activity_) return;
+    jclass activityClass = env->GetObjectClass(activity_);
+    jmethodID unregister =
+        activityClass ? env->GetMethodID(activityClass, "unregisterHttpRequestBridge", "(J)V") : nullptr;
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (unregister) env->CallVoidMethod(activity_, unregister, static_cast<jlong>(requestId));
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (activityClass) env->DeleteLocalRef(activityClass);
+}
+
+void JniHttpClient::cancelRequest(uint64_t requestId) const {
+    ScopedEnv scoped(vm_);
+    JNIEnv* env = scoped.get();
+    if (!env || !activity_) return;
+    jclass activityClass = env->GetObjectClass(activity_);
+    jmethodID cancel = activityClass ? env->GetMethodID(activityClass, "cancelHttpRequestBridge", "(J)V") : nullptr;
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (cancel) env->CallVoidMethod(activity_, cancel, static_cast<jlong>(requestId));
+    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (activityClass) env->DeleteLocalRef(activityClass);
 }

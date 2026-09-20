@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 
@@ -16,7 +18,9 @@ struct SeerrStorageTarget {
 
     [[nodiscard]] int usedPercent() const {
         if (totalSpace <= 0) return 0;
-        const int64_t used = totalSpace - freeSpace;
-        return static_cast<int>((used * 100 + totalSpace / 2) / totalSpace);
+        const int64_t available = std::clamp(freeSpace, int64_t{0}, totalSpace);
+        const int64_t used = totalSpace - available;
+        const long double percent = static_cast<long double>(used) * 100.0L / static_cast<long double>(totalSpace);
+        return std::clamp(static_cast<int>(std::lround(percent)), 0, 100);
     }
 };

@@ -43,13 +43,13 @@ jobject createVideoIntent(JNIEnv* env, const std::string& url) {
         return nullptr;
     }
 
-    jstring action = env->NewStringUTF(kActionView);
+    jstring action = jniNewString(env, kActionView);
     jobject intent = action ? env->NewObject(intentClass, intentCtor, action) : nullptr;
     if (action) env->DeleteLocalRef(action);
-    jstring jUrl = env->NewStringUTF(url.c_str());
+    jstring jUrl = jniNewString(env, url);
     jobject uri = jUrl ? env->CallStaticObjectMethod(uriClass, uriParse, jUrl) : nullptr;
     if (jUrl) env->DeleteLocalRef(jUrl);
-    jstring mime = env->NewStringUTF(kVideoMime);
+    jstring mime = jniNewString(env, kVideoMime);
     if (intent && uri && mime) env->CallObjectMethod(intent, setDataAndType, uri, mime);
     if (mime) env->DeleteLocalRef(mime);
     if (uri) env->DeleteLocalRef(uri);
@@ -69,8 +69,8 @@ void putStringExtra(JNIEnv* env, jobject intent, const char* key, const std::str
                                                       "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;")
                                    : nullptr;
     if (method) {
-        jstring jKey = env->NewStringUTF(key);
-        jstring jValue = env->NewStringUTF(value.c_str());
+        jstring jKey = jniNewString(env, key);
+        jstring jValue = jniNewString(env, value);
         if (jKey && jValue) env->CallObjectMethod(intent, method, jKey, jValue);
         if (jKey) env->DeleteLocalRef(jKey);
         if (jValue) env->DeleteLocalRef(jValue);
@@ -90,11 +90,11 @@ void putUriArrayExtra(JNIEnv* env, jobject intent, const char* key, const std::s
                              ? env->GetMethodID(intentClass, "putExtra",
                                                 "(Ljava/lang/String;[Landroid/os/Parcelable;)Landroid/content/Intent;")
                              : nullptr;
-    jstring jUrl = env->NewStringUTF(url.c_str());
+    jstring jUrl = jniNewString(env, url);
     jobject uri = jUrl && parse ? env->CallStaticObjectMethod(uriClass, parse, jUrl) : nullptr;
     jobjectArray values = parcelableClass ? env->NewObjectArray(1, parcelableClass, nullptr) : nullptr;
     if (values && uri) env->SetObjectArrayElement(values, 0, uri);
-    jstring jKey = env->NewStringUTF(key);
+    jstring jKey = jniNewString(env, key);
     if (putExtra && jKey && values && uri) env->CallObjectMethod(intent, putExtra, jKey, values);
     if (jKey) env->DeleteLocalRef(jKey);
     if (values) env->DeleteLocalRef(values);
@@ -113,7 +113,7 @@ void putByteExtra(JNIEnv* env, jobject intent, const char* key, int value) {
                            ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;B)Landroid/content/Intent;")
                            : nullptr;
     if (method) {
-        jstring jKey = env->NewStringUTF(key);
+        jstring jKey = jniNewString(env, key);
         if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jbyte>(value));
         if (jKey) env->DeleteLocalRef(jKey);
     }
@@ -128,7 +128,7 @@ void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
                            ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;I)Landroid/content/Intent;")
                            : nullptr;
     if (method) {
-        jstring jKey = env->NewStringUTF(key);
+        jstring jKey = jniNewString(env, key);
         if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jint>(value));
         if (jKey) env->DeleteLocalRef(jKey);
     }
@@ -140,7 +140,7 @@ bool hasExtra(JNIEnv* env, jobject intent, const char* key) {
     if (!env || !intent || !key) return false;
     jclass intentClass = env->GetObjectClass(intent);
     jmethodID method = intentClass ? env->GetMethodID(intentClass, "hasExtra", "(Ljava/lang/String;)Z") : nullptr;
-    jstring jKey = env->NewStringUTF(key);
+    jstring jKey = jniNewString(env, key);
     const bool result = method && jKey && env->CallBooleanMethod(intent, method, jKey) == JNI_TRUE;
     if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
@@ -152,7 +152,7 @@ int getIntExtra(JNIEnv* env, jobject intent, const char* key, int fallback = -1)
     if (!env || !intent || !key) return fallback;
     jclass intentClass = env->GetObjectClass(intent);
     jmethodID method = intentClass ? env->GetMethodID(intentClass, "getIntExtra", "(Ljava/lang/String;I)I") : nullptr;
-    jstring jKey = env->NewStringUTF(key);
+    jstring jKey = jniNewString(env, key);
     const int result =
         method && jKey ? env->CallIntMethod(intent, method, jKey, static_cast<jint>(fallback)) : fallback;
     if (jKey) env->DeleteLocalRef(jKey);
@@ -165,7 +165,7 @@ int64_t getLongExtra(JNIEnv* env, jobject intent, const char* key, int64_t fallb
     if (!env || !intent || !key) return fallback;
     jclass intentClass = env->GetObjectClass(intent);
     jmethodID method = intentClass ? env->GetMethodID(intentClass, "getLongExtra", "(Ljava/lang/String;J)J") : nullptr;
-    jstring jKey = env->NewStringUTF(key);
+    jstring jKey = jniNewString(env, key);
     const int64_t result =
         method && jKey ? env->CallLongMethod(intent, method, jKey, static_cast<jlong>(fallback)) : fallback;
     if (jKey) env->DeleteLocalRef(jKey);
@@ -181,7 +181,7 @@ void putBoolExtra(JNIEnv* env, jobject intent, const char* key, bool value) {
                            ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;Z)Landroid/content/Intent;")
                            : nullptr;
     if (method) {
-        jstring jKey = env->NewStringUTF(key);
+        jstring jKey = jniNewString(env, key);
         if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jboolean>(value));
         if (jKey) env->DeleteLocalRef(jKey);
     }
@@ -361,7 +361,7 @@ bool NativeExternalPlayer::launch(const ExternalPlayerApp& app, const std::strin
     jmethodID setComponent = intentClass ? env->GetMethodID(intentClass, "setComponent",
                                                             "(Landroid/content/ComponentName;)Landroid/content/Intent;")
                                          : nullptr;
-    jstring componentValue = env->NewStringUTF(app.componentName.c_str());
+    jstring componentValue = jniNewString(env, app.componentName);
     jobject component =
         componentValue && unflatten ? env->CallStaticObjectMethod(componentClass, unflatten, componentValue) : nullptr;
     if (componentValue) env->DeleteLocalRef(componentValue);

@@ -78,6 +78,7 @@ jobs:
           echo "Google Play version code: $play_version_code"
 
       - name: Configure Play signing identity
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         env:
           SLOPPATV_KEYSTORE_BASE64: ${{ secrets.SLOPPATV_KEYSTORE_BASE64 }}
@@ -147,8 +148,15 @@ jobs:
       - name: Validate Google Play metadata
         run: python3 tools/sync_play_store_screenshots.py --validate-only
 
-      - name: Build debug, benchmark and release artifacts
-        run: ./gradlew --no-daemon test assembleDebug assembleBenchmark assembleRelease bundleRelease
+      - name: Verify pinned playback runtime
+        run: python3 tools/verify_mpv_aar.py
+
+      - name: Build and test debug artifact
+        run: ./gradlew --no-daemon test assembleDebug
+
+      - name: Build signed benchmark and release artifacts
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./gradlew --no-daemon assembleBenchmark assembleRelease bundleRelease
 
       - name: Build architecture release APKs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

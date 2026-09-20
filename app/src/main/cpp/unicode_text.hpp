@@ -24,6 +24,107 @@ inline bool eraseLastUtf8CodePoint(std::string& value) {
     return true;
 }
 
+inline uint32_t nextStrictUtf8CodePoint(std::string_view text, size_t& index) {
+    constexpr uint32_t replacement = 0xFFFDu;
+    if (index >= text.size()) return replacement;
+
+    const size_t start = index;
+    const auto first = static_cast<unsigned char>(text[start]);
+    if (first < 0x80u) {
+        ++index;
+        return first;
+    }
+
+    auto byteAt = [&](size_t offset) -> unsigned char { return static_cast<unsigned char>(text[start + offset]); };
+    auto continuation = [&](size_t offset) {
+        return start + offset < text.size() && (byteAt(offset) & 0xC0u) == 0x80u;
+    };
+
+    if (first >= 0xC2u && first <= 0xDFu && continuation(1)) {
+        index += 2;
+        return ((first & 0x1Fu) << 6u) | (byteAt(1) & 0x3Fu);
+    }
+    if (first >= 0xE0u && first <= 0xEFu && continuation(1) && continuation(2)) {
+        const auto second = byteAt(1);
+        if ((first != 0xE0u || second >= 0xA0u) && (first != 0xEDu || second <= 0x9Fu)) {
+            index += 3;
+            return ((first & 0x0Fu) << 12u) | ((second & 0x3Fu) << 6u) | (byteAt(2) & 0x3Fu);
+        }
+    }
+    if (first >= 0xF0u && first <= 0xF4u && continuation(1) && continuation(2) && continuation(3)) {
+        const auto second = byteAt(1);
+        if ((first != 0xF0u || second >= 0x90u) && (first != 0xF4u || second <= 0x8Fu)) {
+            index += 4;
+            return ((first & 0x07u) << 18u) | ((second & 0x3Fu) << 12u) | ((byteAt(2) & 0x3Fu) << 6u) |
+                   (byteAt(3) & 0x3Fu);
+        }
+    }
+
+    ++index;
+    return replacement;
+}
+
+inline std::u16string utf8ToUtf16(std::string_view text) {
+    std::u16string output;
+    output.reserve(text.size());
+    size_t index = 0;
+    while (index < text.size()) {
+        uint32_t codePoint = nextStrictUtf8CodePoint(text, index);
+        if (codePoint <= 0xFFFFu) {
+            output.push_back(static_cast<char16_t>(codePoint));
+            continue;
+        }
+        codePoint -= 0x10000u;
+        output.push_back(static_cast<char16_t>(0xD800u + (codePoint >> 10u)));
+        output.push_back(static_cast<char16_t>(0xDC00u + (codePoint & 0x3FFu)));
+    }
+    return output;
+}
+
+inline void appendUtf8CodePoint(std::string& output, uint32_t codePoint) {
+    if (codePoint > 0x10FFFFu || (codePoint >= 0xD800u && codePoint <= 0xDFFFu)) codePoint = 0xFFFDu;
+    if (codePoint <= 0x7Fu) {
+        output.push_back(static_cast<char>(codePoint));
+    } else if (codePoint <= 0x7FFu) {
+        output.push_back(static_cast<char>(0xC0u | (codePoint >> 6u)));
+        output.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
+    } else if (codePoint <= 0xFFFFu) {
+        output.push_back(static_cast<char>(0xE0u | (codePoint >> 12u)));
+        output.push_back(static_cast<char>(0x80u | ((codePoint >> 6u) & 0x3Fu)));
+        output.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
+    } else {
+        output.push_back(static_cast<char>(0xF0u | (codePoint >> 18u)));
+        output.push_back(static_cast<char>(0x80u | ((codePoint >> 12u) & 0x3Fu)));
+        output.push_back(static_cast<char>(0x80u | ((codePoint >> 6u) & 0x3Fu)));
+        output.push_back(static_cast<char>(0x80u | (codePoint & 0x3Fu)));
+    }
+}
+
+inline std::string utf16ToUtf8(std::u16string_view text) {
+    std::string output;
+    output.reserve(text.size());
+    for (size_t index = 0; index < text.size(); ++index) {
+        uint32_t codePoint = text[index];
+        if (codePoint >= 0xD800u && codePoint <= 0xDBFFu) {
+            if (index + 1 < text.size()) {
+                const uint32_t low = text[index + 1];
+                if (low >= 0xDC00u && low <= 0xDFFFu) {
+                    codePoint = 0x10000u + ((codePoint - 0xD800u) << 10u) + (low - 0xDC00u);
+                    ++index;
+                } else {
+                    codePoint = 0xFFFDu;
+                }
+            } else {
+                codePoint = 0xFFFDu;
+            }
+        } else if (codePoint >= 0xDC00u && codePoint <= 0xDFFFu) {
+            codePoint = 0xFFFDu;
+        }
+        appendUtf8CodePoint(output, codePoint);
+    }
+    return output;
+}
+
 inline uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
     constexpr uint32_t replacement = 0xFFFDu;
     const auto first = static_cast<unsigned char>(text[index++]);

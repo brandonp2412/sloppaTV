@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <unordered_set>
 
@@ -35,8 +36,26 @@ int integerValue(const json& value, const char* key, int fallback = 0) {
     const auto found = value.find(key);
     if (found == value.end() || found->is_null()) return fallback;
     try {
-        if (found->is_number_integer()) return found->get<int>();
-        if (found->is_string()) return std::stoi(found->get<std::string>());
+        if (found->is_number_unsigned()) {
+            const uint64_t number = found->get<uint64_t>();
+            return number <= static_cast<uint64_t>(std::numeric_limits<int>::max()) ? static_cast<int>(number)
+                                                                                    : fallback;
+        }
+        if (found->is_number_integer()) {
+            const int64_t number = found->get<int64_t>();
+            return number >= std::numeric_limits<int>::min() && number <= std::numeric_limits<int>::max()
+                       ? static_cast<int>(number)
+                       : fallback;
+        }
+        if (found->is_string()) {
+            const std::string text = found->get<std::string>();
+            size_t consumed = 0;
+            const long long number = std::stoll(text, &consumed);
+            return consumed == text.size() && number >= std::numeric_limits<int>::min() &&
+                           number <= std::numeric_limits<int>::max()
+                       ? static_cast<int>(number)
+                       : fallback;
+        }
     } catch (...) {}
     return fallback;
 }
@@ -224,9 +243,18 @@ int64_t int64Value(const json& value, const char* key) {
     const auto found = value.find(key);
     if (found == value.end() || found->is_null()) return 0;
     try {
+        if (found->is_number_unsigned()) {
+            const uint64_t number = found->get<uint64_t>();
+            return number <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) ? static_cast<int64_t>(number)
+                                                                                        : 0;
+        }
         if (found->is_number_integer()) return found->get<int64_t>();
-        if (found->is_number_unsigned()) return static_cast<int64_t>(found->get<uint64_t>());
-        if (found->is_string()) return std::stoll(found->get<std::string>());
+        if (found->is_string()) {
+            const std::string text = found->get<std::string>();
+            size_t consumed = 0;
+            const int64_t number = std::stoll(text, &consumed);
+            return consumed == text.size() ? number : 0;
+        }
     } catch (...) {}
     return 0;
 }

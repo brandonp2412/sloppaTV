@@ -7,6 +7,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cstdint>
+#include <exception>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -55,7 +56,14 @@ public:
             return inFlight->response;
         }
 
-        HttpResponse response = std::forward<Fetch>(fetch)();
+        HttpResponse response;
+        try {
+            response = std::forward<Fetch>(fetch)();
+        } catch (const std::exception& error) {
+            response.error = std::string("HTTP request failed: ") + error.what();
+        } catch (...) {
+            response.error = "HTTP request failed: unknown exception";
+        }
         {
             std::scoped_lock lock(mutex_);
             if (cacheable && response.ok() && requestGeneration == generation_) {

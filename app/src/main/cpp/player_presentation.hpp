@@ -325,10 +325,11 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     }
     if (!showOverlay) return;
 
-    if (showNextUp && playbackCoordinator.continuation().nextItem()) {
+    const auto nextItem = playbackCoordinator.continuation().nextItem();
+    if (showNextUp && nextItem) {
         renderPlayerNextUp(
             PlayerNextUpRenderState{
-                .item = *playbackCoordinator.continuation().nextItem(),
+                .item = *nextItem,
                 .remainingMs = remainingMs,
             },
             PlayerNextUpRenderStyle<Color>{

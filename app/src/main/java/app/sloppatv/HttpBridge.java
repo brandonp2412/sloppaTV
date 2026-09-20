@@ -10,6 +10,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class HttpBridge {
@@ -21,6 +22,12 @@ public final class HttpBridge {
             return thread;
         }
     );
+    private static final class RequestState {
+        final AtomicBoolean cancelled = new AtomicBoolean(false);
+        volatile HttpURLConnection connection;
+    }
+
+    private static final ConcurrentHashMap<Long, RequestState> ACTIVE_REQUESTS = new ConcurrentHashMap<>();
 
     public static final class Result {
         public final int status;
@@ -39,7 +46,7 @@ public final class HttpBridge {
     private HttpBridge() {}
 
     public static Result perform(String method, String url, String[] headerPairs, byte[] requestBody) {
-        return perform(method, url, headerPairs, requestBody, REQUEST_TIMEOUT_MS);
+        return perform(method, url, headerPairs, requestBody, REQUEST_TIMEOUT_MS, 0);
     }
 
     static Result perform(
@@ -49,12 +56,31 @@ public final class HttpBridge {
         byte[] requestBody,
         long requestTimeoutMs
     ) {
+        return perform(method, url, headerPairs, requestBody, requestTimeoutMs, 0);
+    }
+
+    static Result perform(
+        String method,
+        String url,
+        String[] headerPairs,
+        byte[] requestBody,
+        long requestTimeoutMs,
+        long requestId
+    ) {
         HttpURLConnection connection = null;
         ScheduledFuture<?> deadline = null;
         AtomicBoolean timedOut = new AtomicBoolean(false);
+        RequestState requestState =
+            requestId == 0 ? null : ACTIVE_REQUESTS.computeIfAbsent(requestId, ignored -> new RequestState());
         Result result;
         try {
             connection = (HttpURLConnection) new URL(url).openConnection();
+            if (requestState != null) {
+                requestState.connection = connection;
+                if (requestState.cancelled.get()) {
+                    return new Result(0, new byte[0], "Request cancelled", "");
+                }
+            }
             HttpURLConnection activeConnection = connection;
             deadline = DEADLINE_EXECUTOR.schedule(
                 () -> {
@@ -107,6 +133,10 @@ public final class HttpBridge {
             result = new Result(0, new byte[0], error.toString(), "");
         } finally {
             if (deadline != null) deadline.cancel(false);
+            if (requestState != null) {
+                requestState.connection = null;
+                ACTIVE_REQUESTS.remove(requestId, requestState);
+            }
             if (connection != null) connection.disconnect();
         }
 
@@ -114,5 +144,24 @@ public final class HttpBridge {
             return new Result(0, new byte[0], new TimeoutException().toString(), "");
         }
         return result;
+    }
+
+    public static void register(long requestId) {
+        if (requestId == 0) return;
+        ACTIVE_REQUESTS.put(requestId, new RequestState());
+    }
+
+    public static void unregister(long requestId) {
+        if (requestId == 0) return;
+        ACTIVE_REQUESTS.remove(requestId);
+    }
+
+    public static void cancel(long requestId) {
+        if (requestId == 0) return;
+        RequestState requestState = ACTIVE_REQUESTS.get(requestId);
+        if (requestState == null) return;
+        requestState.cancelled.set(true);
+        HttpURLConnection connection = requestState.connection;
+        if (connection != null) connection.disconnect();
     }
 }

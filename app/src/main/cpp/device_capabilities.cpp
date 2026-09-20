@@ -48,11 +48,11 @@ bool supportsVideoFormat(JNIEnv* env, jobject codecList, const char* mime, jint 
         env->DeleteLocalRef(listClass);
         return false;
     }
-    jstring jMime = env->NewStringUTF(mime);
+    jstring jMime = jniNewString(env, mime);
     jobject format = env->CallStaticObjectMethod(formatClass, createVideoFormat, jMime, width, height);
     env->DeleteLocalRef(jMime);
     if (profile > 0 && format) {
-        jstring key = env->NewStringUTF("profile");
+        jstring key = jniNewString(env, "profile");
         env->CallVoidMethod(format, setInteger, key, profile);
         env->DeleteLocalRef(key);
     }
@@ -86,7 +86,7 @@ bool supportsAudioFormat(JNIEnv* env, jobject codecList, const char* mime, int s
         env->DeleteLocalRef(listClass);
         return false;
     }
-    jstring jMime = env->NewStringUTF(mime);
+    jstring jMime = jniNewString(env, mime);
     jobject format = env->CallStaticObjectMethod(formatClass, createAudioFormat, jMime, sampleRate, channels);
     env->DeleteLocalRef(jMime);
     auto decoder = format ? static_cast<jstring>(env->CallObjectMethod(codecList, findDecoder, format)) : nullptr;

@@ -77,7 +77,6 @@
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
 #include "playback_resolution_executor.hpp"
-#include "playback_request_flow.hpp"
 #include "playback_request_coordinator.hpp"
 #include "playback_release_flow.hpp"
 #include "playback_lifecycle_flow.hpp"
@@ -336,8 +335,6 @@ public:
           homeCompletions_(homeScreens_, detailsScreens_, session_, accountFlow_, requestEpochs_, contentMutationFlow_,
                            searchFlow_.state(), settings_, seerrDomain_, navigation_, screen_, loading_, error_),
           playbackCompletionFlow_(playbackCoordinator_, queueState_, detailsFlow_, playerScreenState_),
-          playbackRequestFlow_(queueState_, playbackCoordinator_, playerScreenState_, detailsFlow_, session_, settings_,
-                               requestEpochs_.playback, screen_, loading_, error_),
           trickplayCoordinator_(trickplayState_, playbackCoordinator_, session_, trickplayTileAsync_),
           playbackRuntime_(playbackCoordinator_, playerScreenState_, player_, videoSurface_, session_, settings_,
                            requestEpochs_.playback, loading_, error_, dataPath_),
@@ -354,9 +351,9 @@ public:
                                playbackCoordinator_, playerScreenState_, session_, home_, homeState_, browseState_,
                                searchFlow_.state(), detailsFlow_, queueState_, playbackTelemetryAsync_,
                                hiddenHomeItems_, renderer_, trickplayState_),
-          playbackRequests_(playbackRequestFlow_, playbackReleaseFlow_, playbackRuntime_, playbackResolutionAsync_,
-                            playbackContinuationAsync_, seriesPlaybackAsync_, queueState_, playbackCoordinator_,
-                            playerScreenState_, detailsFlow_, session_, requestEpochs_.playback, loading_, error_),
+          playbackRequests_(queueState_, playbackCoordinator_, playerScreenState_, detailsFlow_, session_, settings_,
+                            requestEpochs_.playback, screen_, loading_, error_, playbackReleaseFlow_, playbackRuntime_,
+                            playbackResolutionAsync_, playbackContinuationAsync_, seriesPlaybackAsync_),
           playbackLifecycleFlow_(renderer_, player_, mediaSession_, videoSurface_, displayMode_, playbackCoordinator_,
                                  playerScreenState_, playbackRuntime_, screen_, session_, settings_, browseState_,
                                  loading_, error_, lastInteraction_, screensaverActive_) {
@@ -516,6 +513,7 @@ public:
 
             runDueLiveSearch();
             tick();
+            publishAccessibilitySummary();
             bool playerScreen = false;
             bool screensaver = false;
             {
@@ -580,6 +578,126 @@ public:
             }
         }
         if (app_ && app_->looper) ALooper_wake(app_->looper);
+    }
+
+    void publishAccessibilitySummary() {
+        std::string summary;
+        {
+            std::scoped_lock lock(stateMutex_);
+            const char* screenName;
+            switch (screen_) {
+            case Screen::Login:
+                screenName = "Sign in";
+                break;
+            case Screen::Profiles:
+                screenName = "Profiles";
+                break;
+            case Screen::Home:
+                screenName = "Home";
+                break;
+            case Screen::Browse:
+                screenName = "Browse";
+                break;
+            case Screen::Search:
+                screenName = "Search";
+                break;
+            case Screen::Settings:
+                screenName = "Settings";
+                break;
+            case Screen::Diagnostics:
+                screenName = "Diagnostics";
+                break;
+            case Screen::Details:
+                screenName = "Details";
+                break;
+            case Screen::Cast:
+                screenName = "Cast";
+                break;
+            case Screen::PersonItems:
+                screenName = "Filmography";
+                break;
+            case Screen::ItemMenu:
+                screenName = "Item options";
+                break;
+            case Screen::Seasons:
+                screenName = "Seasons";
+                break;
+            case Screen::Episodes:
+                screenName = "Episodes";
+                break;
+            case Screen::SeerrDrivePicker:
+                screenName = "Storage location";
+                break;
+            case Screen::Player:
+                screenName = "Player";
+                break;
+            }
+            summary = std::string("sloppaTV, ") + screenName;
+            if (!detailsFlow_.item().name.empty() &&
+                (screen_ == Screen::Details || screen_ == Screen::Player || screen_ == Screen::ItemMenu)) {
+                summary += ", " + detailsFlow_.item().name;
+            }
+            if (screen_ == Screen::Home && homeState_.row() >= 0 &&
+                homeState_.row() < static_cast<int>(home_.rows.size())) {
+                const auto& row = home_.rows[static_cast<size_t>(homeState_.row())];
+                const auto& selections = homeState_.selections();
+                const int selection = homeState_.row() < static_cast<int>(selections.size())
+                                          ? selections[static_cast<size_t>(homeState_.row())]
+                                          : 0;
+                if (selection >= 0 && selection < static_cast<int>(row.items.size()))
+                    summary += ", " + row.title + ", " + row.items[static_cast<size_t>(selection)].name;
+            } else if (screen_ == Screen::Browse) {
+                const auto& items = browseState_.items();
+                const int selection = browseState_.selection();
+                if (selection >= 0 && selection < static_cast<int>(items.size()))
+                    summary += ", " + items[static_cast<size_t>(selection)].name;
+            } else if (screen_ == Screen::Details) {
+                const auto action = detailsFlow_.state().selectedAction(detailsFlow_.item());
+                if (action) summary += ", " + detailsActionLabel(*action, detailsFlow_.item(), false);
+            } else if (screen_ == Screen::Player) {
+                switch (playerScreenState_.controlSelection()) {
+                case PlayerControl::PreviousEpisode:
+                    summary += ", Previous episode";
+                    break;
+                case PlayerControl::PlayPause:
+                    summary += ", Play or pause";
+                    break;
+                case PlayerControl::NextEpisode:
+                    summary += ", Next episode";
+                    break;
+                case PlayerControl::AudioTrack:
+                    summary += ", Audio track";
+                    break;
+                case PlayerControl::SubtitleTrack:
+                    summary += ", Subtitle track";
+                    break;
+                case PlayerControl::Count:
+                    break;
+                }
+            }
+            if (loading_) summary += ", loading";
+        }
+        if (summary == lastAccessibilitySummary_) return;
+        if (!app_ || !app_->activity || !app_->activity->vm || !app_->activity->clazz) return;
+        ScopedJniEnv scoped(app_->activity->vm);
+        JNIEnv* env = scoped.get();
+        if (!env) return;
+        jclass activityClass = env->GetObjectClass(app_->activity->clazz);
+        jmethodID publish =
+            activityClass ? env->GetMethodID(activityClass, "setAccessibilitySummaryBridge", "(Ljava/lang/String;)V")
+                          : nullptr;
+        bool published = false;
+        if (publish && !env->ExceptionCheck()) {
+            jstring value = jniNewString(env, summary);
+            if (value && !env->ExceptionCheck()) {
+                env->CallVoidMethod(app_->activity->clazz, publish, value);
+                published = !env->ExceptionCheck();
+                env->DeleteLocalRef(value);
+            }
+        }
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (activityClass) env->DeleteLocalRef(activityClass);
+        if (published) lastAccessibilitySummary_ = std::move(summary);
     }
 
 private:
@@ -871,8 +989,8 @@ private:
         jmethodID method = activityClass ? env->GetMethodID(activityClass, "showTextInput",
                                                             "(Ljava/lang/String;Ljava/lang/String;IZ)Z")
                                          : nullptr;
-        jstring jInitial = env->NewStringUTF(initial.c_str());
-        jstring jHint = env->NewStringUTF(hint.c_str());
+        jstring jInitial = jniNewString(env, initial);
+        jstring jHint = jniNewString(env, hint);
         jboolean shown = JNI_FALSE;
         if (method && jInitial && jHint) {
             shown = env->CallBooleanMethod(activity, method, jInitial, jHint, static_cast<jint>(mode),
@@ -1420,7 +1538,7 @@ private:
             __android_log_print(ANDROID_LOG_WARN, kTag, "Home load failed transiently; retrying in %d seconds: %s",
                                 *effects.retryDelaySeconds, completion.result.error.c_str());
         if (effects.sessionExpired) {
-            artwork_.eraseProfile(*effects.eraseProfile, renderer_);
+            if (effects.eraseProfile) artwork_.eraseProfile(*effects.eraseProfile, renderer_);
             saveSession(session_);
             return;
         }
@@ -1752,7 +1870,6 @@ private:
     HomeCompletionApplication<decltype(homeScreens_), decltype(detailsScreens_)> homeCompletions_;
     PlayerScreenState playerScreenState_;
     PlaybackCompletionFlow playbackCompletionFlow_;
-    PlaybackRequestFlow playbackRequestFlow_;
     TrickplayPreviewState trickplayState_;
     TrickplayCoordinator<decltype(trickplayTileAsync_)> trickplayCoordinator_;
     PlaybackRuntimeController playbackRuntime_;
@@ -1767,6 +1884,7 @@ private:
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;
+    std::string lastAccessibilitySummary_;
 };
 } // namespace
 

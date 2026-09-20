@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <nlohmann/json.hpp>
+#include <limits>
 #include <optional>
 #include <string>
 
@@ -17,6 +18,11 @@ std::optional<int64_t> integerValue(const json& value, const char* key) {
     const auto match = value.find(key);
     if (match == value.end() || !match->is_number_integer()) return std::nullopt;
     try {
+        if (match->is_number_unsigned()) {
+            const uint64_t number = match->get<uint64_t>();
+            if (number > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) return std::nullopt;
+            return static_cast<int64_t>(number);
+        }
         return match->get<int64_t>();
     } catch (const json::exception&) {
         return std::nullopt;
