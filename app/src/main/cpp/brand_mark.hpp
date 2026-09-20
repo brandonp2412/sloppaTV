@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 
 class BrandMark {
@@ -22,15 +23,25 @@ public:
             __android_log_print(ANDROID_LOG_WARN, "sloppaTV", "Brand mark asset unavailable");
             return;
         }
-        const off_t length = AAsset_getLength(asset);
-        std::string encoded(length > 0 ? static_cast<std::size_t>(length) : 0, '\0');
-        const int bytesRead = encoded.empty() ? 0 : AAsset_read(asset, encoded.data(), encoded.size());
-        AAsset_close(asset);
-        if (bytesRead <= 0) {
-            __android_log_print(ANDROID_LOG_WARN, "sloppaTV", "Brand mark asset was empty");
+        const off64_t length = AAsset_getLength64(asset);
+        if (length <= 0 || static_cast<uint64_t>(length) > std::numeric_limits<std::size_t>::max()) {
+            AAsset_close(asset);
+            __android_log_print(ANDROID_LOG_WARN, "sloppaTV", "Brand mark asset length was invalid");
             return;
         }
-        encoded.resize(static_cast<std::size_t>(bytesRead));
+
+        std::string encoded(static_cast<std::size_t>(length), '\0');
+        std::size_t bytesRead = 0;
+        while (bytesRead < encoded.size()) {
+            const int chunk = AAsset_read(asset, encoded.data() + bytesRead, encoded.size() - bytesRead);
+            if (chunk <= 0) {
+                AAsset_close(asset);
+                __android_log_print(ANDROID_LOG_WARN, "sloppaTV", "Brand mark asset could not be read completely");
+                return;
+            }
+            bytesRead += static_cast<std::size_t>(chunk);
+        }
+        AAsset_close(asset);
         std::string decodeError;
         decoded_ = decoder.decode(encoded, decodeError);
         if (!decoded_.valid()) {
