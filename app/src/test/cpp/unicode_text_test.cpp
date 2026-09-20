@@ -36,6 +36,9 @@ int main() {
     assert(displayText("\xE2\x99\xAA") == "~");
     assert(displayText("\xE3\x81\x82") == "?");
     assert(displayText("\xE3\x81\x82", '\0').empty());
+    assert(displayText("\xC0\xAF") == "??");
+    assert(displayText("\xED\xA0\x80") == "???");
+    assert(displayText("\xF4\x90\x80\x80") == "????");
 
     size_t emptyIndex = 0;
     assert(nextUtf8CodePoint("", emptyIndex) == 0xFFFDu);

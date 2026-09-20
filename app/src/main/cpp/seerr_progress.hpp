@@ -19,8 +19,8 @@ inline bool seerrParseNonNegativeInt(std::string_view text, int& result) {
     if (text.empty()) return false;
     int value = 0;
     const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
-    if (error != std::errc{} || end != text.data() + text.size()) return false;
-    result = std::max(0, value);
+    if (error != std::errc{} || end != text.data() + text.size() || value < 0) return false;
+    result = value;
     return true;
 }
 

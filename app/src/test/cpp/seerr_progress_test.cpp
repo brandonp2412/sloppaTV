@@ -13,6 +13,9 @@ int main() {
     assert(seerrCompactTimeLeft("00:11:42junk").empty());
     assert(seerrCompactTimeLeft("00:1x:42").empty());
     assert(seerrCompactTimeLeft("1x.02:03:04").empty());
+    assert(seerrCompactTimeLeft("-1.02:03:04").empty());
+    assert(seerrCompactTimeLeft("00:-1:42").empty());
+    assert(seerrCompactTimeLeft("00:11:-1").empty());
     assert(seerrProgressLabel("movie", -1, -1, 63) == "Downloading");
     assert(seerrProgressLabel("tv", 1, 1, 63) == "S1E1 downloading");
     assert(seerrProgressLabel("tv", -1, -1, 63) == "Season pack downloading");

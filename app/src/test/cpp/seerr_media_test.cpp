@@ -65,6 +65,17 @@ int main() {
     assert(seerrDeleteRequestFromJellyfinItem(invalid).has_value());
     assert(!seerrMediaFromJellyfinItem(invalid).has_value());
 
+    invalid.tmdbId = "300junk";
+    assert(!seerrMediaFromJellyfinItem(invalid).has_value());
+    invalid.tmdbId = " 300";
+    assert(!seerrMediaFromJellyfinItem(invalid).has_value());
+    invalid.tmdbId = "0";
+    assert(!seerrMediaFromJellyfinItem(invalid).has_value());
+    invalid.tmdbId = "-300";
+    assert(!seerrMediaFromJellyfinItem(invalid).has_value());
+    invalid.tmdbId = "999999999999999999999999";
+    assert(!seerrMediaFromJellyfinItem(invalid).has_value());
+
     JellyfinItem pendingId = item;
     pendingId.externalRequestId = 0;
     assert(!seerrDeleteRequestFromJellyfinItem(pendingId).has_value());

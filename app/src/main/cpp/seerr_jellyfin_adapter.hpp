@@ -3,6 +3,7 @@
 #include "jellyfin_types.hpp"
 #include "seerr_media.hpp"
 
+#include <charconv>
 #include <optional>
 #include <string>
 
@@ -48,13 +49,12 @@ inline std::optional<SeerrDeleteRequest> seerrDeleteRequestFromJellyfinItem(cons
 }
 
 inline std::optional<SeerrMediaItem> seerrMediaFromJellyfinItem(const JellyfinItem& item) {
-    if (!isSeerrItem(item)) return std::nullopt;
+    if (!isSeerrItem(item) || item.tmdbId.empty()) return std::nullopt;
     int tmdbId = 0;
-    try {
-        tmdbId = std::stoi(item.tmdbId);
-    } catch (...) {
-        return std::nullopt;
-    }
+    const char* begin = item.tmdbId.data();
+    const char* end = begin + item.tmdbId.size();
+    const auto [parsedEnd, error] = std::from_chars(begin, end, tmdbId);
+    if (error != std::errc{} || parsedEnd != end || tmdbId <= 0) return std::nullopt;
     SeerrMediaItem media;
     media.id = item.id;
     media.name = item.name;

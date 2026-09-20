@@ -126,24 +126,7 @@ inline std::string utf16ToUtf8(std::u16string_view text) {
 }
 
 inline uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
-    constexpr uint32_t replacement = 0xFFFDu;
-    if (index >= text.size()) return replacement;
-    const auto first = static_cast<unsigned char>(text[index++]);
-    if (first < 0x80) return first;
-    auto continuation = [&](int count, uint32_t value) -> uint32_t {
-        for (int offset = 0; offset < count; ++offset) {
-            if (index >= text.size()) return replacement;
-            const auto byte = static_cast<unsigned char>(text[index]);
-            if ((byte & 0xC0u) != 0x80u) return replacement;
-            ++index;
-            value = (value << 6u) | (byte & 0x3Fu);
-        }
-        return value;
-    };
-    if ((first & 0xE0u) == 0xC0u) return continuation(1, first & 0x1Fu);
-    if ((first & 0xF0u) == 0xE0u) return continuation(2, first & 0x0Fu);
-    if ((first & 0xF8u) == 0xF0u) return continuation(3, first & 0x07u);
-    return replacement;
+    return nextStrictUtf8CodePoint(text, index);
 }
 
 inline void appendDisplayCodePoint(std::string& output, uint32_t codePoint, char unsupported = '?') {

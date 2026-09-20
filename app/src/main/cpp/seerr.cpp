@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <charconv>
 #include <cctype>
 #include <iomanip>
 #include <limits>
@@ -65,9 +66,23 @@ double doubleValue(const json& value, const char* key, double fallback = 0.0) {
     if (found == value.end() || found->is_null()) return fallback;
     try {
         if (found->is_number()) return found->get<double>();
-        if (found->is_string()) return std::stod(found->get<std::string>());
+        if (found->is_string()) {
+            const std::string text = found->get<std::string>();
+            size_t consumed = 0;
+            const double number = std::stod(text, &consumed);
+            return consumed == text.size() ? number : fallback;
+        }
     } catch (...) {}
     return fallback;
+}
+
+int productionYearFromDate(std::string_view date) {
+    if (date.size() < 4) return 0;
+    int year = 0;
+    const char* begin = date.data();
+    const char* end = begin + 4;
+    const auto [parsedEnd, error] = std::from_chars(begin, end, year);
+    return error == std::errc{} && parsedEnd == end && year > 0 ? year : 0;
 }
 
 std::string stringValue(const json& value, const char* key) {
@@ -121,11 +136,7 @@ SeerrMediaItem itemFromSearchResult(const json& value) {
     item.backdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(value, "backdropPath"));
 
     const std::string date = mediaType == "tv" ? stringValue(value, "firstAirDate") : stringValue(value, "releaseDate");
-    if (date.size() >= 4) {
-        try {
-            item.productionYear = std::stoi(date.substr(0, 4));
-        } catch (...) {}
-    }
+    item.productionYear = productionYearFromDate(date);
 
     const auto mediaInfo = value.find("mediaInfo");
     if (mediaInfo != value.end() && mediaInfo->is_object()) {
@@ -568,11 +579,7 @@ ApiValueResult<SeerrMediaItem> SeerrClient::loadMediaDetails(const std::string& 
         result.value.backdropUrl = tmdbImageUrl(kTmdbBackdropBase, stringValue(data, "backdropPath"));
         const std::string date =
             mediaType == "tv" ? stringValue(data, "firstAirDate") : stringValue(data, "releaseDate");
-        if (date.size() >= 4) {
-            try {
-                result.value.productionYear = std::stoi(date.substr(0, 4));
-            } catch (...) {}
-        }
+        result.value.productionYear = productionYearFromDate(date);
         result.ok = true;
     } catch (const std::exception& e) {
         result.error = std::string("Invalid Seerr media response: ") + e.what();

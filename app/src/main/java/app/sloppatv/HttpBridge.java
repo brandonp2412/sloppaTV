@@ -4,6 +4,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -45,6 +48,18 @@ public final class HttpBridge {
 
     private HttpBridge() {}
 
+    private static URL parseUrl(String value) throws MalformedURLException {
+        try {
+            URI uri = new URI(value);
+            if (!uri.isAbsolute()) throw new MalformedURLException("no protocol: " + value);
+            return uri.toURL();
+        } catch (URISyntaxException error) {
+            MalformedURLException malformed = new MalformedURLException(error.getMessage());
+            malformed.initCause(error);
+            throw malformed;
+        }
+    }
+
     public static Result perform(String method, String url, String[] headerPairs, byte[] requestBody) {
         return perform(method, url, headerPairs, requestBody, REQUEST_TIMEOUT_MS, 0);
     }
@@ -74,7 +89,7 @@ public final class HttpBridge {
             requestId == 0 ? null : ACTIVE_REQUESTS.computeIfAbsent(requestId, ignored -> new RequestState());
         Result result;
         try {
-            connection = (HttpURLConnection) new URL(url).openConnection();
+            connection = (HttpURLConnection) parseUrl(url).openConnection();
             if (requestState != null) {
                 requestState.connection = connection;
                 if (requestState.cancelled.get()) {
