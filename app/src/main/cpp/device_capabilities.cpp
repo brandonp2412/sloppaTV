@@ -13,50 +13,122 @@ constexpr const char* kTag = "sloppaTV/capabilities";
 
 using ScopedEnv = ScopedJniEnv;
 
+bool clearPendingException(JNIEnv* env) {
+    if (!env || !env->ExceptionCheck()) return false;
+    env->ExceptionClear();
+    return true;
+}
+
+jclass findClass(JNIEnv* env, const char* name) {
+    if (!env || !name) return nullptr;
+    jclass clazz = env->FindClass(name);
+    if (!clearPendingException(env)) return clazz;
+    if (clazz) env->DeleteLocalRef(clazz);
+    return nullptr;
+}
+
+jclass objectClass(JNIEnv* env, jobject object) {
+    if (!env || !object) return nullptr;
+    jclass clazz = env->GetObjectClass(object);
+    if (!clearPendingException(env)) return clazz;
+    if (clazz) env->DeleteLocalRef(clazz);
+    return nullptr;
+}
+
+jmethodID method(JNIEnv* env, jclass clazz, const char* name, const char* signature) {
+    if (!env || !clazz || !name || !signature) return nullptr;
+    jmethodID value = env->GetMethodID(clazz, name, signature);
+    if (clearPendingException(env)) return nullptr;
+    return value;
+}
+
+jmethodID staticMethod(JNIEnv* env, jclass clazz, const char* name, const char* signature) {
+    if (!env || !clazz || !name || !signature) return nullptr;
+    jmethodID value = env->GetStaticMethodID(clazz, name, signature);
+    if (clearPendingException(env)) return nullptr;
+    return value;
+}
+
+jfieldID staticField(JNIEnv* env, jclass clazz, const char* name, const char* signature) {
+    if (!env || !clazz || !name || !signature) return nullptr;
+    jfieldID value = env->GetStaticFieldID(clazz, name, signature);
+    if (clearPendingException(env)) return nullptr;
+    return value;
+}
+
 bool has(const std::unordered_set<std::string>& types, const char* mime) {
     return types.contains(mime);
 }
 
 jint staticInt(JNIEnv* env, jclass clazz, const char* name) {
     if (!env || !clazz) return -1;
-    jfieldID field = env->GetStaticFieldID(clazz, name, "I");
-    if (!field || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
+    jfieldID field = staticField(env, clazz, name, "I");
+    if (!field) return -1;
+    const jint value = env->GetStaticIntField(clazz, field);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
         return -1;
     }
-    return env->GetStaticIntField(clazz, field);
+    return value;
 }
 
 bool supportsVideoFormat(JNIEnv* env, jobject codecList, const char* mime, jint profile, int width, int height) {
-    if (!env || !codecList || !mime) return false;
-    jclass formatClass = env->FindClass("android/media/MediaFormat");
-    jclass listClass = env->FindClass("android/media/MediaCodecList");
+    if (!env || !codecList || !mime || profile < 0) return false;
+    jclass formatClass = findClass(env, "android/media/MediaFormat");
+    jclass listClass = findClass(env, "android/media/MediaCodecList");
     if (!formatClass || !listClass) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
         if (formatClass) env->DeleteLocalRef(formatClass);
         if (listClass) env->DeleteLocalRef(listClass);
         return false;
     }
     jmethodID createVideoFormat =
-        env->GetStaticMethodID(formatClass, "createVideoFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;");
-    jmethodID setInteger = env->GetMethodID(formatClass, "setInteger", "(Ljava/lang/String;I)V");
+        staticMethod(env, formatClass, "createVideoFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;");
+    jmethodID setInteger = method(env, formatClass, "setInteger", "(Ljava/lang/String;I)V");
     jmethodID findDecoder =
-        env->GetMethodID(listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
-    if (!createVideoFormat || !setInteger || !findDecoder || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
+        method(env, listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
+    if (!createVideoFormat || !setInteger || !findDecoder) {
         env->DeleteLocalRef(formatClass);
         env->DeleteLocalRef(listClass);
         return false;
     }
     jstring jMime = jniNewString(env, mime);
+    if (!jMime || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (jMime) env->DeleteLocalRef(jMime);
+        env->DeleteLocalRef(formatClass);
+        env->DeleteLocalRef(listClass);
+        return false;
+    }
     jobject format = env->CallStaticObjectMethod(formatClass, createVideoFormat, jMime, width, height);
     env->DeleteLocalRef(jMime);
-    if (profile > 0 && format) {
+    if (!format || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (format) env->DeleteLocalRef(format);
+        env->DeleteLocalRef(formatClass);
+        env->DeleteLocalRef(listClass);
+        return false;
+    }
+    if (profile > 0) {
         jstring key = jniNewString(env, "profile");
+        if (!key || env->ExceptionCheck()) {
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            if (key) env->DeleteLocalRef(key);
+            env->DeleteLocalRef(format);
+            env->DeleteLocalRef(formatClass);
+            env->DeleteLocalRef(listClass);
+            return false;
+        }
         env->CallVoidMethod(format, setInteger, key, profile);
         env->DeleteLocalRef(key);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            env->DeleteLocalRef(format);
+            env->DeleteLocalRef(formatClass);
+            env->DeleteLocalRef(listClass);
+            return false;
+        }
     }
-    auto decoder = format ? static_cast<jstring>(env->CallObjectMethod(codecList, findDecoder, format)) : nullptr;
+    auto decoder = static_cast<jstring>(env->CallObjectMethod(codecList, findDecoder, format));
     const bool supported = decoder && !env->ExceptionCheck();
     if (env->ExceptionCheck()) env->ExceptionClear();
     if (decoder) env->DeleteLocalRef(decoder);
@@ -68,28 +140,40 @@ bool supportsVideoFormat(JNIEnv* env, jobject codecList, const char* mime, jint 
 
 bool supportsAudioFormat(JNIEnv* env, jobject codecList, const char* mime, int sampleRate = 48000, int channels = 2) {
     if (!env || !codecList || !mime) return false;
-    jclass formatClass = env->FindClass("android/media/MediaFormat");
-    jclass listClass = env->FindClass("android/media/MediaCodecList");
+    jclass formatClass = findClass(env, "android/media/MediaFormat");
+    jclass listClass = findClass(env, "android/media/MediaCodecList");
     if (!formatClass || !listClass) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
         if (formatClass) env->DeleteLocalRef(formatClass);
         if (listClass) env->DeleteLocalRef(listClass);
         return false;
     }
     jmethodID createAudioFormat =
-        env->GetStaticMethodID(formatClass, "createAudioFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;");
+        staticMethod(env, formatClass, "createAudioFormat", "(Ljava/lang/String;II)Landroid/media/MediaFormat;");
     jmethodID findDecoder =
-        env->GetMethodID(listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
-    if (!createAudioFormat || !findDecoder || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
+        method(env, listClass, "findDecoderForFormat", "(Landroid/media/MediaFormat;)Ljava/lang/String;");
+    if (!createAudioFormat || !findDecoder) {
         env->DeleteLocalRef(formatClass);
         env->DeleteLocalRef(listClass);
         return false;
     }
     jstring jMime = jniNewString(env, mime);
+    if (!jMime || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (jMime) env->DeleteLocalRef(jMime);
+        env->DeleteLocalRef(formatClass);
+        env->DeleteLocalRef(listClass);
+        return false;
+    }
     jobject format = env->CallStaticObjectMethod(formatClass, createAudioFormat, jMime, sampleRate, channels);
     env->DeleteLocalRef(jMime);
-    auto decoder = format ? static_cast<jstring>(env->CallObjectMethod(codecList, findDecoder, format)) : nullptr;
+    if (!format || env->ExceptionCheck()) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (format) env->DeleteLocalRef(format);
+        env->DeleteLocalRef(formatClass);
+        env->DeleteLocalRef(listClass);
+        return false;
+    }
+    auto decoder = static_cast<jstring>(env->CallObjectMethod(codecList, findDecoder, format));
     const bool supported = decoder && !env->ExceptionCheck();
     if (env->ExceptionCheck()) env->ExceptionClear();
     if (decoder) env->DeleteLocalRef(decoder);
@@ -101,39 +185,41 @@ bool supportsAudioFormat(JNIEnv* env, jobject codecList, const char* mime, int s
 
 void queryDisplayHdr(JNIEnv* env, jobject activity, DeviceCodecSupport& result) {
     if (!env || !activity) return;
-    jclass activityClass = env->GetObjectClass(activity);
-    jmethodID getWindowManager =
-        activityClass ? env->GetMethodID(activityClass, "getWindowManager", "()Landroid/view/WindowManager;") : nullptr;
+    jclass activityClass = objectClass(env, activity);
+    if (!activityClass) return;
+    jmethodID getWindowManager = method(env, activityClass, "getWindowManager", "()Landroid/view/WindowManager;");
     jobject windowManager = getWindowManager ? env->CallObjectMethod(activity, getWindowManager) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
+        if (windowManager) env->DeleteLocalRef(windowManager);
         windowManager = nullptr;
     }
-    jclass wmClass = env->FindClass("android/view/WindowManager");
-    jmethodID getDefaultDisplay =
-        wmClass ? env->GetMethodID(wmClass, "getDefaultDisplay", "()Landroid/view/Display;") : nullptr;
+    jclass wmClass = findClass(env, "android/view/WindowManager");
+    jmethodID getDefaultDisplay = method(env, wmClass, "getDefaultDisplay", "()Landroid/view/Display;");
     jobject display =
         windowManager && getDefaultDisplay ? env->CallObjectMethod(windowManager, getDefaultDisplay) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
+        if (display) env->DeleteLocalRef(display);
         display = nullptr;
     }
-    jclass displayClass = env->FindClass("android/view/Display");
+    jclass displayClass = findClass(env, "android/view/Display");
     jmethodID getHdrCapabilities =
-        displayClass ? env->GetMethodID(displayClass, "getHdrCapabilities", "()Landroid/view/Display$HdrCapabilities;")
-                     : nullptr;
+        method(env, displayClass, "getHdrCapabilities", "()Landroid/view/Display$HdrCapabilities;");
     jobject hdrCaps = display && getHdrCapabilities ? env->CallObjectMethod(display, getHdrCapabilities) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
+        if (hdrCaps) env->DeleteLocalRef(hdrCaps);
         hdrCaps = nullptr;
     }
-    jclass hdrClass = env->FindClass("android/view/Display$HdrCapabilities");
-    jmethodID getSupportedTypes = hdrClass ? env->GetMethodID(hdrClass, "getSupportedHdrTypes", "()[I") : nullptr;
+    jclass hdrClass = findClass(env, "android/view/Display$HdrCapabilities");
+    jmethodID getSupportedTypes = method(env, hdrClass, "getSupportedHdrTypes", "()[I");
     auto types = hdrCaps && getSupportedTypes
                      ? static_cast<jintArray>(env->CallObjectMethod(hdrCaps, getSupportedTypes))
                      : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
+        if (types) env->DeleteLocalRef(types);
         types = nullptr;
     }
     const jint hdr10 = staticInt(env, hdrClass, "HDR_TYPE_HDR10");
@@ -142,15 +228,19 @@ void queryDisplayHdr(JNIEnv* env, jobject activity, DeviceCodecSupport& result) 
     const jint hlg = staticInt(env, hdrClass, "HDR_TYPE_HLG");
     if (types) {
         const jsize count = env->GetArrayLength(types);
-        std::vector<jint> values(static_cast<size_t>(count));
-        env->GetIntArrayRegion(types, 0, count, values.data());
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        for (const jint type : values) {
-            if (type == hdr10) result.displayHdr10 = true;
-            if (type == hdr10Plus) result.displayHdr10Plus = true;
-            if (type == dolbyVision) result.displayDolbyVision = true;
-            if (type == hlg) result.displayHlg = true;
+        if (!env->ExceptionCheck() && count > 0) {
+            std::vector<jint> values(static_cast<size_t>(count));
+            env->GetIntArrayRegion(types, 0, count, values.data());
+            if (!env->ExceptionCheck()) {
+                for (const jint type : values) {
+                    if (type == hdr10) result.displayHdr10 = true;
+                    if (type == hdr10Plus) result.displayHdr10Plus = true;
+                    if (type == dolbyVision) result.displayDolbyVision = true;
+                    if (type == hlg) result.displayHlg = true;
+                }
+            }
         }
+        if (env->ExceptionCheck()) env->ExceptionClear();
         env->DeleteLocalRef(types);
     }
     if (hdrClass) env->DeleteLocalRef(hdrClass);
@@ -228,52 +318,77 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     JNIEnv* env = scoped.get();
     if (!env) return result;
 
-    jclass listClass = env->FindClass("android/media/MediaCodecList");
-    if (!listClass) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
-        return result;
-    }
-    jfieldID regularField = env->GetStaticFieldID(listClass, "REGULAR_CODECS", "I");
-    jmethodID ctor = env->GetMethodID(listClass, "<init>", "(I)V");
-    jmethodID getCodecInfos = env->GetMethodID(listClass, "getCodecInfos", "()[Landroid/media/MediaCodecInfo;");
-    if (!regularField || !ctor || !getCodecInfos || env->ExceptionCheck()) {
-        if (env->ExceptionCheck()) env->ExceptionClear();
+    jclass listClass = findClass(env, "android/media/MediaCodecList");
+    if (!listClass) return result;
+    jfieldID regularField = staticField(env, listClass, "REGULAR_CODECS", "I");
+    jmethodID ctor = method(env, listClass, "<init>", "(I)V");
+    jmethodID getCodecInfos = method(env, listClass, "getCodecInfos", "()[Landroid/media/MediaCodecInfo;");
+    if (!regularField || !ctor || !getCodecInfos) {
         env->DeleteLocalRef(listClass);
         return result;
     }
 
     const jint regularCodecs = env->GetStaticIntField(listClass, regularField);
-    jobject list = env->NewObject(listClass, ctor, regularCodecs);
-    auto infos = list ? static_cast<jobjectArray>(env->CallObjectMethod(list, getCodecInfos)) : nullptr;
     if (env->ExceptionCheck()) {
         env->ExceptionClear();
+        env->DeleteLocalRef(listClass);
+        return result;
+    }
+    jobject list = env->NewObject(listClass, ctor, regularCodecs);
+    if (clearPendingException(env)) {
+        if (list) env->DeleteLocalRef(list);
+        list = nullptr;
+    }
+    auto infos = list ? static_cast<jobjectArray>(env->CallObjectMethod(list, getCodecInfos)) : nullptr;
+    if (clearPendingException(env)) {
+        if (infos) env->DeleteLocalRef(infos);
         infos = nullptr;
     }
 
     std::unordered_set<std::string> decoderTypes;
     if (infos) {
-        jclass infoClass = env->FindClass("android/media/MediaCodecInfo");
-        jmethodID isEncoder = infoClass ? env->GetMethodID(infoClass, "isEncoder", "()Z") : nullptr;
-        jmethodID getSupportedTypes =
-            infoClass ? env->GetMethodID(infoClass, "getSupportedTypes", "()[Ljava/lang/String;") : nullptr;
-        if (env->ExceptionCheck()) env->ExceptionClear();
+        jclass infoClass = findClass(env, "android/media/MediaCodecInfo");
+        jmethodID isEncoder = method(env, infoClass, "isEncoder", "()Z");
+        jmethodID getSupportedTypes = method(env, infoClass, "getSupportedTypes", "()[Ljava/lang/String;");
 
-        const jsize infoCount = env->GetArrayLength(infos);
+        jsize infoCount = env->GetArrayLength(infos);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            infoCount = 0;
+        }
         for (jsize index = 0; index < infoCount; ++index) {
             jobject info = env->GetObjectArrayElement(infos, index);
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+                if (info) env->DeleteLocalRef(info);
+                continue;
+            }
             if (!info) continue;
             const bool encoder = isEncoder && env->CallBooleanMethod(info, isEncoder);
-            if (env->ExceptionCheck()) env->ExceptionClear();
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+                env->DeleteLocalRef(info);
+                continue;
+            }
             if (!encoder && getSupportedTypes) {
                 auto types = static_cast<jobjectArray>(env->CallObjectMethod(info, getSupportedTypes));
-                if (env->ExceptionCheck()) {
-                    env->ExceptionClear();
+                if (clearPendingException(env)) {
+                    if (types) env->DeleteLocalRef(types);
                     types = nullptr;
                 }
                 if (types) {
-                    const jsize count = env->GetArrayLength(types);
+                    jsize count = env->GetArrayLength(types);
+                    if (env->ExceptionCheck()) {
+                        env->ExceptionClear();
+                        count = 0;
+                    }
                     for (jsize typeIndex = 0; typeIndex < count; ++typeIndex) {
                         auto value = static_cast<jstring>(env->GetObjectArrayElement(types, typeIndex));
+                        if (env->ExceptionCheck()) {
+                            env->ExceptionClear();
+                            if (value) env->DeleteLocalRef(value);
+                            continue;
+                        }
                         std::string mime = jniString(env, value);
                         std::transform(mime.begin(), mime.end(), mime.begin(),
                                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -289,11 +404,7 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
         env->DeleteLocalRef(infos);
     }
 
-    jclass profileLevelClass = env->FindClass("android/media/MediaCodecInfo$CodecProfileLevel");
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
-        profileLevelClass = nullptr;
-    }
+    jclass profileLevelClass = findClass(env, "android/media/MediaCodecInfo$CodecProfileLevel");
     if (list && profileLevelClass) {
         result.h264High10 = supportsVideoFormat(env, list, "video/avc",
                                                 staticInt(env, profileLevelClass, "AVCProfileHigh10"), 1920, 1080);
@@ -355,32 +466,33 @@ DeviceCodecSupport queryDeviceCodecSupport(JavaVM* vm, jobject activity) {
     queryDisplayHdr(env, activity, result);
 
     if (activity) {
-        jclass activityClass = env->GetObjectClass(activity);
-        jmethodID queryAudio =
-            activityClass ? env->GetMethodID(activityClass, "queryAudioOutputCapabilities", "()[I") : nullptr;
+        jclass activityClass = objectClass(env, activity);
+        jmethodID queryAudio = method(env, activityClass, "queryAudioOutputCapabilities", "()[I");
         auto audioCaps = queryAudio ? static_cast<jintArray>(env->CallObjectMethod(activity, queryAudio)) : nullptr;
-        if (env->ExceptionCheck()) {
-            env->ExceptionClear();
+        if (clearPendingException(env)) {
+            if (audioCaps) env->DeleteLocalRef(audioCaps);
             audioCaps = nullptr;
         }
-        if (audioCaps && env->GetArrayLength(audioCaps) >= 2) {
-            jint values[2]{};
-            env->GetIntArrayRegion(audioCaps, 0, 2, values);
-            if (!env->ExceptionCheck()) {
-                constexpr int kDirectAc3 = 1;
-                constexpr int kDirectEac3 = 1 << 1;
-                constexpr int kDirectDts = 1 << 2;
-                constexpr int kDirectDtsHd = 1 << 3;
-                constexpr int kDirectTrueHd = 1 << 4;
-                result.maxAudioOutputChannels = std::clamp(static_cast<int>(values[0]), 2, 8);
-                result.directAc3 = (values[1] & kDirectAc3) != 0;
-                result.directEac3 = (values[1] & kDirectEac3) != 0;
-                result.directDts = (values[1] & kDirectDts) != 0;
-                result.directDtsHd = (values[1] & kDirectDtsHd) != 0;
-                result.directTrueHd = (values[1] & kDirectTrueHd) != 0;
-            } else {
-                env->ExceptionClear();
+        if (audioCaps) {
+            const jsize count = env->GetArrayLength(audioCaps);
+            if (!env->ExceptionCheck() && count >= 2) {
+                jint values[2]{};
+                env->GetIntArrayRegion(audioCaps, 0, 2, values);
+                if (!env->ExceptionCheck()) {
+                    constexpr int kDirectAc3 = 1;
+                    constexpr int kDirectEac3 = 1 << 1;
+                    constexpr int kDirectDts = 1 << 2;
+                    constexpr int kDirectDtsHd = 1 << 3;
+                    constexpr int kDirectTrueHd = 1 << 4;
+                    result.maxAudioOutputChannels = std::clamp(static_cast<int>(values[0]), 2, 8);
+                    result.directAc3 = (values[1] & kDirectAc3) != 0;
+                    result.directEac3 = (values[1] & kDirectEac3) != 0;
+                    result.directDts = (values[1] & kDirectDts) != 0;
+                    result.directDtsHd = (values[1] & kDirectDtsHd) != 0;
+                    result.directTrueHd = (values[1] & kDirectTrueHd) != 0;
+                }
             }
+            if (env->ExceptionCheck()) env->ExceptionClear();
             env->DeleteLocalRef(audioCaps);
         }
         if (activityClass) env->DeleteLocalRef(activityClass);

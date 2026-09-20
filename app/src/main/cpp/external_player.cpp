@@ -31,13 +31,17 @@ bool clearException(JNIEnv* env, const char* operation, std::string* error = nul
 jclass findClassChecked(JNIEnv* env, const char* name, const char* operation, std::string* error = nullptr) {
     if (!env) return nullptr;
     jclass value = env->FindClass(name);
-    return clearException(env, operation, error) ? nullptr : value;
+    if (!clearException(env, operation, error)) return value;
+    if (value) env->DeleteLocalRef(value);
+    return nullptr;
 }
 
 jclass objectClassChecked(JNIEnv* env, jobject object, const char* operation, std::string* error = nullptr) {
     if (!env || !object) return nullptr;
     jclass value = env->GetObjectClass(object);
-    return clearException(env, operation, error) ? nullptr : value;
+    if (!clearException(env, operation, error)) return value;
+    if (value) env->DeleteLocalRef(value);
+    return nullptr;
 }
 
 jmethodID methodChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature, const char* operation,
@@ -51,6 +55,13 @@ jmethodID staticMethodChecked(JNIEnv* env, jclass clazz, const char* name, const
                               std::string* error = nullptr) {
     if (!env || !clazz) return nullptr;
     jmethodID value = env->GetStaticMethodID(clazz, name, signature);
+    return clearException(env, operation, error) ? nullptr : value;
+}
+
+jfieldID fieldChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature, const char* operation,
+                      std::string* error = nullptr) {
+    if (!env || !clazz) return nullptr;
+    jfieldID value = env->GetFieldID(clazz, name, signature);
     return clearException(env, operation, error) ? nullptr : value;
 }
 
@@ -195,32 +206,40 @@ void putUriArrayExtra(JNIEnv* env, jobject intent, const char* key, const std::s
 
 void putByteExtra(JNIEnv* env, jobject intent, const char* key, int value) {
     if (!env || !intent || !key) return;
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass
-                           ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;B)Landroid/content/Intent;")
-                           : nullptr;
-    if (method) {
-        jstring jKey = jniNewString(env, key);
-        if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jbyte>(value));
-        if (jKey) env->DeleteLocalRef(jKey);
+    jclass intentClass = objectClassChecked(env, intent, "byte intent class lookup");
+    jmethodID method = methodChecked(env, intentClass, "putExtra", "(Ljava/lang/String;B)Landroid/content/Intent;",
+                                     "byte intent method lookup");
+    jstring jKey = nullptr;
+    bool failed = !intentClass || !method;
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "byte intent key creation") || !jKey;
     }
+    if (!failed) {
+        env->CallObjectMethod(intent, method, jKey, static_cast<jbyte>(value));
+        clearException(env, "byte intent extra");
+    }
+    if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "byte intent extra");
 }
 
 void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
     if (!env || !intent || !key) return;
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass
-                           ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;I)Landroid/content/Intent;")
-                           : nullptr;
-    if (method) {
-        jstring jKey = jniNewString(env, key);
-        if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jint>(value));
-        if (jKey) env->DeleteLocalRef(jKey);
+    jclass intentClass = objectClassChecked(env, intent, "integer intent class lookup");
+    jmethodID method = methodChecked(env, intentClass, "putExtra", "(Ljava/lang/String;I)Landroid/content/Intent;",
+                                     "integer intent method lookup");
+    jstring jKey = nullptr;
+    bool failed = !intentClass || !method;
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "integer intent key creation") || !jKey;
     }
+    if (!failed) {
+        env->CallObjectMethod(intent, method, jKey, static_cast<jint>(value));
+        clearException(env, "integer intent extra");
+    }
+    if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "integer intent extra");
 }
 
 bool hasExtra(JNIEnv* env, jobject intent, const char* key) {
@@ -287,17 +306,21 @@ int64_t getLongExtra(JNIEnv* env, jobject intent, const char* key, int64_t fallb
 
 void putBoolExtra(JNIEnv* env, jobject intent, const char* key, bool value) {
     if (!env || !intent || !key) return;
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass
-                           ? env->GetMethodID(intentClass, "putExtra", "(Ljava/lang/String;Z)Landroid/content/Intent;")
-                           : nullptr;
-    if (method) {
-        jstring jKey = jniNewString(env, key);
-        if (jKey) env->CallObjectMethod(intent, method, jKey, static_cast<jboolean>(value));
-        if (jKey) env->DeleteLocalRef(jKey);
+    jclass intentClass = objectClassChecked(env, intent, "boolean intent class lookup");
+    jmethodID method = methodChecked(env, intentClass, "putExtra", "(Ljava/lang/String;Z)Landroid/content/Intent;",
+                                     "boolean intent method lookup");
+    jstring jKey = nullptr;
+    bool failed = !intentClass || !method;
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "boolean intent key creation") || !jKey;
     }
+    if (!failed) {
+        env->CallObjectMethod(intent, method, jKey, static_cast<jboolean>(value));
+        clearException(env, "boolean intent extra");
+    }
+    if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "boolean intent extra");
 }
 } // namespace
 
@@ -380,31 +403,90 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
         return result;
     }
 
-    jclass listClass = env->GetObjectClass(list);
-    jmethodID sizeMethod = listClass ? env->GetMethodID(listClass, "size", "()I") : nullptr;
-    jmethodID getMethod = listClass ? env->GetMethodID(listClass, "get", "(I)Ljava/lang/Object;") : nullptr;
-    const jint size = sizeMethod ? env->CallIntMethod(list, sizeMethod) : 0;
+    jclass listClass = objectClassChecked(env, list, "external player result list class lookup");
+    jmethodID sizeMethod = methodChecked(env, listClass, "size", "()I", "external player result list size lookup");
+    jmethodID getMethod =
+        methodChecked(env, listClass, "get", "(I)Ljava/lang/Object;", "external player result list get lookup");
+    if (!listClass || !sizeMethod || !getMethod) {
+        if (listClass) env->DeleteLocalRef(listClass);
+        env->DeleteLocalRef(list);
+        if (packageManagerClass) env->DeleteLocalRef(packageManagerClass);
+        env->DeleteLocalRef(packageManager);
+        env->DeleteLocalRef(activityClass);
+        return result;
+    }
+
+    const jint size = env->CallIntMethod(list, sizeMethod);
+    if (clearException(env, "external player result list size")) {
+        env->DeleteLocalRef(listClass);
+        env->DeleteLocalRef(list);
+        if (packageManagerClass) env->DeleteLocalRef(packageManagerClass);
+        env->DeleteLocalRef(packageManager);
+        env->DeleteLocalRef(activityClass);
+        return result;
+    }
+
     std::unordered_set<std::string> seen;
     for (jint i = 0; i < size; ++i) {
-        jobject resolveInfo = getMethod ? env->CallObjectMethod(list, getMethod, i) : nullptr;
+        jobject resolveInfo = env->CallObjectMethod(list, getMethod, i);
+        if (clearException(env, "external player result lookup")) {
+            if (resolveInfo) env->DeleteLocalRef(resolveInfo);
+            break;
+        }
         if (!resolveInfo) continue;
-        jclass resolveInfoClass = env->GetObjectClass(resolveInfo);
-        jfieldID priorityField = resolveInfoClass ? env->GetFieldID(resolveInfoClass, "priority", "I") : nullptr;
+
+        jclass resolveInfoClass = objectClassChecked(env, resolveInfo, "external player result class lookup");
+        jfieldID priorityField =
+            fieldChecked(env, resolveInfoClass, "priority", "I", "external player result priority lookup");
         jfieldID activityInfoField =
-            resolveInfoClass ? env->GetFieldID(resolveInfoClass, "activityInfo", "Landroid/content/pm/ActivityInfo;")
-                             : nullptr;
-        const jint priority = priorityField ? env->GetIntField(resolveInfo, priorityField) : 0;
-        jobject activityInfo = activityInfoField ? env->GetObjectField(resolveInfo, activityInfoField) : nullptr;
+            fieldChecked(env, resolveInfoClass, "activityInfo", "Landroid/content/pm/ActivityInfo;",
+                         "external player activity info lookup");
+        if (!resolveInfoClass || !priorityField || !activityInfoField) {
+            if (resolveInfoClass) env->DeleteLocalRef(resolveInfoClass);
+            env->DeleteLocalRef(resolveInfo);
+            continue;
+        }
+
+        const jint priority = env->GetIntField(resolveInfo, priorityField);
+        if (clearException(env, "external player result priority")) {
+            env->DeleteLocalRef(resolveInfoClass);
+            env->DeleteLocalRef(resolveInfo);
+            continue;
+        }
+
+        jobject activityInfo = env->GetObjectField(resolveInfo, activityInfoField);
+        if (clearException(env, "external player activity info")) {
+            if (activityInfo) env->DeleteLocalRef(activityInfo);
+            env->DeleteLocalRef(resolveInfoClass);
+            env->DeleteLocalRef(resolveInfo);
+            continue;
+        }
+
         if (priority >= 0 && activityInfo) {
-            jclass activityInfoClass = env->GetObjectClass(activityInfo);
-            jfieldID packageField =
-                activityInfoClass ? env->GetFieldID(activityInfoClass, "packageName", "Ljava/lang/String;") : nullptr;
-            jfieldID nameField =
-                activityInfoClass ? env->GetFieldID(activityInfoClass, "name", "Ljava/lang/String;") : nullptr;
-            jstring packageValue =
-                packageField ? static_cast<jstring>(env->GetObjectField(activityInfo, packageField)) : nullptr;
-            jstring nameValue =
-                nameField ? static_cast<jstring>(env->GetObjectField(activityInfo, nameField)) : nullptr;
+            jclass activityInfoClass =
+                objectClassChecked(env, activityInfo, "external player activity info class lookup");
+            jfieldID packageField = fieldChecked(env, activityInfoClass, "packageName", "Ljava/lang/String;",
+                                                 "external player package field lookup");
+            jfieldID nameField = fieldChecked(env, activityInfoClass, "name", "Ljava/lang/String;",
+                                              "external player activity field lookup");
+
+            jstring packageValue = nullptr;
+            jstring nameValue = nullptr;
+            if (packageField) {
+                packageValue = static_cast<jstring>(env->GetObjectField(activityInfo, packageField));
+                if (clearException(env, "external player package value")) {
+                    if (packageValue) env->DeleteLocalRef(packageValue);
+                    packageValue = nullptr;
+                }
+            }
+            if (nameField) {
+                nameValue = static_cast<jstring>(env->GetObjectField(activityInfo, nameField));
+                if (clearException(env, "external player activity value")) {
+                    if (nameValue) env->DeleteLocalRef(nameValue);
+                    nameValue = nullptr;
+                }
+            }
+
             const std::string packageName = jniString(env, packageValue);
             const std::string activityName = jniString(env, nameValue);
             if (packageValue) env->DeleteLocalRef(packageValue);
@@ -414,34 +496,39 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
                 const std::string component = packageName + "/" + activityName;
                 if (seen.insert(component).second) {
                     std::string label = packageName;
-                    jmethodID loadLabel =
-                        resolveInfoClass
-                            ? env->GetMethodID(resolveInfoClass, "loadLabel",
-                                               "(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;")
-                            : nullptr;
+                    jmethodID loadLabel = methodChecked(env, resolveInfoClass, "loadLabel",
+                                                        "(Landroid/content/pm/PackageManager;)Ljava/lang/CharSequence;",
+                                                        "external player label method lookup");
                     jobject labelValue =
                         loadLabel ? env->CallObjectMethod(resolveInfo, loadLabel, packageManager) : nullptr;
-                    if (labelValue && !clearException(env, "external player label")) {
-                        jclass labelClass = env->GetObjectClass(labelValue);
-                        jmethodID toString =
-                            labelClass ? env->GetMethodID(labelClass, "toString", "()Ljava/lang/String;") : nullptr;
+                    if (clearException(env, "external player label")) {
+                        if (labelValue) env->DeleteLocalRef(labelValue);
+                        labelValue = nullptr;
+                    }
+                    if (labelValue) {
+                        jclass labelClass = objectClassChecked(env, labelValue, "external player label class lookup");
+                        jmethodID toString = methodChecked(env, labelClass, "toString", "()Ljava/lang/String;",
+                                                           "external player label string method lookup");
                         jstring labelString =
                             toString ? static_cast<jstring>(env->CallObjectMethod(labelValue, toString)) : nullptr;
+                        if (clearException(env, "external player label string")) {
+                            if (labelString) env->DeleteLocalRef(labelString);
+                            labelString = nullptr;
+                        }
                         const std::string parsedLabel = jniString(env, labelString);
                         if (!parsedLabel.empty()) label = parsedLabel;
                         if (labelString) env->DeleteLocalRef(labelString);
                         if (labelClass) env->DeleteLocalRef(labelClass);
+                        env->DeleteLocalRef(labelValue);
                     }
-                    if (labelValue) env->DeleteLocalRef(labelValue);
                     result.push_back({component, packageName, label});
                 }
             }
             if (activityInfoClass) env->DeleteLocalRef(activityInfoClass);
         }
         if (activityInfo) env->DeleteLocalRef(activityInfo);
-        if (resolveInfoClass) env->DeleteLocalRef(resolveInfoClass);
+        env->DeleteLocalRef(resolveInfoClass);
         env->DeleteLocalRef(resolveInfo);
-        if (clearException(env, "external player result parsing")) break;
     }
 
     if (listClass) env->DeleteLocalRef(listClass);
