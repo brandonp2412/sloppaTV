@@ -87,8 +87,10 @@ public:
     [[nodiscard]] ContentCompletionHostEffects complete(EpisodeSeriesContextRequestCompletion& completion) {
         if (!contentEpoch_.active(completion.generation)) return {};
         if (screen_ != Screen::Details || !completion.request.matches(details_.item())) return {};
-        detailsAsync_.loadSeriesContext(std::move(completion.session), std::move(completion.request),
-                                        contentEpoch_.token(completion.generation));
+        if (!detailsAsync_.loadSeriesContext(std::move(completion.session), std::move(completion.request),
+                                             contentEpoch_.token(completion.generation))) {
+            error_ = "EPISODE CONTEXT COULD NOT BE STARTED";
+        }
         return {};
     }
 

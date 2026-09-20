@@ -22,9 +22,11 @@ DecodedImage decodeImage(const std::string& bytes, std::string& error) {
 }
 
 struct FakeTaskRunner {
+    bool accept = true;
     std::vector<std::function<void()>> queued;
 
     bool submit(std::function<void()> task) {
+        if (!accept) return false;
         queued.push_back(std::move(task));
         return true;
     }
@@ -81,6 +83,14 @@ int main() {
         result.decoded = decodeImage("poster", result.error);
         return result;
     };
+    tasks.accept = false;
+    assert(!artwork.loadPoster("rejected", renderer, posterLoad));
+    tasks.accept = true;
+    assert(artwork.loadPoster("rejected", renderer, posterLoad));
+    assert(tasks.queued.size() == 1);
+    tasks.runNext();
+    applyNext();
+
     assert(artwork.loadPoster("poster", renderer, posterLoad));
     assert(!artwork.loadPoster("poster", renderer, posterLoad));
     assert(tasks.queued.size() == 1);
@@ -95,7 +105,7 @@ int main() {
     applyNext();
     ArtworkEntry* poster = artwork.posterTexture("poster", renderer, [&] { ++missingRequests; });
     assert(poster && poster->texture == 101);
-    assert(posterLoads == 1);
+    assert(posterLoads == 2);
     assert(renderer.createCalls == 1);
 
     assert(artwork.loadProfile("profile", renderer, [] {

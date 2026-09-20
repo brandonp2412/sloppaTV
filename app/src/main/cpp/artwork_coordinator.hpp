@@ -115,13 +115,17 @@ private:
     bool queueLoad(ArtworkPipelineKind kind, ArtworkPipeline& pipeline, const std::string& key, RendererLike& renderer,
                    Load&& load) {
         if (!pipeline.beginLoad(key, renderer)) return false;
-        return tasks_.submit([this, kind, key, load = std::forward<Load>(load)]() mutable {
-            completions_.push(ArtworkLoadCompletion{
-                .pipeline = kind,
-                .key = key,
-                .loaded = load(),
-            });
-        });
+        if (tasks_.submit([this, kind, key, load = std::forward<Load>(load)]() mutable {
+                completions_.push(ArtworkLoadCompletion{
+                    .pipeline = kind,
+                    .key = key,
+                    .loaded = load(),
+                });
+            })) {
+            return true;
+        }
+        pipeline.erase(key, renderer);
+        return false;
     }
 
     TaskRunnerLike& tasks_;

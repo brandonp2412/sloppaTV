@@ -31,6 +31,7 @@ CPP_TESTS = [
     "browse_renderer_test.cpp",
     "browse_async_executor_test.cpp",
     "cast_renderer_test.cpp",
+    "content_completion_coordinator_test.cpp",
     "deep_link_test.cpp",
     "details_renderer_test.cpp",
     "details_screen_test.cpp",
