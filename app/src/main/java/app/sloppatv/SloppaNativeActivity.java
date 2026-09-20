@@ -242,9 +242,12 @@ public final class SloppaNativeActivity extends NativeActivity {
                 @Override
                 public boolean onKeyPreIme(int keyCode, KeyEvent event) {
                     if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_ESCAPE) {
+                        if (nativeTextInput != this) return true;
                         if (event.getAction() == KeyEvent.ACTION_UP) {
                             nativeOnSystemTextInputCancelled(mode, getText().toString());
-                            post(() -> removeNativeTextInput(true));
+                            post(() -> {
+                                if (nativeTextInput == this) removeNativeTextInput(true);
+                            });
                         }
                         return true;
                     }
@@ -272,7 +275,7 @@ public final class SloppaNativeActivity extends NativeActivity {
             input.addTextChangedListener(new TextWatcher() {
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    nativeOnSystemTextInputChanged(mode, s.toString());
+                    if (nativeTextInput == input) nativeOnSystemTextInputChanged(mode, s.toString());
                 }
                 @Override public void afterTextChanged(Editable s) {}
             });
@@ -281,6 +284,7 @@ public final class SloppaNativeActivity extends NativeActivity {
                     || actionId == EditorInfo.IME_ACTION_DONE
                     || actionId == EditorInfo.IME_ACTION_GO
                     || actionId == EditorInfo.IME_ACTION_NEXT) {
+                    if (nativeTextInput != input) return true;
                     String value = input.getText().toString();
                     nativeOnSystemTextInputDone(mode, value);
                     removeNativeTextInput(true);

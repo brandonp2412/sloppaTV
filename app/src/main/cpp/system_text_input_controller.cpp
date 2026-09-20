@@ -25,10 +25,10 @@ SystemTextInputEffects SystemTextInputController::apply(const SystemTextInputEve
                                                         SettingsScreenState& settingsScreen, AppSettings& settings,
                                                         AccountScreenState& account) {
     SystemTextInputEffects effects;
+    if (event.mode != mode_) return effects;
 
     switch (event.phase) {
     case SystemTextInputPhase::Changed:
-        mode_ = event.mode;
         if (event.mode == kTextInputSearch) {
             search.setQuery(event.value);
             search.setKeyboard(false);

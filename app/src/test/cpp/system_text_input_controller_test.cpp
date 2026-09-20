@@ -92,5 +92,31 @@ int main() {
     controller.hide();
     assert(!controller.active());
 
+    search.setQuery("current query");
+    effects = controller.apply(systemTextInputEvent(SystemTextInputPhase::Changed, kTextInputSearch, "stale query"),
+                               search, settingsScreen, settings, account);
+    assert(search.query() == "current query");
+    assert(!controller.active());
+    assert(effects.renderBurst.count() == 0);
+
+    account.setField(AccountScreenState::kServerField, "https://current.example");
+    controller.begin(kTextInputSearch, search.query());
+    effects = controller.apply(
+        systemTextInputEvent(SystemTextInputPhase::Done, kTextInputLoginServer, "https://stale.example"), search,
+        settingsScreen, settings, account);
+    assert(account.field(AccountScreenState::kServerField) == "https://current.example");
+    assert(controller.mode() == kTextInputSearch);
+    assert(effects.renderBurst.count() == 0);
+
+    settings.seerrServer = "https://current-seerr.example";
+    controller.begin(kTextInputSeerrServer, settings.seerrServer);
+    controller.begin(kTextInputSettingsSearch, "");
+    effects = controller.apply(
+        systemTextInputEvent(SystemTextInputPhase::Cancelled, kTextInputSeerrServer, "https://stale-seerr.example"),
+        search, settingsScreen, settings, account);
+    assert(settings.seerrServer == "https://current-seerr.example");
+    assert(controller.mode() == kTextInputSettingsSearch);
+    assert(effects.renderBurst.count() == 0);
+
     return 0;
 }
