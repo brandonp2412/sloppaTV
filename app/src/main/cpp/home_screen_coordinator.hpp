@@ -109,13 +109,19 @@ public:
         const JellyfinSession session = session_;
         if (!session.valid()) return;
         HomeSelectionSnapshot snapshot;
+        const auto now = std::chrono::steady_clock::now();
         {
             std::scoped_lock lock(stateMutex_);
             snapshot = state_.snapshot(home_.rows);
             homeLoading_ = true;
             homeRetryAt_ = {};
         }
-        homeAsync_.loadCore(session, homeEpoch_.begin(), std::move(snapshot), std::chrono::steady_clock::now());
+        if (homeAsync_.loadCore(session, homeEpoch_.begin(), std::move(snapshot), now)) return;
+        homeEpoch_.invalidate();
+        std::scoped_lock lock(stateMutex_);
+        homeLoading_ = false;
+        homeRetryAt_ = now + std::chrono::seconds(1);
+        if (screen_ == Screen::Home) error_ = "HOME LOAD COULD NOT BE STARTED";
     }
 
     [[nodiscard]] HomeCoreScreenEffects complete(HomeCoreCompletion& completion) {
@@ -158,8 +164,12 @@ public:
     }
 
     void loadSecondary(HomeCoreCompletion& completion, HomeCoreScreenEffects effects) {
-        homeAsync_.loadSecondary(session_, completion.generation, std::move(effects.secondaryViews),
-                                 std::move(completion.snapshot), effects.coreRestoredRow, completion.startedAt);
+        if (homeAsync_.loadSecondary(session_, completion.generation, std::move(effects.secondaryViews),
+                                     std::move(completion.snapshot), effects.coreRestoredRow, completion.startedAt))
+            return;
+        if (!home_.warning.empty()) home_.warning += " | ";
+        home_.warning += "SECONDARY HOME ROWS COULD NOT BE STARTED";
+        if (screen_ == Screen::Home) error_ = home_.warning;
     }
 
     [[nodiscard]] HomeSecondaryScreenEffects complete(HomeSecondaryCompletion& completion) {

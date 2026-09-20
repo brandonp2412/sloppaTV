@@ -95,7 +95,11 @@ private:
         if (!account_.beginDiscovery(loading_)) return;
         loading_ = true;
         error_.clear();
-        accountAsync_.discover(authEpoch_.begin(), 1600);
+        if (accountAsync_.discover(authEpoch_.begin(), 1600)) return;
+        authEpoch_.invalidate();
+        loading_ = false;
+        account_.state().clearDiscoveryStatus();
+        error_ = "DISCOVERY COULD NOT BE STARTED";
     }
 
     void login() {
@@ -103,7 +107,10 @@ private:
         if (!fields) return;
         loading_ = true;
         error_.clear();
-        accountAsync_.login(std::move(*fields), account_.deviceId(), authEpoch_.begin());
+        if (accountAsync_.login(std::move(*fields), account_.deviceId(), authEpoch_.begin())) return;
+        authEpoch_.invalidate();
+        loading_ = false;
+        error_ = "LOGIN COULD NOT BE STARTED";
     }
 
     void quickConnect() {
@@ -116,7 +123,11 @@ private:
 
         loading_ = true;
         error_.clear();
-        quickConnectAsync_.connect(std::move(plan.server), account_.deviceId(), authEpoch_.beginToken());
+        if (quickConnectAsync_.connect(std::move(plan.server), account_.deviceId(), authEpoch_.beginToken())) return;
+        authEpoch_.invalidate();
+        loading_ = false;
+        account_.cancelQuickConnect();
+        error_ = "QUICK CONNECT COULD NOT BE STARTED";
     }
 
     AccountFlow& account_;

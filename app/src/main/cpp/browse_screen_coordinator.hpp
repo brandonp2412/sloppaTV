@@ -87,18 +87,22 @@ public:
         if (loading_ || browse_.activeContainer().id.empty()) return;
         loading_ = true;
         error_.clear();
-        browseAsync_.load(BrowsePageRequest{
-            .session = session_,
-            .container = browse_.activeContainer(),
-            .startIndex = append ? browse_.nextIndex() : 0,
-            .append = append,
-            .generation = contentEpoch_.begin(),
-            .mode = browse_.mode(),
-            .genre = browse_.genre(),
-            .letter = browse_.letter(),
-            .nested = browse_.nested(),
-            .pageSize = kPageSize,
-        });
+        if (browseAsync_.load(BrowsePageRequest{
+                .session = session_,
+                .container = browse_.activeContainer(),
+                .startIndex = append ? browse_.nextIndex() : 0,
+                .append = append,
+                .generation = contentEpoch_.begin(),
+                .mode = browse_.mode(),
+                .genre = browse_.genre(),
+                .letter = browse_.letter(),
+                .nested = browse_.nested(),
+                .pageSize = kPageSize,
+            }))
+            return;
+        contentEpoch_.invalidate();
+        loading_ = false;
+        error_ = "BROWSE LOAD COULD NOT BE STARTED";
     }
 
     void complete(BrowsePageCompletion& completion) {

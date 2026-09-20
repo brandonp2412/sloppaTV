@@ -129,7 +129,10 @@ public:
 
         error_.clear();
         const RequestEpoch::Token requestToken = contentEpoch_.beginToken();
-        detailsAsync_.load(session_, id, requestToken, !prefetchedSimilar.has_value());
+        if (!detailsAsync_.load(session_, id, requestToken, !prefetchedSimilar.has_value())) {
+            contentEpoch_.invalidate();
+            error_ = "DETAILS LOAD COULD NOT BE STARTED";
+        }
     }
 
     void openItemMenuForItem(const JellyfinItem& item) {
@@ -140,7 +143,7 @@ public:
         error_.clear();
         if (isSeerrItem(item)) return;
 
-        detailsAsync_.loadItemMenuDetail(session_, item.id);
+        if (!detailsAsync_.loadItemMenuDetail(session_, item.id)) error_ = "ITEM DETAILS COULD NOT BE STARTED";
     }
 
     [[nodiscard]] bool restoreHomeVisibilityForPlayback(const JellyfinItem& item) {
@@ -266,7 +269,10 @@ private:
         loading_ = true;
         error_.clear();
         const uint64_t generation = contentEpoch_.begin();
-        detailsAsync_.loadPersonItems(session_, person.id, generation, 60);
+        if (detailsAsync_.loadPersonItems(session_, person.id, generation, 60)) return;
+        contentEpoch_.invalidate();
+        loading_ = false;
+        error_ = "PERSON ITEMS COULD NOT BE STARTED";
     }
 
     void openItemMenu() {
@@ -281,7 +287,10 @@ private:
         loading_ = true;
         error_.clear();
         const uint64_t generation = contentEpoch_.begin();
-        detailsAsync_.loadSeasons(session_, details_.state().seriesDetail().id, generation);
+        if (detailsAsync_.loadSeasons(session_, details_.state().seriesDetail().id, generation)) return;
+        contentEpoch_.invalidate();
+        loading_ = false;
+        error_ = "SEASONS LOAD COULD NOT BE STARTED";
     }
 
     void openEpisodes(const JellyfinItem& season) {
@@ -290,7 +299,10 @@ private:
         loading_ = true;
         error_.clear();
         const uint64_t generation = contentEpoch_.begin();
-        detailsAsync_.loadEpisodes(session_, details_.state().seriesDetail().id, season.id, generation);
+        if (detailsAsync_.loadEpisodes(session_, details_.state().seriesDetail().id, season.id, generation)) return;
+        contentEpoch_.invalidate();
+        loading_ = false;
+        error_ = "EPISODES LOAD COULD NOT BE STARTED";
     }
 
     void toggleHiddenFromHome(DetailsScreenEffects& effects) {
@@ -308,7 +320,9 @@ private:
         const bool desired = !details_.item().favorite;
         contentMutation_.begin();
         error_.clear();
-        itemMutationAsync_.setFavorite(session_, details_.item(), desired, sessionEpoch_.snapshot());
+        if (itemMutationAsync_.setFavorite(session_, details_.item(), desired, sessionEpoch_.snapshot())) return;
+        contentMutation_.finish();
+        error_ = "FAVORITE UPDATE COULD NOT BE STARTED";
     }
 
     void togglePlayedAsync() {
@@ -320,22 +334,31 @@ private:
                                                  queueState_, details_.item(), hiddenFromHome, sessionEpoch);
         contentMutation_.begin();
         error_.clear();
-        itemMutationAsync_.setPlayed(session_, std::move(preparation.item), preparation.desired, sessionEpoch,
-                                     preparation.nextUpReplacementIndex);
+        if (itemMutationAsync_.setPlayed(session_, preparation.item, preparation.desired, sessionEpoch,
+                                         preparation.nextUpReplacementIndex))
+            return;
+        contentMutation_.rejectPlayedToggle(preparation.item, hiddenFromHome, home_, homeState_, browseState_,
+                                            searchState_, details_.state(), queueState_, details_.item());
+        error_ = "PLAYED UPDATE COULD NOT BE STARTED";
     }
 
     void refreshCurrentItemMetadataAsync() {
         if (loading_ || contentMutation_.loading() || details_.item().id.empty()) return;
         contentMutation_.begin();
         error_.clear();
-        itemMutationAsync_.refreshMetadata(session_, details_.item().id, sessionEpoch_.snapshot());
+        if (itemMutationAsync_.refreshMetadata(session_, details_.item().id, sessionEpoch_.snapshot())) return;
+        contentMutation_.finish();
+        error_ = "METADATA REFRESH COULD NOT BE STARTED";
     }
 
     void deleteCurrentItemAsync() {
         if (loading_ || contentMutation_.loading() || details_.item().id.empty() || !details_.item().canDelete) return;
         contentMutation_.begin();
         error_.clear();
-        itemMutationAsync_.deleteItem(session_, details_.item().id, sessionEpoch_.snapshot());
+        if (itemMutationAsync_.deleteItem(session_, details_.item().id, sessionEpoch_.snapshot())) return;
+        contentMutation_.finish();
+        details_.state().setDeleteConfirmation(false);
+        error_ = "DELETE COULD NOT BE STARTED";
     }
 
     DetailsFlow& details_;

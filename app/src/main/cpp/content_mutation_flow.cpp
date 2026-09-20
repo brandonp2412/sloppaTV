@@ -19,6 +19,19 @@ PlayedMutationPreparation ContentMutationFlow::preparePlayedToggle(JellyfinHomeD
     return preparation;
 }
 
+void ContentMutationFlow::rejectPlayedToggle(const JellyfinItem& original, bool hiddenFromHome, JellyfinHomeData& home,
+                                             HomeScreenState& homeState, BrowseScreenState& browseState,
+                                             SearchScreenState& searchState, DetailsScreenState& detailsState,
+                                             PlaybackQueueState& queueState, JellyfinItem& detail) {
+    loading_ = false;
+    ItemMutationCompletionEffects effects;
+    effects.cacheUpdate = original;
+    effects.playedRollback.swap(playedRollback_);
+    if (detail.id == original.id) detail = original;
+    static_cast<void>(
+        apply(std::move(effects), hiddenFromHome, home, homeState, browseState, searchState, detailsState, queueState));
+}
+
 ContentMutationHostEffects ContentMutationFlow::complete(FavoriteCompletion& completion, bool activeSession,
                                                          bool detailVisible, bool updatedHiddenFromHome,
                                                          JellyfinHomeData& home, HomeScreenState& homeState,

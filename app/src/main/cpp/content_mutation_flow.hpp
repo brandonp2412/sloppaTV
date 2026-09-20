@@ -30,6 +30,10 @@ public:
                                                                 PlaybackQueueState& queueState, JellyfinItem& detail,
                                                                 bool hiddenFromHome, uint64_t sessionEpoch);
 
+    void rejectPlayedToggle(const JellyfinItem& original, bool hiddenFromHome, JellyfinHomeData& home,
+                            HomeScreenState& homeState, BrowseScreenState& browseState, SearchScreenState& searchState,
+                            DetailsScreenState& detailsState, PlaybackQueueState& queueState, JellyfinItem& detail);
+
     [[nodiscard]] ContentMutationHostEffects complete(FavoriteCompletion& completion, bool activeSession,
                                                       bool detailVisible, bool updatedHiddenFromHome,
                                                       JellyfinHomeData& home, HomeScreenState& homeState,

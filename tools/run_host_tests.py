@@ -149,6 +149,11 @@ LINKED_CPP_TESTS = [
     ("details_completion_controller_test.cpp", ["details_completion_controller.cpp"], []),
     ("details_navigation_controller_test.cpp", ["details_navigation_controller.cpp"], []),
     ("item_mutation_controller_test.cpp", ["item_mutation_controller.cpp"], []),
+    (
+        "content_mutation_flow_test.cpp",
+        ["content_mutation_flow.cpp", "item_mutation_controller.cpp"],
+        [],
+    ),
     ("home_completion_controller_test.cpp", ["home_completion_controller.cpp"], []),
     ("search_completion_controller_test.cpp", ["search_completion_controller.cpp"], []),
     ("server_info_completion_controller_test.cpp", ["server_info_completion_controller.cpp"], []),
