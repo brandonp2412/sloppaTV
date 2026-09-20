@@ -7,10 +7,18 @@
 
 namespace {
 struct FakeAsyncExecutor {
-    void refreshStorage(SeerrEndpoint endpoint) { storage.push_back(std::move(endpoint)); }
+    bool refreshStorage(SeerrEndpoint endpoint) {
+        storage.push_back(std::move(endpoint));
+        return acceptStorage;
+    }
 
-    void refreshPending(SeerrEndpoint endpoint) { pending.push_back(std::move(endpoint)); }
+    bool refreshPending(SeerrEndpoint endpoint) {
+        pending.push_back(std::move(endpoint));
+        return acceptPending;
+    }
 
+    bool acceptStorage = true;
+    bool acceptPending = true;
     std::vector<SeerrEndpoint> storage;
     std::vector<SeerrEndpoint> pending;
 };
@@ -57,36 +65,51 @@ int main() {
     assert(async.storage.empty());
     assert(domain.storageTargets().empty());
 
+    async.acceptStorage = false;
+    assert(coordinator.refreshStorage(configuredEndpoint(), false, start) ==
+           SeerrDomainState::RefreshStartAction::None);
+    assert(async.storage.size() == 1);
+    assert(!domain.storageLoading());
+
+    async.acceptStorage = true;
     assert(coordinator.refreshStorage(configuredEndpoint(), false, start) ==
            SeerrDomainState::RefreshStartAction::Submit);
-    assert(async.storage.size() == 1);
+    assert(async.storage.size() == 2);
     assert(async.storage.back().server == "https://seerr.example.nz");
     assert(async.storage.back().auth.sessionCookie == "session");
     assert(domain.storageLoading());
 
     assert(coordinator.refreshStorage(configuredEndpoint(), true, start + 1s) ==
            SeerrDomainState::RefreshStartAction::None);
-    assert(async.storage.size() == 1);
+    assert(async.storage.size() == 2);
 
     domain.storage().finishRefresh({}, start);
     assert(coordinator.refreshStorage(configuredEndpoint(), false, start + 1s) ==
            SeerrDomainState::RefreshStartAction::None);
-    assert(async.storage.size() == 1);
+    assert(async.storage.size() == 2);
 
     assert(coordinator.refreshStorage(configuredEndpoint(), true, start + 1s) ==
            SeerrDomainState::RefreshStartAction::Submit);
-    assert(async.storage.size() == 2);
+    assert(async.storage.size() == 3);
 
-    assert(coordinator.refreshPending(configuredEndpoint()) == SeerrDomainState::RefreshStartAction::Submit);
+    async.acceptPending = false;
+    assert(coordinator.refreshPending(configuredEndpoint(), start + 1s) == SeerrDomainState::RefreshStartAction::None);
     assert(async.pending.size() == 1);
+    assert(!domain.pendingRequestsLoading());
+    assert(domain.pendingRequestsRefreshDeadline() == start + 1s);
+
+    async.acceptPending = true;
+    assert(coordinator.refreshPending(configuredEndpoint(), start + 1s) ==
+           SeerrDomainState::RefreshStartAction::Submit);
+    assert(async.pending.size() == 2);
     assert(async.pending.back().server == "https://seerr.example.nz");
     assert(domain.pendingRequestsLoading());
 
-    assert(coordinator.refreshPending(configuredEndpoint()) == SeerrDomainState::RefreshStartAction::None);
-    assert(async.pending.size() == 1);
+    assert(coordinator.refreshPending(configuredEndpoint(), start + 1s) == SeerrDomainState::RefreshStartAction::None);
+    assert(async.pending.size() == 2);
 
-    assert(coordinator.refreshPending(disconnected) == SeerrDomainState::RefreshStartAction::Reset);
-    assert(async.pending.size() == 1);
+    assert(coordinator.refreshPending(disconnected, start + 1s) == SeerrDomainState::RefreshStartAction::Reset);
+    assert(async.pending.size() == 2);
     assert(!domain.pendingRequestsLoading());
 
     const auto requested = media();

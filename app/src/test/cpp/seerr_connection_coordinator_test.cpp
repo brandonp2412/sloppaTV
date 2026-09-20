@@ -13,14 +13,16 @@ struct Submission {
 };
 
 struct FakeAsyncExecutor {
-    void connect(std::string server, JellyfinSession jellyfin, bool announce) {
+    bool connect(std::string server, JellyfinSession jellyfin, bool announce) {
         submissions.push_back({
             .server = std::move(server),
             .jellyfin = std::move(jellyfin),
             .announce = announce,
         });
+        return accept;
     }
 
+    bool accept = true;
     std::vector<Submission> submissions;
 };
 
@@ -41,7 +43,7 @@ int main() {
     auto plan = coordinator.prepare("", session());
     assert(plan.action == SeerrDomainState::ConnectAction::MissingServer);
     assert(!plan.ready());
-    coordinator.submit(std::move(plan), true);
+    assert(!coordinator.submit(std::move(plan), true));
     assert(async.submissions.empty());
     assert(!domain.connection().connecting());
 
@@ -63,13 +65,13 @@ int main() {
     assert(duplicate.action == SeerrDomainState::ConnectAction::AlreadyConnecting);
     assert(!duplicate.ready());
 
-    coordinator.submit(std::move(plan), true);
+    assert(coordinator.submit(std::move(plan), true));
     assert(async.submissions.size() == 1);
     assert(async.submissions.front().server == "https://seerr.example.nz");
     assert(async.submissions.front().jellyfin.userId == "user-1");
     assert(async.submissions.front().announce);
 
-    coordinator.submit(std::move(duplicate), false);
+    assert(!coordinator.submit(std::move(duplicate), false));
     assert(async.submissions.size() == 1);
 
     auto completion =
@@ -107,6 +109,19 @@ int main() {
     assert(completion.deferred.request && completion.deferred.request->id == "seerr:movie:42");
     assert(completion.deferred.retrySearch);
     assert(!domain.connection().connecting());
+
+    {
+        SeerrDomainState rejectedDomain;
+        FakeAsyncExecutor rejectedAsync;
+        rejectedAsync.accept = false;
+        SeerrConnectionCoordinator rejectedCoordinator(rejectedDomain, rejectedAsync);
+        auto rejectedPlan = rejectedCoordinator.prepare("https://seerr.example.nz", session());
+        assert(rejectedPlan.ready());
+        assert(rejectedDomain.connection().connecting());
+        assert(!rejectedCoordinator.submit(std::move(rejectedPlan), true));
+        assert(!rejectedDomain.connection().connecting());
+        assert(rejectedAsync.submissions.size() == 1);
+    }
 
     return 0;
 }

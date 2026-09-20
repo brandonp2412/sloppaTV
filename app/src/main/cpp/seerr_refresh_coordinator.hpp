@@ -27,18 +27,19 @@ public:
     refreshStorage(SeerrEndpoint endpoint, bool force,
                    SeerrStorageState::TimePoint now = SeerrStorageState::Clock::now()) {
         const auto action = domain_.prepareStorageRefresh(endpoint, force, now);
-        if (action == SeerrDomainState::RefreshStartAction::Submit) {
-            async_.refreshStorage(std::move(endpoint));
-        }
-        return action;
+        if (action != SeerrDomainState::RefreshStartAction::Submit) return action;
+        if (async_.refreshStorage(std::move(endpoint))) return action;
+        domain_.storage().invalidateRefresh();
+        return SeerrDomainState::RefreshStartAction::None;
     }
 
-    SeerrDomainState::RefreshStartAction refreshPending(SeerrEndpoint endpoint) {
+    SeerrDomainState::RefreshStartAction
+    refreshPending(SeerrEndpoint endpoint, SeerrRequestState::TimePoint now = SeerrRequestState::Clock::now()) {
         const auto action = domain_.preparePendingRefresh(endpoint);
-        if (action == SeerrDomainState::RefreshStartAction::Submit) {
-            async_.refreshPending(std::move(endpoint));
-        }
-        return action;
+        if (action != SeerrDomainState::RefreshStartAction::Submit) return action;
+        if (async_.refreshPending(std::move(endpoint))) return action;
+        domain_.requests().invalidatePendingRefresh(now);
+        return SeerrDomainState::RefreshStartAction::None;
     }
 
     [[nodiscard]] SeerrStorageRefreshCompletionPlan completeStorage(const SeerrEndpoint& requestedEndpoint,

@@ -14,14 +14,16 @@ struct Submission {
 };
 
 struct FakeAsyncExecutor {
-    void requestMedia(SeerrEndpoint endpoint, SeerrMediaItem item, std::optional<SeerrStorageTarget> target) {
+    bool requestMedia(SeerrEndpoint endpoint, SeerrMediaItem item, std::optional<SeerrStorageTarget> target) {
         submissions.push_back({
             .endpoint = std::move(endpoint),
             .item = std::move(item),
             .target = std::move(target),
         });
+        return accept;
     }
 
+    bool accept = true;
     std::vector<Submission> submissions;
 };
 
@@ -62,7 +64,7 @@ int main() {
     auto plan = coordinator.prepare({}, configuredEndpoint(), false, false);
     assert(plan.action == SeerrDomainState::RequestAction::Invalid);
     assert(!plan.ready());
-    coordinator.submit(std::move(plan));
+    assert(!coordinator.submit(std::move(plan)));
     assert(async.submissions.empty());
 
     auto requested = media();
@@ -100,7 +102,7 @@ int main() {
     assert(plan.endpoint.server == "https://seerr.example.nz");
     assert(plan.item.id == "seerr:movie:10");
     assert(!plan.target);
-    coordinator.submit(std::move(plan));
+    assert(coordinator.submit(std::move(plan)));
     assert(async.submissions.size() == 1);
     assert(async.submissions.back().endpoint.auth.sessionCookie == "session");
     assert(async.submissions.back().item.id == "seerr:movie:10");
@@ -110,7 +112,7 @@ int main() {
     plan = coordinator.prepare(media(), configuredEndpoint(), true, false, &selected);
     assert(plan.action == SeerrDomainState::RequestAction::Submit);
     assert(plan.target && plan.target->serverId == 9);
-    coordinator.submit(std::move(plan));
+    assert(coordinator.submit(std::move(plan)));
     assert(async.submissions.size() == 2);
     assert(async.submissions.back().target && async.submissions.back().target->serverId == 9);
 
@@ -172,6 +174,12 @@ int main() {
     requestedSearchResult = domain.findSearchResult("seerr:movie:10");
     assert(requestedSearchResult != nullptr && requestedSearchResult->requested);
     assert(domain.pendingRequests().size() == 1);
+
+    async.accept = false;
+    plan = coordinator.prepare(media("seerr:movie:14"), configuredEndpoint(), false, false);
+    assert(plan.ready());
+    assert(!coordinator.submit(std::move(plan)));
+    assert(async.submissions.size() == 3);
 
     return 0;
 }

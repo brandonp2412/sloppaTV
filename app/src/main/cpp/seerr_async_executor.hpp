@@ -57,8 +57,8 @@ public:
         : requestClient_(requestClient), searchClient_(searchClient), jellyfinClient_(jellyfinClient), tasks_(tasks),
           completions_(completions) {}
 
-    void connect(std::string server, JellyfinSession jellyfin, bool announce) {
-        tasks_.submit([this, server = std::move(server), jellyfin = std::move(jellyfin), announce] {
+    bool connect(std::string server, JellyfinSession jellyfin, bool announce) {
+        return tasks_.submit([this, server = std::move(server), jellyfin = std::move(jellyfin), announce] {
             auto result = runSeerrQuickConnect(
                 [&] { return requestClient_.initiateQuickConnect(server); },
                 [&](const std::string& code) { return jellyfinClient_.authorizeQuickConnectCode(jellyfin, code); },
@@ -74,8 +74,8 @@ public:
         });
     }
 
-    void deleteRequest(SeerrEndpoint endpoint, SeerrDeleteRequest request) {
-        tasks_.submit([this, endpoint = std::move(endpoint), request = std::move(request)] {
+    bool deleteRequest(SeerrEndpoint endpoint, SeerrDeleteRequest request) {
+        return tasks_.submit([this, endpoint = std::move(endpoint), request = std::move(request)] {
             ApiResult result = requestClient_.deleteRequest(endpoint.server, endpoint.auth, request.requestId);
             completions_.push(SeerrDeleteCompletion{
                 .endpoint = endpoint,
@@ -85,20 +85,21 @@ public:
         });
     }
 
-    void requestMedia(SeerrEndpoint endpoint, SeerrMediaItem item, std::optional<SeerrStorageTarget> target) {
-        tasks_.submit([this, endpoint = std::move(endpoint), item = std::move(item), target = std::move(target)] {
-            auto result =
-                requestClient_.requestMedia(endpoint.server, endpoint.auth, item, target ? &*target : nullptr);
-            completions_.push(SeerrRequestCompletion{
-                .endpoint = endpoint,
-                .requestedItem = item,
-                .result = std::move(result),
+    bool requestMedia(SeerrEndpoint endpoint, SeerrMediaItem item, std::optional<SeerrStorageTarget> target) {
+        return tasks_.submit(
+            [this, endpoint = std::move(endpoint), item = std::move(item), target = std::move(target)] {
+                auto result =
+                    requestClient_.requestMedia(endpoint.server, endpoint.auth, item, target ? &*target : nullptr);
+                completions_.push(SeerrRequestCompletion{
+                    .endpoint = endpoint,
+                    .requestedItem = item,
+                    .result = std::move(result),
+                });
             });
-        });
     }
 
-    void refreshStorage(SeerrEndpoint endpoint) {
-        tasks_.submit([this, endpoint = std::move(endpoint)] {
+    bool refreshStorage(SeerrEndpoint endpoint) {
+        return tasks_.submit([this, endpoint = std::move(endpoint)] {
             auto result = requestClient_.storageTargets(endpoint.server, endpoint.auth);
             completions_.push(SeerrStorageRefreshCompletion{
                 .endpoint = endpoint,
@@ -107,8 +108,8 @@ public:
         });
     }
 
-    void refreshPending(SeerrEndpoint endpoint, int limit = 20) {
-        tasks_.submit([this, endpoint = std::move(endpoint), limit] {
+    bool refreshPending(SeerrEndpoint endpoint, int limit = 20) {
+        return tasks_.submit([this, endpoint = std::move(endpoint), limit] {
             auto result = requestClient_.pendingRequests(endpoint.server, endpoint.auth, limit);
             completions_.push(SeerrPendingRefreshCompletion{
                 .endpoint = endpoint,

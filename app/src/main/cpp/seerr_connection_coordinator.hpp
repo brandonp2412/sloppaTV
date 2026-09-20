@@ -40,9 +40,11 @@ public:
         };
     }
 
-    void submit(SeerrConnectPlan plan, bool announce) {
-        if (!plan.ready()) return;
-        async_.connect(std::move(plan.server), std::move(plan.jellyfin), announce);
+    bool submit(SeerrConnectPlan plan, bool announce) {
+        if (!plan.ready()) return false;
+        if (async_.connect(std::move(plan.server), std::move(plan.jellyfin), announce)) return true;
+        domain_.connection().failConnect();
+        return false;
     }
 
     [[nodiscard]] SeerrConnectCompletionPlan complete(bool ok, bool authenticationStageFailure,

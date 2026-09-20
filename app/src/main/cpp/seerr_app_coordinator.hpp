@@ -64,7 +64,10 @@ public:
             effects.notice = "CONNECTING SEERR WITH JELLYFIN...";
             effects.noticeSeconds = 30;
         }
-        connection_.submit(std::move(plan), announce);
+        if (!connection_.submit(std::move(plan), announce) && announce) {
+            effects.notice = "COULD NOT START SEERR CONNECTION";
+            effects.noticeSeconds = 4;
+        }
         return effects;
     }
 
@@ -123,7 +126,10 @@ public:
             break;
         }
         mutations_.begin();
-        request_.submit(std::move(plan));
+        if (!request_.submit(std::move(plan))) {
+            mutations_.finish();
+            effects.error = "COULD NOT START SEERR REQUEST";
+        }
         return effects;
     }
 
@@ -144,7 +150,11 @@ public:
         }
         mutations_.begin();
         effects.clearError = true;
-        async_.deleteRequest(endpoint(), *pendingDelete);
+        if (!async_.deleteRequest(endpoint(), *pendingDelete)) {
+            mutations_.finish();
+            details_.state().setDeleteConfirmation(false);
+            effects.error = "COULD NOT START SEERR DELETE";
+        }
         return effects;
     }
 

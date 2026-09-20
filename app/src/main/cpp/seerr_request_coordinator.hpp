@@ -41,9 +41,9 @@ public:
         };
     }
 
-    void submit(SeerrRequestDispatchPlan plan) {
-        if (!plan.ready()) return;
-        async_.requestMedia(std::move(plan.endpoint), std::move(plan.item), std::move(plan.target));
+    bool submit(SeerrRequestDispatchPlan plan) {
+        if (!plan.ready()) return false;
+        return async_.requestMedia(std::move(plan.endpoint), std::move(plan.item), std::move(plan.target));
     }
 
     [[nodiscard]] SeerrDomainState::RequestMutationCompletion complete(const SeerrEndpoint& requestedEndpoint,
