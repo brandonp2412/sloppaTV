@@ -26,7 +26,7 @@ template <typename RendererLike, typename ColorLike, typename DrawButton, typena
 void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderState& state,
                           const PlayerControlsRenderStyle<ColorLike>& style, DrawButton&& drawButton,
                           FitScale&& fitScale, MaterialLabel&& materialLabel) {
-    constexpr std::array<float, 5> controlWidths{112.0f, 112.0f, 112.0f, 300.0f, 340.0f};
+    constexpr std::array<float, 5> controlWidths{112.0f, 112.0f, 112.0f, 330.0f, 370.0f};
     constexpr float controlHeight = 66.0f;
     constexpr float controlGap = 18.0f;
     constexpr float controlY = 925.0f;

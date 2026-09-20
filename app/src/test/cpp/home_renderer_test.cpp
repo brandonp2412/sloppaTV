@@ -172,7 +172,7 @@ int main() {
     assert(renderedRows[0].row == 0);
     assert(renderedRows[0].top == 150.0f);
     assert(renderedRows[1].title == "Next Up");
-    assert(renderedRows[1].top == 590.0f);
+    assert(renderedRows[1].top == 555.0f);
 
     HomeScreenState toolbarState;
     toolbarState.reset();
@@ -308,11 +308,11 @@ int main() {
 
     assert(slidingRows.size() == 3);
     assert(slidingRows[0].row == 0);
-    assert(slidingRows[0].top == -70.0f);
+    assert(slidingRows[0].top == -52.5f);
     assert(slidingRows[1].row == 1);
-    assert(slidingRows[1].top == 370.0f);
+    assert(slidingRows[1].top == 352.5f);
     assert(slidingRows[2].row == 2);
-    assert(slidingRows[2].top == 810.0f);
+    assert(slidingRows[2].top == 757.5f);
 
     return 0;
 }

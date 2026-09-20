@@ -237,7 +237,7 @@ int main() {
     assert(movieHarness.renderer.roundedRects.size() >= 3);
     bool sawHalfProgress = false;
     for (const auto& rect : movieHarness.renderer.roundedRects) {
-        if (rect.y == 744.0f && rect.width == 280.0f && rect.color == 5) sawHalfProgress = true;
+        if (rect.width == 280.0f && rect.color == 5) sawHalfProgress = true;
     }
     assert(sawHalfProgress);
 

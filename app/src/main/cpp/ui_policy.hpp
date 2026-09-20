@@ -18,7 +18,7 @@ constexpr float mediaCardWidth() {
 }
 
 constexpr float mediaPosterWidth() {
-    return 208.0f;
+    return 224.0f;
 }
 
 constexpr float mediaPosterHeight() {
@@ -74,7 +74,7 @@ constexpr float homeRowImageOffset(int uiTextSize) {
 }
 
 constexpr float homeRowStep(int uiTextSize) {
-    return uiTextSize <= 0 ? 420.0f : (uiTextSize == 1 ? 440.0f : 460.0f);
+    return uiTextSize <= 0 ? 390.0f : (uiTextSize == 1 ? 405.0f : 420.0f);
 }
 
 constexpr float castRowStep(int uiTextSize) {

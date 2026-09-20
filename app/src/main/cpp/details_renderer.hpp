@@ -84,9 +84,9 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     constexpr float contentWidth = 920.0f;
     const bool episode = detail.type == "Episode";
     const std::string mainTitle = episode && !detail.seriesName.empty() ? detail.seriesName : detail.name;
-    const bool hasLogo = drawLogo(detail, contentX, 132.0f, 700.0f, 138.0f);
+    const bool hasLogo = drawLogo(detail, contentX, 118.0f, 700.0f, 132.0f);
     if (!hasLogo) {
-        renderer.text(contentX, 142.0f, 6.0f,
+        renderer.text(contentX, 132.0f, 6.0f,
                       fitTextLines(mainTitle.empty() ? "Loading…" : mainTitle, 6.0f, contentWidth, 1), style.text,
                       contentWidth);
     }
@@ -98,8 +98,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
                        : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail.name)
                 : episodeLabel(detail);
     const float uiScale = uiTextScale(config.uiTextSize);
-    const float titleBottom = hasLogo ? 270.0f : 142.0f + 10.0f * 6.0f * uiScale;
-    const float secondaryY = std::max(286.0f, titleBottom + 12.0f);
+    const float titleBottom = hasLogo ? 250.0f : 132.0f + 10.0f * 6.0f * uiScale;
+    const float secondaryY = std::max(268.0f, titleBottom + 10.0f);
     if (!secondary.empty()) {
         renderer.text(contentX, secondaryY, 2.80f, fitTextLines(secondary, 2.80f, contentWidth, 1),
                       style.secondaryText, contentWidth);
@@ -118,7 +118,7 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     }
     if (!detail.genres.empty()) metadata.emplace_back(detail.genres.front());
 
-    constexpr float metadataY = 380.0f;
+    const float metadataY = secondary.empty() ? 294.0f : secondaryY + 50.0f;
     float metadataX = contentX;
     for (const auto& value : metadata) {
         const float available = contentX + contentWidth - metadataX;
@@ -127,7 +127,7 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
         metadataX += width + 10.0f;
     }
 
-    constexpr float overviewY = 438.0f;
+    const float overviewY = metadataY + 58.0f;
     const int overviewLines = config.uiTextSize > 0 ? 2 : 3;
     if (!detail.overview.empty()) {
         renderer.text(contentX, overviewY, 2.35f,
@@ -135,7 +135,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
                       contentWidth);
     }
 
-    constexpr float stateY = 600.0f;
+    const float overviewHeight = detail.overview.empty() ? 0.0f : 11.0f * 2.35f * uiScale * static_cast<float>(overviewLines);
+    const float stateY = overviewY + overviewHeight + (detail.overview.empty() ? 4.0f : 18.0f);
     float stateX = contentX;
     if (detail.favorite) {
         stateX += drawChip(stateX, stateY, "Favorite", true, 1.42f, 42.0f, 180.0f) + 10.0f;
@@ -144,7 +145,7 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
         drawChip(stateX, stateY, "Watched", true, 1.42f, 42.0f, 180.0f);
     }
 
-    constexpr float actionY = 658.0f;
+    const float actionY = stateY + ((detail.favorite || (config.showWatchedIndicators && detail.played)) ? 58.0f : 12.0f);
     constexpr float actionGap = 18.0f;
     constexpr float actionRightInset = 72.0f;
     auto desiredActionWidth = [&](const std::string& action) {
@@ -165,8 +166,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
                              state.actionSelection() == static_cast<int>(index);
         const float width = std::round(desiredActionWidth(actions[index]) * actionWidthScale);
         const bool primaryAction = index == 0;
-        const auto bounds = drawButtonSurface(actionX, actionY, width, 64.0f, focused, primaryAction);
-        drawCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.80f, materialLabel(actions[index]),
+        const auto bounds = drawButtonSurface(actionX, actionY, width, 58.0f, focused, primaryAction);
+        drawCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.72f, materialLabel(actions[index]),
                      primaryAction || focused ? style.text : style.secondaryText, 18.0f, 6.0f);
         actionX += width + actionGap;
     }
@@ -174,12 +175,13 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     if (detail.positionTicks > 0 && detail.runtimeTicks > 0) {
         const double fraction =
             std::clamp(static_cast<double>(detail.positionTicks) / static_cast<double>(detail.runtimeTicks), 0.0, 1.0);
-        renderer.roundedRect(contentX, 744.0f, 560.0f, 4.0f, 2.0f, style.track);
-        renderer.roundedRect(contentX, 744.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, style.focus);
+        renderer.roundedRect(contentX, actionY + 84.0f, 560.0f, 4.0f, 2.0f, style.track);
+        renderer.roundedRect(contentX, actionY + 84.0f, static_cast<float>(560.0 * fraction), 4.0f, 2.0f, style.focus);
     }
 
     if (episode && state.hasEpisodeSeriesContext()) {
-        renderer.text(72.0f, 752.0f, 2.30f, "Show & seasons",
+        const float relatedLabelY = actionY + 112.0f;
+        renderer.text(72.0f, relatedLabelY, 2.30f, "Show & seasons",
                       state.episodeContextFocused() ? style.text : style.secondaryText, 520.0f);
         const int count = state.episodeContextCount();
         constexpr int visible = 5;
@@ -188,7 +190,7 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
         constexpr float buttonWidth = 320.0f;
         constexpr float buttonHeight = 72.0f;
         constexpr float buttonGap = 26.0f;
-        constexpr float rowY = 825.0f;
+        const float rowY = relatedLabelY + 72.0f;
         for (int slot = 0; slot < visible; ++slot) {
             const int index = start + slot;
             if (index >= count) break;
@@ -210,7 +212,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     const auto& similarItems = state.similar();
     if (similarItems.empty()) return;
 
-    renderer.text(72.0f, 752.0f, 2.30f, "More like this",
+    const float relatedLabelY = actionY + 112.0f;
+    renderer.text(72.0f, relatedLabelY, 2.30f, "More like this",
                   state.similarFocused() ? style.text : style.secondaryText, 440.0f);
     constexpr int visible = 5;
     const int maxStart = std::max(0, static_cast<int>(similarItems.size()) - visible);
@@ -223,7 +226,7 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
         if (index >= static_cast<int>(similarItems.size())) break;
         const auto& similar = similarItems[static_cast<std::size_t>(index)];
         const float x = 72.0f + static_cast<float>(slot) * (cardWidth + cardGap);
-        constexpr float y = 825.0f;
+        const float y = relatedLabelY + 72.0f;
         const bool focused = !config.overlayOpen && state.similarFocused() && index == state.similarSelection();
         const auto bounds = focusedBounds(x, y, cardWidth, cardHeight, focused, style.cardFocusScale);
         const float cardRadius = style.cornerExtraSmall * bounds[3] / cardHeight;

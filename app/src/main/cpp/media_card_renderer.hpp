@@ -76,19 +76,23 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
         const float badgeWidth = item.favorite ? 132.0f : 118.0f;
         const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
         const float badgeY = bounds[1] + 12.0f;
-        const ColorLike badgeSurface = item.favorite ? style.focusSoft : style.panelElevated;
+        // State is useful context, but it must not read as another focused control.
+        const ColorLike badgeSurface = style.panelElevated;
         renderer.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, badgeSurface);
         renderer.roundedOutline(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, 1.0f,
-                                item.favorite ? style.focus : style.outline);
-        drawCentered(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label, style.text, 10.0f, 3.0f);
+                                focused && item.favorite ? style.focus : style.outline);
+        drawCentered(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label,
+                     focused && item.favorite ? style.text : style.muted, 10.0f, 3.0f);
     }
 
     if (focused) drawHalo(bounds[0], bounds[1], bounds[2], bounds[3], style.focus, cardRadius);
 
     const float titleY = y + artworkBandHeight + 24.0f;
     const int titleLines = options.titleLineLimit > 0 ? options.titleLineLimit : (landscape ? 1 : 2);
-    const std::string fittedTitle = fitText(item.name, style.labelScale, imageWidth - 4.0f, titleLines);
-    renderer.text(imageX + 2.0f, titleY, style.labelScale, fittedTitle, style.text, imageWidth - 4.0f);
+    const float titleWidth = landscape ? imageWidth - 4.0f : slotWidth - 4.0f;
+    const float titleX = landscape ? imageX + 2.0f : x + 2.0f;
+    const std::string fittedTitle = fitText(item.name, style.labelScale, titleWidth, titleLines);
+    renderer.text(titleX, titleY, style.labelScale, fittedTitle, style.text, titleWidth);
 
     const std::string secondary = secondaryLabel(item);
     if (secondary.empty()) return;
@@ -99,8 +103,7 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
     const float secondaryY = titleY + titleLineHeight * static_cast<float>(renderedTitleLines) + 3.0f;
     const float secondaryHeight = 10.0f * 1.45f * uiTextScale(options.uiTextSize);
     if (secondaryY + secondaryHeight <= style.canvasHeight - 8.0f)
-        renderer.text(imageX + 2.0f, secondaryY, 1.45f, fitText(secondary, 1.45f, imageWidth - 4.0f, 1), style.muted,
-                      imageWidth - 4.0f);
+        renderer.text(titleX, secondaryY, 1.45f, fitText(secondary, 1.45f, titleWidth, 1), style.muted, titleWidth);
 }
 
 template <typename RendererLike, typename ColorLike, typename FocusedBounds, typename DrawCentered, typename DrawHalo>

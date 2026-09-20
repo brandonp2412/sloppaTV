@@ -9,7 +9,7 @@ inline void focusRing(Renderer& renderer, float x, float y, float width, float h
                       Color accent = primary) {
     renderer.roundedOutline(x - focusHaloWidth, y - focusHaloWidth, width + focusHaloWidth * 2.0f,
                             height + focusHaloWidth * 2.0f, radius + focusHaloWidth, focusHaloWidth,
-                            Color{accent.r, accent.g, accent.b, 0.18f});
+                            Color{accent.r, accent.g, accent.b, 0.14f});
     renderer.roundedOutline(x - 3.0f, y - 3.0f, width + 6.0f, height + 6.0f, radius + 3.0f, focusOutlineWidth, accent);
 }
 

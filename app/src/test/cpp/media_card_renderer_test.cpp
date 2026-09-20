@@ -106,9 +106,9 @@ int main() {
             assert(item.id == "episode-1");
             sawSeriesCover = seriesCover;
             sawLandscape = landscape;
-            assert(x == 134.0f);
+            assert(x == 126.0f);
             assert(y == 197.0f);
-            assert(width == 212.0f);
+            assert(width == 228.0f);
             assert(height == 318.0f);
             assert(radius > 12.0f);
             return false;
@@ -143,10 +143,12 @@ int main() {
     assert(renderer.rects.size() == 4);
     assert(renderer.rects[1].color == 7);
     assert(renderer.rects[2].color == 8);
-    assert(renderer.rects[3].color == 9);
+    assert(renderer.rects[3].color == 3);
     assert(renderer.texts.size() == 2);
     assert(renderer.texts[0].value == "Pilot");
     assert(renderer.texts[0].scale == 1.8f);
+    assert(renderer.texts[0].x == 82.0f);
+    assert(renderer.texts[0].maxWidth == 316.0f);
     assert(renderer.texts[1].value == "S1 - E1");
     assert(renderer.texts[1].scale == 1.45f);
 

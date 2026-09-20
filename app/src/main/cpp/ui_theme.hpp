@@ -33,7 +33,7 @@ constexpr float cornerSmall = 16.0f;
 constexpr float cornerMedium = 24.0f;
 constexpr float cornerLarge = 32.0f;
 constexpr float focusOutlineWidth = 4.0f;
-constexpr float focusHaloWidth = 10.0f;
+constexpr float focusHaloWidth = 7.0f;
 
 // Type sizes are renderer scales in the 1920 x 1080 logical TV canvas.
 namespace type {

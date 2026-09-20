@@ -46,9 +46,9 @@ void renderHomeRowContent(RendererLike& renderer, std::string_view title, const 
 
     if (title == "My Media") {
         renderer.text(72.0f, top, 3.05f, "My media", rowFocused ? style.text : style.secondaryText, 420.0f);
-        constexpr float cardW = 420.0f;
-        constexpr float cardH = 225.0f;
-        constexpr float gap = 28.0f;
+        constexpr float cardW = 360.0f;
+        constexpr float cardH = 193.0f;
+        constexpr float gap = 24.0f;
         const float imageY = top + imageOffset;
         float x = 72.0f;
         const int start = homeState.firstVisibleItem(row, static_cast<int>(items.size()), 4);
