@@ -150,11 +150,15 @@ def process_pid() -> str:
     return output.split()[0] if output else ""
 
 
-def require_running() -> str:
-    pid = process_pid()
-    if not pid:
-        raise RuntimeError(f"{PACKAGE} is not running")
-    return pid
+def require_running(timeout_seconds: float = 2.0) -> str:
+    deadline = time.monotonic() + timeout_seconds
+    while True:
+        pid = process_pid()
+        if pid:
+            return pid
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"{PACKAGE} is not running")
+        time.sleep(0.1)
 
 
 def ensure_running() -> str:

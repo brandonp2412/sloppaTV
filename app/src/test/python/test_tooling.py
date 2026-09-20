@@ -388,6 +388,24 @@ class WaydroidToolingTest(unittest.TestCase):
         with patch.object(waydroid_e2e, "adb", side_effect=failure):
             self.assertEqual(waydroid_e2e.process_pid(), "")
 
+    def test_require_running_retries_transient_missing_process(self) -> None:
+        with (
+            patch.object(waydroid_e2e, "process_pid", side_effect=["", "456"]) as process_pid,
+            patch.object(waydroid_e2e.time, "monotonic", side_effect=[10.0, 10.1]),
+            patch.object(waydroid_e2e.time, "sleep") as sleep,
+        ):
+            self.assertEqual(waydroid_e2e.require_running(), "456")
+        self.assertEqual(process_pid.call_count, 2)
+        sleep.assert_called_once_with(0.1)
+
+    def test_require_running_times_out_when_process_stays_missing(self) -> None:
+        with (
+            patch.object(waydroid_e2e, "process_pid", return_value=""),
+            patch.object(waydroid_e2e.time, "monotonic", side_effect=[10.0, 12.0]),
+            self.assertRaisesRegex(RuntimeError, "app.sloppatv is not running"),
+        ):
+            waydroid_e2e.require_running()
+
     def test_ensure_running_keeps_existing_process(self) -> None:
         with (
             patch.object(waydroid_e2e, "process_pid", return_value="123") as process_pid,
