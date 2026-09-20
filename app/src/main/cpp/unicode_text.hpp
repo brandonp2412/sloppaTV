@@ -127,6 +127,7 @@ inline std::string utf16ToUtf8(std::u16string_view text) {
 
 inline uint32_t nextUtf8CodePoint(std::string_view text, size_t& index) {
     constexpr uint32_t replacement = 0xFFFDu;
+    if (index >= text.size()) return replacement;
     const auto first = static_cast<unsigned char>(text[index++]);
     if (first < 0x80) return first;
     auto continuation = [&](int count, uint32_t value) -> uint32_t {

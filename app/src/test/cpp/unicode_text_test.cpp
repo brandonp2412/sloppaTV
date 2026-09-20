@@ -37,6 +37,14 @@ int main() {
     assert(displayText("\xE3\x81\x82") == "?");
     assert(displayText("\xE3\x81\x82", '\0').empty());
 
+    size_t emptyIndex = 0;
+    assert(nextUtf8CodePoint("", emptyIndex) == 0xFFFDu);
+    assert(emptyIndex == 0);
+
+    size_t endIndex = 1;
+    assert(nextUtf8CodePoint("A", endIndex) == 0xFFFDu);
+    assert(endIndex == 1);
+
     const std::string utf8 = "caf\xC3\xA9 \xE6\x98\xA0\xE7\x94\xBB \xF0\x9F\x93\xBA";
     const std::u16string utf16 = u"café 映画 📺";
     assert(utf8ToUtf16(utf8) == utf16);

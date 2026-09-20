@@ -1,10 +1,12 @@
 #pragma once
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 inline int seerrProgressPercent(double size, double sizeLeft) {
@@ -13,17 +15,22 @@ inline int seerrProgressPercent(double size, double sizeLeft) {
     return static_cast<int>(std::lround(completed * 100.0));
 }
 
+inline bool seerrParseNonNegativeInt(std::string_view text, int& result) {
+    if (text.empty()) return false;
+    int value = 0;
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error != std::errc{} || end != text.data() + text.size()) return false;
+    result = std::max(0, value);
+    return true;
+}
+
 inline std::string seerrCompactTimeLeft(std::string value) {
     if (value.empty()) return {};
     int days = 0;
     const auto firstColon = value.find(':');
     const auto dayDot = value.find('.');
     if (dayDot != std::string::npos && firstColon != std::string::npos && dayDot < firstColon) {
-        try {
-            days = std::max(0, std::stoi(value.substr(0, dayDot)));
-        } catch (...) {
-            return {};
-        }
+        if (!seerrParseNonNegativeInt(std::string_view(value).substr(0, dayDot), days)) return {};
         value.erase(0, dayDot + 1);
     }
 
@@ -33,11 +40,9 @@ inline std::string seerrCompactTimeLeft(std::string value) {
     while (std::getline(stream, token, ':')) {
         const auto fraction = token.find('.');
         if (fraction != std::string::npos) token.resize(fraction);
-        try {
-            parts.push_back(std::max(0, std::stoi(token)));
-        } catch (...) {
-            return {};
-        }
+        int part = 0;
+        if (!seerrParseNonNegativeInt(token, part)) return {};
+        parts.push_back(part);
     }
     if (parts.size() != 3) return {};
     const int64_t totalSeconds = static_cast<int64_t>(days) * 86400 + static_cast<int64_t>(parts[0]) * 3600 +
