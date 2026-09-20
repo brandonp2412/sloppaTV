@@ -16,6 +16,15 @@ struct ImmediateTaskRunner {
     int submissions = 0;
 };
 
+struct RejectingTaskRunner {
+    bool submit(std::function<void()>) {
+        ++submissions;
+        return false;
+    }
+
+    int submissions = 0;
+};
+
 struct CompletionSink {
     void push(PlaybackReportCompletion completion) { events.push_back(std::move(completion)); }
 
@@ -103,6 +112,19 @@ int main() {
     assert(client.lastTicks == 400);
     assert(completions.events.back().kind == PlaybackReportKind::Stop);
     assert(completions.events.back().result.ok);
+
+    RejectingTaskRunner rejectingTasks;
+    CompletionSink rejectedCompletions;
+    PlaybackTelemetryExecutor rejectedExecutor(client, rejectingTasks, rejectedCompletions);
+    client.lastCall.clear();
+    client.lastTicks = 0;
+    rejectedExecutor.reportStop(session, item, target, 500);
+    assert(rejectingTasks.submissions == 1);
+    assert(client.lastCall == "stop");
+    assert(client.lastTicks == 500);
+    assert(rejectedCompletions.events.size() == 1);
+    assert(rejectedCompletions.events.back().kind == PlaybackReportKind::Stop);
+    assert(rejectedCompletions.events.back().result.ok);
 
     return 0;
 }

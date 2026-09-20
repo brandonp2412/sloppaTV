@@ -43,10 +43,11 @@ public:
     }
 
     void reportStop(JellyfinSession session, JellyfinItem item, PlaybackTarget target, int64_t ticks) {
-        tasks_.submit([this, session = std::move(session), item = std::move(item), target = std::move(target), ticks] {
+        auto report = [this, session = std::move(session), item = std::move(item), target = std::move(target), ticks] {
             auto result = client_.reportPlaybackStopped(session, item, target, ticks);
             pushCompletion(PlaybackReportKind::Stop, session, item, std::move(result));
-        });
+        };
+        if (!tasks_.submit(report)) report();
     }
 
 private:
