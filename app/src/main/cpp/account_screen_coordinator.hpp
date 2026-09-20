@@ -9,7 +9,17 @@
 
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
+
+template <typename T>
+inline constexpr bool isAccountScreenCompletionV =
+    std::is_same_v<std::remove_cvref_t<T>, DiscoveryCompletion> ||
+    std::is_same_v<std::remove_cvref_t<T>, LoginCompletion> ||
+    std::is_same_v<std::remove_cvref_t<T>, QuickConnectStartedCompletion> ||
+    std::is_same_v<std::remove_cvref_t<T>, QuickConnectFailedCompletion> ||
+    std::is_same_v<std::remove_cvref_t<T>, QuickConnectAuthenticatedCompletion> ||
+    std::is_same_v<std::remove_cvref_t<T>, QuickConnectTimedOutCompletion>;
 
 enum class AccountScreenHostAction {
     None,

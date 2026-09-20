@@ -3,6 +3,7 @@
 #include "app_settings.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
+#include "media_session.hpp"
 #include "media_session_policy.hpp"
 #include "playback_continuation_executor.hpp"
 #include "playback_coordinator.hpp"

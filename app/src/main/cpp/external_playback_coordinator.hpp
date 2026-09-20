@@ -1,5 +1,6 @@
 #pragma once
 
+#include "app_screen.hpp"
 #include "browse_screen.hpp"
 #include "details_flow.hpp"
 #include "external_playback_executor.hpp"
@@ -10,6 +11,8 @@
 #include "item_mutation_controller.hpp"
 #include "playback_coordinator.hpp"
 #include "playback_queue.hpp"
+#include "playback_runtime_controller.hpp"
+#include "request_epoch.hpp"
 #include "search_screen.hpp"
 
 #include <mutex>
@@ -29,10 +32,61 @@ public:
                                 ExternalPlaybackAsync& async, PlaybackCoordinator& playback, JellyfinSession& session,
                                 JellyfinHomeData& home, HomeScreenState& homeState, BrowseScreenState& browseState,
                                 SearchScreenState& searchState, DetailsFlow& details, PlaybackQueueState& queue,
-                                HomeVisibility& homeVisibility, std::string& error, std::recursive_mutex& stateMutex)
+                                HomeVisibility& homeVisibility, RequestEpoch& playbackEpoch, Screen& screen,
+                                bool& loading, PlaybackRuntimeController& runtime, std::string& error,
+                                std::recursive_mutex& stateMutex)
         : player_(player), state_(state), async_(async), playback_(playback), session_(session), home_(home),
           homeState_(homeState), browseState_(browseState), searchState_(searchState), details_(details), queue_(queue),
-          homeVisibility_(homeVisibility), error_(error), stateMutex_(stateMutex) {}
+          homeVisibility_(homeVisibility), playbackEpoch_(playbackEpoch), screen_(screen), loading_(loading),
+          runtime_(runtime), error_(error), stateMutex_(stateMutex) {}
+
+    void prepare(std::optional<ExternalPlayerApp> selectedPlayer) {
+        if (loading_ || !session_.valid() || details_.item().id.empty()) return;
+        if (!selectedPlayer) {
+            error_ = "EXTERNAL PLAYER IS NOT CONFIGURED";
+            return;
+        }
+        loading_ = true;
+        error_.clear();
+        const PlaybackLanguagePreferences preferences = playback_.languagePreferences();
+        const PlaybackTrackSelectionPolicy trackPolicy = runtime_.trackSelectionPolicy();
+        if (!async_.prepare(session_, ExternalPlaybackRequest{
+                                          .generation = playbackEpoch_.begin(),
+                                          .selectedItemId = details_.item().id,
+                                          .selectedItemType = details_.item().type,
+                                          .seriesId = details_.item().seriesId,
+                                          .container = details_.item().container,
+                                          .mediaSourceId = details_.item().mediaSourceId,
+                                          .audios = details_.item().audios,
+                                          .subtitles = details_.item().subtitles,
+                                          .player = std::move(*selectedPlayer),
+                                          .subtitlePreference = preferences.subtitle,
+                                          .trackPolicy = trackPolicy,
+                                      })) {
+            loading_ = false;
+            error_ = "EXTERNAL PLAYER COULD NOT BE STARTED";
+        }
+    }
+
+    [[nodiscard]] int complete(ExternalPlaybackCompletion& completion) {
+        if (!playbackEpoch_.active(completion.generation)) return 0;
+        loading_ = false;
+        if (screen_ != Screen::Details || details_.item().id != completion.selectedItemId) return 0;
+        if (!completion.error.empty()) {
+            error_ = std::move(completion.error);
+            return 0;
+        }
+        if (!completion.launch) return 0;
+
+        int persistCount = 0;
+        JellyfinItem selected;
+        selected.id = completion.selectedItemId;
+        selected.seriesId = completion.selectedSeriesId;
+        if (homeVisibility_.restoreForPlayback(selected)) ++persistCount;
+        if (homeVisibility_.restoreForPlayback(completion.launch->item)) ++persistCount;
+        state_.stage(std::move(*completion.launch));
+        return persistCount;
+    }
 
     [[nodiscard]] ExternalPlaybackTickWork collect() {
         ExternalPlaybackTickWork work;
@@ -105,6 +159,10 @@ private:
     DetailsFlow& details_;
     PlaybackQueueState& queue_;
     HomeVisibility& homeVisibility_;
+    RequestEpoch& playbackEpoch_;
+    Screen& screen_;
+    bool& loading_;
+    PlaybackRuntimeController& runtime_;
     std::string& error_;
     std::recursive_mutex& stateMutex_;
 };
