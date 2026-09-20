@@ -126,6 +126,12 @@ public:
         };
     }
 
+    [[nodiscard]] PlaybackDecodeMode activeDecodeMode() const {
+        const std::string& itemId = coordinator_.session().activeItem().id;
+        return !itemId.empty() && itemId == softwareDecodeItemId_ ? PlaybackDecodeMode::Software
+                                                                  : PlaybackDecodeMode::Hardware;
+    }
+
     void refreshTelemetry(bool force = false) {
         const auto now = std::chrono::steady_clock::now();
         const PlaybackTelemetryReadPlan plan = coordinator_.consumeTelemetryRead(now, force, screenState_.durationMs());
@@ -285,14 +291,37 @@ public:
         return true;
     }
 
-    void startResolvedTarget() {
+    void startResolvedTarget(int positionOverrideMs = -1) {
         const auto now = std::chrono::steady_clock::now();
         const PlaybackPlayerStartContext start = coordinator_.playerStartContext();
+        const int startPositionMs = positionOverrideMs >= 0 ? positionOverrideMs : start.startPositionMs;
         coordinator_.beginPreparing(now);
-        player_.startAsync(start.url, videoSurface_.surface(), start.startPositionMs, settings_.playbackBufferPreset,
+        player_.startAsync(start.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
-                           start.externalSubtitleUrl);
-        if (start.startPositionMs > 0) screenState_.beginSeek(start.startPositionMs, now);
+                           start.externalSubtitleUrl, activeDecodeMode());
+        if (startPositionMs > 0) screenState_.beginSeek(startPositionMs, now);
+    }
+
+    bool retryWithSoftwareDecode(bool rendererReady) {
+        if (!rendererReady || !player_.hardwareDecoderFailed()) return false;
+        const std::string itemId = coordinator_.session().activeItem().id;
+        if (itemId.empty() || itemId == softwareDecodeItemId_) return false;
+
+        const int retryPositionMs = std::max(0, screenState_.positionMs());
+        player_.stop();
+        videoSurface_.release();
+        std::string surfaceError;
+        if (!videoSurface_.create(surfaceError)) {
+            error_ = surfaceError.empty() ? "SOFTWARE DECODE FALLBACK SURFACE IS NOT AVAILABLE" : surfaceError;
+            return false;
+        }
+
+        softwareDecodeItemId_ = itemId;
+        __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
+                            "MediaCodec failed to start; retrying current item with software video decoding");
+        screenState_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(5));
+        startResolvedTarget(retryPositionMs);
+        return true;
     }
 
     template <typename StreamExecutor> bool retryWithoutSubtitle(StreamExecutor& stream) {
@@ -517,7 +546,8 @@ public:
         if (status == PlayerStatus::Error) {
             std::scoped_lock lock(stateMutex);
             const std::string playerError = player_.error();
-            if (retryWithoutSubtitle(stream) || retryWithFallback(stream, rendererReady)) {
+            if (retryWithSoftwareDecode(rendererReady) || retryWithoutSubtitle(stream) ||
+                retryWithFallback(stream, rendererReady)) {
                 error_.clear();
                 return {};
             }
@@ -606,4 +636,5 @@ private:
     bool& loading_;
     std::string& error_;
     const std::string& dataPath_;
+    std::string softwareDecodeItemId_;
 };

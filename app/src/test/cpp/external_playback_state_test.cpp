@@ -1,9 +1,27 @@
 #include "external_playback_state.hpp"
 
 #include <cassert>
+#include <limits>
 #include <utility>
 
 int main() {
+    ExternalPlayerResult extremeResult;
+    extremeResult.success = true;
+    extremeResult.positionMs = std::numeric_limits<int64_t>::max();
+
+    ExternalPlaybackLaunch boundedLaunch;
+    boundedLaunch.item.runtimeTicks = 100'000;
+    const ExternalPlaybackFinishPlan bounded = planExternalPlaybackFinish(boundedLaunch, extremeResult);
+    assert(bounded.positionTicks == boundedLaunch.item.runtimeTicks);
+    assert(bounded.updatedItem);
+    assert(bounded.updatedItem->positionTicks == boundedLaunch.item.runtimeTicks);
+
+    ExternalPlaybackLaunch unboundedLaunch;
+    const ExternalPlaybackFinishPlan saturated = planExternalPlaybackFinish(unboundedLaunch, extremeResult);
+    assert(saturated.positionTicks == std::numeric_limits<int64_t>::max());
+    assert(saturated.updatedItem);
+    assert(saturated.updatedItem->positionTicks == std::numeric_limits<int64_t>::max());
+
     ExternalPlaybackState state;
     assert(!state.hasPending());
     assert(!state.hasActive());

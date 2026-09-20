@@ -109,5 +109,44 @@ int main() {
     assert(noBackground.backgrounds == 0);
     assert(noBackground.lines.size() == 1);
 
+    FakeRenderer narrow;
+    float narrowTextWidth = -1.0f;
+    renderPlayerSubtitle(
+        narrow,
+        PlayerSubtitleRenderState{
+            .text = "Narrow",
+            .boxMaxWidth = 120.0f,
+            .textScale = 2.0f,
+            .lineHeight = 30.0f,
+            .logicalWidth = 1920.0f,
+            .bottomY = 900.0f,
+            .showBackground = true,
+        },
+        PlayerSubtitleRenderStyle<int>{.cornerRadius = 24.0f, .text = 1, .background = 2, .outline = 3},
+        [&](std::string value, float, float maxWidth, int) {
+            narrowTextWidth = maxWidth;
+            return value;
+        });
+    assert(narrowTextWidth == 56.0f);
+    assert(narrow.backgroundWidth == 120.0f);
+    assert(narrow.lines.size() == 1);
+
+    FakeRenderer zeroWidth;
+    renderPlayerSubtitle(
+        zeroWidth,
+        PlayerSubtitleRenderState{
+            .text = "Hidden",
+            .boxMaxWidth = 0.0f,
+            .textScale = 2.0f,
+            .lineHeight = 30.0f,
+            .logicalWidth = 1920.0f,
+            .bottomY = 900.0f,
+            .showBackground = true,
+        },
+        PlayerSubtitleRenderStyle<int>{.cornerRadius = 24.0f, .text = 1, .background = 2, .outline = 3},
+        [](std::string value, float, float, int) { return value; });
+    assert(zeroWidth.backgrounds == 0);
+    assert(zeroWidth.lines.empty());
+
     return 0;
 }

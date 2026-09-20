@@ -528,7 +528,8 @@ void Renderer::roundedOutline(float x, float y, float w, float h, float radius, 
     // hierarchy everywhere else.
     const bool pillLike = radius >= std::min(w, h) * 0.33f;
     const float logicalThickness = pillLike ? std::max(thickness, 3.0f) : thickness;
-    thickness = std::clamp(logicalThickness * uiScale_, 0.5f, std::min(w, h) * 0.45f);
+    const float maxThickness = std::min(w, h) * 0.45f;
+    thickness = std::clamp(logicalThickness * uiScale_, std::min(0.5f, maxThickness), maxThickness);
     const float innerW = std::max(0.0f, w - thickness * 2.0f);
     const float innerH = std::max(0.0f, h - thickness * 2.0f);
     if (innerW <= 0.0f || innerH <= 0.0f) {

@@ -45,18 +45,25 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
     }
 
     jclass factoryClass = env->FindClass("android/graphics/BitmapFactory");
-    if (!factoryClass || clearException(env, "FindClass(BitmapFactory)", error)) return result;
+    const bool factoryLookupFailed = clearException(env, "FindClass(BitmapFactory)", error);
+    if (factoryLookupFailed || !factoryClass) {
+        if (error.empty()) error = "Unable to find Android BitmapFactory";
+        return result;
+    }
     jmethodID decodeByteArray =
         env->GetStaticMethodID(factoryClass, "decodeByteArray", "([BII)Landroid/graphics/Bitmap;");
-    if (!decodeByteArray || clearException(env, "BitmapFactory.decodeByteArray", error)) {
+    const bool methodLookupFailed = clearException(env, "BitmapFactory.decodeByteArray", error);
+    if (methodLookupFailed || !decodeByteArray) {
         env->DeleteLocalRef(factoryClass);
+        if (error.empty()) error = "Unable to find Android bitmap decoder";
         return result;
     }
 
     jbyteArray bytes = env->NewByteArray(static_cast<jsize>(encodedBytes.size()));
-    if (!bytes) {
+    const bool byteArrayFailed = clearException(env, "NewByteArray", error);
+    if (byteArrayFailed || !bytes) {
         env->DeleteLocalRef(factoryClass);
-        error = "Unable to allocate image byte array";
+        if (error.empty()) error = "Unable to allocate image byte array";
         return result;
     }
     env->SetByteArrayRegion(bytes, 0, static_cast<jsize>(encodedBytes.size()),
@@ -69,9 +76,10 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
 
     jobject bitmap =
         env->CallStaticObjectMethod(factoryClass, decodeByteArray, bytes, 0, static_cast<jint>(encodedBytes.size()));
+    const bool decodeFailed = clearException(env, "BitmapFactory.decodeByteArray", error);
     env->DeleteLocalRef(bytes);
     env->DeleteLocalRef(factoryClass);
-    if (!bitmap || clearException(env, "BitmapFactory.decodeByteArray", error)) {
+    if (decodeFailed || !bitmap) {
         if (bitmap) env->DeleteLocalRef(bitmap);
         if (error.empty()) error = "Android could not decode the image";
         return result;

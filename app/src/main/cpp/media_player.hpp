@@ -16,6 +16,11 @@ enum class PlayerStatus {
     Error,
 };
 
+enum class PlaybackDecodeMode {
+    Hardware,
+    Software,
+};
+
 struct MpvSymbols;
 
 class NativeMediaPlayer {
@@ -25,7 +30,8 @@ public:
 
     void startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset = 0,
                     int embeddedAudioOrdinal = -1, int embeddedSubtitleStreamIndex = -1,
-                    int embeddedSubtitleOrdinal = -1, const std::string& externalSubtitleUrl = {});
+                    int embeddedSubtitleOrdinal = -1, const std::string& externalSubtitleUrl = {},
+                    PlaybackDecodeMode decodeMode = PlaybackDecodeMode::Hardware);
     void stop();
     void togglePause();
     void pause();
@@ -49,12 +55,14 @@ public:
     [[nodiscard]] std::string videoCodec() const;
     [[nodiscard]] std::string audioCodec() const;
     [[nodiscard]] std::string subtitleText() const;
+    [[nodiscard]] bool hardwareDecoderFailed() const;
     [[nodiscard]] double containerFps() const;
     [[nodiscard]] int64_t droppedFrames() const;
 
 private:
     bool loadLibrariesLocked(std::string& error);
-    bool initializeLocked(JNIEnv* env, jobject surface, int bufferPreset, std::string& error);
+    bool initializeLocked(JNIEnv* env, jobject surface, int bufferPreset, PlaybackDecodeMode decodeMode,
+                          std::string& error);
     bool ensureAndroidCaBundleLocked(std::string& error);
     void releaseLocked(JNIEnv* env);
     bool commandLocked(const char* const* args, const char* operation, std::string* error = nullptr) const;
@@ -94,5 +102,6 @@ private:
     mutable int pendingSubtitleOrdinal_ = -1;
     mutable bool pendingSubtitleOff_ = false;
     mutable bool telemetryLogged_ = false;
+    mutable bool hardwareDecoderFailed_ = false;
     mutable int serverHttpErrorCount_ = 0;
 };

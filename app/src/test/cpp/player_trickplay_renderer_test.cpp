@@ -169,6 +169,41 @@ int main() {
                                  [](float, float, float, float, float, std::string_view, TestColor) {}));
     assert(right.imageX == 1420.0f);
 
+    FakeRenderer narrow;
+    assert(renderPlayerTrickplay(narrow,
+                                 PlayerTrickplayRenderState{
+                                     .texture = 1,
+                                     .frame = frame,
+                                     .info = trickplay,
+                                     .decodedWidth = 640,
+                                     .decodedHeight = 360,
+                                     .positionMs = 0,
+                                     .durationMs = 10'000,
+                                     .logicalWidth = 500.0f,
+                                     .positionLabel = "00:00",
+                                 },
+                                 PlayerTrickplayRenderStyle<TestColor>{},
+                                 [](float, float, float, float, float, std::string_view, TestColor) {}));
+    assert(narrow.imageX == 40.0f);
+
+    FakeRenderer tooNarrow;
+    assert(!renderPlayerTrickplay(tooNarrow,
+                                  PlayerTrickplayRenderState{
+                                      .texture = 1,
+                                      .frame = frame,
+                                      .info = trickplay,
+                                      .decodedWidth = 640,
+                                      .decodedHeight = 360,
+                                      .positionMs = 0,
+                                      .durationMs = 10'000,
+                                      .logicalWidth = 400.0f,
+                                      .positionLabel = "00:00",
+                                  },
+                                  PlayerTrickplayRenderStyle<TestColor>{},
+                                  [](float, float, float, float, float, std::string_view, TestColor) {}));
+    assert(tooNarrow.roundedRects == 0);
+    assert(tooNarrow.images == 0);
+
     FakeRenderer invalid;
     assert(!renderPlayerTrickplay(invalid,
                                   PlayerTrickplayRenderState{

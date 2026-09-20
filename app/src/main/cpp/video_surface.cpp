@@ -47,67 +47,98 @@ bool VideoSurface::create(std::string& error) {
     glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
 
     jclass localTextureClass = env->FindClass("android/graphics/SurfaceTexture");
-    if (!localTextureClass || clearException(env, "FindClass(SurfaceTexture)", error)) goto fail;
+    const bool textureClassLookupFailed = clearException(env, "FindClass(SurfaceTexture)", error);
+    if (textureClassLookupFailed || !localTextureClass) {
+        if (error.empty()) error = "Unable to find Android SurfaceTexture";
+        goto fail;
+    }
     surfaceTextureClass_ = static_cast<jclass>(env->NewGlobalRef(localTextureClass));
-    if (!surfaceTextureClass_) {
+    if (clearException(env, "Retain SurfaceTexture class", error) || !surfaceTextureClass_) {
         env->DeleteLocalRef(localTextureClass);
-        error = "Unable to retain SurfaceTexture class";
+        if (error.empty()) error = "Unable to retain SurfaceTexture class";
         goto fail;
     }
     {
         jmethodID ctor = env->GetMethodID(localTextureClass, "<init>", "(I)V");
-        updateTexImageMethod_ = env->GetMethodID(localTextureClass, "updateTexImage", "()V");
-        getTransformMatrixMethod_ = env->GetMethodID(localTextureClass, "getTransformMatrix", "([F)V");
-        if (!ctor || !updateTexImageMethod_ || !getTransformMatrixMethod_ ||
-            clearException(env, "SurfaceTexture method lookup", error)) {
+        bool methodLookupFailed = clearException(env, "SurfaceTexture constructor lookup", error);
+        if (!methodLookupFailed) {
+            updateTexImageMethod_ = env->GetMethodID(localTextureClass, "updateTexImage", "()V");
+            methodLookupFailed = clearException(env, "SurfaceTexture update method lookup", error);
+        }
+        if (!methodLookupFailed) {
+            getTransformMatrixMethod_ = env->GetMethodID(localTextureClass, "getTransformMatrix", "([F)V");
+            methodLookupFailed = clearException(env, "SurfaceTexture transform method lookup", error);
+        }
+        if (methodLookupFailed || !ctor || !updateTexImageMethod_ || !getTransformMatrixMethod_) {
             env->DeleteLocalRef(localTextureClass);
+            if (error.empty()) error = "Unable to find required SurfaceTexture methods";
             goto fail;
         }
         jobject localTexture = env->NewObject(localTextureClass, ctor, static_cast<jint>(texture_));
-        if (!localTexture || clearException(env, "SurfaceTexture constructor", error)) {
+        const bool textureCreateFailed = clearException(env, "SurfaceTexture constructor", error);
+        if (textureCreateFailed || !localTexture) {
             env->DeleteLocalRef(localTextureClass);
+            if (localTexture) env->DeleteLocalRef(localTexture);
+            if (error.empty()) error = "Unable to create SurfaceTexture";
             goto fail;
         }
         surfaceTexture_ = env->NewGlobalRef(localTexture);
+        const bool textureRetainFailed = clearException(env, "Retain SurfaceTexture", error);
         env->DeleteLocalRef(localTexture);
+        if (textureRetainFailed || !surfaceTexture_) {
+            env->DeleteLocalRef(localTextureClass);
+            if (error.empty()) error = "Unable to retain SurfaceTexture";
+            goto fail;
+        }
     }
     env->DeleteLocalRef(localTextureClass);
-    if (!surfaceTexture_) {
-        error = "Unable to retain SurfaceTexture";
-        goto fail;
-    }
 
     {
         jfloatArray localTransform = env->NewFloatArray(16);
-        if (!localTransform || clearException(env, "SurfaceTexture transform buffer", error)) goto fail;
+        const bool transformCreateFailed = clearException(env, "SurfaceTexture transform buffer", error);
+        if (transformCreateFailed || !localTransform) {
+            if (error.empty()) error = "Unable to allocate SurfaceTexture transform buffer";
+            goto fail;
+        }
         transformArray_ = static_cast<jfloatArray>(env->NewGlobalRef(localTransform));
+        const bool transformRetainFailed = clearException(env, "Retain SurfaceTexture transform buffer", error);
         env->DeleteLocalRef(localTransform);
-        if (!transformArray_) {
-            error = "Unable to retain SurfaceTexture transform buffer";
+        if (transformRetainFailed || !transformArray_) {
+            if (error.empty()) error = "Unable to retain SurfaceTexture transform buffer";
             goto fail;
         }
     }
 
     {
         jclass surfaceClass = env->FindClass("android/view/Surface");
-        if (!surfaceClass || clearException(env, "FindClass(Surface)", error)) goto fail;
+        const bool surfaceClassLookupFailed = clearException(env, "FindClass(Surface)", error);
+        if (surfaceClassLookupFailed || !surfaceClass) {
+            if (error.empty()) error = "Unable to find Android Surface";
+            goto fail;
+        }
         jmethodID ctor = env->GetMethodID(surfaceClass, "<init>", "(Landroid/graphics/SurfaceTexture;)V");
-        if (!ctor || clearException(env, "Surface constructor lookup", error)) {
+        const bool surfaceMethodLookupFailed = clearException(env, "Surface constructor lookup", error);
+        if (surfaceMethodLookupFailed || !ctor) {
             env->DeleteLocalRef(surfaceClass);
+            if (error.empty()) error = "Unable to find Android Surface constructor";
             goto fail;
         }
         jobject localSurface = env->NewObject(surfaceClass, ctor, surfaceTexture_);
-        if (!localSurface || clearException(env, "Surface constructor", error)) {
+        const bool surfaceCreateFailed = clearException(env, "Surface constructor", error);
+        if (surfaceCreateFailed || !localSurface) {
+            if (localSurface) env->DeleteLocalRef(localSurface);
             env->DeleteLocalRef(surfaceClass);
+            if (error.empty()) error = "Unable to create video Surface";
             goto fail;
         }
         surface_ = env->NewGlobalRef(localSurface);
+        const bool surfaceRetainFailed = clearException(env, "Retain Surface", error);
         env->DeleteLocalRef(localSurface);
         env->DeleteLocalRef(surfaceClass);
-    }
-    if (!surface_) {
-        error = "Unable to retain video Surface";
-        goto fail;
+        if (surfaceRetainFailed || !surface_) {
+            if (error.empty()) error = "Unable to retain video Surface";
+            goto fail;
+        }
     }
 
     __android_log_print(ANDROID_LOG_INFO, kTag, "Created external video texture %u", texture_);

@@ -28,34 +28,89 @@ bool clearException(JNIEnv* env, const char* operation, std::string* error = nul
     return true;
 }
 
-jobject createVideoIntent(JNIEnv* env, const std::string& url) {
-    jclass intentClass = env->FindClass("android/content/Intent");
-    jclass uriClass = env->FindClass("android/net/Uri");
-    if (!intentClass || !uriClass || clearException(env, "intent class lookup")) return nullptr;
+jclass findClassChecked(JNIEnv* env, const char* name, const char* operation, std::string* error = nullptr) {
+    if (!env) return nullptr;
+    jclass value = env->FindClass(name);
+    return clearException(env, operation, error) ? nullptr : value;
+}
 
-    jmethodID intentCtor = env->GetMethodID(intentClass, "<init>", "(Ljava/lang/String;)V");
-    jmethodID uriParse = env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;");
-    jmethodID setDataAndType = env->GetMethodID(intentClass, "setDataAndType",
-                                                "(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/Intent;");
-    if (!intentCtor || !uriParse || !setDataAndType || clearException(env, "intent method lookup")) {
+jclass objectClassChecked(JNIEnv* env, jobject object, const char* operation, std::string* error = nullptr) {
+    if (!env || !object) return nullptr;
+    jclass value = env->GetObjectClass(object);
+    return clearException(env, operation, error) ? nullptr : value;
+}
+
+jmethodID methodChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature, const char* operation,
+                        std::string* error = nullptr) {
+    if (!env || !clazz) return nullptr;
+    jmethodID value = env->GetMethodID(clazz, name, signature);
+    return clearException(env, operation, error) ? nullptr : value;
+}
+
+jmethodID staticMethodChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature, const char* operation,
+                              std::string* error = nullptr) {
+    if (!env || !clazz) return nullptr;
+    jmethodID value = env->GetStaticMethodID(clazz, name, signature);
+    return clearException(env, operation, error) ? nullptr : value;
+}
+
+jobject createVideoIntent(JNIEnv* env, const std::string& url) {
+    jclass intentClass = findClassChecked(env, "android/content/Intent", "intent class lookup");
+    if (!intentClass) return nullptr;
+    jclass uriClass = findClassChecked(env, "android/net/Uri", "URI class lookup");
+    if (!uriClass) {
+        env->DeleteLocalRef(intentClass);
+        return nullptr;
+    }
+
+    jmethodID intentCtor =
+        methodChecked(env, intentClass, "<init>", "(Ljava/lang/String;)V", "intent constructor lookup");
+    jmethodID uriParse =
+        staticMethodChecked(env, uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", "URI parser lookup");
+    jmethodID setDataAndType =
+        methodChecked(env, intentClass, "setDataAndType",
+                      "(Landroid/net/Uri;Ljava/lang/String;)Landroid/content/Intent;", "intent data method lookup");
+    if (!intentCtor || !uriParse || !setDataAndType) {
         env->DeleteLocalRef(intentClass);
         env->DeleteLocalRef(uriClass);
         return nullptr;
     }
 
     jstring action = jniNewString(env, kActionView);
-    jobject intent = action ? env->NewObject(intentClass, intentCtor, action) : nullptr;
+    bool failed = clearException(env, "intent action creation") || !action;
+    jobject intent = nullptr;
+    if (!failed) {
+        intent = env->NewObject(intentClass, intentCtor, action);
+        failed = clearException(env, "intent construction") || !intent;
+    }
     if (action) env->DeleteLocalRef(action);
-    jstring jUrl = jniNewString(env, url);
-    jobject uri = jUrl ? env->CallStaticObjectMethod(uriClass, uriParse, jUrl) : nullptr;
+
+    jstring jUrl = nullptr;
+    jobject uri = nullptr;
+    if (!failed) {
+        jUrl = jniNewString(env, url);
+        failed = clearException(env, "intent URL creation") || !jUrl;
+    }
+    if (!failed) {
+        uri = env->CallStaticObjectMethod(uriClass, uriParse, jUrl);
+        failed = clearException(env, "intent URI parsing") || !uri;
+    }
     if (jUrl) env->DeleteLocalRef(jUrl);
-    jstring mime = jniNewString(env, kVideoMime);
-    if (intent && uri && mime) env->CallObjectMethod(intent, setDataAndType, uri, mime);
+
+    jstring mime = nullptr;
+    if (!failed) {
+        mime = jniNewString(env, kVideoMime);
+        failed = clearException(env, "intent MIME creation") || !mime;
+    }
+    if (!failed) {
+        env->CallObjectMethod(intent, setDataAndType, uri, mime);
+        failed = clearException(env, "video intent construction");
+    }
     if (mime) env->DeleteLocalRef(mime);
     if (uri) env->DeleteLocalRef(uri);
     env->DeleteLocalRef(intentClass);
     env->DeleteLocalRef(uriClass);
-    if (clearException(env, "video intent construction")) {
+    if (failed) {
         if (intent) env->DeleteLocalRef(intent);
         return nullptr;
     }
@@ -64,38 +119,71 @@ jobject createVideoIntent(JNIEnv* env, const std::string& url) {
 
 void putStringExtra(JNIEnv* env, jobject intent, const char* key, const std::string& value) {
     if (!env || !intent || !key || value.empty()) return;
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass ? env->GetMethodID(intentClass, "putExtra",
-                                                      "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;")
-                                   : nullptr;
-    if (method) {
-        jstring jKey = jniNewString(env, key);
-        jstring jValue = jniNewString(env, value);
-        if (jKey && jValue) env->CallObjectMethod(intent, method, jKey, jValue);
-        if (jKey) env->DeleteLocalRef(jKey);
-        if (jValue) env->DeleteLocalRef(jValue);
+    jclass intentClass = objectClassChecked(env, intent, "string intent class lookup");
+    jmethodID method =
+        methodChecked(env, intentClass, "putExtra", "(Ljava/lang/String;Ljava/lang/String;)Landroid/content/Intent;",
+                      "string intent method lookup");
+    jstring jKey = nullptr;
+    jstring jValue = nullptr;
+    bool failed = !intentClass || !method;
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "string intent key creation") || !jKey;
     }
+    if (!failed) {
+        jValue = jniNewString(env, value);
+        failed = clearException(env, "string intent value creation") || !jValue;
+    }
+    if (!failed) {
+        env->CallObjectMethod(intent, method, jKey, jValue);
+        clearException(env, "string intent extra");
+    }
+    if (jKey) env->DeleteLocalRef(jKey);
+    if (jValue) env->DeleteLocalRef(jValue);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "string intent extra");
 }
 
 void putUriArrayExtra(JNIEnv* env, jobject intent, const char* key, const std::string& url) {
     if (!env || !intent || !key || url.empty()) return;
-    jclass intentClass = env->GetObjectClass(intent);
-    jclass uriClass = env->FindClass("android/net/Uri");
-    jclass parcelableClass = env->FindClass("android/os/Parcelable");
+    jclass intentClass = objectClassChecked(env, intent, "URI array intent class lookup");
+    jclass uriClass = findClassChecked(env, "android/net/Uri", "URI array URI class lookup");
+    jclass parcelableClass = findClassChecked(env, "android/os/Parcelable", "URI array Parcelable class lookup");
     jmethodID parse =
-        uriClass ? env->GetStaticMethodID(uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;") : nullptr;
-    jmethodID putExtra = intentClass
-                             ? env->GetMethodID(intentClass, "putExtra",
-                                                "(Ljava/lang/String;[Landroid/os/Parcelable;)Landroid/content/Intent;")
-                             : nullptr;
-    jstring jUrl = jniNewString(env, url);
-    jobject uri = jUrl && parse ? env->CallStaticObjectMethod(uriClass, parse, jUrl) : nullptr;
-    jobjectArray values = parcelableClass ? env->NewObjectArray(1, parcelableClass, nullptr) : nullptr;
-    if (values && uri) env->SetObjectArrayElement(values, 0, uri);
-    jstring jKey = jniNewString(env, key);
-    if (putExtra && jKey && values && uri) env->CallObjectMethod(intent, putExtra, jKey, values);
+        staticMethodChecked(env, uriClass, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", "URI array parser lookup");
+    jmethodID putExtra = methodChecked(env, intentClass, "putExtra",
+                                       "(Ljava/lang/String;[Landroid/os/Parcelable;)Landroid/content/Intent;",
+                                       "URI array intent method lookup");
+
+    jstring jUrl = nullptr;
+    jobject uri = nullptr;
+    jobjectArray values = nullptr;
+    jstring jKey = nullptr;
+    bool failed = !intentClass || !uriClass || !parcelableClass || !parse || !putExtra;
+    if (!failed) {
+        jUrl = jniNewString(env, url);
+        failed = clearException(env, "URI array URL creation") || !jUrl;
+    }
+    if (!failed) {
+        uri = env->CallStaticObjectMethod(uriClass, parse, jUrl);
+        failed = clearException(env, "URI array parsing") || !uri;
+    }
+    if (!failed) {
+        values = env->NewObjectArray(1, parcelableClass, nullptr);
+        failed = clearException(env, "URI array allocation") || !values;
+    }
+    if (!failed) {
+        env->SetObjectArrayElement(values, 0, uri);
+        failed = clearException(env, "URI array population");
+    }
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "URI array key creation") || !jKey;
+    }
+    if (!failed) {
+        env->CallObjectMethod(intent, putExtra, jKey, values);
+        clearException(env, "URI array intent extra");
+    }
+
     if (jKey) env->DeleteLocalRef(jKey);
     if (values) env->DeleteLocalRef(values);
     if (uri) env->DeleteLocalRef(uri);
@@ -103,7 +191,6 @@ void putUriArrayExtra(JNIEnv* env, jobject intent, const char* key, const std::s
     if (parcelableClass) env->DeleteLocalRef(parcelableClass);
     if (uriClass) env->DeleteLocalRef(uriClass);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "URI array intent extra");
 }
 
 void putByteExtra(JNIEnv* env, jobject intent, const char* key, int value) {
@@ -138,39 +225,63 @@ void putIntExtra(JNIEnv* env, jobject intent, const char* key, int value) {
 
 bool hasExtra(JNIEnv* env, jobject intent, const char* key) {
     if (!env || !intent || !key) return false;
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass ? env->GetMethodID(intentClass, "hasExtra", "(Ljava/lang/String;)Z") : nullptr;
-    jstring jKey = jniNewString(env, key);
-    const bool result = method && jKey && env->CallBooleanMethod(intent, method, jKey) == JNI_TRUE;
+    jclass intentClass = objectClassChecked(env, intent, "has-extra intent class lookup");
+    jmethodID method = methodChecked(env, intentClass, "hasExtra", "(Ljava/lang/String;)Z", "has-extra method lookup");
+    jstring jKey = nullptr;
+    bool result = false;
+    bool failed = !intentClass || !method;
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "has-extra key creation") || !jKey;
+    }
+    if (!failed) {
+        result = env->CallBooleanMethod(intent, method, jKey) == JNI_TRUE;
+        if (clearException(env, "has intent extra")) result = false;
+    }
     if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "has intent extra");
     return result;
 }
 
 int getIntExtra(JNIEnv* env, jobject intent, const char* key, int fallback = -1) {
     if (!env || !intent || !key) return fallback;
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass ? env->GetMethodID(intentClass, "getIntExtra", "(Ljava/lang/String;I)I") : nullptr;
-    jstring jKey = jniNewString(env, key);
-    const int result =
-        method && jKey ? env->CallIntMethod(intent, method, jKey, static_cast<jint>(fallback)) : fallback;
+    jclass intentClass = objectClassChecked(env, intent, "integer result intent class lookup");
+    jmethodID method =
+        methodChecked(env, intentClass, "getIntExtra", "(Ljava/lang/String;I)I", "integer result method lookup");
+    jstring jKey = nullptr;
+    int result = fallback;
+    bool failed = !intentClass || !method;
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "integer result key creation") || !jKey;
+    }
+    if (!failed) {
+        result = env->CallIntMethod(intent, method, jKey, static_cast<jint>(fallback));
+        if (clearException(env, "integer result extra")) result = fallback;
+    }
     if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "integer result extra");
     return result;
 }
 
 int64_t getLongExtra(JNIEnv* env, jobject intent, const char* key, int64_t fallback = -1) {
     if (!env || !intent || !key) return fallback;
-    jclass intentClass = env->GetObjectClass(intent);
-    jmethodID method = intentClass ? env->GetMethodID(intentClass, "getLongExtra", "(Ljava/lang/String;J)J") : nullptr;
-    jstring jKey = jniNewString(env, key);
-    const int64_t result =
-        method && jKey ? env->CallLongMethod(intent, method, jKey, static_cast<jlong>(fallback)) : fallback;
+    jclass intentClass = objectClassChecked(env, intent, "long result intent class lookup");
+    jmethodID method =
+        methodChecked(env, intentClass, "getLongExtra", "(Ljava/lang/String;J)J", "long result method lookup");
+    jstring jKey = nullptr;
+    int64_t result = fallback;
+    bool failed = !intentClass || !method;
+    if (!failed) {
+        jKey = jniNewString(env, key);
+        failed = clearException(env, "long result key creation") || !jKey;
+    }
+    if (!failed) {
+        result = env->CallLongMethod(intent, method, jKey, static_cast<jlong>(fallback));
+        if (clearException(env, "long result extra")) result = fallback;
+    }
     if (jKey) env->DeleteLocalRef(jKey);
     if (intentClass) env->DeleteLocalRef(intentClass);
-    clearException(env, "long result extra");
     return result;
 }
 
@@ -196,6 +307,7 @@ NativeExternalPlayer::NativeExternalPlayer(JavaVM* vm, jobject activity) : vm_(v
     JNIEnv* env = scoped.get();
     if (!env) return;
     activity_ = env->NewGlobalRef(activity);
+    if (clearException(env, "external player activity retention") || !activity_) return;
     std::scoped_lock lock(gInstanceMutex);
     gInstance = this;
 }
@@ -221,33 +333,46 @@ std::vector<ExternalPlayerApp> NativeExternalPlayer::availablePlayers() const {
     JNIEnv* env = scoped.get();
     if (!env) return result;
 
-    jclass activityClass = env->GetObjectClass(activity_);
+    jclass activityClass = objectClassChecked(env, activity_, "external player activity class lookup");
     if (!activityClass) return result;
     jmethodID getPackageManager =
-        env->GetMethodID(activityClass, "getPackageManager", "()Landroid/content/pm/PackageManager;");
-    jmethodID getPackageName = env->GetMethodID(activityClass, "getPackageName", "()Ljava/lang/String;");
-    jobject packageManager = getPackageManager ? env->CallObjectMethod(activity_, getPackageManager) : nullptr;
-    jstring ownPackageValue =
-        getPackageName ? static_cast<jstring>(env->CallObjectMethod(activity_, getPackageName)) : nullptr;
-    const std::string ownPackage = jniString(env, ownPackageValue);
-    if (ownPackageValue) env->DeleteLocalRef(ownPackageValue);
-    if (!packageManager || clearException(env, "package manager lookup")) {
+        methodChecked(env, activityClass, "getPackageManager", "()Landroid/content/pm/PackageManager;",
+                      "package manager method lookup");
+    jmethodID getPackageName =
+        methodChecked(env, activityClass, "getPackageName", "()Ljava/lang/String;", "package name method lookup");
+    if (!getPackageManager || !getPackageName) {
+        env->DeleteLocalRef(activityClass);
+        return result;
+    }
+
+    jobject packageManager = env->CallObjectMethod(activity_, getPackageManager);
+    if (clearException(env, "package manager lookup") || !packageManager) {
         if (packageManager) env->DeleteLocalRef(packageManager);
+        env->DeleteLocalRef(activityClass);
+        return result;
+    }
+    jstring ownPackageValue = static_cast<jstring>(env->CallObjectMethod(activity_, getPackageName));
+    const bool packageNameFailed = clearException(env, "package name lookup");
+    const std::string ownPackage = packageNameFailed ? std::string{} : jniString(env, ownPackageValue);
+    if (ownPackageValue) env->DeleteLocalRef(ownPackageValue);
+    if (packageNameFailed) {
+        env->DeleteLocalRef(packageManager);
         env->DeleteLocalRef(activityClass);
         return result;
     }
 
     jobject intent = createVideoIntent(env, kSampleVideoUrl);
-    jclass packageManagerClass = env->GetObjectClass(packageManager);
-    jmethodID queryIntentActivities = packageManagerClass
-                                          ? env->GetMethodID(packageManagerClass, "queryIntentActivities",
-                                                             "(Landroid/content/Intent;I)Ljava/util/List;")
-                                          : nullptr;
+    jclass packageManagerClass =
+        objectClassChecked(env, packageManager, "external player package manager class lookup");
+    jmethodID queryIntentActivities =
+        methodChecked(env, packageManagerClass, "queryIntentActivities", "(Landroid/content/Intent;I)Ljava/util/List;",
+                      "external player query method lookup");
     jobject list = intent && queryIntentActivities
                        ? env->CallObjectMethod(packageManager, queryIntentActivities, intent, static_cast<jint>(0))
                        : nullptr;
+    const bool queryFailed = clearException(env, "external player query");
     if (intent) env->DeleteLocalRef(intent);
-    if (!list || clearException(env, "external player query")) {
+    if (queryFailed || !list) {
         if (list) env->DeleteLocalRef(list);
         if (packageManagerClass) env->DeleteLocalRef(packageManagerClass);
         env->DeleteLocalRef(packageManager);
@@ -353,19 +478,28 @@ bool NativeExternalPlayer::launch(const ExternalPlayerApp& app, const std::strin
         error = "Unable to create external-player intent";
         return false;
     }
-    jclass intentClass = env->GetObjectClass(intent);
-    jclass componentClass = env->FindClass("android/content/ComponentName");
-    jmethodID unflatten = componentClass ? env->GetStaticMethodID(componentClass, "unflattenFromString",
-                                                                  "(Ljava/lang/String;)Landroid/content/ComponentName;")
-                                         : nullptr;
-    jmethodID setComponent = intentClass ? env->GetMethodID(intentClass, "setComponent",
-                                                            "(Landroid/content/ComponentName;)Landroid/content/Intent;")
-                                         : nullptr;
-    jstring componentValue = jniNewString(env, app.componentName);
-    jobject component =
-        componentValue && unflatten ? env->CallStaticObjectMethod(componentClass, unflatten, componentValue) : nullptr;
+    jclass intentClass = objectClassChecked(env, intent, "external player intent class lookup", &error);
+    jclass componentClass =
+        findClassChecked(env, "android/content/ComponentName", "external player component class lookup", &error);
+    jmethodID unflatten = staticMethodChecked(env, componentClass, "unflattenFromString",
+                                              "(Ljava/lang/String;)Landroid/content/ComponentName;",
+                                              "external player component lookup", &error);
+    jmethodID setComponent =
+        methodChecked(env, intentClass, "setComponent", "(Landroid/content/ComponentName;)Landroid/content/Intent;",
+                      "external player setComponent lookup", &error);
+    jstring componentValue = nullptr;
+    jobject component = nullptr;
+    bool componentFailed = !intentClass || !componentClass || !unflatten || !setComponent;
+    if (!componentFailed) {
+        componentValue = jniNewString(env, app.componentName);
+        componentFailed = clearException(env, "external player component name", &error) || !componentValue;
+    }
+    if (!componentFailed) {
+        component = env->CallStaticObjectMethod(componentClass, unflatten, componentValue);
+        componentFailed = clearException(env, "external player component", &error) || !component;
+    }
     if (componentValue) env->DeleteLocalRef(componentValue);
-    if (!component || !setComponent || clearException(env, "external player component", &error)) {
+    if (componentFailed) {
         if (component) env->DeleteLocalRef(component);
         if (componentClass) env->DeleteLocalRef(componentClass);
         if (intentClass) env->DeleteLocalRef(intentClass);
@@ -373,9 +507,17 @@ bool NativeExternalPlayer::launch(const ExternalPlayerApp& app, const std::strin
         if (error.empty()) error = "Configured external player is unavailable";
         return false;
     }
+
     env->CallObjectMethod(intent, setComponent, component);
+    componentFailed = clearException(env, "external player component assignment", &error);
     env->DeleteLocalRef(component);
-    if (componentClass) env->DeleteLocalRef(componentClass);
+    env->DeleteLocalRef(componentClass);
+    if (componentFailed) {
+        if (intentClass) env->DeleteLocalRef(intentClass);
+        env->DeleteLocalRef(intent);
+        if (error.empty()) error = "Configured external player is unavailable";
+        return false;
+    }
 
     const int safePosition = std::max(0, positionMs);
     switch (externalPlayerKindForPackage(app.packageName)) {
@@ -408,23 +550,27 @@ bool NativeExternalPlayer::launch(const ExternalPlayerApp& app, const std::strin
         break;
     }
 
-    jclass activityClass = env->GetObjectClass(activity_);
+    jclass activityClass = objectClassChecked(env, activity_, "external player activity class lookup", &error);
     jmethodID startActivityForResult =
-        activityClass ? env->GetMethodID(activityClass, "startActivityForResult", "(Landroid/content/Intent;I)V")
-                      : nullptr;
-    {
-        std::scoped_lock lock(resultMutex_);
-        activeKind_ = externalPlayerKindForPackage(app.packageName);
-        pendingResult_.reset();
-    }
-    if (startActivityForResult) {
+        methodChecked(env, activityClass, "startActivityForResult", "(Landroid/content/Intent;I)V",
+                      "startActivityForResult lookup", &error);
+    bool failed = !activityClass || !startActivityForResult;
+    if (!failed) {
+        {
+            std::scoped_lock lock(resultMutex_);
+            activeKind_ = externalPlayerKindForPackage(app.packageName);
+            pendingResult_.reset();
+        }
         env->CallVoidMethod(activity_, startActivityForResult, intent, static_cast<jint>(kRequestCode));
+        failed = clearException(env, "startActivityForResult", &error);
     }
-    const bool failed = !startActivityForResult || clearException(env, "startActivityForResult", &error);
     if (activityClass) env->DeleteLocalRef(activityClass);
     if (intentClass) env->DeleteLocalRef(intentClass);
     env->DeleteLocalRef(intent);
     if (failed) {
+        std::scoped_lock lock(resultMutex_);
+        activeKind_ = ExternalPlayerKind::Generic;
+        pendingResult_.reset();
         if (error.empty()) error = "Configured external player could not be launched";
         return false;
     }

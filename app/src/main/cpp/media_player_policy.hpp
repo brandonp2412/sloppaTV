@@ -92,6 +92,16 @@ constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs) {
     return elapsedMs >= playbackPrepareTimeoutMs(transcoding);
 }
 
+inline bool mpvLogIndicatesHardwareDecoderFailure(std::string_view text) {
+    std::string normalized(text);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char value) {
+        return static_cast<char>(value >= 'A' && value <= 'Z' ? value - 'A' + 'a' : value);
+    });
+    if (normalized.find("mediacodec") == std::string::npos) return false;
+    return normalized.find("failed") != std::string::npos || normalized.find("could not") != std::string::npos ||
+           normalized.find("error") != std::string::npos;
+}
+
 inline int mpvHttpStatus(std::string_view text) {
     constexpr std::string_view marker = "HTTP error ";
     const size_t begin = text.find(marker);

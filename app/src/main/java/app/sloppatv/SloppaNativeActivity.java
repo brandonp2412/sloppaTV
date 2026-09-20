@@ -178,20 +178,46 @@ public final class SloppaNativeActivity extends NativeActivity {
         if (Looper.myLooper() == Looper.getMainLooper()) return createMediaSessionOnMainThread();
         AtomicReference<MediaSession> result = new AtomicReference<>();
         CountDownLatch ready = new CountDownLatch(1);
+        Object resultLock = new Object();
+        boolean[] abandoned = {false};
         runOnUiThread(() -> {
             try {
-                result.set(createMediaSessionOnMainThread());
+                MediaSession session = createMediaSessionOnMainThread();
+                synchronized (resultLock) {
+                    if (abandoned[0]) {
+                        releaseMediaSessionQuietly(session);
+                    } else {
+                        result.set(session);
+                    }
+                }
             } finally {
                 ready.countDown();
             }
         });
         try {
-            if (!ready.await(3, TimeUnit.SECONDS)) return null;
+            if (!ready.await(3, TimeUnit.SECONDS)) {
+                synchronized (resultLock) {
+                    abandoned[0] = true;
+                    releaseMediaSessionQuietly(result.getAndSet(null));
+                }
+                return null;
+            }
         } catch (InterruptedException interrupted) {
+            synchronized (resultLock) {
+                abandoned[0] = true;
+                releaseMediaSessionQuietly(result.getAndSet(null));
+            }
             Thread.currentThread().interrupt();
             return null;
         }
         return result.get();
+    }
+
+    private static void releaseMediaSessionQuietly(MediaSession session) {
+        if (session == null) return;
+        try {
+            session.release();
+        } catch (RuntimeException ignored) {}
     }
 
     private MediaSession createMediaSessionOnMainThread() {

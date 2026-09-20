@@ -53,6 +53,7 @@ NativeMediaSession::NativeMediaSession(JavaVM* vm, jobject activity) : vm_(vm) {
     JNIEnv* env = scoped.get();
     if (!env) return;
     activity_ = env->NewGlobalRef(activity);
+    if (clearException(env, "MediaSession activity retention") || !activity_) return;
     std::scoped_lock lock(gInstanceMutex);
     gInstance = this;
 }
@@ -82,20 +83,32 @@ bool NativeMediaSession::ensureSession() {
     // firmware (including the Google TV Streamer). Let the Java bridge create and
     // configure it on the UI thread, then keep only a global JNI reference here.
     jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID createSession = activityClass ? env->GetMethodID(activityClass, "createMediaSessionBridge",
-                                                               "()Landroid/media/session/MediaSession;")
-                                            : nullptr;
-    jobject localSession = createSession ? env->CallObjectMethod(activity_, createSession) : nullptr;
-    if (!localSession || clearException(env, "MediaSession bridge construction")) {
-        if (localSession) env->DeleteLocalRef(localSession);
+    if (clearException(env, "MediaSession activity class lookup") || !activityClass) {
         if (activityClass) env->DeleteLocalRef(activityClass);
         return false;
     }
+
+    jmethodID createSession =
+        env->GetMethodID(activityClass, "createMediaSessionBridge", "()Landroid/media/session/MediaSession;");
+    if (clearException(env, "MediaSession bridge method lookup") || !createSession) {
+        env->DeleteLocalRef(activityClass);
+        return false;
+    }
+
+    jobject localSession = env->CallObjectMethod(activity_, createSession);
+    if (clearException(env, "MediaSession bridge construction") || !localSession) {
+        if (localSession) env->DeleteLocalRef(localSession);
+        env->DeleteLocalRef(activityClass);
+        return false;
+    }
+
     session_ = env->NewGlobalRef(localSession);
+    const bool retainFailed = clearException(env, "MediaSession bridge retention");
     env->DeleteLocalRef(localSession);
     env->DeleteLocalRef(activityClass);
-    if (session_) __android_log_print(ANDROID_LOG_INFO, kTag, "Android media session created for playback");
-    return session_ != nullptr;
+    if (retainFailed || !session_) return false;
+    __android_log_print(ANDROID_LOG_INFO, kTag, "Android media session created for playback");
+    return true;
 }
 
 void NativeMediaSession::updateMetadata(const std::string& title, const std::string& subtitle, int64_t durationMs) {
@@ -107,55 +120,91 @@ void NativeMediaSession::updateMetadata(const std::string& title, const std::str
     JNIEnv* env = scoped.get();
     if (!env) return;
     jclass builderClass = env->FindClass("android/media/MediaMetadata$Builder");
-    jclass metadataClass = env->FindClass("android/media/MediaMetadata");
+    if (clearException(env, "metadata builder class lookup") || !builderClass) {
+        if (builderClass) env->DeleteLocalRef(builderClass);
+        return;
+    }
     jclass sessionClass = env->FindClass("android/media/session/MediaSession");
-    if (!builderClass || !metadataClass || !sessionClass || clearException(env, "metadata class lookup")) return;
-
-    jmethodID ctor = env->GetMethodID(builderClass, "<init>", "()V");
-    jmethodID putString = env->GetMethodID(
-        builderClass, "putString", "(Ljava/lang/String;Ljava/lang/String;)Landroid/media/MediaMetadata$Builder;");
-    jmethodID putLong =
-        env->GetMethodID(builderClass, "putLong", "(Ljava/lang/String;J)Landroid/media/MediaMetadata$Builder;");
-    jmethodID build = env->GetMethodID(builderClass, "build", "()Landroid/media/MediaMetadata;");
-    jmethodID setMetadata = env->GetMethodID(sessionClass, "setMetadata", "(Landroid/media/MediaMetadata;)V");
-    if (!ctor || !putString || !putLong || !build || !setMetadata || clearException(env, "metadata method lookup")) {
+    if (clearException(env, "metadata session class lookup") || !sessionClass) {
+        if (sessionClass) env->DeleteLocalRef(sessionClass);
         env->DeleteLocalRef(builderClass);
-        env->DeleteLocalRef(metadataClass);
+        return;
+    }
+
+    const auto getMethod = [&](jclass clazz, const char* name, const char* signature) {
+        jmethodID method = env->GetMethodID(clazz, name, signature);
+        return clearException(env, "metadata method lookup") ? static_cast<jmethodID>(nullptr) : method;
+    };
+    jmethodID ctor = getMethod(builderClass, "<init>", "()V");
+    jmethodID putString = getMethod(builderClass, "putString",
+                                    "(Ljava/lang/String;Ljava/lang/String;)Landroid/media/MediaMetadata$Builder;");
+    jmethodID putLong =
+        getMethod(builderClass, "putLong", "(Ljava/lang/String;J)Landroid/media/MediaMetadata$Builder;");
+    jmethodID build = getMethod(builderClass, "build", "()Landroid/media/MediaMetadata;");
+    jmethodID setMetadata = getMethod(sessionClass, "setMetadata", "(Landroid/media/MediaMetadata;)V");
+    if (!ctor || !putString || !putLong || !build || !setMetadata) {
+        env->DeleteLocalRef(builderClass);
         env->DeleteLocalRef(sessionClass);
         return;
     }
 
     jobject builder = env->NewObject(builderClass, ctor);
-    auto putStringValue = [&](const char* key, const std::string& value) {
-        if (!builder || value.empty()) return;
-        jstring jKey = jniNewString(env, key);
-        jstring jValue = jniNewString(env, value);
-        if (jKey && jValue) env->CallObjectMethod(builder, putString, jKey, jValue);
-        if (jKey) env->DeleteLocalRef(jKey);
-        if (jValue) env->DeleteLocalRef(jValue);
-    };
-    putStringValue("android.media.metadata.TITLE", title);
-    putStringValue("android.media.metadata.DISPLAY_TITLE", title);
-    putStringValue("android.media.metadata.DISPLAY_SUBTITLE", subtitle);
-    if (builder && durationMs > 0) {
-        jstring key = jniNewString(env, "android.media.metadata.DURATION");
-        if (key) {
-            env->CallObjectMethod(builder, putLong, key, static_cast<jlong>(durationMs));
-            env->DeleteLocalRef(key);
-        }
+    if (clearException(env, "media metadata builder construction") || !builder) {
+        if (builder) env->DeleteLocalRef(builder);
+        env->DeleteLocalRef(builderClass);
+        env->DeleteLocalRef(sessionClass);
+        return;
     }
-    jobject metadata = builder ? env->CallObjectMethod(builder, build) : nullptr;
-    if (metadata) env->CallVoidMethod(session_, setMetadata, metadata);
-    const bool failed = clearException(env, "media metadata update");
+
+    auto putStringValue = [&](const char* key, const std::string& value) {
+        if (value.empty()) return true;
+        jstring jKey = jniNewString(env, key);
+        if (clearException(env, "media metadata key creation") || !jKey) {
+            if (jKey) env->DeleteLocalRef(jKey);
+            return false;
+        }
+        jstring jValue = jniNewString(env, value);
+        if (clearException(env, "media metadata value creation") || !jValue) {
+            if (jValue) env->DeleteLocalRef(jValue);
+            env->DeleteLocalRef(jKey);
+            return false;
+        }
+        env->CallObjectMethod(builder, putString, jKey, jValue);
+        const bool failed = clearException(env, "media metadata string update");
+        env->DeleteLocalRef(jKey);
+        env->DeleteLocalRef(jValue);
+        return !failed;
+    };
+    bool failed = !putStringValue("android.media.metadata.TITLE", title) ||
+                  !putStringValue("android.media.metadata.DISPLAY_TITLE", title) ||
+                  !putStringValue("android.media.metadata.DISPLAY_SUBTITLE", subtitle);
+    if (!failed && durationMs > 0) {
+        jstring key = jniNewString(env, "android.media.metadata.DURATION");
+        failed = clearException(env, "media metadata duration key creation") || !key;
+        if (!failed) {
+            env->CallObjectMethod(builder, putLong, key, static_cast<jlong>(durationMs));
+            failed = clearException(env, "media metadata duration update");
+        }
+        if (key) env->DeleteLocalRef(key);
+    }
+
+    jobject metadata = nullptr;
+    if (!failed) {
+        metadata = env->CallObjectMethod(builder, build);
+        failed = clearException(env, "media metadata build") || !metadata;
+    }
+    if (!failed) {
+        env->CallVoidMethod(session_, setMetadata, metadata);
+        failed = clearException(env, "media metadata update");
+    }
     if (!failed) {
         title_ = title;
         subtitle_ = subtitle;
         durationMs_ = durationMs;
     }
     if (metadata) env->DeleteLocalRef(metadata);
-    if (builder) env->DeleteLocalRef(builder);
+    env->DeleteLocalRef(builder);
     env->DeleteLocalRef(builderClass);
-    env->DeleteLocalRef(metadataClass);
     env->DeleteLocalRef(sessionClass);
 }
 
@@ -176,22 +225,41 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
     JNIEnv* env = scoped.get();
     if (!env) return;
     jclass builderClass = env->FindClass("android/media/session/PlaybackState$Builder");
+    if (clearException(env, "playback-state builder class lookup") || !builderClass) {
+        if (builderClass) env->DeleteLocalRef(builderClass);
+        return;
+    }
     jclass sessionClass = env->FindClass("android/media/session/MediaSession");
+    if (clearException(env, "playback-state session class lookup") || !sessionClass) {
+        if (sessionClass) env->DeleteLocalRef(sessionClass);
+        env->DeleteLocalRef(builderClass);
+        return;
+    }
     jclass clockClass = env->FindClass("android/os/SystemClock");
-    if (!builderClass || !sessionClass || !clockClass || clearException(env, "playback-state class lookup")) return;
+    if (clearException(env, "playback-state clock class lookup") || !clockClass) {
+        if (clockClass) env->DeleteLocalRef(clockClass);
+        env->DeleteLocalRef(builderClass);
+        env->DeleteLocalRef(sessionClass);
+        return;
+    }
 
-    jmethodID ctor = env->GetMethodID(builderClass, "<init>", "()V");
-    jmethodID setState =
-        env->GetMethodID(builderClass, "setState", "(IJFJ)Landroid/media/session/PlaybackState$Builder;");
-    jmethodID setActions =
-        env->GetMethodID(builderClass, "setActions", "(J)Landroid/media/session/PlaybackState$Builder;");
-    jmethodID build = env->GetMethodID(builderClass, "build", "()Landroid/media/session/PlaybackState;");
+    const auto getMethod = [&](jclass clazz, const char* name, const char* signature) {
+        jmethodID method = env->GetMethodID(clazz, name, signature);
+        return clearException(env, "playback-state method lookup") ? static_cast<jmethodID>(nullptr) : method;
+    };
+    const auto getStaticMethod = [&](jclass clazz, const char* name, const char* signature) {
+        jmethodID method = env->GetStaticMethodID(clazz, name, signature);
+        return clearException(env, "playback-state static method lookup") ? static_cast<jmethodID>(nullptr) : method;
+    };
+    jmethodID ctor = getMethod(builderClass, "<init>", "()V");
+    jmethodID setState = getMethod(builderClass, "setState", "(IJFJ)Landroid/media/session/PlaybackState$Builder;");
+    jmethodID setActions = getMethod(builderClass, "setActions", "(J)Landroid/media/session/PlaybackState$Builder;");
+    jmethodID build = getMethod(builderClass, "build", "()Landroid/media/session/PlaybackState;");
     jmethodID setPlaybackState =
-        env->GetMethodID(sessionClass, "setPlaybackState", "(Landroid/media/session/PlaybackState;)V");
-    jmethodID setActive = env->GetMethodID(sessionClass, "setActive", "(Z)V");
-    jmethodID elapsedRealtime = env->GetStaticMethodID(clockClass, "elapsedRealtime", "()J");
-    if (!ctor || !setState || !setActions || !build || !setPlaybackState || !setActive || !elapsedRealtime ||
-        clearException(env, "playback-state method lookup")) {
+        getMethod(sessionClass, "setPlaybackState", "(Landroid/media/session/PlaybackState;)V");
+    jmethodID setActive = getMethod(sessionClass, "setActive", "(Z)V");
+    jmethodID elapsedRealtime = getStaticMethod(clockClass, "elapsedRealtime", "()J");
+    if (!ctor || !setState || !setActions || !build || !setPlaybackState || !setActive || !elapsedRealtime) {
         env->DeleteLocalRef(builderClass);
         env->DeleteLocalRef(sessionClass);
         env->DeleteLocalRef(clockClass);
@@ -199,17 +267,36 @@ void NativeMediaSession::updateState(MediaSessionState state, int64_t positionMs
     }
 
     jobject builder = env->NewObject(builderClass, ctor);
-    const jlong now = env->CallStaticLongMethod(clockClass, elapsedRealtime);
+    bool failed = clearException(env, "playback-state builder construction") || !builder;
+    jlong now = 0;
+    if (!failed) {
+        now = env->CallStaticLongMethod(clockClass, elapsedRealtime);
+        failed = clearException(env, "playback-state clock read");
+    }
     const jfloat speed = state == MediaSessionState::Playing ? 1.0f : 0.0f;
-    if (builder) {
+    if (!failed) {
         env->CallObjectMethod(builder, setState, static_cast<jint>(playbackStateValue(state)),
                               static_cast<jlong>(positionMs), speed, now);
-        env->CallObjectMethod(builder, setActions, static_cast<jlong>(kTransportActions));
+        failed = clearException(env, "playback-state state update");
     }
-    jobject playbackState = builder ? env->CallObjectMethod(builder, build) : nullptr;
-    if (playbackState) env->CallVoidMethod(session_, setPlaybackState, playbackState);
-    env->CallVoidMethod(session_, setActive, state == MediaSessionState::Stopped ? JNI_FALSE : JNI_TRUE);
-    const bool failed = clearException(env, "playback-state update");
+    if (!failed) {
+        env->CallObjectMethod(builder, setActions, static_cast<jlong>(kTransportActions));
+        failed = clearException(env, "playback-state action update");
+    }
+
+    jobject playbackState = nullptr;
+    if (!failed) {
+        playbackState = env->CallObjectMethod(builder, build);
+        failed = clearException(env, "playback-state build") || !playbackState;
+    }
+    if (!failed) {
+        env->CallVoidMethod(session_, setPlaybackState, playbackState);
+        failed = clearException(env, "playback-state session update");
+    }
+    if (!failed) {
+        env->CallVoidMethod(session_, setActive, state == MediaSessionState::Stopped ? JNI_FALSE : JNI_TRUE);
+        failed = clearException(env, "playback-state active update");
+    }
     if (!failed) {
         state_ = state;
         lastPositionMs_ = positionMs;
@@ -281,15 +368,22 @@ void NativeMediaSession::clear() {
     keepScreenOn_ = false;
     if (!session_ || !env) return;
     jclass sessionClass = env->FindClass("android/media/session/MediaSession");
-    if (sessionClass) {
+    if (!clearException(env, "MediaSession release class lookup") && sessionClass) {
         jmethodID setActive = env->GetMethodID(sessionClass, "setActive", "(Z)V");
+        const bool setActiveLookupFailed = clearException(env, "MediaSession release setActive lookup");
         jmethodID release = env->GetMethodID(sessionClass, "release", "()V");
-        if (setActive) env->CallVoidMethod(session_, setActive, JNI_FALSE);
-        if (release) env->CallVoidMethod(session_, release);
-        if (env->ExceptionCheck()) env->ExceptionClear();
+        const bool releaseLookupFailed = clearException(env, "MediaSession release method lookup");
+        if (!setActiveLookupFailed && setActive) {
+            env->CallVoidMethod(session_, setActive, JNI_FALSE);
+            clearException(env, "MediaSession release deactivate");
+        }
+        if (!releaseLookupFailed && release) {
+            env->CallVoidMethod(session_, release);
+            clearException(env, "MediaSession release");
+        }
         env->DeleteLocalRef(sessionClass);
-    } else if (env->ExceptionCheck()) {
-        env->ExceptionClear();
+    } else if (sessionClass) {
+        env->DeleteLocalRef(sessionClass);
     }
     env->DeleteGlobalRef(session_);
     session_ = nullptr;

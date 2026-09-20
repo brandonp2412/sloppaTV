@@ -86,6 +86,10 @@ int main() {
     assert(playbackPrepareTimedOut(false, 15'000));
     assert(!playbackPrepareTimedOut(true, 29'999));
     assert(playbackPrepareTimedOut(true, 30'000));
+    assert(mpvLogIndicatesHardwareDecoderFailure("h264_mediacodec: MediaCodec 0x0 failed to start"));
+    assert(mpvLogIndicatesHardwareDecoderFailure("MediaCodec initialization ERROR"));
+    assert(!mpvLogIndicatesHardwareDecoderFailure("ffmpeg: Could not open codec"));
+    assert(!mpvLogIndicatesHardwareDecoderFailure("MediaCodec configured successfully"));
     assert(mpvHttpStatus("HTTP error 500") == 500);
     assert(mpvHttpStatus("curl: HTTP error 503 while fetching") == 503);
     assert(mpvHttpStatus("HTTP error nope") == 0);

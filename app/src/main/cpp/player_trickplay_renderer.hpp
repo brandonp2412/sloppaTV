@@ -32,12 +32,15 @@ bool renderPlayerTrickplay(RendererLike& renderer, const PlayerTrickplayRenderSt
     if (state.texture == 0 || !state.frame.valid() || !state.info.valid()) return false;
 
     constexpr float previewWidth = 420.0f;
+    if (state.logicalWidth < previewWidth) return false;
     const float previewHeight = std::clamp(
         previewWidth * static_cast<float>(state.info.height) / static_cast<float>(state.info.width), 180.0f, 270.0f);
     const double progress =
         state.durationMs > 0 ? std::clamp(static_cast<double>(state.positionMs) / state.durationMs, 0.0, 1.0) : 0.5;
     const float centerX = 155.0f + static_cast<float>(1610.0 * progress);
-    const float x = std::clamp(centerX - previewWidth * 0.5f, 80.0f, state.logicalWidth - 80.0f - previewWidth);
+    const float horizontalMargin = std::min(80.0f, (state.logicalWidth - previewWidth) * 0.5f);
+    const float maxX = state.logicalWidth - horizontalMargin - previewWidth;
+    const float x = std::clamp(centerX - previewWidth * 0.5f, horizontalMargin, maxX);
     constexpr float y = 555.0f;
 
     const TrickplayUvRegion uv =

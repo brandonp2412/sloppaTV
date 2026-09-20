@@ -70,11 +70,11 @@ struct PlayerSubtitleRenderState {
 template <typename RendererLike, typename ColorLike, typename FitTextLines>
 void renderPlayerSubtitle(RendererLike& renderer, const PlayerSubtitleRenderState& state,
                           const PlayerSubtitleRenderStyle<ColorLike>& style, FitTextLines&& fitTextLines) {
-    if (state.text.empty()) return;
+    if (state.text.empty() || state.boxMaxWidth <= 0.0f) return;
 
     constexpr float horizontalPadding = 32.0f;
     constexpr float verticalPadding = 20.0f;
-    const float textMaxWidth = state.boxMaxWidth - horizontalPadding * 2.0f;
+    const float textMaxWidth = std::max(0.0f, state.boxMaxWidth - horizontalPadding * 2.0f);
     const std::string subtitle =
         fitTextLines(normalizePlayerSubtitleText(state.text), state.textScale, textMaxWidth, 3);
 
@@ -89,7 +89,8 @@ void renderPlayerSubtitle(RendererLike& renderer, const PlayerSubtitleRenderStat
     }
     if (lines.empty()) lines.push_back(subtitle);
 
-    const float boxWidth = std::clamp(widest + horizontalPadding * 2.0f, 320.0f, state.boxMaxWidth);
+    const float minimumBoxWidth = std::min(320.0f, state.boxMaxWidth);
+    const float boxWidth = std::clamp(widest + horizontalPadding * 2.0f, minimumBoxWidth, state.boxMaxWidth);
     const float boxHeight = verticalPadding * 2.0f + state.lineHeight * static_cast<float>(lines.size());
     const float boxX = (state.logicalWidth - boxWidth) * 0.5f;
     const float boxY = state.bottomY - boxHeight;

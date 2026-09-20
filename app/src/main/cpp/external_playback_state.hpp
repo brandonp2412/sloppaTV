@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -30,10 +31,16 @@ inline ExternalPlaybackFinishPlan planExternalPlaybackFinish(const ExternalPlayb
     plan.failed = !result.success;
     if (plan.failed) return plan;
     plan.completed = result.completionKnown && result.completed;
-    if (result.positionMs >= 0)
-        plan.positionTicks = static_cast<int64_t>(result.positionMs) * 10000;
-    else if (plan.completed && launch.item.runtimeTicks > 0)
+    if (result.positionMs >= 0) {
+        constexpr int64_t ticksPerMillisecond = 10000;
+        constexpr int64_t maxMilliseconds = std::numeric_limits<int64_t>::max() / ticksPerMillisecond;
+        if (result.positionMs > maxMilliseconds)
+            plan.positionTicks = std::numeric_limits<int64_t>::max();
+        else
+            plan.positionTicks = result.positionMs * ticksPerMillisecond;
+    } else if (plan.completed && launch.item.runtimeTicks > 0) {
         plan.positionTicks = launch.item.runtimeTicks;
+    }
 
     if (!plan.positionTicks && !plan.completed) return plan;
     JellyfinItem updated = launch.item;

@@ -281,7 +281,8 @@ bool NativeMediaPlayer::setOptionLocked(const char* name, const std::string& val
     return !required;
 }
 
-bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int bufferPreset, std::string& error) {
+bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int bufferPreset, PlaybackDecodeMode decodeMode,
+                                         std::string& error) {
     if (!env || !surface || !activity_ || !appContext_) {
         error = "Missing Android playback context or surface";
         return false;
@@ -312,6 +313,23 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
     const std::string cacheSecs =
         durations.maxBufferMs > 0 ? std::to_string(std::max(30, durations.maxBufferMs / 1000)) : "120";
 
+    if (decodeMode == PlaybackDecodeMode::Software) {
+        if (!setOptionLocked("vo", "gpu", true, &error) || !setOptionLocked("gpu-context", "android", true, &error) ||
+            !setOptionLocked("hwdec", "no", true, &error)) {
+            return false;
+        }
+    } else {
+        // Let MediaCodec render directly into the Android SurfaceTexture. Routing
+        // zero-copy MediaCodec through mpv's Android GPU VO corrupts 10-bit HEVC
+        // output on the Google TV Streamer's MediaTek decoder (solid/flashing
+        // colours instead of picture frames). mediacodec_embed keeps the decoder
+        // surface path native and avoids that extra EGL handoff.
+        if (!setOptionLocked("vo", "mediacodec_embed", true, &error) ||
+            !setOptionLocked("hwdec", "mediacodec", true, &error)) {
+            return false;
+        }
+    }
+
     const struct {
         const char* name;
         const char* value;
@@ -319,13 +337,6 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
     } options[] = {
         {"config", "no", true},
         {"profile", "fast", false},
-        // Let MediaCodec render directly into the Android SurfaceTexture. Routing
-        // zero-copy MediaCodec through mpv's Android GPU VO corrupts 10-bit HEVC
-        // output on the Google TV Streamer's MediaTek decoder (solid/flashing
-        // colours instead of picture frames). mediacodec_embed keeps the decoder
-        // surface path native and avoids that extra EGL handoff.
-        {"vo", "mediacodec_embed", true},
-        {"hwdec", "mediacodec", true},
         {"hwdec-codecs", "all", true},
         {"vd-lavc-dr", "auto", false},
         {"vd-lavc-film-grain", "auto", false},
@@ -423,6 +434,7 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     pendingSubtitleOrdinal_ = -1;
     pendingSubtitleOff_ = false;
     telemetryLogged_ = false;
+    hardwareDecoderFailed_ = false;
     serverHttpErrorCount_ = 0;
     cachedStatus_ = PlayerStatus::Idle;
     cachedVideoWidth_ = 0;
@@ -433,7 +445,8 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
 
 void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset,
                                    int embeddedAudioOrdinal, int embeddedSubtitleStreamIndex,
-                                   int embeddedSubtitleOrdinal, const std::string& externalSubtitleUrl) {
+                                   int embeddedSubtitleOrdinal, const std::string& externalSubtitleUrl,
+                                   PlaybackDecodeMode decodeMode) {
     stop();
     if (!surface || url.empty()) {
         std::scoped_lock lock(mutex_);
@@ -453,7 +466,7 @@ void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int6
 
     std::scoped_lock lock(mutex_);
     std::string error;
-    if (!initializeLocked(env, surface, bufferPreset, error)) {
+    if (!initializeLocked(env, surface, bufferPreset, decodeMode, error)) {
         error_ = error;
         cachedStatus_ = PlayerStatus::Error;
         releaseLocked(env);
@@ -487,10 +500,10 @@ void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int6
     serverHttpErrorCount_ = 0;
     cachedStatus_ = PlayerStatus::Preparing;
     lastSnapshotPoll_ = {};
-    __android_log_print(ANDROID_LOG_INFO, kTag,
-                        "Embedded playback requested start=%lldms audioOrdinal=%d subtitleStream=%d",
-                        static_cast<long long>(std::max<int64_t>(0, startPositionMs)), embeddedAudioOrdinal,
-                        embeddedSubtitleStreamIndex);
+    __android_log_print(
+        ANDROID_LOG_INFO, kTag, "Embedded playback requested start=%lldms audioOrdinal=%d subtitleStream=%d decoder=%s",
+        static_cast<long long>(std::max<int64_t>(0, startPositionMs)), embeddedAudioOrdinal,
+        embeddedSubtitleStreamIndex, decodeMode == PlaybackDecodeMode::Software ? "software" : "mediacodec");
 }
 
 void NativeMediaPlayer::stop() {
@@ -737,6 +750,7 @@ PlayerStatus NativeMediaPlayer::status() const {
             const std::string safeText = redactSensitiveQuery(message->text ? message->text : "");
             __android_log_print(ANDROID_LOG_INFO, kTag, "core[%s/%s] %s", message->prefix ? message->prefix : "?",
                                 message->level ? message->level : "?", safeText.c_str());
+            if (mpvLogIndicatesHardwareDecoderFailure(safeText)) hardwareDecoderFailed_ = true;
             const int httpStatus = mpvHttpStatus(safeText);
             if (cachedStatus_ == PlayerStatus::Preparing && httpStatus >= 500 && httpStatus <= 599) {
                 ++serverHttpErrorCount_;
@@ -867,6 +881,11 @@ std::string NativeMediaPlayer::audioCodec() const {
 std::string NativeMediaPlayer::subtitleText() const {
     std::scoped_lock lock(mutex_);
     return cachedSubtitleText_;
+}
+
+bool NativeMediaPlayer::hardwareDecoderFailed() const {
+    std::scoped_lock lock(mutex_);
+    return hardwareDecoderFailed_;
 }
 
 double NativeMediaPlayer::containerFps() const {
