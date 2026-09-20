@@ -224,7 +224,7 @@ def main() -> int:
     jobs = [(test_name, None, None) for test_name in CPP_TESTS] + [
         (test_name, extra_sources, extra_flags) for test_name, extra_sources, extra_flags in LINKED_CPP_TESTS
     ]
-    worker_count = min(len(jobs), os.cpu_count() or 1)
+    worker_count = min(len(jobs), 8, os.cpu_count() or 1)
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = [
             executor.submit(run_cpp_test, test_name, extra_sources, extra_flags)

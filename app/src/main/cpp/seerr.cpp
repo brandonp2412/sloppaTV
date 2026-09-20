@@ -1,4 +1,5 @@
 #include "seerr.hpp"
+#include "json_boolean.hpp"
 #include "seerr_download_progress.hpp"
 
 #include <nlohmann/json.hpp>
@@ -431,8 +432,8 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(cons
                 const int id = integerValue(entry, "id", -1);
                 if (id < 0) continue;
 
-                bool is4k = entry.value("is4k", false);
-                bool isDefault = entry.value("isDefault", false);
+                bool is4k = jsonBooleanValue(entry, "is4k", false);
+                bool isDefault = jsonBooleanValue(entry, "isDefault", false);
                 std::string name = stringValue(entry, "name");
                 int profileId = integerValue(entry, "activeProfileId");
                 int animeProfileId = integerValue(entry, "activeAnimeProfileId");
@@ -447,8 +448,8 @@ ApiValueResult<std::vector<SeerrStorageTarget>> SeerrClient::storageTargets(cons
                         const auto serverInfo = details.find("server");
                         if (serverInfo != details.end() && serverInfo->is_object()) {
                             if (!stringValue(*serverInfo, "name").empty()) name = stringValue(*serverInfo, "name");
-                            is4k = serverInfo->value("is4k", is4k);
-                            isDefault = serverInfo->value("isDefault", isDefault);
+                            is4k = jsonBooleanValue(*serverInfo, "is4k", is4k);
+                            isDefault = jsonBooleanValue(*serverInfo, "isDefault", isDefault);
                             profileId = integerValue(*serverInfo, "activeProfileId", profileId);
                             animeProfileId = integerValue(*serverInfo, "activeAnimeProfileId", animeProfileId);
                             if (!stringValue(*serverInfo, "activeDirectory").empty()) {
@@ -606,7 +607,7 @@ ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::pendingRequests(const s
             item.id = seerrMediaId(mediaType, tmdbId);
             item.requestId = integerValue(request, "id");
             item.requested = true;
-            const bool is4k = request.value("is4k", false);
+            const bool is4k = jsonBooleanValue(request, "is4k", false);
             item.mediaStatus = integerValue(*media, is4k ? "status4k" : "status");
             item.jellyfinId = stringValue(*media, is4k ? "jellyfinMediaId4k" : "jellyfinMediaId");
             item.status = mediaStatusLabel(item.mediaStatus, mediaType == "tv");
