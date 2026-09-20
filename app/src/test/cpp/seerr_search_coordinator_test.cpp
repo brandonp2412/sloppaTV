@@ -14,16 +14,18 @@ struct Submission {
 };
 
 struct FakeAsyncExecutor {
-    void search(SeerrEndpoint endpoint, std::string query, uint64_t generation) {
+    bool search(SeerrEndpoint endpoint, std::string query, uint64_t generation) {
         submissions.push_back({
             .endpoint = std::move(endpoint),
             .query = std::move(query),
             .generation = generation,
         });
+        return accept;
     }
 
     void cancelSearch() { ++cancellations; }
 
+    bool accept = true;
     std::vector<Submission> submissions;
     int cancellations = 0;
 };
@@ -125,7 +127,7 @@ int main() {
         assert(plan.query == "arrival");
         assert(domain.searchLoading());
 
-        coordinator.submit(std::move(plan), 14);
+        assert(coordinator.submit(std::move(plan), 14));
         assert(async.submissions.size() == 1);
         assert(async.submissions.back().endpoint.auth.sessionCookie == "session");
         assert(async.submissions.back().query == "arrival");
@@ -149,10 +151,24 @@ int main() {
         assert(plan.ready());
         assert(domain.searchLoading());
 
-        coordinator.submit(std::move(plan), 27);
+        assert(coordinator.submit(std::move(plan), 27));
         assert(async.submissions.size() == 1);
         assert(async.submissions.back().query == "brook");
         assert(async.submissions.back().generation == 27);
+    }
+
+    {
+        SeerrDomainState domain;
+        FakeAsyncExecutor async;
+        async.accept = false;
+        SeerrSearchCoordinator coordinator(domain, async);
+
+        auto plan = coordinator.prepareImmediate(configuredEndpoint(), "arrival");
+        assert(plan.ready());
+        assert(domain.searchLoading());
+        assert(!coordinator.submit(std::move(plan), 28));
+        assert(async.submissions.size() == 1);
+        assert(!domain.searchLoading());
     }
 
     {

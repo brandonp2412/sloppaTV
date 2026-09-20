@@ -18,8 +18,10 @@ struct FakeSeerrAsync {
         ++searchCount;
         lastGeneration = generation;
         lastQuery = std::move(query);
-        return true;
+        return accept;
     }
+
+    bool accept = true;
 };
 
 struct FakeJellyfinSearch {
@@ -31,8 +33,10 @@ struct FakeJellyfinSearch {
         ++searchCount;
         lastGeneration = generation;
         lastQuery = std::move(query);
-        return true;
+        return accept;
     }
+
+    bool accept = true;
 };
 
 JellyfinSession session() {
@@ -88,6 +92,19 @@ int main() {
     assert(seerr.cancelCount == 2);
     assert(jellyfinEpoch.snapshot() == 3);
     assert(seerrEpoch.snapshot() == 3);
+
+    jellyfin.accept = false;
+    seerr.accept = false;
+    flow.state().setQuery("matrix");
+    const SearchDispatchEffects rejected = flow.search(session(), endpoint(), true, now);
+    assert(rejected.clearError);
+    assert(!rejected.refreshSeerrStorage);
+    assert(!flow.state().loading());
+    assert(!domain.searchLoading());
+    assert(jellyfin.searchCount == 2);
+    assert(seerr.searchCount == 2);
+    assert(jellyfinEpoch.snapshot() == 5);
+    assert(seerrEpoch.snapshot() == 5);
 
     return 0;
 }

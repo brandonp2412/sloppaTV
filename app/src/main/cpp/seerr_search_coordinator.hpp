@@ -108,9 +108,11 @@ public:
         };
     }
 
-    void submit(SeerrSearchDispatchPlan plan, uint64_t generation) {
-        if (!plan.ready()) return;
-        async_.search(std::move(plan.endpoint), std::move(plan.query), generation);
+    bool submit(SeerrSearchDispatchPlan plan, uint64_t generation) {
+        if (!plan.ready()) return false;
+        if (async_.search(std::move(plan.endpoint), std::move(plan.query), generation)) return true;
+        domain_.stopSearchLoading();
+        return false;
     }
 
     void abandonCompletion() { domain_.stopSearchLoading(); }

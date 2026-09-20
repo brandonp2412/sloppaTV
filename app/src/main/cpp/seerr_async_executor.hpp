@@ -117,8 +117,8 @@ public:
         });
     }
 
-    void search(SeerrEndpoint endpoint, std::string query, uint64_t generation) {
-        tasks_.submit([this, endpoint = std::move(endpoint), query = std::move(query), generation] {
+    bool search(SeerrEndpoint endpoint, std::string query, uint64_t generation) {
+        return tasks_.submit([this, endpoint = std::move(endpoint), query = std::move(query), generation] {
             auto result = searchClient_.search(endpoint.server, endpoint.auth, query);
             completions_.push(SeerrSearchCompletion{
                 .query = query,

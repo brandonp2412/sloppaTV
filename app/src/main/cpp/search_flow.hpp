@@ -97,7 +97,11 @@ public:
         if (!session.valid() || !state_.beginSearch()) return {};
 
         const std::string query = state_.query();
-        jellyfinSearch_.search(session, query, jellyfinEpoch_.begin());
+        const uint64_t jellyfinGeneration = jellyfinEpoch_.begin();
+        if (!jellyfinSearch_.search(session, query, jellyfinGeneration)) {
+            jellyfinEpoch_.invalidate();
+            if (!state_.failLibrarySearch(query)) state_.cancelPending();
+        }
 
         SearchDispatchEffects effects;
         effects.clearError = true;
@@ -112,7 +116,11 @@ public:
         if (plan.resultsChanged) state_.refreshSeerrResults();
         if (!plan.ready()) return {};
 
-        coordinator_.submit(std::move(plan), seerrEpoch_.begin());
+        const uint64_t generation = seerrEpoch_.begin();
+        if (!coordinator_.submit(std::move(plan), generation)) {
+            seerrEpoch_.invalidate();
+            return {};
+        }
         return SearchDispatchEffects{.refreshSeerrStorage = true};
     }
 
