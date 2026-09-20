@@ -4,8 +4,7 @@
 
 PlayerCompletionEffects PlayerCompletionController::apply(SubtitleLoadCompletion& completion, bool activeGeneration,
                                                           PlaybackCoordinator& coordinator) {
-    if (!activeGeneration ||
-        !coordinator.subtitleLoadMatches(completion.itemId, completion.requestedSubtitleIndex)) {
+    if (!activeGeneration || !coordinator.subtitleLoadMatches(completion.itemId, completion.requestedSubtitleIndex)) {
         return {};
     }
 

@@ -122,8 +122,7 @@ int main() {
     assert(domain.beginImmediateSearch("arrival", true).started);
     assert(domain.finishSearch("arrival", {media()}));
 
-    auto completion =
-        coordinator.complete(configuredEndpoint(), configuredEndpoint(), media(), 77, true, now);
+    auto completion = coordinator.complete(configuredEndpoint(), configuredEndpoint(), media(), 77, true, now);
     assert(completion.outcome == SeerrDomainState::MutationOutcome::Applied);
     assert(completion.status == "Queued for download");
     const auto* requestedSearchResult = domain.findSearchResult("seerr:movie:10");
@@ -162,15 +161,13 @@ int main() {
     requestedSearchResult = domain.findSearchResult("seerr:movie:10");
     assert(requestedSearchResult != nullptr && requestedSearchResult->requested);
 
-    deleteOutcome =
-        coordinator.completeDelete(configuredEndpoint(), staleEndpoint, "seerr:movie:10", 78, true);
+    deleteOutcome = coordinator.completeDelete(configuredEndpoint(), staleEndpoint, "seerr:movie:10", 78, true);
     assert(deleteOutcome == SeerrDomainState::MutationOutcome::StaleEndpoint);
     requestedSearchResult = domain.findSearchResult("seerr:movie:10");
     assert(requestedSearchResult != nullptr && requestedSearchResult->requested);
     assert(domain.pendingRequests().size() == 1);
 
-    deleteOutcome =
-        coordinator.completeDelete(configuredEndpoint(), configuredEndpoint(), "seerr:movie:10", 78, false);
+    deleteOutcome = coordinator.completeDelete(configuredEndpoint(), configuredEndpoint(), "seerr:movie:10", 78, false);
     assert(deleteOutcome == SeerrDomainState::MutationOutcome::Failed);
     requestedSearchResult = domain.findSearchResult("seerr:movie:10");
     assert(requestedSearchResult != nullptr && requestedSearchResult->requested);

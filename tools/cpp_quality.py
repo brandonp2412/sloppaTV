@@ -154,7 +154,7 @@ def run_tidy() -> int:
         return path, completed.returncode, completed.stdout or ""
 
     failures = 0
-    worker_count = min(4, os.cpu_count() or 1, len(sources))
+    worker_count = min(16, os.cpu_count() or 1, len(sources))
     with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(check, source) for source in sources]
         for future in concurrent.futures.as_completed(futures):
@@ -175,6 +175,8 @@ def run_cppcheck() -> int:
         "--error-exitcode=1",
         "--inline-suppr",
         "--quiet",
+        "-j",
+        str(min(8, os.cpu_count() or 1)),
         "--suppressions-list=.cppcheck-suppressions.txt",
         "-I",
         str(CPP_ROOT),

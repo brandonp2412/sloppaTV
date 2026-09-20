@@ -6,7 +6,9 @@ readonly SCRIPT_DIR
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 readonly PROJECT_DIR
 readonly SCREENSHOT_TARGET="${SLOPPATV_SCREENSHOT_TARGET:-android-tv-emulator}"
-readonly SCREENSHOT_DIR="$PROJECT_DIR/artifacts/$([[ "$SCREENSHOT_TARGET" == "waydroid" ]] && echo e2e-waydroid || echo ci-screenshots)"
+SCREENSHOT_SUBDIR="$([[ "$SCREENSHOT_TARGET" == "waydroid" ]] && echo e2e-waydroid || echo ci-screenshots)"
+readonly SCREENSHOT_SUBDIR
+readonly SCREENSHOT_DIR="$PROJECT_DIR/artifacts/$SCREENSHOT_SUBDIR"
 readonly SCREENSHOT_SUITE="$SCRIPT_DIR/screenshot-suites/ci-login.json"
 readonly FIXTURE_PORT="${SLOPPATV_FIXTURE_PORT:-18096}"
 

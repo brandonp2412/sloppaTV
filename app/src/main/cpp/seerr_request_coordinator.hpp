@@ -46,9 +46,10 @@ public:
         async_.requestMedia(std::move(plan.endpoint), std::move(plan.item), std::move(plan.target));
     }
 
-    [[nodiscard]] SeerrDomainState::RequestMutationCompletion complete(
-        const SeerrEndpoint& requestedEndpoint, const SeerrEndpoint& currentEndpoint, SeerrMediaItem requestedItem,
-        int requestId, bool ok, SeerrRequestState::TimePoint now) {
+    [[nodiscard]] SeerrDomainState::RequestMutationCompletion complete(const SeerrEndpoint& requestedEndpoint,
+                                                                       const SeerrEndpoint& currentEndpoint,
+                                                                       SeerrMediaItem requestedItem, int requestId,
+                                                                       bool ok, SeerrRequestState::TimePoint now) {
         const std::string itemId = requestedItem.id;
         auto completion =
             domain_.completeRequest(requestedEndpoint, currentEndpoint, std::move(requestedItem), requestId, ok, now);
@@ -59,10 +60,9 @@ public:
     }
 
     [[nodiscard]] SeerrDomainState::MutationOutcome completeDelete(const SeerrEndpoint& requestedEndpoint,
-                                                                  const SeerrEndpoint& currentEndpoint,
-                                                                  const std::string& itemId, int requestId, bool ok) {
-        const auto outcome =
-            domain_.completeDeleteRequest(requestedEndpoint, currentEndpoint, itemId, requestId, ok);
+                                                                   const SeerrEndpoint& currentEndpoint,
+                                                                   const std::string& itemId, int requestId, bool ok) {
+        const auto outcome = domain_.completeDeleteRequest(requestedEndpoint, currentEndpoint, itemId, requestId, ok);
         if (outcome == SeerrDomainState::MutationOutcome::Applied) domain_.markSearchUnrequested(itemId);
         return outcome;
     }

@@ -37,13 +37,9 @@ struct FakeRenderer {
         texts.push_back({x, y, scale, std::string(value), color, 0.0f, false});
     }
 
-    void beginClipRect(float x, float y, float width, float height) {
-        clips.push_back({x, y, width, height});
-    }
+    void beginClipRect(float x, float y, float width, float height) { clips.push_back({x, y, width, height}); }
 
-    void endClipRect() {
-        ++clipEnds;
-    }
+    void endClipRect() { ++clipEnds; }
 
     std::vector<TextCall> texts;
     std::vector<ClipCall> clips;

@@ -19,8 +19,7 @@ struct LoginCompletion {
     ApiValueResult<JellyfinSession> result;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink>
-class AccountAsyncExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink> class AccountAsyncExecutor {
 public:
     using DiscoveryFunction = std::vector<DiscoveredJellyfinServer> (*)(int);
 

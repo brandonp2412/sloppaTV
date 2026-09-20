@@ -91,8 +91,8 @@ void renderHomeScreen(RendererLike& renderer, const std::vector<JellyfinHomeRow>
             drawCentered(bounds[0], bounds[1], bounds[2], bounds[3], 2.0f, navLabels[index], style.text, 12.0f, 4.0f);
         } else {
             if (active) renderer.roundedRect(navX, 40.0f, navWidth, 54.0f, style.cornerLarge, style.focusSoft);
-            drawCentered(navX, 40.0f, navWidth, 54.0f, 2.0f, navLabels[index], active ? style.text : style.muted,
-                         12.0f, 4.0f);
+            drawCentered(navX, 40.0f, navWidth, 54.0f, 2.0f, navLabels[index], active ? style.text : style.muted, 12.0f,
+                         4.0f);
         }
         navX += navWidth + 12.0f;
     }
@@ -110,8 +110,7 @@ void renderHomeScreen(RendererLike& renderer, const std::vector<JellyfinHomeRow>
         const std::string initial =
             session.username.empty()
                 ? "U"
-                : std::string(1, static_cast<char>(
-                                     std::toupper(static_cast<unsigned char>(session.username.front()))));
+                : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(session.username.front()))));
         drawCentered(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], 2.35f, initial, style.text,
                      6.0f, 6.0f);
     }
@@ -141,8 +140,8 @@ void renderHomeScreen(RendererLike& renderer, const std::vector<JellyfinHomeRow>
     const float rowStep = homeRowStep(config.uiTextSize);
     if (slide.started != std::chrono::steady_clock::time_point{} && slide.toFirst == firstVisibleRow &&
         current < slide.started + slideDuration) {
-        const float elapsed = static_cast<float>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(current - slide.started).count());
+        const float elapsed =
+            static_cast<float>(std::chrono::duration_cast<std::chrono::milliseconds>(current - slide.started).count());
         const float progress = std::clamp(elapsed / 220.0f, 0.0f, 1.0f);
         const float eased = progress * progress * (3.0f - 2.0f * progress);
         renderRowCount = 3;

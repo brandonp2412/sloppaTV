@@ -17,23 +17,28 @@ def png_dimensions(path: Path) -> tuple[int, int]:
 
 
 class AndroidTvManifestTest(unittest.TestCase):
+    root: ET.Element
+    application: ET.Element
+    activity: ET.Element
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.root = ET.parse(ROOT / "app" / "src" / "main" / "AndroidManifest.xml").getroot()
-        cls.application = cls.root.find("application")
-        assert cls.application is not None
-        cls.activity = cls.application.find("activity")
-        assert cls.activity is not None
+        application = cls.root.find("application")
+        if application is None:
+            raise AssertionError("AndroidManifest.xml has no application element")
+        cls.application = application
+        activity = cls.application.find("activity")
+        if activity is None:
+            raise AssertionError("AndroidManifest.xml has no activity element")
+        cls.activity = activity
 
     def test_tv_banner_is_explicit_on_application_and_launcher_activity(self) -> None:
         self.assertEqual(self.application.get(ANDROID + "banner"), "@drawable/sloppatv_banner")
         self.assertEqual(self.activity.get(ANDROID + "banner"), "@drawable/sloppatv_banner")
 
     def test_launcher_activity_exposes_tv_and_standard_launcher_categories(self) -> None:
-        categories = {
-            category.get(ANDROID + "name")
-            for category in self.activity.findall("./intent-filter/category")
-        }
+        categories = {category.get(ANDROID + "name") for category in self.activity.findall("./intent-filter/category")}
         self.assertIn("android.intent.category.LEANBACK_LAUNCHER", categories)
         self.assertIn("android.intent.category.LAUNCHER", categories)
 

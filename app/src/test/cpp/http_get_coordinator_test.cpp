@@ -19,8 +19,7 @@ HttpResponse ok(std::string body) {
 } // namespace
 
 int main() {
-    assert(httpGetCacheKey("https://example/items", {{"A", "1"}, {"B", "2"}}) ==
-           "https://example/items\nA:1\nB:2");
+    assert(httpGetCacheKey("https://example/items", {{"A", "1"}, {"B", "2"}}) == "https://example/items\nA:1\nB:2");
 
     HttpGetCoordinator cached;
     int cacheFetches = 0;
@@ -46,14 +45,20 @@ int main() {
 
     HttpGetCoordinator uncached;
     int uncachedFetches = 0;
-    assert(uncached.request("uncached", false, [&] {
-               ++uncachedFetches;
-               return ok("one");
-           }).body == "one");
-    assert(uncached.request("uncached", false, [&] {
-               ++uncachedFetches;
-               return ok("two");
-           }).body == "two");
+    assert(uncached
+               .request("uncached", false,
+                        [&] {
+                            ++uncachedFetches;
+                            return ok("one");
+                        })
+               .body == "one");
+    assert(uncached
+               .request("uncached", false,
+                        [&] {
+                            ++uncachedFetches;
+                            return ok("two");
+                        })
+               .body == "two");
     assert(uncachedFetches == 2);
 
     HttpGetCoordinator deduplicated;

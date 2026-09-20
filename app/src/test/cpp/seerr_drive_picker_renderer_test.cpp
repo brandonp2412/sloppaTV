@@ -183,8 +183,7 @@ int main() {
     FakeRenderer emptyRenderer;
     int renderedEmpty = 0;
     renderSeerrDrivePickerScreen(
-        emptyRenderer, emptyModel, style,
-        [](float, float, float, float, bool, float, float) {},
+        emptyRenderer, emptyModel, style, [](float, float, float, float, bool, float, float) {},
         [](std::string_view value, float, float, int) { return std::string(value); },
         [](float, float, float, float, float, std::string_view, int, float, float) {},
         [&](const std::string& title, const std::string& message) {

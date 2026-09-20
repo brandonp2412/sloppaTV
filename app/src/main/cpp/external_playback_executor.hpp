@@ -159,13 +159,14 @@ public:
                 .generation = request.generation,
                 .selectedItemId = request.selectedItemId,
                 .selectedSeriesId = request.seriesId,
-                .launch = ExternalPlaybackLaunch{
-                    .item = std::move(playable),
-                    .player = std::move(request.player),
-                    .url = videoUrl,
-                    .subtitleUrl = std::move(subtitleUrl),
-                    .skipSegmentsJson = std::move(skipSegmentsJson),
-                },
+                .launch =
+                    ExternalPlaybackLaunch{
+                        .item = std::move(playable),
+                        .player = std::move(request.player),
+                        .url = videoUrl,
+                        .subtitleUrl = std::move(subtitleUrl),
+                        .skipSegmentsJson = std::move(skipSegmentsJson),
+                    },
                 .error = {},
             });
         });

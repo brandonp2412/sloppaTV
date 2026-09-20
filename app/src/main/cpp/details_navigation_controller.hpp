@@ -45,16 +45,16 @@ struct DetailsNavigationAction {
 class DetailsNavigationController {
 public:
     [[nodiscard]] static DetailsNavigationAction handleDetails(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                const JellyfinItem& item);
+                                                               const JellyfinItem& item);
     [[nodiscard]] static DetailsNavigationAction handleCast(DetailsScreenState& state, DetailsNavigationKey key,
-                                                             const std::vector<JellyfinPerson>& people, int columns);
+                                                            const std::vector<JellyfinPerson>& people, int columns);
     [[nodiscard]] static DetailsNavigationAction handlePersonItems(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                    int columns);
+                                                                   int columns);
     [[nodiscard]] static DetailsNavigationAction handleItemMenu(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                 const JellyfinItem& item, bool seerrRequest,
-                                                                 bool hasExternalPlayer, bool hasQueue);
+                                                                const JellyfinItem& item, bool seerrRequest,
+                                                                bool hasExternalPlayer, bool hasQueue);
     [[nodiscard]] static DetailsNavigationAction handleSeasons(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                int columns);
+                                                               int columns);
     [[nodiscard]] static DetailsNavigationAction handleEpisodes(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                 int columns);
+                                                                int columns);
 };

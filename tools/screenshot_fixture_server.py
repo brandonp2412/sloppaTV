@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """Deterministic Jellyfin fixture used by the Android TV visual screenshot suite."""
+
 from __future__ import annotations
 
 import argparse
 import json
 import mimetypes
 import re
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any, cast
 from urllib.parse import parse_qs, urlsplit
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "screenshot-fixtures"
@@ -252,7 +255,17 @@ SEASON_ONE = {
 }
 
 
-def episode(item_id: str, name: str, index: int, year: int, runtime_seconds: int, overview: str, *, position_seconds: int = 0, played: bool = False) -> dict[str, object]:
+def episode(
+    item_id: str,
+    name: str,
+    index: int,
+    year: int,
+    runtime_seconds: int,
+    overview: str,
+    *,
+    position_seconds: int = 0,
+    played: bool = False,
+) -> dict[str, object]:
     return {
         "Id": item_id,
         "Name": name,
@@ -341,7 +354,9 @@ def anthology_season(series: dict[str, object]) -> dict[str, object]:
     }
 
 
-def anthology_episode(series: dict[str, object], season: dict[str, object], source: dict[str, object], index: int) -> dict[str, object]:
+def anthology_episode(
+    series: dict[str, object], season: dict[str, object], source: dict[str, object], index: int
+) -> dict[str, object]:
     item_id = f"episode-{series['Id']}-{index}"
     return {
         "Id": item_id,
@@ -421,7 +436,13 @@ MODERN_OPEN_MOVIES_EPISODES = [
 
 SERIES = [OPEN_CLASSICS, CAMINANDES, OPEN_WORLDS, BLENDER_SHORTS, MODERN_OPEN_MOVIES]
 SEASONS = [SEASON_ONE, OPEN_CLASSICS_SEASON, OPEN_WORLDS_SEASON, BLENDER_SHORTS_SEASON, MODERN_OPEN_MOVIES_SEASON]
-ALL_EPISODES = [*EPISODES, *OPEN_CLASSICS_EPISODES, *OPEN_WORLDS_EPISODES, *BLENDER_SHORTS_EPISODES, *MODERN_OPEN_MOVIES_EPISODES]
+ALL_EPISODES = [
+    *EPISODES,
+    *OPEN_CLASSICS_EPISODES,
+    *OPEN_WORLDS_EPISODES,
+    *BLENDER_SHORTS_EPISODES,
+    *MODERN_OPEN_MOVIES_EPISODES,
+]
 SEASONS_BY_SERIES = {
     CAMINANDES["Id"]: [SEASON_ONE],
     OPEN_CLASSICS["Id"]: [OPEN_CLASSICS_SEASON],
@@ -558,8 +579,8 @@ for episode_item, source_movie in zip(OPEN_CLASSICS_EPISODES, MOVIES, strict=Tru
 VIDEO_FILE = MEDIA_ROOT / "big-buck-bunny-clip.mp4"
 
 
-def list_payload(items: list[dict[str, object]]) -> dict[str, object]:
-    return {"Items": deepcopy(items), "TotalRecordCount": len(items)}
+def list_payload(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    return {"Items": [deepcopy(item) for item in items], "TotalRecordCount": len(items)}
 
 
 def query_values(query: dict[str, list[str]], name: str) -> list[str]:
@@ -571,24 +592,23 @@ def query_value(query: dict[str, list[str]], name: str) -> str:
     return values[0] if values else ""
 
 
-def matching_search_items(term: str) -> list[dict[str, object]]:
+def matching_search_items(term: str) -> list[dict[str, Any]]:
     needle = term.casefold().strip()
-    values = [*MOVIES, *SERIES, *ALL_EPISODES]
+    values = [cast(dict[str, Any], value) for value in [*MOVIES, *SERIES, *ALL_EPISODES]]
     if not needle:
         return values
     return [
         value
         for value in values
-        if needle in str(value.get("Name", "")).casefold()
-        or needle in str(value.get("SeriesName", "")).casefold()
+        if needle in str(value.get("Name", "")).casefold() or needle in str(value.get("SeriesName", "")).casefold()
     ]
 
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "sloppaTVScreenshotFixture/2.0"
 
-    def log_message(self, fmt: str, *args: object) -> None:
-        print(fmt % args, flush=True)
+    def log_message(self, format: str, *args: Any) -> None:
+        print(format % args, flush=True)
 
     def send_json(self, payload: object, status: int = 200) -> None:
         data = json.dumps(payload, separators=(",", ":")).encode()
@@ -629,7 +649,9 @@ class Handler(BaseHTTPRequestHandler):
         length = end - start + 1
         self.send_response(status)
         self.send_header("Accept-Ranges", "bytes")
-        self.send_header("Content-Type", content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+        self.send_header(
+            "Content-Type", content_type or mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        )
         self.send_header("Content-Length", str(length))
         if status == 206:
             self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
@@ -658,7 +680,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_file(ARTWORK_ROOT / filename)
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         split = urlsplit(self.path)
         path = split.path
         if path == "/Users/AuthenticateByName":
@@ -685,10 +707,10 @@ class Handler(BaseHTTPRequestHandler):
             return
         self.send_json({})
 
-    def do_HEAD(self) -> None:  # noqa: N802
+    def do_HEAD(self) -> None:
         self.handle_read()
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         self.handle_read()
 
     def handle_read(self) -> None:
@@ -731,15 +753,19 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path.endswith("/Items/Resume"):
-            bunny_resume = deepcopy(BIG_BUCK_BUNNY)
+            bunny_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(BIG_BUCK_BUNNY))
             bunny_resume["UserData"]["PlaybackPositionTicks"] = ticks(238)
-            spring_resume = deepcopy(SPRING)
+            spring_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(SPRING))
             spring_resume["UserData"]["PlaybackPositionTicks"] = ticks(132)
-            coffee_resume = deepcopy(COFFEE_RUN)
+            coffee_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(COFFEE_RUN))
             coffee_resume["UserData"]["PlaybackPositionTicks"] = ticks(54)
-            sprite_resume = deepcopy(SPRITE_FRIGHT)
+            sprite_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(SPRITE_FRIGHT))
             sprite_resume["UserData"]["PlaybackPositionTicks"] = ticks(276)
-            self.send_json(list_payload([bunny_resume, EPISODES[1], spring_resume, coffee_resume, sprite_resume, BLENDER_SHORTS_EPISODES[1]]))
+            self.send_json(
+                list_payload(
+                    [bunny_resume, EPISODES[1], spring_resume, coffee_resume, sprite_resume, BLENDER_SHORTS_EPISODES[1]]
+                )
+            )
             return
 
         if path == "/Shows/NextUp":
@@ -748,7 +774,11 @@ class Handler(BaseHTTPRequestHandler):
                 series_episodes = EPISODES_BY_SERIES.get(series_id, [])
                 next_items = series_episodes[1:2] or series_episodes[:1]
             else:
-                next_items = [episodes[1] if len(episodes) > 1 else episodes[0] for episodes in EPISODES_BY_SERIES.values() if episodes]
+                next_items = [
+                    episodes[1] if len(episodes) > 1 else episodes[0]
+                    for episodes in EPISODES_BY_SERIES.values()
+                    if episodes
+                ]
             self.send_json(list_payload(next_items))
             return
 
@@ -774,7 +804,19 @@ class Handler(BaseHTTPRequestHandler):
             if item_id in {series["Id"] for series in SERIES} or item_id.startswith("episode-"):
                 values = MOVIES[:6]
             else:
-                values = [value for value in [SINTEL, TEARS_OF_STEEL, CAMINANDES, ELEPHANTS_DREAM, SPRING, SPRITE_FRIGHT, BIG_BUCK_BUNNY] if value["Id"] != item_id]
+                values = [
+                    value
+                    for value in [
+                        SINTEL,
+                        TEARS_OF_STEEL,
+                        CAMINANDES,
+                        ELEPHANTS_DREAM,
+                        SPRING,
+                        SPRITE_FRIGHT,
+                        BIG_BUCK_BUNNY,
+                    ]
+                    if value["Id"] != item_id
+                ]
             self.send_json(list_payload(values))
             return
 
@@ -805,7 +847,16 @@ class Handler(BaseHTTPRequestHandler):
                 elif filters == "IsFavorite":
                     values = [BIG_BUCK_BUNNY, CAMINANDES, SPRITE_FRIGHT, OPEN_CLASSICS]
                 elif include_types == "Movie,Series":
-                    values = [BIG_BUCK_BUNNY, CAMINANDES, SINTEL, OPEN_CLASSICS, TEARS_OF_STEEL, OPEN_WORLDS, SPRING, BLENDER_SHORTS]
+                    values = [
+                        BIG_BUCK_BUNNY,
+                        CAMINANDES,
+                        SINTEL,
+                        OPEN_CLASSICS,
+                        TEARS_OF_STEEL,
+                        OPEN_WORLDS,
+                        SPRING,
+                        BLENDER_SHORTS,
+                    ]
                 else:
                     values = [*MOVIES, *SERIES, *ALL_EPISODES]
             self.send_json(list_payload(values))

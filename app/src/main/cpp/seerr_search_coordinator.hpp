@@ -90,7 +90,7 @@ public:
     }
 
     [[nodiscard]] SeerrSearchDispatchPlan prepareDue(SeerrEndpoint endpoint, std::string query,
-                                                      SeerrSearchState::Clock::time_point now) {
+                                                     SeerrSearchState::Clock::time_point now) {
         if (deferForConnection()) {
             return {
                 .action = SeerrSearchDispatchAction::DeferredForConnection,
@@ -125,8 +125,7 @@ public:
         };
     }
 
-    [[nodiscard]] SeerrSearchCompletionPlan completeSuccess(std::string_view query,
-                                                            std::vector<SeerrMediaItem> results,
+    [[nodiscard]] SeerrSearchCompletionPlan completeSuccess(std::string_view query, std::vector<SeerrMediaItem> results,
                                                             SeerrRequestState::TimePoint now) {
         const bool pendingChanged = domain_.completeSearchSuccess(results, now);
         return {

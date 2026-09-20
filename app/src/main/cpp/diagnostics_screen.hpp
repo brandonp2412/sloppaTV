@@ -59,14 +59,12 @@ inline std::vector<std::pair<std::string, std::string>> diagnosticsRows(const Di
         {"Jellyfin version",
          data.serverVersion.empty() ? (data.serverLoading ? "Loading…" : "UNKNOWN") : data.serverVersion},
         {"Video decoders", data.videoCodecs.empty() ? "NONE DETECTED" : joinDiagnosticsValues(data.videoCodecs)},
-        {"Direct audio",
-         data.audioCodecs.empty() ? "AAC TRANSCODE FALLBACK" : joinDiagnosticsValues(data.audioCodecs)},
+        {"Direct audio", data.audioCodecs.empty() ? "AAC TRANSCODE FALLBACK" : joinDiagnosticsValues(data.audioCodecs)},
         {"Audio output", std::to_string(data.maxAudioOutputChannels) + " CHANNELS"},
         {"HEVC maximum", data.maxHevcWidth > 0
                              ? std::to_string(data.maxHevcWidth) + "X" + std::to_string(data.maxHevcHeight)
                              : "UNKNOWN"},
         {"HDR display", data.hdrFormats.empty() ? "SDR / NONE DETECTED" : joinDiagnosticsValues(data.hdrFormats)},
-        {"Last playback",
-         data.lastPlaybackSummary.empty() ? "NOT YET PLAYED THIS SESSION" : data.lastPlaybackSummary},
+        {"Last playback", data.lastPlaybackSummary.empty() ? "NOT YET PLAYED THIS SESSION" : data.lastPlaybackSummary},
     };
 }

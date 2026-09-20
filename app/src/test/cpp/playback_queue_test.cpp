@@ -51,8 +51,7 @@ int main() {
 
     availabilityChecks.clear();
     preparedQueue = prepareSeriesPlaybackQueue(
-        {seasonOneEpisodeOneAvailable, seasonOneEpisodeOneUnavailable, seasonOneEpisodeTwo},
-        [&](JellyfinItem& item) {
+        {seasonOneEpisodeOneAvailable, seasonOneEpisodeOneUnavailable, seasonOneEpisodeTwo}, [&](JellyfinItem& item) {
             availabilityChecks.push_back(item.id);
             return item.id == "s1e1-a";
         });
@@ -61,12 +60,11 @@ int main() {
     assert((availabilityChecks == std::vector<std::string>{"s1e1-a"}));
 
     availabilityChecks.clear();
-    preparedQueue = prepareSeriesPlaybackQueue(
-        {seasonOneEpisodeOneUnavailable, seasonOneEpisodeOneAvailable},
-        [&](JellyfinItem& item) {
-            availabilityChecks.push_back(item.id);
-            return false;
-        });
+    preparedQueue = prepareSeriesPlaybackQueue({seasonOneEpisodeOneUnavailable, seasonOneEpisodeOneAvailable},
+                                               [&](JellyfinItem& item) {
+                                                   availabilityChecks.push_back(item.id);
+                                                   return false;
+                                               });
     assert(preparedQueue.episodes.size() == 1);
     assert(preparedQueue.episodes[0].id == "s1e1-a");
     assert(preparedQueue.unavailableDuplicateSlots.size() == 1);

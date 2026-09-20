@@ -54,7 +54,7 @@ AccountNavigationAction action(AccountNavigationActionType type) {
 } // namespace
 
 AccountNavigationAction AccountNavigationController::handleLogin(AccountScreenState& state, ScreenNavigationKey key,
-                                                                  bool hasSavedSessions) {
+                                                                 bool hasSavedSessions) {
     const LoginScreenCommand command = state.handleLoginInput(loginInput(key), hasSavedSessions);
     switch (command.type) {
     case LoginScreenCommandType::None:
@@ -89,7 +89,7 @@ AccountNavigationAction AccountNavigationController::handleLogin(AccountScreenSt
 }
 
 AccountNavigationAction AccountNavigationController::handleProfiles(AccountScreenState& state, ScreenNavigationKey key,
-                                                                     int savedSessionCount) {
+                                                                    int savedSessionCount) {
     const ProfilesScreenCommand command = state.handleProfilesInput(profilesInput(key), savedSessionCount);
     AccountNavigationAction result;
     switch (command.type) {

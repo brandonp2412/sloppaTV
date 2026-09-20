@@ -123,8 +123,9 @@ int main() {
 
     BrowseScreenState inputState;
     inputState.resetForLibrary(movies);
-    inputState.replacePage({item("i0", "0"), item("i1", "1"), item("i2", "2"), item("i3", "3"),
-                            item("i4", "4"), item("i5", "5"), item("i6", "6")}, 60);
+    inputState.replacePage({item("i0", "0"), item("i1", "1"), item("i2", "2"), item("i3", "3"), item("i4", "4"),
+                            item("i5", "5"), item("i6", "6")},
+                           60);
     auto command = inputState.handleInput(BrowseScreenInput::Up, 5);
     assert(command.type == BrowseScreenCommandType::None);
     assert(inputState.filterFocused());

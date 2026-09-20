@@ -29,8 +29,7 @@ struct BrowsePageRequest {
     int pageSize = 60;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink>
-class BrowseAsyncExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink> class BrowseAsyncExecutor {
 public:
     BrowseAsyncExecutor(Client& client, TaskRunner& tasks, CompletionSink& completions)
         : client_(client), tasks_(tasks), completions_(completions) {}

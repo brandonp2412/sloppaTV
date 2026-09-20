@@ -36,9 +36,7 @@ struct FakeRenderer {
         roundedRects.push_back({x, y, width, height, color});
     }
 
-    void rect(float x, float y, float width, float height, int color) {
-        rects.push_back({x, y, width, height, color});
-    }
+    void rect(float x, float y, float width, float height, int color) { rects.push_back({x, y, width, height, color}); }
 
     std::vector<TextCall> texts;
     std::vector<RectCall> roundedRects;
@@ -97,12 +95,10 @@ int main() {
             return std::array<float, 4>{x, y, width, height};
         },
         [](const JellyfinItem&, float, float, float, float, float) { return true; },
-        [](const JellyfinItem&, float, float, float, float, float) {},
-        [](float, float, float, float, int, float) {},
+        [](const JellyfinItem&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
         [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int) {},
-        [] { return SearchScreenState::Clock::time_point{}; },
-        [](int, float) { return 99; });
+        [] { return SearchScreenState::Clock::time_point{}; }, [](int, float) { return 99; });
 
     assert(keyboardCalls == 1);
     assert(emptyCalls == 0);
@@ -128,12 +124,33 @@ int main() {
     state.setSelection(1);
 
     std::vector<SeerrStorageTarget> storage{
-        {.mediaType = "", .serviceName = "", .path = "/media/a", .serverId = -1, .profileId = 0,
-         .freeSpace = 10, .totalSpace = 100, .isDefault = false, .is4k = false},
-        {.mediaType = "", .serviceName = "", .path = "/media/a", .serverId = -1, .profileId = 0,
-         .freeSpace = 10, .totalSpace = 100, .isDefault = false, .is4k = false},
-        {.mediaType = "", .serviceName = "", .path = "/media/b", .serverId = -1, .profileId = 0,
-         .freeSpace = 100, .totalSpace = 200, .isDefault = false, .is4k = false},
+        {.mediaType = "",
+         .serviceName = "",
+         .path = "/media/a",
+         .serverId = -1,
+         .profileId = 0,
+         .freeSpace = 10,
+         .totalSpace = 100,
+         .isDefault = false,
+         .is4k = false},
+        {.mediaType = "",
+         .serviceName = "",
+         .path = "/media/a",
+         .serverId = -1,
+         .profileId = 0,
+         .freeSpace = 10,
+         .totalSpace = 100,
+         .isDefault = false,
+         .is4k = false},
+        {.mediaType = "",
+         .serviceName = "",
+         .path = "/media/b",
+         .serverId = -1,
+         .profileId = 0,
+         .freeSpace = 100,
+         .totalSpace = 200,
+         .isDefault = false,
+         .is4k = false},
     };
 
     FakeRenderer renderer;
@@ -154,8 +171,7 @@ int main() {
         [&](float, float, float, float, float, std::string_view value, int, float, float) {
             centered.emplace_back(value);
         },
-        [](float) { assert(false); },
-        [&](std::string_view, std::string_view) { ++emptyStates; },
+        [](float) { assert(false); }, [&](std::string_view, std::string_view) { ++emptyStates; },
         [](float x, float y, float width, float height, bool focused, float) {
             if (focused) {
                 return std::array<float, 4>{x - 2.0f, y - 1.0f, width + 4.0f, height + 2.0f};
@@ -181,8 +197,7 @@ int main() {
             assert(item.id == "local-1");
             assert(!focused);
         },
-        [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; },
-        [](int, float) { return 99; });
+        [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
 
     assert(emptyStates == 0);
     assert(mediaCards == 1);
@@ -207,19 +222,16 @@ int main() {
         },
         [](std::string_view value, float, float, int) { return std::string(value); },
         [](float, float, float, float, float, std::string_view, int) {},
-        [](float, float, float, float, float, std::string_view, int, float, float) {},
-        [](float) {},
+        [](float, float, float, float, float, std::string_view, int, float, float) {}, [](float) {},
         [](std::string_view, std::string_view) {},
         [](float x, float y, float width, float height, bool, float) {
             return std::array<float, 4>{x, y, width, height};
         },
         [](const JellyfinItem&, float, float, float, float, float) { return true; },
-        [](const JellyfinItem&, float, float, float, float, float) {},
-        [](float, float, float, float, int, float) {},
+        [](const JellyfinItem&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
         [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int) {},
-        [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; },
-        [](int, float) { return 99; });
+        [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
 
     assert(contains(loadingRenderer.texts, "Searching Jellyfin…"));
     int pulseRects = 0;
@@ -237,19 +249,16 @@ int main() {
         },
         [](std::string_view value, float, float, int) { return std::string(value); },
         [](float, float, float, float, float, std::string_view, int) {},
-        [](float, float, float, float, float, std::string_view, int, float, float) {},
-        [](float) {},
+        [](float, float, float, float, float, std::string_view, int, float, float) {}, [](float) {},
         [&](std::string_view title, std::string_view) { emptyTitle = title; },
         [](float x, float y, float width, float height, bool, float) {
             return std::array<float, 4>{x, y, width, height};
         },
         [](const JellyfinItem&, float, float, float, float, float) { return true; },
-        [](const JellyfinItem&, float, float, float, float, float) {},
-        [](float, float, float, float, int, float) {},
+        [](const JellyfinItem&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
         [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int) {},
-        [] { return SearchScreenState::Clock::time_point{}; },
-        [](int, float) { return 99; });
+        [] { return SearchScreenState::Clock::time_point{}; }, [](int, float) { return 99; });
 
     assert(emptyTitle == "Find your next favorite");
 

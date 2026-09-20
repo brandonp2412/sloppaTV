@@ -294,8 +294,8 @@ int main() {
 
     PlaybackCoordinator loadedSubtitleLabelCoordinator;
     loadedSubtitleLabelCoordinator.activate(preferenceItem, coordinatedTarget, now);
-    loadedSubtitleLabelCoordinator.tracks().applySubtitle(
-        5, "English", {{.startMs = 100, .endMs = 500, .text = "Hello"}});
+    loadedSubtitleLabelCoordinator.tracks().applySubtitle(5, "English",
+                                                          {{.startMs = 100, .endMs = 500, .text = "Hello"}});
     assert(loadedSubtitleLabelCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle) == "ENGLISH 2/2");
     assert(loadedSubtitleLabelCoordinator.activeSubtitleCue(99) == nullptr);
     assert(loadedSubtitleLabelCoordinator.activeSubtitleCue(100)->text == "Hello");
@@ -514,8 +514,7 @@ int main() {
     assert(nextEpisodePlanCoordinator.continuation().nextItem()->id == queuedNext.id);
     nextEpisodePlanCoordinator.continuation().clearNextEpisode();
     PlaybackQueueState emptyContinuationQueue;
-    const auto invalidSessionPlan =
-        nextEpisodePlanCoordinator.beginNextEpisodePlan(emptyContinuationQueue, false, now);
+    const auto invalidSessionPlan = nextEpisodePlanCoordinator.beginNextEpisodePlan(emptyContinuationQueue, false, now);
     assert(!invalidSessionPlan.queueContinuation);
     assert(!invalidSessionPlan.request);
     assert(!nextEpisodePlanCoordinator.continuation().nextEpisodeRequested());
@@ -862,8 +861,7 @@ int main() {
     assert(selectionCoordinator.tracks().audioLanguagePreference() == std::optional<std::string>{"eng"});
     assert(!selectionCoordinator.continuation().stillWatchingPrompt());
     selectionCoordinator.tracks().setAudioLanguagePreference(std::string{"eng"});
-    const auto freshSelectionPlan =
-        selectionCoordinator.beginUserPlaybackSelection(selectionQueue, queuedSelection.id);
+    const auto freshSelectionPlan = selectionCoordinator.beginUserPlaybackSelection(selectionQueue, queuedSelection.id);
     assert(freshSelectionPlan.queuedPlaybackIndex == -1);
     assert(freshSelectionPlan.resetQueue);
     assert(!selectionCoordinator.tracks().audioLanguagePreference().has_value());

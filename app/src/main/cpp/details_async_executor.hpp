@@ -58,8 +58,7 @@ struct PersonItemsCompletion {
     ApiValueResult<std::vector<JellyfinItem>> result;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink>
-class DetailsAsyncExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink> class DetailsAsyncExecutor {
 public:
     DetailsAsyncExecutor(Client& client, TaskRunner& tasks, CompletionSink& completions)
         : client_(client), tasks_(tasks), completions_(completions) {}
@@ -158,14 +157,15 @@ public:
     }
 
     bool loadPersonItems(JellyfinSession session, std::string personId, uint64_t generation, int limit) {
-        return tasks_.submit([this, session = std::move(session), personId = std::move(personId), generation, limit]() mutable {
-            auto result = client_.getItemsForPerson(session, personId, limit);
-            completions_.push(PersonItemsCompletion{
-                .personId = std::move(personId),
-                .generation = generation,
-                .result = std::move(result),
+        return tasks_.submit(
+            [this, session = std::move(session), personId = std::move(personId), generation, limit]() mutable {
+                auto result = client_.getItemsForPerson(session, personId, limit);
+                completions_.push(PersonItemsCompletion{
+                    .personId = std::move(personId),
+                    .generation = generation,
+                    .result = std::move(result),
+                });
             });
-        });
     }
 
 private:

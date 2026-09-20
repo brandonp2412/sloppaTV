@@ -3,12 +3,9 @@
 #include <cassert>
 
 int main() {
-    assert(handleDiagnosticsScreenInput(DiagnosticsScreenInput::None).type ==
-           DiagnosticsScreenCommandType::None);
-    assert(handleDiagnosticsScreenInput(DiagnosticsScreenInput::Back).type ==
-           DiagnosticsScreenCommandType::Exit);
-    assert(handleDiagnosticsScreenInput(DiagnosticsScreenInput::Activate).type ==
-           DiagnosticsScreenCommandType::Exit);
+    assert(handleDiagnosticsScreenInput(DiagnosticsScreenInput::None).type == DiagnosticsScreenCommandType::None);
+    assert(handleDiagnosticsScreenInput(DiagnosticsScreenInput::Back).type == DiagnosticsScreenCommandType::Exit);
+    assert(handleDiagnosticsScreenInput(DiagnosticsScreenInput::Activate).type == DiagnosticsScreenCommandType::Exit);
 
     DiagnosticsScreenData data;
     data.appVersion = "1.2.3";

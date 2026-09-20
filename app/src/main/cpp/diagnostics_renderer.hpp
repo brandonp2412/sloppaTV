@@ -35,8 +35,8 @@ void renderDiagnosticsScreen(RendererLike& renderer, const DiagnosticsScreenData
         for (const int index : indices) {
             if (index < 0 || index >= static_cast<int>(rows.size())) continue;
             if (row > 0) renderer.rect(x + 28.0f, rowY - 13.0f, width - 56.0f, 1.0f, style.divider);
-            drawLeftAligned(x + 28.0f, rowY - 5.0f, 260.0f, 46.0f, 1.45f,
-                            rows[static_cast<size_t>(index)].first, style.tertiary);
+            drawLeftAligned(x + 28.0f, rowY - 5.0f, 260.0f, 46.0f, 1.45f, rows[static_cast<size_t>(index)].first,
+                            style.tertiary);
             drawLeftAligned(x + 300.0f, rowY - 5.0f, width - 330.0f, 46.0f, 1.75f,
                             rows[static_cast<size_t>(index)].second, style.text);
             rowY += 58.0f;

@@ -8,14 +8,17 @@ and SurfaceFlinger present cadence during rapid DPAD focus movement.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 import statistics
 import subprocess
 import time
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import TypedDict
 
 
 @dataclass(frozen=True)
@@ -72,7 +75,15 @@ def percentile(values: list[float], fraction: float) -> float:
     return ordered[min(len(ordered) - 1, int(len(ordered) * fraction))]
 
 
-def startup_benchmark(serial: str, runs: int) -> dict[str, dict[str, float | list[int]]]:
+class StartupResult(TypedDict):
+    samples_ms: list[int]
+    median_ms: float
+    mean_ms: float
+    min_ms: int
+    max_ms: int
+
+
+def startup_benchmark(serial: str, runs: int) -> dict[str, StartupResult]:
     samples: dict[str, list[int]] = {app.name: [] for app in APPS}
     for run in range(runs):
         order = APPS if run % 2 == 0 else tuple(reversed(APPS))
@@ -90,13 +101,11 @@ def startup_benchmark(serial: str, runs: int) -> dict[str, dict[str, float | lis
                 samples[app.name].append(int(match.group(1)))
             time.sleep(0.6)
 
-    result = {}
+    result: dict[str, StartupResult] = {}
     for app in APPS:
         values = samples[app.name]
         if len(values) != runs:
-            raise RuntimeError(
-                f"Expected {runs} cold-launch samples for {app.name}, captured {len(values)}: {values}"
-            )
+            raise RuntimeError(f"Expected {runs} cold-launch samples for {app.name}, captured {len(values)}: {values}")
         result[app.name] = {
             "samples_ms": values,
             "median_ms": statistics.median(values),
@@ -147,9 +156,7 @@ def select_active_layer(layers: list[str], app: App) -> str:
     package_layers = [
         line
         for line in layers
-        if app.package + "/" in line
-        and "ActivityRecord" not in line
-        and "InputSink" not in line
+        if app.package + "/" in line and "ActivityRecord" not in line and "InputSink" not in line
     ]
     preferred = [line for line in package_layers if app.layer_contains in line]
     candidates = preferred or package_layers
@@ -222,7 +229,7 @@ def navigation_benchmark(serial: str, app: App, nav_events: int, settle_seconds:
         columns = line.split()
         if len(columns) >= 2 and columns[1].isdigit() and int(columns[1]) > 0:
             actual.append(int(columns[1]))
-    intervals = [(right - left) / 1_000_000 for left, right in zip(actual, actual[1:]) if right > left]
+    intervals = [(right - left) / 1_000_000 for left, right in itertools.pairwise(actual) if right > left]
     if not intervals:
         return navigation_timestats(serial, app)
     return {
@@ -236,13 +243,10 @@ def navigation_benchmark(serial: str, app: App, nav_events: int, settle_seconds:
     }
 
 
-def aggregate_samples(samples: list[dict[str, float | int]]) -> dict[str, float]:
+def aggregate_samples(samples: Sequence[Mapping[str, float | int]]) -> dict[str, float]:
     if not samples:
         return {}
-    return {
-        key: round(float(statistics.median([float(sample[key]) for sample in samples])), 2)
-        for key in samples[0]
-    }
+    return {key: round(float(statistics.median([float(sample[key]) for sample in samples])), 2) for key in samples[0]}
 
 
 def percentage_lower(candidate: float, baseline: float) -> float:
@@ -320,13 +324,27 @@ def main() -> None:
     sloppa = "sloppaTV"
     jellyfin = "Jellyfin"
     comparison = {
-        "startup_median_lower_pct": percentage_lower(float(startup[sloppa]["median_ms"]), float(startup[jellyfin]["median_ms"])),
-        "startup_mean_lower_pct": percentage_lower(float(startup[sloppa]["mean_ms"]), float(startup[jellyfin]["mean_ms"])),
-        "pss_lower_pct": percentage_lower(float(memory[sloppa]["total_pss_kb"]), float(memory[jellyfin]["total_pss_kb"])),
-        "rss_lower_pct": percentage_lower(float(memory[sloppa]["total_rss_kb"]), float(memory[jellyfin]["total_rss_kb"])),
-        "java_heap_lower_pct": percentage_lower(float(memory[sloppa]["java_heap_kb"]), float(memory[jellyfin]["java_heap_kb"])),
-        "navigation_p95_lower_pct": percentage_lower(float(navigation[sloppa]["p95_interval_ms"]), float(navigation[jellyfin]["p95_interval_ms"])),
-        "navigation_over_20ms_lower_pct": percentage_lower(float(navigation[sloppa]["over_20ms_pct"]), float(navigation[jellyfin]["over_20ms_pct"])),
+        "startup_median_lower_pct": percentage_lower(
+            float(startup[sloppa]["median_ms"]), float(startup[jellyfin]["median_ms"])
+        ),
+        "startup_mean_lower_pct": percentage_lower(
+            float(startup[sloppa]["mean_ms"]), float(startup[jellyfin]["mean_ms"])
+        ),
+        "pss_lower_pct": percentage_lower(
+            float(memory[sloppa]["total_pss_kb"]), float(memory[jellyfin]["total_pss_kb"])
+        ),
+        "rss_lower_pct": percentage_lower(
+            float(memory[sloppa]["total_rss_kb"]), float(memory[jellyfin]["total_rss_kb"])
+        ),
+        "java_heap_lower_pct": percentage_lower(
+            float(memory[sloppa]["java_heap_kb"]), float(memory[jellyfin]["java_heap_kb"])
+        ),
+        "navigation_p95_lower_pct": percentage_lower(
+            float(navigation[sloppa]["p95_interval_ms"]), float(navigation[jellyfin]["p95_interval_ms"])
+        ),
+        "navigation_over_20ms_lower_pct": percentage_lower(
+            float(navigation[sloppa]["over_20ms_pct"]), float(navigation[jellyfin]["over_20ms_pct"])
+        ),
     }
     print("\nCOMPARISON")
     for key, value in comparison.items():
@@ -334,7 +352,7 @@ def main() -> None:
 
     if args.json_out:
         payload = {
-            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "captured_at": datetime.now(UTC).isoformat(),
             "parameters": {
                 "runs": args.runs,
                 "memory_runs": args.memory_runs,

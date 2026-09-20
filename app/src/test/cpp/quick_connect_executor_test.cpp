@@ -103,7 +103,8 @@ int main() {
         ImmediateTaskRunner tasks;
         CompletionSink completions;
         RequestEpoch epoch;
-        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks, completions);
+        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks,
+                                                                                               completions);
 
         const auto token = epoch.beginToken();
         assert(executor.connect("https://jellyfin.example.nz", "device-1", token));
@@ -128,7 +129,8 @@ int main() {
         ImmediateTaskRunner tasks;
         CompletionSink completions;
         RequestEpoch epoch;
-        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks, completions);
+        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks,
+                                                                                               completions);
 
         const auto token = epoch.beginToken();
         assert(executor.connect("https://jellyfin.example.nz", "device-2", token));
@@ -149,7 +151,8 @@ int main() {
         ImmediateTaskRunner tasks;
         CompletionSink completions;
         RequestEpoch epoch;
-        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks, completions);
+        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks,
+                                                                                               completions);
 
         assert(executor.connect("https://jellyfin.example.nz", "device-3", epoch.beginToken()));
         assert(completions.events.size() == 2);
@@ -165,7 +168,8 @@ int main() {
         ImmediateTaskRunner tasks;
         CompletionSink completions;
         RequestEpoch epoch;
-        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks, completions);
+        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks,
+                                                                                               completions);
 
         assert(executor.connect("https://jellyfin.example.nz", "device-4", epoch.beginToken()));
         assert(completions.events.size() == 2);
@@ -178,7 +182,8 @@ int main() {
         ImmediateTaskRunner tasks;
         CompletionSink completions;
         RequestEpoch epoch;
-        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks, completions);
+        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks,
+                                                                                               completions);
 
         const auto token = epoch.beginToken();
         assert(executor.connect("https://jellyfin.example.nz", "device-5", token));
@@ -208,7 +213,8 @@ int main() {
         tasks.accept = false;
         CompletionSink completions;
         RequestEpoch epoch;
-        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks, completions);
+        QuickConnectExecutor<FakeClient, ImmediateTaskRunner, CompletionSink, NoWait> executor(client, tasks,
+                                                                                               completions);
 
         assert(!executor.connect("https://jellyfin.example.nz", "device-7", epoch.beginToken()));
         assert(completions.events.empty());

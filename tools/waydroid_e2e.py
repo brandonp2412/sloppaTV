@@ -6,11 +6,11 @@ import hashlib
 import json
 import re
 import shlex
-import struct
 import statistics
+import struct
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,8 +61,10 @@ def model_matches_target(model: str, target: str) -> bool:
     if target == "android-tv-emulator":
         normalized = model.strip().lower()
         return (
-            normalized.startswith("sdk_") and ("atv" in normalized or "_tv_" in normalized)
-        ) or "android tv" in normalized or "aosp tv" in normalized
+            (normalized.startswith("sdk_") and ("atv" in normalized or "_tv_" in normalized))
+            or "android tv" in normalized
+            or "aosp tv" in normalized
+        )
     return False
 
 
@@ -186,8 +188,7 @@ def require_playback_session(timeout_seconds: float = 5.0) -> None:
         time.sleep(0.2)
     state_label = "missing" if last_state is None else str(last_state)
     raise RuntimeError(
-        "sloppaTV playback is not active; expected playing/paused media session "
-        f"but state was {state_label}"
+        f"sloppaTV playback is not active; expected playing/paused media session but state was {state_label}"
     )
 
 
@@ -369,7 +370,7 @@ def screenshot_suite(path: Path) -> Path:
         raise RuntimeError("screenshot suite produced duplicate images; refusing to publish a repeated screen")
     manifest = {
         "suite": suite["name"],
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "serial": SERIAL,
         "package": PACKAGE,
         "screenshots": screenshots,
@@ -402,11 +403,7 @@ def pair(prefix: str, wait: float) -> float:
 
 def filtered_log_lines() -> list[str]:
     logs = adb("logcat", "-d", "-v", "time", capture=True, timeout=60.0)
-    return [
-        line
-        for line in logs.splitlines()
-        if any(token.lower() in line.lower() for token in LOG_TOKENS)
-    ]
+    return [line for line in logs.splitlines() if any(token.lower() in line.lower() for token in LOG_TOKENS)]
 
 
 def filtered_logs(name: str) -> Path:
@@ -467,7 +464,7 @@ def memory_snapshot() -> dict[str, int | float | str]:
                     cpu = 0.0
                 break
     return {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "pid": pid,
         "total_pss_kb": extract(r"TOTAL PSS:\s+(\d+)"),
         "total_rss_kb": extract(r"TOTAL RSS:\s+(\d+)"),
@@ -608,7 +605,7 @@ def soak_summary(samples: list[dict[str, int | float | str]]) -> dict[str, int |
     window = min(3, len(samples))
 
     def median_value(key: str, subset: list[dict[str, int | float | str]]) -> int:
-        return int(round(statistics.median(float(sample.get(key, 0)) for sample in subset)))
+        return round(statistics.median(float(sample.get(key, 0)) for sample in subset))
 
     first = samples[:window]
     last = samples[-window:]
@@ -717,12 +714,16 @@ def main() -> None:
     SERIAL = args.serial
     PACKAGE = args.package
     COMPONENT = args.component
-    ARTIFACTS = ROOT / "artifacts" / (
-        "e2e-physical-tv"
-        if args.target == "google-tv-streamer"
-        else "ci-screenshots"
-        if args.target == "android-tv-emulator"
-        else "e2e-waydroid"
+    ARTIFACTS = (
+        ROOT
+        / "artifacts"
+        / (
+            "e2e-physical-tv"
+            if args.target == "google-tv-streamer"
+            else "ci-screenshots"
+            if args.target == "android-tv-emulator"
+            else "e2e-waydroid"
+        )
     )
 
     verify_target(args.target)

@@ -23,24 +23,23 @@ struct HomeSecondaryCompletion {
     ApiValueResult<JellyfinHomeData> result;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink>
-class HomeAsyncExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink> class HomeAsyncExecutor {
 public:
     HomeAsyncExecutor(Client& client, TaskRunner& tasks, CompletionSink& completions)
         : client_(client), tasks_(tasks), completions_(completions) {}
 
     bool loadCore(JellyfinSession session, uint64_t generation, HomeSelectionSnapshot snapshot,
                   std::chrono::steady_clock::time_point startedAt) {
-        return tasks_.submit([this, session = std::move(session), generation, snapshot = std::move(snapshot),
-                              startedAt]() mutable {
-            auto result = client_.loadHomeCore(session);
-            completions_.push(HomeCoreCompletion{
-                .generation = generation,
-                .snapshot = std::move(snapshot),
-                .startedAt = startedAt,
-                .result = std::move(result),
+        return tasks_.submit(
+            [this, session = std::move(session), generation, snapshot = std::move(snapshot), startedAt]() mutable {
+                auto result = client_.loadHomeCore(session);
+                completions_.push(HomeCoreCompletion{
+                    .generation = generation,
+                    .snapshot = std::move(snapshot),
+                    .startedAt = startedAt,
+                    .result = std::move(result),
+                });
             });
-        });
     }
 
     bool loadSecondary(JellyfinSession session, uint64_t generation, std::vector<JellyfinItem> views,

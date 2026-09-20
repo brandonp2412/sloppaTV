@@ -226,8 +226,7 @@ int main() {
          .isDefault = false,
          .isExternal = true},
     };
-    const auto loadCandidates =
-        playbackSubtitleLoadCandidates(loadFallbacks, loadFallbacks.subtitles.front(), {"eng"});
+    const auto loadCandidates = playbackSubtitleLoadCandidates(loadFallbacks, loadFallbacks.subtitles.front(), {"eng"});
     assert(loadCandidates.size() == 2);
     assert(loadCandidates[0].index == 20);
     assert(loadCandidates[1].index == 22);

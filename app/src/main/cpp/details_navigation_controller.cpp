@@ -123,7 +123,7 @@ ItemMenuScreenInput itemMenuInput(DetailsNavigationKey key) {
 } // namespace
 
 DetailsNavigationAction DetailsNavigationController::handleDetails(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                    const JellyfinItem& item) {
+                                                                   const JellyfinItem& item) {
     const DetailsScreenCommand command =
         state.handleInput(detailsInput(key), static_cast<int>(detailActionIdsFor(item).size()), item.type == "Episode");
     switch (command.type) {
@@ -158,8 +158,8 @@ DetailsNavigationAction DetailsNavigationController::handleDetails(DetailsScreen
 }
 
 DetailsNavigationAction DetailsNavigationController::handleCast(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                 const std::vector<JellyfinPerson>& people,
-                                                                 int columns) {
+                                                                const std::vector<JellyfinPerson>& people,
+                                                                int columns) {
     const CastScreenCommand command = state.handleCastInput(castInput(key), people, columns);
     if (command.type == CastScreenCommandType::Back) return navigationAction(DetailsNavigationActionType::Back);
     if (command.type != CastScreenCommandType::OpenPerson) return {};
@@ -170,7 +170,7 @@ DetailsNavigationAction DetailsNavigationController::handleCast(DetailsScreenSta
 }
 
 DetailsNavigationAction DetailsNavigationController::handlePersonItems(DetailsScreenState& state,
-                                                                        DetailsNavigationKey key, int columns) {
+                                                                       DetailsNavigationKey key, int columns) {
     const DetailGridScreenCommand command = state.handlePersonItemsInput(gridInput(key), columns);
     if (command.type == DetailGridScreenCommandType::Back) return navigationAction(DetailsNavigationActionType::Back);
     if (command.type == DetailGridScreenCommandType::OpenContext) {
@@ -188,9 +188,10 @@ DetailsNavigationAction DetailsNavigationController::handlePersonItems(DetailsSc
 }
 
 DetailsNavigationAction DetailsNavigationController::handleItemMenu(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                     const JellyfinItem& item, bool seerrRequest,
-                                                                     bool hasExternalPlayer, bool hasQueue) {
-    const int actionCount = static_cast<int>(itemMenuActionIdsFor(item, seerrRequest, hasExternalPlayer, hasQueue).size());
+                                                                    const JellyfinItem& item, bool seerrRequest,
+                                                                    bool hasExternalPlayer, bool hasQueue) {
+    const int actionCount =
+        static_cast<int>(itemMenuActionIdsFor(item, seerrRequest, hasExternalPlayer, hasQueue).size());
     const ItemMenuScreenCommand command = state.handleItemMenuInput(itemMenuInput(key), actionCount);
     if (command.type == ItemMenuScreenCommandType::Back) return navigationAction(DetailsNavigationActionType::Back);
     if (command.type == ItemMenuScreenCommandType::ConfirmDelete) {
@@ -208,7 +209,7 @@ DetailsNavigationAction DetailsNavigationController::handleItemMenu(DetailsScree
 }
 
 DetailsNavigationAction DetailsNavigationController::handleSeasons(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                    int columns) {
+                                                                   int columns) {
     const DetailGridScreenCommand command = state.handleSeasonsInput(gridInput(key), columns);
     if (command.type == DetailGridScreenCommandType::Back) {
         return navigationItemAction(DetailsNavigationActionType::Back, state.seriesDetail());
@@ -222,7 +223,7 @@ DetailsNavigationAction DetailsNavigationController::handleSeasons(DetailsScreen
 }
 
 DetailsNavigationAction DetailsNavigationController::handleEpisodes(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                     int columns) {
+                                                                    int columns) {
     const DetailGridScreenCommand command = state.handleEpisodesInput(gridInput(key), columns);
     if (command.type == DetailGridScreenCommandType::Back) return navigationAction(DetailsNavigationActionType::Back);
     if (command.type == DetailGridScreenCommandType::OpenContext) {

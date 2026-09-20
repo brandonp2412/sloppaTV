@@ -56,33 +56,31 @@ int main() {
     };
 
     FakeRenderer loading;
-    renderStatusOverlay(
-        loading,
-        StatusOverlayRenderState{
-            .loading = true,
-            .playerScreen = false,
-            .noticeVisible = false,
-            .notice = {},
-            .errorVisible = false,
-            .error = {},
-        },
-        style, [](std::string_view value, float, float, int) { return std::string(value); });
+    renderStatusOverlay(loading,
+                        StatusOverlayRenderState{
+                            .loading = true,
+                            .playerScreen = false,
+                            .noticeVisible = false,
+                            .notice = {},
+                            .errorVisible = false,
+                            .error = {},
+                        },
+                        style, [](std::string_view value, float, float, int) { return std::string(value); });
     assert(loading.rects.size() == 2);
     assert(loading.rects[0].x == 1600.0f && loading.rects[0].y == 120.0f);
     assert(hasText(loading.texts, "Loading…", 120.0f));
 
     FakeRenderer player;
-    renderStatusOverlay(
-        player,
-        StatusOverlayRenderState{
-            .loading = false,
-            .playerScreen = true,
-            .noticeVisible = true,
-            .notice = "Track changed",
-            .errorVisible = true,
-            .error = "Playback failed",
-        },
-        style, [](std::string_view value, float, float, int) { return std::string(value); });
+    renderStatusOverlay(player,
+                        StatusOverlayRenderState{
+                            .loading = false,
+                            .playerScreen = true,
+                            .noticeVisible = true,
+                            .notice = "Track changed",
+                            .errorVisible = true,
+                            .error = "Playback failed",
+                        },
+                        style, [](std::string_view value, float, float, int) { return std::string(value); });
     assert(player.rects.size() == 4);
     assert(player.outlines.size() == 1);
     assert(player.outlines[0].y == 588.0f);
@@ -91,32 +89,30 @@ int main() {
     assert(hasText(player.texts, "Playback failed", 588.0f));
 
     FakeRenderer browse;
-    renderStatusOverlay(
-        browse,
-        StatusOverlayRenderState{
-            .loading = false,
-            .playerScreen = false,
-            .noticeVisible = true,
-            .notice = "Saved",
-            .errorVisible = true,
-            .error = "Request failed",
-        },
-        style, [](std::string_view value, float, float, int) { return std::string(value); });
+    renderStatusOverlay(browse,
+                        StatusOverlayRenderState{
+                            .loading = false,
+                            .playerScreen = false,
+                            .noticeVisible = true,
+                            .notice = "Saved",
+                            .errorVisible = true,
+                            .error = "Request failed",
+                        },
+                        style, [](std::string_view value, float, float, int) { return std::string(value); });
     assert(hasText(browse.texts, "Saved", 914.0f));
     assert(hasText(browse.texts, "Request failed", 834.0f));
 
     FakeRenderer errorOnly;
-    renderStatusOverlay(
-        errorOnly,
-        StatusOverlayRenderState{
-            .loading = false,
-            .playerScreen = true,
-            .noticeVisible = false,
-            .notice = {},
-            .errorVisible = true,
-            .error = "Decode failed",
-        },
-        style, [](std::string_view value, float, float, int) { return std::string(value); });
+    renderStatusOverlay(errorOnly,
+                        StatusOverlayRenderState{
+                            .loading = false,
+                            .playerScreen = true,
+                            .noticeVisible = false,
+                            .notice = {},
+                            .errorVisible = true,
+                            .error = "Decode failed",
+                        },
+                        style, [](std::string_view value, float, float, int) { return std::string(value); });
     assert(hasText(errorOnly.texts, "Decode failed", 670.0f));
 
     return 0;

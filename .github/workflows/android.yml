@@ -54,10 +54,19 @@ jobs:
             "ndk;29.0.14206865" \
             "cmake;3.22.1"
 
-      - name: Install C++ quality tools
+      - name: Install uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.15"
+          python-version: "3.14"
+
+      - name: Sync Python tooling
+        run: uv sync --locked
+
+      - name: Install native quality tools
         run: |
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y clang-format clang-tidy cppcheck
+          sudo apt-get install --no-install-recommends -y clang-format clang-tidy cppcheck shellcheck
 
       - name: Set Play version code for main release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -123,8 +132,17 @@ jobs:
             printf 'keyPassword=%s\n' "$SLOPPATV_KEY_PASSWORD"
           } > key.properties
 
+      - name: Run Python quality gates
+        run: |
+          uv run ruff format --check tools app/src/test/python
+          uv run ruff check tools app/src/test/python
+          uv run ty check tools app/src/test/python
+
+      - name: Run shell quality gates
+        run: shellcheck tools/ci_screenshots.sh
+
       - name: Run host policy tests
-        run: ./tools/run_host_tests.py
+        run: uv run python tools/run_host_tests.py
 
       - name: Validate Google Play metadata
         run: python3 tools/sync_play_store_screenshots.py --validate-only
@@ -137,8 +155,7 @@ jobs:
         run: ./gradlew --no-daemon -PSLOPPATV_SPLIT_APKS=true assembleRelease
 
       - name: Run C++ quality gates
-        continue-on-error: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-        run: ./tools/cpp_quality.py check
+        run: uv run python tools/cpp_quality.py check
 
       - name: Upload Android build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

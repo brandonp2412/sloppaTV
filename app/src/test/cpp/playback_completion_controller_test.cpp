@@ -23,8 +23,7 @@ PlaybackTarget target(std::string url) {
 
 PlaybackCoordinator coordinatorFor(const JellyfinItem& active) {
     PlaybackCoordinator coordinator;
-    coordinator.activate(active, target("https://media.example/" + active.id),
-                         PlaybackCoordinator::Clock::now());
+    coordinator.activate(active, target("https://media.example/" + active.id), PlaybackCoordinator::Clock::now());
     return coordinator;
 }
 
@@ -55,8 +54,7 @@ int main() {
         completion.result.ok = true;
         completion.result.value = target("https://media.example/episode-1");
 
-        const auto effects =
-            PlaybackCompletionController::apply(completion, false, true, false, queue, coordinator);
+        const auto effects = PlaybackCompletionController::apply(completion, false, true, false, queue, coordinator);
         assertNoEffects(effects);
         assert(coordinator.transitionLoading());
         assert(queue.currentIndex() == 0);

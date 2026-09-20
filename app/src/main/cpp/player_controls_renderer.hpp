@@ -72,8 +72,8 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
             renderer.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, style.text);
-            renderer.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f,
-                              iconX + 20.0f, iconCenterY + 15.0f, style.text);
+            renderer.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f,
+                              iconCenterY + 15.0f, style.text);
             renderer.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, style.text);
             renderer.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, style.text);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,

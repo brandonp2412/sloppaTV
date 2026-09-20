@@ -118,7 +118,7 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
             await tunnel(reader, writer, host, int(port_text))
         else:
             await forward_http(reader, writer, method, target, version, headers)
-    except (ValueError, asyncio.TimeoutError):
+    except (TimeoutError, ValueError):
         with contextlib.suppress(Exception):
             writer.write(b"HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n")
             await writer.drain()

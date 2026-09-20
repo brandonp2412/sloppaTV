@@ -23,5 +23,5 @@ struct SettingsNavigationAction {
 class SettingsNavigationController {
 public:
     [[nodiscard]] static SettingsNavigationAction handle(SettingsScreenState& state, AppSettings& settings,
-                                                          ScreenNavigationKey key);
+                                                         ScreenNavigationKey key);
 };

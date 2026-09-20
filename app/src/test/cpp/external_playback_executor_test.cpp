@@ -105,11 +105,12 @@ ExternalPlaybackRequest episodeRequest(std::string packageName = "org.videolan.v
         .mediaSourceId = "source-1",
         .audios = {audio},
         .subtitles = {subtitle},
-        .player = ExternalPlayerApp{
-            .componentName = packageName + "/Player",
-            .packageName = std::move(packageName),
-            .label = "Player",
-        },
+        .player =
+            ExternalPlayerApp{
+                .componentName = packageName + "/Player",
+                .packageName = std::move(packageName),
+                .label = "Player",
+            },
         .subtitlePreference = std::string{"eng"},
         .trackPolicy =
             PlaybackTrackSelectionPolicy{

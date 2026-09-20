@@ -34,7 +34,8 @@ SearchNavigationAction action(SearchNavigationActionType type) {
 }
 } // namespace
 
-SearchNavigationAction SearchNavigationController::handle(SearchScreenState& state, ScreenNavigationKey key, int columns) {
+SearchNavigationAction SearchNavigationController::handle(SearchScreenState& state, ScreenNavigationKey key,
+                                                          int columns) {
     const SearchScreenCommand command = state.handleInput(searchInput(key), columns);
     switch (command.type) {
     case SearchScreenCommandType::None:

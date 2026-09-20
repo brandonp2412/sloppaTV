@@ -197,7 +197,6 @@ public:
         return true;
     }
 
-
     [[nodiscard]] bool finishLibrarySearch(const std::string& query, std::vector<JellyfinItem> results) {
         if (query_ != query) return false;
         loading_ = false;
@@ -214,7 +213,6 @@ public:
         loading_ = false;
         return true;
     }
-
 
     void clearResults() {
         libraryTitles_.clear();

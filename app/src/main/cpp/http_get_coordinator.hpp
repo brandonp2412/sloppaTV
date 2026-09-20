@@ -24,8 +24,7 @@ inline std::string httpGetCacheKey(const std::string& url, const std::map<std::s
 
 class HttpGetCoordinator {
 public:
-    template <typename Fetch>
-    HttpResponse request(const std::string& key, bool cacheable, Fetch&& fetch) {
+    template <typename Fetch> HttpResponse request(const std::string& key, bool cacheable, Fetch&& fetch) {
         std::shared_ptr<InFlightRequest> inFlight;
         bool owner = false;
         uint64_t requestGeneration = 0;

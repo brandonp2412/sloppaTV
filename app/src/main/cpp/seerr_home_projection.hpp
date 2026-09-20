@@ -15,8 +15,8 @@ inline constexpr std::string_view kSeerrHomeRowTitle = "Seerr requests";
 inline const SeerrMediaItem* findSeerrHomeMedia(std::string_view rowTitle, std::string_view itemId,
                                                 const std::vector<SeerrMediaItem>& pending) {
     if (rowTitle != kSeerrHomeRowTitle || itemId.empty()) return nullptr;
-    const auto found = std::find_if(pending.begin(), pending.end(),
-                                    [&](const SeerrMediaItem& item) { return item.id == itemId; });
+    const auto found =
+        std::find_if(pending.begin(), pending.end(), [&](const SeerrMediaItem& item) { return item.id == itemId; });
     return found == pending.end() ? nullptr : &*found;
 }
 

@@ -92,17 +92,16 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     }
 
     const std::string episodeNumber = episodeNumberLabel(detail);
-    const std::string secondary =
-        episode ? (detail.name.empty() || detail.name == detail.seriesName
-                       ? episodeNumber
-                       : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail.name)
-                : episodeLabel(detail);
+    const std::string secondary = episode ? (detail.name.empty() || detail.name == detail.seriesName
+                                                 ? episodeNumber
+                                                 : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail.name)
+                                          : episodeLabel(detail);
     const float uiScale = uiTextScale(config.uiTextSize);
     const float titleBottom = hasLogo ? 250.0f : 132.0f + 10.0f * 6.0f * uiScale;
     const float secondaryY = std::max(268.0f, titleBottom + 10.0f);
     if (!secondary.empty()) {
-        renderer.text(contentX, secondaryY, 2.80f, fitTextLines(secondary, 2.80f, contentWidth, 1),
-                      style.secondaryText, contentWidth);
+        renderer.text(contentX, secondaryY, 2.80f, fitTextLines(secondary, 2.80f, contentWidth, 1), style.secondaryText,
+                      contentWidth);
     }
 
     std::vector<std::string> metadata;
@@ -130,12 +129,12 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     const float overviewY = metadataY + 58.0f;
     const int overviewLines = config.uiTextSize > 0 ? 2 : 3;
     if (!detail.overview.empty()) {
-        renderer.text(contentX, overviewY, 2.35f,
-                      fitTextLines(detail.overview, 2.35f, contentWidth, overviewLines), style.secondaryText,
-                      contentWidth);
+        renderer.text(contentX, overviewY, 2.35f, fitTextLines(detail.overview, 2.35f, contentWidth, overviewLines),
+                      style.secondaryText, contentWidth);
     }
 
-    const float overviewHeight = detail.overview.empty() ? 0.0f : 11.0f * 2.35f * uiScale * static_cast<float>(overviewLines);
+    const float overviewHeight =
+        detail.overview.empty() ? 0.0f : 11.0f * 2.35f * uiScale * static_cast<float>(overviewLines);
     const float stateY = overviewY + overviewHeight + (detail.overview.empty() ? 4.0f : 18.0f);
     float stateX = contentX;
     if (detail.favorite) {
@@ -145,18 +144,17 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
         drawChip(stateX, stateY, "Watched", true, 1.42f, 42.0f, 180.0f);
     }
 
-    const float actionY = stateY + ((detail.favorite || (config.showWatchedIndicators && detail.played)) ? 58.0f : 12.0f);
+    const float actionY =
+        stateY + ((detail.favorite || (config.showWatchedIndicators && detail.played)) ? 58.0f : 12.0f);
     constexpr float actionGap = 18.0f;
     constexpr float actionRightInset = 72.0f;
     auto desiredActionWidth = [&](const std::string& action) {
-        return std::round(
-            std::max(145.0f, renderer.textWidth(style.labelScale, materialLabel(action)) + 56.0f));
+        return std::round(std::max(145.0f, renderer.textWidth(style.labelScale, materialLabel(action)) + 56.0f));
     };
     float desiredActionWidths = 0.0f;
     for (const auto& action : actions) desiredActionWidths += desiredActionWidth(action);
     const float actionGaps = actions.empty() ? 0.0f : actionGap * static_cast<float>(actions.size() - 1);
-    const float availableActionWidths =
-        std::max(1.0f, style.canvasWidth - contentX - actionRightInset - actionGaps);
+    const float availableActionWidths = std::max(1.0f, style.canvasWidth - contentX - actionRightInset - actionGaps);
     const float actionWidthScale = desiredActionWidths > availableActionWidths && desiredActionWidths > 0.0f
                                        ? availableActionWidths / desiredActionWidths
                                        : 1.0f;
@@ -234,8 +232,7 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
             drawArtworkPlaceholder(similar, bounds[0], bounds[1], bounds[2], bounds[3], cardRadius);
         }
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], style.focus, cardRadius);
-        renderer.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f,
-                      fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, 1),
+        renderer.text(x + 2.0f, y + cardHeight + 22.0f, 2.10f, fitTextLines(similar.name, 2.10f, cardWidth - 10.0f, 1),
                       focused ? style.text : style.secondaryText, cardWidth - 10.0f);
     }
 }

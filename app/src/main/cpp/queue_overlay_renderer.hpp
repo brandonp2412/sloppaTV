@@ -20,6 +20,7 @@ template <typename ColorLike> struct QueueOverlayRenderStyle {
 };
 
 struct QueueOverlayRenderState {
+    // cppcheck-suppress uninitMemberVarNoCtor -- required aggregate reference, supplied at every construction site.
     const std::vector<JellyfinItem>& items;
     int currentIndex = 0;
     int selection = 0;

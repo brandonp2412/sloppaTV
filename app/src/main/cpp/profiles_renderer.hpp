@@ -5,8 +5,7 @@
 #include <cstddef>
 #include <string>
 
-template <typename ColorLike>
-struct ProfilesRenderStyle {
+template <typename ColorLike> struct ProfilesRenderStyle {
     float cornerMedium = 0.0f;
     ColorLike text{};
     ColorLike muted{};
@@ -21,8 +20,8 @@ template <typename RendererLike, typename ColorLike, typename RenderHeader, type
 void renderProfilesScreen(RendererLike& renderer, int savedCount, int profileSelection, int profileAction,
                           const ProfilesRenderStyle<ColorLike>& style, RenderHeader&& renderHeader,
                           DrawLeftAligned&& drawLeftAligned, DrawFocusedSurface&& drawFocusedSurface,
-                          DrawCentered&& drawCentered, GetSession&& getSession,
-                          DrawProfileArtwork&& drawProfileArtwork, DrawButtonSurface&& drawButtonSurface) {
+                          DrawCentered&& drawCentered, GetSession&& getSession, DrawProfileArtwork&& drawProfileArtwork,
+                          DrawButtonSurface&& drawButtonSurface) {
     renderHeader("Users & servers");
     drawLeftAligned(105.0f, 176.0f, 640.0f, 50.0f, 2.15f, "Choose who is watching", style.muted);
 
@@ -38,8 +37,8 @@ void renderProfilesScreen(RendererLike& renderer, int savedCount, int profileSel
         if (index == savedCount) {
             const auto bounds = drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false);
             drawCentered(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", style.focus, 8.0f, 8.0f);
-            renderer.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f,
-                                            "Add another account", style.text, bounds[2] - 160.0f);
+            renderer.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f, "Add another account",
+                                            style.text, bounds[2] - 160.0f);
             continue;
         }
 
@@ -53,7 +52,8 @@ void renderProfilesScreen(RendererLike& renderer, int savedCount, int profileSel
             std::string initial =
                 saved.username.empty()
                     ? "?"
-                    : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
+                    : std::string(1,
+                                  static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
             drawCentered(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, style.text, 8.0f, 8.0f);
         }
 
@@ -70,6 +70,6 @@ void renderProfilesScreen(RendererLike& renderer, int savedCount, int profileSel
                      forgetFocused ? style.text : style.muted, 16.0f, 6.0f);
     }
 
-    drawCentered(270.0f, 950.0f, 1380.0f, 58.0f, 1.72f,
-                 "Up / Down chooses account   |   Left / Right chooses action", style.muted, 18.0f, 5.0f);
+    drawCentered(270.0f, 950.0f, 1380.0f, 58.0f, 1.72f, "Up / Down chooses account   |   Left / Right chooses action",
+                 style.muted, 18.0f, 5.0f);
 }

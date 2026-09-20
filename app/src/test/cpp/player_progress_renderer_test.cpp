@@ -92,34 +92,32 @@ int main() {
     assert(renderer.rects[2].color == 1);
 
     FakeRenderer skipped;
-    renderPlayerProgress(
-        skipped,
-        PlayerProgressRenderState{
-            .positionMs = 20'000,
-            .durationMs = 10'000,
-            .skipButtonVisible = true,
-            .positionText = "00:20",
-            .durationText = "00:10",
-        },
-        PlayerProgressRenderStyle<TestColor>{},
-        [&](float right, float, float, std::string_view, TestColor, float) { durationRight = right; });
+    renderPlayerProgress(skipped,
+                         PlayerProgressRenderState{
+                             .positionMs = 20'000,
+                             .durationMs = 10'000,
+                             .skipButtonVisible = true,
+                             .positionText = "00:20",
+                             .durationText = "00:10",
+                         },
+                         PlayerProgressRenderStyle<TestColor>{},
+                         [&](float right, float, float, std::string_view, TestColor, float) { durationRight = right; });
     assert(durationRight == 1430.0f);
     assert(skipped.rects.size() == 3);
     assert(skipped.rects[1].width == 1620.0f);
     assert(skipped.rects[2].x == 1752.0f);
 
     FakeRenderer unknownDuration;
-    renderPlayerProgress(
-        unknownDuration,
-        PlayerProgressRenderState{
-            .positionMs = 1000,
-            .durationMs = 0,
-            .skipButtonVisible = false,
-            .positionText = "00:01",
-            .durationText = "00:00",
-        },
-        PlayerProgressRenderStyle<TestColor>{},
-        [](float, float, float, std::string_view, TestColor, float) {});
+    renderPlayerProgress(unknownDuration,
+                         PlayerProgressRenderState{
+                             .positionMs = 1000,
+                             .durationMs = 0,
+                             .skipButtonVisible = false,
+                             .positionText = "00:01",
+                             .durationText = "00:00",
+                         },
+                         PlayerProgressRenderStyle<TestColor>{},
+                         [](float, float, float, std::string_view, TestColor, float) {});
     assert(unknownDuration.rects.size() == 1);
 
     return 0;

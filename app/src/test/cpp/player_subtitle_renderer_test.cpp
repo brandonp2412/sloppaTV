@@ -22,9 +22,7 @@ struct FakeRenderer {
         lines.emplace_back(value);
     }
 
-    float textWidth(float, std::string_view value) {
-        return static_cast<float>(value.size()) * 10.0f;
-    }
+    float textWidth(float, std::string_view value) { return static_cast<float>(value.size()) * 10.0f; }
 
     int backgrounds = 0;
     float backgroundX = 0.0f;

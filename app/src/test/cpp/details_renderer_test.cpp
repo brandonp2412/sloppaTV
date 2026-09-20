@@ -23,9 +23,7 @@ struct TextCall {
 };
 
 struct FakeRenderer {
-    void rect(float x, float y, float width, float height, int color) {
-        rects.push_back({x, y, width, height, color});
-    }
+    void rect(float x, float y, float width, float height, int color) { rects.push_back({x, y, width, height, color}); }
 
     void roundedRect(float x, float y, float width, float height, float, int color) {
         roundedRects.push_back({x, y, width, height, color});
@@ -49,9 +47,7 @@ struct FakeRenderer {
         texts.push_back({std::string(value), x, y, color});
     }
 
-    float textWidth(float, std::string_view value) const {
-        return static_cast<float>(value.size()) * 12.0f;
-    }
+    float textWidth(float, std::string_view value) const { return static_cast<float>(value.size()) * 12.0f; }
 
     std::vector<RectCall> rects;
     std::vector<RectCall> roundedRects;
@@ -205,16 +201,15 @@ int main() {
 
     Harness movieHarness;
     movieHarness.backdrop = false;
-    movieHarness.render(
-        movie, movieState, movieActions,
-        DetailsRenderConfig{
-            .showClock = true,
-            .clock24Hour = true,
-            .showWatchedIndicators = true,
-            .uiTextSize = 1,
-            .stillWatchingPrompt = true,
-            .overlayOpen = false,
-        });
+    movieHarness.render(movie, movieState, movieActions,
+                        DetailsRenderConfig{
+                            .showClock = true,
+                            .clock24Hour = true,
+                            .showWatchedIndicators = true,
+                            .uiTextSize = 1,
+                            .stillWatchingPrompt = true,
+                            .overlayOpen = false,
+                        });
 
     assert(movieHarness.backdropCalls == 1);
     assert(movieHarness.renderer.rects.size() == 1);
@@ -270,16 +265,15 @@ int main() {
     Harness episodeHarness;
     episodeHarness.backdrop = true;
     episodeHarness.logo = true;
-    episodeHarness.render(
-        episode, episodeState, episodeActions,
-        DetailsRenderConfig{
-            .showClock = false,
-            .clock24Hour = true,
-            .showWatchedIndicators = true,
-            .uiTextSize = 1,
-            .stillWatchingPrompt = false,
-            .overlayOpen = false,
-        });
+    episodeHarness.render(episode, episodeState, episodeActions,
+                          DetailsRenderConfig{
+                              .showClock = false,
+                              .clock24Hour = true,
+                              .showWatchedIndicators = true,
+                              .uiTextSize = 1,
+                              .stillWatchingPrompt = false,
+                              .overlayOpen = false,
+                          });
 
     assert(episodeHarness.renderer.rects.empty());
     assert(episodeHarness.renderer.horizontalGradients.size() == 1);

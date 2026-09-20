@@ -8,12 +8,15 @@
 namespace {
 struct FakeRenderer {
     void triangle(float, float, float, float, float, float, int) { ++triangles; }
+
     void roundedRect(float, float, float, float, float, int) { ++roundedRects; }
+
     float textWidth(float scale, std::string_view value) {
         measuredScale = scale;
         measured = std::string(value);
         return 90.0f;
     }
+
     void textVerticallyCentered(float x, float y, float height, float scale, std::string_view value, int,
                                 float maxWidth) {
         textX = x;

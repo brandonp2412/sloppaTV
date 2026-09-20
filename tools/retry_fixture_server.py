@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
 import argparse
+import contextlib
 import json
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
 from urllib.parse import urlsplit
 
 
@@ -14,8 +16,8 @@ class RetryFixtureHandler(BaseHTTPRequestHandler):
     fail_views_once = True
     server_version = "10.11.11"
 
-    def log_message(self, fmt: str, *args: object) -> None:
-        print(f"{self.command} {self.path} - {fmt % args}", flush=True)
+    def log_message(self, format: str, *args: Any) -> None:
+        print(f"{self.command} {self.path} - {format % args}", flush=True)
 
     def send_json(self, payload: object, status: int = 200) -> None:
         body = json.dumps(payload, separators=(",", ":")).encode()
@@ -29,33 +31,37 @@ class RetryFixtureHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         path = urlsplit(self.path).path
         if path == "/System/Info/Public":
-            self.send_json({
-                "Id": "sloppatv-retry-fixture",
-                "ServerName": "sloppaTV Retry Fixture",
-                "Version": type(self).server_version,
-                "ProductName": "Jellyfin Server",
-                "OperatingSystem": "Linux",
-            })
+            self.send_json(
+                {
+                    "Id": "sloppatv-retry-fixture",
+                    "ServerName": "sloppaTV Retry Fixture",
+                    "Version": type(self).server_version,
+                    "ProductName": "Jellyfin Server",
+                    "OperatingSystem": "Linux",
+                }
+            )
             return
 
         if path == "/Users/retry-user/Views":
             if type(self).fail_views_once and not type(self).failed_views_once:
                 type(self).failed_views_once = True
                 print("INTENTIONAL_ABORT /Users/retry-user/Views", flush=True)
-                try:
+                with contextlib.suppress(OSError):
                     self.connection.shutdown(socket.SHUT_RDWR)
-                except OSError:
-                    pass
                 self.connection.close()
                 return
-            self.send_json({
-                "Items": [{
-                    "Id": "retry-library",
-                    "Name": "Retry Verified",
-                    "Type": "CollectionFolder",
-                    "CollectionType": "movies",
-                }]
-            })
+            self.send_json(
+                {
+                    "Items": [
+                        {
+                            "Id": "retry-library",
+                            "Name": "Retry Verified",
+                            "Type": "CollectionFolder",
+                            "CollectionType": "movies",
+                        }
+                    ]
+                }
+            )
             return
 
         if path.startswith("/Users/retry-user/Items") or path == "/Shows/NextUp":

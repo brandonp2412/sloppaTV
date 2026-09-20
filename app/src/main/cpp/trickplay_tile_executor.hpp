@@ -19,8 +19,7 @@ struct TrickplayTileCompletion {
     std::string error;
 };
 
-template <typename Client, typename Decoder, typename TaskRunner, typename CompletionSink>
-class TrickplayTileExecutor {
+template <typename Client, typename Decoder, typename TaskRunner, typename CompletionSink> class TrickplayTileExecutor {
 public:
     TrickplayTileExecutor(Client& client, Decoder& decoder, TaskRunner& tasks, CompletionSink& completions)
         : client_(client), decoder_(decoder), tasks_(tasks), completions_(completions) {}

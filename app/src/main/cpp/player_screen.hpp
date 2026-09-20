@@ -117,8 +117,8 @@ public:
     }
 
     void moveControl(int delta) {
-        const int selection = std::clamp(static_cast<int>(controlSelection_) + delta, 0,
-                                         static_cast<int>(controlCount()) - 1);
+        const int selection =
+            std::clamp(static_cast<int>(controlSelection_) + delta, 0, static_cast<int>(controlCount()) - 1);
         controlSelection_ = static_cast<PlayerControl>(selection);
     }
 

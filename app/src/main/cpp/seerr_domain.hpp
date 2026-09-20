@@ -107,9 +107,7 @@ public:
         return storage_.pendingRequest();
     }
 
-    [[nodiscard]] const std::vector<SeerrStorageTarget>& storageDriveChoices() const {
-        return storage_.driveChoices();
-    }
+    [[nodiscard]] const std::vector<SeerrStorageTarget>& storageDriveChoices() const { return storage_.driveChoices(); }
 
     [[nodiscard]] int storageDriveSelection() const { return storage_.driveSelection(); }
 

@@ -26,8 +26,7 @@ struct SeriesPlayAllCompletion {
     std::string error;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink, typename Epoch>
-class SeriesPlaybackExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink, typename Epoch> class SeriesPlaybackExecutor {
 public:
     using DuplicateUnavailableWarning = std::function<void(const SeriesEpisodeSlot&)>;
 
@@ -81,9 +80,8 @@ public:
             JellyfinItem first = episodes.value.front();
             auto detailed = client_.getItem(session, first.id);
             if (detailed.ok) first = std::move(detailed.value);
-            auto target =
-                client_.resolvePlayback(session, first, options.maxStreamingBitrate, options.maxAudioChannels,
-                                        options.overrides);
+            auto target = client_.resolvePlayback(session, first, options.maxStreamingBitrate, options.maxAudioChannels,
+                                                  options.overrides);
             if (!epoch_.active(generation)) return;
             completions_.push(SeriesPlayAllCompletion{
                 .generation = generation,

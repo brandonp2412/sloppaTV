@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Build deterministic screenshot-only artwork variants from vendored CC sources."""
+
 from __future__ import annotations
 
 from pathlib import Path

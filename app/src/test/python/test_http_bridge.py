@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import http.server
 import pathlib
 import shutil
@@ -9,7 +10,6 @@ import tempfile
 import threading
 import time
 import unittest
-
 
 ROOT = pathlib.Path(__file__).resolve().parents[4]
 HTTP_BRIDGE = ROOT / "app" / "src" / "main" / "java" / "app" / "sloppatv" / "HttpBridge.java"
@@ -21,10 +21,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.end_headers()
             time.sleep(0.5)
-            try:
+            with contextlib.suppress(BrokenPipeError):
                 self.wfile.write(b"late")
-            except BrokenPipeError:
-                pass
             return
         if self.path == "/redirect":
             self.send_response(302)

@@ -7,7 +7,8 @@
 #include <string>
 #include <utility>
 
-template <typename JellyfinLike, typename SeerrLike, typename DecoderLike, typename TaskRunnerLike, typename CompletionSink>
+template <typename JellyfinLike, typename SeerrLike, typename DecoderLike, typename TaskRunnerLike,
+          typename CompletionSink>
 class ArtworkProvider {
 public:
     using HomeLoadObserver = void (*)(const HomeArtworkRequest&, const ArtworkLoadResult&);

@@ -12,8 +12,7 @@ int main() {
     movie.type = "Movie";
     movie.canDelete = true;
 
-    auto navigation =
-        DetailsNavigationController::handleDetails(state, DetailsNavigationKey::Activate, movie);
+    auto navigation = DetailsNavigationController::handleDetails(state, DetailsNavigationKey::Activate, movie);
     assert(navigation.type == DetailsNavigationActionType::ActivateDetailAction);
     assert(navigation.detailAction == DetailsAction::StartPlayback);
 

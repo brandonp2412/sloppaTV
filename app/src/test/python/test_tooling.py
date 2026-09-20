@@ -61,9 +61,7 @@ class WaydroidSurfaceToolingTest(unittest.TestCase):
         self.assertTrue(waydroid_e2e.surface_size_is_1080p("Physical size: 1920x1200\nOverride size: 1080x1920"))
         self.assertTrue(waydroid_e2e.surface_size_is_1080p("Physical size: 1920x1080"))
         self.assertFalse(waydroid_e2e.surface_size_is_1080p("Override size: 1280x720"))
-        self.assertFalse(
-            waydroid_e2e.surface_size_is_1080p("Physical size: 1920x1080\nOverride size: 1280x720")
-        )
+        self.assertFalse(waydroid_e2e.surface_size_is_1080p("Physical size: 1920x1080\nOverride size: 1280x720"))
 
 
 class ManifestToolingTest(unittest.TestCase):
@@ -71,16 +69,19 @@ class ManifestToolingTest(unittest.TestCase):
         manifest = ET.parse(ROOT / "app" / "src" / "main" / "AndroidManifest.xml").getroot()
         android = "{http://schemas.android.com/apk/res/android}"
         intents = manifest.findall("./queries/intent")
-        self.assertTrue(
-            any(
-                intent.find("action") is not None
-                and intent.find("action").get(android + "name") == "android.intent.action.VIEW"
-                and intent.find("data") is not None
-                and intent.find("data").get(android + "mimeType") == "video/*"
-                and intent.find("data").get(android + "scheme") == "*"
-                for intent in intents
+
+        def is_external_video_intent(intent: ET.Element) -> bool:
+            action = intent.find("action")
+            data = intent.find("data")
+            return (
+                action is not None
+                and data is not None
+                and action.get(android + "name") == "android.intent.action.VIEW"
+                and data.get(android + "mimeType") == "video/*"
+                and data.get(android + "scheme") == "*"
             )
-        )
+
+        self.assertTrue(any(is_external_video_intent(intent) for intent in intents))
 
 
 class RetryFixtureToolingTest(unittest.TestCase):
@@ -113,7 +114,11 @@ class RetryFixtureToolingTest(unittest.TestCase):
 class PlaybackReportToolingTest(unittest.TestCase):
     def test_selects_exact_active_sloppatv_item(self) -> None:
         sessions = [
-            {"Client": "sloppaTV", "NowPlayingItem": {"Id": "abc-def", "Name": "Target"}, "PlayState": {"IsPaused": False}},
+            {
+                "Client": "sloppaTV",
+                "NowPlayingItem": {"Id": "abc-def", "Name": "Target"},
+                "PlayState": {"IsPaused": False},
+            },
             {"Client": "Jellyfin Android TV", "NowPlayingItem": {"Id": "abc-def", "Name": "Other"}},
             {"Client": "sloppaTV", "NowPlayingItem": {}},
         ]
@@ -151,9 +156,7 @@ class PlaybackReportToolingTest(unittest.TestCase):
 class ScreenshotFixtureToolingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.server = screenshot_fixture_server.ThreadingHTTPServer(
-            ("127.0.0.1", 0), screenshot_fixture_server.Handler
-        )
+        cls.server = screenshot_fixture_server.ThreadingHTTPServer(("127.0.0.1", 0), screenshot_fixture_server.Handler)
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
         cls.port = cls.server.server_address[1]
@@ -164,7 +167,9 @@ class ScreenshotFixtureToolingTest(unittest.TestCase):
         cls.server.server_close()
         cls.thread.join(timeout=2)
 
-    def request(self, method: str, path: str, headers: dict[str, str] | None = None) -> tuple[int, dict[str, str], bytes]:
+    def request(
+        self, method: str, path: str, headers: dict[str, str] | None = None
+    ) -> tuple[int, dict[str, str], bytes]:
         connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=2)
         connection.request(method, path, headers=headers or {})
         response = connection.getresponse()
@@ -210,15 +215,29 @@ class ScreenshotFixtureToolingTest(unittest.TestCase):
         status, _, body = self.request("GET", "/Shows/series-caminandes/Seasons?UserId=fixture-user")
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body)["Items"][0]["Name"], "Season 1")
-        status, _, body = self.request("GET", "/Shows/series-caminandes/Episodes?UserId=fixture-user&SeasonId=season-caminandes-1")
+        status, _, body = self.request(
+            "GET", "/Shows/series-caminandes/Episodes?UserId=fixture-user&SeasonId=season-caminandes-1"
+        )
         self.assertEqual(status, 200)
-        self.assertEqual([item["Name"] for item in json.loads(body)["Items"]], ["Llama Drama", "Gran Dillama", "Llamigos"])
+        self.assertEqual(
+            [item["Name"] for item in json.loads(body)["Items"]], ["Llama Drama", "Gran Dillama", "Llamigos"]
+        )
 
         status, _, body = self.request("GET", "/Shows/series-open-classics/Episodes?UserId=fixture-user")
         self.assertEqual(status, 200)
         self.assertEqual(
             [item["Name"] for item in json.loads(body)["Items"]],
-            ["Big Buck Bunny", "Sintel", "Tears of Steel", "Elephants Dream", "Spring", "Coffee Run", "Sprite Fright", "Glass Half", "The Daily Dweebs"],
+            [
+                "Big Buck Bunny",
+                "Sintel",
+                "Tears of Steel",
+                "Elephants Dream",
+                "Spring",
+                "Coffee Run",
+                "Sprite Fright",
+                "Glass Half",
+                "The Daily Dweebs",
+            ],
         )
 
         status, headers, body = self.request("GET", "/Videos/movie-big-buck-bunny/stream.mp4", {"Range": "bytes=0-127"})
@@ -259,11 +278,13 @@ class WaydroidToolingTest(unittest.TestCase):
         )
         self.assertEqual(sum(step.get("store") is True for step in capture_steps), 8)
         search_capture_index = next(
-            index for index, step in enumerate(suite["steps"])
+            index
+            for index, step in enumerate(suite["steps"])
             if step.get("action") == "capture" and step.get("name") == "04-search-catalog"
         )
         movie_capture_index = next(
-            index for index, step in enumerate(suite["steps"])
+            index
+            for index, step in enumerate(suite["steps"])
             if step.get("action") == "capture" and step.get("name") == "05-movie-browse"
         )
         self.assertIn(
@@ -271,11 +292,13 @@ class WaydroidToolingTest(unittest.TestCase):
             [step["action"] for step in suite["steps"][search_capture_index + 1 : movie_capture_index]],
         )
         person_capture_index = next(
-            index for index, step in enumerate(suite["steps"])
+            index
+            for index, step in enumerate(suite["steps"])
             if step.get("action") == "capture" and step.get("name") == "08-person-titles"
         )
         menu_capture_index = next(
-            index for index, step in enumerate(suite["steps"])
+            index
+            for index, step in enumerate(suite["steps"])
             if step.get("action") == "capture" and step.get("name") == "09-item-menu"
         )
         self.assertIn(
@@ -283,7 +306,8 @@ class WaydroidToolingTest(unittest.TestCase):
             [step["action"] for step in suite["steps"][person_capture_index + 1 : menu_capture_index]],
         )
         player_capture_index = next(
-            index for index, step in enumerate(suite["steps"])
+            index
+            for index, step in enumerate(suite["steps"])
             if step.get("action") == "capture" and step.get("name") == "10-player-cc-video"
         )
         self.assertIn(
@@ -311,7 +335,7 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("publish-play-store:", workflow)
         self.assertIn("needs: screenshots", workflow)
         self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
-        self.assertIn("ruby-version: \"3.4\"", workflow)
+        self.assertIn('ruby-version: "3.4"', workflow)
         self.assertIn("secrets.SLOPPATV_KEYSTORE_BASE64", workflow)
         self.assertNotIn("secrets.ANDROID_KEYSTORE_BASE64", workflow)
         self.assertIn('expected_sha1="108F6DFFAD1F2307495808AFF7D89E07B1892DEF"', workflow)
@@ -322,7 +346,7 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("target: android-tv", workflow)
         script = (ROOT / "tools" / "ci_screenshots.sh").read_text(encoding="utf-8")
         self.assertIn("screenshot_fixture_server.py", script)
-        self.assertIn('SLOPPATV_FIXTURE_PORT:-18096', script)
+        self.assertIn("SLOPPATV_FIXTURE_PORT:-18096", script)
         self.assertIn('reverse tcp:1024 "tcp:$FIXTURE_PORT"', script)
         self.assertIn("POST /Users/AuthenticateByName", script)
 
@@ -350,8 +374,9 @@ class WaydroidToolingTest(unittest.TestCase):
     def test_launch_waits_for_sloppatv_to_be_foreground(self) -> None:
         launcher = "topResumedActivity=ActivityRecord{123 com.android.launcher3/.Launcher}"
         sloppa = "topResumedActivity=ActivityRecord{456 app.sloppatv/.SloppaNativeActivity}"
-        with patch.object(waydroid_e2e, "adb", side_effect=["", launcher, sloppa]) as adb, patch.object(
-            waydroid_e2e.time, "sleep", return_value=None
+        with (
+            patch.object(waydroid_e2e, "adb", side_effect=["", launcher, sloppa]) as adb,
+            patch.object(waydroid_e2e.time, "sleep", return_value=None),
         ):
             waydroid_e2e.launch()
         self.assertEqual(adb.call_count, 3)
@@ -364,18 +389,22 @@ class WaydroidToolingTest(unittest.TestCase):
             self.assertEqual(waydroid_e2e.process_pid(), "")
 
     def test_ensure_running_keeps_existing_process(self) -> None:
-        with patch.object(waydroid_e2e, "process_pid", return_value="123") as process_pid, patch.object(
-            waydroid_e2e, "launch"
-        ) as launch, patch.object(waydroid_e2e, "require_running") as require_running:
+        with (
+            patch.object(waydroid_e2e, "process_pid", return_value="123") as process_pid,
+            patch.object(waydroid_e2e, "launch") as launch,
+            patch.object(waydroid_e2e, "require_running") as require_running,
+        ):
             self.assertEqual(waydroid_e2e.ensure_running(), "123")
         process_pid.assert_called_once_with()
         launch.assert_not_called()
         require_running.assert_not_called()
 
     def test_ensure_running_launches_stopped_app(self) -> None:
-        with patch.object(waydroid_e2e, "process_pid", return_value="") as process_pid, patch.object(
-            waydroid_e2e, "launch"
-        ) as launch, patch.object(waydroid_e2e, "require_running", return_value="456") as require_running:
+        with (
+            patch.object(waydroid_e2e, "process_pid", return_value="") as process_pid,
+            patch.object(waydroid_e2e, "launch") as launch,
+            patch.object(waydroid_e2e, "require_running", return_value="456") as require_running,
+        ):
             self.assertEqual(waydroid_e2e.ensure_running(), "456")
         process_pid.assert_called_once_with()
         launch.assert_called_once_with()
@@ -390,8 +419,9 @@ class WaydroidToolingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             local = Path(directory) / "screen.png"
             local.write_bytes(b"partial")
-            with patch.object(waydroid_e2e, "adb", side_effect=[failure, "", ""]) as adb, patch.object(
-                waydroid_e2e.time, "sleep"
+            with (
+                patch.object(waydroid_e2e, "adb", side_effect=[failure, "", ""]) as adb,
+                patch.object(waydroid_e2e.time, "sleep"),
             ):
                 waydroid_e2e.pull_with_reconnect("/sdcard/screen.png", local)
             self.assertFalse(local.exists())
@@ -404,32 +434,32 @@ class WaydroidToolingTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             local = Path(directory) / "screen.png"
             local.write_bytes(b"partial")
-            with patch.object(waydroid_e2e, "screencap_bytes", side_effect=[failure, png]), patch.object(
-                waydroid_e2e, "adb", return_value=""
-            ) as adb, patch.object(waydroid_e2e.time, "sleep"):
+            with (
+                patch.object(waydroid_e2e, "screencap_bytes", side_effect=[failure, png]),
+                patch.object(waydroid_e2e, "adb", return_value="") as adb,
+                patch.object(waydroid_e2e.time, "sleep"),
+            ):
                 waydroid_e2e.screencap_with_reconnect(local)
             self.assertEqual(local.read_bytes(), png)
             adb.assert_called_once_with("wait-for-device", timeout=45.0)
 
     def test_ensure_awake_wakes_sleeping_target(self) -> None:
-        with patch.object(
-            waydroid_e2e,
-            "adb",
-            side_effect=["mWakefulness=Asleep", "mWakefulness=Awake"],
-        ), patch.object(waydroid_e2e, "key") as key, patch.object(waydroid_e2e.time, "sleep"):
+        with (
+            patch.object(
+                waydroid_e2e,
+                "adb",
+                side_effect=["mWakefulness=Asleep", "mWakefulness=Awake"],
+            ),
+            patch.object(waydroid_e2e, "key") as key,
+            patch.object(waydroid_e2e.time, "sleep"),
+        ):
             waydroid_e2e.ensure_awake()
         key.assert_called_once_with("WAKEUP")
 
     def test_fatal_log_detection_is_scoped_to_app(self) -> None:
         waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
-        app_fatal = (
-            "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main "
-            "Process: app.sloppatv, PID: 123"
-        )
-        other_fatal = (
-            "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main "
-            "Process: com.example.other, PID: 456"
-        )
+        app_fatal = "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main Process: app.sloppatv, PID: 123"
+        other_fatal = "09-02 22:00:00 E AndroidRuntime: FATAL EXCEPTION: main Process: com.example.other, PID: 456"
         self.assertEqual(waydroid_e2e.fatal_lines([app_fatal]), [app_fatal])
         self.assertEqual(waydroid_e2e.fatal_lines([other_fatal]), [])
 
@@ -446,11 +476,12 @@ class WaydroidToolingTest(unittest.TestCase):
 
     def test_player_acceptance_requires_active_media_session(self) -> None:
         waydroid_e2e.PACKAGE = waydroid_e2e.DEFAULT_PACKAGE
-        with patch.object(waydroid_e2e, "adb", return_value="Media button session is com.example.other/player"), patch.object(
-            waydroid_e2e.time, "sleep"
+        with (
+            patch.object(waydroid_e2e, "adb", return_value="Media button session is com.example.other/player"),
+            patch.object(waydroid_e2e.time, "sleep"),
+            self.assertRaisesRegex(RuntimeError, "playback is not active"),
         ):
-            with self.assertRaisesRegex(RuntimeError, "playback is not active"):
-                waydroid_e2e.require_playback_session(0.001)
+            waydroid_e2e.require_playback_session(0.001)
         active = (
             f"sloppaTV {waydroid_e2e.DEFAULT_PACKAGE}/sloppaTV (userId=0)\n"
             "  active=true\n"
@@ -480,14 +511,20 @@ class WaydroidToolingTest(unittest.TestCase):
             "  active=true\n"
             "  state=PlaybackState {state=1, position=0, buffered position=0, speed=0.0, error=null}"
         )
-        with patch.object(waydroid_e2e, "adb", return_value=stopped), patch.object(waydroid_e2e.time, "sleep"):
-            with self.assertRaisesRegex(RuntimeError, "state was 1"):
-                waydroid_e2e.require_playback_session(0.001)
+        with (
+            patch.object(waydroid_e2e, "adb", return_value=stopped),
+            patch.object(waydroid_e2e.time, "sleep"),
+            self.assertRaisesRegex(RuntimeError, "state was 1"),
+        ):
+            waydroid_e2e.require_playback_session(0.001)
 
     def test_search_quotes_multi_word_query_for_adb_shell(self) -> None:
-        with patch.object(waydroid_e2e, "adb") as adb, patch.object(waydroid_e2e, "capture"), patch.object(
-            waydroid_e2e, "audit_logs"
-        ), patch.object(waydroid_e2e.time, "sleep"):
+        with (
+            patch.object(waydroid_e2e, "adb") as adb,
+            patch.object(waydroid_e2e, "capture"),
+            patch.object(waydroid_e2e, "audit_logs"),
+            patch.object(waydroid_e2e.time, "sleep"),
+        ):
             waydroid_e2e.action_search("FOLLOW MAMA AND PAPA")
         args = adb.call_args_list[1].args
         self.assertIn("'FOLLOW MAMA AND PAPA'", args)

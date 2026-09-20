@@ -31,8 +31,7 @@ struct FallbackPlaybackCompletion {
     ApiValueResult<PlaybackTarget> result;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink, typename Epoch>
-class PlaybackStreamExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink, typename Epoch> class PlaybackStreamExecutor {
 public:
     using ReportFailureSink = std::function<void(const char*, const std::string&, const ApiResult&)>;
 

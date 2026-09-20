@@ -35,16 +35,17 @@ struct FakeClient {
         return libraryResult;
     }
 
-    ApiValueResult<std::vector<JellyfinItem>>
-    browseCollectionMembersFallback(const JellyfinSession&, const JellyfinItem& container) {
+    ApiValueResult<std::vector<JellyfinItem>> browseCollectionMembersFallback(const JellyfinSession&,
+                                                                              const JellyfinItem& container) {
         ++fallbackCalls;
         fallbackContainerId = container.id;
         return fallbackResult;
     }
 
-    ApiValueResult<std::vector<JellyfinItem>>
-    browseVideoFilter(const JellyfinSession&, const JellyfinItem& container, int startIndex, int pageSize, bool favorite,
-                      std::string genre = std::string{}, std::string letter = std::string{}) {
+    ApiValueResult<std::vector<JellyfinItem>> browseVideoFilter(const JellyfinSession&, const JellyfinItem& container,
+                                                                int startIndex, int pageSize, bool favorite,
+                                                                std::string genre = std::string{},
+                                                                std::string letter = std::string{}) {
         call = "filter";
         lastContainerId = container.id;
         lastStartIndex = startIndex;

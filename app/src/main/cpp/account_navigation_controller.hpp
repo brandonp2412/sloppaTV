@@ -30,7 +30,7 @@ struct AccountNavigationAction {
 class AccountNavigationController {
 public:
     [[nodiscard]] static AccountNavigationAction handleLogin(AccountScreenState& state, ScreenNavigationKey key,
-                                                              bool hasSavedSessions);
+                                                             bool hasSavedSessions);
     [[nodiscard]] static AccountNavigationAction handleProfiles(AccountScreenState& state, ScreenNavigationKey key,
-                                                                 int savedSessionCount);
+                                                                int savedSessionCount);
 };

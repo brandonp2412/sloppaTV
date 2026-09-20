@@ -136,57 +136,54 @@ int main() {
     assert(label == "00:05");
 
     FakeRenderer left;
-    assert(renderPlayerTrickplay(
-        left,
-        PlayerTrickplayRenderState{
-            .texture = 1,
-            .frame = frame,
-            .info = trickplay,
-            .decodedWidth = 640,
-            .decodedHeight = 360,
-            .positionMs = 0,
-            .durationMs = 10'000,
-            .logicalWidth = 1920.0f,
-            .positionLabel = "00:00",
-        },
-        PlayerTrickplayRenderStyle<TestColor>{},
-        [](float, float, float, float, float, std::string_view, TestColor) {}));
+    assert(renderPlayerTrickplay(left,
+                                 PlayerTrickplayRenderState{
+                                     .texture = 1,
+                                     .frame = frame,
+                                     .info = trickplay,
+                                     .decodedWidth = 640,
+                                     .decodedHeight = 360,
+                                     .positionMs = 0,
+                                     .durationMs = 10'000,
+                                     .logicalWidth = 1920.0f,
+                                     .positionLabel = "00:00",
+                                 },
+                                 PlayerTrickplayRenderStyle<TestColor>{},
+                                 [](float, float, float, float, float, std::string_view, TestColor) {}));
     assert(left.imageX == 80.0f);
 
     FakeRenderer right;
-    assert(renderPlayerTrickplay(
-        right,
-        PlayerTrickplayRenderState{
-            .texture = 1,
-            .frame = frame,
-            .info = trickplay,
-            .decodedWidth = 640,
-            .decodedHeight = 360,
-            .positionMs = 20'000,
-            .durationMs = 10'000,
-            .logicalWidth = 1920.0f,
-            .positionLabel = "00:20",
-        },
-        PlayerTrickplayRenderStyle<TestColor>{},
-        [](float, float, float, float, float, std::string_view, TestColor) {}));
+    assert(renderPlayerTrickplay(right,
+                                 PlayerTrickplayRenderState{
+                                     .texture = 1,
+                                     .frame = frame,
+                                     .info = trickplay,
+                                     .decodedWidth = 640,
+                                     .decodedHeight = 360,
+                                     .positionMs = 20'000,
+                                     .durationMs = 10'000,
+                                     .logicalWidth = 1920.0f,
+                                     .positionLabel = "00:20",
+                                 },
+                                 PlayerTrickplayRenderStyle<TestColor>{},
+                                 [](float, float, float, float, float, std::string_view, TestColor) {}));
     assert(right.imageX == 1420.0f);
 
     FakeRenderer invalid;
-    assert(!renderPlayerTrickplay(
-        invalid,
-        PlayerTrickplayRenderState{
-            .texture = 1,
-            .frame = frame,
-            .info = trickplay,
-            .decodedWidth = 0,
-            .decodedHeight = 0,
-            .positionMs = 5000,
-            .durationMs = 10'000,
-            .logicalWidth = 1920.0f,
-            .positionLabel = "00:05",
-        },
-        PlayerTrickplayRenderStyle<TestColor>{},
-        [](float, float, float, float, float, std::string_view, TestColor) {}));
+    assert(!renderPlayerTrickplay(invalid,
+                                  PlayerTrickplayRenderState{
+                                      .texture = 1,
+                                      .frame = frame,
+                                      .info = trickplay,
+                                      .decodedWidth = 0,
+                                      .decodedHeight = 0,
+                                      .positionMs = 5000,
+                                      .durationMs = 10'000,
+                                      .logicalWidth = 1920.0f,
+                                      .positionLabel = "00:05",
+                                  },
+                                  PlayerTrickplayRenderStyle<TestColor>{},
+                                  [](float, float, float, float, float, std::string_view, TestColor) {}));
     assert(invalid.roundedRects == 0);
     assert(invalid.images == 0);
 

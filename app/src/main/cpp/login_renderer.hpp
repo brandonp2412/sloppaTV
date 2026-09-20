@@ -20,8 +20,7 @@ struct LoginRenderState {
     std::string_view discoveryStatus;
 };
 
-template <typename ColorLike>
-struct LoginRenderStyle {
+template <typename ColorLike> struct LoginRenderStyle {
     float cornerLarge = 0.0f;
     float cornerMedium = 0.0f;
     float displayScale = 0.0f;
@@ -40,9 +39,9 @@ struct LoginRenderStyle {
     ColorLike focus{};
 };
 
-template <typename RendererLike, typename ColorLike, typename DrawCentered, typename DrawModal, typename DrawLeftAligned,
-          typename DrawInputSurface, typename DrawButtonSurface, typename DrawFocusedSurface, typename FitText,
-          typename RenderKeyboard>
+template <typename RendererLike, typename ColorLike, typename DrawCentered, typename DrawModal,
+          typename DrawLeftAligned, typename DrawInputSurface, typename DrawButtonSurface, typename DrawFocusedSurface,
+          typename FitText, typename RenderKeyboard>
 void renderLoginScreen(RendererLike& renderer, float logicalWidth, float logicalHeight, const LoginRenderState& state,
                        const LoginRenderStyle<ColorLike>& style, DrawCentered&& drawCentered, DrawModal&& drawModal,
                        DrawLeftAligned&& drawLeftAligned, DrawInputSurface&& drawInputSurface,
@@ -51,8 +50,8 @@ void renderLoginScreen(RendererLike& renderer, float logicalWidth, float logical
     renderer.rect(0, 0, logicalWidth, logicalHeight, style.background);
     renderer.verticalGradient(0.0f, 0.0f, 1920.0f, 1080.0f, style.surfaceContainerHigh, style.background);
     drawCentered(410.0f, 15.0f, 1100.0f, 145.0f, style.displayScale, "sloppaTV", style.text, 20.0f, 8.0f);
-    drawCentered(410.0f, 165.0f, 1100.0f, 50.0f, style.bodyScale, "Connect to your Jellyfin server", style.muted,
-                 20.0f, 4.0f);
+    drawCentered(410.0f, 165.0f, 1100.0f, 50.0f, style.bodyScale, "Connect to your Jellyfin server", style.muted, 20.0f,
+                 4.0f);
 
     if (state.quickConnectActive) {
         drawModal(465.0f, 230.0f, 990.0f, 610.0f);
@@ -70,8 +69,7 @@ void renderLoginScreen(RendererLike& renderer, float logicalWidth, float logical
             const float rowY = 535.0f + static_cast<float>(index) * 74.0f;
             renderer.roundedRect(510.0f, rowY, 900.0f, 58.0f, style.cornerMedium, style.panelAlt);
             renderer.roundedRect(528.0f, rowY + 9.0f, 40.0f, 40.0f, 20.0f, style.focusSoft);
-            drawCentered(528.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f, std::to_string(index + 1), style.text, 4.0f,
-                         3.0f);
+            drawCentered(528.0f, rowY + 9.0f, 40.0f, 40.0f, 1.45f, std::to_string(index + 1), style.text, 4.0f, 3.0f);
             renderer.textVerticallyCentered(595.0f, rowY, 58.0f, 1.45f, fitText(steps[index], 1.45f, 790.0f, 1),
                                             style.secondaryText, 790.0f);
         }
@@ -90,8 +88,7 @@ void renderLoginScreen(RendererLike& renderer, float logicalWidth, float logical
     static constexpr std::array<std::string_view, 3> labels{"Server", "Username", "Password"};
     for (int index = 0; index < 3; ++index) {
         const float y = 290.0f + static_cast<float>(index) * 128.0f;
-        drawLeftAligned(495.0f, y - 45.0f, 420.0f, 32.0f, 1.35f, labels[static_cast<std::size_t>(index)],
-                        style.muted);
+        drawLeftAligned(495.0f, y - 45.0f, 420.0f, 32.0f, 1.35f, labels[static_cast<std::size_t>(index)], style.muted);
         const bool focused = !state.keyboardActive && state.loginFocus == index;
         const auto bounds = drawInputSurface(490.0f, y, 940.0f, 70.0f, focused, style.wideInputFocusScale);
         std::string value(state.fields[static_cast<std::size_t>(index)]);

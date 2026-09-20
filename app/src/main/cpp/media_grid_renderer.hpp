@@ -39,8 +39,8 @@ void renderMediaGridScreen(std::string_view title, const std::vector<JellyfinIte
     constexpr int columns = mediaGridColumns();
     constexpr float slotWidth = mediaCardWidth();
     constexpr float xGap = 32.0f;
-    const bool hasPortraitCards =
-        std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
+    const bool hasPortraitCards = std::any_of(
+        items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
     const float rowStep = searchMediaRowHeight(hasPortraitCards);
     const int firstRow = mediaFirstVisibleRow(state.selection, 2);
     for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
@@ -48,17 +48,16 @@ void renderMediaGridScreen(std::string_view title, const std::vector<JellyfinIte
         const int col = index % columns;
         if (row >= 2) break;
 
-        renderCard(
-            items[static_cast<std::size_t>(index)],
-            MediaGridCardPlacement{
-                .x = 80.0f + static_cast<float>(col) * (slotWidth + xGap),
-                .y = 195.0f + static_cast<float>(row) * rowStep,
-                .slotWidth = slotWidth,
-                .focused = index == state.selection,
-                .showState = true,
-                .preferSeriesCover = hasPortraitCards,
-                .alignToPortraitBand = hasPortraitCards,
-                .titleLineLimit = mediaGridTitleLineLimit(row, state.uiTextSize, hasPortraitCards),
-            });
+        renderCard(items[static_cast<std::size_t>(index)],
+                   MediaGridCardPlacement{
+                       .x = 80.0f + static_cast<float>(col) * (slotWidth + xGap),
+                       .y = 195.0f + static_cast<float>(row) * rowStep,
+                       .slotWidth = slotWidth,
+                       .focused = index == state.selection,
+                       .showState = true,
+                       .preferSeriesCover = hasPortraitCards,
+                       .alignToPortraitBand = hasPortraitCards,
+                       .titleLineLimit = mediaGridTitleLineLimit(row, state.uiTextSize, hasPortraitCards),
+                   });
     }
 }

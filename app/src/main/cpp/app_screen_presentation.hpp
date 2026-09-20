@@ -38,6 +38,7 @@ template <typename UiLike, typename ArtworkLike> struct AppScreenPresentationFra
     int homeSlideToFirst = 0;
     std::chrono::steady_clock::time_point homeSlideStarted{};
     int nextUpReplacementFadeIndex = -1;
+    // cppcheck-suppress uninitMemberVarNoCtor -- required aggregate reference, supplied by the frame builder.
     const std::string& nextUpReplacementFadeItemId;
     std::chrono::steady_clock::time_point nextUpReplacementFadeStarted{};
     std::chrono::steady_clock::time_point lastInteraction{};
@@ -45,7 +46,9 @@ template <typename UiLike, typename ArtworkLike> struct AppScreenPresentationFra
     std::string_view error;
 
     Renderer& renderer;
+    // cppcheck-suppress uninitMemberVarNoCtor -- required aggregate reference, supplied by the frame builder.
     UiLike& ui;
+    // cppcheck-suppress uninitMemberVarNoCtor -- required aggregate reference, supplied by the frame builder.
     ArtworkLike& artwork;
     BrandMark& brandMark;
     const AccountFlow& accountFlow;
@@ -57,6 +60,7 @@ template <typename UiLike, typename ArtworkLike> struct AppScreenPresentationFra
     const SearchScreenState& searchState;
     const SeerrDomainState& seerrDomain;
     const SettingsScreenState& settingsScreen;
+    // cppcheck-suppress uninitMemberVarNoCtor -- required aggregate reference, supplied by the frame builder.
     const std::vector<ExternalPlayerApp>& externalPlayers;
     const DeviceCodecSupport& deviceCodecSupport;
     const JellyfinServerInfo& serverInfo;

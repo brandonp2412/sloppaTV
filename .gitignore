@@ -21,3 +21,4 @@ fastlane/Preview.html
 fastlane/screenshots.html
 fastlane/test_output/
 fastlane/*.json
+.venv/

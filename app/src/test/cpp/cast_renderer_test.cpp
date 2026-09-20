@@ -76,8 +76,7 @@ int main() {
     int emptyCalls = 0;
 
     renderCastScreen(
-        renderer, "Example", people, 10, 2, style,
-        [&](std::string_view heading) { headers.emplace_back(heading); },
+        renderer, "Example", people, 10, 2, style, [&](std::string_view heading) { headers.emplace_back(heading); },
         [&](std::string_view, std::string_view) { ++emptyCalls; },
         [](float x, float y, float width, float height, bool focused) {
             if (!focused) return std::array<float, 4>{x, y, width, height};
@@ -137,20 +136,14 @@ int main() {
     FakeRenderer emptyRenderer;
     int renderedEmpty = 0;
     renderCastScreen(
-        emptyRenderer, "", {}, 0, 1, style,
-        [&](std::string_view heading) {
-            assert(heading == "Cast");
-        },
+        emptyRenderer, "", {}, 0, 1, style, [&](std::string_view heading) { assert(heading == "Cast"); },
         [&](std::string_view title, std::string_view message) {
             ++renderedEmpty;
             assert(title == "No cast information");
             assert(message == "Jellyfin has no cast information for this title.");
         },
-        [](float x, float y, float width, float height, bool) {
-            return std::array<float, 4>{x, y, width, height};
-        },
-        [](const JellyfinPerson&, float, float, float, float, float) {},
-        [](float, float, float, float, int, float) {},
+        [](float x, float y, float width, float height, bool) { return std::array<float, 4>{x, y, width, height}; },
+        [](const JellyfinPerson&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](std::string_view value, float, float, int) { return std::string(value); },
         [](float, float, float, float, float, std::string_view, int, float, float) {});
 

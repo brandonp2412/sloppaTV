@@ -792,8 +792,8 @@ public:
     }
 
     [[nodiscard]] PlaybackProgressContext progressContext(bool playerScreenActive, bool jellyfinSessionValid,
-                                                         bool immediate, bool preparing, bool paused,
-                                                         int positionMs) const {
+                                                          bool immediate, bool preparing, bool paused,
+                                                          int positionMs) const {
         return PlaybackProgressContext{
             .plan = progressPlan(playerScreenActive, jellyfinSessionValid, immediate, preparing, paused, positionMs),
             .item = sessionState_.activeItem(),
@@ -815,9 +815,8 @@ public:
                                                               bool videoSurfaceReady, bool playerReusable,
                                                               bool resumeRequested) const {
         PlaybackWindowRestorePlan plan =
-            planPlaybackWindowRestore(playerScreenActive, windowRestorePending, rendererReady,
-                                      activeTargetAvailable(), rendererContextReused, videoSurfaceReady,
-                                      playerReusable, resumeRequested);
+            planPlaybackWindowRestore(playerScreenActive, windowRestorePending, rendererReady, activeTargetAvailable(),
+                                      rendererContextReused, videoSurfaceReady, playerReusable, resumeRequested);
         if (plan.restore) plan.videoFrameRate = sessionState_.activeItem().videoFrameRate;
         return plan;
     }
@@ -843,10 +842,10 @@ public:
         const int selectedIndex = trackState_.selectedSubtitleServerIndex();
         if (selectedIndex < 0) return nullptr;
         const auto& subtitles = sessionState_.activeItem().subtitles;
-        const auto selected = std::find_if(subtitles.begin(), subtitles.end(),
-                                           [selectedIndex](const JellyfinSubtitleStream& subtitle) {
-                                               return subtitle.index == selectedIndex;
-                                           });
+        const auto selected =
+            std::find_if(subtitles.begin(), subtitles.end(), [selectedIndex](const JellyfinSubtitleStream& subtitle) {
+                return subtitle.index == selectedIndex;
+            });
         return selected == subtitles.end() ? nullptr : &*selected;
     }
 
@@ -872,9 +871,9 @@ public:
     [[nodiscard]] PlaybackSubtitleCycleContext
     subtitleTrackCycleContext(const std::vector<std::string>& allowedLanguages) const {
         return {
-            .plan = planPlaybackSubtitleTrackCycle(sessionState_.activeItem(),
-                                                   trackState_.selectedSubtitleServerIndex(),
-                                                   sessionState_.activeTarget().playMethod, allowedLanguages),
+            .plan =
+                planPlaybackSubtitleTrackCycle(sessionState_.activeItem(), trackState_.selectedSubtitleServerIndex(),
+                                               sessionState_.activeTarget().playMethod, allowedLanguages),
             .audioStreamIndex = trackState_.selectedAudioServerIndex(),
             .busy = trackState_.subtitleBusy(),
         };
@@ -997,8 +996,8 @@ public:
                                     telemetryState_.playbackStartReported(), positionMs, preferServerStream);
     }
 
-    [[nodiscard]] std::optional<PlaybackFallbackAttempt>
-    fallbackAttempt(bool jellyfinSessionValid, int positionMs, bool preferServerStream) const {
+    [[nodiscard]] std::optional<PlaybackFallbackAttempt> fallbackAttempt(bool jellyfinSessionValid, int positionMs,
+                                                                         bool preferServerStream) const {
         PlaybackFallbackAttempt attempt;
         attempt.plan = fallbackPlan(jellyfinSessionValid, positionMs, preferServerStream);
         if (!attempt.plan.retry) return std::nullopt;

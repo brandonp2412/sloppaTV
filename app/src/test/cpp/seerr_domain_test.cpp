@@ -57,8 +57,7 @@ int main() {
     connectionStarts.connection().endConnect();
 
     SeerrDomainState preAuthFailure;
-    assert(preAuthFailure.prepareConnect("https://seerr.example.nz", true) ==
-           SeerrDomainState::ConnectAction::Submit);
+    assert(preAuthFailure.prepareConnect("https://seerr.example.nz", true) == SeerrDomainState::ConnectAction::Submit);
     preAuthFailure.connection().deferRequest(media("seerr:movie:1"));
     auto connectCompletion = preAuthFailure.completeConnect(false, false, true);
     assert(connectCompletion == SeerrDomainState::ConnectCompletionAction::PreAuthenticationFailed);
@@ -75,8 +74,7 @@ int main() {
     assert(!authConnectFailure.connection().takeDeferredWork().request);
 
     SeerrDomainState staleCompletion;
-    assert(staleCompletion.prepareConnect("https://seerr.example.nz", true) ==
-           SeerrDomainState::ConnectAction::Submit);
+    assert(staleCompletion.prepareConnect("https://seerr.example.nz", true) == SeerrDomainState::ConnectAction::Submit);
     staleCompletion.connection().deferRequest(media("seerr:movie:3"));
     connectCompletion = staleCompletion.completeConnect(false, true, false);
     assert(connectCompletion == SeerrDomainState::ConnectCompletionAction::Stale);
@@ -181,8 +179,7 @@ int main() {
     assert(refreshStarts.prepareStorageRefresh(configured, false, start) ==
            SeerrDomainState::RefreshStartAction::Submit);
     assert(refreshStarts.storage().loading());
-    assert(refreshStarts.prepareStorageRefresh(configured, true, start) ==
-           SeerrDomainState::RefreshStartAction::None);
+    assert(refreshStarts.prepareStorageRefresh(configured, true, start) == SeerrDomainState::RefreshStartAction::None);
 
     assert(refreshStarts.preparePendingRefresh(configured) == SeerrDomainState::RefreshStartAction::Submit);
     assert(refreshStarts.requests().pendingLoading());
@@ -205,8 +202,7 @@ int main() {
     assert(deferredStorage.storageTargets().size() == 1);
     assert(!deferredStorage.storageLoading());
     assert(deferredStorage.storageError().empty());
-    assert(deferredStorage.prepareStoragePicker(media("seerr:movie:21")) ==
-           SeerrStorageState::PickerStatus::Ready);
+    assert(deferredStorage.prepareStoragePicker(media("seerr:movie:21")) == SeerrStorageState::PickerStatus::Ready);
     assert(deferredStorage.pendingStorageRequest());
     assert(deferredStorage.storageDriveChoices().size() == 1);
     assert(deferredStorage.storageDriveSelection() == 0);
@@ -216,10 +212,8 @@ int main() {
     assert(pendingStorage && pendingStorage->id == "seerr:movie:21");
     assert(!deferredStorage.storage().pendingRequest());
 
-    assert(deferredStorage.prepareStoragePicker(media("seerr:movie:22")) ==
-           SeerrStorageState::PickerStatus::Ready);
-    const auto pickerCommand =
-        deferredStorage.handleStoragePickerInput(SeerrStorageState::PickerInput::Activate);
+    assert(deferredStorage.prepareStoragePicker(media("seerr:movie:22")) == SeerrStorageState::PickerStatus::Ready);
+    const auto pickerCommand = deferredStorage.handleStoragePickerInput(SeerrStorageState::PickerInput::Activate);
     assert(pickerCommand.type == SeerrStorageState::PickerCommandType::Selected);
     assert(pickerCommand.selection && pickerCommand.selection->item.id == "seerr:movie:22");
 

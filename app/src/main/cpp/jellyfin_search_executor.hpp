@@ -13,8 +13,7 @@ struct JellyfinSearchCompletion {
     ApiValueResult<std::vector<JellyfinItem>> result;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink>
-class JellyfinSearchExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink> class JellyfinSearchExecutor {
 public:
     JellyfinSearchExecutor(Client& client, TaskRunner& tasks, CompletionSink& completions)
         : client_(client), tasks_(tasks), completions_(completions) {}

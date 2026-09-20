@@ -103,7 +103,8 @@ public:
                             if (!ec) {
                                 std::ofstream output(cacheFile, std::ios::binary | std::ios::trunc);
                                 if (output)
-                                    output.write(subtitleBody.data(), static_cast<std::streamsize>(subtitleBody.size()));
+                                    output.write(subtitleBody.data(),
+                                                 static_cast<std::streamsize>(subtitleBody.size()));
                             }
                         }
                     } else {
@@ -120,8 +121,7 @@ public:
                         subtitleBody = std::move(response.value);
                         cues = parseTextSubtitleCues(subtitleBody, candidate.codec);
                     } else {
-                        subtitleFailure =
-                            response.error.empty() ? "subtitle cache refresh failed" : response.error;
+                        subtitleFailure = response.error.empty() ? "subtitle cache refresh failed" : response.error;
                     }
                 }
 

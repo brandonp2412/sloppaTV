@@ -32,8 +32,8 @@ inline PlayerVideoBounds playerVideoBounds(const PlayerVideoRenderState& state) 
 
     const float widthScale = state.logicalWidth / static_cast<float>(state.sourceWidth);
     const float heightScale = state.logicalHeight / static_cast<float>(state.sourceHeight);
-    const float scale = state.zoomMode == VideoZoomMode::Fit ? std::min(widthScale, heightScale)
-                                                             : std::max(widthScale, heightScale);
+    const float scale =
+        state.zoomMode == VideoZoomMode::Fit ? std::min(widthScale, heightScale) : std::max(widthScale, heightScale);
     bounds.width = static_cast<float>(state.sourceWidth) * scale;
     bounds.height = static_cast<float>(state.sourceHeight) * scale;
     bounds.x = (state.logicalWidth - bounds.width) * 0.5f;

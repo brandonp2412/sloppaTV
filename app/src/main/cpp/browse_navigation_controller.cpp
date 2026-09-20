@@ -39,8 +39,8 @@ BrowseNavigationAction itemAction(BrowseNavigationActionType type, const Jellyfi
 }
 } // namespace
 
-BrowseNavigationAction BrowseNavigationController::handle(BrowseScreenState& state, ScreenNavigationKey key, int columns,
-                                                           bool loading) {
+BrowseNavigationAction BrowseNavigationController::handle(BrowseScreenState& state, ScreenNavigationKey key,
+                                                          int columns, bool loading) {
     const BrowseScreenCommand command = state.handleInput(browseInput(key), columns);
     switch (command.type) {
     case BrowseScreenCommandType::None:
@@ -76,8 +76,8 @@ BrowseNavigationAction BrowseNavigationController::handle(BrowseScreenState& sta
                           state.items()[static_cast<size_t>(state.selection())]);
     case BrowseScreenCommandType::SelectionChanged: {
         BrowseNavigationAction result = action(BrowseNavigationActionType::SelectionChanged);
-        result.loadMore = state.hasMore() && !loading &&
-                          state.selection() >= static_cast<int>(state.items().size()) - 12;
+        result.loadMore =
+            state.hasMore() && !loading && state.selection() >= static_cast<int>(state.items().size()) - 12;
         return result;
     }
     }

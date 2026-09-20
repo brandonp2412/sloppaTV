@@ -34,21 +34,20 @@ bool renderPlayerTrickplay(RendererLike& renderer, const PlayerTrickplayRenderSt
     constexpr float previewWidth = 420.0f;
     const float previewHeight = std::clamp(
         previewWidth * static_cast<float>(state.info.height) / static_cast<float>(state.info.width), 180.0f, 270.0f);
-    const double progress = state.durationMs > 0
-                                ? std::clamp(static_cast<double>(state.positionMs) / state.durationMs, 0.0, 1.0)
-                                : 0.5;
+    const double progress =
+        state.durationMs > 0 ? std::clamp(static_cast<double>(state.positionMs) / state.durationMs, 0.0, 1.0) : 0.5;
     const float centerX = 155.0f + static_cast<float>(1610.0 * progress);
     const float x = std::clamp(centerX - previewWidth * 0.5f, 80.0f, state.logicalWidth - 80.0f - previewWidth);
     constexpr float y = 555.0f;
 
-    const TrickplayUvRegion uv = trickplayUvRegion(state.frame, state.info.width, state.info.height, state.decodedWidth,
-                                                   state.decodedHeight);
+    const TrickplayUvRegion uv =
+        trickplayUvRegion(state.frame, state.info.width, state.info.height, state.decodedWidth, state.decodedHeight);
     if (!uv.valid()) return false;
 
     renderer.roundedRect(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, style.previewRadius + 7.0f,
                          style.backdrop);
-    renderer.roundedOutline(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f,
-                            style.previewRadius + 7.0f, 4.0f, style.focus);
+    renderer.roundedOutline(x - 7.0f, y - 7.0f, previewWidth + 14.0f, previewHeight + 58.0f, style.previewRadius + 7.0f,
+                            4.0f, style.focus);
     renderer.roundedImageRegion(state.texture, x, y, previewWidth, previewHeight, style.previewRadius, uv.u0, uv.v0,
                                 uv.u1, uv.v1);
     drawLeftAligned(x + 14.0f, y + previewHeight + 7.0f, previewWidth - 28.0f, 44.0f, 1.65f, state.positionLabel,

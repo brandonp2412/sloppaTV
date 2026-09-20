@@ -58,21 +58,22 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
                                     fitTextLines(searchDisplay, 2.15f, searchWidth - 68.0f, 1),
                                     query.empty() ? style.muted : style.text, searchWidth - 68.0f);
     const std::string_view searchHint =
-        state.keyboard() ? "On-screen keyboard"
-                         : (systemSearchInputActive ? "Typing…" : (results.empty() ? "Press OK to type" : "Up to edit"));
+        state.keyboard()
+            ? "On-screen keyboard"
+            : (systemSearchInputActive ? "Typing…" : (results.empty() ? "Press OK to type" : "Up to edit"));
     drawLeftAligned(1575.0f, searchTop, 250.0f, 68.0f, 1.45f, searchHint,
                     (state.keyboard() || systemSearchInputActive) ? style.focus : style.secondaryText);
 
     if (state.keyboard()) {
         renderKeyboard(270.0f);
-        drawCentered(560.0f, 886.0f, 800.0f, 58.0f, 1.62f, "Done runs search   |   Back closes keyboard",
-                     style.muted, 16.0f, 5.0f);
+        drawCentered(560.0f, 886.0f, 800.0f, 58.0f, 1.62f, "Done runs search   |   Back closes keyboard", style.muted,
+                     16.0f, 5.0f);
         return;
     }
 
     if (systemSearchInputActive && results.empty() && !seerrSearchLoading) {
-        drawCentered(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to search Jellyfin and Seerr", style.muted,
-                     16.0f, 5.0f);
+        drawCentered(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to search Jellyfin and Seerr", style.muted, 16.0f,
+                     5.0f);
         return;
     }
     if (query.empty() && results.empty()) {
@@ -93,24 +94,24 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
         semanticRows.push_back(SearchScreenState::kEpisodeRow);
     }
     if (semanticRows.empty()) {
-        renderEmpty("No results found",
-                    seerrConfigured ? "No Jellyfin or Seerr matches for this search."
-                                    : "No Jellyfin matches. Connect Seerr in Settings to search for more.");
+        renderEmpty("No results found", seerrConfigured
+                                            ? "No Jellyfin or Seerr matches for this search."
+                                            : "No Jellyfin matches. Connect Seerr in Settings to search for more.");
         return;
     }
 
     const int selectedSemanticRow = state.selectedRow();
     const auto selectedPosition = std::find(semanticRows.begin(), semanticRows.end(), selectedSemanticRow);
-    const int selectedRowPosition =
-        selectedPosition == semanticRows.end() ? 0 : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
+    const int selectedRowPosition = selectedPosition == semanticRows.end()
+                                        ? 0
+                                        : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
     const int firstSemantic =
         std::clamp(selectedRowPosition - 1, 0, std::max(0, static_cast<int>(semanticRows.size()) - 2));
 
     auto drawLoadingDots = [&](float x, float y) {
         const double seconds = std::chrono::duration<double>(now().time_since_epoch()).count();
         for (int index = 0; index < 3; ++index) {
-            const float pulse =
-                0.45f + 0.55f * static_cast<float>((std::sin(seconds * 5.0 - index * 1.2) + 1.0) * 0.5);
+            const float pulse = 0.45f + 0.55f * static_cast<float>((std::sin(seconds * 5.0 - index * 1.2) + 1.0) * 0.5);
             const float size = 9.0f + pulse * 5.0f;
             renderer.roundedRect(x + static_cast<float>(index) * 24.0f, y + (14.0f - size) * 0.5f, size, size,
                                  size * 0.5f, withAlpha(style.focus, 0.45f + pulse * 0.55f));
@@ -198,15 +199,13 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
                 if (focused) {
                     drawLingeringTitle(x + 2.0f, titleY, 1.95f, item.name, slotWidth - 4.0f, style.text, now());
                 } else {
-                    renderer.text(x + 2.0f, titleY, 1.95f,
-                                  fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1), style.secondaryText,
-                                  slotWidth - 4.0f);
+                    renderer.text(x + 2.0f, titleY, 1.95f, fitTextLines(item.name, 1.95f, slotWidth - 4.0f, 1),
+                                  style.secondaryText, slotWidth - 4.0f);
                 }
                 const std::string requestState =
                     item.externalRequested ? item.externalStatus : std::string("Press OK to request");
-                renderer.text(x + 2.0f, titleY + 27.0f, 1.35f,
-                              fitTextLines(requestState, 1.35f, slotWidth - 4.0f, 1), style.muted,
-                              slotWidth - 4.0f);
+                renderer.text(x + 2.0f, titleY + 27.0f, 1.35f, fitTextLines(requestState, 1.35f, slotWidth - 4.0f, 1),
+                              style.muted, slotWidth - 4.0f);
             }
             return;
         }

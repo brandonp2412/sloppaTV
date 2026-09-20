@@ -94,8 +94,7 @@ int main() {
     Epoch epoch;
     std::vector<std::string> reportFailures;
     PlaybackStreamExecutor executor(
-        client, tasks, completions, epoch,
-        [&](const char* stage, const std::string& itemId, const ApiResult& result) {
+        client, tasks, completions, epoch, [&](const char* stage, const std::string& itemId, const ApiResult& result) {
             if (!result.ok) reportFailures.push_back(std::string{stage} + ":" + itemId + ":" + result.error);
         });
 

@@ -5,8 +5,7 @@
 #include <cstddef>
 #include <string>
 
-template <typename ColorLike>
-struct SeerrDrivePickerRenderStyle {
+template <typename ColorLike> struct SeerrDrivePickerRenderStyle {
     float headlineScale = 0.0f;
     float cornerMedium = 0.0f;
     float focusScale = 1.0f;
@@ -43,13 +42,11 @@ void renderSeerrDrivePickerScreen(RendererLike& renderer, const SeerrDrivePicker
         const float iconX = x + 34.0f;
         const float iconY = y + 30.0f;
         renderer.roundedRect(iconX, iconY, 58.0f, 52.0f, 10.0f, focused ? style.focusSoft : style.panelElevated);
-        renderer.roundedRect(iconX + 10.0f, iconY + 11.0f, 38.0f, 7.0f, 3.5f,
-                             focused ? style.focus : style.muted);
+        renderer.roundedRect(iconX + 10.0f, iconY + 11.0f, 38.0f, 7.0f, 3.5f, focused ? style.focus : style.muted);
         renderer.roundedRect(iconX + 40.0f, iconY + 33.0f, 7.0f, 7.0f, 3.5f,
                              focused ? style.focus : style.secondaryText);
 
-        renderer.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f,
-                                        fitText(row.name, 2.05f, 760.0f, 1),
+        renderer.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f, fitText(row.name, 2.05f, 760.0f, 1),
                                         focused ? style.text : style.secondaryText, 760.0f);
 
         const float barX = 1085.0f;
@@ -61,13 +58,13 @@ void renderSeerrDrivePickerScreen(RendererLike& renderer, const SeerrDrivePicker
             renderer.roundedRect(barX, barY, barWidth * static_cast<float>(row.usedPercent) / 100.0f, 14.0f, 7.0f,
                                  row.nearFull ? style.error : (focused ? style.focus : style.secondaryText));
         } else {
-            renderer.text(x + 120.0f, y + 78.0f, 1.38f, fitText(row.secondaryText, 1.38f, 920.0f, 1),
-                          style.muted, 920.0f);
+            renderer.text(x + 120.0f, y + 78.0f, 1.38f, fitText(row.secondaryText, 1.38f, 920.0f, 1), style.muted,
+                          920.0f);
         }
         drawCentered(1510.0f, y + 26.0f, 250.0f, 58.0f, 1.60f, row.statusText,
                      row.nearFull ? style.error : (focused ? style.text : style.secondaryText), 8.0f, 3.0f);
     }
 
-    drawCentered(590.0f, 970.0f, 740.0f, 48.0f, 1.45f,
-                 "Up / Down selects   ·   OK requests   ·   Back cancels", style.muted, 12.0f, 4.0f);
+    drawCentered(590.0f, 970.0f, 740.0f, 48.0f, 1.45f, "Up / Down selects   ·   OK requests   ·   Back cancels",
+                 style.muted, 12.0f, 4.0f);
 }

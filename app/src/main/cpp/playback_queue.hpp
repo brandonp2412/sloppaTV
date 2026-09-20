@@ -57,8 +57,8 @@ struct SeriesPlaybackQueuePreparation {
 template <typename Availability>
 SeriesPlaybackQueuePreparation prepareSeriesPlaybackQueue(std::vector<JellyfinItem> episodes,
                                                           Availability&& staticStreamAvailable) {
-    const bool hasRegularEpisodes =
-        std::any_of(episodes.begin(), episodes.end(), [](const JellyfinItem& item) { return item.parentIndexNumber > 0; });
+    const bool hasRegularEpisodes = std::any_of(episodes.begin(), episodes.end(),
+                                                [](const JellyfinItem& item) { return item.parentIndexNumber > 0; });
     if (hasRegularEpisodes) {
         episodes.erase(std::remove_if(episodes.begin(), episodes.end(),
                                       [](const JellyfinItem& item) { return item.parentIndexNumber <= 0; }),
@@ -75,9 +75,8 @@ SeriesPlaybackQueuePreparation prepareSeriesPlaybackQueue(std::vector<JellyfinIt
     result.episodes.reserve(episodes.size());
     for (size_t begin = 0; begin < episodes.size();) {
         size_t end = begin + 1;
-        while (end < episodes.size() &&
-               sameEpisodeSlot(episodes[begin].parentIndexNumber, episodes[begin].indexNumber,
-                               episodes[end].parentIndexNumber, episodes[end].indexNumber)) {
+        while (end < episodes.size() && sameEpisodeSlot(episodes[begin].parentIndexNumber, episodes[begin].indexNumber,
+                                                        episodes[end].parentIndexNumber, episodes[end].indexNumber)) {
             ++end;
         }
 

@@ -21,9 +21,7 @@ struct TextCall {
 };
 
 struct FakeRenderer {
-    void rect(float, float, float width, float height, int color) {
-        rects.push_back({width, height, color});
-    }
+    void rect(float, float, float width, float height, int color) { rects.push_back({width, height, color}); }
 
     std::vector<RectCall> rects;
 };

@@ -7,8 +7,7 @@
 #include <string>
 #include <string_view>
 
-template <typename ColorLike>
-struct CastRenderStyle {
+template <typename ColorLike> struct CastRenderStyle {
     float cornerSmall = 0.0f;
     float labelScale = 0.0f;
     float supportingScale = 0.0f;
@@ -59,8 +58,8 @@ void renderCastScreen(RendererLike& renderer, std::string_view detailName, const
         if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], style.focus, cardRadius);
 
         const float personTitleY = y + imageHeight + 24.0f;
-        renderer.text(imageX, personTitleY, style.labelScale,
-                      fitText(person.name, style.labelScale, imageWidth, 1), style.text, imageWidth);
+        renderer.text(imageX, personTitleY, style.labelScale, fitText(person.name, style.labelScale, imageWidth, 1),
+                      style.text, imageWidth);
         if (!person.role.empty()) {
             const float roleY = personTitleY + 11.0f * style.labelScale * uiTextScale(uiTextSize) + 4.0f;
             renderer.text(imageX, roleY, style.supportingScale,
@@ -68,6 +67,6 @@ void renderCastScreen(RendererLike& renderer, std::string_view detailName, const
         }
     }
 
-    drawCentered(500.0f, 1032.0f, 920.0f, 40.0f, 1.55f,
-                 "Press OK to explore titles featuring this person", style.tertiary, 12.0f, 2.0f);
+    drawCentered(500.0f, 1032.0f, 920.0f, 40.0f, 1.55f, "Press OK to explore titles featuring this person",
+                 style.tertiary, 12.0f, 2.0f);
 }

@@ -37,8 +37,8 @@ struct Epoch {
 };
 
 struct FakeClient {
-    ApiValueResult<std::string> downloadSubtitleText(const JellyfinSession&, const JellyfinItem& item, int subtitleIndex,
-                                                     const std::string&) {
+    ApiValueResult<std::string> downloadSubtitleText(const JellyfinSession&, const JellyfinItem& item,
+                                                     int subtitleIndex, const std::string&) {
         calls.push_back("text:" + std::to_string(subtitleIndex));
         lastItemId = item.id;
         lastMediaSourceId = item.mediaSourceId;
@@ -50,7 +50,8 @@ struct FakeClient {
         return deliveryResponse;
     }
 
-    ApiValueResult<std::string> downloadSubtitleSrt(const JellyfinSession&, const JellyfinItem& item, int subtitleIndex) {
+    ApiValueResult<std::string> downloadSubtitleSrt(const JellyfinSession&, const JellyfinItem& item,
+                                                    int subtitleIndex) {
         calls.push_back("srt:" + std::to_string(subtitleIndex));
         lastItemId = item.id;
         lastMediaSourceId = item.mediaSourceId;

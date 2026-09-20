@@ -46,9 +46,9 @@ public:
     bool resolveQueued(JellyfinSession session, JellyfinItem item, PlaybackResolutionOptions options,
                        uint64_t generation, Origin originScreen, int index, int previousQueueIndex,
                        bool replacingPlayer) {
-        return tasks_.submit([this, session = std::move(session), item = std::move(item),
-                              options = std::move(options), generation, originScreen = std::move(originScreen), index,
-                              previousQueueIndex, replacingPlayer]() mutable {
+        return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
+                              generation, originScreen = std::move(originScreen), index, previousQueueIndex,
+                              replacingPlayer]() mutable {
             auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options);
             if (!epoch_.active(generation)) return;
             completions_.push(QueuedPlaybackResolutionCompletion<Origin>{
@@ -65,8 +65,8 @@ public:
 
     bool resolvePlayerItem(JellyfinSession session, JellyfinItem item, PlaybackResolutionOptions options,
                            uint64_t generation) {
-        return tasks_.submit([this, session = std::move(session), item = std::move(item),
-                              options = std::move(options), generation]() mutable {
+        return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
+                              generation]() mutable {
             auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options);
             if (!epoch_.active(generation)) return;
             completions_.push(PlayerItemPlaybackCompletion{
@@ -79,8 +79,8 @@ public:
 
     bool resolveAutoplay(JellyfinSession session, JellyfinItem item, PlaybackResolutionOptions options,
                          uint64_t generation, int queuedNextIndex) {
-        return tasks_.submit([this, session = std::move(session), item = std::move(item),
-                              options = std::move(options), generation, queuedNextIndex]() mutable {
+        return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
+                              generation, queuedNextIndex]() mutable {
             auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options);
             if (!epoch_.active(generation)) return;
             completions_.push(AutoplayPlaybackCompletion{
@@ -119,9 +119,9 @@ public:
 
             const auto tracks = selectPlaybackTracks(playable, options.audioLanguagePreference,
                                                      options.subtitleLanguagePreference, options.trackPolicy);
-            auto target = client_.resolvePlayback(session, playable, options.maxStreamingBitrate,
-                                                  options.maxAudioChannels, options.overrides, tracks.audioStreamIndex,
-                                                  tracks.subtitleStreamIndex);
+            auto target =
+                client_.resolvePlayback(session, playable, options.maxStreamingBitrate, options.maxAudioChannels,
+                                        options.overrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!epoch_.active(generation)) return;
             completions_.push(BeginPlaybackCompletion{
                 .generation = generation,

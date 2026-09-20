@@ -72,8 +72,7 @@ int main() {
     state.moveFilter(2);
 
     std::vector<JellyfinItem> items;
-    for (int index = 0; index < 12; ++index)
-        items.push_back(makeItem(index, index % 3 == 0 ? "Episode" : "Movie"));
+    for (int index = 0; index < 12; ++index) items.push_back(makeItem(index, index % 3 == 0 ? "Episode" : "Movie"));
     state.replacePage(std::move(items), 50);
     state.setSelection(11);
 
@@ -86,8 +85,7 @@ int main() {
     std::vector<ItemCall> artworkCards;
 
     renderBrowseScreen(
-        renderer, state, false, style,
-        [&](std::string_view heading) { headers.emplace_back(heading); },
+        renderer, state, false, style, [&](std::string_view heading) { headers.emplace_back(heading); },
         [&](std::string_view title, std::string_view) { emptyTitles.emplace_back(title); },
         [&](float x, float y, float width, float height, bool focused, bool selected) {
             assert(focused);
@@ -131,8 +129,7 @@ int main() {
     emptyState.resetForLibrary(library);
     std::string emptyMessage;
     renderBrowseScreen(
-        renderer, emptyState, true, style,
-        [](std::string_view) {},
+        renderer, emptyState, true, style, [](std::string_view) {},
         [&](std::string_view title, std::string_view message) {
             assert(title == "Loading your library");
             emptyMessage = message;
@@ -155,9 +152,7 @@ int main() {
 
     std::vector<ItemCall> syntheticTiles;
     renderBrowseScreen(
-        renderer, syntheticState, false, style,
-        [](std::string_view) {},
-        [](std::string_view, std::string_view) {},
+        renderer, syntheticState, false, style, [](std::string_view) {}, [](std::string_view, std::string_view) {},
         [](float x, float y, float width, float height, bool, bool) {
             return std::array<float, 4>{x, y, width, height};
         },

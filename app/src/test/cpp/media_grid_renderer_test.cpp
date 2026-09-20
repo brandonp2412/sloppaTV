@@ -74,8 +74,7 @@ int main() {
             .selection = 5,
             .uiTextSize = 2,
         },
-        [](std::string_view) {},
-        [](std::string_view, std::string_view) {},
+        [](std::string_view) {}, [](std::string_view, std::string_view) {},
         [&](const JellyfinItem& item, const MediaGridCardPlacement& placement) {
             cards.push_back({item.id, placement});
         });

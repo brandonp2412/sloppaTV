@@ -36,20 +36,19 @@ std::string fit(std::string_view value, float, float maxWidth, int maxLines) {
 
 int main() {
     FakeRenderer regular;
-    renderPlayerHeader(
-        regular,
-        PlayerHeaderRenderState{
-            .heading = "Series",
-            .secondary = "S1 E2  |  Episode",
-            .showNextUp = false,
-            .headlineScale = 3.0f,
-            .secondaryY = 92.0f,
-        },
-        PlayerHeaderRenderStyle<TestColor>{
-            .text = {1},
-            .muted = {2},
-        },
-        fit);
+    renderPlayerHeader(regular,
+                       PlayerHeaderRenderState{
+                           .heading = "Series",
+                           .secondary = "S1 E2  |  Episode",
+                           .showNextUp = false,
+                           .headlineScale = 3.0f,
+                           .secondaryY = 92.0f,
+                       },
+                       PlayerHeaderRenderStyle<TestColor>{
+                           .text = {1},
+                           .muted = {2},
+                       },
+                       fit);
     assert(regular.calls.size() == 2);
     assert(regular.calls[0].x == 80.0f);
     assert(regular.calls[0].y == 42.0f);
@@ -64,48 +63,42 @@ int main() {
     assert(regular.calls[1].maxWidth == 1500.0f);
 
     FakeRenderer nextUp;
-    renderPlayerHeader(
-        nextUp,
-        PlayerHeaderRenderState{
-            .heading = "Series",
-            .secondary = "Episode",
-            .showNextUp = true,
-            .headlineScale = 3.0f,
-            .secondaryY = 92.0f,
-        },
-        PlayerHeaderRenderStyle<TestColor>{},
-        fit);
+    renderPlayerHeader(nextUp,
+                       PlayerHeaderRenderState{
+                           .heading = "Series",
+                           .secondary = "Episode",
+                           .showNextUp = true,
+                           .headlineScale = 3.0f,
+                           .secondaryY = 92.0f,
+                       },
+                       PlayerHeaderRenderStyle<TestColor>{}, fit);
     assert(nextUp.calls.size() == 2);
     assert(nextUp.calls[0].maxWidth == 1040.0f);
     assert(nextUp.calls[1].maxWidth == 1040.0f);
 
     FakeRenderer fallback;
-    renderPlayerHeader(
-        fallback,
-        PlayerHeaderRenderState{
-            .heading = "",
-            .secondary = "",
-            .showNextUp = false,
-            .headlineScale = 3.0f,
-            .secondaryY = 92.0f,
-        },
-        PlayerHeaderRenderStyle<TestColor>{},
-        fit);
+    renderPlayerHeader(fallback,
+                       PlayerHeaderRenderState{
+                           .heading = "",
+                           .secondary = "",
+                           .showNextUp = false,
+                           .headlineScale = 3.0f,
+                           .secondaryY = 92.0f,
+                       },
+                       PlayerHeaderRenderStyle<TestColor>{}, fit);
     assert(fallback.calls.size() == 1);
     assert(fallback.calls[0].value == "Playback");
 
     FakeRenderer duplicateSecondary;
-    renderPlayerHeader(
-        duplicateSecondary,
-        PlayerHeaderRenderState{
-            .heading = "Movie",
-            .secondary = "Movie",
-            .showNextUp = false,
-            .headlineScale = 3.0f,
-            .secondaryY = 92.0f,
-        },
-        PlayerHeaderRenderStyle<TestColor>{},
-        fit);
+    renderPlayerHeader(duplicateSecondary,
+                       PlayerHeaderRenderState{
+                           .heading = "Movie",
+                           .secondary = "Movie",
+                           .showNextUp = false,
+                           .headlineScale = 3.0f,
+                           .secondaryY = 92.0f,
+                       },
+                       PlayerHeaderRenderStyle<TestColor>{}, fit);
     assert(duplicateSecondary.calls.size() == 1);
 
     return 0;

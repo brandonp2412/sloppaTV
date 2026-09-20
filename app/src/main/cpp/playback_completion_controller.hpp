@@ -43,10 +43,9 @@ struct PlaybackCompletionEffects {
 class PlaybackCompletionController {
 public:
     template <typename Origin>
-    [[nodiscard]] static PlaybackCompletionEffects apply(QueuedPlaybackResolutionCompletion<Origin>& completion,
-                                                         bool activeGeneration, bool activeQueueContext,
-                                                         bool playerScreen, PlaybackQueueState& queue,
-                                                         PlaybackCoordinator& coordinator) {
+    [[nodiscard]] static PlaybackCompletionEffects
+    apply(QueuedPlaybackResolutionCompletion<Origin>& completion, bool activeGeneration, bool activeQueueContext,
+          bool playerScreen, PlaybackQueueState& queue, PlaybackCoordinator& coordinator) {
         if (!activeGeneration) return {};
 
         PlaybackCompletionEffects effects;
@@ -73,14 +72,12 @@ public:
     [[nodiscard]] static PlaybackCompletionEffects apply(PlayerItemPlaybackCompletion& completion,
                                                          bool activeGeneration, bool playerScreen,
                                                          PlaybackCoordinator& coordinator);
-    [[nodiscard]] static PlaybackCompletionEffects apply(AutoplayPlaybackCompletion& completion,
-                                                         bool activeGeneration, PlaybackQueueState& queue,
-                                                         PlaybackCoordinator& coordinator);
+    [[nodiscard]] static PlaybackCompletionEffects apply(AutoplayPlaybackCompletion& completion, bool activeGeneration,
+                                                         PlaybackQueueState& queue, PlaybackCoordinator& coordinator);
     [[nodiscard]] static PlaybackCompletionEffects apply(StreamRestartCompletion& completion, bool activeGeneration,
                                                          bool playerScreen, PlaybackCoordinator& coordinator);
-    [[nodiscard]] static PlaybackCompletionEffects apply(FallbackPlaybackCompletion& completion,
-                                                         bool activeGeneration, bool playerScreen,
-                                                         PlaybackCoordinator& coordinator);
+    [[nodiscard]] static PlaybackCompletionEffects apply(FallbackPlaybackCompletion& completion, bool activeGeneration,
+                                                         bool playerScreen, PlaybackCoordinator& coordinator);
     [[nodiscard]] static PlaybackCompletionEffects apply(BeginPlaybackCompletion& completion, bool activeGeneration,
                                                          bool activeDetailsSelection, PlaybackQueueState& queue);
     [[nodiscard]] static PlaybackCompletionEffects apply(SeriesPlayAllCompletion& completion, bool activeGeneration,

@@ -39,8 +39,7 @@ void renderPlayerNextUp(const PlayerNextUpRenderState& state, const PlayerNextUp
         drawPlaceholder(state.item, artworkX, contentY, artworkWidth, artworkHeight, style.artworkCornerRadius);
     }
 
-    const std::string nextHeading =
-        "Up next  |  " + std::to_string(std::max(0, state.remainingMs / 1000)) + "s";
+    const std::string nextHeading = "Up next  |  " + std::to_string(std::max(0, state.remainingMs / 1000)) + "s";
     drawLeftAligned(textX, contentY, textWidth, 34.0f, 1.55f, nextHeading, style.focus);
     drawLeftAligned(textX, contentY + 38.0f, textWidth, 58.0f, 2.05f, state.item.name, style.text);
 

@@ -57,9 +57,9 @@ int main() {
     assert(homeRowImageOffset(0) == 82.0f);
     assert(homeRowImageOffset(1) == 92.0f);
     assert(homeRowImageOffset(2) == 102.0f);
-    assert(homeRowStep(0) == 420.0f);
-    assert(homeRowStep(1) == 440.0f);
-    assert(homeRowStep(2) == 460.0f);
+    assert(homeRowStep(0) == 390.0f);
+    assert(homeRowStep(1) == 405.0f);
+    assert(homeRowStep(2) == 420.0f);
     assert(castRowStep(0) == 400.0f);
     assert(castRowStep(1) == 415.0f);
     assert(castRowStep(2) == 430.0f);

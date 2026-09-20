@@ -9,14 +9,17 @@
 namespace {
 struct FakeRenderer {
     void triangle(float, float, float, float, float, float, int) { ++triangles; }
+
     void roundedRect(float, float, float, float, float, int) { ++roundedRects; }
+
     void roundedOutline(float, float, float, float, float, float, int) { ++roundedOutlines; }
-    void textCentered(float, float, float, float, float, std::string_view value, int) {
-        centered.emplace_back(value);
-    }
+
+    void textCentered(float, float, float, float, float, std::string_view value, int) { centered.emplace_back(value); }
+
     void textVerticallyCentered(float, float, float, float, std::string_view value, int) {
         vertical.emplace_back(value);
     }
+
     float textWidth(float, std::string_view value) { return static_cast<float>(value.size()) * 10.0f; }
 
     int triangles = 0;

@@ -21,8 +21,7 @@ struct ItemMenuRenderState {
     std::string_view externalProgressEta;
 };
 
-template <typename ColorLike>
-struct ItemMenuRenderStyle {
+template <typename ColorLike> struct ItemMenuRenderStyle {
     float cornerLarge = 0.0f;
     ColorLike scrim{};
     ColorLike error{};
@@ -38,22 +37,20 @@ template <typename RendererLike, typename ColorLike, typename DrawModal, typenam
           typename FitText, typename DrawChip, typename DrawFocusedSurface, typename MaterialLabel>
 void renderItemMenuScreen(RendererLike& renderer, float logicalWidth, float logicalHeight,
                           const ItemMenuRenderState& state, const std::vector<std::string>& actions,
-                          const ItemMenuRenderStyle<ColorLike>& style, DrawModal&& drawModal,
-                          DrawButton&& drawButton, DrawCentered&& drawCentered, FitText&& fitText,
-                          DrawChip&& drawChip, DrawFocusedSurface&& drawFocusedSurface,
-                          MaterialLabel&& materialLabel) {
+                          const ItemMenuRenderStyle<ColorLike>& style, DrawModal&& drawModal, DrawButton&& drawButton,
+                          DrawCentered&& drawCentered, FitText&& fitText, DrawChip&& drawChip,
+                          DrawFocusedSurface&& drawFocusedSurface, MaterialLabel&& materialLabel) {
     renderer.rect(0, 0, logicalWidth, logicalHeight, style.scrim);
 
     if (state.deleteConfirmation) {
         drawModal(405.0f, 275.0f, 1110.0f, 520.0f);
         renderer.text(470.0f, 335.0f, 3.25f, state.seerrRequest ? "Delete this request?" : "Delete this media?",
                       style.error, 980.0f);
-        renderer.text(
-            470.0f, 435.0f, 2.0f,
-            state.seerrRequest
-                ? "Removes the request from Seerr. Already-sent Sonarr/Radarr downloads may continue."
-                : "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
-            style.text, 980.0f);
+        renderer.text(470.0f, 435.0f, 2.0f,
+                      state.seerrRequest
+                          ? "Removes the request from Seerr. Already-sent Sonarr/Radarr downloads may continue."
+                          : "Jellyfin will delete this item and its media files.\nThis cannot be undone.",
+                      style.text, 980.0f);
 
         const std::array<std::string_view, 2> confirmationActions{
             state.seerrRequest ? "Delete request" : "Delete permanently",
@@ -78,14 +75,14 @@ void renderItemMenuScreen(RendererLike& renderer, float logicalWidth, float logi
     const float panelHeight = panelHeaderHeight + static_cast<float>(actions.size()) * rowStep + 46.0f;
     const float panelY = std::max(72.0f, (logicalHeight - panelHeight) * 0.5f);
     drawModal(panelX, panelY, panelWidth, panelHeight);
-    renderer.text(panelX + 38.0f, panelY + 24.0f, 2.35f,
-                  fitText(state.itemName.empty() ? std::string_view("Item") : state.itemName, 2.35f,
-                          panelWidth - 76.0f, 1),
-                  style.text, panelWidth - 76.0f);
-    renderer.text(panelX + 40.0f, panelY + 92.0f, 1.35f,
-                  fitText(state.itemType.empty() ? std::string_view("Media") : state.itemType, 1.35f,
-                          panelWidth - 80.0f, 1),
-                  style.muted, panelWidth - 80.0f);
+    renderer.text(
+        panelX + 38.0f, panelY + 24.0f, 2.35f,
+        fitText(state.itemName.empty() ? std::string_view("Item") : state.itemName, 2.35f, panelWidth - 76.0f, 1),
+        style.text, panelWidth - 76.0f);
+    renderer.text(
+        panelX + 40.0f, panelY + 92.0f, 1.35f,
+        fitText(state.itemType.empty() ? std::string_view("Media") : state.itemType, 1.35f, panelWidth - 80.0f, 1),
+        style.muted, panelWidth - 80.0f);
     if (state.seerrRequest && !state.externalStatus.empty()) {
         if (state.externalProgressPercent >= 0 && !state.externalProgressLabel.empty()) {
             const float statusY = panelY + 119.0f;
@@ -103,17 +100,16 @@ void renderItemMenuScreen(RendererLike& renderer, float logicalWidth, float logi
             const float percentX =
                 state.externalProgressEta.empty() ? rightEdge - percentWidth : etaX - metadataGap - percentWidth;
             const float statusWidth = std::max(120.0f, percentX - (panelX + 40.0f) - statusToMetadataGap);
-            renderer.text(panelX + 40.0f, statusY, 1.45f,
-                          fitText(state.externalProgressLabel, 1.45f, statusWidth, 1), style.focus, statusWidth);
-            renderer.textVerticallyCentered(percentX, panelY + 115.0f, 32.0f, 1.14f, percentLabel,
-                                            style.secondaryText, percentWidth);
+            renderer.text(panelX + 40.0f, statusY, 1.45f, fitText(state.externalProgressLabel, 1.45f, statusWidth, 1),
+                          style.focus, statusWidth);
+            renderer.textVerticallyCentered(percentX, panelY + 115.0f, 32.0f, 1.14f, percentLabel, style.secondaryText,
+                                            percentWidth);
             if (!state.externalProgressEta.empty()) {
                 drawChip(etaX, panelY + 115.0f, state.externalProgressEta, false, 1.05f, 32.0f, 240.0f);
             }
         } else {
             renderer.text(panelX + 40.0f, panelY + 122.0f, 1.55f,
-                          fitText(state.externalStatus, 1.55f, panelWidth - 80.0f, 1), style.focus,
-                          panelWidth - 80.0f);
+                          fitText(state.externalStatus, 1.55f, panelWidth - 80.0f, 1), style.focus, panelWidth - 80.0f);
         }
     }
     const float dividerY = panelY + (state.seerrRequest && !state.externalStatus.empty() ? 162.0f : 138.0f);
@@ -124,12 +120,10 @@ void renderItemMenuScreen(RendererLike& renderer, float logicalWidth, float logi
         const float y = firstActionY + static_cast<float>(index) * rowStep;
         const bool focused = state.itemMenuSelection == static_cast<int>(index);
         const bool destructive = actions[index] == "DELETE MEDIA" || actions[index] == "DELETE REQUEST";
-        const auto bounds =
-            drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused, focused && !destructive,
-                               destructive);
-        renderer.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f,
-                                        materialLabel(actions[index]), destructive && !focused ? style.muted : style.text,
-                                        bounds[2] - 48.0f);
+        const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused,
+                                               focused && !destructive, destructive);
+        renderer.textVerticallyCentered(bounds[0] + 24.0f, bounds[1], bounds[3], 1.70f, materialLabel(actions[index]),
+                                        destructive && !focused ? style.muted : style.text, bounds[2] - 48.0f);
     }
     drawCentered(panelX + 40.0f, panelY + panelHeight - 56.0f, panelWidth - 80.0f, 44.0f, 1.30f,
                  "OK selects   |   Back closes", style.tertiary, 10.0f, 3.0f);

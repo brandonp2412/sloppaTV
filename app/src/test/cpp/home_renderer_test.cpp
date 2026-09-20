@@ -30,9 +30,7 @@ struct RowCall {
 };
 
 struct FakeRenderer {
-    void rect(float x, float y, float width, float height, int color) {
-        rects.push_back({x, y, width, height, color});
-    }
+    void rect(float x, float y, float width, float height, int color) { rects.push_back({x, y, width, height, color}); }
 
     void roundedRect(float x, float y, float width, float height, float, int color) {
         roundedRects.push_back({x, y, width, height, color});
@@ -42,9 +40,7 @@ struct FakeRenderer {
         texts.push_back({std::string(value), x, y, color});
     }
 
-    float textWidth(float, std::string_view value) const {
-        return static_cast<float>(value.size()) * 10.0f;
-    }
+    float textWidth(float, std::string_view value) const { return static_cast<float>(value.size()) * 10.0f; }
 
     std::vector<RectCall> rects;
     std::vector<RectCall> roundedRects;
@@ -184,8 +180,7 @@ int main() {
     int profileHalos = 0;
     renderHomeScreen(
         toolbarRenderer, rows, toolbarState, session, HomeRenderConfig{}, HomeSlideState{}, style,
-        [](const JellyfinItem&, float) { return false; },
-        [](float, float, float) { return false; },
+        [](const JellyfinItem&, float) { return false; }, [](float, float, float) { return false; },
         [&](float x, float y, float width, float height, bool focused, bool selected) {
             ++focusedTab;
             assert(focused);
@@ -199,8 +194,7 @@ int main() {
         },
         [](const JellyfinSession&, float, float, float) { return false; },
         [&](float, float, float, float, int, float) { ++profileHalos; },
-        [](float, float, float, std::string_view, int, float) {},
-        [](bool) { return std::string(); },
+        [](float, float, float, std::string_view, int, float) {}, [](bool) { return std::string(); },
         [](std::string_view, std::string_view) {},
         [](std::string_view, const std::vector<JellyfinItem>&, int, float) {},
         [] { return std::chrono::steady_clock::time_point{std::chrono::seconds(10)}; });
@@ -219,8 +213,7 @@ int main() {
     int halos = 0;
     renderHomeScreen(
         toolbarRenderer, rows, profileState, noArtworkSession, HomeRenderConfig{}, HomeSlideState{}, style,
-        [](const JellyfinItem&, float) { return false; },
-        [](float, float, float) { return false; },
+        [](const JellyfinItem&, float) { return false; }, [](float, float, float) { return false; },
         [](float x, float y, float width, float height, bool, bool) {
             return std::array<float, 4>{x, y, width, height};
         },
@@ -236,8 +229,7 @@ int main() {
             ++halos;
             assert(color == style.focus);
         },
-        [](float, float, float, std::string_view, int, float) {},
-        [](bool) { return std::string(); },
+        [](float, float, float, std::string_view, int, float) {}, [](bool) { return std::string(); },
         [](std::string_view, std::string_view) {},
         [](std::string_view, const std::vector<JellyfinItem>&, int, float) {},
         [] { return std::chrono::steady_clock::time_point{std::chrono::seconds(10)}; });
@@ -254,8 +246,7 @@ int main() {
     renderHomeScreen(
         toolbarRenderer, {}, emptyState, session,
         HomeRenderConfig{.backdropMode = 0, .showClock = false, .clock24Hour = true, .uiTextSize = 1, .loading = true},
-        HomeSlideState{}, style,
-        [](const JellyfinItem&, float) { return false; },
+        HomeSlideState{}, style, [](const JellyfinItem&, float) { return false; },
         [](float, float, float) { return false; },
         [](float x, float y, float width, float height, bool, bool) {
             return std::array<float, 4>{x, y, width, height};
@@ -264,10 +255,8 @@ int main() {
         [](float x, float y, float width, float height, bool, float) {
             return std::array<float, 4>{x, y, width, height};
         },
-        [](const JellyfinSession&, float, float, float) { return true; },
-        [](float, float, float, float, int, float) {},
-        [](float, float, float, std::string_view, int, float) {},
-        [](bool) { return std::string(); },
+        [](const JellyfinSession&, float, float, float) { return true; }, [](float, float, float, float, int, float) {},
+        [](float, float, float, std::string_view, int, float) {}, [](bool) { return std::string(); },
         [&](std::string_view title, std::string_view message) {
             emptyTitle = title;
             assert(message == "Connecting to your Jellyfin server");
@@ -287,8 +276,7 @@ int main() {
     renderHomeScreen(
         toolbarRenderer, rows, slideState, session, HomeRenderConfig{.uiTextSize = 1},
         HomeSlideState{.fromFirst = 0, .toFirst = 1, .started = slideStarted}, style,
-        [](const JellyfinItem&, float) { return false; },
-        [](float, float, float) { return false; },
+        [](const JellyfinItem&, float) { return false; }, [](float, float, float) { return false; },
         [](float x, float y, float width, float height, bool, bool) {
             return std::array<float, 4>{x, y, width, height};
         },
@@ -296,10 +284,8 @@ int main() {
         [](float x, float y, float width, float height, bool, float) {
             return std::array<float, 4>{x, y, width, height};
         },
-        [](const JellyfinSession&, float, float, float) { return true; },
-        [](float, float, float, float, int, float) {},
-        [](float, float, float, std::string_view, int, float) {},
-        [](bool) { return std::string(); },
+        [](const JellyfinSession&, float, float, float) { return true; }, [](float, float, float, float, int, float) {},
+        [](float, float, float, std::string_view, int, float) {}, [](bool) { return std::string(); },
         [](std::string_view, std::string_view) {},
         [&](std::string_view title, const std::vector<JellyfinItem>&, int rowIndex, float top) {
             slidingRows.push_back({std::string(title), rowIndex, top});

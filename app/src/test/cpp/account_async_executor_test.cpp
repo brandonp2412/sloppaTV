@@ -30,8 +30,8 @@ struct CompletionSink {
 };
 
 struct FakeClient {
-    ApiValueResult<JellyfinSession> login(std::string server, const std::string& username,
-                                          const std::string& password, const std::string& deviceId) {
+    ApiValueResult<JellyfinSession> login(std::string server, const std::string& username, const std::string& password,
+                                          const std::string& deviceId) {
         ++calls;
         lastServer = std::move(server);
         lastUsername = username;

@@ -33,7 +33,7 @@ SettingsNavigationAction action(SettingsNavigationActionType type) {
 } // namespace
 
 SettingsNavigationAction SettingsNavigationController::handle(SettingsScreenState& state, AppSettings& settings,
-                                                               ScreenNavigationKey key) {
+                                                              ScreenNavigationKey key) {
     const SettingsScreenCommand command = state.handleInput(settingsInput(key));
     switch (command.type) {
     case SettingsScreenCommandType::None:

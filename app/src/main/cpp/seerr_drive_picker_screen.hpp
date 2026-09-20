@@ -88,8 +88,9 @@ inline SeerrDrivePickerRow seerrDrivePickerRow(const SeerrStorageTarget& target)
     }
 
     const std::string statusText =
-        hasCapacity ? std::to_string(percent) + "% full"
-                    : (target.freeSpace > 0 ? formatSeerrStorageBytes(target.freeSpace) + " free" : "Free space unknown");
+        hasCapacity
+            ? std::to_string(percent) + "% full"
+            : (target.freeSpace > 0 ? formatSeerrStorageBytes(target.freeSpace) + " free" : "Free space unknown");
 
     return {
         .name = std::move(name),
@@ -101,15 +102,14 @@ inline SeerrDrivePickerRow seerrDrivePickerRow(const SeerrStorageTarget& target)
     };
 }
 
-inline SeerrDrivePickerViewModel
-seerrDrivePickerViewModel(const std::optional<SeerrMediaItem>& pendingRequest,
-                          const std::vector<SeerrStorageTarget>& driveChoices, int selection, int visibleRows = 5) {
+inline SeerrDrivePickerViewModel seerrDrivePickerViewModel(const std::optional<SeerrMediaItem>& pendingRequest,
+                                                           const std::vector<SeerrStorageTarget>& driveChoices,
+                                                           int selection, int visibleRows = 5) {
     SeerrDrivePickerViewModel model;
     model.subtitle = seerrDrivePickerSubtitle(pendingRequest);
     if (driveChoices.empty() || visibleRows <= 0) return model;
 
-    const int first =
-        seerrDrivePickerFirstVisible(selection, static_cast<int>(driveChoices.size()), visibleRows);
+    const int first = seerrDrivePickerFirstVisible(selection, static_cast<int>(driveChoices.size()), visibleRows);
     const int end = std::min(first + visibleRows, static_cast<int>(driveChoices.size()));
     model.rows.reserve(static_cast<size_t>(end - first));
     for (int index = first; index < end; ++index) {

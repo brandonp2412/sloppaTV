@@ -71,8 +71,8 @@ AccountCompletionEffects AccountCompletionController::apply(QuickConnectFailedCo
     return finishWithError(std::move(completion.error));
 }
 
-AccountCompletionEffects AccountCompletionController::apply(QuickConnectAuthenticatedCompletion& completion, bool active,
-                                                            AccountScreenState& state) {
+AccountCompletionEffects AccountCompletionController::apply(QuickConnectAuthenticatedCompletion& completion,
+                                                            bool active, AccountScreenState& state) {
     if (!active) return {};
 
     state.setAuthenticatedAccount(completion.session.server, completion.session.username);

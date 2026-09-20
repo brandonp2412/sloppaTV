@@ -243,7 +243,7 @@ private:
 };
 
 inline SettingsScreenPresentation settingsScreenPresentation(const SettingsScreenState& screen,
-                                                              bool systemSettingsInputActive) {
+                                                             bool systemSettingsInputActive) {
     const bool searchPlaceholder = screen.searchQuery().empty();
     return {
         .searchText = searchPlaceholder ? "Search settings" : screen.searchQuery(),
@@ -262,21 +262,20 @@ inline std::optional<SubtitleLanguageScreenRow> subtitleLanguageScreenRow(const 
     constexpr int languageCount = static_cast<int>(kSubtitleLanguageOptions.size()) + 1;
     if (visibleRows <= 0 || slot < 0 || slot >= visibleRows) return std::nullopt;
 
-    const int first =
-        std::clamp(screen.subtitleLanguageFirstVisible(), 0, std::max(0, languageCount - visibleRows));
+    const int first = std::clamp(screen.subtitleLanguageFirstVisible(), 0, std::max(0, languageCount - visibleRows));
     const int languageIndex = first + slot;
     if (languageIndex >= languageCount) return std::nullopt;
 
-    const bool selected =
-        languageIndex == 0
-            ? settings.subtitleLanguages.empty()
-            : std::find(settings.subtitleLanguages.begin(), settings.subtitleLanguages.end(),
-                        kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code) !=
-                  settings.subtitleLanguages.end();
+    const bool selected = languageIndex == 0
+                              ? settings.subtitleLanguages.empty()
+                              : std::find(settings.subtitleLanguages.begin(), settings.subtitleLanguages.end(),
+                                          kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].code) !=
+                                    settings.subtitleLanguages.end();
     return SubtitleLanguageScreenRow{
         .index = languageIndex,
-        .label = languageIndex == 0 ? std::string_view("All languages")
-                                    : std::string_view(kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label),
+        .label = languageIndex == 0
+                     ? std::string_view("All languages")
+                     : std::string_view(kSubtitleLanguageOptions[static_cast<size_t>(languageIndex - 1)].label),
         .focused = languageIndex == screen.subtitleLanguageSelection(),
         .selected = selected,
     };

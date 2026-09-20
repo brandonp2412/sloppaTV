@@ -67,8 +67,7 @@ int main() {
     settingsScreen.reset();
     AppSettings settings;
     const int originalUiTextSize = settings.uiTextSize;
-    auto settingsAction =
-        SettingsNavigationController::handle(settingsScreen, settings, ScreenNavigationKey::Right);
+    auto settingsAction = SettingsNavigationController::handle(settingsScreen, settings, ScreenNavigationKey::Right);
     assert(settingsAction.type == SettingsNavigationActionType::ApplyEffects);
     assert(settingsAction.effects != SettingChangeEffect::None);
     assert(settings.uiTextSize != originalUiTextSize);

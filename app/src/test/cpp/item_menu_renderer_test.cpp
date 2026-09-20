@@ -9,17 +9,21 @@
 namespace {
 struct FakeRenderer {
     void rect(float, float, float, float, int color) { rectColors.push_back(color); }
+
     void text(float, float, float, std::string_view value, int color, float) {
         texts.emplace_back(value);
         textColors.push_back(color);
     }
+
     void textVerticallyCentered(float, float, float, float, std::string_view value, int color, float) {
         verticalTexts.emplace_back(value);
         verticalColors.push_back(color);
     }
+
     float textWidth(float scale, std::string_view value) const {
         return scale * static_cast<float>(value.size()) * 5.0f;
     }
+
     std::vector<int> rectColors;
     std::vector<std::string> texts;
     std::vector<int> textColors;
@@ -75,17 +79,30 @@ bool has(const std::vector<std::string>& values, std::string_view expected) {
 
 int main() {
     const ItemMenuRenderStyle<int> style{
-        .cornerLarge = 28.0f, .scrim = 1, .error = 2, .text = 3, .muted = 4,
-        .tertiary = 5, .focus = 6, .secondaryText = 7, .divider = 8,
+        .cornerLarge = 28.0f,
+        .scrim = 1,
+        .error = 2,
+        .text = 3,
+        .muted = 4,
+        .tertiary = 5,
+        .focus = 6,
+        .secondaryText = 7,
+        .divider = 8,
     };
 
     Harness confirmation;
     confirmation.render(
         ItemMenuRenderState{
-            .deleteConfirmation = true, .deleteConfirmationSelection = 0, .itemMenuSelection = 0,
-            .seerrRequest = true, .itemName = "Requested Show", .itemType = "Series",
-            .externalStatus = "Downloading", .externalProgressPercent = 42,
-            .externalProgressLabel = "Episode 2 of 8", .externalProgressEta = "18 min",
+            .deleteConfirmation = true,
+            .deleteConfirmationSelection = 0,
+            .itemMenuSelection = 0,
+            .seerrRequest = true,
+            .itemName = "Requested Show",
+            .itemType = "Series",
+            .externalStatus = "Downloading",
+            .externalProgressPercent = 42,
+            .externalProgressLabel = "Episode 2 of 8",
+            .externalProgressEta = "18 min",
         },
         {}, style);
     assert(confirmation.renderer.rectColors.size() == 1);
@@ -101,10 +118,16 @@ int main() {
     const std::vector<std::string> actions{"MARK WATCHED", "DELETE REQUEST", "BACK"};
     menu.render(
         ItemMenuRenderState{
-            .deleteConfirmation = false, .deleteConfirmationSelection = 1, .itemMenuSelection = 1,
-            .seerrRequest = true, .itemName = "Requested Show", .itemType = "Series",
-            .externalStatus = "Downloading", .externalProgressPercent = 42,
-            .externalProgressLabel = "Episode 2 of 8", .externalProgressEta = "18 MIN",
+            .deleteConfirmation = false,
+            .deleteConfirmationSelection = 1,
+            .itemMenuSelection = 1,
+            .seerrRequest = true,
+            .itemName = "Requested Show",
+            .itemType = "Series",
+            .externalStatus = "Downloading",
+            .externalProgressPercent = 42,
+            .externalProgressLabel = "Episode 2 of 8",
+            .externalProgressEta = "18 MIN",
         },
         actions, style);
     assert(menu.modalHeights.size() == 1 && menu.modalHeights[0] == 438.0f);
@@ -120,9 +143,16 @@ int main() {
     Harness fallback;
     fallback.render(
         ItemMenuRenderState{
-            .deleteConfirmation = false, .deleteConfirmationSelection = 1, .itemMenuSelection = 0,
-            .seerrRequest = false, .itemName = {}, .itemType = {}, .externalStatus = {},
-            .externalProgressPercent = -1, .externalProgressLabel = {}, .externalProgressEta = {},
+            .deleteConfirmation = false,
+            .deleteConfirmationSelection = 1,
+            .itemMenuSelection = 0,
+            .seerrRequest = false,
+            .itemName = {},
+            .itemType = {},
+            .externalStatus = {},
+            .externalProgressPercent = -1,
+            .externalProgressLabel = {},
+            .externalProgressEta = {},
         },
         {"BACK"}, style);
     assert(fallback.modalHeights.size() == 1 && fallback.modalHeights[0] == 282.0f);

@@ -37,26 +37,25 @@ struct FakeRenderer {
 int main() {
     FakeRenderer renderer;
     int clockCalls = 0;
-    renderPlayerStatus(
-        renderer,
-        PlayerStatusRenderState{
-            .clockText = "10:15 PM",
-            .finishText = "Ends 10:30 PM",
-            .statusText = "Switching track",
-        },
-        PlayerStatusRenderStyle<TestColor>{
-            .muted = {1},
-            .secondary = {2},
-        },
-        [&](float right, float y, float scale, std::string_view value, TestColor color, float maxWidth) {
-            ++clockCalls;
-            assert(right == 1840.0f);
-            assert(y == 46.0f);
-            assert(scale == 2.05f);
-            assert(value == "10:15 PM");
-            assert(color.value == 1);
-            assert(maxWidth == 210.0f);
-        });
+    renderPlayerStatus(renderer,
+                       PlayerStatusRenderState{
+                           .clockText = "10:15 PM",
+                           .finishText = "Ends 10:30 PM",
+                           .statusText = "Switching track",
+                       },
+                       PlayerStatusRenderStyle<TestColor>{
+                           .muted = {1},
+                           .secondary = {2},
+                       },
+                       [&](float right, float y, float scale, std::string_view value, TestColor color, float maxWidth) {
+                           ++clockCalls;
+                           assert(right == 1840.0f);
+                           assert(y == 46.0f);
+                           assert(scale == 2.05f);
+                           assert(value == "10:15 PM");
+                           assert(color.value == 1);
+                           assert(maxWidth == 210.0f);
+                       });
 
     assert(clockCalls == 1);
     assert(renderer.calls.size() == 2);
@@ -74,23 +73,21 @@ int main() {
 
     FakeRenderer clamped;
     clamped.finishWidth = 900.0f;
-    renderPlayerStatus(
-        clamped,
-        PlayerStatusRenderState{
-            .clockText = {},
-            .finishText = "Ends 10:30 PM",
-            .statusText = {},
-        },
-        PlayerStatusRenderStyle<TestColor>{},
-        [](float, float, float, std::string_view, TestColor, float) {});
+    renderPlayerStatus(clamped,
+                       PlayerStatusRenderState{
+                           .clockText = {},
+                           .finishText = "Ends 10:30 PM",
+                           .statusText = {},
+                       },
+                       PlayerStatusRenderStyle<TestColor>{},
+                       [](float, float, float, std::string_view, TestColor, float) {});
     assert(clamped.calls.size() == 1);
     assert(clamped.calls[0].x == 1180.0f);
 
     FakeRenderer empty;
     int emptyClockCalls = 0;
-    renderPlayerStatus(
-        empty, PlayerStatusRenderState{}, PlayerStatusRenderStyle<TestColor>{},
-        [&](float, float, float, std::string_view, TestColor, float) { ++emptyClockCalls; });
+    renderPlayerStatus(empty, PlayerStatusRenderState{}, PlayerStatusRenderStyle<TestColor>{},
+                       [&](float, float, float, std::string_view, TestColor, float) { ++emptyClockCalls; });
     assert(empty.calls.empty());
     assert(emptyClockCalls == 0);
 

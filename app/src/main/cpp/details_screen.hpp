@@ -13,9 +13,7 @@ struct EpisodeSeriesContextRequest {
     std::string itemId;
     std::string seriesId;
 
-    [[nodiscard]] bool matches(const JellyfinItem& item) const {
-        return item.id == itemId && item.type == "Episode";
-    }
+    [[nodiscard]] bool matches(const JellyfinItem& item) const { return item.id == itemId && item.type == "Episode"; }
 };
 
 inline std::optional<EpisodeSeriesContextRequest> episodeSeriesContextRequest(const JellyfinItem& item) {
@@ -286,7 +284,7 @@ public:
                 moveEpisodeContext(1);
             else if (input == DetailsScreenInput::Activate)
                 return {.type = episodeContextSelection_ == 0 ? DetailsScreenCommandType::OpenEpisodeSeries
-                                                             : DetailsScreenCommandType::OpenEpisodeSeason};
+                                                              : DetailsScreenCommandType::OpenEpisodeSeason};
             return {};
         }
 
@@ -393,8 +391,7 @@ public:
             else if (input == ItemMenuScreenInput::Down || input == ItemMenuScreenInput::Right)
                 setDeleteConfirmationSelection(1);
             else if (input == ItemMenuScreenInput::Activate) {
-                if (deleteConfirmationSelection_ == 0)
-                    return {.type = ItemMenuScreenCommandType::ConfirmDelete};
+                if (deleteConfirmationSelection_ == 0) return {.type = ItemMenuScreenCommandType::ConfirmDelete};
                 setDeleteConfirmation(false);
             }
             return {};

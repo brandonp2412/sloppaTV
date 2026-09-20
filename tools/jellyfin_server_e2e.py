@@ -13,6 +13,7 @@ import json
 import os
 import ssl
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -37,10 +38,7 @@ def load_local_env() -> None:
 
 
 def authorization(token: str = "", device_id: str = DEVICE_ID) -> str:
-    value = (
-        f'MediaBrowser Client="{CLIENT}",Version="{VERSION}",'
-        f'DeviceId="{device_id}",Device="Glass"'
-    )
+    value = f'MediaBrowser Client="{CLIENT}",Version="{VERSION}",DeviceId="{device_id}",Device="Glass"'
     if token:
         value += f',Token="{token}"'
     return value
@@ -413,15 +411,14 @@ def main() -> int:
 
     views = client.get(f"/Users/{client.user_id}/Views").get("Items", [])
     video_views = [view for view in views if view.get("CollectionType") in {"movies", "tvshows", "mixed", "boxsets"}]
-    require(video_views, "No scoped video libraries were returned")
+    require(bool(video_views), "No scoped video libraries were returned")
 
     resume = client.get(
         f"/Users/{client.user_id}/Items/Resume?"
         + query({"Limit": 30, "MediaTypes": "Video", "ExcludeItemTypes": "AudioBook"})
     ).get("Items", [])
     next_up = client.get(
-        "/Shows/NextUp?"
-        + query({"UserId": client.user_id, "Limit": 30, "EnableResumable": "false"})
+        "/Shows/NextUp?" + query({"UserId": client.user_id, "Limit": 30, "EnableResumable": "false"})
     ).get("Items", [])
 
     search = client.get(
@@ -435,7 +432,7 @@ def main() -> int:
             }
         )
     ).get("Items", [])
-    require(search, "Real-server search returned no results for the acceptance query 'Friends'")
+    require(bool(search), "Real-server search returned no results for the acceptance query 'Friends'")
 
     browsed: dict[str, int] = {}
     for view in video_views:
@@ -471,7 +468,7 @@ def main() -> int:
             }
         )
     ).get("Items", [])
-    require(collections, "Collections browse returned no box sets")
+    require(bool(collections), "Collections browse returned no box sets")
 
     genre_count = 0
     letter_a_count = 0
@@ -491,7 +488,7 @@ def main() -> int:
                 }
             )
         ).get("Items", [])
-        require(genres, "Movie genre browse returned no genres")
+        require(bool(genres), "Movie genre browse returned no genres")
         genre_count = len(genres)
         letter_a = client.get(
             f"/Users/{client.user_id}/Items?"
@@ -505,7 +502,7 @@ def main() -> int:
                 }
             )
         ).get("Items", [])
-        require(letter_a, "Movie A-Z browse returned no titles starting with A")
+        require(bool(letter_a), "Movie A-Z browse returned no titles starting with A")
         letter_a_count = len(letter_a)
         favorites = client.get(
             f"/Users/{client.user_id}/Items?"
@@ -536,13 +533,13 @@ def main() -> int:
                 }
             )
         ).get("Items", [])
-        series = series_items[0] if series_items else None
-        require(series is not None, "Shows library filtered browse returned no series")
+        if not series_items:
+            raise AssertionError("Shows library filtered browse returned no series")
+        series = series_items[0]
         seasons = client.get(
-            f"/Shows/{series['Id']}/Seasons?"
-            + query({"UserId": client.user_id, "EnableTotalRecordCount": "false"})
+            f"/Shows/{series['Id']}/Seasons?" + query({"UserId": client.user_id, "EnableTotalRecordCount": "false"})
         ).get("Items", [])
-        require(seasons, f"Series {series.get('Name')!r} returned no seasons")
+        require(bool(seasons), f"Series {series.get('Name')!r} returned no seasons")
         season = seasons[0]
         episodes = client.get(
             f"/Shows/{series['Id']}/Episodes?"
@@ -554,7 +551,7 @@ def main() -> int:
                 }
             )
         ).get("Items", [])
-        require(episodes, f"Season {season.get('Name')!r} returned no episodes")
+        require(bool(episodes), f"Season {season.get('Name')!r} returned no episodes")
         series_hierarchy = {
             "series": series.get("Name"),
             "seasonCount": len(seasons),
@@ -682,11 +679,7 @@ def main() -> int:
         )
         playback_source = playback.get("MediaSources", [])[0]
         selected_stream = next(
-            (
-                stream
-                for stream in playback_source.get("MediaStreams") or []
-                if stream.get("Index") == subtitle_index
-            ),
+            (stream for stream in playback_source.get("MediaStreams") or [] if stream.get("Index") == subtitle_index),
             {},
         )
         delivery_url = str(selected_stream.get("DeliveryUrl") or "")
@@ -705,9 +698,7 @@ def main() -> int:
     bitrate_probe = verify_bitrate_negotiation(client, scan)
     direct_stream_probe = verify_direct_stream_negotiation(client, scan)
     quick_connect = (
-        verify_quick_connect(args.server, args.insecure, args.username, args.password)
-        if args.quick_connect
-        else None
+        verify_quick_connect(args.server, args.insecure, args.username, args.password) if args.quick_connect else None
     )
 
     result = {
@@ -751,4 +742,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (AssertionError, KeyError, urllib.error.URLError) as error:
         print(f"server-e2e: {error}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from error

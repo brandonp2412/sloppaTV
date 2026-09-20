@@ -54,12 +54,8 @@ int main() {
     };
 
     std::vector<FakeSession> sessions = {
-        {"user0", "https://server0"},
-        {"user1", "https://server1"},
-        {"user2", "https://server2"},
-        {"", "https://server3"},
-        {"user4", "https://server4"},
-        {"user5", "https://server5"},
+        {"user0", "https://server0"}, {"user1", "https://server1"}, {"user2", "https://server2"},
+        {"", "https://server3"},      {"user4", "https://server4"}, {"user5", "https://server5"},
     };
 
     FakeRenderer renderer;
@@ -142,8 +138,7 @@ int main() {
     std::vector<std::string> addCentered;
     int addSurfaceCalls = 0;
     renderProfilesScreen(
-        addRenderer, static_cast<int>(sessions.size()), 6, 0, style,
-        [](std::string_view) {},
+        addRenderer, static_cast<int>(sessions.size()), 6, 0, style, [](std::string_view) {},
         [](float, float, float, float, float, std::string_view, int) {},
         [&](float, float y, float, float, bool focused, bool primary) {
             ++addSurfaceCalls;

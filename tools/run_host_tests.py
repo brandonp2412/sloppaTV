@@ -131,12 +131,16 @@ CPP_TESTS = [
 
 LINKED_CPP_TESTS = [
     ("account_completion_controller_test.cpp", ["account_completion_controller.cpp"], []),
-    ("account_flow_test.cpp", [
-        "account_flow.cpp",
-        "account_completion_controller.cpp",
-        "account_navigation_controller.cpp",
-        "session_store.cpp",
-    ], []),
+    (
+        "account_flow_test.cpp",
+        [
+            "account_flow.cpp",
+            "account_completion_controller.cpp",
+            "account_navigation_controller.cpp",
+            "session_store.cpp",
+        ],
+        [],
+    ),
     ("browse_completion_controller_test.cpp", ["browse_completion_controller.cpp"], []),
     ("details_completion_controller_test.cpp", ["details_completion_controller.cpp"], []),
     ("details_navigation_controller_test.cpp", ["details_navigation_controller.cpp"], []),
@@ -146,17 +150,25 @@ LINKED_CPP_TESTS = [
     ("server_info_completion_controller_test.cpp", ["server_info_completion_controller.cpp"], []),
     ("settings_action_controller_test.cpp", ["settings_action_controller.cpp"], []),
     ("system_text_input_controller_test.cpp", ["system_text_input_controller.cpp"], []),
-    ("screen_navigation_controller_test.cpp", [
-        "browse_navigation_controller.cpp",
-        "home_navigation_controller.cpp",
-        "search_navigation_controller.cpp",
-    ], []),
-    ("secondary_navigation_controller_test.cpp", [
-        "account_navigation_controller.cpp",
-        "queue_navigation_controller.cpp",
-        "seerr_drive_navigation_controller.cpp",
-        "settings_navigation_controller.cpp",
-    ], []),
+    (
+        "screen_navigation_controller_test.cpp",
+        [
+            "browse_navigation_controller.cpp",
+            "home_navigation_controller.cpp",
+            "search_navigation_controller.cpp",
+        ],
+        [],
+    ),
+    (
+        "secondary_navigation_controller_test.cpp",
+        [
+            "account_navigation_controller.cpp",
+            "queue_navigation_controller.cpp",
+            "seerr_drive_navigation_controller.cpp",
+            "settings_navigation_controller.cpp",
+        ],
+        [],
+    ),
     ("http_get_coordinator_test.cpp", [], ["-pthread"]),
     ("jellyfin_item_parser_test.cpp", ["jellyfin_item_parser.cpp"], []),
     ("jellyfin_media_segment_parser_test.cpp", ["jellyfin_media_segment_parser.cpp"], []),
@@ -199,15 +211,15 @@ def run_cpp_test(test_name: str, extra_sources: list[str] | None = None, extra_f
 
 def main() -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    jobs = [
-        (test_name, None, None) for test_name in CPP_TESTS
-    ] + [
-        (test_name, extra_sources, extra_flags)
-        for test_name, extra_sources, extra_flags in LINKED_CPP_TESTS
+    jobs = [(test_name, None, None) for test_name in CPP_TESTS] + [
+        (test_name, extra_sources, extra_flags) for test_name, extra_sources, extra_flags in LINKED_CPP_TESTS
     ]
     worker_count = min(len(jobs), os.cpu_count() or 1)
     with ThreadPoolExecutor(max_workers=worker_count) as executor:
-        futures = [executor.submit(run_cpp_test, *job) for job in jobs]
+        futures = [
+            executor.submit(run_cpp_test, test_name, extra_sources, extra_flags)
+            for test_name, extra_sources, extra_flags in jobs
+        ]
         for future in futures:
             future.result()
 

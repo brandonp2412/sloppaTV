@@ -7,13 +7,9 @@
 
 namespace {
 struct FakeAsyncExecutor {
-    void refreshStorage(SeerrEndpoint endpoint) {
-        storage.push_back(std::move(endpoint));
-    }
+    void refreshStorage(SeerrEndpoint endpoint) { storage.push_back(std::move(endpoint)); }
 
-    void refreshPending(SeerrEndpoint endpoint) {
-        pending.push_back(std::move(endpoint));
-    }
+    void refreshPending(SeerrEndpoint endpoint) { pending.push_back(std::move(endpoint)); }
 
     std::vector<SeerrEndpoint> storage;
     std::vector<SeerrEndpoint> pending;
@@ -57,8 +53,7 @@ int main() {
     const auto start = SeerrStorageState::Clock::now();
 
     const SeerrEndpoint disconnected;
-    assert(coordinator.refreshStorage(disconnected, false, start) ==
-           SeerrDomainState::RefreshStartAction::Reset);
+    assert(coordinator.refreshStorage(disconnected, false, start) == SeerrDomainState::RefreshStartAction::Reset);
     assert(async.storage.empty());
     assert(domain.storageTargets().empty());
 
@@ -82,25 +77,22 @@ int main() {
            SeerrDomainState::RefreshStartAction::Submit);
     assert(async.storage.size() == 2);
 
-    assert(coordinator.refreshPending(configuredEndpoint()) ==
-           SeerrDomainState::RefreshStartAction::Submit);
+    assert(coordinator.refreshPending(configuredEndpoint()) == SeerrDomainState::RefreshStartAction::Submit);
     assert(async.pending.size() == 1);
     assert(async.pending.back().server == "https://seerr.example.nz");
     assert(domain.pendingRequestsLoading());
 
-    assert(coordinator.refreshPending(configuredEndpoint()) ==
-           SeerrDomainState::RefreshStartAction::None);
+    assert(coordinator.refreshPending(configuredEndpoint()) == SeerrDomainState::RefreshStartAction::None);
     assert(async.pending.size() == 1);
 
-    assert(coordinator.refreshPending(disconnected) ==
-           SeerrDomainState::RefreshStartAction::Reset);
+    assert(coordinator.refreshPending(disconnected) == SeerrDomainState::RefreshStartAction::Reset);
     assert(async.pending.size() == 1);
     assert(!domain.pendingRequestsLoading());
 
     const auto requested = media();
     assert(domain.storage().preparePicker(requested) == SeerrStorageState::PickerStatus::Loading);
-    auto storageCompletion =
-        coordinator.completeStorage(configuredEndpoint(), configuredEndpoint(), true, {target(9)}, "", true, start + 2s);
+    auto storageCompletion = coordinator.completeStorage(configuredEndpoint(), configuredEndpoint(), true, {target(9)},
+                                                         "", true, start + 2s);
     assert(storageCompletion.domain.outcome == SeerrDomainState::RefreshOutcome::Applied);
     assert(storageCompletion.targetCount == 1);
     assert(storageCompletion.pendingRequest);

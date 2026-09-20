@@ -36,8 +36,7 @@ template <typename ColorLike> struct MediaCardRenderStyle {
 };
 
 template <typename RendererLike, typename ColorLike, typename FocusedBounds, typename DrawArtwork,
-          typename DrawPlaceholder, typename DrawHalo, typename DrawCentered, typename FitText,
-          typename SecondaryLabel>
+          typename DrawPlaceholder, typename DrawHalo, typename DrawCentered, typename FitText, typename SecondaryLabel>
 void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& item, float x, float y, float slotWidth,
                                    bool focused, const MediaArtworkCardRenderOptions& options,
                                    const MediaCardRenderStyle<ColorLike>& style, FocusedBounds&& focusedBounds,
@@ -114,8 +113,8 @@ void renderMediaTextTileContent(RendererLike& renderer, const JellyfinItem& item
     const float tileRadius = style.cornerMedium * bounds[3] / height;
     renderer.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], tileRadius,
                          focused ? style.panelElevated : style.panel);
-    drawCentered(bounds[0] + 28.0f, bounds[1] + 18.0f, bounds[2] - 56.0f, 42.0f, 1.25f, item.type, style.tertiary,
-                 8.0f, 3.0f);
+    drawCentered(bounds[0] + 28.0f, bounds[1] + 18.0f, bounds[2] - 56.0f, 42.0f, 1.25f, item.type, style.tertiary, 8.0f,
+                 3.0f);
     drawCentered(bounds[0] + 28.0f, bounds[1] + 58.0f, bounds[2] - 56.0f, bounds[3] - 76.0f, 2.55f, item.name,
                  style.text, 10.0f, 6.0f);
     if (focused) drawHalo(bounds[0], bounds[1], bounds[2], bounds[3], style.focus, tileRadius);

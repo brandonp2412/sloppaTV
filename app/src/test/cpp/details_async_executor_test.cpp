@@ -9,8 +9,8 @@
 
 namespace {
 using Completion = std::variant<DetailsItemCompletion, DetailsSimilarCompletion, EpisodeSeriesContextRequestCompletion,
-                                 EpisodeSeriesContextCompletion, SeasonsCompletion, EpisodesCompletion,
-                                 ItemMenuDetailCompletion, PersonItemsCompletion>;
+                                EpisodeSeriesContextCompletion, SeasonsCompletion, EpisodesCompletion,
+                                ItemMenuDetailCompletion, PersonItemsCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -254,8 +254,7 @@ int main() {
         DetailsAsyncExecutor executor(client, tasks, completions);
 
         assert(executor.loadSeriesContext(
-            session(), EpisodeSeriesContextRequest{.itemId = "episode-2", .seriesId = "series-1"},
-            epoch.beginToken()));
+            session(), EpisodeSeriesContextRequest{.itemId = "episode-2", .seriesId = "series-1"}, epoch.beginToken()));
         assert(completions.events.empty());
     }
 

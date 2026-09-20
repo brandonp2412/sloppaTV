@@ -31,6 +31,6 @@ struct HomeNavigationAction {
 class HomeNavigationController {
 public:
     [[nodiscard]] static HomeNavigationAction handle(HomeScreenState& state, ScreenNavigationKey key,
-                                                      const std::vector<JellyfinHomeRow>& rows,
-                                                      const std::vector<SeerrMediaItem>& pendingSeerr);
+                                                     const std::vector<JellyfinHomeRow>& rows,
+                                                     const std::vector<SeerrMediaItem>& pendingSeerr);
 };

@@ -27,5 +27,5 @@ struct BrowseNavigationAction {
 class BrowseNavigationController {
 public:
     [[nodiscard]] static BrowseNavigationAction handle(BrowseScreenState& state, ScreenNavigationKey key, int columns,
-                                                        bool loading);
+                                                       bool loading);
 };

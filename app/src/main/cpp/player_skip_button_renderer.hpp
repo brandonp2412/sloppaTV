@@ -27,8 +27,7 @@ void renderPlayerSkipButton(RendererLike& renderer, const PlayerSkipButtonRender
     const float iconX = std::round(bounds[0] + (bounds[2] - groupWidth) * 0.5f);
     const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
 
-    renderer.triangle(iconX, iconCenterY - 11.0f, iconX, iconCenterY + 11.0f, iconX + 13.0f, iconCenterY,
-                      style.text);
+    renderer.triangle(iconX, iconCenterY - 11.0f, iconX, iconCenterY + 11.0f, iconX + 13.0f, iconCenterY, style.text);
     renderer.triangle(iconX + 11.0f, iconCenterY - 11.0f, iconX + 11.0f, iconCenterY + 11.0f, iconX + 24.0f,
                       iconCenterY, style.text);
     renderer.roundedRect(iconX + 27.0f, iconCenterY - 12.0f, 4.0f, 24.0f, 2.0f, style.text);

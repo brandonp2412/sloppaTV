@@ -43,8 +43,8 @@ HomeNavigationAction itemAction(HomeNavigationActionType type, JellyfinItem item
 } // namespace
 
 HomeNavigationAction HomeNavigationController::handle(HomeScreenState& state, ScreenNavigationKey key,
-                                                       const std::vector<JellyfinHomeRow>& rows,
-                                                       const std::vector<SeerrMediaItem>& pendingSeerr) {
+                                                      const std::vector<JellyfinHomeRow>& rows,
+                                                      const std::vector<SeerrMediaItem>& pendingSeerr) {
     const int previousFirstVisibleRow = state.firstVisibleRow();
     const HomeScreenCommand command = state.handleInput(homeInput(key), rows);
     switch (command.type) {
@@ -58,8 +58,7 @@ HomeNavigationAction HomeNavigationController::handle(HomeScreenState& state, Sc
         return action(HomeNavigationActionType::OpenSettings);
     case HomeScreenCommandType::OpenContext: {
         const auto& section = rows[static_cast<size_t>(command.rowIndex)];
-        return itemAction(HomeNavigationActionType::OpenContext,
-                          section.items[static_cast<size_t>(command.itemIndex)]);
+        return itemAction(HomeNavigationActionType::OpenContext, section.items[static_cast<size_t>(command.itemIndex)]);
     }
     case HomeScreenCommandType::OpenSelected: {
         const auto& section = rows[static_cast<size_t>(command.rowIndex)];

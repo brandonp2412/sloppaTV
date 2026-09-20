@@ -60,11 +60,12 @@ int main() {
         AccountScreenState state;
         DiscoveryCompletion completion{
             .generation = 5,
-            .servers = {
-                server("https://living-room.example", "Living Room"),
-                server("https://bedroom.example", "Bedroom"),
-                server("https://office.example", ""),
-            },
+            .servers =
+                {
+                    server("https://living-room.example", "Living Room"),
+                    server("https://bedroom.example", "Bedroom"),
+                    server("https://office.example", ""),
+                },
         };
 
         const auto effects = AccountCompletionController::apply(completion, true, state);

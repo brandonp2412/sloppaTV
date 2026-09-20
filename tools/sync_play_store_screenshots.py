@@ -39,7 +39,9 @@ def jpeg_dimensions(path: Path) -> tuple[int, int]:
         if marker in {0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF}:
             if offset + 7 > len(data):
                 break
-            return int.from_bytes(data[offset + 5 : offset + 7], "big"), int.from_bytes(data[offset + 3 : offset + 5], "big")
+            return int.from_bytes(data[offset + 5 : offset + 7], "big"), int.from_bytes(
+                data[offset + 3 : offset + 5], "big"
+            )
         if length < 2:
             break
         offset += length
@@ -112,7 +114,9 @@ def require_text(path: Path, limit: int) -> str:
     return value
 
 
-def require_image(path: Path, dimensions: tuple[int, int], *, max_bytes: int | None = None, forbid_alpha: bool = False) -> None:
+def require_image(
+    path: Path, dimensions: tuple[int, int], *, max_bytes: int | None = None, forbid_alpha: bool = False
+) -> None:
     if not path.is_file():
         raise FileNotFoundError(path)
     actual = image_dimensions(path)
@@ -138,7 +142,11 @@ def validate(locale: str) -> None:
     require_image(images / "featureGraphic.png", (1024, 500), forbid_alpha=True)
     require_image(images / "tvBanner.png", (1280, 720), forbid_alpha=True)
 
-    screenshots = sorted(path for path in (images / "tvScreenshots").iterdir() if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES)
+    screenshots = sorted(
+        path
+        for path in (images / "tvScreenshots").iterdir()
+        if path.is_file() and path.suffix.lower() in IMAGE_SUFFIXES
+    )
     if not 1 <= len(screenshots) <= 8:
         raise RuntimeError(f"expected 1-8 Android TV screenshots, found {len(screenshots)}")
     for path in screenshots:
@@ -156,7 +164,9 @@ def validate(locale: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Sync sloppaTV screenshots into Fastlane supply metadata and validate the store listing")
+    parser = argparse.ArgumentParser(
+        description="Sync sloppaTV screenshots into Fastlane supply metadata and validate the store listing"
+    )
     parser.add_argument("--source", type=Path, help="directory containing generated 1920x1080 screenshots")
     parser.add_argument("--locale", default=DEFAULT_LOCALE)
     parser.add_argument("--validate-only", action="store_true")

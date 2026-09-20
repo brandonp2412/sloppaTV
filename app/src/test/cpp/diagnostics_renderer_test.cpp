@@ -22,9 +22,7 @@ struct FakeRenderer {
         outlines.push_back({x, y, width, height});
     }
 
-    void rect(float x, float y, float width, float height, int) {
-        dividers.push_back({x, y, width, height});
-    }
+    void rect(float x, float y, float width, float height, int) { dividers.push_back({x, y, width, height}); }
 
     std::vector<RectCall> panels;
     std::vector<RectCall> outlines;

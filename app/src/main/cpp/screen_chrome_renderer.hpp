@@ -20,10 +20,9 @@ void renderScreenHeader(RendererLike& renderer, std::string_view title, bool sho
                         const ScreenChromeRenderStyle<ColorLike>& style, FitText&& fitText,
                         DrawRightAligned&& drawRightAligned, FormatClock&& formatClock) {
     renderer.text(style.pageInset, 28.0f, style.supportingScale, "sloppaTV", style.muted);
-    renderer.text(style.pageInset, 76.0f, style.headlineScale, fitText(title, style.headlineScale, 1480.0f, 1), style.text,
-                  1480.0f);
-    if (showClock)
-        drawRightAligned(1840.0f, 52.0f, 2.05f, formatClock(clock24Hour), style.muted, 210.0f);
+    renderer.text(style.pageInset, 76.0f, style.headlineScale, fitText(title, style.headlineScale, 1480.0f, 1),
+                  style.text, 1480.0f);
+    if (showClock) drawRightAligned(1840.0f, 52.0f, 2.05f, formatClock(clock24Hour), style.muted, 210.0f);
 }
 
 template <typename RendererLike, typename ColorLike, typename DrawCentered>

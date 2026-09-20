@@ -85,8 +85,7 @@ int main() {
         SeerrSearchCoordinator coordinator(domain, async);
         assert(domain.beginImmediateSearch("matrix", true).started);
         assert(domain.searchLoading());
-        assert(domain.prepareConnect("https://seerr.example.nz", true) ==
-               SeerrDomainState::ConnectAction::Submit);
+        assert(domain.prepareConnect("https://seerr.example.nz", true) == SeerrDomainState::ConnectAction::Submit);
 
         auto plan = coordinator.prepareImmediate(configuredEndpoint(), "matrix");
         assert(plan.action == SeerrSearchDispatchAction::DeferredForConnection);

@@ -17,8 +17,7 @@ struct ServerInfoNoticeCompletion {
     ApiValueResult<JellyfinServerInfo> result;
 };
 
-template <typename Client, typename TaskRunner, typename CompletionSink>
-class ServerInfoExecutor {
+template <typename Client, typename TaskRunner, typename CompletionSink> class ServerInfoExecutor {
 public:
     ServerInfoExecutor(Client& client, TaskRunner& tasks, CompletionSink& completions)
         : client_(client), tasks_(tasks), completions_(completions) {}

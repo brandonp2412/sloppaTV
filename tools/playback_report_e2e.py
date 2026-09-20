@@ -9,7 +9,7 @@ import ssl
 import subprocess
 import time
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -117,7 +117,7 @@ def snapshot(session: dict[str, Any]) -> dict[str, Any]:
     item = session.get("NowPlayingItem") or {}
     state = session.get("PlayState") or {}
     return {
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
         "user": session.get("UserName"),
         "item": item.get("Name"),
         "item_id": item.get("Id"),

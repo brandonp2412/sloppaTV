@@ -17,8 +17,8 @@ template <typename ColorLike> struct BrowseRenderStyle {
     ColorLike muted{};
 };
 
-template <typename RendererLike, typename ColorLike, typename RenderHeader, typename RenderEmpty, typename DrawTabSurface,
-          typename DrawCentered, typename RenderTextTile, typename RenderMediaArtworkCard>
+template <typename RendererLike, typename ColorLike, typename RenderHeader, typename RenderEmpty,
+          typename DrawTabSurface, typename DrawCentered, typename RenderTextTile, typename RenderMediaArtworkCard>
 void renderBrowseScreen(RendererLike& renderer, const BrowseScreenState& state, bool loading,
                         const BrowseRenderStyle<ColorLike>& style, RenderHeader&& renderHeader,
                         RenderEmpty&& renderEmpty, DrawTabSurface&& drawTabSurface, DrawCentered&& drawCentered,
@@ -37,9 +37,9 @@ void renderBrowseScreen(RendererLike& renderer, const BrowseScreenState& state, 
                 drawCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.65f, materialLabel(labels[index]),
                              style.text, 14.0f, 4.0f);
             } else {
-                renderer.roundedRect(x, 190.0f, width, 58.0f, style.cornerLarge, active ? style.focusSoft : style.panel);
-                if (!active)
-                    renderer.roundedOutline(x, 190.0f, width, 58.0f, style.cornerLarge, 1.5f, style.outline);
+                renderer.roundedRect(x, 190.0f, width, 58.0f, style.cornerLarge,
+                                     active ? style.focusSoft : style.panel);
+                if (!active) renderer.roundedOutline(x, 190.0f, width, 58.0f, style.cornerLarge, 1.5f, style.outline);
                 drawCentered(x, 190.0f, width, 58.0f, 1.65f, materialLabel(labels[index]),
                              active ? style.text : style.muted, 14.0f, 4.0f);
             }
@@ -58,8 +58,8 @@ void renderBrowseScreen(RendererLike& renderer, const BrowseScreenState& state, 
     constexpr float slotWidth = mediaCardWidth();
     constexpr float xGap = 32.0f;
     const bool syntheticPage = state.syntheticPage();
-    const bool hasPortraitCards =
-        std::any_of(items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
+    const bool hasPortraitCards = std::any_of(
+        items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
     const float rowStep = syntheticPage ? 190.0f : browseMediaRowHeight(hasPortraitCards);
     const int visibleRows = browseMediaVisibleRows(syntheticPage);
     const int firstRow = mediaFirstVisibleRow(state.selection(), visibleRows);
