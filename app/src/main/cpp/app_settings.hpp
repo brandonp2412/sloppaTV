@@ -197,15 +197,28 @@ inline SettingChangeEffect adjustAudioOutput(AppSettings& settings, int) {
     return SettingChangeEffect::None;
 }
 
+inline constexpr std::array<int, 10> kAvcLevelChoices{0, 40, 41, 42, 50, 51, 52, 60, 61, 62};
+inline constexpr std::array<int, 9> kHevcLevelChoices{0, 120, 123, 150, 153, 156, 180, 183, 186};
+
+template <size_t N> inline int normalizedSettingChoice(int value, const std::array<int, N>& choices, int fallback) {
+    return std::find(choices.begin(), choices.end(), value) == choices.end() ? fallback : value;
+}
+
+inline int normalizedAvcLevelOverride(int value) {
+    return normalizedSettingChoice(value, kAvcLevelChoices, 0);
+}
+
+inline int normalizedHevcLevelOverride(int value) {
+    return normalizedSettingChoice(value, kHevcLevelChoices, 0);
+}
+
 inline SettingChangeEffect adjustAvcMaxLevel(AppSettings& settings, int direction) {
-    static constexpr std::array<int, 10> choices{0, 40, 41, 42, 50, 51, 52, 60, 61, 62};
-    stepSettingChoice(settings.avcLevelOverride, choices, direction, 0);
+    stepSettingChoice(settings.avcLevelOverride, kAvcLevelChoices, direction, 0);
     return SettingChangeEffect::None;
 }
 
 inline SettingChangeEffect adjustHevcMaxLevel(AppSettings& settings, int direction) {
-    static constexpr std::array<int, 9> choices{0, 120, 123, 150, 153, 156, 180, 183, 186};
-    stepSettingChoice(settings.hevcLevelOverride, choices, direction, 0);
+    stepSettingChoice(settings.hevcLevelOverride, kHevcLevelChoices, direction, 0);
     return SettingChangeEffect::None;
 }
 

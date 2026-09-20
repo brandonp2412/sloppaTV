@@ -31,6 +31,8 @@ int main() {
     state.settings.autoSubtitleSourceLanguage = "different";
     state.settings.clock24Hour = true;
     state.settings.safeAreaPercent = 4;
+    state.settings.avcLevelOverride = 51;
+    state.settings.hevcLevelOverride = 153;
     state.settings.externalPlayerComponent = "org.example/.Player";
     state.settings.seerrServer = "https://seerr.example";
     state.settings.seerrSessionCookie = "connect.sid=session";
@@ -60,6 +62,8 @@ int main() {
     assert(loaded.settings.autoSubtitleSourceLanguage == "different");
     assert(loaded.settings.clock24Hour);
     assert(loaded.settings.safeAreaPercent == 4);
+    assert(loaded.settings.avcLevelOverride == 51);
+    assert(loaded.settings.hevcLevelOverride == 153);
     assert(loaded.settings.externalPlayerComponent == "org.example/.Player");
     assert(loaded.settings.seerrServer == "https://seerr.example");
     assert(loaded.settings.seerrSessionCookie == "connect.sid=session");
@@ -95,6 +99,8 @@ int main() {
     "maxBitrateMbps": 120,
     "playbackBufferPreset": "bad",
     "clock24Hour": "yes",
+    "avcLevelOverride": 999,
+    "hevcLevelOverride": -5,
     "externalPlayerComponent": 42,
     "subtitleStyleDefaultsVersion": 1,
     "subtitleSize": 2
@@ -111,6 +117,8 @@ int main() {
     assert(loaded.settings.maxBitrateMbps == 120);
     assert(loaded.settings.playbackBufferPreset == AppSettings{}.playbackBufferPreset);
     assert(loaded.settings.clock24Hour == AppSettings{}.clock24Hour);
+    assert(loaded.settings.avcLevelOverride == AppSettings{}.avcLevelOverride);
+    assert(loaded.settings.hevcLevelOverride == AppSettings{}.hevcLevelOverride);
     assert(loaded.settings.externalPlayerComponent.empty());
     assert(loaded.settings.subtitleSize == 2);
 

@@ -87,8 +87,10 @@ void readSettings(const json& saved, AppSettings& settings) {
     }
     const int savedMaxAudioChannels = valueOr(saved, "maxAudioChannels", settings.maxAudioChannels);
     settings.maxAudioChannels = savedMaxAudioChannels <= 2 ? 2 : 8;
-    settings.avcLevelOverride = valueOr(saved, "avcLevelOverride", settings.avcLevelOverride);
-    settings.hevcLevelOverride = valueOr(saved, "hevcLevelOverride", settings.hevcLevelOverride);
+    settings.avcLevelOverride =
+        normalizedAvcLevelOverride(valueOr(saved, "avcLevelOverride", settings.avcLevelOverride));
+    settings.hevcLevelOverride =
+        normalizedHevcLevelOverride(valueOr(saved, "hevcLevelOverride", settings.hevcLevelOverride));
     settings.hdrOverride = std::clamp(valueOr(saved, "hdrOverride", settings.hdrOverride), 0, 2);
     settings.uiTextSize = std::clamp(valueOr(saved, "uiTextSize", settings.uiTextSize), 0, 2);
     const int savedSafeArea = valueOr(saved, "safeAreaPercent", settings.safeAreaPercent);
