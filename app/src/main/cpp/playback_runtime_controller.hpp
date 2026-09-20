@@ -178,12 +178,12 @@ public:
     }
 
     template <typename StreamExecutor>
-    void restartAt(StreamExecutor& stream, int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
-        if (!session_.valid()) return;
+    bool restartAt(StreamExecutor& stream, int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
+        if (!session_.valid()) return false;
         const int targetPositionMs = std::max(0, positionMs);
         const bool wasPaused = player_.status() == PlayerStatus::Paused;
         auto restartPlan = coordinator_.beginStreamRestart(targetPositionMs);
-        if (!restartPlan) return;
+        if (!restartPlan) return false;
 
         JellyfinItem item = std::move(restartPlan->item);
         const PlaybackTarget previousTarget = std::move(restartPlan->previousTarget);
@@ -195,15 +195,20 @@ public:
         player_.stop();
         videoSurface_.release();
 
-        stream.restart(session_, std::move(item), previousTarget, shouldReportPrevious,
-                       PlaybackStreamResolutionOptions{
-                           .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-                           .maxAudioChannels = settings_.maxAudioChannels,
-                           .overrides = playbackOverridesFor(settings_),
-                           .audioStreamIndex = audioStreamIndex,
-                           .subtitleStreamIndex = subtitleStreamIndex,
-                       },
-                       wasPaused, generation);
+        if (stream.restart(session_, std::move(item), previousTarget, shouldReportPrevious,
+                           PlaybackStreamResolutionOptions{
+                               .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
+                               .maxAudioChannels = settings_.maxAudioChannels,
+                               .overrides = playbackOverridesFor(settings_),
+                               .audioStreamIndex = audioStreamIndex,
+                               .subtitleStreamIndex = subtitleStreamIndex,
+                           },
+                           wasPaused, generation))
+            return true;
+        playbackEpoch_.invalidate();
+        coordinator_.finishStreamRestartRequest();
+        error_ = "STREAM RESTART COULD NOT BE STARTED";
+        return false;
     }
 
     template <typename StreamExecutor, typename TelemetryExecutor>
@@ -222,7 +227,7 @@ public:
             reportProgress(telemetry, playerScreenActive, false);
             return;
         }
-        restartAt(stream, switchPositionMs, plan.audioStreamIndex, plan.subtitleStreamIndex);
+        static_cast<void>(restartAt(stream, switchPositionMs, plan.audioStreamIndex, plan.subtitleStreamIndex));
     }
 
     template <typename SubtitleExecutor, typename StreamExecutor, typename TelemetryExecutor>
@@ -272,7 +277,8 @@ public:
         }
 
         refreshTelemetry(true);
-        restartAt(stream, screenState_.positionMs(), cycle.audioStreamIndex, plan.subtitleStreamIndex);
+        if (!restartAt(stream, screenState_.positionMs(), cycle.audioStreamIndex, plan.subtitleStreamIndex))
+            return PlaybackRuntimeNotice::SubtitleStartFailed;
         return PlaybackRuntimeNotice::None;
     }
 
@@ -330,8 +336,7 @@ public:
         __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
                             "Subtitle-selected transcode failed; retrying item without subtitles (stream %d)",
                             plan.failedSubtitleStreamIndex);
-        restartAt(stream, screenState_.positionMs(), plan.audioStreamIndex, kSubtitleOffIndex);
-        return true;
+        return restartAt(stream, screenState_.positionMs(), plan.audioStreamIndex, kSubtitleOffIndex);
     }
 
     template <typename StreamExecutor>
@@ -402,6 +407,7 @@ public:
                                    },
                                    generation);
         if (!submitted) {
+            playbackEpoch_.invalidate();
             loading_ = false;
             coordinator_.finishFallbackResolution();
             error_ = "TRANSCODE FALLBACK COULD NOT BE STARTED";

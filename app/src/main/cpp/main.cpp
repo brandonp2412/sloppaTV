@@ -1224,7 +1224,7 @@ private:
             playbackRequests_.playQueued(effect.queueIndex, effect.restartCurrent, effect.replacingCompleted);
             return;
         case PlaybackHostEffectType::QueueAutoplayNext:
-            if (effect.item) playbackRequests_.queueAutoplay(*effect.item);
+            if (effect.item) applyPlaybackRequestHostEffects(playbackRequests_.queueAutoplay(*effect.item));
             return;
         case PlaybackHostEffectType::ShowStillWatching:
             if (effect.item) applyPlaybackRequestHostEffects(playbackRequests_.showStillWatching(*effect.item));

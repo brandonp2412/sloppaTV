@@ -22,7 +22,7 @@ public:
         if (!session_.valid() || noticeLoading_ || !serverInfo_.version.empty()) return;
         const JellyfinSession session = session_;
         noticeLoading_ = true;
-        serverInfoAsync_.loadNotice(session);
+        if (!serverInfoAsync_.loadNotice(session)) noticeLoading_ = false;
     }
 
     void openDiagnostics() {
@@ -33,7 +33,10 @@ public:
         error_.clear();
         serverInfo_ = {};
         const JellyfinSession session = session_;
-        serverInfoAsync_.loadDiagnostics(session, contentEpoch_.begin());
+        if (serverInfoAsync_.loadDiagnostics(session, contentEpoch_.begin())) return;
+        contentEpoch_.invalidate();
+        loading_ = false;
+        error_ = "DIAGNOSTICS COULD NOT BE STARTED";
     }
 
     [[nodiscard]] std::optional<ServerInfoNotice> complete(DiagnosticsCompletion& completion) {

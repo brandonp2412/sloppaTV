@@ -63,6 +63,7 @@ public:
                                           .subtitlePreference = preferences.subtitle,
                                           .trackPolicy = trackPolicy,
                                       })) {
+            playbackEpoch_.invalidate();
             loading_ = false;
             error_ = "EXTERNAL PLAYER COULD NOT BE STARTED";
         }

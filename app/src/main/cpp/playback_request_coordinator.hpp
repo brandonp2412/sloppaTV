@@ -63,8 +63,10 @@ public:
         error_.clear();
         JellyfinItem queued = *queue_.itemAt(index);
         if (restartCurrent) queued.positionTicks = 0;
-        resolution_.resolveQueued(session_, std::move(queued), runtime_.resolutionOptions(), playbackEpoch_.begin(),
-                                  originScreen, index, previousQueueIndex, replacingPlayer);
+        if (!resolution_.resolveQueued(session_, std::move(queued), runtime_.resolutionOptions(),
+                                       playbackEpoch_.begin(), originScreen, index, previousQueueIndex,
+                                       replacingPlayer))
+            rejectPlaybackResolution("PLAYBACK COULD NOT BE STARTED");
     }
 
     void playItem(JellyfinItem item) {
@@ -74,7 +76,9 @@ public:
         loading_ = true;
         playback_.beginPlaybackResolution(true);
         error_.clear();
-        resolution_.resolvePlayerItem(session_, std::move(item), runtime_.resolutionOptions(), playbackEpoch_.begin());
+        if (!resolution_.resolvePlayerItem(session_, std::move(item), runtime_.resolutionOptions(),
+                                           playbackEpoch_.begin()))
+            rejectPlaybackResolution("PLAYBACK COULD NOT BE STARTED");
     }
 
     void playAdjacent(int direction) {
@@ -95,8 +99,11 @@ public:
         }
         if (!plan.lookup) return;
         playerScreen_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(5));
-        continuation_.requestAdjacentEpisode(session_, plan.lookup->seriesId, plan.lookup->currentItemId,
-                                             plan.lookup->currentSeason, plan.lookup->currentEpisode, direction);
+        if (!continuation_.requestAdjacentEpisode(session_, plan.lookup->seriesId, plan.lookup->currentItemId,
+                                                  plan.lookup->currentSeason, plan.lookup->currentEpisode, direction)) {
+            static_cast<void>(playback_.finishAdjacentEpisodeLookup(plan.lookup->currentItemId));
+            error_ = "ADJACENT EPISODE LOOKUP COULD NOT BE STARTED";
+        }
     }
 
     void handleQueue(ScreenNavigationKey key) {
@@ -124,7 +131,8 @@ public:
         SeriesPlayAllOptions options{.maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
                                      .maxAudioChannels = settings_.maxAudioChannels,
                                      .overrides = playbackOverridesFor(settings_)};
-        seriesPlayback_.playAll(session_, details_.item(), options, playbackEpoch_.begin());
+        if (!seriesPlayback_.playAll(session_, details_.item(), options, playbackEpoch_.begin()))
+            rejectPlaybackResolution("PLAY ALL COULD NOT BE STARTED");
     }
 
     void beginPlayback() {
@@ -133,13 +141,14 @@ public:
         if (selection.resetQueue) queue_.reset();
         loading_ = true;
         error_.clear();
-        resolution_.resolveSelection(session_, details_.item(), runtime_.resolutionOptions(), playbackEpoch_.begin(),
-                                     selection.queuedPlaybackIndex);
+        if (!resolution_.resolveSelection(session_, details_.item(), runtime_.resolutionOptions(),
+                                          playbackEpoch_.begin(), selection.queuedPlaybackIndex))
+            rejectPlaybackResolution("PLAYBACK COULD NOT BE STARTED");
     }
 
     void release(bool reportStop, bool completed = false) { releaseFlow_.release(reportStop, completed, runtime_); }
 
-    void queueAutoplay(JellyfinItem nextItem) {
+    [[nodiscard]] PlaybackRequestHostEffects queueAutoplay(JellyfinItem nextItem) {
         const int queuedNextIndex = queue_.autoplayAdvanceIndex(nextItem);
         release(true, true);
         playback_.beginAutoplayResolution();
@@ -147,8 +156,11 @@ public:
         details_.item() = nextItem;
         playerScreen_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(10));
         PlaybackResolutionOptions options = runtime_.resolutionOptions();
-        resolution_.resolveAutoplay(session_, std::move(nextItem), std::move(options), playbackEpoch_.begin(),
-                                    queuedNextIndex);
+        if (resolution_.resolveAutoplay(session_, std::move(nextItem), std::move(options), playbackEpoch_.begin(),
+                                        queuedNextIndex))
+            return {};
+        rejectPlaybackResolution("NEXT EPISODE: PLAYBACK COULD NOT BE STARTED");
+        return {.popToDetails = true};
     }
 
     [[nodiscard]] PlaybackRequestHostEffects showStillWatching(JellyfinItem nextItem) {
@@ -161,6 +173,13 @@ public:
     }
 
 private:
+    void rejectPlaybackResolution(std::string error) {
+        playbackEpoch_.invalidate();
+        loading_ = false;
+        playback_.finishPlaybackResolution();
+        error_ = std::move(error);
+    }
+
     ReleaseFlow& releaseFlow_;
     PlaybackRuntimeController& runtime_;
     ResolutionAsync& resolution_;
