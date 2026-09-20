@@ -23,6 +23,7 @@ public:
 
 private:
     void workerLoop();
+    void reportError(const std::string& error) noexcept;
 
     std::mutex mutex_;
     std::condition_variable condition_;

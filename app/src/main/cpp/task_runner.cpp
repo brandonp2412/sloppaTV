@@ -9,8 +9,13 @@ TaskRunner::TaskRunner(size_t workerCount, std::function<void()> onTaskComplete,
     : onTaskComplete_(std::move(onTaskComplete)), onTaskError_(std::move(onTaskError)) {
     workerCount = std::clamp<size_t>(workerCount, 1, 8);
     workers_.reserve(workerCount);
-    for (size_t i = 0; i < workerCount; ++i) {
-        workers_.emplace_back(&TaskRunner::workerLoop, this);
+    try {
+        for (size_t i = 0; i < workerCount; ++i) {
+            workers_.emplace_back(&TaskRunner::workerLoop, this);
+        }
+    } catch (...) {
+        shutdown();
+        throw;
     }
 }
 
@@ -43,6 +48,13 @@ void TaskRunner::shutdown() {
     workers_.clear();
 }
 
+void TaskRunner::reportError(const std::string& error) noexcept {
+    if (!onTaskError_) return;
+    try {
+        onTaskError_(error);
+    } catch (...) {}
+}
+
 void TaskRunner::workerLoop() {
     while (true) {
         std::function<void()> task;
@@ -56,10 +68,18 @@ void TaskRunner::workerLoop() {
         try {
             task();
         } catch (const std::exception& error) {
-            if (onTaskError_) onTaskError_(error.what());
+            reportError(error.what());
         } catch (...) {
-            if (onTaskError_) onTaskError_("Unknown background task exception");
+            reportError("Unknown background task exception");
         }
-        if (onTaskComplete_) onTaskComplete_();
+        if (onTaskComplete_) {
+            try {
+                onTaskComplete_();
+            } catch (const std::exception& error) {
+                reportError(std::string("Task completion callback failed: ") + error.what());
+            } catch (...) {
+                reportError("Task completion callback failed: unknown exception");
+            }
+        }
     }
 }

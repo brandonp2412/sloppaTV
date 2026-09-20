@@ -44,6 +44,40 @@ int main() {
     assert(preserved && *preserved == "original");
     fs::remove_all(blockedTemporaryPath, ec);
 
+    cache.write("oversized-key", "oversized-seed");
+    fs::path oversizedPath;
+    for (const auto& entry : fs::directory_iterator(root / "home-image-cache")) {
+        if (!entry.is_regular_file() || entry.file_size() != std::string("oversized-seed").size()) continue;
+        std::ifstream input(entry.path(), std::ios::binary);
+        std::string value((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        if (value == "oversized-seed") {
+            oversizedPath = entry.path();
+            break;
+        }
+    }
+    assert(!oversizedPath.empty());
+    fs::resize_file(oversizedPath, 49ULL * 1024ULL * 1024ULL, ec);
+    assert(!ec);
+    assert(!cache.read("oversized-key"));
+    assert(!fs::exists(oversizedPath));
+
+    cache.write("empty-file-key", "seed");
+    fs::path emptyFilePath;
+    for (const auto& entry : fs::directory_iterator(root / "home-image-cache")) {
+        if (!entry.is_regular_file() || entry.file_size() != std::string("seed").size()) continue;
+        std::ifstream input(entry.path(), std::ios::binary);
+        std::string value((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+        if (value == "seed") {
+            emptyFilePath = entry.path();
+            break;
+        }
+    }
+    assert(!emptyFilePath.empty());
+    fs::resize_file(emptyFilePath, 0, ec);
+    assert(!ec);
+    assert(!cache.read("empty-file-key"));
+    assert(!fs::exists(emptyFilePath));
+
     cache.write("empty", "");
     assert(!cache.read("empty"));
 

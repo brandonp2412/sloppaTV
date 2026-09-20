@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -29,7 +30,22 @@ public:
         std::ifstream input(path, std::ios::binary | std::ios::ate);
         if (!input) return std::nullopt;
         const std::streamsize size = input.tellg();
-        if (size <= 0) return std::nullopt;
+        if (size < 0) return std::nullopt;
+        if (size == 0) {
+            input.close();
+            std::error_code ec;
+            std::filesystem::remove(path, ec);
+            usageKnown_ = false;
+            return std::nullopt;
+        }
+        const auto unsignedSize = static_cast<uintmax_t>(size);
+        if (unsignedSize > kMaxDiskBytes || unsignedSize > std::numeric_limits<size_t>::max()) {
+            input.close();
+            std::error_code ec;
+            std::filesystem::remove(path, ec);
+            usageKnown_ = false;
+            return std::nullopt;
+        }
         std::string bytes(static_cast<size_t>(size), '\0');
         input.seekg(0, std::ios::beg);
         if (!input.read(bytes.data(), size)) return std::nullopt;
@@ -39,7 +55,7 @@ public:
     }
 
     void write(const std::string& key, const std::string& bytes) {
-        if (bytes.empty()) return;
+        if (bytes.empty() || bytes.size() > kMaxDiskBytes) return;
         std::scoped_lock lock(mutex_);
         const auto path = pathForKey(key);
         if (path.empty()) return;

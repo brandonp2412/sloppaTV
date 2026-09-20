@@ -818,14 +818,25 @@ bool Renderer::externalImage(GLuint texture, float x, float y, float w, float h,
 GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
     if (!env || !bitmap) return 0;
     AndroidBitmapInfo info{};
-    void* pixels = nullptr;
-    const bool locked = AndroidBitmap_getInfo(env, bitmap, &info) == ANDROID_BITMAP_RESULT_SUCCESS && info.width > 0 &&
-                        info.height > 0 && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888 &&
-                        AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS && pixels;
-    if (!locked) return 0;
+    if (AndroidBitmap_getInfo(env, bitmap, &info) != ANDROID_BITMAP_RESULT_SUCCESS || info.width == 0 ||
+        info.height == 0 || info.format != ANDROID_BITMAP_FORMAT_RGBA_8888 ||
+        info.width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+        info.height > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
+        return 0;
+    }
 
-    const size_t rowBytes = static_cast<size_t>(info.width) * 4;
-    const size_t pixelCount = static_cast<size_t>(info.width) * static_cast<size_t>(info.height);
+    const size_t width = static_cast<size_t>(info.width);
+    const size_t height = static_cast<size_t>(info.height);
+    if (width > std::numeric_limits<size_t>::max() / 4) return 0;
+    const size_t rowBytes = width * 4;
+    if (static_cast<size_t>(info.stride) < rowBytes || height > std::numeric_limits<size_t>::max() / rowBytes) return 0;
+    const size_t rgbaBytes = rowBytes * height;
+    if (rgbaBytes > std::vector<uint8_t>{}.max_size()) return 0;
+
+    void* pixels = nullptr;
+    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS || !pixels) return 0;
+
+    const size_t pixelCount = rgbaBytes / 4;
     GLuint texture = 0;
     if (info.stride == rowBytes) {
         auto* rgba = static_cast<uint8_t*>(pixels);
@@ -839,7 +850,7 @@ GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
         }
         texture = createTexture(static_cast<int>(info.width), static_cast<int>(info.height), rgba);
     } else {
-        std::vector<uint8_t> packed(rowBytes * static_cast<size_t>(info.height));
+        std::vector<uint8_t> packed(rgbaBytes);
         for (uint32_t row = 0; row < info.height; ++row) {
             std::memcpy(packed.data() + static_cast<size_t>(row) * rowBytes,
                         static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride, rowBytes);
