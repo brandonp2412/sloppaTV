@@ -13,6 +13,8 @@
 #include <cmath>
 #include <cstring>
 #include <future>
+#include <limits>
+#include <new>
 #include <string_view>
 #include <vector>
 
@@ -21,12 +23,37 @@ constexpr const char* kTag = "sloppaTV/render";
 
 using ScopedEnv = ScopedJniEnv;
 
+bool clearPendingException(JNIEnv* env) {
+    if (!env || !env->ExceptionCheck()) return false;
+    env->ExceptionClear();
+    return true;
+}
+
+jclass objectClassChecked(JNIEnv* env, jobject object) {
+    if (!env || !object) return nullptr;
+    jclass value = env->GetObjectClass(object);
+    if (!clearPendingException(env)) return value;
+    if (value) env->DeleteLocalRef(value);
+    return nullptr;
+}
+
+jmethodID methodChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature) {
+    if (!env || !clazz || !name || !signature) return nullptr;
+    jmethodID value = env->GetMethodID(clazz, name, signature);
+    return clearPendingException(env) ? nullptr : value;
+}
+
 } // namespace
 
 Renderer::Renderer(JavaVM* vm, jobject activity) : vm_(vm) {
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
-    if (env && activity) activity_ = env->NewGlobalRef(activity);
+    if (!env || !activity) return;
+    activity_ = env->NewGlobalRef(activity);
+    if (clearPendingException(env) || !activity_) {
+        if (activity_) env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+    }
 }
 
 Renderer::~Renderer() {
@@ -46,27 +73,29 @@ Renderer::PreparedFontAtlas Renderer::prepareFontAtlas(JavaVM* vm, jobject activ
     JNIEnv* env = scoped.get();
     if (!env) return prepared;
 
-    jclass activityClass = env->GetObjectClass(activity);
-    jmethodID createAtlas =
-        activityClass ? env->GetMethodID(activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;") : nullptr;
-    jmethodID createAdvances = activityClass ? env->GetMethodID(activityClass, "createFontAdvances", "()[F") : nullptr;
+    jclass activityClass = objectClassChecked(env, activity);
+    jmethodID createAtlas = methodChecked(env, activityClass, "createFontAtlas", "()Landroid/graphics/Bitmap;");
+    jmethodID createAdvances = methodChecked(env, activityClass, "createFontAdvances", "()[F");
+
     jobject bitmap = createAtlas ? env->CallObjectMethod(activity, createAtlas) : nullptr;
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
+    if (clearPendingException(env)) {
+        if (bitmap) env->DeleteLocalRef(bitmap);
         bitmap = nullptr;
     }
+
     jfloatArray advances =
         createAdvances ? static_cast<jfloatArray>(env->CallObjectMethod(activity, createAdvances)) : nullptr;
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
+    if (clearPendingException(env)) {
+        if (advances) env->DeleteLocalRef(advances);
         advances = nullptr;
     }
-    if (advances && env->GetArrayLength(advances) >= static_cast<jsize>(prepared.advances.size())) {
-        env->GetFloatArrayRegion(advances, 0, static_cast<jsize>(prepared.advances.size()), prepared.advances.data());
-        if (!env->ExceptionCheck())
-            prepared.advancesReady = true;
-        else
-            env->ExceptionClear();
+    if (advances) {
+        const jsize length = env->GetArrayLength(advances);
+        if (!clearPendingException(env) && length >= static_cast<jsize>(prepared.advances.size())) {
+            env->GetFloatArrayRegion(advances, 0, static_cast<jsize>(prepared.advances.size()),
+                                     prepared.advances.data());
+            prepared.advancesReady = !clearPendingException(env);
+        }
     }
     if (advances) env->DeleteLocalRef(advances);
 
@@ -77,13 +106,30 @@ Renderer::PreparedFontAtlas Renderer::prepareFontAtlas(JavaVM* vm, jobject activ
                             info.width > 0 && info.height > 0 && info.format == ANDROID_BITMAP_FORMAT_RGBA_8888 &&
                             AndroidBitmap_lockPixels(env, bitmap, &pixels) == ANDROID_BITMAP_RESULT_SUCCESS && pixels;
         if (locked) {
-            prepared.width = static_cast<int>(info.width);
-            prepared.height = static_cast<int>(info.height);
-            const size_t rowBytes = static_cast<size_t>(info.width) * 4;
-            prepared.rgba.resize(rowBytes * static_cast<size_t>(info.height));
-            for (uint32_t row = 0; row < info.height; ++row) {
-                std::memcpy(prepared.rgba.data() + static_cast<size_t>(row) * rowBytes,
-                            static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride, rowBytes);
+            const size_t width = static_cast<size_t>(info.width);
+            const size_t height = static_cast<size_t>(info.height);
+            const bool widthFits = info.width <= static_cast<uint32_t>(std::numeric_limits<int>::max()) &&
+                                   width <= std::numeric_limits<size_t>::max() / 4;
+            const size_t rowBytes = widthFits ? width * 4 : 0;
+            const bool layoutFits =
+                widthFits && info.height <= static_cast<uint32_t>(std::numeric_limits<int>::max()) &&
+                rowBytes <= static_cast<size_t>(info.stride) && height <= std::numeric_limits<size_t>::max() / rowBytes;
+            if (layoutFits) {
+                const size_t rgbaBytes = rowBytes * height;
+                try {
+                    if (rgbaBytes <= prepared.rgba.max_size()) prepared.rgba.resize(rgbaBytes);
+                } catch (const std::bad_alloc&) {
+                    prepared.rgba.clear();
+                }
+                if (prepared.rgba.size() == rgbaBytes) {
+                    prepared.width = static_cast<int>(info.width);
+                    prepared.height = static_cast<int>(info.height);
+                    for (uint32_t row = 0; row < info.height; ++row) {
+                        std::memcpy(prepared.rgba.data() + static_cast<size_t>(row) * rowBytes,
+                                    static_cast<const uint8_t*>(pixels) + static_cast<size_t>(row) * info.stride,
+                                    rowBytes);
+                    }
+                }
             }
             AndroidBitmap_unlockPixels(env, bitmap);
             for (size_t pixel = 0; pixel + 3 < prepared.rgba.size(); pixel += 4) {
@@ -838,13 +884,12 @@ bool Renderer::loadFontOutlineAtlas() {
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (!env) return false;
-    jclass activityClass = env->GetObjectClass(activity_);
+    jclass activityClass = objectClassChecked(env, activity_);
     jmethodID createOutlineAtlas =
-        activityClass ? env->GetMethodID(activityClass, "createFontOutlineAtlas", "()Landroid/graphics/Bitmap;")
-                      : nullptr;
+        methodChecked(env, activityClass, "createFontOutlineAtlas", "()Landroid/graphics/Bitmap;");
     jobject bitmap = createOutlineAtlas ? env->CallObjectMethod(activity_, createOutlineAtlas) : nullptr;
-    if (env->ExceptionCheck()) {
-        env->ExceptionClear();
+    if (clearPendingException(env)) {
+        if (bitmap) env->DeleteLocalRef(bitmap);
         bitmap = nullptr;
     }
     fontOutlineTexture_ = uploadFontAtlasBitmap(env, bitmap);

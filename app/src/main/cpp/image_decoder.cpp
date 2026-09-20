@@ -5,6 +5,8 @@
 #include <android/log.h>
 
 #include <cstring>
+#include <limits>
+#include <new>
 
 namespace {
 constexpr const char* kTag = "sloppaTV/image";
@@ -23,9 +25,20 @@ bool clearException(JNIEnv* env, const char* where, std::string& error) {
 void recycleBitmap(JNIEnv* env, jobject bitmap) {
     if (!env || !bitmap) return;
     jclass bitmapClass = env->GetObjectClass(bitmap);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        if (bitmapClass) env->DeleteLocalRef(bitmapClass);
+        return;
+    }
     jmethodID recycle = bitmapClass ? env->GetMethodID(bitmapClass, "recycle", "()V") : nullptr;
-    if (recycle) env->CallVoidMethod(bitmap, recycle);
-    if (env->ExceptionCheck()) env->ExceptionClear();
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        recycle = nullptr;
+    }
+    if (recycle) {
+        env->CallVoidMethod(bitmap, recycle);
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
     if (bitmapClass) env->DeleteLocalRef(bitmapClass);
 }
 } // namespace
@@ -56,6 +69,12 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
     if (methodLookupFailed || !decodeByteArray) {
         env->DeleteLocalRef(factoryClass);
         if (error.empty()) error = "Unable to find Android bitmap decoder";
+        return result;
+    }
+
+    if (encodedBytes.size() > static_cast<size_t>(std::numeric_limits<jsize>::max())) {
+        env->DeleteLocalRef(factoryClass);
+        error = "Image payload exceeds the Android decoder size limit";
         return result;
     }
 
@@ -93,18 +112,69 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
         error = "Unable to inspect decoded bitmap";
         return result;
     }
-
-    void* pixels = nullptr;
-    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS || !pixels) {
+    if (info.width > static_cast<uint32_t>(std::numeric_limits<int>::max()) ||
+        info.height > static_cast<uint32_t>(std::numeric_limits<int>::max())) {
         recycleBitmap(env, bitmap);
         env->DeleteLocalRef(bitmap);
-        error = "Unable to lock decoded bitmap pixels";
+        error = "Decoded bitmap dimensions exceed the supported size";
         return result;
     }
 
     result.width = static_cast<int>(info.width);
     result.height = static_cast<int>(info.height);
-    result.rgba.resize(static_cast<size_t>(result.width) * static_cast<size_t>(result.height) * 4);
+    const size_t width = static_cast<size_t>(result.width);
+    const size_t height = static_cast<size_t>(result.height);
+    const size_t bytesPerSourcePixel =
+        info.format == ANDROID_BITMAP_FORMAT_RGBA_8888 ? 4 : (info.format == ANDROID_BITMAP_FORMAT_RGB_565 ? 2 : 0);
+    if (bytesPerSourcePixel == 0) {
+        recycleBitmap(env, bitmap);
+        env->DeleteLocalRef(bitmap);
+        result = {};
+        error = "Unsupported decoded bitmap pixel format";
+        return result;
+    }
+    if (width > std::numeric_limits<size_t>::max() / 4) {
+        recycleBitmap(env, bitmap);
+        env->DeleteLocalRef(bitmap);
+        result = {};
+        error = "Decoded bitmap is too large";
+        return result;
+    }
+    const size_t rgbaRowBytes = width * 4;
+    if (height > std::numeric_limits<size_t>::max() / rgbaRowBytes) {
+        recycleBitmap(env, bitmap);
+        env->DeleteLocalRef(bitmap);
+        result = {};
+        error = "Decoded bitmap is too large";
+        return result;
+    }
+    const size_t rgbaBytes = rgbaRowBytes * height;
+    if (rgbaBytes > result.rgba.max_size() || width > std::numeric_limits<size_t>::max() / bytesPerSourcePixel ||
+        static_cast<size_t>(info.stride) < width * bytesPerSourcePixel) {
+        recycleBitmap(env, bitmap);
+        env->DeleteLocalRef(bitmap);
+        result = {};
+        error = "Decoded bitmap layout exceeds the supported size";
+        return result;
+    }
+    try {
+        result.rgba.resize(rgbaBytes);
+    } catch (const std::bad_alloc&) {
+        recycleBitmap(env, bitmap);
+        env->DeleteLocalRef(bitmap);
+        result = {};
+        error = "Unable to allocate decoded image pixels";
+        return result;
+    }
+
+    void* pixels = nullptr;
+    if (AndroidBitmap_lockPixels(env, bitmap, &pixels) != ANDROID_BITMAP_RESULT_SUCCESS || !pixels) {
+        recycleBitmap(env, bitmap);
+        env->DeleteLocalRef(bitmap);
+        result = {};
+        error = "Unable to lock decoded bitmap pixels";
+        return result;
+    }
 
     if (info.format == ANDROID_BITMAP_FORMAT_RGBA_8888) {
         for (int y = 0; y < result.height; ++y) {
@@ -126,9 +196,6 @@ DecodedImage JniImageDecoder::decode(const std::string& encodedBytes, std::strin
                 result.rgba[out + 3] = 255;
             }
         }
-    } else {
-        result = {};
-        error = "Unsupported decoded bitmap pixel format";
     }
 
     AndroidBitmap_unlockPixels(env, bitmap);

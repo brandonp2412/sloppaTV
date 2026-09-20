@@ -196,6 +196,26 @@ using namespace std::chrono_literals;
 namespace {
 constexpr const char* kTag = "sloppaTV";
 
+bool clearPendingJniException(JNIEnv* env) {
+    if (!env || !env->ExceptionCheck()) return false;
+    env->ExceptionClear();
+    return true;
+}
+
+jclass objectClassChecked(JNIEnv* env, jobject object) {
+    if (!env || !object) return nullptr;
+    jclass value = env->GetObjectClass(object);
+    if (!clearPendingJniException(env)) return value;
+    if (value) env->DeleteLocalRef(value);
+    return nullptr;
+}
+
+jmethodID methodChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature) {
+    if (!env || !clazz || !name || !signature) return nullptr;
+    jmethodID value = env->GetMethodID(clazz, name, signature);
+    return clearPendingJniException(env) ? nullptr : value;
+}
+
 void logPlaybackReportFailure(const char* stage, const std::string& itemId, const ApiResult& result) {
     if (result.ok) return;
     __android_log_print(ANDROID_LOG_WARN, kTag, "Playback %s report failed for %s: %s", stage, itemId.c_str(),
@@ -682,20 +702,18 @@ public:
         ScopedJniEnv scoped(app_->activity->vm);
         JNIEnv* env = scoped.get();
         if (!env) return;
-        jclass activityClass = env->GetObjectClass(app_->activity->clazz);
-        jmethodID publish =
-            activityClass ? env->GetMethodID(activityClass, "setAccessibilitySummaryBridge", "(Ljava/lang/String;)V")
-                          : nullptr;
+        jclass activityClass = objectClassChecked(env, app_->activity->clazz);
+        jmethodID publish = methodChecked(env, activityClass, "setAccessibilitySummaryBridge", "(Ljava/lang/String;)V");
         bool published = false;
-        if (publish && !env->ExceptionCheck()) {
+        if (publish) {
             jstring value = jniNewString(env, summary);
-            if (value && !env->ExceptionCheck()) {
+            const bool valueFailed = clearPendingJniException(env);
+            if (value && !valueFailed) {
                 env->CallVoidMethod(app_->activity->clazz, publish, value);
-                published = !env->ExceptionCheck();
-                env->DeleteLocalRef(value);
+                published = !clearPendingJniException(env);
             }
+            if (value) env->DeleteLocalRef(value);
         }
-        if (env->ExceptionCheck()) env->ExceptionClear();
         if (activityClass) env->DeleteLocalRef(activityClass);
         if (published) lastAccessibilitySummary_ = std::move(summary);
     }
@@ -985,20 +1003,24 @@ private:
         JNIEnv* env = scoped.get();
         if (!env) return false;
         jobject activity = app_->activity->clazz;
-        jclass activityClass = env->GetObjectClass(activity);
-        jmethodID method = activityClass ? env->GetMethodID(activityClass, "showTextInput",
-                                                            "(Ljava/lang/String;Ljava/lang/String;IZ)Z")
-                                         : nullptr;
-        jstring jInitial = jniNewString(env, initial);
-        jstring jHint = jniNewString(env, hint);
+        jclass activityClass = objectClassChecked(env, activity);
+        jmethodID method =
+            methodChecked(env, activityClass, "showTextInput", "(Ljava/lang/String;Ljava/lang/String;IZ)Z");
+        jstring jInitial = nullptr;
+        jstring jHint = nullptr;
         jboolean shown = JNI_FALSE;
-        if (method && jInitial && jHint) {
-            shown = env->CallBooleanMethod(activity, method, jInitial, jHint, static_cast<jint>(mode),
-                                           password ? JNI_TRUE : JNI_FALSE);
-        }
-        if (env->ExceptionCheck()) {
-            env->ExceptionClear();
-            shown = JNI_FALSE;
+        if (method) {
+            jInitial = jniNewString(env, initial);
+            bool failed = clearPendingJniException(env) || !jInitial;
+            if (!failed) {
+                jHint = jniNewString(env, hint);
+                failed = clearPendingJniException(env) || !jHint;
+            }
+            if (!failed) {
+                shown = env->CallBooleanMethod(activity, method, jInitial, jHint, static_cast<jint>(mode),
+                                               password ? JNI_TRUE : JNI_FALSE);
+                if (clearPendingJniException(env)) shown = JNI_FALSE;
+            }
         }
         if (jHint) env->DeleteLocalRef(jHint);
         if (jInitial) env->DeleteLocalRef(jInitial);
@@ -1014,10 +1036,12 @@ private:
         JNIEnv* env = scoped.get();
         if (!env) return;
         jobject activity = app_->activity->clazz;
-        jclass activityClass = env->GetObjectClass(activity);
-        jmethodID method = activityClass ? env->GetMethodID(activityClass, "hideTextInput", "()V") : nullptr;
-        if (method) env->CallVoidMethod(activity, method);
-        if (env->ExceptionCheck()) env->ExceptionClear();
+        jclass activityClass = objectClassChecked(env, activity);
+        jmethodID method = methodChecked(env, activityClass, "hideTextInput", "()V");
+        if (method) {
+            env->CallVoidMethod(activity, method);
+            clearPendingJniException(env);
+        }
         if (activityClass) env->DeleteLocalRef(activityClass);
     }
 

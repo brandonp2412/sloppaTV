@@ -25,11 +25,19 @@ bool clearException(JNIEnv* env, const char* operation) {
 bool setPlaybackKeepScreenOn(JNIEnv* env, jobject activity, bool enabled) {
     if (!env || !activity) return false;
     jclass activityClass = env->GetObjectClass(activity);
-    jmethodID method = activityClass ? env->GetMethodID(activityClass, "setPlaybackKeepScreenOn", "(Z)V") : nullptr;
-    if (method) env->CallVoidMethod(activity, method, enabled ? JNI_TRUE : JNI_FALSE);
+    if (clearException(env, "playback keep-screen-on class lookup") || !activityClass) {
+        if (activityClass) env->DeleteLocalRef(activityClass);
+        return false;
+    }
+    jmethodID method = env->GetMethodID(activityClass, "setPlaybackKeepScreenOn", "(Z)V");
+    if (clearException(env, "playback keep-screen-on method lookup") || !method) {
+        env->DeleteLocalRef(activityClass);
+        return false;
+    }
+    env->CallVoidMethod(activity, method, enabled ? JNI_TRUE : JNI_FALSE);
     const bool failed = clearException(env, "playback keep-screen-on update");
-    if (activityClass) env->DeleteLocalRef(activityClass);
-    return method != nullptr && !failed;
+    env->DeleteLocalRef(activityClass);
+    return !failed;
 }
 
 int playbackStateValue(MediaSessionState state) {
@@ -53,7 +61,11 @@ NativeMediaSession::NativeMediaSession(JavaVM* vm, jobject activity) : vm_(vm) {
     JNIEnv* env = scoped.get();
     if (!env) return;
     activity_ = env->NewGlobalRef(activity);
-    if (clearException(env, "MediaSession activity retention") || !activity_) return;
+    if (clearException(env, "MediaSession activity retention") || !activity_) {
+        if (activity_) env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+        return;
+    }
     std::scoped_lock lock(gInstanceMutex);
     gInstance = this;
 }
@@ -106,7 +118,11 @@ bool NativeMediaSession::ensureSession() {
     const bool retainFailed = clearException(env, "MediaSession bridge retention");
     env->DeleteLocalRef(localSession);
     env->DeleteLocalRef(activityClass);
-    if (retainFailed || !session_) return false;
+    if (retainFailed || !session_) {
+        if (session_) env->DeleteGlobalRef(session_);
+        session_ = nullptr;
+        return false;
+    }
     __android_log_print(ANDROID_LOG_INFO, kTag, "Android media session created for playback");
     return true;
 }

@@ -330,7 +330,11 @@ NativeExternalPlayer::NativeExternalPlayer(JavaVM* vm, jobject activity) : vm_(v
     JNIEnv* env = scoped.get();
     if (!env) return;
     activity_ = env->NewGlobalRef(activity);
-    if (clearException(env, "external player activity retention") || !activity_) return;
+    if (clearException(env, "external player activity retention") || !activity_) {
+        if (activity_) env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+        return;
+    }
     std::scoped_lock lock(gInstanceMutex);
     gInstance = this;
 }

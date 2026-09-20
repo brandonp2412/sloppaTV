@@ -78,7 +78,13 @@ JellyfinClient::JellyfinClient(JavaVM* vm, jobject activity) : http_(vm, activit
     if (!vm_ || !activity) return;
     ScopedJniEnv scoped(vm_);
     JNIEnv* env = scoped.get();
-    if (env) activity_ = env->NewGlobalRef(activity);
+    if (!env) return;
+    activity_ = env->NewGlobalRef(activity);
+    if (env->ExceptionCheck() || !activity_) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (activity_) env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+    }
 }
 
 JellyfinClient::~JellyfinClient() {

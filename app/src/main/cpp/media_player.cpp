@@ -123,25 +123,51 @@ NativeMediaPlayer::NativeMediaPlayer(JavaVM* vm, jobject activity, const char* d
     if (!env) return;
 
     activity_ = env->NewGlobalRef(activity);
-    jclass activityClass = env->GetObjectClass(activity);
-    if (!activityClass || env->ExceptionCheck()) {
-        env->ExceptionClear();
-        if (activityClass) env->DeleteLocalRef(activityClass);
+    if (env->ExceptionCheck() || !activity_) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (activity_) env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
         return;
     }
+
+    jclass activityClass = env->GetObjectClass(activity);
+    if (env->ExceptionCheck() || !activityClass) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (activityClass) env->DeleteLocalRef(activityClass);
+        env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+        return;
+    }
+
     jmethodID getApplicationContext =
         env->GetMethodID(activityClass, "getApplicationContext", "()Landroid/content/Context;");
-    if (!getApplicationContext || env->ExceptionCheck()) {
-        env->ExceptionClear();
+    if (env->ExceptionCheck() || !getApplicationContext) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
         env->DeleteLocalRef(activityClass);
+        env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
         return;
     }
+
     jobject context = env->CallObjectMethod(activity, getApplicationContext);
-    if (!env->ExceptionCheck() && context)
-        appContext_ = env->NewGlobalRef(context);
-    else if (env->ExceptionCheck())
+    if (env->ExceptionCheck()) {
         env->ExceptionClear();
-    if (context) env->DeleteLocalRef(context);
+        if (context) env->DeleteLocalRef(context);
+        env->DeleteLocalRef(activityClass);
+        env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+        return;
+    }
+
+    if (context) {
+        appContext_ = env->NewGlobalRef(context);
+        if (env->ExceptionCheck() || !appContext_) {
+            if (env->ExceptionCheck()) env->ExceptionClear();
+            if (appContext_) env->DeleteGlobalRef(appContext_);
+            appContext_ = nullptr;
+        }
+        env->DeleteLocalRef(context);
+    }
     env->DeleteLocalRef(activityClass);
 }
 
@@ -381,7 +407,10 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
     }
 
     surface_ = env->NewGlobalRef(surface);
-    if (!surface_) {
+    if (env->ExceptionCheck() || !surface_) {
+        if (env->ExceptionCheck()) env->ExceptionClear();
+        if (surface_) env->DeleteGlobalRef(surface_);
+        surface_ = nullptr;
         error = "Unable to retain playback Surface for libmpv";
         return false;
     }

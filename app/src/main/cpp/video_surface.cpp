@@ -155,13 +155,22 @@ void VideoSurface::release() {
     if (env) {
         if (surface_) {
             jclass surfaceClass = env->FindClass("android/view/Surface");
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+                if (surfaceClass) env->DeleteLocalRef(surfaceClass);
+                surfaceClass = nullptr;
+            }
             if (surfaceClass) {
                 jmethodID method = env->GetMethodID(surfaceClass, "release", "()V");
-                if (method) env->CallVoidMethod(surface_, method);
-                if (env->ExceptionCheck()) env->ExceptionClear();
+                if (env->ExceptionCheck()) {
+                    env->ExceptionClear();
+                    method = nullptr;
+                }
+                if (method) {
+                    env->CallVoidMethod(surface_, method);
+                    if (env->ExceptionCheck()) env->ExceptionClear();
+                }
                 env->DeleteLocalRef(surfaceClass);
-            } else if (env->ExceptionCheck()) {
-                env->ExceptionClear();
             }
             env->DeleteGlobalRef(surface_);
             surface_ = nullptr;
@@ -169,8 +178,14 @@ void VideoSurface::release() {
         if (surfaceTexture_) {
             jclass textureClass = surfaceTextureClass_;
             jmethodID method = textureClass ? env->GetMethodID(textureClass, "release", "()V") : nullptr;
-            if (method) env->CallVoidMethod(surfaceTexture_, method);
-            if (env->ExceptionCheck()) env->ExceptionClear();
+            if (env->ExceptionCheck()) {
+                env->ExceptionClear();
+                method = nullptr;
+            }
+            if (method) {
+                env->CallVoidMethod(surfaceTexture_, method);
+                if (env->ExceptionCheck()) env->ExceptionClear();
+            }
             env->DeleteGlobalRef(surfaceTexture_);
             surfaceTexture_ = nullptr;
         }

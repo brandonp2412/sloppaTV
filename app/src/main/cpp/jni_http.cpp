@@ -49,6 +49,36 @@ bool clearException(JNIEnv* env, const char* where, std::string& error) {
     return true;
 }
 
+jclass findClassChecked(JNIEnv* env, const char* name, const char* where, std::string& error) {
+    if (!env || !name) return nullptr;
+    jclass value = env->FindClass(name);
+    if (!clearException(env, where, error)) return value;
+    if (value) env->DeleteLocalRef(value);
+    return nullptr;
+}
+
+jclass objectClassChecked(JNIEnv* env, jobject object, const char* where, std::string& error) {
+    if (!env || !object) return nullptr;
+    jclass value = env->GetObjectClass(object);
+    if (!clearException(env, where, error)) return value;
+    if (value) env->DeleteLocalRef(value);
+    return nullptr;
+}
+
+jmethodID methodChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature, const char* where,
+                        std::string& error) {
+    if (!env || !clazz || !name || !signature) return nullptr;
+    jmethodID value = env->GetMethodID(clazz, name, signature);
+    return clearException(env, where, error) ? nullptr : value;
+}
+
+jfieldID fieldChecked(JNIEnv* env, jclass clazz, const char* name, const char* signature, const char* where,
+                      std::string& error) {
+    if (!env || !clazz || !name || !signature) return nullptr;
+    jfieldID value = env->GetFieldID(clazz, name, signature);
+    return clearException(env, where, error) ? nullptr : value;
+}
+
 std::string requestUrlForLog(const std::string& url) {
     const size_t query = url.find('?');
     return query == std::string::npos ? url : url.substr(0, query);
@@ -64,7 +94,13 @@ JniHttpClient::JniHttpClient(JavaVM* vm, jobject activity) : vm_(vm) {
     if (!vm_ || !activity) return;
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
-    if (env) activity_ = env->NewGlobalRef(activity);
+    if (!env) return;
+    activity_ = env->NewGlobalRef(activity);
+    std::string error;
+    if (clearException(env, "HTTP activity retention", error) || !activity_) {
+        if (activity_) env->DeleteGlobalRef(activity_);
+        activity_ = nullptr;
+    }
 }
 
 JniHttpClient::~JniHttpClient() {
@@ -153,19 +189,18 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
         return response;
     }
 
-    jclass activityClass = env->GetObjectClass(activity_);
+    jclass activityClass = objectClassChecked(env, activity_, "HTTP bridge activity class", response.error);
     jmethodID performRequest =
-        activityClass ? env->GetMethodID(activityClass, "performHttpRequestBridge",
-                                         "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[BJ)Lapp/"
-                                         "sloppatv/HttpBridge$Result;")
-                      : nullptr;
-    if (clearException(env, "HTTP bridge lookup", response.error) || !activityClass || !performRequest) {
+        methodChecked(env, activityClass, "performHttpRequestBridge",
+                      "(Ljava/lang/String;Ljava/lang/String;[Ljava/lang/String;[BJ)Lapp/sloppatv/HttpBridge$Result;",
+                      "HTTP bridge lookup", response.error);
+    if (!activityClass || !performRequest) {
         if (activityClass) env->DeleteLocalRef(activityClass);
         return response;
     }
 
-    jclass stringClass = env->FindClass("java/lang/String");
-    if (clearException(env, "HTTP bridge String class", response.error) || !stringClass) {
+    jclass stringClass = findClassChecked(env, "java/lang/String", "HTTP bridge String class", response.error);
+    if (!stringClass) {
         env->DeleteLocalRef(activityClass);
         return response;
     }
@@ -179,9 +214,18 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
     }
 
     jstring jMethod = toJString(env, method);
-    jstring jUrl = toJString(env, url);
-    jobjectArray jHeaders = env->NewObjectArray(static_cast<jsize>(headers.size() * 2), stringClass, nullptr);
-    if (clearException(env, "HTTP bridge request strings", response.error) || !jMethod || !jUrl || !jHeaders) {
+    bool requestSetupFailed = clearException(env, "HTTP bridge request method", response.error) || !jMethod;
+    jstring jUrl = nullptr;
+    if (!requestSetupFailed) {
+        jUrl = toJString(env, url);
+        requestSetupFailed = clearException(env, "HTTP bridge request URL", response.error) || !jUrl;
+    }
+    jobjectArray jHeaders = nullptr;
+    if (!requestSetupFailed) {
+        jHeaders = env->NewObjectArray(static_cast<jsize>(headers.size() * 2), stringClass, nullptr);
+        requestSetupFailed = clearException(env, "HTTP bridge request headers allocation", response.error) || !jHeaders;
+    }
+    if (requestSetupFailed) {
         if (response.error.empty()) response.error = "Unable to allocate Android HTTP request strings";
         if (jHeaders) env->DeleteLocalRef(jHeaders);
         if (jUrl) env->DeleteLocalRef(jUrl);
@@ -194,21 +238,23 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
     bool headerSetupFailed = false;
     for (const auto& [key, value] : headers) {
         jstring jKey = toJString(env, key);
-        jstring jValue = toJString(env, value);
-        if (!jKey || !jValue || env->ExceptionCheck()) {
-            if (jKey) env->DeleteLocalRef(jKey);
-            if (jValue) env->DeleteLocalRef(jValue);
-            headerSetupFailed = true;
-            break;
+        headerSetupFailed = clearException(env, "HTTP bridge header key", response.error) || !jKey;
+        jstring jValue = nullptr;
+        if (!headerSetupFailed) {
+            jValue = toJString(env, value);
+            headerSetupFailed = clearException(env, "HTTP bridge header value", response.error) || !jValue;
         }
-        env->SetObjectArrayElement(jHeaders, headerIndex++, jKey);
-        if (!env->ExceptionCheck()) env->SetObjectArrayElement(jHeaders, headerIndex++, jValue);
-        env->DeleteLocalRef(jKey);
-        env->DeleteLocalRef(jValue);
-        if (env->ExceptionCheck()) {
-            headerSetupFailed = true;
-            break;
+        if (!headerSetupFailed) {
+            env->SetObjectArrayElement(jHeaders, headerIndex++, jKey);
+            headerSetupFailed = clearException(env, "HTTP bridge header key insertion", response.error);
         }
+        if (!headerSetupFailed) {
+            env->SetObjectArrayElement(jHeaders, headerIndex++, jValue);
+            headerSetupFailed = clearException(env, "HTTP bridge header value insertion", response.error);
+        }
+        if (jKey) env->DeleteLocalRef(jKey);
+        if (jValue) env->DeleteLocalRef(jValue);
+        if (headerSetupFailed) break;
     }
 
     if (headerSetupFailed) {
@@ -223,9 +269,9 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
     }
 
     jbyteArray jBody = env->NewByteArray(static_cast<jsize>(body.size()));
-    if (!jBody) {
-        clearException(env, "HTTP bridge request body", response.error);
+    if (clearException(env, "HTTP bridge request body", response.error) || !jBody) {
         if (response.error.empty()) response.error = "Unable to allocate Android HTTP request body";
+        if (jBody) env->DeleteLocalRef(jBody);
         env->DeleteLocalRef(jHeaders);
         env->DeleteLocalRef(jUrl);
         env->DeleteLocalRef(jMethod);
@@ -271,42 +317,59 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
         __android_log_print(ANDROID_LOG_ERROR, kTag, "%s %s failed before HTTP status: %s", method.c_str(),
                             safeUrl.c_str(), response.error.c_str());
     } else {
-        jclass resultClass = env->GetObjectClass(result);
-        jfieldID statusField = resultClass ? env->GetFieldID(resultClass, "status", "I") : nullptr;
-        jfieldID bodyField = resultClass ? env->GetFieldID(resultClass, "body", "[B") : nullptr;
-        jfieldID errorField = resultClass ? env->GetFieldID(resultClass, "error", "Ljava/lang/String;") : nullptr;
-        jfieldID setCookieField =
-            resultClass ? env->GetFieldID(resultClass, "setCookie", "Ljava/lang/String;") : nullptr;
-        if (!clearException(env, "HTTP bridge result fields", response.error) && statusField && bodyField &&
-            errorField && setCookieField) {
-            response.status = env->GetIntField(result, statusField);
-            auto responseBytes = static_cast<jbyteArray>(env->GetObjectField(result, bodyField));
-            auto errorText = static_cast<jstring>(env->GetObjectField(result, errorField));
-            auto setCookieText = static_cast<jstring>(env->GetObjectField(result, setCookieField));
+        jclass resultClass = objectClassChecked(env, result, "HTTP bridge result class", response.error);
+        jfieldID statusField =
+            fieldChecked(env, resultClass, "status", "I", "HTTP bridge result status field", response.error);
+        jfieldID bodyField =
+            fieldChecked(env, resultClass, "body", "[B", "HTTP bridge result body field", response.error);
+        jfieldID errorField = fieldChecked(env, resultClass, "error", "Ljava/lang/String;",
+                                           "HTTP bridge result error field", response.error);
+        jfieldID setCookieField = fieldChecked(env, resultClass, "setCookie", "Ljava/lang/String;",
+                                               "HTTP bridge result cookie field", response.error);
+        bool resultFailed = !resultClass || !statusField || !bodyField || !errorField || !setCookieField;
 
-            if (responseBytes) {
-                const jsize length = env->GetArrayLength(responseBytes);
-                if (length > 0) {
-                    response.body.resize(static_cast<size_t>(length));
-                    env->GetByteArrayRegion(responseBytes, 0, length, reinterpret_cast<jbyte*>(response.body.data()));
-                }
-                env->DeleteLocalRef(responseBytes);
-            }
-            if (setCookieText) {
-                response.setCookie = jniString(env, setCookieText);
-                env->DeleteLocalRef(setCookieText);
-            }
-            if (errorText) {
-                const std::string detail = jniString(env, errorText);
-                if (!detail.empty()) {
-                    response.error = userFacingJavaHttpError("HTTP request", detail);
-                    __android_log_print(ANDROID_LOG_ERROR, kTag, "%s (%s)", response.error.c_str(), detail.c_str());
-                }
-                env->DeleteLocalRef(errorText);
-            }
-        } else if (response.error.empty()) {
-            response.error = "Android HTTP bridge returned an invalid result";
+        jbyteArray responseBytes = nullptr;
+        jstring errorText = nullptr;
+        jstring setCookieText = nullptr;
+        if (!resultFailed) {
+            response.status = env->GetIntField(result, statusField);
+            resultFailed = clearException(env, "HTTP bridge result status", response.error);
         }
+        if (!resultFailed) {
+            responseBytes = static_cast<jbyteArray>(env->GetObjectField(result, bodyField));
+            resultFailed = clearException(env, "HTTP bridge result body", response.error);
+        }
+        if (!resultFailed) {
+            errorText = static_cast<jstring>(env->GetObjectField(result, errorField));
+            resultFailed = clearException(env, "HTTP bridge result error", response.error);
+        }
+        if (!resultFailed) {
+            setCookieText = static_cast<jstring>(env->GetObjectField(result, setCookieField));
+            resultFailed = clearException(env, "HTTP bridge result cookie", response.error);
+        }
+
+        if (!resultFailed && responseBytes) {
+            const jsize length = env->GetArrayLength(responseBytes);
+            resultFailed = clearException(env, "HTTP bridge result body length", response.error);
+            if (!resultFailed && length > 0) {
+                response.body.resize(static_cast<size_t>(length));
+                env->GetByteArrayRegion(responseBytes, 0, length, reinterpret_cast<jbyte*>(response.body.data()));
+                resultFailed = clearException(env, "HTTP bridge result body copy", response.error);
+            }
+        }
+        if (!resultFailed && setCookieText) response.setCookie = jniString(env, setCookieText);
+        if (!resultFailed && errorText) {
+            const std::string detail = jniString(env, errorText);
+            if (!detail.empty()) {
+                response.error = userFacingJavaHttpError("HTTP request", detail);
+                __android_log_print(ANDROID_LOG_ERROR, kTag, "%s (%s)", response.error.c_str(), detail.c_str());
+            }
+        }
+
+        if (responseBytes) env->DeleteLocalRef(responseBytes);
+        if (setCookieText) env->DeleteLocalRef(setCookieText);
+        if (errorText) env->DeleteLocalRef(errorText);
+        if (resultFailed && response.error.empty()) response.error = "Android HTTP bridge returned an invalid result";
         if (resultClass) env->DeleteLocalRef(resultClass);
         env->DeleteLocalRef(result);
     }
@@ -324,15 +387,15 @@ bool JniHttpClient::registerRequest(uint64_t requestId) const {
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (!env || !activity_) return false;
-    jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID registerRequest =
-        activityClass ? env->GetMethodID(activityClass, "registerHttpRequestBridge", "(J)V") : nullptr;
-    bool ok = registerRequest != nullptr && !env->ExceptionCheck();
+    std::string error;
+    jclass activityClass = objectClassChecked(env, activity_, "HTTP request registration class", error);
+    jmethodID registerRequest = methodChecked(env, activityClass, "registerHttpRequestBridge", "(J)V",
+                                              "HTTP request registration lookup", error);
+    bool ok = activityClass && registerRequest;
     if (ok) {
         env->CallVoidMethod(activity_, registerRequest, static_cast<jlong>(requestId));
-        ok = !env->ExceptionCheck();
+        ok = !clearException(env, "HTTP request registration", error);
     }
-    if (env->ExceptionCheck()) env->ExceptionClear();
     if (activityClass) env->DeleteLocalRef(activityClass);
     return ok;
 }
@@ -341,12 +404,14 @@ void JniHttpClient::unregisterRequest(uint64_t requestId) const {
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (!env || !activity_) return;
-    jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID unregister =
-        activityClass ? env->GetMethodID(activityClass, "unregisterHttpRequestBridge", "(J)V") : nullptr;
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    if (unregister) env->CallVoidMethod(activity_, unregister, static_cast<jlong>(requestId));
-    if (env->ExceptionCheck()) env->ExceptionClear();
+    std::string error;
+    jclass activityClass = objectClassChecked(env, activity_, "HTTP request unregistration class", error);
+    jmethodID unregister = methodChecked(env, activityClass, "unregisterHttpRequestBridge", "(J)V",
+                                         "HTTP request unregistration lookup", error);
+    if (unregister) {
+        env->CallVoidMethod(activity_, unregister, static_cast<jlong>(requestId));
+        clearException(env, "HTTP request unregistration", error);
+    }
     if (activityClass) env->DeleteLocalRef(activityClass);
 }
 
@@ -354,10 +419,13 @@ void JniHttpClient::cancelRequest(uint64_t requestId) const {
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (!env || !activity_) return;
-    jclass activityClass = env->GetObjectClass(activity_);
-    jmethodID cancel = activityClass ? env->GetMethodID(activityClass, "cancelHttpRequestBridge", "(J)V") : nullptr;
-    if (env->ExceptionCheck()) env->ExceptionClear();
-    if (cancel) env->CallVoidMethod(activity_, cancel, static_cast<jlong>(requestId));
-    if (env->ExceptionCheck()) env->ExceptionClear();
+    std::string error;
+    jclass activityClass = objectClassChecked(env, activity_, "HTTP request cancellation class", error);
+    jmethodID cancel =
+        methodChecked(env, activityClass, "cancelHttpRequestBridge", "(J)V", "HTTP request cancellation lookup", error);
+    if (cancel) {
+        env->CallVoidMethod(activity_, cancel, static_cast<jlong>(requestId));
+        clearException(env, "HTTP request cancellation", error);
+    }
     if (activityClass) env->DeleteLocalRef(activityClass);
 }
