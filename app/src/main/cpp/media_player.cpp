@@ -188,7 +188,7 @@ bool NativeMediaPlayer::ensureAndroidCaBundleLocked(std::string& error) {
     }
 
     const std::string outputPath = filesDir_ + "/android-ca-bundle.pem";
-    struct stat existing{};
+    struct stat existing = {};
     if (stat(outputPath.c_str(), &existing) == 0 && existing.st_size > 0) {
         caBundlePath_ = outputPath;
         return true;

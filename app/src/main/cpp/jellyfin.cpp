@@ -156,11 +156,11 @@ std::string JellyfinClient::discoverServerBase(const std::string& value, const s
 
 std::string JellyfinClient::authorization(const JellyfinSession* session, const std::string& deviceId) const {
     std::ostringstream out;
-    out << "MediaBrowser "
-        << "Client=\"" << kClientName << "\","
-        << "Version=\"" << kClientVersion << "\","
-        << "DeviceId=\"" << deviceId << "\","
-        << "Device=\"" << kDeviceName << "\"";
+    out << "MediaBrowser ";
+    out << "Client=\"" << kClientName << "\",";
+    out << "Version=\"" << kClientVersion << "\",";
+    out << "DeviceId=\"" << deviceId << "\",";
+    out << "Device=\"" << kDeviceName << "\"";
     if (session && !session->token.empty()) out << ",Token=\"" << session->token << "\"";
     return out.str();
 }

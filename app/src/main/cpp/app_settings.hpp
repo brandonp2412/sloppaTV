@@ -143,6 +143,8 @@ constexpr bool hasSettingEffect(SettingChangeEffect effects, SettingChangeEffect
 }
 
 using SettingAdjuster = SettingChangeEffect (*)(AppSettings&, int);
+using BoolSettingMember = bool AppSettings::*;
+using IntSettingMember = int AppSettings::*;
 
 template <size_t N>
 inline void stepSettingChoice(int& value, const std::array<int, N>& choices, int direction, int fallbackIndex) {
@@ -152,12 +154,12 @@ inline void stepSettingChoice(int& value, const std::array<int, N>& choices, int
     value = choices[static_cast<size_t>(index)];
 }
 
-template <bool AppSettings::* Member> inline SettingChangeEffect toggleSetting(AppSettings& settings, int) {
+template <BoolSettingMember Member> inline SettingChangeEffect toggleSetting(AppSettings& settings, int) {
     settings.*Member = !(settings.*Member);
     return SettingChangeEffect::None;
 }
 
-template <int AppSettings::* Member, int Minimum, int Maximum>
+template <IntSettingMember Member, int Minimum, int Maximum>
 inline SettingChangeEffect stepClampedSetting(AppSettings& settings, int direction) {
     settings.*Member = std::clamp(settings.*Member + direction, Minimum, Maximum);
     return SettingChangeEffect::None;
@@ -288,7 +290,7 @@ struct SettingValueContext {
 
 using SettingValueRenderer = std::string (*)(const AppSettings&, const SettingValueContext&);
 
-template <bool AppSettings::* Member>
+template <BoolSettingMember Member>
 inline std::string renderBooleanSetting(const AppSettings& settings, const SettingValueContext&) {
     return settings.*Member ? "ON" : "OFF";
 }
