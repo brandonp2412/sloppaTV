@@ -7,6 +7,7 @@
 #include "screen_navigation_key.hpp"
 #include "virtual_keyboard.hpp"
 
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -31,6 +32,14 @@ public:
                              std::string& error)
         : account_(account), keyboard_(keyboard), accountAsync_(accountAsync), quickConnectAsync_(quickConnectAsync),
           authEpoch_(authEpoch), loading_(loading), error_(error) {}
+
+    template <typename Completion> [[nodiscard]] std::optional<JellyfinSession> complete(Completion& completion) {
+        AccountCompletionEffects effects = account_.complete(completion, authEpoch_.active(completion.generation));
+        if (effects.finishLoading) loading_ = false;
+        if (effects.error) error_ = std::move(*effects.error);
+        if (effects.clearError) error_.clear();
+        return std::move(effects.authenticatedSession);
+    }
 
     [[nodiscard]] AccountScreenEffects handleLogin(ScreenNavigationKey key) {
         const AccountNavigationAction navigation = account_.handleLogin(key);
