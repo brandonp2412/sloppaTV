@@ -1,5 +1,5 @@
 #include "seerr.hpp"
-#include "seerr_progress.hpp"
+#include "seerr_download_progress.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -164,50 +164,28 @@ void applyMediaDetails(SeerrMediaItem& item, const SeerrMediaItem& details) {
 void applyDownloadProgress(SeerrMediaItem& item, const json& downloads) {
     if (!downloads.is_array() || downloads.empty()) return;
 
-    if (item.mediaType == "tv") {
-        const size_t activeDownloads = static_cast<size_t>(std::count_if(
-            downloads.begin(), downloads.end(), [](const json& download) { return download.is_object(); }));
-        if (activeDownloads == 0) return;
-        item.progressPercent = -1;
-        item.progressLabel.clear();
-        item.progressEta.clear();
-        item.status =
-            item.mediaStatus == 4
-                ? "Partially available, still downloading"
-                : (activeDownloads == 1 ? "Series downloading" : std::to_string(activeDownloads) + " downloads active");
-        return;
-    }
-
-    const json* selected = nullptr;
-    int selectedSeason = -1;
-    int selectedEpisode = -1;
-    int selectedScore = 0;
+    std::vector<SeerrDownloadProgressEntry> entries;
+    entries.reserve(downloads.size());
     for (const auto& download : downloads) {
         if (!download.is_object()) continue;
-        if (!selected) selected = &download;
-        if (item.mediaType != "tv") continue;
+        SeerrDownloadProgressEntry entry;
+        entry.size = doubleValue(download, "size");
+        entry.sizeLeft = doubleValue(download, "sizeLeft");
+        entry.timeLeft = stringValue(download, "timeLeft");
         const auto episode = download.find("episode");
-        if (episode == download.end() || !episode->is_object()) continue;
-        const int season = integerValue(*episode, "seasonNumber", -1);
-        const int number = integerValue(*episode, "episodeNumber", -1);
-        if (season < 0 || number < 0) continue;
-        const int score = (season > 0 ? season : 10000 + season) * 10000 + number;
-        if (selectedSeason < 0 || score < selectedScore) {
-            selected = &download;
-            selectedSeason = season;
-            selectedEpisode = number;
-            selectedScore = score;
+        if (episode != download.end() && episode->is_object()) {
+            entry.seasonNumber = integerValue(*episode, "seasonNumber", -1);
+            entry.episodeNumber = integerValue(*episode, "episodeNumber", -1);
         }
+        entries.push_back(std::move(entry));
     }
-    if (!selected) return;
+    if (entries.empty()) return;
 
-    const int percent = seerrProgressPercent(doubleValue(*selected, "size"), doubleValue(*selected, "sizeLeft"));
-    if (percent < 0) return;
-    const std::string timeLeft = stringValue(*selected, "timeLeft");
-    item.progressPercent = percent;
-    item.progressLabel = seerrProgressLabel(item.mediaType, selectedSeason, selectedEpisode, percent);
-    item.progressEta = seerrProgressEta(percent, timeLeft);
-    item.status = seerrProgressStatus(item.mediaType, selectedSeason, selectedEpisode, percent, timeLeft);
+    const auto progress = seerrDownloadProgressSummary(item.mediaType, item.mediaStatus, entries);
+    item.progressPercent = progress.percent;
+    item.progressLabel = progress.label;
+    item.progressEta = progress.eta;
+    if (!progress.status.empty()) item.status = progress.status;
 }
 
 std::string cookieValue(const std::string& headers, const std::string& wanted) {
