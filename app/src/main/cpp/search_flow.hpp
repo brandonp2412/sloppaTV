@@ -107,7 +107,7 @@ public:
 
     [[nodiscard]] SearchDispatchEffects searchSeerr(SeerrEndpoint endpoint, bool immediate,
                                                     std::chrono::steady_clock::time_point now) {
-        auto plan = immediate ? coordinator_.prepareImmediate(std::move(endpoint), state_.query())
+        auto plan = immediate ? coordinator_.prepareImmediate(endpoint, state_.query())
                               : coordinator_.prepareDue(std::move(endpoint), state_.query(), now);
         if (plan.resultsChanged) state_.refreshSeerrResults();
         if (!plan.ready()) return {};

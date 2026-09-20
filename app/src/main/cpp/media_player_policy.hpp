@@ -154,8 +154,8 @@ inline bool transcodingUrlRepresentsDirectStream(std::string_view url) {
     size_t begin = 0;
     while (begin < reasons.size()) {
         const size_t end = reasons.find(',', begin);
-        const std::string_view reason(reasons.data() + begin,
-                                      (end == std::string::npos ? reasons.size() : end) - begin);
+        const std::string_view reason =
+            std::string_view(reasons).substr(begin, (end == std::string::npos ? reasons.size() : end) - begin);
         if (reason.empty() || !directStreamTranscodeReason(reason)) return false;
         if (end == std::string::npos) break;
         begin = end + 1;

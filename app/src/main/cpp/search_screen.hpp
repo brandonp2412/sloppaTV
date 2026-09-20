@@ -200,10 +200,16 @@ public:
     [[nodiscard]] bool finishLibrarySearch(const std::string& query, std::vector<JellyfinItem> results) {
         if (query_ != query) return false;
         loading_ = false;
-        const auto firstEpisode = std::stable_partition(
-            results.begin(), results.end(), [](const JellyfinItem& item) { return item.type != "Episode"; });
-        libraryTitles_.assign(results.begin(), firstEpisode);
-        episodes_.assign(firstEpisode, results.end());
+        libraryTitles_.clear();
+        episodes_.clear();
+        libraryTitles_.reserve(results.size());
+        episodes_.reserve(results.size());
+        for (auto& item : results) {
+            if (item.type == "Episode")
+                episodes_.push_back(std::move(item));
+            else
+                libraryTitles_.push_back(std::move(item));
+        }
         rebuildResults();
         return true;
     }

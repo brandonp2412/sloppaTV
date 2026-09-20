@@ -133,10 +133,7 @@ ItemMutationCompletionEffects ItemMutationController::apply(PlayedCompletion& co
 
     ItemMutationCompletionEffects effects;
     effects.finishLoading = true;
-    if (rollbackMatches) {
-        effects.playedRollback = std::move(rollbackState);
-        rollbackState.reset();
-    }
+    if (rollbackMatches) effects.playedRollback.swap(rollbackState);
 
     if (!completion.result.ok) {
         effects.cacheUpdate = completion.item;

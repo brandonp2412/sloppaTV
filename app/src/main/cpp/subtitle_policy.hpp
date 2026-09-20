@@ -73,7 +73,7 @@ inline std::string sanitizeSubtitleText(std::string text) {
         if (text[index] == '{') {
             const size_t end = text.find('}', index + 1);
             if (end != std::string::npos) {
-                const std::string_view body(text.data() + index + 1, end - index - 1);
+                const std::string_view body = std::string_view(text).substr(index + 1, end - index - 1);
                 const bool assOverride = !body.empty() && body.front() == '\\';
                 const bool startsWithAn = body.size() >= 2 &&
                                           std::tolower(static_cast<unsigned char>(body[0])) == 'a' &&
@@ -89,7 +89,7 @@ inline std::string sanitizeSubtitleText(std::string text) {
         if (text[index] == '<') {
             const size_t end = text.find('>', index + 1);
             if (end != std::string::npos) {
-                const std::string_view body(text.data() + index + 1, end - index - 1);
+                const std::string_view body = std::string_view(text).substr(index + 1, end - index - 1);
                 if (isMarkupTag(body)) {
                     std::string_view normalized = body;
                     while (!normalized.empty() && std::isspace(static_cast<unsigned char>(normalized.front())))

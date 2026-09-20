@@ -124,7 +124,7 @@ public:
         SeriesPlayAllOptions options{.maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
                                      .maxAudioChannels = settings_.maxAudioChannels,
                                      .overrides = playbackOverridesFor(settings_)};
-        seriesPlayback_.playAll(session_, details_.item(), std::move(options), playbackEpoch_.begin());
+        seriesPlayback_.playAll(session_, details_.item(), options, playbackEpoch_.begin());
     }
 
     void beginPlayback() {

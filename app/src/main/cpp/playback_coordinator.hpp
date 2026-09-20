@@ -710,9 +710,9 @@ public:
     [[nodiscard]] PlaybackAdjacentEpisodePlan beginAdjacentEpisodePlan(int direction) {
         PlaybackAdjacentEpisodePlan plan;
         if (direction == 0) return plan;
-        if (direction > 0 && continuationState_.nextItem()) {
-            plan.nextItem = *continuationState_.nextItem();
-            return plan;
+        if (direction > 0) {
+            plan.nextItem = continuationState_.nextItem();
+            if (plan.nextItem) return plan;
         }
         plan.lookup = beginAdjacentEpisodeLookup();
         return plan;
