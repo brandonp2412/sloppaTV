@@ -1,6 +1,7 @@
 package app.sloppatv;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -18,6 +19,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class HttpBridge {
     private static final long REQUEST_TIMEOUT_MS = 45_000;
+    private static final int MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
+    private static final String RESPONSE_TOO_LARGE = "HTTP response exceeds 64 MiB limit";
     private static final ScheduledExecutorService DEADLINE_EXECUTOR = Executors.newSingleThreadScheduledExecutor(
         runnable -> {
             Thread thread = new Thread(runnable, "sloppa-http-timeout");
@@ -123,13 +126,19 @@ public final class HttpBridge {
             }
 
             int status = connection.getResponseCode();
+            long contentLength = connection.getContentLengthLong();
+            if (contentLength > MAX_RESPONSE_BYTES) throw new IOException(RESPONSE_TOO_LARGE);
+
             InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
             byte[] responseBody = new byte[0];
             if (stream != null) {
                 try (InputStream input = stream; ByteArrayOutputStream output = new ByteArrayOutputStream()) {
                     byte[] buffer = new byte[16 * 1024];
                     int count;
-                    while ((count = input.read(buffer)) != -1) output.write(buffer, 0, count);
+                    while ((count = input.read(buffer)) != -1) {
+                        if (count > MAX_RESPONSE_BYTES - output.size()) throw new IOException(RESPONSE_TOO_LARGE);
+                        output.write(buffer, 0, count);
+                    }
                     responseBody = output.toByteArray();
                 }
             }

@@ -29,6 +29,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Location", "/final")
             self.end_headers()
             return
+        if self.path == "/oversized":
+            self.send_response(200)
+            self.send_header("Content-Length", str(64 * 1024 * 1024 + 1))
+            self.end_headers()
+            return
         if self.path == "/final":
             self.send_response(200)
             self.send_header("Set-Cookie", "first=one; Path=/")
@@ -254,6 +259,13 @@ public final class HttpBridgeHarness {
         self.assertEqual(body, b"redirected")
         self.assertEqual(error, "")
         self.assertIn("second=two; Path=/", cookies)
+
+    def test_rejects_oversized_response_before_buffering_body(self) -> None:
+        status, body, error, cookies = self._request("GET", self.base_url + "/oversized")
+        self.assertEqual(status, 0)
+        self.assertEqual(body, b"")
+        self.assertIn("HTTP response exceeds 64 MiB limit", error)
+        self.assertEqual(cookies, "")
 
     def test_returns_transport_errors_as_result(self) -> None:
         status, body, error, cookies = self._request("GET", "not-a-url")
