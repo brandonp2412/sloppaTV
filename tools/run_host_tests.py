@@ -12,6 +12,7 @@ CPP_DIR = ROOT / "app" / "src" / "main" / "cpp"
 CPP_TEST_DIR = ROOT / "app" / "src" / "test" / "cpp"
 PY_TEST_DIR = ROOT / "app" / "src" / "test" / "python"
 BUILD_DIR = ROOT / "build" / "host-tests"
+TEMP_DIR = BUILD_DIR / "tmp"
 
 CPP_TESTS = [
     "account_async_executor_test.cpp",
@@ -192,7 +193,9 @@ LINKED_CPP_TESTS = [
 
 def run(command: list[str]) -> None:
     print("+", " ".join(command), flush=True)
-    subprocess.run(command, cwd=ROOT, check=True)
+    env = os.environ.copy()
+    env["TMPDIR"] = str(TEMP_DIR)
+    subprocess.run(command, cwd=ROOT, check=True, env=env)
 
 
 def run_cpp_test(test_name: str, extra_sources: list[str] | None = None, extra_flags: list[str] | None = None) -> None:
@@ -221,6 +224,7 @@ def run_cpp_test(test_name: str, extra_sources: list[str] | None = None, extra_f
 
 def main() -> int:
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    TEMP_DIR.mkdir(parents=True, exist_ok=True)
     jobs = [(test_name, None, None) for test_name in CPP_TESTS] + [
         (test_name, extra_sources, extra_flags) for test_name, extra_sources, extra_flags in LINKED_CPP_TESTS
     ]
