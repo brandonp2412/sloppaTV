@@ -815,6 +815,61 @@ bool Renderer::externalImage(GLuint texture, float x, float y, float w, float h,
     return true;
 }
 
+std::optional<Color> Renderer::sampleAverageColor(float x, float y, float w, float h) {
+    if (!ready() || w <= 0.0f || h <= 0.0f || surfaceWidth_ <= 0 || surfaceHeight_ <= 0) return std::nullopt;
+    flush();
+
+    const float sx = static_cast<float>(surfaceWidth_) / logicalWidth();
+    const float sy = static_cast<float>(surfaceHeight_) / logicalHeight();
+    const int readX = std::clamp(static_cast<int>(std::floor(x * sx)), 0, surfaceWidth_ - 1);
+    const int requestedWidth = std::max(1, static_cast<int>(std::ceil(w * sx)));
+    const int readWidth = std::min(requestedWidth, surfaceWidth_ - readX);
+    const int bandHeight = std::min(6, surfaceHeight_);
+    if (readWidth <= 0 || bandHeight <= 0) return std::nullopt;
+
+    std::vector<uint8_t> pixels(static_cast<size_t>(readWidth) * static_cast<size_t>(bandHeight) * 4);
+    uint64_t red = 0;
+    uint64_t green = 0;
+    uint64_t blue = 0;
+    uint64_t count = 0;
+    constexpr std::array<float, 3> sampleRows{0.25f, 0.5f, 0.75f};
+
+    while (glGetError() != GL_NO_ERROR) {}
+    glPixelStorei(GL_PACK_ALIGNMENT, 1);
+    for (const float row : sampleRows) {
+        const float logicalSampleY = y + h * row;
+        const int centerY =
+            static_cast<int>(std::round((logicalHeight() - logicalSampleY) * sy));
+        const int readY = std::clamp(centerY - bandHeight / 2, 0, surfaceHeight_ - bandHeight);
+        glReadPixels(readX, readY, readWidth, bandHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+        if (glGetError() != GL_NO_ERROR) {
+            glPixelStorei(GL_PACK_ALIGNMENT, 4);
+            return std::nullopt;
+        }
+        const int stride = std::max(1, readWidth / 256);
+        for (int py = 0; py < bandHeight; ++py) {
+            for (int px = 0; px < readWidth; px += stride) {
+                const size_t offset =
+                    (static_cast<size_t>(py) * static_cast<size_t>(readWidth) + static_cast<size_t>(px)) * 4;
+                red += pixels[offset];
+                green += pixels[offset + 1];
+                blue += pixels[offset + 2];
+                ++count;
+            }
+        }
+    }
+    glPixelStorei(GL_PACK_ALIGNMENT, 4);
+    if (count == 0) return std::nullopt;
+
+    constexpr float channelScale = 1.0f / 255.0f;
+    return Color{
+        static_cast<float>(red) / static_cast<float>(count) * channelScale,
+        static_cast<float>(green) / static_cast<float>(count) * channelScale,
+        static_cast<float>(blue) / static_cast<float>(count) * channelScale,
+        1.0f,
+    };
+}
+
 GLuint Renderer::uploadFontAtlasBitmap(JNIEnv* env, jobject bitmap) {
     if (!env || !bitmap) return 0;
     AndroidBitmapInfo info{};

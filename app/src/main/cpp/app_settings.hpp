@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 enum class VideoZoomMode {
@@ -48,8 +49,9 @@ struct AppSettings {
     int seekBackSeconds = 10;
     int seekForwardSeconds = 10;
     int zoomMode = static_cast<int>(VideoZoomMode::Fit);
+    bool ambientLetterbox = false;
     bool autoplayNext = true;
-    int stillWatchingAfter = 3;
+    int stillWatchingAfter = 0;
     bool refreshRateSwitching = false;
     bool showWatchedIndicators = true;
     bool showClock = true;
@@ -74,7 +76,20 @@ struct AppSettings {
     std::string seerrSessionCookie;
     std::string seerrApiKey;
     bool seerrSelectDrive = false;
+    std::vector<std::string> disabledSkipSeriesIds;
 };
+
+inline bool skipSegmentsDisabledForSeries(const AppSettings& settings, std::string_view seriesId) {
+    if (seriesId.empty()) return false;
+    return std::find(settings.disabledSkipSeriesIds.begin(), settings.disabledSkipSeriesIds.end(), seriesId) !=
+           settings.disabledSkipSeriesIds.end();
+}
+
+inline bool addDisabledSkipSeries(AppSettings& settings, std::string seriesId) {
+    if (seriesId.empty() || skipSegmentsDisabledForSeries(settings, seriesId)) return false;
+    settings.disabledSkipSeriesIds.push_back(std::move(seriesId));
+    return true;
+}
 
 enum class SettingId : uint8_t {
     MaxStreamingBitrate = 0,
@@ -82,6 +97,7 @@ enum class SettingId : uint8_t {
     SkipBack,
     SkipAhead,
     DefaultVideoZoom,
+    AmbientLetterbox,
     AutoplayNextEpisode,
     StillWatchingAfter,
     MatchVideoRefreshRate,
@@ -184,8 +200,8 @@ inline SettingChangeEffect adjustSeekForward(AppSettings& settings, int directio
 }
 
 inline SettingChangeEffect adjustStillWatchingAfter(AppSettings& settings, int direction) {
-    static constexpr std::array<int, 5> choices{2, 3, 4, 5, 6};
-    stepSettingChoice(settings.stillWatchingAfter, choices, direction, 1);
+    static constexpr std::array<int, 6> choices{0, 2, 3, 4, 5, 6};
+    stepSettingChoice(settings.stillWatchingAfter, choices, direction, 0);
     return SettingChangeEffect::None;
 }
 
@@ -316,6 +332,7 @@ inline std::string renderDefaultVideoZoom(const AppSettings& settings, const Set
 }
 
 inline std::string renderStillWatchingAfter(const AppSettings& settings, const SettingValueContext&) {
+    if (settings.stillWatchingAfter <= 0) return "OFF";
     return std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS";
 }
 
@@ -426,7 +443,7 @@ struct SettingDescriptor {
 };
 
 inline constexpr int kNoSettingOrder = -1;
-inline constexpr size_t kSettingCount = 34;
+inline constexpr size_t kSettingCount = 35;
 
 constexpr size_t settingIndex(SettingId setting) {
     return static_cast<size_t>(setting);
@@ -444,6 +461,9 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
     {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, SettingKind::Value,
      SettingChangeEffect::Save | SettingChangeEffect::ApplyVideoZoom, stepClampedSetting<&AppSettings::zoomMode, 0, 2>,
      renderDefaultVideoZoom},
+    {SettingId::AmbientLetterbox, "AMBIENT LETTERBOX BARS", kNoSettingOrder, 12, SettingKind::Boolean,
+     SettingChangeEffect::Save, toggleSetting<&AppSettings::ambientLetterbox>,
+     renderBooleanSetting<&AppSettings::ambientLetterbox>},
     {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::autoplayNext>,
      renderBooleanSetting<&AppSettings::autoplayNext>},
@@ -504,7 +524,7 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
      renderBooleanSetting<&AppSettings::seerrSelectDrive>, SettingActivation::ToggleSeerrDriveSelection},
     {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, SettingKind::Action,
      SettingChangeEffect::None, nullptr, renderSeerrApiKey, SettingActivation::EditSeerrApiKey},
-    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, SettingKind::Action, SettingChangeEffect::None, nullptr,
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 13, SettingKind::Action, SettingChangeEffect::None, nullptr,
      renderAdvancedToggle, SettingActivation::ToggleAdvanced},
 }};
 
@@ -719,7 +739,7 @@ template <size_t N> consteval std::array<SettingId, N> makeSettingOrder(bool adv
 }
 
 inline constexpr auto kCommonSettings = makeSettingOrder<23>(false);
-inline constexpr auto kAdvancedSettings = makeSettingOrder<13>(true);
+inline constexpr auto kAdvancedSettings = makeSettingOrder<14>(true);
 
 inline std::vector<SettingId> matchingSettings(const std::string& query, bool advanced) {
     std::vector<SettingId> matches;

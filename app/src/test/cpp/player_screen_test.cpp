@@ -38,6 +38,44 @@ int main() {
     assert(!state.controlsActive(now + 21s));
     assert(!state.shouldDismissOnBack(now + 21s));
 
+    PlayerScreenState ambientState;
+    assert(ambientState.ambientSampleDue(now));
+    assert(!ambientState.ambientColorReady());
+    ambientState.applyAmbientSample(1.0f, 0.5f, 0.25f, now);
+    assert(ambientState.ambientColorReady());
+    const PlayerAmbientColor firstAmbient = ambientState.ambientColor();
+    assert(firstAmbient.r > 0.17f && firstAmbient.r < 0.19f);
+    assert(firstAmbient.g > 0.08f && firstAmbient.g < 0.10f);
+    assert(!ambientState.ambientSampleDue(now + 2s));
+    assert(ambientState.ambientSampleDue(now + 3s));
+    ambientState.applyAmbientSample(0.0f, 0.0f, 0.0f, now + 3s);
+    assert(ambientState.ambientColor().r < firstAmbient.r);
+
+    PlayerScreenState resumeState;
+    resumeState.beginInitialPosition(60'000, now);
+    assert(resumeState.positionMs() == 60'000);
+    assert(resumeState.pendingSeekTargetMs() == 60'000);
+    assert(!resumeState.pendingSeekAppearsFailed(0, now + 2s));
+    resumeState.applyObservedPosition(60'050, now + 600ms);
+    assert(resumeState.pendingSeekTargetMs() == -1);
+    resumeState.beginSeek(90'000, now + 3s);
+    assert(resumeState.pendingSeekAppearsFailed(0, now + 5s));
+
+    PlayerScreenState skipHoldState;
+    skipHoldState.beginSkipButtonPress();
+    assert(skipHoldState.skipButtonPressPending());
+    assert(skipHoldState.consumeSkipButtonRelease());
+    skipHoldState.beginSkipButtonPress();
+    skipHoldState.holdSkipButtonPress();
+    assert(skipHoldState.skipDisableSheetActive());
+    assert(skipHoldState.skipDisableSheetSelection() == 1);
+    assert(!skipHoldState.consumeSkipButtonRelease());
+    assert(skipHoldState.handleSkipDisableSheetInput(PlayerScreenInput::Left) == PlayerSkipSheetCommand::None);
+    assert(skipHoldState.skipDisableSheetSelection() == 0);
+    assert(skipHoldState.handleSkipDisableSheetInput(PlayerScreenInput::Activate) ==
+           PlayerSkipSheetCommand::DisableForShow);
+    assert(!skipHoldState.skipDisableSheetActive());
+
     PlayerScreenState inputState;
     auto command = inputState.handleInput(PlayerScreenInput::Up, now);
     assert(command.type == PlayerScreenCommandType::None);

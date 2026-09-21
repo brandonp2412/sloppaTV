@@ -290,6 +290,7 @@ public:
 
     template <typename TelemetryExecutor>
     bool skipActiveMediaSegment(TelemetryExecutor& telemetry, bool playerScreenActive) {
+        if (skipSegmentsDisabledForSeries(settings_, coordinator_.session().activeItem().seriesId)) return false;
         const auto targetMs = coordinator_.activeSkippableSegmentEndMs(screenState_.positionMs());
         if (!targetMs) return false;
         seekTo(*targetMs);
@@ -305,7 +306,7 @@ public:
         player_.startAsync(start.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
                            start.externalSubtitleUrl, activeDecodeMode());
-        if (startPositionMs > 0) screenState_.beginSeek(startPositionMs, now);
+        if (startPositionMs > 0) screenState_.beginInitialPosition(startPositionMs, now);
     }
 
     bool retryWithSoftwareDecode(bool rendererReady) {

@@ -6,6 +6,13 @@ int main() {
     AppSettings settings;
     assert(settings.maxBitrateMbps == 120);
     assert(settings.zoomMode == static_cast<int>(VideoZoomMode::Fit));
+    assert(!settings.ambientLetterbox);
+    assert(settings.stillWatchingAfter == 0);
+    assert(renderStillWatchingAfter(settings, {}) == "OFF");
+    assert(!skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(addDisabledSkipSeries(settings, "series-1"));
+    assert(skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(!addDisabledSkipSeries(settings, "series-1"));
     assert(playbackOverridesFor(settings).hdrMode == HdrOverrideMode::Auto);
     assert(videoZoomName(VideoZoomMode::Fill) == "FILL");
     assert(settings.subtitleSize == 1);
@@ -30,6 +37,7 @@ int main() {
     assert(settingKind(SettingId::Backdrops) == SettingKind::Value);
     assert(settingKind(SettingId::Diagnostics) == SettingKind::Action);
     assert(isBooleanSetting(SettingId::AutoplayNextEpisode));
+    assert(isBooleanSetting(SettingId::AmbientLetterbox));
     assert(isBooleanSetting(SettingId::MatchVideoRefreshRate));
     assert(isBooleanSetting(SettingId::WatchedIndicators));
     assert(isBooleanSetting(SettingId::Clock));
@@ -84,6 +92,14 @@ int main() {
     assert(adjusted.zoomMode == static_cast<int>(VideoZoomMode::Fill));
     assert(hasSettingEffect(effects, SettingChangeEffect::Save));
     assert(hasSettingEffect(effects, SettingChangeEffect::ApplyVideoZoom));
+    effects = adjustSetting(adjusted, SettingId::AmbientLetterbox, 1);
+    assert(adjusted.ambientLetterbox);
+    assert(hasSettingEffect(effects, SettingChangeEffect::Save));
+    effects = adjustSetting(adjusted, SettingId::StillWatchingAfter, 1);
+    assert(adjusted.stillWatchingAfter == 2);
+    assert(renderStillWatchingAfter(adjusted, {}) == "2 AUTOPLAYS");
+    effects = adjustSetting(adjusted, SettingId::StillWatchingAfter, -1);
+    assert(adjusted.stillWatchingAfter == 0);
     effects = adjustSetting(adjusted, SettingId::Diagnostics, 1);
     assert(effects == SettingChangeEffect::None);
 
@@ -107,7 +123,7 @@ int main() {
     assert(timeFiltered.front() == SettingId::TimeFormat);
 
     const auto advanced = matchingSettings("", true);
-    assert(advanced.size() == 13);
+    assert(advanced.size() == 14);
     assert(advanced.front() == SettingId::MaxStreamingBitrate);
     assert(advanced.back() == SettingId::AdvancedToggle);
     return 0;

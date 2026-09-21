@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 
 enum class PlayerScreenInput {
@@ -44,8 +45,20 @@ enum class PlayerScreenCommandType {
     SeekForward,
 };
 
+enum class PlayerSkipSheetCommand {
+    None,
+    DisableForShow,
+    Dismiss,
+};
+
 struct PlayerScreenCommand {
     PlayerScreenCommandType type = PlayerScreenCommandType::None;
+};
+
+struct PlayerAmbientColor {
+    float r = 0.0f;
+    float g = 0.0f;
+    float b = 0.0f;
 };
 
 class PlayerScreenState {
@@ -65,6 +78,11 @@ public:
         seekFeedbackUntil_ = {};
         windowRestorePending_ = false;
         resumeOnFocus_ = false;
+        skipButtonPressPending_ = false;
+        skipButtonLongPressed_ = false;
+        skipDisableSheetActive_ = false;
+        skipDisableSheetSelection_ = 1;
+        resetAmbientColor();
         resetPosition();
     }
 
@@ -74,6 +92,7 @@ public:
         pendingSeekTargetMs_ = -1;
         lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
+        pendingSeekRecoveryEnabled_ = false;
         seekFeedbackSeconds_ = 0;
         seekFeedbackStarted_ = {};
         seekFeedbackUntil_ = {};
@@ -88,6 +107,8 @@ public:
         pendingSeekTargetMs_ = -1;
         lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
+        pendingSeekRecoveryEnabled_ = false;
+        resetAmbientColor();
     }
 
     [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
@@ -96,6 +117,85 @@ public:
 
     [[nodiscard]] bool controlSelected(std::size_t index) const {
         return index == static_cast<std::size_t>(controlSelection_);
+    }
+
+    void beginSkipButtonPress() {
+        skipButtonPressPending_ = true;
+        skipButtonLongPressed_ = false;
+    }
+
+    [[nodiscard]] bool skipButtonPressPending() const { return skipButtonPressPending_; }
+
+    void holdSkipButtonPress() {
+        if (!skipButtonPressPending_ || skipButtonLongPressed_) return;
+        skipButtonLongPressed_ = true;
+        skipDisableSheetActive_ = true;
+        skipDisableSheetSelection_ = 1;
+    }
+
+    [[nodiscard]] bool consumeSkipButtonRelease() {
+        const bool activateSkip = skipButtonPressPending_ && !skipButtonLongPressed_;
+        skipButtonPressPending_ = false;
+        skipButtonLongPressed_ = false;
+        return activateSkip;
+    }
+
+    [[nodiscard]] bool ambientSampleDue(TimePoint now) const {
+        return lastAmbientSample_ == TimePoint{} || now - lastAmbientSample_ >= std::chrono::seconds(3);
+    }
+
+    void applyAmbientSample(float r, float g, float b, TimePoint now) {
+        const float sampleR = std::clamp(r, 0.0f, 1.0f);
+        const float sampleG = std::clamp(g, 0.0f, 1.0f);
+        const float sampleB = std::clamp(b, 0.0f, 1.0f);
+        float alpha = 0.18f;
+        if (lastAmbientSample_ != TimePoint{}) {
+            const float elapsedSeconds =
+                std::max(0.0f, std::chrono::duration<float>(now - lastAmbientSample_).count());
+            alpha = 1.0f - std::exp(-elapsedSeconds / 60.0f);
+        }
+        ambientColor_.r += (sampleR - ambientColor_.r) * alpha;
+        ambientColor_.g += (sampleG - ambientColor_.g) * alpha;
+        ambientColor_.b += (sampleB - ambientColor_.b) * alpha;
+        lastAmbientSample_ = now;
+        ambientColorReady_ = true;
+    }
+
+    [[nodiscard]] bool ambientColorReady() const { return ambientColorReady_; }
+
+    [[nodiscard]] PlayerAmbientColor ambientColor() const { return ambientColor_; }
+
+    void resetAmbientColor() {
+        ambientColor_ = {};
+        lastAmbientSample_ = {};
+        ambientColorReady_ = false;
+    }
+
+    [[nodiscard]] bool skipDisableSheetActive() const { return skipDisableSheetActive_; }
+
+    [[nodiscard]] int skipDisableSheetSelection() const { return skipDisableSheetSelection_; }
+
+    PlayerSkipSheetCommand handleSkipDisableSheetInput(PlayerScreenInput input) {
+        if (!skipDisableSheetActive_) return PlayerSkipSheetCommand::None;
+        switch (input) {
+        case PlayerScreenInput::Left:
+            skipDisableSheetSelection_ = 0;
+            return PlayerSkipSheetCommand::None;
+        case PlayerScreenInput::Right:
+            skipDisableSheetSelection_ = 1;
+            return PlayerSkipSheetCommand::None;
+        case PlayerScreenInput::Activate:
+        case PlayerScreenInput::PlayPause: {
+            const bool disableForShow = skipDisableSheetSelection_ == 0;
+            skipDisableSheetActive_ = false;
+            return disableForShow ? PlayerSkipSheetCommand::DisableForShow : PlayerSkipSheetCommand::Dismiss;
+        }
+        case PlayerScreenInput::Back:
+            skipDisableSheetActive_ = false;
+            return PlayerSkipSheetCommand::Dismiss;
+        default:
+            return PlayerSkipSheetCommand::None;
+        }
     }
 
     void showControls(TimePoint now) {
@@ -215,12 +315,22 @@ public:
 
     void setDurationMs(int value) { durationMs_ = std::max(0, value); }
 
+    void beginInitialPosition(int targetMs, TimePoint now) {
+        const int target = std::max(0, targetMs);
+        positionMs_ = target;
+        pendingSeekTargetMs_ = target;
+        lastSeekTargetMs_ = -1;
+        lastSeekIssued_ = now;
+        pendingSeekRecoveryEnabled_ = false;
+    }
+
     void beginSeek(int targetMs, TimePoint now) {
         const int target = std::max(0, targetMs);
         positionMs_ = target;
         pendingSeekTargetMs_ = target;
         lastSeekTargetMs_ = target;
         lastSeekIssued_ = now;
+        pendingSeekRecoveryEnabled_ = true;
         showOverlayFor(now, std::chrono::seconds(3));
     }
 
@@ -248,7 +358,7 @@ public:
     [[nodiscard]] int recentSeekTargetMs() const { return lastSeekTargetMs_; }
 
     [[nodiscard]] bool pendingSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
-        if (pendingSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
+        if (!pendingSeekRecoveryEnabled_ || pendingSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
         const int64_t elapsedSinceSeekMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSeekIssued_).count();
         return postSeekPositionFailed(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs);
@@ -315,6 +425,14 @@ private:
     int pendingSeekTargetMs_ = -1;
     int lastSeekTargetMs_ = -1;
     TimePoint lastSeekIssued_{};
+    bool pendingSeekRecoveryEnabled_ = false;
     bool windowRestorePending_ = false;
     bool resumeOnFocus_ = false;
+    bool skipButtonPressPending_ = false;
+    bool skipButtonLongPressed_ = false;
+    bool skipDisableSheetActive_ = false;
+    int skipDisableSheetSelection_ = 1;
+    PlayerAmbientColor ambientColor_{};
+    TimePoint lastAmbientSample_{};
+    bool ambientColorReady_ = false;
 };

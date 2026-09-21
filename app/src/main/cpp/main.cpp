@@ -930,6 +930,12 @@ private:
             // unconsumed, even when we already handled BACK on key-down. Consume both
             // halves so in-app BACK navigation cannot also finish the activity.
             if (key == AKEYCODE_BACK) return 1;
+            if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && screen_ == Screen::Player &&
+                playerScreenState_.skipButtonPressPending()) {
+                const bool activate = playerScreenState_.consumeSkipButtonRelease();
+                if (activate) handlePlayerKey(key);
+                return 1;
+            }
             if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending()) {
                 const bool activate = homeState_.consumeCenterRelease(screen_ == Screen::Home);
                 if (activate) handleHomeKey(key);
@@ -954,6 +960,24 @@ private:
         }
 
         if (screen_ == Screen::Player) {
+            const bool centerKey = key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER;
+            if (centerKey && playerScreenState_.skipButtonPressPending()) {
+                if (repeatCount > 0) playerScreenState_.holdSkipButtonPress();
+                return 1;
+            }
+            if (playerScreenState_.skipDisableSheetActive()) {
+                handlePlayerSkipSheetKey(key);
+                return 1;
+            }
+            if (centerKey && repeatCount == 0 && !playerScreenState_.controlsActive(inputNow)) {
+                const auto* segment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs());
+                const auto& item = playbackCoordinator_.session().activeItem();
+                if (segment && (segment->type == "Intro" || segment->type == "Outro") && !item.seriesId.empty() &&
+                    !skipSegmentsDisabledForSeries(settings_, item.seriesId)) {
+                    playerScreenState_.beginSkipButtonPress();
+                    return 1;
+                }
+            }
             handlePlayerKey(key, repeatCount);
             return 1;
         }
@@ -1233,6 +1257,15 @@ private:
             showNotice("SUBTITLES COULD NOT BE STARTED");
             return;
         }
+    }
+
+    void handlePlayerSkipSheetKey(int32_t key) {
+        const PlayerSkipSheetCommand command =
+            playerScreenState_.handleSkipDisableSheetInput(playerScreenInputForAndroidKey(key));
+        if (command != PlayerSkipSheetCommand::DisableForShow) return;
+        const auto& item = playbackCoordinator_.session().activeItem();
+        if (!addDisabledSkipSeries(settings_, item.seriesId)) return;
+        saveSession(session_);
     }
 
     void handlePlayerKey(int32_t key, int repeatCount = 0) {

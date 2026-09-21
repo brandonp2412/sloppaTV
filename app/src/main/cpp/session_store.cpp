@@ -49,8 +49,9 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.seekBackSeconds = std::clamp(valueOr(saved, "seekBackSeconds", settings.seekBackSeconds), 5, 60);
     settings.seekForwardSeconds = std::clamp(valueOr(saved, "seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
     settings.zoomMode = std::clamp(valueOr(saved, "zoomMode", settings.zoomMode), 0, 2);
+    settings.ambientLetterbox = valueOr(saved, "ambientLetterbox", settings.ambientLetterbox);
     settings.autoplayNext = valueOr(saved, "autoplayNext", settings.autoplayNext);
-    settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 2, 6);
+    settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 0, 6);
     settings.refreshRateSwitching = valueOr(saved, "refreshRateSwitching", settings.refreshRateSwitching);
     settings.showWatchedIndicators = valueOr(saved, "showWatchedIndicators", settings.showWatchedIndicators);
     settings.showClock = valueOr(saved, "showClock", settings.showClock);
@@ -102,6 +103,7 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.seerrSessionCookie = valueOr<std::string>(saved, "seerrSessionCookie", {});
     settings.seerrApiKey = valueOr<std::string>(saved, "seerrApiKey", {});
     settings.seerrSelectDrive = valueOr(saved, "seerrSelectDrive", false);
+    settings.disabledSkipSeriesIds = valueOr<std::vector<std::string>>(saved, "disabledSkipSeriesIds", {});
 }
 
 json writeSettings(const AppSettings& settings) {
@@ -111,6 +113,7 @@ json writeSettings(const AppSettings& settings) {
         {"seekBackSeconds", settings.seekBackSeconds},
         {"seekForwardSeconds", settings.seekForwardSeconds},
         {"zoomMode", settings.zoomMode},
+        {"ambientLetterbox", settings.ambientLetterbox},
         {"autoplayNext", settings.autoplayNext},
         {"stillWatchingAfter", settings.stillWatchingAfter},
         {"refreshRateSwitching", settings.refreshRateSwitching},
@@ -138,6 +141,7 @@ json writeSettings(const AppSettings& settings) {
         {"seerrSessionCookie", settings.seerrSessionCookie},
         {"seerrApiKey", settings.seerrApiKey},
         {"seerrSelectDrive", settings.seerrSelectDrive},
+        {"disabledSkipSeriesIds", settings.disabledSkipSeriesIds},
     };
 }
 } // namespace

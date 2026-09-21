@@ -67,8 +67,8 @@ constexpr bool hdrCapabilityAllowed(bool detected, HdrOverrideMode mode) {
 
 constexpr bool shouldAutoplayNextEpisode(bool autoplayEnabled, int completedAutoplays, int stillWatchingAfter) {
     if (!autoplayEnabled) return false;
-    const int threshold = std::max(0, stillWatchingAfter);
-    return completedAutoplays < threshold;
+    if (stillWatchingAfter <= 0) return true;
+    return completedAutoplays < stillWatchingAfter;
 }
 
 constexpr int heldSeekMultiplier(int repeatCount) {

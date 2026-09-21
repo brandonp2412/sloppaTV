@@ -77,8 +77,9 @@ int main() {
     assert(shouldAutoplayNextEpisode(true, 2, 3));
     assert(!shouldAutoplayNextEpisode(true, 3, 3));
     assert(!shouldAutoplayNextEpisode(true, 4, 3));
-    assert(!shouldAutoplayNextEpisode(true, 0, 0));
-    assert(!shouldAutoplayNextEpisode(true, 0, -2));
+    assert(shouldAutoplayNextEpisode(true, 0, 0));
+    assert(shouldAutoplayNextEpisode(true, 500, 0));
+    assert(shouldAutoplayNextEpisode(true, 0, -2));
 
     assert(playbackPrepareTimeoutMs(false) == 15'000);
     assert(playbackPrepareTimeoutMs(true) == 30'000);

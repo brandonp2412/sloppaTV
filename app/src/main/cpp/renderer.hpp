@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -64,6 +65,7 @@ public:
                             float u1, float v1, float alpha = 1.0f);
     bool externalImage(GLuint texture, float x, float y, float w, float h, const std::array<float, 16>& transform,
                        float alpha = 1.0f);
+    [[nodiscard]] std::optional<Color> sampleAverageColor(float x, float y, float w, float h);
 
     [[nodiscard]] uint64_t generation() const { return generation_; }
 

@@ -237,32 +237,48 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                               std::chrono::steady_clock::time_point lastInteraction) {
     PlayerPresentationUi<ArtworkLike> ui(renderer, artwork, session, settings, lastInteraction);
     const PlayerStatus status = player.status();
+    const auto now = std::chrono::steady_clock::now();
     std::string videoError;
     if (videoSurface.ready()) {
         videoSurface.update(videoError);
-        renderPlayerVideo(renderer,
-                          PlayerVideoRenderState{
-                              .texture = videoSurface.texture(),
-                              .sourceWidth = player.videoWidth(),
-                              .sourceHeight = player.videoHeight(),
-                              .zoomMode = playbackCoordinator.session().zoomMode(),
-                              .logicalWidth = Renderer::logicalWidth(),
-                              .logicalHeight = Renderer::logicalHeight(),
-                          },
-                          videoSurface.transform());
+        const PlayerVideoRenderState videoState{
+            .texture = videoSurface.texture(),
+            .sourceWidth = player.videoWidth(),
+            .sourceHeight = player.videoHeight(),
+            .zoomMode = playbackCoordinator.session().zoomMode(),
+            .logicalWidth = Renderer::logicalWidth(),
+            .logicalHeight = Renderer::logicalHeight(),
+        };
+        const PlayerVideoBounds videoBounds = playerVideoBounds(videoState);
+        const bool hasLetterbox =
+            videoState.zoomMode == VideoZoomMode::Fit && (videoBounds.x > 0.5f || videoBounds.y > 0.5f);
+        if (settings.ambientLetterbox && hasLetterbox && playerScreenState.ambientColorReady()) {
+            const PlayerAmbientColor ambient = playerScreenState.ambientColor();
+            constexpr float ambientStrength = 0.48f;
+            renderer.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(),
+                          Color{ambient.r * ambientStrength, ambient.g * ambientStrength,
+                                ambient.b * ambientStrength, 1.0f});
+        }
+        renderPlayerVideo(renderer, videoState, videoSurface.transform());
+        if (settings.ambientLetterbox && hasLetterbox && playerScreenState.ambientSampleDue(now)) {
+            const auto sample = renderer.sampleAverageColor(videoBounds.x, videoBounds.y, videoBounds.width, videoBounds.height);
+            if (sample) playerScreenState.applyAmbientSample(sample->r, sample->g, sample->b, now);
+        }
     }
 
-    const auto now = std::chrono::steady_clock::now();
     const int remainingMs = playerScreenState.durationMs() > 0
                                 ? std::max(0, playerScreenState.durationMs() - playerScreenState.positionMs())
                                 : 0;
-    const auto skipSegment = playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs());
+    const auto skipSegment =
+        skipSegmentsDisabledForSeries(settings, playbackCoordinator.session().activeItem().seriesId)
+            ? nullptr
+            : playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs());
     const bool userOverlayVisible = playerScreenState.overlayVisible(now);
     const bool showNextUp = shouldShowNextUpCard(playbackCoordinator.continuation().nextItem().has_value(), remainingMs,
                                                  userOverlayVisible, skipSegment != nullptr);
-    const bool showOverlay = status == PlayerStatus::Preparing || status == PlayerStatus::Paused ||
-                             playbackCoordinator.transitionLoading() || playbackCoordinator.fallbackResolving() ||
-                             userOverlayVisible;
+    const bool showOverlay = status == PlayerStatus::Preparing || playbackCoordinator.transitionLoading() ||
+                             playbackCoordinator.fallbackResolving() || userOverlayVisible ||
+                             playerScreenState.skipDisableSheetActive();
     if (showOverlay) {
         renderer.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f, Color{0.0f, 0.0f, 0.0f, 0.74f},
                                   Color{0.0f, 0.0f, 0.0f, 0.0f});
@@ -448,5 +464,30 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 return ui.fittedSingleLineScale(scale, value, width, height);
             },
             [](std::string_view value) { return materialLabel(value); });
+    }
+
+    if (playerScreenState.skipDisableSheetActive()) {
+        constexpr float panelX = 180.0f;
+        constexpr float panelY = 700.0f;
+        constexpr float panelWidth = 1560.0f;
+        renderer.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, 0.48f});
+        ui.drawModalSurface(panelX, panelY, panelWidth, 380.0f, material_tv::cornerLarge);
+        renderer.text(panelX + 70.0f, panelY + 46.0f, 2.9f, "Disable skip for this show?", material_tv::onSurface,
+                      panelWidth - 140.0f);
+        const auto& sheetItem = playbackCoordinator.session().activeItem();
+        renderer.text(panelX + 70.0f, panelY + 128.0f, 1.75f,
+                      sheetItem.seriesName.empty() ? "This show" : sheetItem.seriesName, material_tv::onSurfaceVariant,
+                      panelWidth - 140.0f);
+        renderer.text(panelX + 70.0f, panelY + 180.0f, 1.55f,
+                      "Intro and credits skip buttons will stay hidden for future episodes.",
+                      material_tv::onSurfaceVariant, panelWidth - 140.0f);
+        constexpr std::array<std::string_view, 2> actions{"Disable for show", "Cancel"};
+        for (int index = 0; index < 2; ++index) {
+            const float x = index == 0 ? panelX + 70.0f : panelX + 805.0f;
+            const bool focused = playerScreenState.skipDisableSheetSelection() == index;
+            const auto bounds = ui.drawButtonSurface(x, panelY + 255.0f, 685.0f, 82.0f, focused, index == 0);
+            renderer.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.85f,
+                                  actions[static_cast<std::size_t>(index)], material_tv::onSurface);
+        }
     }
 }
