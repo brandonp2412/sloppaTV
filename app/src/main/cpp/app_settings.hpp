@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 enum class VideoZoomMode {
@@ -49,7 +50,9 @@ struct AppSettings {
     int seekForwardSeconds = 10;
     int zoomMode = static_cast<int>(VideoZoomMode::Fit);
     bool autoplayNext = true;
-    int stillWatchingAfter = 3;
+    int stillWatchingAfter = 0;
+    bool ambientLetterboxBars = false;
+    std::vector<std::string> skipDisabledSeriesIds;
     bool refreshRateSwitching = false;
     bool showWatchedIndicators = true;
     bool showClock = true;
@@ -84,6 +87,7 @@ enum class SettingId : uint8_t {
     DefaultVideoZoom,
     AutoplayNextEpisode,
     StillWatchingAfter,
+    AmbientLetterboxBars,
     MatchVideoRefreshRate,
     WatchedIndicators,
     Clock,
@@ -184,9 +188,21 @@ inline SettingChangeEffect adjustSeekForward(AppSettings& settings, int directio
 }
 
 inline SettingChangeEffect adjustStillWatchingAfter(AppSettings& settings, int direction) {
-    static constexpr std::array<int, 5> choices{2, 3, 4, 5, 6};
-    stepSettingChoice(settings.stillWatchingAfter, choices, direction, 1);
+    static constexpr std::array<int, 6> choices{0, 2, 3, 4, 5, 6};
+    stepSettingChoice(settings.stillWatchingAfter, choices, direction, 0);
     return SettingChangeEffect::None;
+}
+
+inline bool skipSegmentsDisabledForSeries(const AppSettings& settings, std::string_view seriesId) {
+    return !seriesId.empty() &&
+           std::find(settings.skipDisabledSeriesIds.begin(), settings.skipDisabledSeriesIds.end(), seriesId) !=
+               settings.skipDisabledSeriesIds.end();
+}
+
+inline bool disableSkipSegmentsForSeries(AppSettings& settings, std::string seriesId) {
+    if (seriesId.empty() || skipSegmentsDisabledForSeries(settings, seriesId)) return false;
+    settings.skipDisabledSeriesIds.push_back(std::move(seriesId));
+    return true;
 }
 
 inline SettingChangeEffect adjustRefreshRateSwitching(AppSettings& settings, int) {
@@ -316,7 +332,7 @@ inline std::string renderDefaultVideoZoom(const AppSettings& settings, const Set
 }
 
 inline std::string renderStillWatchingAfter(const AppSettings& settings, const SettingValueContext&) {
-    return std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS";
+    return settings.stillWatchingAfter <= 0 ? "OFF" : std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS";
 }
 
 inline std::string renderBackdrops(const AppSettings& settings, const SettingValueContext&) {
@@ -426,7 +442,7 @@ struct SettingDescriptor {
 };
 
 inline constexpr int kNoSettingOrder = -1;
-inline constexpr size_t kSettingCount = 34;
+inline constexpr size_t kSettingCount = 35;
 
 constexpr size_t settingIndex(SettingId setting) {
     return static_cast<size_t>(setting);
@@ -449,6 +465,9 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
      renderBooleanSetting<&AppSettings::autoplayNext>},
     {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save, adjustStillWatchingAfter, renderStillWatchingAfter},
+    {SettingId::AmbientLetterboxBars, "AMBIENT LETTERBOX BARS", kNoSettingOrder, 12, SettingKind::Boolean,
+     SettingChangeEffect::Save, toggleSetting<&AppSettings::ambientLetterboxBars>,
+     renderBooleanSetting<&AppSettings::ambientLetterboxBars>},
     {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, SettingKind::Boolean,
      SettingChangeEffect::Save, adjustRefreshRateSwitching, renderBooleanSetting<&AppSettings::refreshRateSwitching>},
     {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, SettingKind::Boolean,
@@ -504,7 +523,7 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
      renderBooleanSetting<&AppSettings::seerrSelectDrive>, SettingActivation::ToggleSeerrDriveSelection},
     {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, SettingKind::Action,
      SettingChangeEffect::None, nullptr, renderSeerrApiKey, SettingActivation::EditSeerrApiKey},
-    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, SettingKind::Action, SettingChangeEffect::None, nullptr,
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 13, SettingKind::Action, SettingChangeEffect::None, nullptr,
      renderAdvancedToggle, SettingActivation::ToggleAdvanced},
 }};
 

@@ -237,32 +237,51 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                               std::chrono::steady_clock::time_point lastInteraction) {
     PlayerPresentationUi<ArtworkLike> ui(renderer, artwork, session, settings, lastInteraction);
     const PlayerStatus status = player.status();
+    const auto now = std::chrono::steady_clock::now();
+    const auto& activeItem = playbackCoordinator.session().activeItem();
     std::string videoError;
     if (videoSurface.ready()) {
         videoSurface.update(videoError);
-        renderPlayerVideo(renderer,
-                          PlayerVideoRenderState{
-                              .texture = videoSurface.texture(),
-                              .sourceWidth = player.videoWidth(),
-                              .sourceHeight = player.videoHeight(),
-                              .zoomMode = playbackCoordinator.session().zoomMode(),
-                              .logicalWidth = Renderer::logicalWidth(),
-                              .logicalHeight = Renderer::logicalHeight(),
-                          },
-                          videoSurface.transform());
+        const PlayerVideoRenderState videoState{
+            .texture = videoSurface.texture(),
+            .sourceWidth = player.videoWidth(),
+            .sourceHeight = player.videoHeight(),
+            .zoomMode = playbackCoordinator.session().zoomMode(),
+            .logicalWidth = Renderer::logicalWidth(),
+            .logicalHeight = Renderer::logicalHeight(),
+        };
+        const PlayerVideoBounds videoBounds = playerVideoBounds(videoState);
+        const bool hasLetterboxBars =
+            videoState.zoomMode == VideoZoomMode::Fit &&
+            (videoBounds.x > 1.0f || videoBounds.y > 1.0f ||
+             videoBounds.width < videoState.logicalWidth - 2.0f || videoBounds.height < videoState.logicalHeight - 2.0f);
+        if (settings.ambientLetterboxBars && hasLetterboxBars) {
+            const AmbientBarColor ambient = playerScreenState.ambientBars().displayColor(now);
+            renderer.clearScreen(Color{ambient.r, ambient.g, ambient.b, 1.0f});
+        }
+        renderPlayerVideo(renderer, videoState, videoSurface.transform());
+        if (settings.ambientLetterboxBars && hasLetterboxBars && status == PlayerStatus::Playing &&
+            playerScreenState.ambientBars().sampleDue(now)) {
+            if (const auto sample =
+                    renderer.sampleFramebufferAverage(videoBounds.x, videoBounds.y, videoBounds.width, videoBounds.height)) {
+                playerScreenState.ambientBars().addSample(AmbientBarColor{sample->r, sample->g, sample->b}, now);
+            }
+        }
     }
 
-    const auto now = std::chrono::steady_clock::now();
     const int remainingMs = playerScreenState.durationMs() > 0
                                 ? std::max(0, playerScreenState.durationMs() - playerScreenState.positionMs())
                                 : 0;
-    const auto skipSegment = playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs());
+    const JellyfinMediaSegment* skipSegment =
+        skipSegmentsDisabledForSeries(settings, activeItem.seriesId)
+            ? nullptr
+            : playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs());
     const bool userOverlayVisible = playerScreenState.overlayVisible(now);
     const bool showNextUp = shouldShowNextUpCard(playbackCoordinator.continuation().nextItem().has_value(), remainingMs,
                                                  userOverlayVisible, skipSegment != nullptr);
-    const bool showOverlay = status == PlayerStatus::Preparing || status == PlayerStatus::Paused ||
-                             playbackCoordinator.transitionLoading() || playbackCoordinator.fallbackResolving() ||
-                             userOverlayVisible;
+    const bool showOverlay = status == PlayerStatus::Preparing || playbackCoordinator.transitionLoading() ||
+                             playbackCoordinator.fallbackResolving() || userOverlayVisible ||
+                             playerScreenState.skipDisablePromptVisible();
     if (showOverlay) {
         renderer.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f, Color{0.0f, 0.0f, 0.0f, 0.74f},
                                   Color{0.0f, 0.0f, 0.0f, 0.0f});
@@ -354,7 +373,6 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             [](const JellyfinItem& item) { return episodeLabel(item); });
     }
 
-    const auto& activeItem = playbackCoordinator.session().activeItem();
     const std::string heading = activeItem.seriesName.empty() ? activeItem.name : activeItem.seriesName;
     const std::string playerEpisodeNumber = episodeNumberLabel(activeItem);
     const std::string secondary =
@@ -448,5 +466,36 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 return ui.fittedSingleLineScale(scale, value, width, height);
             },
             [](std::string_view value) { return materialLabel(value); });
+    }
+
+    if (playerScreenState.skipDisablePromptVisible()) {
+        constexpr float sheetX = 90.0f;
+        constexpr float sheetY = 720.0f;
+        constexpr float sheetWidth = 1740.0f;
+        constexpr float sheetHeight = 360.0f;
+        renderer.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, 0.42f});
+        ui.drawModalSurface(sheetX, sheetY, sheetWidth, sheetHeight, material_tv::cornerLarge);
+        ui.drawLeftAlignedSingleLineFit(sheetX + 64.0f, sheetY + 42.0f, sheetWidth - 128.0f, 52.0f, 2.1f,
+                                        "Disable skip for this show?", material_tv::onSurface);
+        const std::string showName =
+            playerScreenState.skipDisableSeriesName().empty() ? activeItem.seriesName
+                                                               : playerScreenState.skipDisableSeriesName();
+        if (!showName.empty()) {
+            ui.drawLeftAlignedSingleLineFit(sheetX + 64.0f, sheetY + 105.0f, sheetWidth - 128.0f, 42.0f, 1.45f,
+                                            showName, material_tv::onSurfaceVariant);
+        }
+        ui.drawLeftAlignedSingleLineFit(sheetX + 64.0f, sheetY + 160.0f, sheetWidth - 128.0f, 44.0f, 1.45f,
+                                        "Skip intro and credits buttons will stay hidden for this series.",
+                                        material_tv::onSurfaceVariant);
+
+        const bool disableSelected = playerScreenState.skipDisableSelected();
+        const auto keepBounds =
+            ui.drawButtonSurface(sheetX + 64.0f, sheetY + 246.0f, 310.0f, 72.0f, !disableSelected, true);
+        renderer.textCentered(keepBounds[0], keepBounds[1], keepBounds[2], keepBounds[3], 1.45f, "Keep enabled",
+                              material_tv::onSurface);
+        const auto disableBounds =
+            ui.drawButtonSurface(sheetX + 398.0f, sheetY + 246.0f, 460.0f, 72.0f, disableSelected, false);
+        renderer.textCentered(disableBounds[0], disableBounds[1], disableBounds[2], disableBounds[3], 1.45f,
+                              "Disable for this show", material_tv::onSurface);
     }
 }

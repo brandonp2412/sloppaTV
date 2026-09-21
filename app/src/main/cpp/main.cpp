@@ -930,6 +930,12 @@ private:
             // unconsumed, even when we already handled BACK on key-down. Consume both
             // halves so in-app BACK navigation cannot also finish the activity.
             if (key == AKEYCODE_BACK) return 1;
+            if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && screen_ == Screen::Player &&
+                playerScreenState_.skipButtonPressPending()) {
+                const bool activate = playerScreenState_.consumeSkipButtonRelease();
+                if (activate) handlePlayerKey(key);
+                return 1;
+            }
             if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending()) {
                 const bool activate = homeState_.consumeCenterRelease(screen_ == Screen::Home);
                 if (activate) handleHomeKey(key);
@@ -954,6 +960,16 @@ private:
         }
 
         if (screen_ == Screen::Player) {
+            if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) &&
+                !playerScreenState_.skipDisablePromptVisible()) {
+                if (playerScreenState_.skipButtonPressPending()) {
+                    if (repeatCount > 0 && !playerScreenState_.skipButtonLongPressed()) {
+                        playerScreenState_.openSkipDisablePrompt();
+                    }
+                    return 1;
+                }
+                if (repeatCount == 0 && beginPlayerSkipButtonPress()) return 1;
+            }
             handlePlayerKey(key, repeatCount);
             return 1;
         }
@@ -1235,7 +1251,51 @@ private:
         }
     }
 
+    bool beginPlayerSkipButtonPress() {
+        const auto now = std::chrono::steady_clock::now();
+        if (playerScreenState_.controlsActive(now)) return false;
+        const auto* segment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs());
+        if (!segment || !canDisableSkipForSegmentType(segment->type)) return false;
+        const auto& item = playbackCoordinator_.session().activeItem();
+        if (item.seriesId.empty() || skipSegmentsDisabledForSeries(settings_, item.seriesId)) return false;
+        playerScreenState_.beginSkipButtonPress(item.seriesId, item.seriesName);
+        return true;
+    }
+
+    bool handleSkipDisablePromptKey(int32_t key, int repeatCount) {
+        if (!playerScreenState_.skipDisablePromptVisible()) return false;
+        if (repeatCount > 0) return true;
+        if (key == AKEYCODE_BACK) {
+            playerScreenState_.closeSkipDisablePrompt();
+            return true;
+        }
+        if (key == AKEYCODE_DPAD_LEFT) {
+            playerScreenState_.selectSkipDisable(false);
+            return true;
+        }
+        if (key == AKEYCODE_DPAD_RIGHT) {
+            playerScreenState_.selectSkipDisable(true);
+            return true;
+        }
+        if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) {
+            if (playerScreenState_.skipDisableSelected()) {
+                const std::string seriesId = playerScreenState_.skipDisableSeriesId();
+                const std::string seriesName = playerScreenState_.skipDisableSeriesName();
+                if (disableSkipSegmentsForSeries(settings_, seriesId)) {
+                    saveSession(session_);
+                    showNotice(seriesName.empty() ? "Skip buttons disabled for this show"
+                                                  : "Skip buttons disabled for " + seriesName,
+                               4s);
+                }
+            }
+            playerScreenState_.closeSkipDisablePrompt();
+            return true;
+        }
+        return true;
+    }
+
     void handlePlayerKey(int32_t key, int repeatCount = 0) {
+        if (handleSkipDisablePromptKey(key, repeatCount)) return;
         applyPlaybackHostEffect(playbackRuntime_.handlePlayerInput(playerScreenInputForAndroidKey(key), repeatCount,
                                                                    subtitleLoadAsync_, playbackStreamAsync_,
                                                                    playbackTelemetryAsync_, screen_ == Screen::Player));

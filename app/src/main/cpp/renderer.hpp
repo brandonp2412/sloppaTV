@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,6 +38,8 @@ public:
 
     void beginFrame();
     void endFrame();
+    void clearScreen(Color color);
+    [[nodiscard]] std::optional<Color> sampleFramebufferAverage(float x, float y, float w, float h);
     void setUiTransform(float safeAreaFraction, float textScale);
     void beginClipRect(float x, float y, float w, float h);
     void endClipRect();

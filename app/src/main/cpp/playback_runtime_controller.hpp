@@ -290,6 +290,8 @@ public:
 
     template <typename TelemetryExecutor>
     bool skipActiveMediaSegment(TelemetryExecutor& telemetry, bool playerScreenActive) {
+        const auto& activeItem = coordinator_.session().activeItem();
+        if (skipSegmentsDisabledForSeries(settings_, activeItem.seriesId)) return false;
         const auto targetMs = coordinator_.activeSkippableSegmentEndMs(screenState_.positionMs());
         if (!targetMs) return false;
         seekTo(*targetMs);
@@ -454,9 +456,11 @@ public:
         case PlayerScreenCommandType::NextEpisode:
             return PlaybackHostEffect::adjacentEpisode(1);
         case PlayerScreenCommandType::ActivatePlayback:
+            if (!shouldHandlePauseToggle(repeatCount)) return {};
             if (skipActiveMediaSegment(telemetry, playerScreenActive)) return {};
             [[fallthrough]];
         case PlayerScreenCommandType::TogglePause:
+            if (!shouldHandlePauseToggle(repeatCount)) return {};
             player_.togglePause();
             reportProgress(telemetry, playerScreenActive, true);
             return {};

@@ -67,8 +67,16 @@ constexpr bool hdrCapabilityAllowed(bool detected, HdrOverrideMode mode) {
 
 constexpr bool shouldAutoplayNextEpisode(bool autoplayEnabled, int completedAutoplays, int stillWatchingAfter) {
     if (!autoplayEnabled) return false;
-    const int threshold = std::max(0, stillWatchingAfter);
-    return completedAutoplays < threshold;
+    if (stillWatchingAfter <= 0) return true;
+    return completedAutoplays < stillWatchingAfter;
+}
+
+constexpr bool shouldHandlePauseToggle(int repeatCount) {
+    return repeatCount <= 0;
+}
+
+constexpr bool canDisableSkipForSegmentType(std::string_view type) {
+    return type == "Intro" || type == "Outro";
 }
 
 constexpr int heldSeekMultiplier(int repeatCount) {

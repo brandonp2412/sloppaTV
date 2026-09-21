@@ -146,6 +146,40 @@ int main() {
     assert(state.takeResumeOnFocus());
     assert(!state.resumeOnFocusRequested());
 
+    state.beginSkipButtonPress("series-1", "Example Show");
+    assert(state.skipButtonPressPending());
+    assert(!state.skipButtonLongPressed());
+    assert(state.consumeSkipButtonRelease());
+
+    state.beginSkipButtonPress("series-1", "Example Show");
+    state.openSkipDisablePrompt();
+    assert(state.skipButtonPressPending());
+    assert(state.skipButtonLongPressed());
+    assert(state.skipDisablePromptVisible());
+    assert(!state.skipDisableSelected());
+    assert(state.skipDisableSeriesId() == "series-1");
+    assert(state.skipDisableSeriesName() == "Example Show");
+    state.selectSkipDisable(true);
+    assert(state.skipDisableSelected());
+    assert(!state.consumeSkipButtonRelease());
+    assert(state.skipDisablePromptVisible());
+    state.closeSkipDisablePrompt();
+    assert(!state.skipDisablePromptVisible());
+    assert(!state.skipButtonPressPending());
+
+    auto& ambient = state.ambientBars();
+    assert(ambient.sampleDue(now));
+    ambient.addSample({1.0f, 0.5f, 0.25f}, now);
+    assert(!ambient.sampleDue(now + 1s));
+    assert(ambient.sampleDue(now + 2s));
+    assert(ambient.sampleCount() == 1);
+    const auto ambientTarget = ambient.targetColor();
+    assert(ambientTarget.r > 0.0f);
+    assert(ambientTarget.r < 1.0f);
+    const auto ambientStart = ambient.displayColor(now);
+    const auto ambientLater = ambient.displayColor(now + 3s);
+    assert(ambientLater.r > ambientStart.r);
+
     state.resetSession();
     assert(!state.controlsActive(now));
     assert(state.controlSelection() == PlayerControl::PlayPause);

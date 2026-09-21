@@ -326,7 +326,7 @@ ApiValueResult<bool> JellyfinClient::pollQuickConnect(const QuickConnectRequest&
     }
     try {
         const auto data = json::parse(response.body);
-        result.value = data.value("Authenticated", false);
+        result.value = jsonBooleanValue(data, "Authenticated", false);
         result.ok = true;
     } catch (const std::exception& e) {
         result.error = std::string("Invalid Quick Connect state response: ") + e.what();

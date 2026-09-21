@@ -13,6 +13,7 @@ inline std::string_view materialLabel(std::string_view value) {
         {"DEFAULT VIDEO ZOOM", "Default video zoom"},
         {"AUTOPLAY NEXT EPISODE", "Autoplay next episode"},
         {"STILL WATCHING AFTER", "Still watching after"},
+        {"AMBIENT LETTERBOX BARS", "Ambient letterbox bars"},
         {"MATCH VIDEO REFRESH RATE", "Match video refresh rate"},
         {"WATCHED INDICATORS", "Watched indicators"},
         {"CLOCK", "Clock"},
