@@ -23,6 +23,7 @@ int main() {
     state.savedSessions.push_back(state.currentSession);
     state.hiddenHomeItems.insert("user-1:item-1");
     state.settings.maxBitrateMbps = 80;
+    state.settings.ambientBlackBars = true;
     state.settings.subtitleSize = 2;
     state.settings.subtitleBackground = false;
     state.settings.subtitleLanguages = {"eng", "jpn"};
@@ -52,6 +53,7 @@ int main() {
     assert(loaded.savedSessions.front().userId == "user-1");
     assert(loaded.hiddenHomeItems.contains("user-1:item-1"));
     assert(loaded.settings.maxBitrateMbps == 80);
+    assert(loaded.settings.ambientBlackBars);
     assert(loaded.settings.subtitleSize == 2);
     assert(!loaded.settings.subtitleBackground);
     assert(loaded.settings.subtitleLanguages.size() == 2);

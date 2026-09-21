@@ -48,6 +48,7 @@ struct AppSettings {
     int seekBackSeconds = 10;
     int seekForwardSeconds = 10;
     int zoomMode = static_cast<int>(VideoZoomMode::Fit);
+    bool ambientBlackBars = false;
     bool autoplayNext = true;
     int stillWatchingAfter = 3;
     bool refreshRateSwitching = false;
@@ -82,6 +83,7 @@ enum class SettingId : uint8_t {
     SkipBack,
     SkipAhead,
     DefaultVideoZoom,
+    AmbientBlackBars,
     AutoplayNextEpisode,
     StillWatchingAfter,
     MatchVideoRefreshRate,
@@ -426,7 +428,7 @@ struct SettingDescriptor {
 };
 
 inline constexpr int kNoSettingOrder = -1;
-inline constexpr size_t kSettingCount = 34;
+inline constexpr size_t kSettingCount = 35;
 
 constexpr size_t settingIndex(SettingId setting) {
     return static_cast<size_t>(setting);
@@ -444,12 +446,15 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
     {SettingId::DefaultVideoZoom, "DEFAULT VIDEO ZOOM", kNoSettingOrder, 2, SettingKind::Value,
      SettingChangeEffect::Save | SettingChangeEffect::ApplyVideoZoom, stepClampedSetting<&AppSettings::zoomMode, 0, 2>,
      renderDefaultVideoZoom},
+    {SettingId::AmbientBlackBars, "AMBIENT BLACK BARS", kNoSettingOrder, 3, SettingKind::Boolean,
+     SettingChangeEffect::Save, toggleSetting<&AppSettings::ambientBlackBars>,
+     renderBooleanSetting<&AppSettings::ambientBlackBars>},
     {SettingId::AutoplayNextEpisode, "AUTOPLAY NEXT EPISODE", 12, kNoSettingOrder, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::autoplayNext>,
      renderBooleanSetting<&AppSettings::autoplayNext>},
     {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save, adjustStillWatchingAfter, renderStillWatchingAfter},
-    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, SettingKind::Boolean,
+    {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 4, SettingKind::Boolean,
      SettingChangeEffect::Save, adjustRefreshRateSwitching, renderBooleanSetting<&AppSettings::refreshRateSwitching>},
     {SettingId::WatchedIndicators, "WATCHED INDICATORS", 16, kNoSettingOrder, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::showWatchedIndicators>,
@@ -467,23 +472,23 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
      SettingChangeEffect::Save, stepClampedSetting<&AppSettings::subtitlePosition, 0, 2>, renderSubtitlePosition},
     {SettingId::AudioOutput, "AUDIO OUTPUT", 19, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      adjustAudioOutput, renderAudioOutput},
-    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 6, SettingKind::Value, SettingChangeEffect::Save,
+    {SettingId::AvcMaxLevel, "AVC / H.264 MAX LEVEL", kNoSettingOrder, 7, SettingKind::Value, SettingChangeEffect::Save,
      adjustAvcMaxLevel, renderAvcMaxLevel},
-    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 7, SettingKind::Value,
+    {SettingId::HevcMaxLevel, "HEVC / H.265 MAX LEVEL", kNoSettingOrder, 8, SettingKind::Value,
      SettingChangeEffect::Save, adjustHevcMaxLevel, renderHevcMaxLevel},
-    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 4, SettingKind::Value, SettingChangeEffect::Save,
+    {SettingId::HdrPlayback, "HDR PLAYBACK", kNoSettingOrder, 5, SettingKind::Value, SettingChangeEffect::Save,
      stepClampedSetting<&AppSettings::hdrOverride, 0, 2>, renderHdrPlayback},
     {SettingId::UiTextSize, "UI TEXT SIZE", 0, kNoSettingOrder, SettingKind::Value, SettingChangeEffect::Save,
      stepClampedSetting<&AppSettings::uiTextSize, 0, 2>, renderUiTextSize},
-    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 5, SettingKind::Value,
+    {SettingId::OverscanSafeArea, "OVERSCAN SAFE AREA", kNoSettingOrder, 6, SettingKind::Value,
      SettingChangeEffect::Save, adjustOverscanSafeArea, renderOverscanSafeArea},
     {SettingId::Screensaver, "IN-APP SCREENSAVER", 20, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save | SettingChangeEffect::ResetScreensaver, adjustScreensaver, renderScreensaver},
-    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 8, SettingKind::Value,
+    {SettingId::ExternalPlayer, "EXTERNAL PLAYER", kNoSettingOrder, 9, SettingKind::Value,
      SettingChangeEffect::Save | SettingChangeEffect::CycleExternalPlayer, adjustExternalPlayer, renderExternalPlayer},
-    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 9, SettingKind::Action, SettingChangeEffect::None, nullptr,
-     renderDiagnostics, SettingActivation::OpenDiagnostics},
-    {SettingId::SwitchUser, "SWITCH USER", 21, 10, SettingKind::Action, SettingChangeEffect::None, nullptr,
+    {SettingId::Diagnostics, "DIAGNOSTICS", kNoSettingOrder, 10, SettingKind::Action, SettingChangeEffect::None,
+     nullptr, renderDiagnostics, SettingActivation::OpenDiagnostics},
+    {SettingId::SwitchUser, "SWITCH USER", 21, 11, SettingKind::Action, SettingChangeEffect::None, nullptr,
      renderSwitchUser, SettingActivation::SwitchUser},
     {SettingId::SubtitleLanguages, "SUBTITLE LANGUAGES", 5, kNoSettingOrder, SettingKind::Action,
      SettingChangeEffect::None, nullptr, renderSubtitleLanguages, SettingActivation::OpenSubtitleLanguages},
@@ -502,9 +507,9 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
     {SettingId::SeerrDriveSelection, "SEERR DRIVE SELECTION", 11, kNoSettingOrder, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::seerrSelectDrive>,
      renderBooleanSetting<&AppSettings::seerrSelectDrive>, SettingActivation::ToggleSeerrDriveSelection},
-    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 11, SettingKind::Action,
+    {SettingId::SeerrApiKey, "SEERR API KEY (LEGACY)", kNoSettingOrder, 12, SettingKind::Action,
      SettingChangeEffect::None, nullptr, renderSeerrApiKey, SettingActivation::EditSeerrApiKey},
-    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 12, SettingKind::Action, SettingChangeEffect::None, nullptr,
+    {SettingId::AdvancedToggle, "ADVANCED SETTINGS", 22, 13, SettingKind::Action, SettingChangeEffect::None, nullptr,
      renderAdvancedToggle, SettingActivation::ToggleAdvanced},
 }};
 
@@ -719,7 +724,7 @@ template <size_t N> consteval std::array<SettingId, N> makeSettingOrder(bool adv
 }
 
 inline constexpr auto kCommonSettings = makeSettingOrder<23>(false);
-inline constexpr auto kAdvancedSettings = makeSettingOrder<13>(true);
+inline constexpr auto kAdvancedSettings = makeSettingOrder<14>(true);
 
 inline std::vector<SettingId> matchingSettings(const std::string& query, bool advanced) {
     std::vector<SettingId> matches;

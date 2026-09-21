@@ -49,6 +49,7 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.seekBackSeconds = std::clamp(valueOr(saved, "seekBackSeconds", settings.seekBackSeconds), 5, 60);
     settings.seekForwardSeconds = std::clamp(valueOr(saved, "seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
     settings.zoomMode = std::clamp(valueOr(saved, "zoomMode", settings.zoomMode), 0, 2);
+    settings.ambientBlackBars = valueOr(saved, "ambientBlackBars", settings.ambientBlackBars);
     settings.autoplayNext = valueOr(saved, "autoplayNext", settings.autoplayNext);
     settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 2, 6);
     settings.refreshRateSwitching = valueOr(saved, "refreshRateSwitching", settings.refreshRateSwitching);
@@ -111,6 +112,7 @@ json writeSettings(const AppSettings& settings) {
         {"seekBackSeconds", settings.seekBackSeconds},
         {"seekForwardSeconds", settings.seekForwardSeconds},
         {"zoomMode", settings.zoomMode},
+        {"ambientBlackBars", settings.ambientBlackBars},
         {"autoplayNext", settings.autoplayNext},
         {"stillWatchingAfter", settings.stillWatchingAfter},
         {"refreshRateSwitching", settings.refreshRateSwitching},

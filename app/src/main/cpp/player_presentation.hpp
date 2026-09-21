@@ -237,22 +237,35 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                               std::chrono::steady_clock::time_point lastInteraction) {
     PlayerPresentationUi<ArtworkLike> ui(renderer, artwork, session, settings, lastInteraction);
     const PlayerStatus status = player.status();
+    const auto now = std::chrono::steady_clock::now();
     std::string videoError;
     if (videoSurface.ready()) {
         videoSurface.update(videoError);
-        renderPlayerVideo(renderer,
-                          PlayerVideoRenderState{
-                              .texture = videoSurface.texture(),
-                              .sourceWidth = player.videoWidth(),
-                              .sourceHeight = player.videoHeight(),
-                              .zoomMode = playbackCoordinator.session().zoomMode(),
-                              .logicalWidth = Renderer::logicalWidth(),
-                              .logicalHeight = Renderer::logicalHeight(),
-                          },
-                          videoSurface.transform());
+        const PlayerVideoRenderState videoState{
+            .texture = videoSurface.texture(),
+            .sourceWidth = player.videoWidth(),
+            .sourceHeight = player.videoHeight(),
+            .zoomMode = playbackCoordinator.session().zoomMode(),
+            .logicalWidth = Renderer::logicalWidth(),
+            .logicalHeight = Renderer::logicalHeight(),
+        };
+        auto& ambient = videoSurface.ambientColorState();
+        if (settings.ambientBlackBars && playerVideoHasBars(videoState)) {
+            if (status == PlayerStatus::Playing && ambient.sampleDue(now)) {
+                std::array<float, 3> sample{};
+                if (renderer.sampleExternalAverage(videoSurface.texture(), videoSurface.transform(), sample)) {
+                    ambient.submitSample(AmbientVideoColor{.r = sample[0], .g = sample[1], .b = sample[2]}, now);
+                } else {
+                    ambient.noteSampleAttempt(now);
+                }
+            }
+            const AmbientVideoColor ambientColor = ambient.color(now);
+            renderPlayerAmbientBars(renderer, videoState, Color{ambientColor.r, ambientColor.g, ambientColor.b, 1.0f});
+        } else {
+            ambient.reset();
+        }
+        renderPlayerVideo(renderer, videoState, videoSurface.transform());
     }
-
-    const auto now = std::chrono::steady_clock::now();
     const int remainingMs = playerScreenState.durationMs() > 0
                                 ? std::max(0, playerScreenState.durationMs() - playerScreenState.positionMs())
                                 : 0;

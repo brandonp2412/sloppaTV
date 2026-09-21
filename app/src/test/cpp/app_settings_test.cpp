@@ -6,6 +6,7 @@ int main() {
     AppSettings settings;
     assert(settings.maxBitrateMbps == 120);
     assert(settings.zoomMode == static_cast<int>(VideoZoomMode::Fit));
+    assert(!settings.ambientBlackBars);
     assert(playbackOverridesFor(settings).hdrMode == HdrOverrideMode::Auto);
     assert(videoZoomName(VideoZoomMode::Fill) == "FILL");
     assert(settings.subtitleSize == 1);
@@ -30,6 +31,7 @@ int main() {
     assert(settingKind(SettingId::Backdrops) == SettingKind::Value);
     assert(settingKind(SettingId::Diagnostics) == SettingKind::Action);
     assert(isBooleanSetting(SettingId::AutoplayNextEpisode));
+    assert(isBooleanSetting(SettingId::AmbientBlackBars));
     assert(isBooleanSetting(SettingId::MatchVideoRefreshRate));
     assert(isBooleanSetting(SettingId::WatchedIndicators));
     assert(isBooleanSetting(SettingId::Clock));
@@ -84,6 +86,9 @@ int main() {
     assert(adjusted.zoomMode == static_cast<int>(VideoZoomMode::Fill));
     assert(hasSettingEffect(effects, SettingChangeEffect::Save));
     assert(hasSettingEffect(effects, SettingChangeEffect::ApplyVideoZoom));
+    effects = adjustSetting(adjusted, SettingId::AmbientBlackBars, 1);
+    assert(adjusted.ambientBlackBars);
+    assert(hasSettingEffect(effects, SettingChangeEffect::Save));
     effects = adjustSetting(adjusted, SettingId::Diagnostics, 1);
     assert(effects == SettingChangeEffect::None);
 
@@ -107,8 +112,12 @@ int main() {
     assert(timeFiltered.front() == SettingId::TimeFormat);
 
     const auto advanced = matchingSettings("", true);
-    assert(advanced.size() == 13);
+    assert(advanced.size() == 14);
     assert(advanced.front() == SettingId::MaxStreamingBitrate);
+    assert(advanced[3] == SettingId::AmbientBlackBars);
     assert(advanced.back() == SettingId::AdvancedToggle);
+    const auto ambientFiltered = matchingSettings("ambient", true);
+    assert(ambientFiltered.size() == 1);
+    assert(ambientFiltered.front() == SettingId::AmbientBlackBars);
     return 0;
 }

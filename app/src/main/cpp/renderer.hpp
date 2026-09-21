@@ -64,6 +64,7 @@ public:
                             float u1, float v1, float alpha = 1.0f);
     bool externalImage(GLuint texture, float x, float y, float w, float h, const std::array<float, 16>& transform,
                        float alpha = 1.0f);
+    bool sampleExternalAverage(GLuint texture, const std::array<float, 16>& transform, std::array<float, 3>& rgb);
 
     [[nodiscard]] uint64_t generation() const { return generation_; }
 
@@ -105,6 +106,7 @@ private:
 
     void flush();
     bool ensureExternalProgram();
+    bool ensureExternalSampleTarget();
     bool loadFontAtlas();
     bool loadFontOutlineAtlas();
     static PreparedFontAtlas prepareFontAtlas(JavaVM* vm, jobject activity);
@@ -142,6 +144,8 @@ private:
     GLint externalAlphaLocation_ = -1;
     GLint externalTransformLocation_ = -1;
     bool externalProgramFailed_ = false;
+    GLuint externalSampleTexture_ = 0;
+    GLuint externalSampleFramebuffer_ = 0;
     GLuint fontTexture_ = 0;
     GLuint fontOutlineTexture_ = 0;
     bool fontAtlasAttempted_ = false;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ambient_video_color.hpp"
+
 #include <GLES3/gl3.h>
 #include <jni.h>
 
@@ -27,6 +29,8 @@ public:
 
     [[nodiscard]] const std::array<float, 16>& transform() const { return transform_; }
 
+    [[nodiscard]] AmbientVideoColorState& ambientColorState() { return ambientColorState_; }
+
 private:
     JavaVM* vm_ = nullptr;
     jobject surfaceTexture_ = nullptr;
@@ -36,6 +40,7 @@ private:
     jmethodID getTransformMatrixMethod_ = nullptr;
     jfloatArray transformArray_ = nullptr;
     GLuint texture_ = 0;
+    AmbientVideoColorState ambientColorState_;
     std::array<float, 16> transform_{
         1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1,
     };

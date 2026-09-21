@@ -150,6 +150,7 @@ fail:
 }
 
 void VideoSurface::release() {
+    ambientColorState_.reset();
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (env) {

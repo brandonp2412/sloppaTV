@@ -41,6 +41,29 @@ inline PlayerVideoBounds playerVideoBounds(const PlayerVideoRenderState& state) 
     return bounds;
 }
 
+inline bool playerVideoHasBars(const PlayerVideoRenderState& state) {
+    if (state.zoomMode != VideoZoomMode::Fit) return false;
+    const PlayerVideoBounds bounds = playerVideoBounds(state);
+    return bounds.x > 0.5f || bounds.y > 0.5f || bounds.x + bounds.width < state.logicalWidth - 0.5f ||
+           bounds.y + bounds.height < state.logicalHeight - 0.5f;
+}
+
+template <typename RendererLike, typename ColorLike>
+void renderPlayerAmbientBars(RendererLike& renderer, const PlayerVideoRenderState& state, ColorLike color) {
+    if (!playerVideoHasBars(state)) return;
+    const PlayerVideoBounds bounds = playerVideoBounds(state);
+    if (bounds.x > 0.0f) renderer.rect(0.0f, 0.0f, bounds.x, state.logicalHeight, color);
+    const float right = bounds.x + bounds.width;
+    if (right < state.logicalWidth) {
+        renderer.rect(right, 0.0f, state.logicalWidth - right, state.logicalHeight, color);
+    }
+    if (bounds.y > 0.0f) renderer.rect(0.0f, 0.0f, state.logicalWidth, bounds.y, color);
+    const float bottom = bounds.y + bounds.height;
+    if (bottom < state.logicalHeight) {
+        renderer.rect(0.0f, bottom, state.logicalWidth, state.logicalHeight - bottom, color);
+    }
+}
+
 template <typename RendererLike, typename TransformLike>
 void renderPlayerVideo(RendererLike& renderer, const PlayerVideoRenderState& state, const TransformLike& transform) {
     const PlayerVideoBounds bounds = playerVideoBounds(state);
