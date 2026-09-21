@@ -9,6 +9,14 @@ int main() {
     assert(settings.stillWatchingAfter == 0);
     assert(!settings.ambientLetterboxBars);
     assert(settings.skipDisabledSeriesIds.empty());
+    assert(!skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(setSkipSegmentsDisabledForSeries(settings, "series-1", true));
+    assert(skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(!setSkipSegmentsDisabledForSeries(settings, "series-1", true));
+    assert(setSkipSegmentsDisabledForSeries(settings, "series-1", false));
+    assert(!skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(!setSkipSegmentsDisabledForSeries(settings, "series-1", false));
+    assert(!setSkipSegmentsDisabledForSeries(settings, "", true));
     assert(playbackOverridesFor(settings).hdrMode == HdrOverrideMode::Auto);
     assert(videoZoomName(VideoZoomMode::Fill) == "FILL");
     assert(settings.subtitleSize == 1);
@@ -89,8 +97,8 @@ int main() {
     assert(renderStillWatchingAfter(AppSettings{}, {}) == "OFF");
     effects = adjustSetting(adjusted, SettingId::AmbientLetterboxBars, 1);
     assert(adjusted.ambientLetterboxBars);
-    assert(disableSkipSegmentsForSeries(adjusted, "series-1"));
-    assert(!disableSkipSegmentsForSeries(adjusted, "series-1"));
+    assert(setSkipSegmentsDisabledForSeries(adjusted, "series-1", true));
+    assert(!setSkipSegmentsDisabledForSeries(adjusted, "series-1", true));
     assert(skipSegmentsDisabledForSeries(adjusted, "series-1"));
     assert(!skipSegmentsDisabledForSeries(adjusted, ""));
     effects = adjustSetting(adjusted, SettingId::DefaultVideoZoom, 1);

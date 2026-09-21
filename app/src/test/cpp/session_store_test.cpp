@@ -60,6 +60,12 @@ int main() {
     assert(loaded.settings.skipDisabledSeriesIds.size() == 2);
     assert(loaded.settings.skipDisabledSeriesIds[0] == "series-1");
     assert(loaded.settings.skipDisabledSeriesIds[1] == "series-2");
+    assert(setSkipSegmentsDisabledForSeries(loaded.settings, "series-1", false));
+    assert(saveSessionState(directory.string(), loaded, warning));
+    StoredSessionState reloaded = loadSessionState(directory.string(), "fallback", warning);
+    assert(warning.empty());
+    assert(!skipSegmentsDisabledForSeries(reloaded.settings, "series-1"));
+    assert(skipSegmentsDisabledForSeries(reloaded.settings, "series-2"));
     assert(loaded.settings.subtitleSize == 2);
     assert(!loaded.settings.subtitleBackground);
     assert(loaded.settings.subtitleLanguages.size() == 2);

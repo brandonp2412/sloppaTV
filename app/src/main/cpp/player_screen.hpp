@@ -303,9 +303,10 @@ public:
         return true;
     }
 
-    void beginSkipButtonPress(std::string seriesId, std::string seriesName) {
+    void beginSkipButtonPress(std::string seriesId, std::string seriesName, bool enabling) {
         skipButtonPressPending_ = true;
         skipButtonLongPressed_ = false;
+        skipButtonPressEnabling_ = enabling;
         skipButtonPressSeriesId_ = std::move(seriesId);
         skipButtonPressSeriesName_ = std::move(seriesName);
     }
@@ -318,6 +319,7 @@ public:
         skipButtonLongPressed_ = true;
         skipDisablePromptVisible_ = true;
         skipDisableSelected_ = false;
+        skipDisableEnabling_ = skipButtonPressEnabling_;
         skipDisableSeriesId_ = skipButtonPressSeriesId_;
         skipDisableSeriesName_ = skipButtonPressSeriesName_;
     }
@@ -327,6 +329,7 @@ public:
         const bool activate = !skipButtonLongPressed_;
         skipButtonPressPending_ = false;
         skipButtonLongPressed_ = false;
+        skipButtonPressEnabling_ = false;
         skipButtonPressSeriesId_.clear();
         skipButtonPressSeriesName_.clear();
         return activate;
@@ -335,12 +338,15 @@ public:
     void cancelSkipButtonPress() {
         skipButtonPressPending_ = false;
         skipButtonLongPressed_ = false;
+        skipButtonPressEnabling_ = false;
         skipButtonPressSeriesId_.clear();
         skipButtonPressSeriesName_.clear();
     }
 
     [[nodiscard]] bool skipDisablePromptVisible() const { return skipDisablePromptVisible_; }
     [[nodiscard]] bool skipDisableSelected() const { return skipDisableSelected_; }
+
+    [[nodiscard]] bool skipDisableEnabling() const { return skipDisableEnabling_; }
     [[nodiscard]] const std::string& skipDisableSeriesId() const { return skipDisableSeriesId_; }
     [[nodiscard]] const std::string& skipDisableSeriesName() const { return skipDisableSeriesName_; }
 
@@ -349,6 +355,7 @@ public:
     void closeSkipDisablePrompt() {
         skipDisablePromptVisible_ = false;
         skipDisableSelected_ = false;
+        skipDisableEnabling_ = false;
         skipDisableSeriesId_.clear();
         skipDisableSeriesName_.clear();
         cancelSkipButtonPress();
@@ -392,10 +399,12 @@ private:
     void resetSkipButtonInteraction() {
         skipButtonPressPending_ = false;
         skipButtonLongPressed_ = false;
+        skipButtonPressEnabling_ = false;
         skipButtonPressSeriesId_.clear();
         skipButtonPressSeriesName_.clear();
         skipDisablePromptVisible_ = false;
         skipDisableSelected_ = false;
+        skipDisableEnabling_ = false;
         skipDisableSeriesId_.clear();
         skipDisableSeriesName_.clear();
     }
@@ -404,10 +413,12 @@ private:
     bool resumeOnFocus_ = false;
     bool skipButtonPressPending_ = false;
     bool skipButtonLongPressed_ = false;
+    bool skipButtonPressEnabling_ = false;
     std::string skipButtonPressSeriesId_;
     std::string skipButtonPressSeriesName_;
     bool skipDisablePromptVisible_ = false;
     bool skipDisableSelected_ = false;
+    bool skipDisableEnabling_ = false;
     std::string skipDisableSeriesId_;
     std::string skipDisableSeriesName_;
     AmbientBarColorState ambientBars_;

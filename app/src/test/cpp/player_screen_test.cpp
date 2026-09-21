@@ -156,12 +156,12 @@ int main() {
     assert(state.takeResumeOnFocus());
     assert(!state.resumeOnFocusRequested());
 
-    state.beginSkipButtonPress("series-1", "Example Show");
+    state.beginSkipButtonPress("series-1", "Example Show", false);
     assert(state.skipButtonPressPending());
     assert(!state.skipButtonLongPressed());
     assert(state.consumeSkipButtonRelease());
 
-    state.beginSkipButtonPress("series-1", "Example Show");
+    state.beginSkipButtonPress("series-1", "Example Show", false);
     state.openSkipDisablePrompt();
     assert(state.skipButtonPressPending());
     assert(state.skipButtonLongPressed());
@@ -176,6 +176,11 @@ int main() {
     state.closeSkipDisablePrompt();
     assert(!state.skipDisablePromptVisible());
     assert(!state.skipButtonPressPending());
+
+    state.beginSkipButtonPress("series-1", "Example Show", true);
+    state.openSkipDisablePrompt();
+    assert(state.skipDisableEnabling());
+    state.closeSkipDisablePrompt();
 
     auto& ambient = state.ambientBars();
     assert(ambient.sampleDue(now));
