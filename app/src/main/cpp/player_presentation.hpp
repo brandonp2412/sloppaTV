@@ -8,12 +8,10 @@
 #include "player_controls_renderer.hpp"
 #include "player_header_renderer.hpp"
 #include "player_next_up_renderer.hpp"
+#include "player_overlay_renderer.hpp"
 #include "player_progress_renderer.hpp"
 #include "player_screen.hpp"
-#include "player_seek_feedback_renderer.hpp"
-#include "player_skip_button_renderer.hpp"
 #include "player_status_renderer.hpp"
-#include "player_subtitle_renderer.hpp"
 #include "player_trickplay_renderer.hpp"
 #include "player_video_renderer.hpp"
 #include "renderer.hpp"
@@ -288,66 +286,49 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const bool showOverlay = status == PlayerStatus::Preparing || playbackCoordinator.transitionLoading() ||
                              playbackCoordinator.fallbackResolving() || userOverlayVisible ||
                              playerScreenState.skipDisablePromptVisible();
-    if (showOverlay) {
-        renderer.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f, Color{0.0f, 0.0f, 0.0f, 0.74f},
-                                  Color{0.0f, 0.0f, 0.0f, 0.0f});
-        renderer.verticalGradient(0.0f, 650.0f, 1920.0f, 430.0f, Color{0.0f, 0.0f, 0.0f, 0.0f},
-                                  Color{0.0f, 0.0f, 0.0f, 0.90f});
-    }
-
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
         subtitleText = cue->text;
     }
-    if (!subtitleText.empty()) {
-        const float textScale = subtitleTextScale(settings.subtitleSize);
-        renderPlayerSubtitle(renderer,
-                             PlayerSubtitleRenderState{
-                                 .text = subtitleText,
-                                 .boxMaxWidth = subtitleBoxMaxWidth(skipAffordanceVisible),
-                                 .textScale = textScale,
-                                 .lineHeight = 11.0f * textScale * uiTextScale(settings.uiTextSize),
-                                 .logicalWidth = Renderer::logicalWidth(),
-                                 .bottomY = subtitleBottomY(showOverlay, playerScreenState.controlsActive(now),
-                                                            settings.subtitlePosition, skipAffordanceVisible),
-                                 .showBackground = settings.subtitleBackground,
-                             },
-                             PlayerSubtitleRenderStyle<Color>{
-                                 .cornerRadius = material_tv::cornerMedium,
-                                 .text = material_tv::onSurface,
-                                 .background = Color{0.0f, 0.0f, 0.0f, 0.80f},
-                                 .outline = Color{0.0f, 0.0f, 0.0f, 0.92f},
-                             },
-                             [&ui](std::string value, float scale, float maxWidth, int maxLines) {
-                                 return ui.fitText(value, scale, maxWidth, maxLines);
-                             });
-    }
-
-    if (skipSegment || showSkipRestore) {
-        const std::string skipLabel = skipSegment ? mediaSegmentSkipLabel(*skipSegment) : "Hold OK to enable";
-        renderPlayerSkipButton(
-            renderer,
-            PlayerSkipButtonRenderState{
-                .label = skipLabel,
-                .y = skipButtonY(showOverlay),
-            },
-            PlayerSkipButtonRenderStyle<Color>{.text = material_tv::onSurface},
-            [&ui](float x, float y, float width, float height, bool focused, bool primary) {
-                return ui.drawButtonSurface(x, y, width, height, focused, primary);
-            },
-            [&ui](std::string_view value, float scale, float maxWidth, int maxLines) {
-                return ui.fitText(value, scale, maxWidth, maxLines);
-            });
-    }
-
-    if (playerScreenState.seekFeedbackVisible(now)) {
-        renderPlayerSeekFeedback(renderer,
-                                 PlayerSeekFeedbackRenderState{
-                                     .seconds = playerScreenState.seekFeedbackSeconds(),
-                                     .fade = playerScreenState.seekFeedbackAlpha(now),
-                                 },
-                                 [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
-    }
+    const bool subtitleVisible = !subtitleText.empty();
+    const float subtitleScale = subtitleVisible ? subtitleTextScale(settings.subtitleSize) : 1.0f;
+    const bool skipButtonVisible = skipSegment != nullptr || showSkipRestore;
+    const std::string skipLabel =
+        skipSegment ? mediaSegmentSkipLabel(*skipSegment) : (showSkipRestore ? "Hold OK to enable" : std::string{});
+    const bool seekFeedbackVisible = playerScreenState.seekFeedbackVisible(now);
+    renderPlayerOverlay(
+        renderer,
+        PlayerOverlayRenderState{
+            .showOverlay = showOverlay,
+            .subtitleText = subtitleText,
+            .subtitleBoxMaxWidth = subtitleVisible ? subtitleBoxMaxWidth(skipAffordanceVisible) : 0.0f,
+            .subtitleTextScale = subtitleScale,
+            .subtitleLineHeight = subtitleVisible ? 11.0f * subtitleScale * uiTextScale(settings.uiTextSize) : 0.0f,
+            .logicalWidth = Renderer::logicalWidth(),
+            .subtitleBottomY =
+                subtitleVisible
+                    ? subtitleBottomY(showOverlay, playerScreenState.controlsActive(now), settings.subtitlePosition,
+                                      skipAffordanceVisible)
+                    : 0.0f,
+            .subtitleBackground = settings.subtitleBackground,
+            .skipButtonVisible = skipButtonVisible,
+            .skipLabel = skipLabel,
+            .skipButtonY = skipButtonVisible ? skipButtonY(showOverlay) : 0.0f,
+            .seekFeedbackVisible = seekFeedbackVisible,
+            .seekFeedbackSeconds = seekFeedbackVisible ? playerScreenState.seekFeedbackSeconds() : 0,
+            .seekFeedbackAlpha = seekFeedbackVisible ? playerScreenState.seekFeedbackAlpha(now) : 0.0f,
+        },
+        PlayerOverlayRenderStyle<Color>{
+            .subtitleCornerRadius = material_tv::cornerMedium,
+            .text = material_tv::onSurface,
+        },
+        [&ui](std::string_view value, float scale, float maxWidth, int maxLines) {
+            return ui.fitText(value, scale, maxWidth, maxLines);
+        },
+        [&ui](float x, float y, float width, float height, bool focused, bool primary) {
+            return ui.drawButtonSurface(x, y, width, height, focused, primary);
+        },
+        [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
     if (!showOverlay) return;
 
     const auto nextItem = playbackCoordinator.continuation().nextItem();
