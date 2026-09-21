@@ -619,7 +619,13 @@ int main() {
 
     telemetry.beginPlayback(now - 11s);
 
-    auto plan = planPlaybackTick(false, true, 35000, "Episode", session, telemetry, continuation, now);
+    auto plan = planPlaybackTick(false, true, kNextEpisodePrefetchStartMs - 1, "Episode", session, telemetry,
+                                 continuation, now);
+    assert(!plan.requestNextEpisode);
+    plan = planPlaybackTick(false, true, kNextEpisodePrefetchStartMs, "Episode", session, telemetry, continuation, now);
+    assert(plan.requestNextEpisode);
+
+    plan = planPlaybackTick(false, true, 35000, "Episode", session, telemetry, continuation, now);
     assert(plan.refreshTelemetry);
     assert(plan.requestMediaSegments);
     assert(plan.reportPlaybackStart);

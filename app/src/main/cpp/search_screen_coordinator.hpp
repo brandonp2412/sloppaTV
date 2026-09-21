@@ -123,6 +123,7 @@ private:
         if (completion.clearError) error_.clear();
         effects.reconnectSeerr = completion.reconnectSeerr;
         effects.syncSeerrHome = completion.syncSeerrHome;
+        if (const JellyfinItem* selected = search_.selectedResult()) effects.prefetchSimilarItem = *selected;
         return effects;
     }
 

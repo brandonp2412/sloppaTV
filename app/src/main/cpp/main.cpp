@@ -349,8 +349,8 @@ public:
           runtimeLaunch_(api_, requestEpochs_, session_, accountFlow_, queueState_, searchFlow_.state(),
                          detailsScreens_, navigation_, screen_, loading_, homeLoading_, pendingDeepLinkItemId_,
                          pendingSearchQuery_, error_, lastInteraction_, screensaverActive_),
-          contentCompletions_(requestEpochs_.content, requestEpochs_.session, screen_, loading_, error_, detailsFlow_,
-                              contentMutationFlow_, homeVisibility_, home_, homeState_, browseState_,
+          contentCompletions_(requestEpochs_.content, requestEpochs_.session, screen_, loading_, error_, session_,
+                              detailsFlow_, contentMutationFlow_, homeVisibility_, home_, homeState_, browseState_,
                               searchFlow_.state(), queueState_, detailsAsync_, similarPrefetch_),
           homeCompletions_(homeScreens_, detailsScreens_, session_, accountFlow_, requestEpochs_, contentMutationFlow_,
                            searchFlow_.state(), settings_, seerrDomain_, navigation_, screen_, loading_, error_),
@@ -1360,21 +1360,123 @@ private:
         if (similarPrefetch_.schedule(session_, item) && app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
+    void scheduleFocusedHomePrefetch() {
+        if (screen_ != Screen::Home) return;
+        const int row = homeState_.row();
+        if (row < 0 || row >= static_cast<int>(home_.rows.size())) return;
+        const auto& items = home_.rows[static_cast<size_t>(row)].items;
+        if (items.empty()) return;
+        const int selection = homeState_.selection(row, static_cast<int>(items.size()));
+        scheduleSimilarPrefetch(items[static_cast<size_t>(selection)]);
+    }
+
     void runDueSimilarPrefetch() {
         const bool eligible = screen_ == Screen::Home || screen_ == Screen::Browse || screen_ == Screen::Search ||
-                              screen_ == Screen::Details;
+                              screen_ == Screen::Details || screen_ == Screen::Player;
         auto work = similarPrefetch_.takeDue(session_, eligible);
         if (!work) return;
 
         SimilarPrefetchWork request = std::move(*work);
         const std::string key = request.key;
         if (!similarPrefetchTasks_.submit([this, request = std::move(request)]() mutable {
-                auto result = similarPrefetchApi_.getSimilar(request.session, request.itemId, 18);
+                ApiValueResult<JellyfinItem> detail;
+                JellyfinItem item = request.item;
+                if (item.type != "Season" || item.seriesId.empty()) {
+                    if (const auto cached = similarPrefetch_.cachedDetail(request.session, request.itemId)) {
+                        item = *cached;
+                    } else {
+                        detail = similarPrefetchApi_.getItem(request.session, request.itemId);
+                        if (detail.ok) item = detail.value;
+                    }
+                }
+
+                ApiValueResult<std::vector<JellyfinItem>> result;
+                if (item.type != "Season" && !similarPrefetch_.cached(request.session, request.itemId)) {
+                    result = similarPrefetchApi_.getSimilar(request.session, request.itemId, 18);
+                }
+
+                std::string seriesId;
+                if (item.type == "Series")
+                    seriesId = item.id;
+                else if (item.type == "Episode" || item.type == "Season")
+                    seriesId = item.seriesId;
+
+                ApiValueResult<JellyfinItem> seriesDetail;
+                ApiValueResult<std::vector<JellyfinItem>> seasons;
+                std::vector<JellyfinItem> seasonItems;
+                std::string seasonId;
+                ApiValueResult<std::vector<JellyfinItem>> episodes;
+                ApiValueResult<JellyfinItem> nextEpisodeDetail;
+
+                if (!seriesId.empty()) {
+                    if (seriesId != item.id && !similarPrefetch_.cachedSeriesDetail(request.session, seriesId)) {
+                        seriesDetail = similarPrefetchApi_.getItem(request.session, seriesId);
+                    }
+
+                    if (const auto cached = similarPrefetch_.cachedSeasons(request.session, seriesId)) {
+                        seasonItems = *cached;
+                    } else {
+                        seasons = similarPrefetchApi_.getSeasons(request.session, seriesId);
+                        if (seasons.ok) seasonItems = seasons.value;
+                    }
+
+                    if (item.type == "Season") {
+                        seasonId = item.id;
+                    } else if (!seasonItems.empty()) {
+                        int preferredSeason = item.type == "Episode" ? item.parentIndexNumber : -1;
+                        JellyfinItem nextUp;
+                        if (item.type == "Series") {
+                            auto next = similarPrefetchApi_.getNextUpForSeries(request.session, seriesId);
+                            if (next.ok) {
+                                nextUp = next.value;
+                                preferredSeason = nextUp.parentIndexNumber;
+                            }
+                        }
+
+                        auto selected = seasonItems.end();
+                        if (preferredSeason >= 0) {
+                            selected =
+                                std::find_if(seasonItems.begin(), seasonItems.end(), [&](const JellyfinItem& season) {
+                                    return season.indexNumber == preferredSeason;
+                                });
+                        }
+                        if (selected == seasonItems.end()) {
+                            selected = std::find_if(seasonItems.begin(), seasonItems.end(),
+                                                    [](const JellyfinItem& season) { return season.indexNumber > 0; });
+                        }
+                        if (selected == seasonItems.end()) selected = seasonItems.begin();
+                        seasonId = selected->id;
+
+                        if (!nextUp.id.empty() && !similarPrefetch_.cachedDetail(request.session, nextUp.id)) {
+                            nextEpisodeDetail = similarPrefetchApi_.getItem(request.session, nextUp.id);
+                        }
+                    }
+
+                    if (!seasonId.empty() && !similarPrefetch_.cachedEpisodes(request.session, seriesId, seasonId)) {
+                        episodes = similarPrefetchApi_.getEpisodes(request.session, seriesId, seasonId);
+                    }
+
+                    if (item.type == "Episode") {
+                        auto next =
+                            similarPrefetchApi_.getFollowingEpisodeForSeries(request.session, seriesId, item.id);
+                        if (next.ok && !similarPrefetch_.cachedDetail(request.session, next.value.id)) {
+                            nextEpisodeDetail = similarPrefetchApi_.getItem(request.session, next.value.id);
+                        }
+                    }
+                }
+
                 asyncCompletions_.push(SimilarPrefetchCompletion{
                     .session = std::move(request.session),
                     .itemId = std::move(request.itemId),
                     .key = std::move(request.key),
+                    .detail = std::move(detail),
                     .result = std::move(result),
+                    .seriesId = std::move(seriesId),
+                    .seriesDetail = std::move(seriesDetail),
+                    .seasons = std::move(seasons),
+                    .seasonId = std::move(seasonId),
+                    .episodes = std::move(episodes),
+                    .nextEpisodeDetail = std::move(nextEpisodeDetail),
                 });
             })) {
             similarPrefetch_.submissionFailed(key);
@@ -1510,6 +1612,7 @@ private:
     }
 
     void applyContentCompletionHostEffects(ContentCompletionHostEffects effects) {
+        if (effects.prefetchItem) scheduleSimilarPrefetch(*effects.prefetchItem);
         if (effects.renderAnimationStarted) {
             renderBurstUntil_ = std::max(renderBurstUntil_, *effects.renderAnimationStarted + 320ms);
             if (app_ && app_->looper) ALooper_wake(app_->looper);
@@ -1532,7 +1635,15 @@ private:
             showNotice(std::move(notice->message), notice->duration, notice->persistent);
     }
 
-    void applyAsyncCompletion(BrowsePageCompletion& completion) { browseScreens_.complete(completion); }
+    void applyAsyncCompletion(BrowsePageCompletion& completion) {
+        browseScreens_.complete(completion);
+        if (screen_ != Screen::Browse) return;
+        const auto& items = browseState_.items();
+        const int selection = browseState_.selection();
+        if (selection >= 0 && selection < static_cast<int>(items.size())) {
+            scheduleSimilarPrefetch(items[static_cast<size_t>(selection)]);
+        }
+    }
 
     void applyAsyncCompletion(ServerInfoNoticeCompletion& completion) {
         if (auto notice = serverInfoScreens_.complete(completion))
@@ -1576,6 +1687,7 @@ private:
             if (effects.triggerSearch) searchAsync();
         }
         if (effects.refreshSeerrPending) refreshSeerrPendingAsync();
+        scheduleFocusedHomePrefetch();
     }
 
     void applyAsyncCompletion(HomeSecondaryCompletion& completion) {
@@ -1583,6 +1695,7 @@ private:
         if (effects.secondaryReadyMs)
             __android_log_print(ANDROID_LOG_INFO, kTag, "Home enrichment completed in %lld ms",
                                 *effects.secondaryReadyMs);
+        scheduleFocusedHomePrefetch();
     }
 
     void applyAsyncCompletion(ExternalPlaybackCompletion& completion) {
@@ -1617,6 +1730,14 @@ private:
         }
         if (effects.notice) showNotice(std::move(effects.notice->text), effects.notice->duration);
         if (effects.playItem) playbackRequests_.playItem(std::move(*effects.playItem));
+    }
+
+    void applyAsyncCompletion(NextEpisodeCompletion& completion) {
+        if (completion.ok && !completion.item.id.empty()) {
+            similarPrefetch_.rememberDetail(session_, completion.item);
+            scheduleSimilarPrefetch(completion.item);
+        }
+        applyPlaybackCompletionApplicationEffects(playbackCompletions_.complete(completion));
     }
 
     template <typename Completion>

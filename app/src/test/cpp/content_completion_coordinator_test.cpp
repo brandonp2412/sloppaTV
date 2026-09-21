@@ -44,8 +44,8 @@ struct Fixture {
     FakeDetailsAsync detailsAsync;
     SimilarPrefetchController similarPrefetch;
     ContentCompletionCoordinator<FakeDetailsAsync> coordinator{
-        contentEpoch, sessionEpoch, screen,      loading,     error,      details,      mutations,      homeVisibility,
-        home,         homeState,    browseState, searchState, queueState, detailsAsync, similarPrefetch};
+        contentEpoch,   sessionEpoch, screen,    loading,     error,       session,    details,      mutations,
+        homeVisibility, home,         homeState, browseState, searchState, queueState, detailsAsync, similarPrefetch};
 
     EpisodeSeriesContextRequestCompletion completion(uint64_t generation) {
         JellyfinItem episode;

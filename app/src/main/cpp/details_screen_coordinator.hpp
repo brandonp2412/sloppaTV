@@ -90,7 +90,9 @@ public:
 
     [[nodiscard]] DetailsScreenEffects handlePersonItems(DetailsNavigationKey key, int columns) {
         DetailsScreenEffects effects;
-        applyCommand(details_.handlePersonItems(key, columns), effects);
+        const DetailsFlowCommand command = details_.handlePersonItems(key, columns);
+        if (const auto* selected = details_.state().selectedPersonItem()) effects.prefetchItem = *selected;
+        applyCommand(command, effects);
         return effects;
     }
 
@@ -104,13 +106,17 @@ public:
 
     [[nodiscard]] DetailsScreenEffects handleSeasons(DetailsNavigationKey key, int columns) {
         DetailsScreenEffects effects;
-        applyCommand(details_.handleSeasons(key, columns), effects);
+        const DetailsFlowCommand command = details_.handleSeasons(key, columns);
+        if (const auto* selected = details_.state().selectedSeasonItem()) effects.prefetchItem = *selected;
+        applyCommand(command, effects);
         return effects;
     }
 
     [[nodiscard]] DetailsScreenEffects handleEpisodes(DetailsNavigationKey key, int columns) {
         DetailsScreenEffects effects;
-        applyCommand(details_.handleEpisodes(key, columns), effects);
+        const DetailsFlowCommand command = details_.handleEpisodes(key, columns);
+        if (const auto* selected = details_.state().selectedEpisodeItem()) effects.prefetchItem = *selected;
+        applyCommand(command, effects);
         return effects;
     }
 
@@ -120,11 +126,19 @@ public:
         else
             pushScreen(Screen::Details);
         playbackCoordinator_.dismissStillWatchingPrompt();
-        details_.beginDetails(item);
+
+        const auto prefetchedDetail = similarPrefetch_.cachedDetail(session_, item.id);
+        details_.beginDetails(prefetchedDetail ? *prefetchedDetail : item);
 
         const std::string id = details_.item().id;
         const auto prefetchedSimilar = similarPrefetch_.cached(session_, id);
         if (prefetchedSimilar) details_.state().setSimilar(*prefetchedSimilar);
+
+        if (details_.item().type == "Episode" && !details_.item().seriesId.empty()) {
+            const auto series = similarPrefetch_.cachedSeriesDetail(session_, details_.item().seriesId);
+            const auto seasons = similarPrefetch_.cachedSeasons(session_, details_.item().seriesId);
+            if (series && seasons) details_.state().setEpisodeSeriesContext(*series, *seasons);
+        }
         similarPrefetch_.clearPending();
 
         error_.clear();
@@ -283,11 +297,22 @@ private:
 
     void openSeasons() {
         if (loading_ || !details_.beginSeries()) return;
+        const std::string seriesId = details_.state().seriesDetail().id;
+        const auto prefetched = similarPrefetch_.cachedSeasons(session_, seriesId);
         pushScreen(Screen::Seasons);
-        loading_ = true;
         error_.clear();
+        if (prefetched) {
+            contentEpoch_.invalidate();
+            details_.state().setSeasons(*prefetched);
+            loading_ = false;
+            if (const auto* selected = details_.state().selectedSeasonItem())
+                similarPrefetch_.schedule(session_, *selected);
+            return;
+        }
+
+        loading_ = true;
         const uint64_t generation = contentEpoch_.begin();
-        if (detailsAsync_.loadSeasons(session_, details_.state().seriesDetail().id, generation)) return;
+        if (detailsAsync_.loadSeasons(session_, seriesId, generation)) return;
         contentEpoch_.invalidate();
         loading_ = false;
         error_ = "SEASONS LOAD COULD NOT BE STARTED";
@@ -295,11 +320,22 @@ private:
 
     void openEpisodes(const JellyfinItem& season) {
         if (loading_ || !details_.beginSeason(season)) return;
+        const std::string seriesId = details_.state().seriesDetail().id;
+        const auto prefetched = similarPrefetch_.cachedEpisodes(session_, seriesId, season.id);
         pushScreen(Screen::Episodes);
-        loading_ = true;
         error_.clear();
+        if (prefetched) {
+            contentEpoch_.invalidate();
+            details_.state().setEpisodes(*prefetched);
+            loading_ = false;
+            if (const auto* selected = details_.state().selectedEpisodeItem())
+                similarPrefetch_.schedule(session_, *selected);
+            return;
+        }
+
+        loading_ = true;
         const uint64_t generation = contentEpoch_.begin();
-        if (detailsAsync_.loadEpisodes(session_, details_.state().seriesDetail().id, season.id, generation)) return;
+        if (detailsAsync_.loadEpisodes(session_, seriesId, season.id, generation)) return;
         contentEpoch_.invalidate();
         loading_ = false;
         error_ = "EPISODES LOAD COULD NOT BE STARTED";

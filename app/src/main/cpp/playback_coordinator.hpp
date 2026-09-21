@@ -39,6 +39,8 @@ struct PlaybackTickPlan {
     bool requestNextEpisode = false;
 };
 
+inline constexpr int kNextEpisodePrefetchStartMs = 3000;
+
 struct PlaybackContinuationPlan {
     PlaybackContinuationAction action = PlaybackContinuationAction::None;
     int queueIndex = -1;
@@ -222,7 +224,8 @@ inline PlaybackTickPlan planPlaybackTick(bool playbackEnded, bool playbackPlayin
     plan.requestMediaSegments = !sessionState.mediaSegmentsRequested();
     plan.reportPlaybackStart = !telemetryState.playbackStartReported();
     plan.reportProgress = telemetryState.progressReportDue(now, playbackPlaying);
-    plan.requestNextEpisode = !continuationState.nextEpisodeRequested() && itemType == "Episode" && positionMs >= 30000;
+    plan.requestNextEpisode =
+        !continuationState.nextEpisodeRequested() && itemType == "Episode" && positionMs >= kNextEpisodePrefetchStartMs;
     return plan;
 }
 

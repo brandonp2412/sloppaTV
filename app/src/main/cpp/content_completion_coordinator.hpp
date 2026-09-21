@@ -34,20 +34,21 @@ struct ContentCompletionHostEffects {
     bool closeDeletedItem = false;
     std::optional<std::string> notice;
     std::optional<std::chrono::steady_clock::time_point> renderAnimationStarted;
+    std::optional<JellyfinItem> prefetchItem;
 };
 
 template <typename DetailsAsync> class ContentCompletionCoordinator {
 public:
     ContentCompletionCoordinator(RequestEpoch& contentEpoch, RequestEpoch& sessionEpoch, Screen& screen, bool& loading,
-                                 std::string& error, DetailsFlow& details, ContentMutationFlow& mutations,
-                                 HomeVisibility& homeVisibility, JellyfinHomeData& home, HomeScreenState& homeState,
-                                 BrowseScreenState& browseState, SearchScreenState& searchState,
-                                 PlaybackQueueState& queueState, DetailsAsync& detailsAsync,
-                                 SimilarPrefetchController& similarPrefetch)
+                                 std::string& error, JellyfinSession& session, DetailsFlow& details,
+                                 ContentMutationFlow& mutations, HomeVisibility& homeVisibility, JellyfinHomeData& home,
+                                 HomeScreenState& homeState, BrowseScreenState& browseState,
+                                 SearchScreenState& searchState, PlaybackQueueState& queueState,
+                                 DetailsAsync& detailsAsync, SimilarPrefetchController& similarPrefetch)
         : contentEpoch_(contentEpoch), sessionEpoch_(sessionEpoch), screen_(screen), loading_(loading), error_(error),
-          details_(details), mutations_(mutations), homeVisibility_(homeVisibility), home_(home), homeState_(homeState),
-          browseState_(browseState), searchState_(searchState), queueState_(queueState), detailsAsync_(detailsAsync),
-          similarPrefetch_(similarPrefetch) {}
+          session_(session), details_(details), mutations_(mutations), homeVisibility_(homeVisibility), home_(home),
+          homeState_(homeState), browseState_(browseState), searchState_(searchState), queueState_(queueState),
+          detailsAsync_(detailsAsync), similarPrefetch_(similarPrefetch) {}
 
     [[nodiscard]] ContentCompletionHostEffects complete(ItemMenuDetailCompletion& completion) {
         applyDetails(DetailsCompletionController::apply(completion, screen_ == Screen::ItemMenu, details_.item()));
@@ -57,28 +58,51 @@ public:
     [[nodiscard]] ContentCompletionHostEffects complete(PersonItemsCompletion& completion) {
         applyDetails(DetailsCompletionController::apply(completion, contentEpoch_.active(completion.generation),
                                                         screen_ == Screen::PersonItems, details_.state()));
-        return {};
+        ContentCompletionHostEffects effects;
+        if (screen_ == Screen::PersonItems) {
+            if (const auto* selected = details_.state().selectedPersonItem()) effects.prefetchItem = *selected;
+        }
+        return effects;
     }
 
     [[nodiscard]] ContentCompletionHostEffects complete(SeasonsCompletion& completion) {
+        if (completion.result.ok) {
+            similarPrefetch_.rememberSeasons(session_, completion.seriesId, completion.result.value);
+        }
         applyDetails(DetailsCompletionController::apply(completion, contentEpoch_.active(completion.generation),
                                                         screen_ == Screen::Seasons, details_.state()));
-        return {};
+        ContentCompletionHostEffects effects;
+        if (screen_ == Screen::Seasons) {
+            if (const auto* selected = details_.state().selectedSeasonItem()) effects.prefetchItem = *selected;
+        }
+        return effects;
     }
 
     [[nodiscard]] ContentCompletionHostEffects complete(EpisodesCompletion& completion) {
+        if (completion.result.ok) {
+            similarPrefetch_.rememberEpisodes(session_, completion.seriesId, completion.seasonId,
+                                              completion.result.value);
+        }
         applyDetails(DetailsCompletionController::apply(completion, contentEpoch_.active(completion.generation),
                                                         screen_ == Screen::Episodes, details_.state()));
-        return {};
+        ContentCompletionHostEffects effects;
+        if (screen_ == Screen::Episodes) {
+            if (const auto* selected = details_.state().selectedEpisodeItem()) effects.prefetchItem = *selected;
+        }
+        return effects;
     }
 
     [[nodiscard]] ContentCompletionHostEffects complete(DetailsItemCompletion& completion) {
+        if (completion.result.ok) similarPrefetch_.rememberDetail(session_, completion.result.value);
         applyDetails(DetailsCompletionController::apply(completion, contentEpoch_.active(completion.generation),
                                                         screen_ == Screen::Details, details_.item()));
-        return {};
+        ContentCompletionHostEffects effects;
+        if (screen_ == Screen::Details && !details_.item().id.empty()) effects.prefetchItem = details_.item();
+        return effects;
     }
 
     [[nodiscard]] ContentCompletionHostEffects complete(DetailsSimilarCompletion& completion) {
+        similarPrefetch_.rememberSimilar(session_, completion.itemId, completion.items);
         applyDetails(DetailsCompletionController::apply(completion, contentEpoch_.active(completion.generation),
                                                         screen_ == Screen::Details, details_.item(), details_.state()));
         return {};
@@ -156,6 +180,7 @@ private:
     Screen& screen_;
     bool& loading_;
     std::string& error_;
+    JellyfinSession& session_;
     DetailsFlow& details_;
     ContentMutationFlow& mutations_;
     HomeVisibility& homeVisibility_;
