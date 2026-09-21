@@ -738,7 +738,7 @@ template <size_t N> consteval std::array<SettingId, N> makeSettingOrder(bool adv
 }
 
 inline constexpr auto kCommonSettings = makeSettingOrder<23>(false);
-inline constexpr auto kAdvancedSettings = makeSettingOrder<13>(true);
+inline constexpr auto kAdvancedSettings = makeSettingOrder<14>(true);
 
 inline std::vector<SettingId> matchingSettings(const std::string& query, bool advanced) {
     std::vector<SettingId> matches;
