@@ -33,6 +33,8 @@ public:
         : search_(search), keyboard_(keyboard), navigation_(navigation), screen_(screen), homeState_(homeState),
           home_(home), session_(session), error_(error) {}
 
+    void resetForSessionChange() { search_.reset(); }
+
     [[nodiscard]] SearchScreenEffects handle(ScreenNavigationKey key, const SeerrEndpoint& endpoint,
                                              std::chrono::steady_clock::time_point now) {
         SearchScreenEffects effects;

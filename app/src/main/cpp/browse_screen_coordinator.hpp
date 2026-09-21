@@ -31,6 +31,8 @@ public:
           loading_(loading), error_(error), contentEpoch_(contentEpoch), browseAsync_(browseAsync),
           uiPresentation_(uiPresentation) {}
 
+    void resetForSessionChange() { browse_.clear(); }
+
     [[nodiscard]] BrowseScreenEffects handle(ScreenNavigationKey key) {
         BrowseScreenEffects effects;
         if (key == ScreenNavigationKey::Back) cancelContentLoadForNavigation();

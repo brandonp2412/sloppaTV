@@ -33,6 +33,12 @@ public:
         : visibility_(visibility), home_(home), state_(state), loading_(loading), retryAt_(retryAt),
           retryAttempt_(retryAttempt) {}
 
+    void resetForSessionChange() {
+        loading_ = false;
+        retryAt_ = {};
+        retryAttempt_ = 0;
+    }
+
     [[nodiscard]] HomeCoreFlowEffects complete(HomeCoreCompletion& completion, bool activeGeneration, bool activeScreen,
                                                std::chrono::steady_clock::time_point now);
     [[nodiscard]] HomeSecondaryFlowEffects complete(HomeSecondaryCompletion& completion, bool activeGeneration,

@@ -58,6 +58,20 @@ public:
           error_(error), pendingDeepLinkItemId_(pendingDeepLinkItemId), pendingSearchQuery_(pendingSearchQuery),
           homeAsync_(homeAsync), uiPresentation_(uiPresentation), stateMutex_(stateMutex) {}
 
+    void resetForSessionChange() {
+        home_ = {};
+        state_.reset();
+        completionFlow_.resetForSessionChange();
+        slideFromFirst_ = 0;
+        slideToFirst_ = 0;
+        slideStarted_ = {};
+    }
+
+    void focusInitialForSession() {
+        state_.setRow(0);
+        state_.setFirstVisibleRow(0);
+    }
+
     [[nodiscard]] HomeScreenEffects handle(ScreenNavigationKey key) {
         HomeScreenEffects effects;
         const HomeNavigationAction navigation =

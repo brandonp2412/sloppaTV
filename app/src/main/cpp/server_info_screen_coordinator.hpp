@@ -1,8 +1,10 @@
 #pragma once
 
 #include "app_screen.hpp"
+#include "diagnostics_screen.hpp"
 #include "navigation_stack.hpp"
 #include "request_epoch.hpp"
+#include "screen_navigation_key.hpp"
 #include "server_info_completion_controller.hpp"
 #include "server_info_executor.hpp"
 
@@ -17,6 +19,11 @@ public:
                                 ServerInfoAsync& serverInfoAsync, NavigationStack<Screen>& navigation, Screen& screen)
         : session_(session), serverInfo_(serverInfo), noticeLoading_(noticeLoading), loading_(loading), error_(error),
           contentEpoch_(contentEpoch), serverInfoAsync_(serverInfoAsync), navigation_(navigation), screen_(screen) {}
+
+    void resetForSessionChange() {
+        serverInfo_ = {};
+        noticeLoading_ = false;
+    }
 
     void requestNotice() {
         if (!session_.valid() || noticeLoading_ || !serverInfo_.version.empty()) return;
@@ -37,6 +44,18 @@ public:
         contentEpoch_.invalidate();
         loading_ = false;
         error_ = "DIAGNOSTICS COULD NOT BE STARTED";
+    }
+
+    void handleDiagnostics(ScreenNavigationKey key) {
+        DiagnosticsScreenInput input = DiagnosticsScreenInput::None;
+        if (key == ScreenNavigationKey::Back)
+            input = DiagnosticsScreenInput::Back;
+        else if (key == ScreenNavigationKey::Activate || key == ScreenNavigationKey::Submit)
+            input = DiagnosticsScreenInput::Activate;
+        if (handleDiagnosticsScreenInput(input).type != DiagnosticsScreenCommandType::Exit) return;
+        contentEpoch_.invalidate();
+        loading_ = false;
+        screen_ = navigation_.popOr(Screen::Settings);
     }
 
     [[nodiscard]] std::optional<ServerInfoNotice> complete(DiagnosticsCompletion& completion) {

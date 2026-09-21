@@ -7,6 +7,9 @@
 #include "account_async_executor.hpp"
 #include "account_flow.hpp"
 #include "account_screen_coordinator.hpp"
+#include "account_session_coordinator.hpp"
+#include "app_frame_coordinator.hpp"
+#include "app_screen_interaction_coordinator.hpp"
 #include "app_screen.hpp"
 #include "app_settings.hpp"
 #include "app_screen_presentation.hpp"
@@ -69,6 +72,7 @@
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
+#include "native_text_input_bridge.hpp"
 #include "playback_continuation.hpp"
 #include "playback_continuation_executor.hpp"
 #include "playback_completion_controller.hpp"
@@ -333,13 +337,14 @@ public:
                        pendingSearchQuery_, homeAsync_, uiPresentation_, stateMutex_),
           browseScreens_(browseState_, homeState_, session_, navigation_, screen_, loading_, error_,
                          requestEpochs_.content, browseAsync_, uiPresentation_),
+          textInputBridge_(app_, systemTextInputController_, asyncCompletions_),
           accountScreens_(accountFlow_, virtualKeyboard_, accountAsync_, quickConnectAsync_, requestEpochs_.auth,
                           loading_, error_),
           searchScreens_(searchFlow_, virtualKeyboard_, navigation_, screen_, homeState_, home_, session_, error_),
           seerrCompletionFlow_(seerrDomain_, contentMutationFlow_, searchFlow_.state(), detailsFlow_, settings_,
                                session_, seerrConnection_, seerrRequest_, seerrRefresh_),
-          seerrApp_(seerrDomain_, contentMutationFlow_, detailsFlow_, settings_, session_, loading_, seerrAsync_,
-                    seerrConnection_, seerrRequest_, seerrRefresh_, seerrCompletionFlow_),
+          seerrApp_(seerrDomain_, contentMutationFlow_, detailsFlow_, settings_, session_, loading_, navigation_,
+                    screen_, seerrAsync_, seerrConnection_, seerrRequest_, seerrRefresh_, seerrCompletionFlow_),
           settingsScreens_(settingsFlow_, settings_, playbackCoordinator_, displayMode_, homeState_, navigation_,
                            screen_, lastInteraction_, screensaverActive_, error_),
           detailsScreens_(detailsFlow_, navigation_, screen_, session_, loading_, error_, requestEpochs_.content,
@@ -376,7 +381,25 @@ public:
                             playbackResolutionAsync_, playbackContinuationAsync_, seriesPlaybackAsync_),
           playbackLifecycleFlow_(renderer_, player_, mediaSession_, videoSurface_, displayMode_, playbackCoordinator_,
                                  playerScreenState_, playbackRuntime_, screen_, session_, settings_, browseState_,
-                                 loading_, error_, lastInteraction_, screensaverActive_) {
+                                 loading_, error_, lastInteraction_, screensaverActive_),
+          accountSession_(api_, requestEpochs_, screen_, navigation_, player_, playbackRequests_, playbackCoordinator_,
+                          externalPlaybackState_, playerScreenState_, trickplayCoordinator_, queueState_, artwork_,
+                          renderer_, accountFlow_, session_, settings_, hiddenHomeItems_, dataPath_, homeScreens_,
+                          browseScreens_, searchScreens_, detailsScreens_, serverInfoScreens_, seerrApp_, loading_,
+                          error_, statusOverlayState_, screensaverActive_, lastInteraction_, pendingDeepLinkItemId_,
+                          pendingSearchQuery_, pendingRuntimeLaunchRequest_),
+          frameCoordinator_(stateMutex_, renderer_, api_, screen_, navigation_, screensaverActive_, loading_,
+                            homeLoading_, contentMutationFlow_, settings_, seerrApp_, systemTextInputController_,
+                            homeVisibility_, virtualKeyboard_, homeScreens_, lastInteraction_, error_, uiPresentation_,
+                            artwork_, brandMark_, accountFlow_, home_, homeState_, session_, browseState_, searchFlow_,
+                            seerrDomain_, settingsFlow_, serverInfo_, detailsFlow_, player_, videoSurface_,
+                            playbackCoordinator_, playerScreenState_, trickplayState_, queueState_,
+                            statusOverlayState_),
+          screenInteractions_(api_, textInputBridge_, accountScreens_, accountSession_, homeScreens_, browseScreens_,
+                              searchScreens_, searchFlow_, settingsScreens_, serverInfoScreens_, detailsScreens_,
+                              seerrApp_, playbackRequests_, externalPlaybackCoordinator_, similarPrefetch_,
+                              externalPlayer_, screen_, navigation_, session_, settings_, settingsFlow_, detailsFlow_,
+                              virtualKeyboard_, accountFlow_, loading_, error_, renderBurstUntil_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         artwork_.setDataPath(dataPath_);
@@ -384,7 +407,9 @@ public:
         const LaunchRequest launchRequest = readLaunchRequest(app_);
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
-        loadSession();
+        accountSession_.load();
+        if (const std::string warning = accountSession_.takeWarning(); !warning.empty())
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to read session: %s", warning.c_str());
         if (!settings_.externalPlayerComponent.empty())
             settingsFlow_.refreshExternalPlayers(externalPlayer_.availablePlayers());
         __android_log_print(ANDROID_LOG_INFO, kTag,
@@ -531,7 +556,10 @@ public:
                 if (pollResult == ALOOPER_POLL_WAKE) shouldRender = true;
             }
 
-            runDueLiveSearch();
+            {
+                std::scoped_lock lock(stateMutex_);
+                applyScreenInteractionHostEffects(screenInteractions_.runDueLiveSearch());
+            }
             tick();
             publishAccessibilitySummary();
             bool playerScreen = false;
@@ -553,20 +581,21 @@ public:
                 screensaver = screensaverActive_;
             }
             burstActive = std::chrono::steady_clock::now() < renderBurstUntil_;
-            if (renderer_.ready() && (playerScreen || screensaver || shouldRender || burstActive)) render();
+            if (renderer_.ready() && (playerScreen || screensaver || shouldRender || burstActive))
+                frameCoordinator_.render(SLOPPATV_VERSION_NAME);
         }
     }
 
     void onSystemTextInputChanged(int mode, const std::string& value) {
-        queueSystemTextInputEvent(SystemTextInputPhase::Changed, mode, value);
+        textInputBridge_.queue(SystemTextInputPhase::Changed, mode, value);
     }
 
     void onSystemTextInputCancelled(int mode, const std::string& value) {
-        queueSystemTextInputEvent(SystemTextInputPhase::Cancelled, mode, value);
+        textInputBridge_.queue(SystemTextInputPhase::Cancelled, mode, value);
     }
 
     void onSystemTextInputDone(int mode, const std::string& value) {
-        queueSystemTextInputEvent(SystemTextInputPhase::Done, mode, value);
+        textInputBridge_.queue(SystemTextInputPhase::Done, mode, value);
     }
 
     void onNewLaunchIntent(const std::string& action, const std::string& data, const std::string& query) {
@@ -584,7 +613,7 @@ public:
         const auto now = std::chrono::steady_clock::now();
         {
             std::scoped_lock lock(stateMutex_);
-            if (systemTextInputController_.active()) return;
+            if (textInputBridge_.active()) return;
             renderBurstUntil_ = now + 150ms;
             lastInteraction_ = now;
             if (screensaverActive_) {
@@ -594,7 +623,8 @@ public:
             } else if (screen_ == Screen::Player) {
                 handlePlayerKey(AKEYCODE_BACK);
             } else {
-                dispatchScreenKey(AKEYCODE_BACK);
+                applyScreenInteractionHostEffects(screenInteractions_.dispatch(
+                    screenNavigationKeyForAndroidKey(AKEYCODE_BACK), detailsNavigationKeyForAndroidKey(AKEYCODE_BACK)));
             }
         }
         if (app_ && app_->looper) ALooper_wake(app_->looper);
@@ -719,40 +749,12 @@ public:
     }
 
 private:
-    void queueSystemTextInputEvent(SystemTextInputPhase phase, int mode, std::string value) {
-        asyncCompletions_.push(systemTextInputEvent(phase, mode, std::move(value)));
-        if (app_ && app_->looper) ALooper_wake(app_->looper);
-    }
-
-    void applySystemTextInputEffects(const SystemTextInputEffects& effects) {
-        if (effects.scheduleSearch) scheduleLiveSearch();
-        if (effects.cancelSeerrSearch) searchFlow_.cancelSeerrSearch();
-        if (effects.submitSearch) searchAsync();
-        if (effects.invalidateSeerrStorage) seerrDomain_.invalidateStorageTargets();
-        if (effects.saveSession) saveSession(session_);
-
-        switch (effects.notice) {
-        case SystemTextInputNotice::None:
-            break;
-        case SystemTextInputNotice::SeerrDisconnected:
-            showNotice("SEERR DISCONNECTED", 3s);
-            break;
-        case SystemTextInputNotice::SeerrServerSaved:
-            showNotice("SEERR SERVER SAVED", 3s);
-            break;
-        case SystemTextInputNotice::SeerrApiKeyCleared:
-            showNotice("SEERR API KEY CLEARED", 3s);
-            break;
-        case SystemTextInputNotice::SeerrApiKeySaved:
-            showNotice("SEERR API KEY SAVED", 3s);
-            break;
-        }
-
-        if (effects.refreshSeerr) {
-            refreshSeerrPendingAsync();
-            refreshSeerrStorageAsync(true);
-        }
-        if (effects.renderBurst.count() > 0) renderBurstUntil_ = std::chrono::steady_clock::now() + effects.renderBurst;
+    void applyScreenInteractionHostEffects(ScreenInteractionHostEffects effects) {
+        if (effects.persistSession) persistSession();
+        for (auto& notice : effects.notices) showNotice(std::move(notice.message), notice.duration, notice.persistent);
+        for (auto& seerrEffects : effects.seerrEffects) applySeerrCompletionHostEffects(std::move(seerrEffects));
+        if (effects.finishActivity) ANativeActivity_finish(app_->activity);
+        if (effects.wakeLooper && app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     void onAppCommand(int32_t command) {
@@ -777,140 +779,6 @@ private:
         }
     }
 
-    void applyAccountScreenEffects(AccountScreenEffects effects) {
-        switch (effects.action) {
-        case AccountScreenHostAction::None:
-            return;
-        case AccountScreenHostAction::FinishActivity:
-            ANativeActivity_finish(app_->activity);
-            return;
-        case AccountScreenHostAction::CancelPendingRequests:
-            api_.cancelPendingRequests();
-            return;
-        case AccountScreenHostAction::ActivateKeyboard:
-            activateKeyboardKey(false);
-            return;
-        case AccountScreenHostAction::EditField: {
-            const int field = effects.field;
-            const int mode = kTextInputLoginServer + field;
-            static constexpr std::array<const char*, 3> hints{"Jellyfin server URL", "Jellyfin username",
-                                                              "Jellyfin password"};
-            accountFlow_.state().setKeyboardActive(!showSystemTextInput(accountFlow_.state().field(field),
-                                                                        hints[static_cast<size_t>(field)], mode,
-                                                                        field == AccountScreenState::kPasswordField));
-            if (accountFlow_.state().keyboardActive()) virtualKeyboard_.reset();
-            return;
-        }
-        case AccountScreenHostAction::OpenProfiles:
-            openProfiles();
-            return;
-        }
-    }
-
-    void applySearchScreenEffects(SearchScreenEffects effects) {
-        if (effects.hideTextInput) hideSystemTextInput();
-        if (effects.openTextInput) {
-            const bool shown =
-                showSystemTextInput(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch);
-            searchScreens_.applyTextInputShown(shown);
-        }
-        if (effects.activateKeyboard) activateKeyboardKey(true);
-        if (effects.refreshSeerrStorage) refreshSeerrStorageAsync();
-        if (effects.reconnectSeerr) connectSeerrAsync(false);
-        if (effects.syncSeerrHome) homeScreens_.syncSeerrHome();
-        if (effects.prefetchSimilarItem) scheduleSimilarPrefetch(*effects.prefetchSimilarItem);
-        if (effects.openContextItem) detailsScreens_.openItemMenuForItem(*effects.openContextItem);
-        if (effects.openDetailsItem) detailsScreens_.openDetails(*effects.openDetailsItem);
-        if (effects.requestSeerrItem) requestSeerrMediaAsync(*effects.requestSeerrItem);
-    }
-
-    void applyBrowseScreenEffects(BrowseScreenEffects effects) {
-        if (effects.openContextItem) detailsScreens_.openItemMenuForItem(*effects.openContextItem);
-        if (effects.openDetailsItem) detailsScreens_.openDetails(*effects.openDetailsItem);
-        if (effects.prefetchSimilarItem) scheduleSimilarPrefetch(*effects.prefetchSimilarItem);
-    }
-
-    void applyDetailsScreenEffects(DetailsScreenEffects effects) {
-        if (effects.reloadBrowse) browseScreens_.loadPage(false);
-        if (effects.prefetchItem) scheduleSimilarPrefetch(*effects.prefetchItem);
-        if (effects.persistSession) saveSession(session_);
-        if (effects.notice) showNotice(std::move(effects.notice->message), effects.notice->duration);
-
-        switch (effects.action) {
-        case DetailsScreenHostAction::None:
-            return;
-        case DetailsScreenHostAction::BeginPlayback:
-            beginPlayback();
-            return;
-        case DetailsScreenHostAction::BeginSeriesPlayAll:
-            playbackRequests_.beginSeriesPlayAll();
-            return;
-        case DetailsScreenHostAction::DeleteSeerrRequest:
-            deleteSeerrRequestAsync();
-            return;
-        case DetailsScreenHostAction::PlayExternal:
-            externalPlaybackCoordinator_.prepare(settingsFlow_.selectedExternalPlayer());
-            return;
-        case DetailsScreenHostAction::ViewQueue:
-            playbackRequests_.openQueue();
-            return;
-        }
-    }
-
-    void dispatchScreenKey(int32_t key) {
-        switch (screen_) {
-        case Screen::Login:
-            applyAccountScreenEffects(accountScreens_.handleLogin(screenNavigationKeyForAndroidKey(key)));
-            break;
-        case Screen::Profiles:
-            handleProfilesKey(key);
-            break;
-        case Screen::Home:
-            handleHomeKey(key);
-            break;
-        case Screen::Browse:
-            applyBrowseScreenEffects(browseScreens_.handle(screenNavigationKeyForAndroidKey(key)));
-            break;
-        case Screen::Search:
-            applySearchScreenEffects(searchScreens_.handle(screenNavigationKeyForAndroidKey(key), seerrApp_.endpoint(),
-                                                           std::chrono::steady_clock::now()));
-            break;
-        case Screen::Settings:
-            handleSettingsKey(key);
-            break;
-        case Screen::Diagnostics:
-            handleDiagnosticsKey(key);
-            break;
-        case Screen::Details:
-            applyDetailsScreenEffects(detailsScreens_.handleDetails(detailsNavigationKeyForAndroidKey(key)));
-            break;
-        case Screen::Cast:
-            applyDetailsScreenEffects(
-                detailsScreens_.handleCast(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
-            break;
-        case Screen::PersonItems:
-            applyDetailsScreenEffects(
-                detailsScreens_.handlePersonItems(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
-            break;
-        case Screen::ItemMenu:
-            applyDetailsScreenEffects(detailsScreens_.handleItemMenu(detailsNavigationKeyForAndroidKey(key)));
-            break;
-        case Screen::Seasons:
-            applyDetailsScreenEffects(
-                detailsScreens_.handleSeasons(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
-            break;
-        case Screen::Episodes:
-            applyDetailsScreenEffects(
-                detailsScreens_.handleEpisodes(detailsNavigationKeyForAndroidKey(key), mediaGridColumns()));
-            break;
-        case Screen::SeerrDrivePicker:
-            handleSeerrDrivePickerKey(key);
-            break;
-        case Screen::Player:
-            break;
-        }
-    }
-
     int32_t onInput(AInputEvent* event) {
         if (AInputEvent_getType(event) != AINPUT_EVENT_TYPE_KEY) return 0;
         const int32_t action = AKeyEvent_getAction(event);
@@ -923,7 +791,7 @@ private:
         const auto inputNow = std::chrono::steady_clock::now();
         renderBurstUntil_ = inputNow + 150ms;
         std::scoped_lock lock(stateMutex_);
-        if (systemTextInputController_.active()) return 0;
+        if (textInputBridge_.active()) return 0;
 
         if (action == AKEY_EVENT_ACTION_UP) {
             // NativeActivity may apply its own BACK handling if the release is left
@@ -938,7 +806,9 @@ private:
             }
             if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending()) {
                 const bool activate = homeState_.consumeCenterRelease(screen_ == Screen::Home);
-                if (activate) handleHomeKey(key);
+                if (activate)
+                    applyScreenInteractionHostEffects(
+                        screenInteractions_.handleHome(screenNavigationKeyForAndroidKey(key)));
                 return 1;
             }
             return 0;
@@ -995,196 +865,12 @@ private:
 
         const TextEntryResult textEntry =
             handlePhysicalTextInput(screen_, accountFlow_.state(), searchFlow_.state(), key, meta);
-        if (textEntry.searchChanged) scheduleLiveSearch();
+        if (textEntry.searchChanged) applyScreenInteractionHostEffects(screenInteractions_.scheduleLiveSearch());
         if (textEntry.handled) return 1;
 
-        dispatchScreenKey(key);
+        applyScreenInteractionHostEffects(screenInteractions_.dispatch(screenNavigationKeyForAndroidKey(key),
+                                                                       detailsNavigationKeyForAndroidKey(key)));
         return 1;
-    }
-
-    void scheduleLiveSearch() {
-        const bool seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrApp_.auth());
-        if (searchScreens_.scheduleLive(seerrConfigured, std::chrono::steady_clock::now()) && app_ && app_->looper)
-            ALooper_wake(app_->looper);
-    }
-
-    void runDueLiveSearch() {
-        std::scoped_lock lock(stateMutex_);
-        applySearchScreenEffects(searchScreens_.runDue(seerrApp_.endpoint(), std::chrono::steady_clock::now()));
-    }
-
-    bool showSystemTextInput(const std::string& initial, const std::string& hint, int mode, bool password = false) {
-        if (!app_ || !app_->activity || !app_->activity->vm || !app_->activity->clazz) return false;
-        ScopedJniEnv scoped(app_->activity->vm);
-        JNIEnv* env = scoped.get();
-        if (!env) return false;
-        jobject activity = app_->activity->clazz;
-        jclass activityClass = objectClassChecked(env, activity);
-        jmethodID method =
-            methodChecked(env, activityClass, "showTextInput", "(Ljava/lang/String;Ljava/lang/String;IZ)Z");
-        jstring jInitial = nullptr;
-        jstring jHint = nullptr;
-        jboolean shown = JNI_FALSE;
-        if (method) {
-            jInitial = jniNewString(env, initial);
-            bool failed = clearPendingJniException(env) || !jInitial;
-            if (!failed) {
-                jHint = jniNewString(env, hint);
-                failed = clearPendingJniException(env) || !jHint;
-            }
-            if (!failed) {
-                shown = env->CallBooleanMethod(activity, method, jInitial, jHint, static_cast<jint>(mode),
-                                               password ? JNI_TRUE : JNI_FALSE);
-                if (clearPendingJniException(env)) shown = JNI_FALSE;
-            }
-        }
-        if (jHint) env->DeleteLocalRef(jHint);
-        if (jInitial) env->DeleteLocalRef(jInitial);
-        if (activityClass) env->DeleteLocalRef(activityClass);
-        if (shown == JNI_TRUE) systemTextInputController_.begin(mode, initial);
-        return shown == JNI_TRUE;
-    }
-
-    void hideSystemTextInput() {
-        systemTextInputController_.hide();
-        if (!app_ || !app_->activity || !app_->activity->vm || !app_->activity->clazz) return;
-        ScopedJniEnv scoped(app_->activity->vm);
-        JNIEnv* env = scoped.get();
-        if (!env) return;
-        jobject activity = app_->activity->clazz;
-        jclass activityClass = objectClassChecked(env, activity);
-        jmethodID method = methodChecked(env, activityClass, "hideTextInput", "()V");
-        if (method) {
-            env->CallVoidMethod(activity, method);
-            clearPendingJniException(env);
-        }
-        if (activityClass) env->DeleteLocalRef(activityClass);
-    }
-
-    void activateKeyboardKey(bool forSearch) {
-        const VirtualKeyboardEffects effects =
-            virtualKeyboard_.activate(forSearch, searchFlow_.state(), accountFlow_.state());
-        if (effects.searchChanged) scheduleLiveSearch();
-        if (effects.submitSearch) searchAsync();
-    }
-
-    void handleProfilesKey(int32_t key) {
-        AccountProfileCommand command = accountFlow_.handleProfiles(screenNavigationKeyForAndroidKey(key), session_);
-        switch (command.action) {
-        case AccountProfileAction::None:
-            return;
-        case AccountProfileAction::Back:
-            popScreen(Screen::Login);
-            return;
-        case AccountProfileAction::AddAccount:
-            startAddAccount();
-            return;
-        case AccountProfileAction::SwitchSession:
-            if (!command.session) return;
-            clearCurrentSessionUi();
-            session_ = std::move(*command.session);
-            accountFlow_.activateSession(session_);
-            resetNavigation(Screen::Home);
-            homeState_.setRow(0);
-            homeState_.setFirstVisibleRow(0);
-            saveSession(session_);
-            loadHomeAsync();
-            return;
-        case AccountProfileAction::ForgetSession:
-            if (!command.removedSession) return;
-            artwork_.eraseProfile(*command.removedSession, renderer_);
-            if (command.removedCurrent) {
-                clearCurrentSessionUi();
-                resetNavigation(Screen::Profiles);
-            }
-            saveSession(session_);
-            if (command.sessionsEmpty) startAddAccount();
-            return;
-        }
-    }
-
-    void handleHomeKey(int32_t key) {
-        HomeScreenEffects effects = homeScreens_.handle(screenNavigationKeyForAndroidKey(key));
-        if (effects.rowSlideStarted) renderBurstUntil_ = std::max(renderBurstUntil_, *effects.rowSlideStarted + 240ms);
-        if (effects.prefetchSimilarItem) scheduleSimilarPrefetch(*effects.prefetchSimilarItem);
-        if (effects.openContextItem) {
-            detailsScreens_.openItemMenuForItem(*effects.openContextItem);
-            return;
-        }
-        if (effects.openLibraryItem) {
-            browseScreens_.openLibrary(*effects.openLibraryItem);
-            return;
-        }
-        if (effects.openDetailsItem) {
-            detailsScreens_.openDetails(*effects.openDetailsItem);
-            return;
-        }
-        switch (effects.action) {
-        case HomeScreenHostAction::None:
-            return;
-        case HomeScreenHostAction::FinishActivity:
-            ANativeActivity_finish(app_->activity);
-            return;
-        case HomeScreenHostAction::OpenProfiles:
-            openProfiles();
-            return;
-        case HomeScreenHostAction::OpenSearch:
-            openSearch();
-            return;
-        case HomeScreenHostAction::OpenSettings:
-            openSettings();
-            return;
-        }
-    }
-
-    void applySettingsScreenEffects(SettingsScreenEffects effects) {
-        if (effects.persistSession) saveSession(session_);
-        if (effects.refreshSeerrStorage) refreshSeerrStorageAsync(true);
-
-        switch (effects.hostAction) {
-        case SettingsHostAction::None:
-        case SettingsHostAction::Exit:
-            return;
-        case SettingsHostAction::EditSearch:
-            showSystemTextInput(settingsFlow_.state().searchQuery(), "Search settings", kTextInputSettingsSearch);
-            return;
-        case SettingsHostAction::OpenDiagnostics:
-            openDiagnostics();
-            return;
-        case SettingsHostAction::SwitchUser:
-            openProfiles();
-            return;
-        case SettingsHostAction::EditSeerrServer:
-            showSystemTextInput(settings_.seerrServer, "Seerr server URL", kTextInputSeerrServer);
-            return;
-        case SettingsHostAction::ConnectSeerr:
-            connectSeerrAsync();
-            return;
-        case SettingsHostAction::EditSeerrApiKey:
-            showSystemTextInput(settings_.seerrApiKey, "Seerr API key", kTextInputSeerrApiKey, true);
-            return;
-        }
-    }
-
-    void handleSettingsKey(int32_t key) {
-        applySettingsScreenEffects(settingsScreens_.handle(screenNavigationKeyForAndroidKey(key)));
-    }
-
-    void handleDiagnosticsKey(int32_t key) {
-        DiagnosticsScreenInput input = DiagnosticsScreenInput::None;
-        if (key == AKEYCODE_BACK)
-            input = DiagnosticsScreenInput::Back;
-        else if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER)
-            input = DiagnosticsScreenInput::Activate;
-
-        if (handleDiagnosticsScreenInput(input).type != DiagnosticsScreenCommandType::Exit) return;
-
-        // Diagnostics owns the current content request. Cancel it before
-        // returning so an in-flight server-info response cannot leave the
-        // app's global loading state stuck after this screen is gone.
-        requestEpochs_.content.invalidate();
-        loading_ = false;
-        popScreen(Screen::Settings);
     }
 
     void loadSubtitleAsync(const JellyfinSubtitleStream& subtitle, const std::string& deliveryUrl = {}) {
@@ -1199,22 +885,6 @@ private:
     void requestTrickplayPreview(int positionMs) {
         if (const auto texture = trickplayCoordinator_.request(positionMs, renderer_.generation()))
             renderer_.deleteTexture(*texture);
-    }
-
-    void handleSeerrDrivePickerKey(int32_t key) {
-        SeerrDriveNavigationAction navigation =
-            SeerrDriveNavigationController::handle(seerrDomain_.storage(), screenNavigationKeyForAndroidKey(key));
-        if (navigation.type == SeerrDriveNavigationActionType::Back) {
-            popScreen(Screen::Search);
-            return;
-        }
-        if (navigation.type != SeerrDriveNavigationActionType::Selected || !navigation.selection) return;
-
-        auto selected = std::move(*navigation.selection);
-        __android_log_print(ANDROID_LOG_INFO, kTag, "Seerr storage selected media=%s server=%d path=%s",
-                            selected.item.mediaType.c_str(), selected.target.serverId, selected.target.path.c_str());
-        popScreen(Screen::Search);
-        requestSeerrMediaAsync(selected.item, &selected.target, true);
     }
 
     void applyPlaybackHostEffect(PlaybackHostEffect effect) {
@@ -1321,81 +991,10 @@ private:
         if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
-    void openSettings() { settingsScreens_.open(externalPlayer_.availablePlayers()); }
-
-    void openDiagnostics() { serverInfoScreens_.openDiagnostics(); }
-
-    void clearCurrentSessionUi() {
-        const bool hadAuthenticatedSession = session_.valid();
-        api_.cancelPendingRequests();
-        requestEpochs_.invalidateAll();
-        if (screen_ == Screen::Player || player_.status() != PlayerStatus::Idle ||
-            playbackCoordinator_.activeItemAvailable()) {
-            playbackRequests_.release(true);
-        }
-
-        queueState_.reset();
-        playbackCoordinator_.resetSession();
-        externalPlaybackState_.reset();
-        playerScreenState_.resetSession();
-        clearTrickplayPreview();
-
-        if (hadAuthenticatedSession) {
-            pendingDeepLinkItemId_.clear();
-            pendingSearchQuery_.clear();
-            pendingRuntimeLaunchRequest_.reset();
-        }
-        session_ = {};
-        settings_.seerrSessionCookie.clear();
-        seerrDomain_.resetStorageForSessionClear();
-        serverInfo_ = {};
-        serverInfoLoading_ = false;
-        home_ = {};
-        homeState_.reset();
-        browseState_.clear();
-        searchFlow_.reset();
-        detailsFlow_.item() = {};
-        detailsFlow_.state().reset();
-
-        artwork_.clearSession(renderer_);
-        accountFlow_.state().clearSessionUi();
-        loading_ = false;
-        homeLoading_ = false;
-        homeRetryAt_ = {};
-        homeRetryAttempt_ = 0;
-        contentMutationFlow_.reset();
-        error_.clear();
-        statusOverlayState_.clearNotice();
-        screensaverActive_ = false;
-        lastInteraction_ = std::chrono::steady_clock::now();
-    }
-
-    void openProfiles() {
-        if (!accountFlow_.beginProfiles()) {
-            startAddAccount();
-            return;
-        }
-        pushScreen(Screen::Profiles);
-        error_.clear();
-    }
-
-    void startAddAccount() {
-        const std::string existingServer = session_.server;
-        clearCurrentSessionUi();
-        accountFlow_.beginAddAccount(existingServer);
-        resetNavigation(Screen::Login);
-        saveSession(session_);
-    }
-
-    void deleteSeerrRequestAsync() { applySeerrCompletionHostEffects(seerrApp_.deleteCurrentRequest()); }
-
-    void openSearch() {
-        pushScreen(Screen::Search);
-        const bool shown =
-            showSystemTextInput(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch);
-        searchScreens_.applyTextInputShown(shown);
-        virtualKeyboard_.reset();
-        error_.clear();
+    void persistSession() {
+        accountSession_.save();
+        if (const std::string warning = accountSession_.takeWarning(); !warning.empty())
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to save session: %s", warning.c_str());
     }
 
     void loadHomeAsync() {
@@ -1419,12 +1018,7 @@ private:
     }
 
     void searchAsync(bool includeSeerrImmediately = true) {
-        applySearchScreenEffects(
-            searchScreens_.search(seerrApp_.endpoint(), includeSeerrImmediately, std::chrono::steady_clock::now()));
-    }
-
-    void scheduleSimilarPrefetch(const JellyfinItem& item) {
-        if (similarPrefetch_.schedule(session_, item) && app_ && app_->looper) ALooper_wake(app_->looper);
+        applyScreenInteractionHostEffects(screenInteractions_.search(includeSeerrImmediately));
     }
 
     void scheduleFocusedHomePrefetch() {
@@ -1550,14 +1144,6 @@ private:
         }
     }
 
-    void beginPlayback() {
-        if (loading_ || detailsFlow_.item().id.empty()) return;
-        if (const auto externalPlayer = settingsFlow_.selectedExternalPlayer())
-            externalPlaybackCoordinator_.prepare(*externalPlayer);
-        else
-            playbackRequests_.beginPlayback();
-    }
-
     void applyPlaybackRequestHostEffects(PlaybackRequestHostEffects effects) {
         if (effects.resetIdle) {
             lastInteraction_ = std::chrono::steady_clock::now();
@@ -1570,7 +1156,7 @@ private:
         std::scoped_lock lock(stateMutex_);
         const bool playbackActive = screen_ == Screen::Player || player_.status() != PlayerStatus::Idle;
         RuntimeLaunchEffects effects = runtimeLaunch_.apply(request, playbackActive);
-        if (effects.hideTextInput) hideSystemTextInput();
+        if (effects.hideTextInput) textInputBridge_.hide();
         if (effects.releasePlayback) {
             playbackRequests_.release(true);
             playbackCoordinator_.finishStop();
@@ -1619,8 +1205,8 @@ private:
     }
 
     void applyAsyncCompletion(SystemTextInputEvent& event) {
-        applySystemTextInputEffects(systemTextInputController_.apply(event, searchFlow_.state(), settingsFlow_.state(),
-                                                                     settings_, accountFlow_.state()));
+        applyScreenInteractionHostEffects(screenInteractions_.applySystemTextInput(systemTextInputController_.apply(
+            event, searchFlow_.state(), settingsFlow_.state(), settings_, accountFlow_.state())));
     }
 
     void applySeerrCompletionHostEffects(SeerrCompletionHostEffects effects) {
@@ -1644,38 +1230,39 @@ private:
                                 effects.openDrivePicker->mediaType.c_str(), seerrDomain_.storageDriveChoices().size());
             if (screen_ != Screen::SeerrDrivePicker) pushScreen(Screen::SeerrDrivePicker);
         }
-        if (effects.saveSession) saveSession(session_);
+        if (effects.saveSession) persistSession();
         if (effects.refreshPending) refreshSeerrPendingAsync();
         if (effects.refreshStorage) refreshSeerrStorageAsync(true);
         if (effects.deferredRequest) requestSeerrMediaAsync(*effects.deferredRequest);
         if (effects.retrySearch && screen_ == Screen::Search && !searchFlow_.state().query().empty()) {
             const auto now = std::chrono::steady_clock::now();
             (void)searchFlow_.prepareReconnectRetry(now);
-            applySearchScreenEffects(searchScreens_.searchSeerr(seerrApp_.endpoint(), true, now));
+            applyScreenInteractionHostEffects(
+                screenInteractions_.applySearch(searchScreens_.searchSeerr(seerrApp_.endpoint(), true, now)));
         }
     }
 
     template <typename Completion>
-        requires isSimpleSeerrCompletionV<Completion>
+        requires isSeerrAppCompletionV<Completion>
     void applyAsyncCompletion(Completion& completion) {
         applySeerrCompletionHostEffects(seerrApp_.complete(completion));
     }
 
     void applyAsyncCompletion(const SeerrDeleteCompletion& completion) {
-        applySeerrCompletionHostEffects(seerrApp_.complete(completion, screen_ == Screen::ItemMenu));
+        applySeerrCompletionHostEffects(seerrApp_.complete(completion));
     }
 
     void applyAsyncCompletion(SeerrPendingRefreshCompletion& completion) {
-        applySeerrCompletionHostEffects(seerrApp_.complete(completion, screen_ == Screen::ItemMenu));
+        applySeerrCompletionHostEffects(seerrApp_.complete(completion));
     }
 
     void applyAsyncCompletion(SeerrSearchCompletion& completion) {
-        applySearchScreenEffects(searchScreens_.complete(completion, !settings_.seerrSessionCookie.empty(),
-                                                         std::chrono::steady_clock::now()));
+        applyScreenInteractionHostEffects(screenInteractions_.applySearch(searchScreens_.complete(
+            completion, !settings_.seerrSessionCookie.empty(), std::chrono::steady_clock::now())));
     }
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
-        applySearchScreenEffects(searchScreens_.complete(completion));
+        applyScreenInteractionHostEffects(screenInteractions_.applySearch(searchScreens_.complete(completion)));
     }
 
     void applyContentCompletionHostEffects(ContentCompletionHostEffects effects) {
@@ -1717,21 +1304,10 @@ private:
             showNotice(std::move(notice->message), notice->duration, notice->persistent);
     }
 
-    void applyAuthenticatedSession(std::optional<JellyfinSession> authenticatedSession) {
-        if (!authenticatedSession) return;
-        requestEpochs_.session.invalidate();
-        session_ = std::move(*authenticatedSession);
-        resetNavigation(Screen::Home);
-        homeState_.setRow(0);
-        homeState_.setFirstVisibleRow(0);
-        saveSession(session_);
-        loadHomeAsync();
-    }
-
     template <typename Completion>
         requires isAccountScreenCompletionV<Completion>
     void applyAsyncCompletion(Completion& completion) {
-        applyAuthenticatedSession(accountScreens_.complete(completion));
+        accountSession_.applyAuthenticatedSession(accountScreens_.complete(completion));
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
@@ -1741,7 +1317,7 @@ private:
                                 *effects.retryDelaySeconds, completion.result.error.c_str());
         if (effects.sessionExpired) {
             if (effects.eraseProfile) artwork_.eraseProfile(*effects.eraseProfile, renderer_);
-            saveSession(session_);
+            persistSession();
             return;
         }
         if (effects.primaryReadyMs)
@@ -1767,12 +1343,12 @@ private:
 
     void applyAsyncCompletion(ExternalPlaybackCompletion& completion) {
         const int persistCount = externalPlaybackCoordinator_.complete(completion);
-        for (int i = 0; i < persistCount; ++i) saveSession(session_);
+        for (int i = 0; i < persistCount; ++i) persistSession();
     }
 
     void applyPlaybackCompletionApplicationEffects(PlaybackCompletionApplicationEffects effects) {
         if (effects.popToDetails) popScreen(Screen::Details);
-        for (int i = 0; i < effects.saveSessionCount; ++i) saveSession(session_);
+        for (int i = 0; i < effects.saveSessionCount; ++i) persistSession();
         if (effects.stopPlayback) stopPlayback();
         if (effects.diagnostic) {
             const auto& diagnostic = *effects.diagnostic;
@@ -1883,87 +1459,6 @@ private:
         loadHomeAsync();
     }
 
-    void render() {
-        std::scoped_lock lock(stateMutex_);
-        renderer_.beginFrame();
-
-        DeviceCodecSupport codecSupport;
-        if (screen_ == Screen::Settings || screen_ == Screen::Diagnostics) {
-            codecSupport = api_.deviceCodecSupport();
-        }
-
-        renderAppScreenFrame(AppScreenPresentationFrame<decltype(uiPresentation_), decltype(artwork_)>{
-            .screen = screen_,
-            .backgroundScreen = navigation_.previousOr(Screen::Details),
-            .screensaverActive = screensaverActive_,
-            .loading = loading_,
-            .homeLoading = homeLoading_,
-            .mutationLoading = contentMutationFlow_.loading(),
-            .seerrConfigured = SeerrClient::configured(settings_.seerrServer, seerrApp_.auth()),
-            .systemSearchInputActive = systemTextInputController_.mode() == kTextInputSearch,
-            .systemSettingsSearchActive = systemTextInputController_.mode() == kTextInputSettingsSearch,
-            .systemSeerrApiKeyActive = systemTextInputController_.mode() == kTextInputSeerrApiKey,
-            .itemHiddenFromHome = homeVisibility_.isHidden(detailsFlow_.item()),
-            .keyboardRow = virtualKeyboard_.row(),
-            .keyboardCol = virtualKeyboard_.column(),
-            .homeSlideFromFirst = homeScreens_.slideFromFirst(),
-            .homeSlideToFirst = homeScreens_.slideToFirst(),
-            .homeSlideStarted = homeScreens_.slideStarted(),
-            .nextUpReplacementFadeIndex = contentMutationFlow_.nextUpReplacementFadeIndex(),
-            .nextUpReplacementFadeItemId = contentMutationFlow_.nextUpReplacementFadeItemId(),
-            .nextUpReplacementFadeStarted = contentMutationFlow_.nextUpReplacementFadeStarted(),
-            .lastInteraction = lastInteraction_,
-            .appVersion = SLOPPATV_VERSION_NAME,
-            .error = error_,
-            .renderer = renderer_,
-            .ui = uiPresentation_,
-            .artwork = artwork_,
-            .brandMark = brandMark_,
-            .accountFlow = accountFlow_,
-            .home = home_,
-            .homeState = homeState_,
-            .session = session_,
-            .settings = settings_,
-            .browseState = browseState_,
-            .searchState = searchFlow_.state(),
-            .seerrDomain = seerrDomain_,
-            .settingsScreen = settingsFlow_.state(),
-            .externalPlayers = settingsFlow_.externalPlayers(),
-            .deviceCodecSupport = codecSupport,
-            .serverInfo = serverInfo_,
-            .detailsFlow = detailsFlow_,
-            .player = player_,
-            .videoSurface = videoSurface_,
-            .playbackCoordinator = playbackCoordinator_,
-            .playerScreenState = playerScreenState_,
-            .trickplayState = trickplayState_,
-            .queueState = queueState_,
-            .statusOverlayState = statusOverlayState_,
-        });
-
-        renderer_.endFrame();
-    }
-
-    void loadSession() {
-        AccountPersistedState restored = accountFlow_.restore(dataPath_);
-        if (!restored.warning.empty()) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to read session: %s", restored.warning.c_str());
-        }
-        session_ = std::move(restored.session);
-        hiddenHomeItems_ = std::move(restored.hiddenHomeItems);
-        settings_ = std::move(restored.settings);
-        if (session_.valid()) artwork_.eraseProfile(session_, renderer_);
-        playbackCoordinator_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
-    }
-
-    void saveSession(const JellyfinSession& session) {
-        if (session.valid()) artwork_.eraseProfile(session, renderer_);
-        std::string warning;
-        if (!accountFlow_.persist(dataPath_, session, hiddenHomeItems_, settings_, warning) && !warning.empty()) {
-            __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to save session: %s", warning.c_str());
-        }
-    }
-
     android_app* app_ = nullptr;
     Renderer renderer_;
     JellyfinClient api_;
@@ -2057,6 +1552,7 @@ private:
     BrowseScreenCoordinator<decltype(browseAsync_), decltype(uiPresentation_)> browseScreens_;
 
     SystemTextInputController systemTextInputController_;
+    NativeTextInputBridge<decltype(asyncCompletions_)> textInputBridge_;
 
     SimilarPrefetchController similarPrefetch_;
 
@@ -2093,10 +1589,27 @@ private:
                                decltype(playbackContinuationAsync_), decltype(seriesPlaybackAsync_)>
         playbackRequests_;
     PlaybackLifecycleFlow playbackLifecycleFlow_;
+    AccountSessionCoordinator<JellyfinClient, NativeMediaPlayer, decltype(playbackRequests_), PlaybackCoordinator,
+                              ExternalPlaybackState, PlayerScreenState, decltype(trickplayCoordinator_),
+                              PlaybackQueueState, decltype(artwork_), Renderer, decltype(homeScreens_),
+                              decltype(browseScreens_), decltype(searchScreens_), decltype(detailsScreens_),
+                              decltype(serverInfoScreens_), decltype(seerrApp_)>
+        accountSession_;
     std::chrono::steady_clock::time_point renderBurstUntil_{};
     std::chrono::steady_clock::time_point lastInteraction_ = std::chrono::steady_clock::now();
     bool screensaverActive_ = false;
     std::string lastAccessibilitySummary_;
+    AppFrameCoordinator<JellyfinClient, decltype(uiPresentation_), decltype(artwork_), decltype(searchFlow_),
+                        decltype(seerrApp_), decltype(homeScreens_)>
+        frameCoordinator_;
+    AppScreenInteractionCoordinator<JellyfinClient, decltype(textInputBridge_), decltype(accountScreens_),
+                                    decltype(accountSession_), decltype(homeScreens_), decltype(browseScreens_),
+                                    decltype(searchScreens_), decltype(searchFlow_), SettingsScreenCoordinator,
+                                    decltype(serverInfoScreens_), decltype(detailsScreens_), decltype(seerrApp_),
+                                    decltype(playbackRequests_), decltype(externalPlaybackCoordinator_),
+                                    SimilarPrefetchController, NativeExternalPlayer>
+        screenInteractions_;
+
 };
 } // namespace
 

@@ -72,6 +72,12 @@ public:
                                         homeVisibility_.isHidden(details_.item()));
     }
 
+    void resetForSessionChange() {
+        details_.item() = {};
+        details_.state().reset();
+        contentMutation_.reset();
+    }
+
     [[nodiscard]] DetailsScreenEffects handleDetails(DetailsNavigationKey key) {
         DetailsScreenEffects effects;
         const DetailsFlowCommand command = details_.handleDetails(key);

@@ -1,10 +1,14 @@
 #pragma once
 
+#include "app_screen.hpp"
 #include "app_settings.hpp"
 #include "content_mutation_flow.hpp"
 #include "details_flow.hpp"
+#include "navigation_stack.hpp"
+#include "screen_navigation_key.hpp"
 #include "seerr_completion_flow.hpp"
 #include "seerr_domain.hpp"
+#include "seerr_drive_navigation_controller.hpp"
 
 #include <chrono>
 #include <string>
@@ -12,22 +16,31 @@
 #include <utility>
 
 template <typename T>
-inline constexpr bool isSimpleSeerrCompletionV =
-    std::is_same_v<std::remove_cvref_t<T>, SeerrRequestCompletion> ||
-    std::is_same_v<std::remove_cvref_t<T>, SeerrStorageRefreshCompletion> ||
-    std::is_same_v<std::remove_cvref_t<T>, SeerrConnectCompletion>;
+inline constexpr bool isSeerrAppCompletionV = std::is_same_v<std::remove_cvref_t<T>, SeerrDeleteCompletion> ||
+                                              std::is_same_v<std::remove_cvref_t<T>, SeerrRequestCompletion> ||
+                                              std::is_same_v<std::remove_cvref_t<T>, SeerrStorageRefreshCompletion> ||
+                                              std::is_same_v<std::remove_cvref_t<T>, SeerrPendingRefreshCompletion> ||
+                                              std::is_same_v<std::remove_cvref_t<T>, SeerrConnectCompletion>;
 
 template <typename AsyncExecutor, typename ConnectionCoordinator, typename RequestCoordinator,
           typename RefreshCoordinator, typename CompletionFlow>
 class SeerrAppCoordinator {
 public:
     SeerrAppCoordinator(SeerrDomainState& domain, ContentMutationFlow& mutations, DetailsFlow& details,
-                        AppSettings& settings, JellyfinSession& session, bool& loading, AsyncExecutor& async,
+                        AppSettings& settings, JellyfinSession& session, bool& loading,
+                        NavigationStack<Screen>& navigation, Screen& screen, AsyncExecutor& async,
                         ConnectionCoordinator& connection, RequestCoordinator& request, RefreshCoordinator& refresh,
                         CompletionFlow& completions)
         : domain_(domain), mutations_(mutations), details_(details), settings_(settings), session_(session),
-          loading_(loading), async_(async), connection_(connection), request_(request), refresh_(refresh),
-          completions_(completions) {}
+          loading_(loading), navigation_(navigation), screen_(screen), async_(async), connection_(connection),
+          request_(request), refresh_(refresh), completions_(completions) {}
+
+    void resetForSessionChange() {
+        settings_.seerrSessionCookie.clear();
+        domain_.resetStorageForSessionClear();
+    }
+
+    void invalidateStorage() { domain_.invalidateStorageTargets(); }
 
     [[nodiscard]] SeerrEndpoint endpoint() const {
         return SeerrEndpoint{
@@ -99,6 +112,25 @@ public:
         return effects;
     }
 
+    [[nodiscard]] SeerrCompletionHostEffects handleDrivePicker(ScreenNavigationKey key) {
+        SeerrDriveNavigationAction navigation = SeerrDriveNavigationController::handle(domain_.storage(), key);
+        if (navigation.type == SeerrDriveNavigationActionType::Back) {
+            screen_ = navigation_.popOr(Screen::Search);
+            return {};
+        }
+        if (navigation.type != SeerrDriveNavigationActionType::Selected || !navigation.selection) return {};
+
+        auto selected = std::move(*navigation.selection);
+        screen_ = navigation_.popOr(Screen::Search);
+        SeerrCompletionHostEffects effects = requestMedia(selected.item, &selected.target, true);
+        effects.log = SeerrCompletionLog{
+            SeerrCompletionLogLevel::Info,
+            "Seerr storage selected media=" + selected.item.mediaType +
+                " server=" + std::to_string(selected.target.serverId) + " path=" + selected.target.path,
+        };
+        return effects;
+    }
+
     [[nodiscard]] SeerrCompletionHostEffects requestMedia(const SeerrMediaItem& item,
                                                           const SeerrStorageTarget* selectedTarget = nullptr,
                                                           bool skipDrivePrompt = false) {
@@ -158,8 +190,8 @@ public:
         return effects;
     }
 
-    [[nodiscard]] SeerrCompletionHostEffects complete(const SeerrDeleteCompletion& completion, bool activeItemMenu) {
-        return completions_.complete(completion, endpoint(), activeItemMenu);
+    [[nodiscard]] SeerrCompletionHostEffects complete(const SeerrDeleteCompletion& completion) {
+        return completions_.complete(completion, endpoint(), screen_ == Screen::ItemMenu);
     }
 
     [[nodiscard]] SeerrCompletionHostEffects complete(const SeerrRequestCompletion& completion) {
@@ -171,8 +203,9 @@ public:
                                      std::chrono::steady_clock::now());
     }
 
-    [[nodiscard]] SeerrCompletionHostEffects complete(SeerrPendingRefreshCompletion& completion, bool activeItemMenu) {
-        return completions_.complete(completion, endpoint(), activeItemMenu, std::chrono::steady_clock::now());
+    [[nodiscard]] SeerrCompletionHostEffects complete(SeerrPendingRefreshCompletion& completion) {
+        return completions_.complete(completion, endpoint(), screen_ == Screen::ItemMenu,
+                                     std::chrono::steady_clock::now());
     }
 
     [[nodiscard]] SeerrCompletionHostEffects complete(SeerrConnectCompletion& completion) {
@@ -186,6 +219,8 @@ private:
     AppSettings& settings_;
     JellyfinSession& session_;
     bool& loading_;
+    NavigationStack<Screen>& navigation_;
+    Screen& screen_;
     AsyncExecutor& async_;
     ConnectionCoordinator& connection_;
     RequestCoordinator& request_;
