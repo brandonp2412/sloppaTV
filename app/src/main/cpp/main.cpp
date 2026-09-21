@@ -958,7 +958,7 @@ private:
                 const std::string seriesName = playerScreenState_.skipDisableSeriesName();
                 const bool disabled = !playerScreenState_.skipDisableEnabling();
                 if (setSkipSegmentsDisabledForSeries(settings_, seriesId, disabled)) {
-                    saveSession(session_);
+                    persistSession();
                     const std::string action = disabled ? "disabled" : "enabled";
                     showNotice(seriesName.empty() ? "Skip buttons " + action + " for this show"
                                                   : "Skip buttons " + action + " for " + seriesName,
@@ -1019,6 +1019,10 @@ private:
 
     void searchAsync(bool includeSeerrImmediately = true) {
         applyScreenInteractionHostEffects(screenInteractions_.search(includeSeerrImmediately));
+    }
+
+    void scheduleSimilarPrefetch(const JellyfinItem& item) {
+        if (similarPrefetch_.schedule(session_, item) && app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     void scheduleFocusedHomePrefetch() {
