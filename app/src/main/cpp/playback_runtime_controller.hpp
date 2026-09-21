@@ -290,6 +290,12 @@ public:
 
     template <typename TelemetryExecutor>
     bool skipActiveMediaSegment(TelemetryExecutor& telemetry, bool playerScreenActive) {
+        const auto* segment = coordinator_.activeSkippableSegment(screenState_.positionMs());
+        const auto& item = coordinator_.session().activeItem();
+        if (segment && (segment->type == "Intro" || segment->type == "Outro") &&
+            skipSegmentsDisabledForSeries(settings_, item.seriesId)) {
+            return false;
+        }
         const auto targetMs = coordinator_.activeSkippableSegmentEndMs(screenState_.positionMs());
         if (!targetMs) return false;
         seekTo(*targetMs);

@@ -930,6 +930,12 @@ private:
             // unconsumed, even when we already handled BACK on key-down. Consume both
             // halves so in-app BACK navigation cannot also finish the activity.
             if (key == AKEYCODE_BACK) return 1;
+            if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && screen_ == Screen::Player &&
+                playerScreenState_.skipPreferencePressPending()) {
+                const bool activate = playerScreenState_.consumeSkipPreferenceRelease();
+                if (activate) handlePlayerKey(key);
+                return 1;
+            }
             if ((key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) && homeState_.centerPending()) {
                 const bool activate = homeState_.consumeCenterRelease(screen_ == Screen::Home);
                 if (activate) handleHomeKey(key);
@@ -954,6 +960,32 @@ private:
         }
 
         if (screen_ == Screen::Player) {
+            const bool centerKey = key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER;
+            if (centerKey && playerScreenState_.skipPreferencePressPending()) {
+                if (repeatCount > 0) playerScreenState_.holdSkipPreferencePress();
+                return 1;
+            }
+            if (playerScreenState_.skipPreferenceSheetActive()) {
+                handlePlayerSkipPreferenceSheetKey(key);
+                return 1;
+            }
+            if (centerKey && repeatCount == 0) {
+                const auto* segment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs());
+                const auto& item = playbackCoordinator_.session().activeItem();
+                const bool supportedSegment =
+                    segment && (segment->type == "Intro" || segment->type == "Outro") && !item.seriesId.empty();
+                if (supportedSegment) {
+                    const bool disabled = skipSegmentsDisabledForSeries(settings_, item.seriesId);
+                    const bool controlsActive = playerScreenState_.controlsActive(inputNow);
+                    const bool disableGesture = !disabled && !controlsActive;
+                    const bool enableGesture =
+                        disabled && controlsActive && playerScreenState_.controlSelection() == PlayerControl::PlayPause;
+                    if (disableGesture || enableGesture) {
+                        playerScreenState_.beginSkipPreferencePress(disabled);
+                        return 1;
+                    }
+                }
+            }
             handlePlayerKey(key, repeatCount);
             return 1;
         }
@@ -1233,6 +1265,22 @@ private:
             showNotice("SUBTITLES COULD NOT BE STARTED");
             return;
         }
+    }
+
+    void handlePlayerSkipPreferenceSheetKey(int32_t key) {
+        const PlayerSkipPreferenceCommand command =
+            playerScreenState_.handleSkipPreferenceSheetInput(playerScreenInputForAndroidKey(key));
+        if (command != PlayerSkipPreferenceCommand::DisableForShow &&
+            command != PlayerSkipPreferenceCommand::EnableForShow) {
+            return;
+        }
+        const auto& item = playbackCoordinator_.session().activeItem();
+        const bool disabled = command == PlayerSkipPreferenceCommand::DisableForShow;
+        if (!setSkipSegmentsDisabledForSeries(settings_, item.seriesId, disabled)) return;
+        saveSession(session_);
+        showNotice(disabled ? "SKIP HIDDEN FOR THIS SHOW - OPEN CONTROLS AND HOLD OK TO RE-ENABLE"
+                            : "SKIP ENABLED FOR THIS SHOW",
+                   4s);
     }
 
     void handlePlayerKey(int32_t key, int repeatCount = 0) {

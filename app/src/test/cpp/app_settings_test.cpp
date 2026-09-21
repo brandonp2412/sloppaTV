@@ -6,6 +6,14 @@ int main() {
     AppSettings settings;
     assert(settings.maxBitrateMbps == 120);
     assert(settings.zoomMode == static_cast<int>(VideoZoomMode::Fit));
+    assert(!skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(setSkipSegmentsDisabledForSeries(settings, "series-1", true));
+    assert(skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(!setSkipSegmentsDisabledForSeries(settings, "series-1", true));
+    assert(setSkipSegmentsDisabledForSeries(settings, "series-1", false));
+    assert(!skipSegmentsDisabledForSeries(settings, "series-1"));
+    assert(!setSkipSegmentsDisabledForSeries(settings, "series-1", false));
+    assert(!setSkipSegmentsDisabledForSeries(settings, "", true));
     assert(playbackOverridesFor(settings).hdrMode == HdrOverrideMode::Auto);
     assert(videoZoomName(VideoZoomMode::Fill) == "FILL");
     assert(settings.subtitleSize == 1);

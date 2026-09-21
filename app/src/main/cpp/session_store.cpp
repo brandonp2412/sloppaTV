@@ -102,6 +102,10 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.seerrSessionCookie = valueOr<std::string>(saved, "seerrSessionCookie", {});
     settings.seerrApiKey = valueOr<std::string>(saved, "seerrApiKey", {});
     settings.seerrSelectDrive = valueOr(saved, "seerrSelectDrive", false);
+    settings.disabledSkipSeriesIds.clear();
+    for (std::string seriesId : valueOr<std::vector<std::string>>(saved, "disabledSkipSeriesIds", {})) {
+        setSkipSegmentsDisabledForSeries(settings, std::move(seriesId), true);
+    }
 }
 
 json writeSettings(const AppSettings& settings) {
@@ -138,6 +142,7 @@ json writeSettings(const AppSettings& settings) {
         {"seerrSessionCookie", settings.seerrSessionCookie},
         {"seerrApiKey", settings.seerrApiKey},
         {"seerrSelectDrive", settings.seerrSelectDrive},
+        {"disabledSkipSeriesIds", settings.disabledSkipSeriesIds},
     };
 }
 } // namespace

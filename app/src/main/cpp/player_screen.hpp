@@ -44,6 +44,13 @@ enum class PlayerScreenCommandType {
     SeekForward,
 };
 
+enum class PlayerSkipPreferenceCommand {
+    None,
+    DisableForShow,
+    EnableForShow,
+    Dismiss,
+};
+
 struct PlayerScreenCommand {
     PlayerScreenCommandType type = PlayerScreenCommandType::None;
 };
@@ -65,6 +72,12 @@ public:
         seekFeedbackUntil_ = {};
         windowRestorePending_ = false;
         resumeOnFocus_ = false;
+        skipPreferencePressPending_ = false;
+        skipPreferenceLongPressed_ = false;
+        skipPreferencePressEnabling_ = false;
+        skipPreferenceSheetActive_ = false;
+        skipPreferenceSheetEnabling_ = false;
+        skipPreferenceSheetSelection_ = 1;
         resetPosition();
     }
 
@@ -96,6 +109,62 @@ public:
 
     [[nodiscard]] bool controlSelected(std::size_t index) const {
         return index == static_cast<std::size_t>(controlSelection_);
+    }
+
+    void beginSkipPreferencePress(bool currentlyDisabled) {
+        skipPreferencePressPending_ = true;
+        skipPreferenceLongPressed_ = false;
+        skipPreferencePressEnabling_ = currentlyDisabled;
+    }
+
+    [[nodiscard]] bool skipPreferencePressPending() const { return skipPreferencePressPending_; }
+
+    void holdSkipPreferencePress() {
+        if (!skipPreferencePressPending_ || skipPreferenceLongPressed_) return;
+        skipPreferenceLongPressed_ = true;
+        skipPreferenceSheetActive_ = true;
+        skipPreferenceSheetEnabling_ = skipPreferencePressEnabling_;
+        skipPreferenceSheetSelection_ = 1;
+    }
+
+    [[nodiscard]] bool consumeSkipPreferenceRelease() {
+        const bool activateNormalAction = skipPreferencePressPending_ && !skipPreferenceLongPressed_;
+        skipPreferencePressPending_ = false;
+        skipPreferenceLongPressed_ = false;
+        skipPreferencePressEnabling_ = false;
+        return activateNormalAction;
+    }
+
+    [[nodiscard]] bool skipPreferenceSheetActive() const { return skipPreferenceSheetActive_; }
+
+    [[nodiscard]] bool skipPreferenceSheetEnabling() const { return skipPreferenceSheetEnabling_; }
+
+    [[nodiscard]] int skipPreferenceSheetSelection() const { return skipPreferenceSheetSelection_; }
+
+    PlayerSkipPreferenceCommand handleSkipPreferenceSheetInput(PlayerScreenInput input) {
+        if (!skipPreferenceSheetActive_) return PlayerSkipPreferenceCommand::None;
+        switch (input) {
+        case PlayerScreenInput::Left:
+            skipPreferenceSheetSelection_ = 0;
+            return PlayerSkipPreferenceCommand::None;
+        case PlayerScreenInput::Right:
+            skipPreferenceSheetSelection_ = 1;
+            return PlayerSkipPreferenceCommand::None;
+        case PlayerScreenInput::Activate:
+        case PlayerScreenInput::PlayPause: {
+            const bool confirm = skipPreferenceSheetSelection_ == 0;
+            const bool enabling = skipPreferenceSheetEnabling_;
+            skipPreferenceSheetActive_ = false;
+            if (!confirm) return PlayerSkipPreferenceCommand::Dismiss;
+            return enabling ? PlayerSkipPreferenceCommand::EnableForShow
+                            : PlayerSkipPreferenceCommand::DisableForShow;
+        }
+        case PlayerScreenInput::Back:
+            skipPreferenceSheetActive_ = false;
+            return PlayerSkipPreferenceCommand::Dismiss;
+        default:
+            return PlayerSkipPreferenceCommand::None;
+        }
     }
 
     void showControls(TimePoint now) {
@@ -317,4 +386,10 @@ private:
     TimePoint lastSeekIssued_{};
     bool windowRestorePending_ = false;
     bool resumeOnFocus_ = false;
+    bool skipPreferencePressPending_ = false;
+    bool skipPreferenceLongPressed_ = false;
+    bool skipPreferencePressEnabling_ = false;
+    bool skipPreferenceSheetActive_ = false;
+    bool skipPreferenceSheetEnabling_ = false;
+    int skipPreferenceSheetSelection_ = 1;
 };

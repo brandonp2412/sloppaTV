@@ -256,13 +256,23 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const int remainingMs = playerScreenState.durationMs() > 0
                                 ? std::max(0, playerScreenState.durationMs() - playerScreenState.positionMs())
                                 : 0;
-    const auto skipSegment = playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs());
+    const auto* activeSkipSegment = playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs());
+    const auto& playerItem = playbackCoordinator.session().activeItem();
+    const bool perShowSkipSegment =
+        activeSkipSegment && (activeSkipSegment->type == "Intro" || activeSkipSegment->type == "Outro");
+    const bool skipDisabledForSeries =
+        perShowSkipSegment && skipSegmentsDisabledForSeries(settings, playerItem.seriesId);
+    const auto* skipSegment = skipDisabledForSeries ? nullptr : activeSkipSegment;
+    const bool showSkipRestore =
+        activeSkipSegment && skipDisabledForSeries && playerScreenState.controlsActive(now) &&
+        playerScreenState.controlSelection() == PlayerControl::PlayPause;
+    const bool skipAffordanceVisible = skipSegment != nullptr || showSkipRestore;
     const bool userOverlayVisible = playerScreenState.overlayVisible(now);
     const bool showNextUp = shouldShowNextUpCard(playbackCoordinator.continuation().nextItem().has_value(), remainingMs,
-                                                 userOverlayVisible, skipSegment != nullptr);
+                                                 userOverlayVisible, skipAffordanceVisible);
     const bool showOverlay = status == PlayerStatus::Preparing || status == PlayerStatus::Paused ||
                              playbackCoordinator.transitionLoading() || playbackCoordinator.fallbackResolving() ||
-                             userOverlayVisible;
+                             userOverlayVisible || playerScreenState.skipPreferenceSheetActive();
     if (showOverlay) {
         renderer.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f, Color{0.0f, 0.0f, 0.0f, 0.74f},
                                   Color{0.0f, 0.0f, 0.0f, 0.0f});
@@ -279,12 +289,12 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         renderPlayerSubtitle(renderer,
                              PlayerSubtitleRenderState{
                                  .text = subtitleText,
-                                 .boxMaxWidth = subtitleBoxMaxWidth(skipSegment != nullptr),
+                                 .boxMaxWidth = subtitleBoxMaxWidth(skipAffordanceVisible),
                                  .textScale = textScale,
                                  .lineHeight = 11.0f * textScale * uiTextScale(settings.uiTextSize),
                                  .logicalWidth = Renderer::logicalWidth(),
                                  .bottomY = subtitleBottomY(showOverlay, playerScreenState.controlsActive(now),
-                                                            settings.subtitlePosition, skipSegment != nullptr),
+                                                            settings.subtitlePosition, skipAffordanceVisible),
                                  .showBackground = settings.subtitleBackground,
                              },
                              PlayerSubtitleRenderStyle<Color>{
@@ -298,8 +308,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                              });
     }
 
-    if (skipSegment) {
-        const std::string skipLabel = mediaSegmentSkipLabel(*skipSegment);
+    if (skipSegment || showSkipRestore) {
+        const std::string skipLabel = skipSegment ? mediaSegmentSkipLabel(*skipSegment) : "Hold OK to enable";
         renderPlayerSkipButton(
             renderer,
             PlayerSkipButtonRenderState{
@@ -415,7 +425,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                          PlayerProgressRenderState{
                              .positionMs = position,
                              .durationMs = duration,
-                             .skipButtonVisible = skipSegment != nullptr,
+                             .skipButtonVisible = skipAffordanceVisible,
                              .positionText = positionText,
                              .durationText = durationText,
                          },
@@ -448,5 +458,35 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 return ui.fittedSingleLineScale(scale, value, width, height);
             },
             [](std::string_view value) { return materialLabel(value); });
+    }
+
+    if (playerScreenState.skipPreferenceSheetActive()) {
+        constexpr float panelX = 180.0f;
+        constexpr float panelY = 700.0f;
+        constexpr float panelWidth = 1560.0f;
+        const bool enabling = playerScreenState.skipPreferenceSheetEnabling();
+        renderer.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, 0.48f});
+        ui.drawModalSurface(panelX, panelY, panelWidth, 380.0f, material_tv::cornerLarge);
+        renderer.text(panelX + 70.0f, panelY + 46.0f, 2.9f,
+                      enabling ? "Enable skip for this show?" : "Disable skip for this show?", material_tv::onSurface,
+                      panelWidth - 140.0f);
+        renderer.text(panelX + 70.0f, panelY + 128.0f, 1.75f,
+                      playerItem.seriesName.empty() ? "This show" : playerItem.seriesName,
+                      material_tv::onSurfaceVariant, panelWidth - 140.0f);
+        renderer.text(panelX + 70.0f, panelY + 180.0f, 1.55f,
+                      enabling ? "Intro and credits skip buttons will appear again for future episodes."
+                               : "Intro and credits skip buttons will stay hidden for future episodes.",
+                      material_tv::onSurfaceVariant, panelWidth - 140.0f);
+        const std::array<std::string_view, 2> actions{
+            enabling ? std::string_view{"Enable for show"} : std::string_view{"Disable for show"},
+            "Cancel",
+        };
+        for (int index = 0; index < 2; ++index) {
+            const float x = index == 0 ? panelX + 70.0f : panelX + 805.0f;
+            const bool focused = playerScreenState.skipPreferenceSheetSelection() == index;
+            const auto bounds = ui.drawButtonSurface(x, panelY + 255.0f, 685.0f, 82.0f, focused, index == 0);
+            renderer.textCentered(bounds[0], bounds[1], bounds[2], bounds[3], 1.85f,
+                                  actions[static_cast<std::size_t>(index)], material_tv::onSurface);
+        }
     }
 }

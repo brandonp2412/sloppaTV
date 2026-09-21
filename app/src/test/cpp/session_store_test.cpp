@@ -38,6 +38,7 @@ int main() {
     state.settings.seerrSessionCookie = "connect.sid=session";
     state.settings.seerrApiKey = "api-key";
     state.settings.seerrSelectDrive = true;
+    state.settings.disabledSkipSeriesIds = {"series-1", "series-2"};
 
     std::string warning;
     assert(saveSessionState(directory.string(), state, warning));
@@ -69,6 +70,9 @@ int main() {
     assert(loaded.settings.seerrSessionCookie == "connect.sid=session");
     assert(loaded.settings.seerrApiKey == "api-key");
     assert(loaded.settings.seerrSelectDrive);
+    assert(loaded.settings.disabledSkipSeriesIds.size() == 2);
+    assert(loaded.settings.disabledSkipSeriesIds[0] == "series-1");
+    assert(loaded.settings.disabledSkipSeriesIds[1] == "series-2");
 
     const std::filesystem::path temporaryPath = directory / "session.json.tmp";
     std::filesystem::create_directory(temporaryPath, ec);

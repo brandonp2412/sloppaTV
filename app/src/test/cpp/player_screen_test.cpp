@@ -38,6 +38,44 @@ int main() {
     assert(!state.controlsActive(now + 21s));
     assert(!state.shouldDismissOnBack(now + 21s));
 
+    PlayerScreenState skipPreferenceState;
+    skipPreferenceState.beginSkipPreferencePress(false);
+    assert(skipPreferenceState.skipPreferencePressPending());
+    assert(skipPreferenceState.consumeSkipPreferenceRelease());
+    assert(!skipPreferenceState.skipPreferencePressPending());
+
+    skipPreferenceState.beginSkipPreferencePress(false);
+    skipPreferenceState.holdSkipPreferencePress();
+    assert(skipPreferenceState.skipPreferenceSheetActive());
+    assert(!skipPreferenceState.skipPreferenceSheetEnabling());
+    assert(skipPreferenceState.skipPreferenceSheetSelection() == 1);
+    assert(!skipPreferenceState.consumeSkipPreferenceRelease());
+    assert(skipPreferenceState.handleSkipPreferenceSheetInput(PlayerScreenInput::Left) ==
+           PlayerSkipPreferenceCommand::None);
+    assert(skipPreferenceState.skipPreferenceSheetSelection() == 0);
+    assert(skipPreferenceState.handleSkipPreferenceSheetInput(PlayerScreenInput::Activate) ==
+           PlayerSkipPreferenceCommand::DisableForShow);
+    assert(!skipPreferenceState.skipPreferenceSheetActive());
+
+    skipPreferenceState.beginSkipPreferencePress(true);
+    skipPreferenceState.holdSkipPreferencePress();
+    assert(skipPreferenceState.skipPreferenceSheetActive());
+    assert(skipPreferenceState.skipPreferenceSheetEnabling());
+    assert(!skipPreferenceState.consumeSkipPreferenceRelease());
+    assert(skipPreferenceState.handleSkipPreferenceSheetInput(PlayerScreenInput::Left) ==
+           PlayerSkipPreferenceCommand::None);
+    assert(skipPreferenceState.handleSkipPreferenceSheetInput(PlayerScreenInput::Activate) ==
+           PlayerSkipPreferenceCommand::EnableForShow);
+
+    skipPreferenceState.beginSkipPreferencePress(false);
+    skipPreferenceState.holdSkipPreferencePress();
+    assert(!skipPreferenceState.consumeSkipPreferenceRelease());
+    assert(skipPreferenceState.handleSkipPreferenceSheetInput(PlayerScreenInput::Back) ==
+           PlayerSkipPreferenceCommand::Dismiss);
+    skipPreferenceState.resetSession();
+    assert(!skipPreferenceState.skipPreferencePressPending());
+    assert(!skipPreferenceState.skipPreferenceSheetActive());
+
     PlayerScreenState inputState;
     auto command = inputState.handleInput(PlayerScreenInput::Up, now);
     assert(command.type == PlayerScreenCommandType::None);

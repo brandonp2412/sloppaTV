@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 enum class VideoZoomMode {
@@ -74,7 +75,27 @@ struct AppSettings {
     std::string seerrSessionCookie;
     std::string seerrApiKey;
     bool seerrSelectDrive = false;
+    std::vector<std::string> disabledSkipSeriesIds;
 };
+
+inline bool skipSegmentsDisabledForSeries(const AppSettings& settings, std::string_view seriesId) {
+    if (seriesId.empty()) return false;
+    return std::find(settings.disabledSkipSeriesIds.begin(), settings.disabledSkipSeriesIds.end(), seriesId) !=
+           settings.disabledSkipSeriesIds.end();
+}
+
+inline bool setSkipSegmentsDisabledForSeries(AppSettings& settings, std::string seriesId, bool disabled) {
+    if (seriesId.empty()) return false;
+    const auto existing = std::find(settings.disabledSkipSeriesIds.begin(), settings.disabledSkipSeriesIds.end(), seriesId);
+    if (disabled) {
+        if (existing != settings.disabledSkipSeriesIds.end()) return false;
+        settings.disabledSkipSeriesIds.push_back(std::move(seriesId));
+        return true;
+    }
+    if (existing == settings.disabledSkipSeriesIds.end()) return false;
+    settings.disabledSkipSeriesIds.erase(existing);
+    return true;
+}
 
 enum class SettingId : uint8_t {
     MaxStreamingBitrate = 0,
