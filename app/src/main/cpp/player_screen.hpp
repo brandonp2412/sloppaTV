@@ -1,10 +1,13 @@
 #pragma once
 
 #include "media_player_policy.hpp"
+#include "player_ambient_bars.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cstddef>
+#include <string>
+#include <utility>
 
 enum class PlayerScreenInput {
     None,
@@ -65,6 +68,8 @@ public:
         seekFeedbackUntil_ = {};
         windowRestorePending_ = false;
         resumeOnFocus_ = false;
+        resetSkipButtonInteraction();
+        ambientBars_.reset();
         resetPosition();
     }
 
@@ -88,6 +93,8 @@ public:
         pendingSeekTargetMs_ = -1;
         lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
+        resetSkipButtonInteraction();
+        ambientBars_.reset();
     }
 
     [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
@@ -284,6 +291,60 @@ public:
         return true;
     }
 
+    void beginSkipButtonPress(std::string seriesId, std::string seriesName) {
+        skipButtonPressPending_ = true;
+        skipButtonLongPressed_ = false;
+        skipButtonPressSeriesId_ = std::move(seriesId);
+        skipButtonPressSeriesName_ = std::move(seriesName);
+    }
+
+    [[nodiscard]] bool skipButtonPressPending() const { return skipButtonPressPending_; }
+    [[nodiscard]] bool skipButtonLongPressed() const { return skipButtonLongPressed_; }
+
+    void openSkipDisablePrompt() {
+        if (!skipButtonPressPending_) return;
+        skipButtonLongPressed_ = true;
+        skipDisablePromptVisible_ = true;
+        skipDisableSelected_ = false;
+        skipDisableSeriesId_ = skipButtonPressSeriesId_;
+        skipDisableSeriesName_ = skipButtonPressSeriesName_;
+    }
+
+    [[nodiscard]] bool consumeSkipButtonRelease() {
+        if (!skipButtonPressPending_) return false;
+        const bool activate = !skipButtonLongPressed_;
+        skipButtonPressPending_ = false;
+        skipButtonLongPressed_ = false;
+        skipButtonPressSeriesId_.clear();
+        skipButtonPressSeriesName_.clear();
+        return activate;
+    }
+
+    void cancelSkipButtonPress() {
+        skipButtonPressPending_ = false;
+        skipButtonLongPressed_ = false;
+        skipButtonPressSeriesId_.clear();
+        skipButtonPressSeriesName_.clear();
+    }
+
+    [[nodiscard]] bool skipDisablePromptVisible() const { return skipDisablePromptVisible_; }
+    [[nodiscard]] bool skipDisableSelected() const { return skipDisableSelected_; }
+    [[nodiscard]] const std::string& skipDisableSeriesId() const { return skipDisableSeriesId_; }
+    [[nodiscard]] const std::string& skipDisableSeriesName() const { return skipDisableSeriesName_; }
+
+    void selectSkipDisable(bool disable) { skipDisableSelected_ = disable; }
+
+    void closeSkipDisablePrompt() {
+        skipDisablePromptVisible_ = false;
+        skipDisableSelected_ = false;
+        skipDisableSeriesId_.clear();
+        skipDisableSeriesName_.clear();
+        cancelSkipButtonPress();
+    }
+
+    AmbientBarColorState& ambientBars() { return ambientBars_; }
+    const AmbientBarColorState& ambientBars() const { return ambientBars_; }
+
 private:
     [[nodiscard]] PlayerScreenCommand selectedControlCommand() const {
         switch (controlSelection_) {
@@ -315,6 +376,26 @@ private:
     int pendingSeekTargetMs_ = -1;
     int lastSeekTargetMs_ = -1;
     TimePoint lastSeekIssued_{};
+    void resetSkipButtonInteraction() {
+        skipButtonPressPending_ = false;
+        skipButtonLongPressed_ = false;
+        skipButtonPressSeriesId_.clear();
+        skipButtonPressSeriesName_.clear();
+        skipDisablePromptVisible_ = false;
+        skipDisableSelected_ = false;
+        skipDisableSeriesId_.clear();
+        skipDisableSeriesName_.clear();
+    }
+
     bool windowRestorePending_ = false;
     bool resumeOnFocus_ = false;
+    bool skipButtonPressPending_ = false;
+    bool skipButtonLongPressed_ = false;
+    std::string skipButtonPressSeriesId_;
+    std::string skipButtonPressSeriesName_;
+    bool skipDisablePromptVisible_ = false;
+    bool skipDisableSelected_ = false;
+    std::string skipDisableSeriesId_;
+    std::string skipDisableSeriesName_;
+    AmbientBarColorState ambientBars_;
 };

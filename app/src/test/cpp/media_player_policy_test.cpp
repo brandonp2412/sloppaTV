@@ -77,8 +77,15 @@ int main() {
     assert(shouldAutoplayNextEpisode(true, 2, 3));
     assert(!shouldAutoplayNextEpisode(true, 3, 3));
     assert(!shouldAutoplayNextEpisode(true, 4, 3));
-    assert(!shouldAutoplayNextEpisode(true, 0, 0));
-    assert(!shouldAutoplayNextEpisode(true, 0, -2));
+    assert(shouldAutoplayNextEpisode(true, 0, 0));
+    assert(shouldAutoplayNextEpisode(true, 100, 0));
+    assert(shouldAutoplayNextEpisode(true, 0, -2));
+    assert(shouldHandlePauseToggle(0));
+    assert(!shouldHandlePauseToggle(1));
+    assert(!shouldHandlePauseToggle(8));
+    assert(canDisableSkipForSegmentType("Intro"));
+    assert(canDisableSkipForSegmentType("Outro"));
+    assert(!canDisableSkipForSegmentType("Recap"));
 
     assert(playbackPrepareTimeoutMs(false) == 15'000);
     assert(playbackPrepareTimeoutMs(true) == 30'000);

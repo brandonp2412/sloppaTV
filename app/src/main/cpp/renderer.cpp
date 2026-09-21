@@ -439,6 +439,49 @@ void Renderer::endFrame() {
     eglSwapBuffers(display_, surface_);
 }
 
+void Renderer::clearScreen(Color color) {
+    if (!ready()) return;
+    flush();
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(color.r, color.g, color.b, color.a);
+    glClear(GL_COLOR_BUFFER_BIT);
+}
+
+std::optional<Color> Renderer::sampleFramebufferAverage(float x, float y, float w, float h) {
+    if (!ready() || w <= 0.0f || h <= 0.0f || surfaceWidth_ <= 0 || surfaceHeight_ <= 0) return std::nullopt;
+    flush();
+
+    while (glGetError() != GL_NO_ERROR) {
+    }
+
+    constexpr int columns = 4;
+    constexpr int rows = 3;
+    float red = 0.0f;
+    float green = 0.0f;
+    float blue = 0.0f;
+    const float scaleX = static_cast<float>(surfaceWidth_) / logicalWidth();
+    const float scaleY = static_cast<float>(surfaceHeight_) / logicalHeight();
+
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < columns; ++column) {
+            const float logicalX = x + w * (static_cast<float>(column) + 0.5f) / static_cast<float>(columns);
+            const float logicalY = y + h * (static_cast<float>(row) + 0.5f) / static_cast<float>(rows);
+            const GLint pixelX = std::clamp(static_cast<GLint>(std::lround(logicalX * scaleX)), 0, surfaceWidth_ - 1);
+            const GLint pixelY =
+                std::clamp(static_cast<GLint>(std::lround((logicalHeight() - logicalY) * scaleY)), 0, surfaceHeight_ - 1);
+            std::array<uint8_t, 4> pixel{};
+            glReadPixels(pixelX, pixelY, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
+            red += static_cast<float>(pixel[0]) / 255.0f;
+            green += static_cast<float>(pixel[1]) / 255.0f;
+            blue += static_cast<float>(pixel[2]) / 255.0f;
+        }
+    }
+    if (glGetError() != GL_NO_ERROR) return std::nullopt;
+
+    constexpr float divisor = static_cast<float>(columns * rows);
+    return Color{red / divisor, green / divisor, blue / divisor, 1.0f};
+}
+
 void Renderer::beginClipRect(float x, float y, float w, float h) {
     if (!ready() || w <= 0.0f || h <= 0.0f) return;
     flush();

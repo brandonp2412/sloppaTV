@@ -50,7 +50,17 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.seekForwardSeconds = std::clamp(valueOr(saved, "seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
     settings.zoomMode = std::clamp(valueOr(saved, "zoomMode", settings.zoomMode), 0, 2);
     settings.autoplayNext = valueOr(saved, "autoplayNext", settings.autoplayNext);
-    settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 2, 6);
+    settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 0, 6);
+    settings.ambientLetterboxBars = valueOr(saved, "ambientLetterboxBars", settings.ambientLetterboxBars);
+    settings.skipDisabledSeriesIds.clear();
+    if (saved.contains("skipDisabledSeriesIds") && saved["skipDisabledSeriesIds"].is_array()) {
+        for (const auto& seriesId : saved["skipDisabledSeriesIds"]) {
+            if (!seriesId.is_string()) continue;
+            const std::string value = seriesId.get<std::string>();
+            if (value.empty() || skipSegmentsDisabledForSeries(settings, value)) continue;
+            settings.skipDisabledSeriesIds.push_back(value);
+        }
+    }
     settings.refreshRateSwitching = valueOr(saved, "refreshRateSwitching", settings.refreshRateSwitching);
     settings.showWatchedIndicators = valueOr(saved, "showWatchedIndicators", settings.showWatchedIndicators);
     settings.showClock = valueOr(saved, "showClock", settings.showClock);
@@ -113,6 +123,8 @@ json writeSettings(const AppSettings& settings) {
         {"zoomMode", settings.zoomMode},
         {"autoplayNext", settings.autoplayNext},
         {"stillWatchingAfter", settings.stillWatchingAfter},
+        {"ambientLetterboxBars", settings.ambientLetterboxBars},
+        {"skipDisabledSeriesIds", settings.skipDisabledSeriesIds},
         {"refreshRateSwitching", settings.refreshRateSwitching},
         {"showWatchedIndicators", settings.showWatchedIndicators},
         {"showClock", settings.showClock},
