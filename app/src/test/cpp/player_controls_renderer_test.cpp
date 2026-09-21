@@ -71,9 +71,10 @@ int main() {
     assert((paused.primaryButtons == std::vector<std::size_t>{1}));
     assert(paused.fitCalls == 2);
     assert(paused.labelCalls == 2);
-    assert(paused.renderer.triangles == 4);
+    assert(paused.renderer.triangles == 3);
+    assert(paused.renderer.roundedRects == 10);
     assert(paused.renderer.roundedOutlines == 1);
-    assert((paused.renderer.centered == std::vector<std::string>{"CC"}));
+    assert(paused.renderer.centered.empty());
     assert((paused.renderer.vertical == std::vector<std::string>{"Audio  English", "Subtitles  Off"}));
 
     Harness playing;
@@ -86,8 +87,8 @@ int main() {
     });
     assert((playing.focusedButtons == std::vector<std::size_t>{4}));
     assert((playing.primaryButtons == std::vector<std::size_t>{1}));
-    assert(playing.renderer.triangles == 3);
-    assert(playing.renderer.roundedRects > paused.renderer.roundedRects);
+    assert(playing.renderer.triangles == 2);
+    assert(playing.renderer.roundedRects == 12);
     assert((playing.renderer.vertical == std::vector<std::string>{"Audio  Director", "Subtitles  English"}));
 
     return 0;

@@ -260,9 +260,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const bool userOverlayVisible = playerScreenState.overlayVisible(now);
     const bool showNextUp = shouldShowNextUpCard(playbackCoordinator.continuation().nextItem().has_value(), remainingMs,
                                                  userOverlayVisible, skipSegment != nullptr);
-    const bool showOverlay = status == PlayerStatus::Preparing || status == PlayerStatus::Paused ||
-                             playbackCoordinator.transitionLoading() || playbackCoordinator.fallbackResolving() ||
-                             userOverlayVisible;
+    const bool showOverlay = status == PlayerStatus::Preparing || playbackCoordinator.transitionLoading() ||
+                             playbackCoordinator.fallbackResolving() || userOverlayVisible;
     if (showOverlay) {
         renderer.verticalGradient(0.0f, 0.0f, 1920.0f, 250.0f, Color{0.0f, 0.0f, 0.0f, 0.74f},
                                   Color{0.0f, 0.0f, 0.0f, 0.0f});

@@ -69,6 +69,7 @@ int main() {
     assert(loaded.settings.seerrSessionCookie == "connect.sid=session");
     assert(loaded.settings.seerrApiKey == "api-key");
     assert(loaded.settings.seerrSelectDrive);
+    assert(loaded.settings.stillWatchingAfter == 0);
 
     const std::filesystem::path temporaryPath = directory / "session.json.tmp";
     std::filesystem::create_directory(temporaryPath, ec);

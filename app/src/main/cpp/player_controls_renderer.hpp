@@ -71,11 +71,10 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float textWidth = renderer.textWidth(labelScale, label);
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
-            renderer.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, style.text);
-            renderer.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f,
-                              iconCenterY + 15.0f, style.text);
-            renderer.roundedRect(iconX + 24.0f, iconCenterY - 10.0f, 4.0f, 20.0f, 2.0f, style.text);
-            renderer.roundedRect(iconX + 31.0f, iconCenterY - 15.0f, 4.0f, 30.0f, 2.0f, style.text);
+            renderer.roundedRect(iconX, iconCenterY - 8.0f, 5.0f, 16.0f, 2.0f, style.text);
+            renderer.roundedRect(iconX + 9.0f, iconCenterY - 14.0f, 5.0f, 28.0f, 2.0f, style.text);
+            renderer.roundedRect(iconX + 18.0f, iconCenterY - 10.0f, 5.0f, 20.0f, 2.0f, style.text);
+            renderer.roundedRect(iconX + 27.0f, iconCenterY - 5.0f, 5.0f, 10.0f, 2.0f, style.text);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
                                             style.text);
         } else {
@@ -88,7 +87,10 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
             renderer.roundedOutline(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 6.0f, 2.0f, style.text);
-            renderer.textCentered(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 0.82f, "CC", style.text);
+            renderer.roundedRect(iconX + 7.0f, iconCenterY - 6.0f, 11.0f, 3.0f, 1.5f, style.text);
+            renderer.roundedRect(iconX + 21.0f, iconCenterY - 6.0f, 10.0f, 3.0f, 1.5f, style.text);
+            renderer.roundedRect(iconX + 7.0f, iconCenterY + 3.0f, 8.0f, 3.0f, 1.5f, style.text);
+            renderer.roundedRect(iconX + 18.0f, iconCenterY + 3.0f, 13.0f, 3.0f, 1.5f, style.text);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
                                             style.text);
         }

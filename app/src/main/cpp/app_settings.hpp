@@ -49,7 +49,7 @@ struct AppSettings {
     int seekForwardSeconds = 10;
     int zoomMode = static_cast<int>(VideoZoomMode::Fit);
     bool autoplayNext = true;
-    int stillWatchingAfter = 3;
+    int stillWatchingAfter = 0;
     bool refreshRateSwitching = false;
     bool showWatchedIndicators = true;
     bool showClock = true;
@@ -184,8 +184,8 @@ inline SettingChangeEffect adjustSeekForward(AppSettings& settings, int directio
 }
 
 inline SettingChangeEffect adjustStillWatchingAfter(AppSettings& settings, int direction) {
-    static constexpr std::array<int, 5> choices{2, 3, 4, 5, 6};
-    stepSettingChoice(settings.stillWatchingAfter, choices, direction, 1);
+    static constexpr std::array<int, 6> choices{0, 2, 3, 4, 5, 6};
+    stepSettingChoice(settings.stillWatchingAfter, choices, direction, 0);
     return SettingChangeEffect::None;
 }
 
@@ -316,6 +316,7 @@ inline std::string renderDefaultVideoZoom(const AppSettings& settings, const Set
 }
 
 inline std::string renderStillWatchingAfter(const AppSettings& settings, const SettingValueContext&) {
+    if (settings.stillWatchingAfter <= 0) return "OFF";
     return std::to_string(settings.stillWatchingAfter) + " AUTOPLAYS";
 }
 

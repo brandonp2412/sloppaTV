@@ -50,7 +50,7 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.seekForwardSeconds = std::clamp(valueOr(saved, "seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
     settings.zoomMode = std::clamp(valueOr(saved, "zoomMode", settings.zoomMode), 0, 2);
     settings.autoplayNext = valueOr(saved, "autoplayNext", settings.autoplayNext);
-    settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 2, 6);
+    settings.stillWatchingAfter = std::clamp(valueOr(saved, "stillWatchingAfter", settings.stillWatchingAfter), 0, 6);
     settings.refreshRateSwitching = valueOr(saved, "refreshRateSwitching", settings.refreshRateSwitching);
     settings.showWatchedIndicators = valueOr(saved, "showWatchedIndicators", settings.showWatchedIndicators);
     settings.showClock = valueOr(saved, "showClock", settings.showClock);

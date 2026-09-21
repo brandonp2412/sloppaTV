@@ -74,6 +74,7 @@ public:
         pendingSeekTargetMs_ = -1;
         lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
+        pendingSeekRecoveryEnabled_ = false;
         seekFeedbackSeconds_ = 0;
         seekFeedbackStarted_ = {};
         seekFeedbackUntil_ = {};
@@ -88,6 +89,7 @@ public:
         pendingSeekTargetMs_ = -1;
         lastSeekTargetMs_ = -1;
         lastSeekIssued_ = {};
+        pendingSeekRecoveryEnabled_ = false;
     }
 
     [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
@@ -215,12 +217,22 @@ public:
 
     void setDurationMs(int value) { durationMs_ = std::max(0, value); }
 
+    void beginInitialPosition(int targetMs, TimePoint now) {
+        const int target = std::max(0, targetMs);
+        positionMs_ = target;
+        pendingSeekTargetMs_ = target;
+        lastSeekTargetMs_ = -1;
+        lastSeekIssued_ = now;
+        pendingSeekRecoveryEnabled_ = false;
+    }
+
     void beginSeek(int targetMs, TimePoint now) {
         const int target = std::max(0, targetMs);
         positionMs_ = target;
         pendingSeekTargetMs_ = target;
         lastSeekTargetMs_ = target;
         lastSeekIssued_ = now;
+        pendingSeekRecoveryEnabled_ = true;
         showOverlayFor(now, std::chrono::seconds(3));
     }
 
@@ -248,7 +260,7 @@ public:
     [[nodiscard]] int recentSeekTargetMs() const { return lastSeekTargetMs_; }
 
     [[nodiscard]] bool pendingSeekAppearsFailed(int observedPositionMs, TimePoint now) const {
-        if (pendingSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
+        if (!pendingSeekRecoveryEnabled_ || pendingSeekTargetMs_ < 0 || lastSeekIssued_ == TimePoint{}) return false;
         const int64_t elapsedSinceSeekMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSeekIssued_).count();
         return postSeekPositionFailed(observedPositionMs, pendingSeekTargetMs_, elapsedSinceSeekMs);
@@ -315,6 +327,7 @@ private:
     int pendingSeekTargetMs_ = -1;
     int lastSeekTargetMs_ = -1;
     TimePoint lastSeekIssued_{};
+    bool pendingSeekRecoveryEnabled_ = false;
     bool windowRestorePending_ = false;
     bool resumeOnFocus_ = false;
 };

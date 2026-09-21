@@ -6,6 +6,8 @@ int main() {
     AppSettings settings;
     assert(settings.maxBitrateMbps == 120);
     assert(settings.zoomMode == static_cast<int>(VideoZoomMode::Fit));
+    assert(settings.stillWatchingAfter == 0);
+    assert(renderStillWatchingAfter(settings, {}) == "OFF");
     assert(playbackOverridesFor(settings).hdrMode == HdrOverrideMode::Auto);
     assert(videoZoomName(VideoZoomMode::Fill) == "FILL");
     assert(settings.subtitleSize == 1);
@@ -84,6 +86,11 @@ int main() {
     assert(adjusted.zoomMode == static_cast<int>(VideoZoomMode::Fill));
     assert(hasSettingEffect(effects, SettingChangeEffect::Save));
     assert(hasSettingEffect(effects, SettingChangeEffect::ApplyVideoZoom));
+    effects = adjustSetting(adjusted, SettingId::StillWatchingAfter, 1);
+    assert(adjusted.stillWatchingAfter == 2);
+    assert(renderStillWatchingAfter(adjusted, {}) == "2 AUTOPLAYS");
+    effects = adjustSetting(adjusted, SettingId::StillWatchingAfter, -1);
+    assert(adjusted.stillWatchingAfter == 0);
     effects = adjustSetting(adjusted, SettingId::Diagnostics, 1);
     assert(effects == SettingChangeEffect::None);
 
