@@ -2,11 +2,10 @@
 
 #include "http_get_coordinator.hpp"
 #include "http_response.hpp"
+#include "http_retry_coordinator.hpp"
 
 #include <jni.h>
 
-#include <atomic>
-#include <condition_variable>
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -36,9 +35,7 @@ private:
     JavaVM* vm_ = nullptr;
     jobject activity_ = nullptr;
     mutable HttpGetCoordinator getCoordinator_;
-    mutable std::atomic<uint64_t> cancelGeneration_{0};
-    mutable std::mutex retryMutex_;
-    mutable std::condition_variable retryWake_;
+    mutable HttpRetryCoordinator retryCoordinator_;
     mutable std::mutex activeRequestsMutex_;
     mutable std::unordered_set<uint64_t> activeRequestIds_;
 };

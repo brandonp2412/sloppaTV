@@ -6,7 +6,6 @@
 
 #include <android/log.h>
 
-#include <array>
 #include <chrono>
 #include <limits>
 #include <vector>
@@ -116,14 +115,13 @@ void JniHttpClient::invalidateGetCache() const {
 }
 
 void JniHttpClient::cancelPending() const {
-    cancelGeneration_.fetch_add(1, std::memory_order_relaxed);
+    retryCoordinator_.cancelPending();
     std::vector<uint64_t> activeRequests;
     {
         std::scoped_lock lock(activeRequestsMutex_);
         activeRequests.assign(activeRequestIds_.begin(), activeRequestIds_.end());
     }
     for (const uint64_t requestId : activeRequests) cancelRequest(requestId);
-    retryWake_.notify_all();
 }
 
 HttpResponse JniHttpClient::request(const std::string& method, const std::string& url,
@@ -142,40 +140,18 @@ HttpResponse JniHttpClient::request(const std::string& method, const std::string
 HttpResponse JniHttpClient::requestWithRetry(const std::string& method, const std::string& url,
                                              const std::map<std::string, std::string>& headers,
                                              const std::string& body) const {
-    HttpResponse response;
-    const uint64_t generation = cancelGeneration_.load(std::memory_order_relaxed);
-    constexpr std::array<std::chrono::milliseconds, 2> retryDelays{
-        std::chrono::milliseconds{250},
-        std::chrono::milliseconds{750},
-    };
-    const size_t retryCount = transientHttpRetryCount(method);
-    for (size_t attempt = 0; attempt <= retryCount; ++attempt) {
-        if (cancelGeneration_.load(std::memory_order_relaxed) != generation) {
-            response = {};
-            response.error = "Request cancelled";
-            return response;
-        }
-        const uint64_t requestId = gNextHttpRequestId.fetch_add(1, std::memory_order_relaxed);
-        response = requestOnce(method, url, headers, body, requestId, generation);
-        if (cancelGeneration_.load(std::memory_order_relaxed) != generation) {
-            response = {};
-            response.error = "Request cancelled";
-            return response;
-        }
-        const bool retryable = shouldRetryTransientHttpResponse(method, response.status, !response.error.empty());
-        if (!retryable || attempt == retryCount) return response;
-        const std::string failure = response.status != 0 ? "HTTP " + std::to_string(response.status) : response.error;
-        __android_log_print(ANDROID_LOG_WARN, kTag, "Transient request failure (%s); retrying in %lldms",
-                            failure.c_str(), static_cast<long long>(retryDelays[attempt].count()));
-        std::unique_lock retryLock(retryMutex_);
-        if (retryWake_.wait_for(retryLock, retryDelays[attempt],
-                                [&] { return cancelGeneration_.load(std::memory_order_relaxed) != generation; })) {
-            response = {};
-            response.error = "Request cancelled";
-            return response;
-        }
-    }
-    return response;
+    return retryCoordinator_.request(
+        method,
+        [&](uint64_t generation) {
+            const uint64_t requestId = gNextHttpRequestId.fetch_add(1, std::memory_order_relaxed);
+            return requestOnce(method, url, headers, body, requestId, generation);
+        },
+        [](const HttpResponse& response, std::chrono::milliseconds delay) {
+            const std::string failure =
+                response.status != 0 ? "HTTP " + std::to_string(response.status) : response.error;
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Transient request failure (%s); retrying in %lldms",
+                                failure.c_str(), static_cast<long long>(delay.count()));
+        });
 }
 
 HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::string& url,
@@ -300,7 +276,7 @@ HttpResponse JniHttpClient::requestOnce(const std::string& method, const std::st
             std::scoped_lock lock(activeRequestsMutex_);
             activeRequestIds_.insert(requestId);
         }
-        if (cancelGeneration_.load(std::memory_order_relaxed) != generation) cancelRequest(requestId);
+        if (retryCoordinator_.cancelled(generation)) cancelRequest(requestId);
     }
     jobject result = response.error.empty() ? env->CallObjectMethod(activity_, performRequest, jMethod, jUrl, jHeaders,
                                                                     jBody, static_cast<jlong>(requestId))
