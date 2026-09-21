@@ -38,6 +38,16 @@ int main() {
     assert(!state.controlsActive(now + 21s));
     assert(!state.shouldDismissOnBack(now + 21s));
 
+    PlayerScreenState resumeState;
+    resumeState.beginInitialPosition(60'000, now);
+    assert(resumeState.positionMs() == 60'000);
+    assert(resumeState.pendingSeekTargetMs() == 60'000);
+    assert(!resumeState.pendingSeekAppearsFailed(0, now + 2s));
+    resumeState.applyObservedPosition(60'050, now + 600ms);
+    assert(resumeState.pendingSeekTargetMs() == -1);
+    resumeState.beginSeek(90'000, now + 3s);
+    assert(resumeState.pendingSeekAppearsFailed(0, now + 5s));
+
     PlayerScreenState inputState;
     auto command = inputState.handleInput(PlayerScreenInput::Up, now);
     assert(command.type == PlayerScreenCommandType::None);

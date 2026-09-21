@@ -307,7 +307,7 @@ public:
         player_.startAsync(start.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
                            start.externalSubtitleUrl, activeDecodeMode());
-        if (startPositionMs > 0) screenState_.beginSeek(startPositionMs, now);
+        if (startPositionMs > 0) screenState_.beginInitialPosition(startPositionMs, now);
     }
 
     bool retryWithSoftwareDecode(bool rendererReady) {

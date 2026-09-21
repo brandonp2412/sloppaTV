@@ -73,7 +73,7 @@ int main() {
     assert(paused.labelCalls == 2);
     assert(paused.renderer.triangles == 4);
     assert(paused.renderer.roundedOutlines == 1);
-    assert((paused.renderer.centered == std::vector<std::string>{"CC"}));
+    assert(paused.renderer.centered.empty());
     assert((paused.renderer.vertical == std::vector<std::string>{"Audio  English", "Subtitles  Off"}));
 
     Harness playing;
