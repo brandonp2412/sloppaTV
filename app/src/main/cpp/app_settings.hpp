@@ -199,9 +199,17 @@ inline bool skipSegmentsDisabledForSeries(const AppSettings& settings, std::stri
                settings.skipDisabledSeriesIds.end();
 }
 
-inline bool disableSkipSegmentsForSeries(AppSettings& settings, std::string seriesId) {
-    if (seriesId.empty() || skipSegmentsDisabledForSeries(settings, seriesId)) return false;
-    settings.skipDisabledSeriesIds.push_back(std::move(seriesId));
+inline bool setSkipSegmentsDisabledForSeries(AppSettings& settings, std::string seriesId, bool disabled) {
+    if (seriesId.empty()) return false;
+    const auto existing =
+        std::find(settings.skipDisabledSeriesIds.begin(), settings.skipDisabledSeriesIds.end(), seriesId);
+    if (disabled) {
+        if (existing != settings.skipDisabledSeriesIds.end()) return false;
+        settings.skipDisabledSeriesIds.push_back(std::move(seriesId));
+        return true;
+    }
+    if (existing == settings.skipDisabledSeriesIds.end()) return false;
+    settings.skipDisabledSeriesIds.erase(existing);
     return true;
 }
 
@@ -738,7 +746,7 @@ template <size_t N> consteval std::array<SettingId, N> makeSettingOrder(bool adv
 }
 
 inline constexpr auto kCommonSettings = makeSettingOrder<23>(false);
-inline constexpr auto kAdvancedSettings = makeSettingOrder<13>(true);
+inline constexpr auto kAdvancedSettings = makeSettingOrder<14>(true);
 
 inline std::vector<SettingId> matchingSettings(const std::string& query, bool advanced) {
     std::vector<SettingId> matches;

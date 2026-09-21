@@ -1253,12 +1253,17 @@ private:
 
     bool beginPlayerSkipButtonPress() {
         const auto now = std::chrono::steady_clock::now();
-        if (playerScreenState_.controlsActive(now)) return false;
         const auto* segment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs());
         if (!segment || !canDisableSkipForSegmentType(segment->type)) return false;
         const auto& item = playbackCoordinator_.session().activeItem();
-        if (item.seriesId.empty() || skipSegmentsDisabledForSeries(settings_, item.seriesId)) return false;
-        playerScreenState_.beginSkipButtonPress(item.seriesId, item.seriesName);
+        if (item.seriesId.empty()) return false;
+        const bool disabled = skipSegmentsDisabledForSeries(settings_, item.seriesId);
+        const bool controlsActive = playerScreenState_.controlsActive(now);
+        if ((!disabled && controlsActive) ||
+            (disabled && (!controlsActive || playerScreenState_.controlSelection() != PlayerControl::PlayPause))) {
+            return false;
+        }
+        playerScreenState_.beginSkipButtonPress(item.seriesId, item.seriesName, disabled);
         return true;
     }
 
@@ -1281,10 +1286,12 @@ private:
             if (playerScreenState_.skipDisableSelected()) {
                 const std::string seriesId = playerScreenState_.skipDisableSeriesId();
                 const std::string seriesName = playerScreenState_.skipDisableSeriesName();
-                if (disableSkipSegmentsForSeries(settings_, seriesId)) {
+                const bool disabled = !playerScreenState_.skipDisableEnabling();
+                if (setSkipSegmentsDisabledForSeries(settings_, seriesId, disabled)) {
                     saveSession(session_);
-                    showNotice(seriesName.empty() ? "Skip buttons disabled for this show"
-                                                  : "Skip buttons disabled for " + seriesName,
+                    const std::string action = disabled ? "disabled" : "enabled";
+                    showNotice(seriesName.empty() ? "Skip buttons " + action + " for this show"
+                                                  : "Skip buttons " + action + " for " + seriesName,
                                4s);
                 }
             }
