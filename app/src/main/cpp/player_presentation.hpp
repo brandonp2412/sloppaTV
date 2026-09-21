@@ -256,17 +256,19 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             (videoBounds.x > 1.0f || videoBounds.y > 1.0f ||
              videoBounds.width < videoState.logicalWidth - 2.0f || videoBounds.height < videoState.logicalHeight - 2.0f);
         if (settings.ambientLetterboxBars && hasLetterboxBars) {
-            const AmbientBarColor ambient = playerScreenState.ambientBars().displayColor(now);
+            auto& ambientBars = playerScreenState.ambientBars();
+            if (status == PlayerStatus::Playing && ambientBars.sampleDue(now)) {
+                std::array<float, 3> sample{};
+                if (renderer.sampleExternalAverage(videoSurface.texture(), videoSurface.transform(), sample)) {
+                    ambientBars.addSample(AmbientBarColor{sample[0], sample[1], sample[2]}, now);
+                } else {
+                    ambientBars.noteSampleAttempt(now);
+                }
+            }
+            const AmbientBarColor ambient = ambientBars.displayColor(now);
             renderer.clearScreen(Color{ambient.r, ambient.g, ambient.b, 1.0f});
         }
         renderPlayerVideo(renderer, videoState, videoSurface.transform());
-        if (settings.ambientLetterboxBars && hasLetterboxBars && status == PlayerStatus::Playing &&
-            playerScreenState.ambientBars().sampleDue(now)) {
-            if (const auto sample =
-                    renderer.sampleFramebufferAverage(videoBounds.x, videoBounds.y, videoBounds.width, videoBounds.height)) {
-                playerScreenState.ambientBars().addSample(AmbientBarColor{sample->r, sample->g, sample->b}, now);
-            }
-        }
     }
 
     const int remainingMs = playerScreenState.durationMs() > 0

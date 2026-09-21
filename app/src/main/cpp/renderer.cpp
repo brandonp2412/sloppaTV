@@ -374,6 +374,8 @@ void Renderer::shutdown() {
             if (externalVbo_) glDeleteBuffers(1, &externalVbo_);
             if (externalVao_) glDeleteVertexArrays(1, &externalVao_);
             if (externalProgram_) glDeleteProgram(externalProgram_);
+            if (externalSampleFramebuffer_) glDeleteFramebuffers(1, &externalSampleFramebuffer_);
+            if (externalSampleTexture_) glDeleteTextures(1, &externalSampleTexture_);
         }
         eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (context_ != EGL_NO_CONTEXT) eglDestroyContext(display_, context_);
@@ -403,6 +405,8 @@ void Renderer::shutdown() {
     externalAlphaLocation_ = -1;
     externalTransformLocation_ = -1;
     externalProgramFailed_ = false;
+    externalSampleTexture_ = 0;
+    externalSampleFramebuffer_ = 0;
     fontTexture_ = 0;
     fontOutlineTexture_ = 0;
     fontAtlasAttempted_ = false;
@@ -445,41 +449,6 @@ void Renderer::clearScreen(Color color) {
     glDisable(GL_SCISSOR_TEST);
     glClearColor(color.r, color.g, color.b, color.a);
     glClear(GL_COLOR_BUFFER_BIT);
-}
-
-std::optional<Color> Renderer::sampleFramebufferAverage(float x, float y, float w, float h) {
-    if (!ready() || w <= 0.0f || h <= 0.0f || surfaceWidth_ <= 0 || surfaceHeight_ <= 0) return std::nullopt;
-    flush();
-
-    while (glGetError() != GL_NO_ERROR) {
-    }
-
-    constexpr int columns = 4;
-    constexpr int rows = 3;
-    float red = 0.0f;
-    float green = 0.0f;
-    float blue = 0.0f;
-    const float scaleX = static_cast<float>(surfaceWidth_) / logicalWidth();
-    const float scaleY = static_cast<float>(surfaceHeight_) / logicalHeight();
-
-    for (int row = 0; row < rows; ++row) {
-        for (int column = 0; column < columns; ++column) {
-            const float logicalX = x + w * (static_cast<float>(column) + 0.5f) / static_cast<float>(columns);
-            const float logicalY = y + h * (static_cast<float>(row) + 0.5f) / static_cast<float>(rows);
-            const GLint pixelX = std::clamp(static_cast<GLint>(std::lround(logicalX * scaleX)), 0, surfaceWidth_ - 1);
-            const GLint pixelY =
-                std::clamp(static_cast<GLint>(std::lround((logicalHeight() - logicalY) * scaleY)), 0, surfaceHeight_ - 1);
-            std::array<uint8_t, 4> pixel{};
-            glReadPixels(pixelX, pixelY, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixel.data());
-            red += static_cast<float>(pixel[0]) / 255.0f;
-            green += static_cast<float>(pixel[1]) / 255.0f;
-            blue += static_cast<float>(pixel[2]) / 255.0f;
-        }
-    }
-    if (glGetError() != GL_NO_ERROR) return std::nullopt;
-
-    constexpr float divisor = static_cast<float>(columns * rows);
-    return Color{red / divisor, green / divisor, blue / divisor, 1.0f};
 }
 
 void Renderer::beginClipRect(float x, float y, float w, float h) {
@@ -832,6 +801,108 @@ bool Renderer::ensureExternalProgram() {
                           reinterpret_cast<void*>(offsetof(TextureVertex, u)));
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
+    return true;
+}
+
+bool Renderer::ensureExternalSampleTarget() {
+    if (externalSampleTexture_ != 0 && externalSampleFramebuffer_ != 0) return true;
+    if (!ready()) return false;
+
+    constexpr int kSampleWidth = 8;
+    constexpr int kSampleHeight = 5;
+    GLint previousFramebuffer = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+
+    glGenTextures(1, &externalSampleTexture_);
+    glBindTexture(GL_TEXTURE_2D, externalSampleTexture_);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, kSampleWidth, kSampleHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+
+    glGenFramebuffers(1, &externalSampleFramebuffer_);
+    glBindFramebuffer(GL_FRAMEBUFFER, externalSampleFramebuffer_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, externalSampleTexture_, 0);
+    const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    if (!complete) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Ambient video sample framebuffer unavailable");
+        if (externalSampleFramebuffer_) glDeleteFramebuffers(1, &externalSampleFramebuffer_);
+        if (externalSampleTexture_) glDeleteTextures(1, &externalSampleTexture_);
+        externalSampleFramebuffer_ = 0;
+        externalSampleTexture_ = 0;
+    }
+    return complete;
+}
+
+bool Renderer::sampleExternalAverage(GLuint texture, const std::array<float, 16>& transform,
+                                     std::array<float, 3>& rgb) {
+    constexpr int kSampleWidth = 8;
+    constexpr int kSampleHeight = 5;
+    if (!ready() || texture == 0 || !ensureExternalProgram() || !ensureExternalSampleTarget()) return false;
+
+    flush();
+
+    while (glGetError() != GL_NO_ERROR) {}
+
+    GLint previousFramebuffer = 0;
+    GLint previousViewport[4]{};
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
+    glGetIntegerv(GL_VIEWPORT, previousViewport);
+    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, externalSampleFramebuffer_);
+    glViewport(0, 0, kSampleWidth, kSampleHeight);
+    glDisable(GL_BLEND);
+
+    const TextureVertex vertices[] = {
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {static_cast<float>(kSampleWidth), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f},
+        {static_cast<float>(kSampleWidth), static_cast<float>(kSampleHeight), 1.0f, 1.0f, 0.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
+        {static_cast<float>(kSampleWidth), static_cast<float>(kSampleHeight), 1.0f, 1.0f, 0.0f, 0.0f},
+        {0.0f, static_cast<float>(kSampleHeight), 0.0f, 1.0f, 0.0f, 0.0f},
+    };
+    glUseProgram(externalProgram_);
+    glUniform2f(externalResolutionLocation_, static_cast<float>(kSampleWidth), static_cast<float>(kSampleHeight));
+    glUniform1f(externalAlphaLocation_, 1.0f);
+    glUniformMatrix4fv(externalTransformLocation_, 1, GL_FALSE, transform.data());
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
+    glBindVertexArray(externalVao_);
+    glBindBuffer(GL_ARRAY_BUFFER, externalVbo_);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    std::array<uint8_t, kSampleWidth * kSampleHeight * 4> pixels{};
+    glReadPixels(0, 0, kSampleWidth, kSampleHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
+    glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
+    if (blendEnabled)
+        glEnable(GL_BLEND);
+    else
+        glDisable(GL_BLEND);
+
+    if (glGetError() != GL_NO_ERROR) return false;
+
+    uint32_t red = 0;
+    uint32_t green = 0;
+    uint32_t blue = 0;
+    constexpr uint32_t kPixelCount = kSampleWidth * kSampleHeight;
+    for (size_t offset = 0; offset < pixels.size(); offset += 4) {
+        red += pixels[offset];
+        green += pixels[offset + 1];
+        blue += pixels[offset + 2];
+    }
+    constexpr float kNormalize = 1.0f / (255.0f * static_cast<float>(kPixelCount));
+    rgb = {static_cast<float>(red) * kNormalize, static_cast<float>(green) * kNormalize,
+           static_cast<float>(blue) * kNormalize};
     return true;
 }
 

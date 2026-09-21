@@ -36,6 +36,8 @@ public:
         return lastSample_ == TimePoint{} || now - lastSample_ >= std::chrono::seconds(2);
     }
 
+    void noteSampleAttempt(TimePoint now) { lastSample_ = now; }
+
     void addSample(AmbientBarColor sample, TimePoint now) {
         samples_[nextSample_] = normalizedAmbientBarColor(sample);
         nextSample_ = (nextSample_ + 1) % samples_.size();

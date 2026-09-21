@@ -182,6 +182,9 @@ int main() {
     ambient.addSample({1.0f, 0.5f, 0.25f}, now);
     assert(!ambient.sampleDue(now + 1s));
     assert(ambient.sampleDue(now + 2s));
+    ambient.noteSampleAttempt(now + 2s);
+    assert(!ambient.sampleDue(now + 3s));
+    assert(ambient.sampleDue(now + 4s));
     assert(ambient.sampleCount() == 1);
     const auto ambientTarget = ambient.targetColor();
     assert(ambientTarget.r > 0.0f);
