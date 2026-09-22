@@ -65,6 +65,6 @@ void renderSeerrDrivePickerScreen(RendererLike& renderer, const SeerrDrivePicker
                      row.nearFull ? style.error : (focused ? style.text : style.secondaryText), 8.0f, 3.0f);
     }
 
-    drawCentered(590.0f, 970.0f, 740.0f, 48.0f, 1.45f, "Up / Down selects   ·   OK requests   ·   Back cancels",
+    drawCentered(590.0f, 970.0f, 740.0f, 48.0f, 1.45f, "Up / Down selects   ·   OK continues   ·   Back cancels",
                  style.muted, 12.0f, 4.0f);
 }

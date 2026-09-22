@@ -203,7 +203,9 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
                                   style.secondaryText, slotWidth - 4.0f);
                 }
                 const std::string requestState =
-                    item.externalRequested ? item.externalStatus : std::string("Press OK to request");
+                    item.type == "Series"
+                        ? "Press OK to choose seasons"
+                        : (item.externalRequested ? item.externalStatus : std::string("Press OK to request"));
                 renderer.text(x + 2.0f, titleY + 27.0f, 1.35f, fitTextLines(requestState, 1.35f, slotWidth - 4.0f, 1),
                               style.muted, slotWidth - 4.0f);
             }

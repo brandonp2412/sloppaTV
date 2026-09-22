@@ -36,7 +36,7 @@ int main() {
     library[0].tmdbId = "100";
     library[1].type = "Episode";
     library[2].type = "Series";
-    library[2].tmdbId = "200";
+    library[2].tmdbId = "300"; // Keep matching Seerr series visible for missing-season requests.
     library[3].type = "Episode";
     library[4].type = "Movie";
     library[5].type = "Episode";

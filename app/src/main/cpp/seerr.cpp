@@ -1,4 +1,5 @@
 #include "seerr.hpp"
+#include "seerr_season_parser.hpp"
 #include "json_boolean.hpp"
 #include "seerr_download_progress.hpp"
 
@@ -522,7 +523,7 @@ ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::search(const std::strin
             for (const auto& value : *values) {
                 if (!value.is_object()) continue;
                 SeerrMediaItem item = itemFromSearchResult(value);
-                if (item.id.empty() || item.available) continue;
+                if (item.id.empty() || (item.available && !item.television())) continue;
                 result.value.push_back(std::move(item));
                 if (result.value.size() >= 24) break;
             }
@@ -626,6 +627,23 @@ ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::pendingRequests(const s
     return result;
 }
 
+ApiValueResult<std::vector<SeerrSeason>> SeerrClient::seasons(const std::string& server, const SeerrAuth& auth,
+                                                              int tmdbId, bool is4k) const {
+    ApiValueResult<std::vector<SeerrSeason>> result;
+    const auto response = http_.request("GET", apiBase(server) + "/tv/" + std::to_string(tmdbId), headers(auth));
+    if (!response.ok()) {
+        result.error = apiError(response);
+        return result;
+    }
+    try {
+        result.value = parseSeerrSeasons(json::parse(response.body), is4k);
+        result.ok = true;
+    } catch (const std::exception& e) {
+        result.error = std::string("Invalid Seerr seasons response: ") + e.what();
+    }
+    return result;
+}
+
 ApiValueResult<int> SeerrClient::requestMedia(const std::string& server, const SeerrAuth& auth,
                                               const SeerrMediaItem& item, const SeerrStorageTarget* target) const {
     ApiValueResult<int> result;
@@ -648,7 +666,14 @@ ApiValueResult<int> SeerrClient::requestMedia(const std::string& server, const S
         {"mediaId", mediaId},
         {"is4k", target ? target->is4k : false},
     };
-    if (item.mediaType == "tv") body["seasons"] = "all";
+    if (item.television()) {
+        if (item.selectedSeasons.empty() || std::any_of(item.selectedSeasons.begin(), item.selectedSeasons.end(),
+                                                        [](int number) { return number < 0; })) {
+            result.error = "Select at least one season";
+            return result;
+        }
+        body["seasons"] = item.selectedSeasons;
+    }
     if (target && target->serverId >= 0 && !target->path.empty()) {
         body["serverId"] = target->serverId;
         body["rootFolder"] = target->path;

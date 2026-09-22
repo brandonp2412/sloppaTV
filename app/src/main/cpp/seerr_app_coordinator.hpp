@@ -18,6 +18,7 @@
 template <typename T>
 inline constexpr bool isSeerrAppCompletionV = std::is_same_v<std::remove_cvref_t<T>, SeerrDeleteCompletion> ||
                                               std::is_same_v<std::remove_cvref_t<T>, SeerrRequestCompletion> ||
+                                              std::is_same_v<std::remove_cvref_t<T>, SeerrSeasonsCompletion> ||
                                               std::is_same_v<std::remove_cvref_t<T>, SeerrStorageRefreshCompletion> ||
                                               std::is_same_v<std::remove_cvref_t<T>, SeerrPendingRefreshCompletion> ||
                                               std::is_same_v<std::remove_cvref_t<T>, SeerrConnectCompletion>;
@@ -36,6 +37,7 @@ public:
           request_(request), refresh_(refresh), completions_(completions) {}
 
     void resetForSessionChange() {
+        domain_.seasonPicker.cancel();
         settings_.seerrSessionCookie.clear();
         domain_.resetStorageForSessionClear();
     }
@@ -135,6 +137,7 @@ public:
                                                           const SeerrStorageTarget* selectedTarget = nullptr,
                                                           bool skipDrivePrompt = false) {
         SeerrCompletionHostEffects effects;
+        if (mutations_.loading()) return effects;
         auto plan = request_.prepare(item, endpoint(), settings_.seerrSelectDrive, skipDrivePrompt, selectedTarget);
         switch (plan.action) {
         case SeerrDomainState::RequestAction::Invalid:
@@ -157,12 +160,72 @@ public:
         case SeerrDomainState::RequestAction::Submit:
             break;
         }
+        if (item.television() && item.selectedSeasons.empty()) {
+            auto& picker = domain_.seasonPicker;
+            picker.open(item, plan.target);
+            navigation_.push(Screen::SeerrSeasonPicker);
+            screen_ = Screen::SeerrSeasonPicker;
+            loadSeasons();
+            effects.clearError = true;
+            return effects;
+        }
         mutations_.begin();
+        effects.clearError = true;
+        effects.notice = "SENDING REQUEST TO SEERR...";
         if (!request_.submit(std::move(plan))) {
             mutations_.finish();
+            effects.notice.reset();
+            effects.clearNotice = true;
             effects.error = "COULD NOT START SEERR REQUEST";
         }
         return effects;
+    }
+
+    void loadSeasons() {
+        auto& picker = domain_.seasonPicker;
+        if (!async_.loadSeasons(endpoint(), picker.item.tmdbId, picker.target && picker.target->is4k,
+                                picker.generation))
+            picker.complete(picker.generation, {}, "Could not load seasons. Press OK to retry.");
+    }
+
+    [[nodiscard]] SeerrCompletionHostEffects handleSeasonPicker(ScreenNavigationKey key) {
+        auto& picker = domain_.seasonPicker;
+        if (key == ScreenNavigationKey::Back) {
+            picker.cancel();
+            screen_ = navigation_.popOr(Screen::Search);
+            return {};
+        }
+        const bool activate = key == ScreenNavigationKey::Activate || key == ScreenNavigationKey::Submit;
+        if (picker.submitting) return {};
+        if (activate && !picker.loading && !picker.error.empty()) {
+            picker.open(picker.item, picker.target);
+            loadSeasons();
+            return {};
+        }
+        if (activate && !picker.loading && picker.selection == 0 && !picker.selected().empty()) {
+            auto item = picker.item;
+            item.selectedSeasons = picker.selected();
+            const auto target = picker.target;
+            auto effects = requestMedia(item, target ? &*target : nullptr, true);
+            picker.submitting = mutations_.loading();
+            return effects;
+        }
+        picker.navigate(key);
+        return {};
+    }
+
+    [[nodiscard]] SeerrCompletionHostEffects complete(SeerrSeasonsCompletion& completion) {
+        auto& picker = domain_.seasonPicker;
+        if (screen_ != Screen::SeerrSeasonPicker || completion.generation != picker.generation) return {};
+        if (!completion.endpoint.matches(endpoint().server, endpoint().auth)) {
+            picker.complete(completion.generation, {}, "Seerr connection changed. Press OK to retry.");
+            return {};
+        }
+        picker.complete(completion.generation, std::move(completion.result.value),
+                        completion.result.ok ? std::string{}
+                                             : (completion.result.error.empty() ? "Seerr did not return seasons."
+                                                                                : completion.result.error));
+        return {};
     }
 
     [[nodiscard]] SeerrCompletionHostEffects deleteCurrentRequest() {
@@ -195,7 +258,17 @@ public:
     }
 
     [[nodiscard]] SeerrCompletionHostEffects complete(const SeerrRequestCompletion& completion) {
-        return completions_.complete(completion, endpoint(), std::chrono::steady_clock::now());
+        auto effects = completions_.complete(completion, endpoint(), std::chrono::steady_clock::now());
+        auto& picker = domain_.seasonPicker;
+        if (screen_ == Screen::SeerrSeasonPicker && picker.submitting &&
+            picker.item.id == completion.requestedItem.id) {
+            picker.submitting = false;
+            if (completion.result.ok && completion.endpoint.matches(endpoint().server, endpoint().auth)) {
+                picker.cancel();
+                screen_ = navigation_.popOr(Screen::Search);
+            }
+        }
+        return effects;
     }
 
     [[nodiscard]] SeerrCompletionHostEffects complete(SeerrStorageRefreshCompletion& completion) {

@@ -1,4 +1,5 @@
 #pragma once
+#include "seerr_season_picker_renderer.hpp"
 
 #include "home_row_renderer.hpp"
 #include "media_card_renderer.hpp"
@@ -224,6 +225,18 @@ void renderContentSeerrDrivePicker(Renderer& renderer, UiLike& ui, const SeerrDr
             ui.drawCenteredSingleLineFit(x, y, width, height, scale, value, color, horizontalPadding, verticalPadding);
         },
         [&ui](const std::string& title, const std::string& message) { ui.renderEmptyState(title, message); });
+}
+
+template <typename UiLike>
+void renderContentSeerrSeasonPicker(Renderer& renderer, UiLike& ui, const SeerrSeasonPickerState& state) {
+    renderSeerrSeasonPicker(renderer, ui, state,
+                            SeerrSeasonPickerStyle<Color>{
+                                .headlineScale = material_tv::type::headline,
+                                .cornerRadius = material_tv::cornerMedium,
+                                .focusScale = materialWideListItemFocusScale(),
+                                .text = material_tv::onSurface,
+                                .muted = material_tv::onSurfaceVariant,
+                            });
 }
 
 template <typename UiLike>

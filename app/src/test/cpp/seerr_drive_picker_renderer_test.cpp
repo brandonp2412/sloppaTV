@@ -173,7 +173,7 @@ int main() {
     assert(centered[1].color == style.error);
     assert(centered[2].text == "Free space unknown");
     assert(centered[2].color == style.secondaryText);
-    assert(centered[3].text == "Up / Down selects   ·   OK requests   ·   Back cancels");
+    assert(centered[3].text == "Up / Down selects   ·   OK continues   ·   Back cancels");
     assert(centered[3].x == 590.0f);
     assert(centered[3].y == 970.0f);
     assert(centered[3].color == style.muted);

@@ -164,6 +164,9 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
                                                                     frame.seerrDomain.storageDriveChoices(),
                                                                     frame.seerrDomain.storageDriveSelection()));
             break;
+        case Screen::SeerrSeasonPicker:
+            renderContentSeerrSeasonPicker(frame.renderer, frame.ui, frame.seerrDomain.seasonPicker);
+            break;
         case Screen::Player:
             renderPlayerPresentation(frame.renderer, frame.player, frame.videoSurface, frame.playbackCoordinator,
                                      frame.playerScreenState, frame.trickplayState, frame.settings, frame.session,

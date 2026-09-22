@@ -228,20 +228,19 @@ void logPlaybackReportFailure(const char* stage, const std::string& itemId, cons
 
 using QueuedPlaybackCompletion = AppQueuedPlaybackCompletion;
 
-using AsyncCompletion =
-    std::variant<SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
-                 SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion, JellyfinSearchCompletion,
-                 ItemMenuDetailCompletion, PersonItemsCompletion, DiagnosticsCompletion, SeasonsCompletion,
-                 EpisodesCompletion, BrowsePageCompletion, ServerInfoNoticeCompletion, FavoriteCompletion,
-                 PlayedCompletion, MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion,
-                 LoginCompletion, DetailsItemCompletion, DetailsSimilarCompletion, SimilarPrefetchCompletion,
-                 EpisodeSeriesContextRequestCompletion, EpisodeSeriesContextCompletion, QuickConnectStartedCompletion,
-                 QuickConnectFailedCompletion, QuickConnectAuthenticatedCompletion, QuickConnectTimedOutCompletion,
-                 HomeCoreCompletion, HomeSecondaryCompletion, ExternalPlaybackCompletion, SubtitleLoadCompletion,
-                 TrickplayTileCompletion, ArtworkLoadCompletion, MediaSegmentsCompletion, NextEpisodeCompletion,
-                 PlaybackAdjacentCompletion, PlaybackReportCompletion, QueuedPlaybackCompletion,
-                 PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, StreamRestartCompletion,
-                 FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion>;
+using AsyncCompletion = std::variant<
+    SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion, SeerrSeasonsCompletion,
+    SeerrStorageRefreshCompletion, SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
+    JellyfinSearchCompletion, ItemMenuDetailCompletion, PersonItemsCompletion, DiagnosticsCompletion, SeasonsCompletion,
+    EpisodesCompletion, BrowsePageCompletion, ServerInfoNoticeCompletion, FavoriteCompletion, PlayedCompletion,
+    MetadataRefreshCompletion, DeleteItemCompletion, DiscoveryCompletion, LoginCompletion, DetailsItemCompletion,
+    DetailsSimilarCompletion, SimilarPrefetchCompletion, EpisodeSeriesContextRequestCompletion,
+    EpisodeSeriesContextCompletion, QuickConnectStartedCompletion, QuickConnectFailedCompletion,
+    QuickConnectAuthenticatedCompletion, QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
+    ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion, ArtworkLoadCompletion,
+    MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion, PlaybackReportCompletion,
+    QueuedPlaybackCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, StreamRestartCompletion,
+    FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -677,6 +676,9 @@ public:
                 break;
             case Screen::SeerrDrivePicker:
                 screenName = "Storage location";
+                break;
+            case Screen::SeerrSeasonPicker:
+                screenName = "Choose seasons";
                 break;
             case Screen::Player:
                 screenName = "Player";

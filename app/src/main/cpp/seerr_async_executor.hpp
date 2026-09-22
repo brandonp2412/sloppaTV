@@ -6,6 +6,7 @@
 #include "seerr_media.hpp"
 #include "seerr_quick_connect.hpp"
 #include "seerr_storage.hpp"
+#include "seerr_seasons.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -23,6 +24,12 @@ struct SeerrRequestCompletion {
     SeerrEndpoint endpoint;
     SeerrMediaItem requestedItem;
     ApiValueResult<int> result;
+};
+
+struct SeerrSeasonsCompletion {
+    SeerrEndpoint endpoint;
+    uint64_t generation = 0;
+    ApiValueResult<std::vector<SeerrSeason>> result;
 };
 
 struct SeerrStorageRefreshCompletion {
@@ -105,6 +112,13 @@ public:
                 .endpoint = endpoint,
                 .result = std::move(result),
             });
+        });
+    }
+
+    bool loadSeasons(SeerrEndpoint endpoint, int tmdbId, bool is4k, uint64_t generation) {
+        return tasks_.submit([this, endpoint = std::move(endpoint), tmdbId, is4k, generation] {
+            auto result = requestClient_.seasons(endpoint.server, endpoint.auth, tmdbId, is4k);
+            completions_.push(SeerrSeasonsCompletion{endpoint, generation, std::move(result)});
         });
     }
 

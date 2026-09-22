@@ -292,6 +292,11 @@ public:
             host.seerrEffects.push_back(seerrApp_.handleDrivePicker(key));
             return host;
         }
+        case Screen::SeerrSeasonPicker: {
+            ScreenInteractionHostEffects host;
+            host.seerrEffects.push_back(seerrApp_.handleSeasonPicker(key));
+            return host;
+        }
         case Screen::Player:
             return {};
         }

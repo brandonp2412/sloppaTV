@@ -341,6 +341,8 @@ public:
 
 private:
     [[nodiscard]] bool duplicatesLocalLibrary(const SeerrMediaItem& candidate) const {
+        // A library series can still be missing seasons that Seerr can request.
+        if (candidate.television()) return false;
         if (candidate.tmdbId <= 0) return false;
         const std::string tmdbId = std::to_string(candidate.tmdbId);
         return std::any_of(libraryTitles_.begin(), libraryTitles_.end(),

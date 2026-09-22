@@ -15,5 +15,6 @@ enum class Screen {
     Seasons,
     Episodes,
     SeerrDrivePicker,
+    SeerrSeasonPicker,
     Player,
 };

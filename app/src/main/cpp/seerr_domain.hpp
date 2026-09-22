@@ -5,6 +5,7 @@
 #include "seerr_request_state.hpp"
 #include "seerr_search_state.hpp"
 #include "seerr_storage_state.hpp"
+#include "seerr_seasons.hpp"
 
 #include <algorithm>
 #include <optional>
@@ -15,6 +16,7 @@
 
 class SeerrDomainState {
 public:
+    SeerrSeasonPickerState seasonPicker;
     enum class ConnectAction {
         AlreadyConnecting,
         MissingServer,
@@ -179,7 +181,7 @@ public:
                                              bool selectDrive, bool skipDrivePrompt,
                                              const SeerrStorageTarget* selectedTarget = nullptr) {
         if (!item.valid()) return {};
-        if (item.requested) {
+        if (item.requested && !item.television()) {
             return {
                 .action = RequestAction::AlreadyRequested,
                 .refreshStorage = false,

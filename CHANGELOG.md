@@ -6,6 +6,7 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Added
 
+- Seerr TV season selection with individual toggles, select-all for missing seasons, separate specials, availability and request status, and storage-aware 4K filtering. Series already in Jellyfin remain searchable for additional seasons; failed requests preserve the selection for retry.
 - Fastlane Google Play deployment lanes, validated Android TV store metadata/graphics, and screenshot syncing into the `supply` metadata layout.
 - Android application ID and Java/JNI namespace renamed from `nz.presley.sloppatv` to `app.sloppatv`; the legacy package is preserved as a migration source rather than destructively removed.
 - Structured navigation stack replacing screen-specific return variables.

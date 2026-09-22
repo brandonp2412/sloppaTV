@@ -8,8 +8,9 @@
 #include <vector>
 
 namespace {
-using Completion = std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
-                                SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion>;
+using Completion =
+    std::variant<SeerrDeleteCompletion, SeerrRequestCompletion, SeerrStorageRefreshCompletion,
+                 SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion, SeerrSeasonsCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -44,6 +45,20 @@ struct FakeJellyfinClient {
 };
 
 struct FakeSeerrClient {
+    ApiValueResult<std::vector<SeerrSeason>> seasons(const std::string& server, const SeerrAuth& auth, int tmdbId,
+                                                     bool is4k) {
+        lastServer = server;
+        lastAuth = auth;
+        lastTmdbId = tmdbId;
+        lastIs4k = is4k;
+        ApiValueResult<std::vector<SeerrSeason>> result;
+        result.ok = true;
+        SeerrSeason season;
+        season.number = 3;
+        season.episodes = 8;
+        result.value.push_back(season);
+        return result;
+    }
     ApiValueResult<SeerrQuickConnectRequest> initiateQuickConnect(const std::string& server) {
         lastServer = server;
         SeerrQuickConnectRequest request;
@@ -79,6 +94,7 @@ struct FakeSeerrClient {
         lastServer = server;
         lastAuth = auth;
         lastItemId = item.id;
+        lastSeasons = item.selectedSeasons;
         lastTargetServerId = target == nullptr ? -1 : target->serverId;
         ApiValueResult<int> result;
         result.ok = true;
@@ -142,6 +158,9 @@ struct FakeSeerrClient {
     std::string lastQuery;
     std::string lastQuickConnectSecret;
     int cancelCount = 0;
+    int lastTmdbId = 0;
+    bool lastIs4k = false;
+    std::vector<int> lastSeasons;
 };
 
 SeerrEndpoint endpoint() {
@@ -236,6 +255,19 @@ int main() {
     assert(searchClient.cancelCount == 1);
     assert(requestClient.cancelCount == 0);
 
+    assert(executor.loadSeasons(endpoint(), 123, true, 42));
+    const auto& seasons = std::get<SeerrSeasonsCompletion>(completions.events.back());
+    assert(seasons.generation == 42 && seasons.result.ok);
+    assert(seasons.result.value.front().number == 3);
+    assert(requestClient.lastTmdbId == 123 && requestClient.lastIs4k);
+    auto series = media();
+    series.mediaType = "tv";
+    series.selectedSeasons = {1, 3};
+    assert(executor.requestMedia(endpoint(), series, target()));
+    assert((requestClient.lastSeasons == std::vector<int>{1, 3}));
+    assert(std::get<SeerrRequestCompletion>(completions.events.back()).requestedItem.selectedSeasons ==
+           series.selectedSeasons);
+
     tasks.accept = false;
     const auto completionCount = completions.events.size();
     assert(!executor.connect("https://seerr.example.nz", jellyfin, false));
@@ -244,6 +276,7 @@ int main() {
     assert(!executor.refreshStorage(endpoint()));
     assert(!executor.refreshPending(endpoint()));
     assert(!executor.search(endpoint(), "matrix", 13));
+    assert(!executor.loadSeasons(endpoint(), 123, false, 43));
     assert(completions.events.size() == completionCount);
 
     return 0;

@@ -6,6 +6,7 @@
 #include "seerr_media.hpp"
 #include "seerr_quick_connect.hpp"
 #include "seerr_storage.hpp"
+#include "seerr_seasons.hpp"
 
 #include <jni.h>
 
@@ -37,6 +38,8 @@ public:
     ApiValueResult<int> requestMedia(const std::string& server, const SeerrAuth& auth, const SeerrMediaItem& item,
                                      const SeerrStorageTarget* target = nullptr) const;
     ApiResult deleteRequest(const std::string& server, const SeerrAuth& auth, int requestId) const;
+    ApiValueResult<std::vector<SeerrSeason>> seasons(const std::string& server, const SeerrAuth& auth, int tmdbId,
+                                                     bool is4k) const;
     ApiValueResult<std::string> downloadImage(const std::string& url) const;
 
 private:

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 struct SeerrMediaItem {
     std::string id;
@@ -20,6 +21,7 @@ struct SeerrMediaItem {
     int mediaStatus = 0;
     bool requested = false;
     bool available = false;
+    std::vector<int> selectedSeasons;
 
     [[nodiscard]] bool valid() const {
         return !id.empty() && tmdbId > 0 && (mediaType == "movie" || mediaType == "tv");

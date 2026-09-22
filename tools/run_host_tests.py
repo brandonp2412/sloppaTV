@@ -15,6 +15,9 @@ BUILD_DIR = ROOT / "build" / "host-tests"
 TEMP_DIR = BUILD_DIR / "tmp"
 
 CPP_TESTS = [
+    "seerr_season_picker_renderer_test.cpp",
+    "seerr_app_coordinator_test.cpp",
+    "seerr_seasons_test.cpp",
     "account_async_executor_test.cpp",
     "account_screen_test.cpp",
     "app_settings_test.cpp",
