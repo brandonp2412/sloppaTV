@@ -223,18 +223,17 @@ public:
         height = std::round(height);
         const float radius = std::min(material_tv::cornerLarge, height * 0.5f);
         renderer_.roundedRect(x, y, width, height, radius, material_tv::surface);
-        renderer_.roundedOutline(x, y, width, height, radius, 1.0f, material_tv::outlineVariant);
     }
 
     std::array<float, 4> drawButtonSurface(float x, float y, float width, float height, bool focused,
                                            bool primary = false, bool destructive = false) {
         return drawFocusedSurface(x, y, width, height, focused, primary, destructive, materialButtonFocusScale(),
-                                  std::min(material_tv::cornerLarge, height * 0.5f), !primary);
+                                  std::min(material_tv::cornerLarge, height * 0.5f));
     }
 
     std::array<float, 4> drawTabSurface(float x, float y, float width, float height, bool focused, bool selected) {
         return drawFocusedSurface(x, y, width, height, focused, selected, false, materialTabFocusScale(),
-                                  material_tv::cornerLarge, !selected);
+                                  std::min(material_tv::cornerLarge, height * 0.5f));
     }
 
     std::array<float, 4> drawInputSurface(float x, float y, float width, float height, bool focused,
@@ -311,7 +310,6 @@ public:
         y = std::round(y);
         renderer_.roundedRect(x, y, width, height, height * 0.5f,
                               selected ? material_tv::primaryContainer : material_tv::surfaceContainer);
-        if (!selected) renderer_.roundedOutline(x, y, width, height, height * 0.5f, 1.0f, material_tv::outline);
         drawCenteredSingleLineFit(x, y, width, height, scale, displayLabel,
                                   selected ? material_tv::onSurface : material_tv::onSurfaceSecondary, 14.0f, 4.0f);
         return width;
@@ -324,7 +322,6 @@ public:
             return color;
         };
         renderer_.roundedRect(x, y, width, height, radius, faded(material_tv::surfaceContainer));
-        renderer_.roundedOutline(x, y, width, height, radius, 1.0f, faded(material_tv::outline));
         const std::string& source = item.type == "Episode" && !item.seriesName.empty() ? item.seriesName : item.name;
         std::string initial = "?";
         const auto first =

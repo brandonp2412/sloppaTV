@@ -75,7 +75,6 @@ void renderHomeScreen(RendererLike& renderer, const std::vector<JellyfinHomeRow>
     const bool toolbarFocused = state.row() < 0;
     const bool hasBrandMark = drawBrandMark(72.0f, 27.0f, 72.0f);
     renderer.text(hasBrandMark ? 160.0f : 72.0f, 42.0f, 3.0f, "sloppaTV", style.text, 430.0f);
-    renderer.roundedRect(hasBrandMark ? 160.0f : 72.0f, 120.0f, 86.0f, 3.0f, 1.5f, style.brandGold);
 
     const std::array<std::string_view, 3> navLabels{"Home", "Search", "Settings"};
     const std::array<int, 3> navIndices{1, 2, 3};
