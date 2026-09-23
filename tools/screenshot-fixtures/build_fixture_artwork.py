@@ -23,6 +23,25 @@ def landscape(source: str, output: str, size: tuple[int, int] = (1280, 720)) -> 
     fitted.save(ART / output, quality=86, optimize=True)
 
 
+def anthology_artwork(sources: tuple[str, str, str], poster_output: str, backdrop_output: str) -> None:
+    poster = Image.new("RGB", (600, 900))
+    for index, source in enumerate(sources):
+        image = Image.open(ART / source).convert("RGB")
+        band = ImageOps.fit(image, (600, 300), method=Image.Resampling.LANCZOS)
+        poster.paste(band, (0, index * 300))
+    poster.save(ART / poster_output, quality=88, optimize=True)
+
+    backdrop = Image.new("RGB", (1280, 720))
+    widths = (427, 426, 427)
+    x = 0
+    for source, width in zip(sources, widths, strict=True):
+        image = Image.open(ART / source).convert("RGB")
+        panel = ImageOps.fit(image, (width, 720), method=Image.Resampling.LANCZOS)
+        backdrop.paste(panel, (x, 0))
+        x += width
+    backdrop.save(ART / backdrop_output, quality=86, optimize=True)
+
+
 def episode_variant(output: str, *, crop_shift: float, brightness: float) -> None:
     image = Image.open(ART / "caminandes-backdrop.png").convert("RGB")
     width, height = image.size
@@ -56,6 +75,26 @@ def main() -> None:
     landscape("sprite-fright-poster.jpg", "sprite-fright-backdrop.jpg")
     landscape("daily-dweebs-poster.png", "daily-dweebs-backdrop.jpg")
     cover("glass-half-backdrop.png", "glass-half-poster.jpg")
+    anthology_artwork(
+        ("elephants-dream-backdrop.jpg", "big-buck-bunny-backdrop.png", "sintel-backdrop.png"),
+        "open-classics-series.jpg",
+        "open-classics-backdrop.jpg",
+    )
+    anthology_artwork(
+        ("tears-of-steel-backdrop.jpg", "spring-backdrop.jpg", "sprite-fright-backdrop.jpg"),
+        "open-worlds-series.jpg",
+        "open-worlds-backdrop.jpg",
+    )
+    anthology_artwork(
+        ("glass-half-backdrop.png", "coffee-run-backdrop.png", "daily-dweebs-backdrop.jpg"),
+        "blender-shorts-series.jpg",
+        "blender-shorts-backdrop.jpg",
+    )
+    anthology_artwork(
+        ("spring-backdrop.jpg", "coffee-run-backdrop.png", "sprite-fright-backdrop.jpg"),
+        "modern-open-movies-series.jpg",
+        "modern-open-movies-backdrop.jpg",
+    )
     library_tile("big-buck-bunny-backdrop.png", "movies-library.jpg")
     library_tile("caminandes-backdrop.png", "shows-library.jpg")
     avatar("big-buck-bunny-backdrop.png", "fixture-user.jpg")

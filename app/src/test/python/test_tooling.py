@@ -246,6 +246,25 @@ class ScreenshotFixtureToolingTest(unittest.TestCase):
         self.assertEqual(len(body), 128)
         self.assertTrue(headers["content-range"].startswith("bytes 0-127/"))
 
+    def test_home_resume_row_has_distinct_artwork_and_progress(self) -> None:
+        status, _, body = self.request("GET", "/Users/fixture-user/Items/Resume")
+        self.assertEqual(status, 200)
+        items = json.loads(body)["Items"]
+        self.assertEqual(len(items), 6)
+
+        progress = [round(100 * item["UserData"]["PlaybackPositionTicks"] / item["RunTimeTicks"]) for item in items]
+        self.assertEqual(progress, [12, 27, 44, 61, 78, 91])
+
+        artwork = [screenshot_fixture_server.PRIMARY_ART[item["Id"]] for item in items]
+        self.assertEqual(len(set(artwork)), len(artwork))
+
+        series_artwork = {
+            screenshot_fixture_server.PRIMARY_ART[item["Id"]] for item in screenshot_fixture_server.SERIES
+        }
+        movie_artwork = {screenshot_fixture_server.PRIMARY_ART[item["Id"]] for item in screenshot_fixture_server.MOVIES}
+        self.assertEqual(len(series_artwork), len(screenshot_fixture_server.SERIES))
+        self.assertTrue(series_artwork.isdisjoint(movie_artwork))
+
 
 class WaydroidToolingTest(unittest.TestCase):
     def test_ci_screenshot_suite_visually_covers_rich_catalog_and_selects_eight_store_screens(self) -> None:
@@ -329,6 +348,12 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("GET /Shows/series-open-classics/Seasons", fixture_assertions)
         self.assertIn("GET /Shows/series-open-classics/Episodes", fixture_assertions)
         self.assertIn("POST /Items/movie-big-buck-bunny/PlaybackInfo", fixture_assertions)
+        playback_index = next(
+            index for index, step in enumerate(suite["steps"]) if step["action"] == "playback_session"
+        )
+        playback_step = suite["steps"][playback_index]
+        self.assertGreaterEqual(playback_step.get("wait_seconds", 0), 1.2)
+        self.assertLessEqual(suite["steps"][playback_index - 2].get("wait_seconds", 0), 0.5)
 
     def test_main_branch_pipeline_publishes_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")

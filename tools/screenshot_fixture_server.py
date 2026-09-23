@@ -494,10 +494,10 @@ PRIMARY_ART = {
     EPISODES[0]["Id"]: "caminandes-llama-drama.jpg",
     EPISODES[1]["Id"]: "caminandes-gran-dillama.jpg",
     EPISODES[2]["Id"]: "caminandes-llamigos.jpg",
-    OPEN_CLASSICS["Id"]: "elephants-dream-poster.jpg",
-    OPEN_WORLDS["Id"]: "spring-poster.jpg",
-    BLENDER_SHORTS["Id"]: "daily-dweebs-poster.png",
-    MODERN_OPEN_MOVIES["Id"]: "sprite-fright-poster.jpg",
+    OPEN_CLASSICS["Id"]: "open-classics-series.jpg",
+    OPEN_WORLDS["Id"]: "open-worlds-series.jpg",
+    BLENDER_SHORTS["Id"]: "blender-shorts-series.jpg",
+    MODERN_OPEN_MOVIES["Id"]: "modern-open-movies-series.jpg",
     OPEN_CLASSICS_SEASON["Id"]: "elephants-dream-poster.jpg",
     OPEN_WORLDS_SEASON["Id"]: "spring-poster.jpg",
     BLENDER_SHORTS_SEASON["Id"]: "daily-dweebs-poster.png",
@@ -535,10 +535,10 @@ THUMB_ART = {
     EPISODES[0]["Id"]: "caminandes-llama-drama.jpg",
     EPISODES[1]["Id"]: "caminandes-gran-dillama.jpg",
     EPISODES[2]["Id"]: "caminandes-llamigos.jpg",
-    OPEN_CLASSICS["Id"]: "elephants-dream-backdrop.jpg",
-    OPEN_WORLDS["Id"]: "spring-backdrop.jpg",
-    BLENDER_SHORTS["Id"]: "glass-half-backdrop.png",
-    MODERN_OPEN_MOVIES["Id"]: "sprite-fright-backdrop.jpg",
+    OPEN_CLASSICS["Id"]: "open-classics-backdrop.jpg",
+    OPEN_WORLDS["Id"]: "open-worlds-backdrop.jpg",
+    BLENDER_SHORTS["Id"]: "blender-shorts-backdrop.jpg",
+    MODERN_OPEN_MOVIES["Id"]: "modern-open-movies-backdrop.jpg",
     OPEN_CLASSICS_EPISODES[0]["Id"]: "elephants-dream-backdrop.jpg",
     OPEN_CLASSICS_EPISODES[1]["Id"]: "big-buck-bunny-backdrop.png",
     OPEN_CLASSICS_EPISODES[2]["Id"]: "sintel-backdrop.png",
@@ -564,10 +564,10 @@ BACKDROP_ART = {
     DAILY_DWEEBS["Id"]: "daily-dweebs-backdrop.jpg",
     CAMINANDES["Id"]: "caminandes-backdrop.png",
     SEASON_ONE["Id"]: "caminandes-backdrop.png",
-    OPEN_CLASSICS["Id"]: "elephants-dream-backdrop.jpg",
-    OPEN_WORLDS["Id"]: "spring-backdrop.jpg",
-    BLENDER_SHORTS["Id"]: "glass-half-backdrop.png",
-    MODERN_OPEN_MOVIES["Id"]: "sprite-fright-backdrop.jpg",
+    OPEN_CLASSICS["Id"]: "open-classics-backdrop.jpg",
+    OPEN_WORLDS["Id"]: "open-worlds-backdrop.jpg",
+    BLENDER_SHORTS["Id"]: "blender-shorts-backdrop.jpg",
+    MODERN_OPEN_MOVIES["Id"]: "modern-open-movies-backdrop.jpg",
     OPEN_CLASSICS_SEASON["Id"]: "elephants-dream-backdrop.jpg",
     OPEN_WORLDS_SEASON["Id"]: "spring-backdrop.jpg",
     BLENDER_SHORTS_SEASON["Id"]: "glass-half-backdrop.png",
@@ -753,19 +753,20 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         if path.endswith("/Items/Resume"):
-            bunny_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(BIG_BUCK_BUNNY))
-            bunny_resume["UserData"]["PlaybackPositionTicks"] = ticks(238)
-            spring_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(SPRING))
-            spring_resume["UserData"]["PlaybackPositionTicks"] = ticks(132)
-            coffee_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(COFFEE_RUN))
-            coffee_resume["UserData"]["PlaybackPositionTicks"] = ticks(54)
-            sprite_resume: dict[str, Any] = cast(dict[str, Any], deepcopy(SPRITE_FRIGHT))
-            sprite_resume["UserData"]["PlaybackPositionTicks"] = ticks(276)
-            self.send_json(
-                list_payload(
-                    [bunny_resume, EPISODES[1], spring_resume, coffee_resume, sprite_resume, BLENDER_SHORTS_EPISODES[1]]
-                )
-            )
+            resume_items: list[tuple[dict[str, object], int]] = [
+                (BIG_BUCK_BUNNY, 76),
+                (EPISODES[1], 39),
+                (SPRING, 204),
+                (COFFEE_RUN, 113),
+                (SPRITE_FRIGHT, 491),
+                (ELEPHANTS_DREAM, 599),
+            ]
+            values: list[dict[str, Any]] = []
+            for source, position_seconds in resume_items:
+                item = cast(dict[str, Any], deepcopy(source))
+                item["UserData"]["PlaybackPositionTicks"] = ticks(position_seconds)
+                values.append(item)
+            self.send_json(list_payload(values))
             return
 
         if path == "/Shows/NextUp":
