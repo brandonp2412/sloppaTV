@@ -251,8 +251,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         const PlayerVideoBounds videoBounds = playerVideoBounds(videoState);
         const bool hasLetterboxBars =
             videoState.zoomMode == VideoZoomMode::Fit &&
-            (videoBounds.x > 1.0f || videoBounds.y > 1.0f ||
-             videoBounds.width < videoState.logicalWidth - 2.0f || videoBounds.height < videoState.logicalHeight - 2.0f);
+            (videoBounds.x > 1.0f || videoBounds.y > 1.0f || videoBounds.width < videoState.logicalWidth - 2.0f ||
+             videoBounds.height < videoState.logicalHeight - 2.0f);
         if (settings.ambientLetterboxBars && hasLetterboxBars) {
             auto& ambientBars = playerScreenState.ambientBars();
             if (status == PlayerStatus::Playing && ambientBars.sampleDue(now)) {
@@ -305,11 +305,9 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             .subtitleTextScale = subtitleScale,
             .subtitleLineHeight = subtitleVisible ? 11.0f * subtitleScale * uiTextScale(settings.uiTextSize) : 0.0f,
             .logicalWidth = Renderer::logicalWidth(),
-            .subtitleBottomY =
-                subtitleVisible
-                    ? subtitleBottomY(showOverlay, playerScreenState.controlsActive(now), settings.subtitlePosition,
-                                      skipAffordanceVisible)
-                    : 0.0f,
+            .subtitleBottomY = subtitleVisible ? subtitleBottomY(showOverlay, playerScreenState.controlsActive(now),
+                                                                 settings.subtitlePosition, skipAffordanceVisible)
+                                               : 0.0f,
             .subtitleBackground = settings.subtitleBackground,
             .skipButtonVisible = skipButtonVisible,
             .skipLabel = skipLabel,
@@ -466,9 +464,9 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         ui.drawLeftAlignedSingleLineFit(sheetX + 64.0f, sheetY + 42.0f, sheetWidth - 128.0f, 52.0f, 2.1f,
                                         enabling ? "Enable skip for this show?" : "Disable skip for this show?",
                                         material_tv::onSurface);
-        const std::string showName =
-            playerScreenState.skipDisableSeriesName().empty() ? activeItem.seriesName
-                                                               : playerScreenState.skipDisableSeriesName();
+        const std::string showName = playerScreenState.skipDisableSeriesName().empty()
+                                         ? activeItem.seriesName
+                                         : playerScreenState.skipDisableSeriesName();
         if (!showName.empty()) {
             ui.drawLeftAlignedSingleLineFit(sheetX + 64.0f, sheetY + 105.0f, sheetWidth - 128.0f, 42.0f, 1.45f,
                                             showName, material_tv::onSurfaceVariant);

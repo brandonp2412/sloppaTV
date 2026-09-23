@@ -102,5 +102,19 @@ int main() {
     assert(afterCancel.status == 200);
     assert(afterCancelAttempts == 1);
 
+    HttpRetryCoordinator cancelledDuringFetch({1ms, 1ms});
+    int cancelledDuringFetchAttempts = 0;
+    const HttpResponse cancelledInsideFetch = cancelledDuringFetch.request(
+        "GET",
+        [&](uint64_t) {
+            ++cancelledDuringFetchAttempts;
+            cancelledDuringFetch.cancelPending();
+            return response(200);
+        },
+        [](const HttpResponse&, std::chrono::milliseconds) { assert(false); });
+    assert(cancelledInsideFetch.status == 0);
+    assert(cancelledInsideFetch.error == "Request cancelled");
+    assert(cancelledDuringFetchAttempts == 1);
+
     return 0;
 }

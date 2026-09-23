@@ -82,6 +82,7 @@ public:
     }
 
     [[nodiscard]] std::size_t sampleCount() const { return sampleCount_; }
+
     [[nodiscard]] AmbientBarColor targetColor() const { return target_; }
 
 private:

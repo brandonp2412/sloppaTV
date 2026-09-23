@@ -312,6 +312,7 @@ public:
     }
 
     [[nodiscard]] bool skipButtonPressPending() const { return skipButtonPressPending_; }
+
     [[nodiscard]] bool skipButtonLongPressed() const { return skipButtonLongPressed_; }
 
     void openSkipDisablePrompt() {
@@ -344,10 +345,13 @@ public:
     }
 
     [[nodiscard]] bool skipDisablePromptVisible() const { return skipDisablePromptVisible_; }
+
     [[nodiscard]] bool skipDisableSelected() const { return skipDisableSelected_; }
 
     [[nodiscard]] bool skipDisableEnabling() const { return skipDisableEnabling_; }
+
     [[nodiscard]] const std::string& skipDisableSeriesId() const { return skipDisableSeriesId_; }
+
     [[nodiscard]] const std::string& skipDisableSeriesName() const { return skipDisableSeriesName_; }
 
     void selectSkipDisable(bool disable) { skipDisableSelected_ = disable; }
@@ -362,6 +366,7 @@ public:
     }
 
     AmbientBarColorState& ambientBars() { return ambientBars_; }
+
     const AmbientBarColorState& ambientBars() const { return ambientBars_; }
 
 private:
@@ -396,6 +401,7 @@ private:
     int lastSeekTargetMs_ = -1;
     TimePoint lastSeekIssued_{};
     bool pendingSeekRecoveryEnabled_ = false;
+
     void resetSkipButtonInteraction() {
         skipButtonPressPending_ = false;
         skipButtonLongPressed_ = false;

@@ -21,22 +21,16 @@ struct FakeRenderer {
         gradientBottomAlpha.push_back(bottom.alpha);
     }
 
-    void roundedRect(float, float, float, float, float, TestColor) {
-        ++roundedRects;
-    }
+    void roundedRect(float, float, float, float, float, TestColor) { ++roundedRects; }
 
     void outlinedText(float, float, float, std::string_view value, TestColor, TestColor, float) {
         ++outlinedTexts;
         subtitle = std::string(value);
     }
 
-    float textWidth(float, std::string_view value) {
-        return static_cast<float>(value.size()) * 10.0f;
-    }
+    float textWidth(float, std::string_view value) { return static_cast<float>(value.size()) * 10.0f; }
 
-    void triangle(float, float, float, float, float, float, TestColor) {
-        ++triangles;
-    }
+    void triangle(float, float, float, float, float, float, TestColor) { ++triangles; }
 
     void textVerticallyCentered(float, float, float, float, std::string_view value, TestColor, float) {
         ++centeredTexts;

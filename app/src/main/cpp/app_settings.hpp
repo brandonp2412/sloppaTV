@@ -194,9 +194,8 @@ inline SettingChangeEffect adjustStillWatchingAfter(AppSettings& settings, int d
 }
 
 inline bool skipSegmentsDisabledForSeries(const AppSettings& settings, std::string_view seriesId) {
-    return !seriesId.empty() &&
-           std::find(settings.skipDisabledSeriesIds.begin(), settings.skipDisabledSeriesIds.end(), seriesId) !=
-               settings.skipDisabledSeriesIds.end();
+    return !seriesId.empty() && std::find(settings.skipDisabledSeriesIds.begin(), settings.skipDisabledSeriesIds.end(),
+                                          seriesId) != settings.skipDisabledSeriesIds.end();
 }
 
 inline bool setSkipSegmentsDisabledForSeries(AppSettings& settings, std::string seriesId, bool disabled) {

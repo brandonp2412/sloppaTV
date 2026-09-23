@@ -1615,7 +1615,6 @@ private:
                                     decltype(playbackRequests_), decltype(externalPlaybackCoordinator_),
                                     SimilarPrefetchController, NativeExternalPlayer>
         screenInteractions_;
-
 };
 } // namespace
 

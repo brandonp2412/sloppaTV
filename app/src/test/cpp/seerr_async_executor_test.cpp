@@ -59,6 +59,7 @@ struct FakeSeerrClient {
         result.value.push_back(season);
         return result;
     }
+
     ApiValueResult<SeerrQuickConnectRequest> initiateQuickConnect(const std::string& server) {
         lastServer = server;
         SeerrQuickConnectRequest request;

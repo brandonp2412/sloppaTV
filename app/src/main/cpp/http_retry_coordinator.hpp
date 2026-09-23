@@ -17,8 +17,7 @@ public:
     using RetryDelays = std::array<std::chrono::milliseconds, 2>;
 
     HttpRetryCoordinator()
-        : HttpRetryCoordinator(
-              RetryDelays{std::chrono::milliseconds{250}, std::chrono::milliseconds{750}}) {}
+        : HttpRetryCoordinator(RetryDelays{std::chrono::milliseconds{250}, std::chrono::milliseconds{750}}) {}
 
     explicit HttpRetryCoordinator(RetryDelays retryDelays) : retryDelays_(retryDelays) {}
 
@@ -31,16 +30,16 @@ public:
             if (cancelled(generation)) return cancelledResponse();
 
             response = fetch(generation);
+            // fetch() may call cancelPending() or race with it on another thread.
+            // cppcheck-suppress identicalConditionAfterEarlyExit
             if (cancelled(generation)) return cancelledResponse();
-            const bool retryable =
-                shouldRetryTransientHttpResponse(method, response.status, !response.error.empty());
+            const bool retryable = shouldRetryTransientHttpResponse(method, response.status, !response.error.empty());
             if (!retryable || attempt == retryCount) return response;
 
             const auto delay = retryDelays_[attempt];
             onRetry(response, delay);
             std::unique_lock retryLock(retryMutex_);
-            if (retryWake_.wait_for(retryLock, delay,
-                                    [&] { return cancelled(generation); })) {
+            if (retryWake_.wait_for(retryLock, delay, [&] { return cancelled(generation); })) {
                 return cancelledResponse();
             }
         }

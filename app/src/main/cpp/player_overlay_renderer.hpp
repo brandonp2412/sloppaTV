@@ -40,39 +40,36 @@ void renderPlayerOverlay(RendererLike& renderer, const PlayerOverlayRenderState&
     }
 
     if (!state.subtitleText.empty()) {
-        renderPlayerSubtitle(
-            renderer,
-            PlayerSubtitleRenderState{
-                .text = state.subtitleText,
-                .boxMaxWidth = state.subtitleBoxMaxWidth,
-                .textScale = state.subtitleTextScale,
-                .lineHeight = state.subtitleLineHeight,
-                .logicalWidth = state.logicalWidth,
-                .bottomY = state.subtitleBottomY,
-                .showBackground = state.subtitleBackground,
-            },
-            PlayerSubtitleRenderStyle<ColorLike>{
-                .cornerRadius = style.subtitleCornerRadius,
-                .text = style.text,
-                .background = makeColor(0.0f, 0.0f, 0.0f, 0.80f),
-                .outline = makeColor(0.0f, 0.0f, 0.0f, 0.92f),
-            },
-            fitTextLines);
+        renderPlayerSubtitle(renderer,
+                             PlayerSubtitleRenderState{
+                                 .text = state.subtitleText,
+                                 .boxMaxWidth = state.subtitleBoxMaxWidth,
+                                 .textScale = state.subtitleTextScale,
+                                 .lineHeight = state.subtitleLineHeight,
+                                 .logicalWidth = state.logicalWidth,
+                                 .bottomY = state.subtitleBottomY,
+                                 .showBackground = state.subtitleBackground,
+                             },
+                             PlayerSubtitleRenderStyle<ColorLike>{
+                                 .cornerRadius = style.subtitleCornerRadius,
+                                 .text = style.text,
+                                 .background = makeColor(0.0f, 0.0f, 0.0f, 0.80f),
+                                 .outline = makeColor(0.0f, 0.0f, 0.0f, 0.92f),
+                             },
+                             fitTextLines);
     }
 
     if (state.skipButtonVisible) {
-        renderPlayerSkipButton(
-            renderer, PlayerSkipButtonRenderState{.label = state.skipLabel, .y = state.skipButtonY},
-            PlayerSkipButtonRenderStyle<ColorLike>{.text = style.text}, drawButton, fitTextLines);
+        renderPlayerSkipButton(renderer, PlayerSkipButtonRenderState{.label = state.skipLabel, .y = state.skipButtonY},
+                               PlayerSkipButtonRenderStyle<ColorLike>{.text = style.text}, drawButton, fitTextLines);
     }
 
     if (state.seekFeedbackVisible) {
-        renderPlayerSeekFeedback(
-            renderer,
-            PlayerSeekFeedbackRenderState{
-                .seconds = state.seekFeedbackSeconds,
-                .fade = state.seekFeedbackAlpha,
-            },
-            makeColor);
+        renderPlayerSeekFeedback(renderer,
+                                 PlayerSeekFeedbackRenderState{
+                                     .seconds = state.seekFeedbackSeconds,
+                                     .fade = state.seekFeedbackAlpha,
+                                 },
+                                 makeColor);
     }
 }
