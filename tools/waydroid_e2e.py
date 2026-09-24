@@ -23,7 +23,7 @@ COMPONENT = DEFAULT_COMPONENT
 
 LOG_TOKENS = (
     "sloppaTV",
-    "ExoPlayer",
+    "libmpv",
     "MediaCodec",
     "CCodec",
     "libass",
