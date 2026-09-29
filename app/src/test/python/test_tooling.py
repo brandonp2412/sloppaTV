@@ -358,7 +358,7 @@ class WaydroidToolingTest(unittest.TestCase):
     def test_main_branch_pipeline_publishes_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
         self.assertIn("publish-play-store:", workflow)
-        self.assertIn("needs: screenshots", workflow)
+        self.assertRegex(workflow, r"needs:\s*(?:screenshots|\[[^\n]*\bscreenshots\b[^\n]*\])")
         self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
         self.assertIn('ruby-version: "3.4"', workflow)
         self.assertIn("secrets.SLOPPATV_KEYSTORE_BASE64", workflow)
