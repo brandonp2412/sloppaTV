@@ -223,7 +223,6 @@ public final class SloppaNativeActivity extends NativeActivity {
     private MediaSession createMediaSessionOnMainThread() {
         try {
             MediaSession session = new MediaSession(this, "sloppaTV");
-            session.setFlags(MediaSession.FLAG_HANDLES_MEDIA_BUTTONS | MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS);
             session.setCallback(createMediaSessionCallback());
             return session;
         } catch (RuntimeException ignored) {
@@ -414,7 +413,7 @@ public final class SloppaNativeActivity extends NativeActivity {
         return new int[] { Math.max(2, Math.min(8, maxChannels)), directMask };
     }
 
-    private static boolean supportsDirectEncoding(int encoding, int channelMask) {
+    private boolean supportsDirectEncoding(int encoding, int channelMask) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return false;
         try {
             android.media.AudioAttributes attributes = new android.media.AudioAttributes.Builder()
@@ -426,10 +425,24 @@ public final class SloppaNativeActivity extends NativeActivity {
                 .setSampleRate(48_000)
                 .setChannelMask(channelMask)
                 .build();
-            return AudioTrack.isDirectPlaybackSupported(format, attributes);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                AudioManager manager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+                return manager != null
+                    && manager.getDirectPlaybackSupport(format, attributes)
+                        != AudioManager.DIRECT_PLAYBACK_NOT_SUPPORTED;
+            }
+            return isDirectPlaybackSupportedLegacy(format, attributes);
         } catch (RuntimeException ignored) {
             return false;
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private static boolean isDirectPlaybackSupportedLegacy(
+        AudioFormat format,
+        android.media.AudioAttributes attributes
+    ) {
+        return AudioTrack.isDirectPlaybackSupported(format, attributes);
     }
 
     public static MediaSession.Callback createMediaSessionCallback() {

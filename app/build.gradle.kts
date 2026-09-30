@@ -129,6 +129,10 @@ gradle.taskGraph.whenReady {
     }
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-Xlint:deprecation")
+}
+
 dependencies {
     implementation(files("libs/mpv-core-no-vulkan.aar"))
 }

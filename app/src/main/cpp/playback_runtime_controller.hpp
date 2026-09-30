@@ -102,8 +102,15 @@ public:
                               AppSettings& settings, RequestEpoch& playbackEpoch, bool& loading, std::string& error,
                               const std::string& dataPath)
         : coordinator_(coordinator), screenState_(screenState), player_(player), videoSurface_(videoSurface),
-          session_(session), settings_(settings), playbackEpoch_(playbackEpoch), loading_(loading), error_(error),
-          dataPath_(dataPath) {}
+          session_(session), settings_(settings), playbackEpoch_(playbackEpoch),
+#ifndef SLOPPATV_BENCHMARK
+          loading_(loading),
+#endif
+          error_(error), dataPath_(dataPath) {
+#ifdef SLOPPATV_BENCHMARK
+        (void)loading;
+#endif
+    }
 
     [[nodiscard]] PlaybackTrackSelectionPolicy trackSelectionPolicy() const {
         return {
@@ -647,7 +654,9 @@ private:
     JellyfinSession& session_;
     AppSettings& settings_;
     RequestEpoch& playbackEpoch_;
+#ifndef SLOPPATV_BENCHMARK
     bool& loading_;
+#endif
     std::string& error_;
     const std::string& dataPath_;
     std::string softwareDecodeItemId_;
