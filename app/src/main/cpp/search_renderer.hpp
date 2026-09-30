@@ -119,8 +119,8 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     };
 
     auto renderResultRow = [&](int semanticRow, int visibleSlot) {
-        const float labelY = visibleSlot == 0 ? 258.0f : 670.0f;
-        const float cardY = visibleSlot == 0 ? 314.0f : 724.0f;
+        const float labelY = visibleSlot == 0 ? 258.0f : 710.0f;
+        const float cardY = visibleSlot == 0 ? 314.0f : 764.0f;
         const int count = state.rowItemCount(semanticRow);
         const std::string label = semanticRow == SearchScreenState::kLibraryRow
                                       ? "In your library"

@@ -95,8 +95,8 @@ def main() -> None:
         "modern-open-movies-series.jpg",
         "modern-open-movies-backdrop.jpg",
     )
-    library_tile("big-buck-bunny-backdrop.png", "movies-library.jpg")
-    library_tile("caminandes-backdrop.png", "shows-library.jpg")
+    library_tile("open-classics-backdrop.jpg", "movies-library.jpg")
+    library_tile("blender-shorts-backdrop.jpg", "shows-library.jpg")
     avatar("big-buck-bunny-backdrop.png", "fixture-user.jpg")
     episode_variant("caminandes-llama-drama.jpg", crop_shift=0.0, brightness=0.86)
     episode_variant("caminandes-gran-dillama.jpg", crop_shift=0.48, brightness=1.0)

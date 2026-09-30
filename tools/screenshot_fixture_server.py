@@ -754,8 +754,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path.endswith("/Items/Resume"):
             resume_items: list[tuple[dict[str, object], int]] = [
-                (BIG_BUCK_BUNNY, 76),
-                (EPISODES[1], 39),
+                (SINTEL, 107),
+                (TEARS_OF_STEEL, 198),
                 (SPRING, 204),
                 (COFFEE_RUN, 113),
                 (SPRITE_FRIGHT, 491),

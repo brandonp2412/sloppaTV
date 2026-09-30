@@ -254,6 +254,8 @@ class ScreenshotFixtureToolingTest(unittest.TestCase):
 
         progress = [round(100 * item["UserData"]["PlaybackPositionTicks"] / item["RunTimeTicks"]) for item in items]
         self.assertEqual(progress, [12, 27, 44, 61, 78, 91])
+        self.assertNotIn("Big Buck Bunny", [item["Name"] for item in items])
+        self.assertNotIn("Caminandes", [item.get("SeriesName", item["Name"]) for item in items])
 
         artwork = [screenshot_fixture_server.PRIMARY_ART[item["Id"]] for item in items]
         self.assertEqual(len(set(artwork)), len(artwork))
@@ -354,6 +356,19 @@ class WaydroidToolingTest(unittest.TestCase):
         playback_step = suite["steps"][playback_index]
         self.assertGreaterEqual(playback_step.get("wait_seconds", 0), 1.2)
         self.assertLessEqual(suite["steps"][playback_index - 2].get("wait_seconds", 0), 0.5)
+
+        player_video_index = next(
+            index
+            for index, step in enumerate(suite["steps"])
+            if step.get("action") == "capture" and step.get("name") == "10-player-cc-video"
+        )
+        player_controls_index = next(
+            index
+            for index, step in enumerate(suite["steps"])
+            if step.get("action") == "capture" and step.get("name") == "11-player-controls"
+        )
+        seek_steps = suite["steps"][player_video_index + 1 : player_controls_index]
+        self.assertGreaterEqual(sum(step.get("key") == "DPAD_RIGHT" for step in seek_steps), 18)
 
     def test_main_branch_pipeline_publishes_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")
