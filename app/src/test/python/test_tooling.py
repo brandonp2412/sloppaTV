@@ -366,6 +366,8 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn('expected_sha1="108F6DFFAD1F2307495808AFF7D89E07B1892DEF"', workflow)
         self.assertIn('release_aab="$(realpath "$release_aab")"', workflow)
         self.assertIn("bundle exec fastlane android production_artifact", workflow)
+        self.assertIn("generate_release_notes: true", workflow)
+        self.assertNotIn("Automated Android release from main with per-architecture APKs.", workflow)
         fastfile = (ROOT / "fastlane" / "Fastfile").read_text(encoding="utf-8")
         self.assertIn("File.expand_path(configured, project_root)", fastfile)
         self.assertIn("target: android-tv", workflow)

@@ -409,8 +409,7 @@ jobs:
           tag_name: ${{ steps.release.outputs.tag_name }}
           name: ${{ steps.release.outputs.release_name }}
           target_commitish: ${{ github.sha }}
-          body: |
-            Automated Android release from main with per-architecture APKs.
+          generate_release_notes: true
           files: release-assets/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
