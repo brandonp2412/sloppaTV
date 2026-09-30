@@ -7,7 +7,7 @@
 
   <p>
     <a href="https://play.google.com/store/apps/details?id=app.sloppatv"><img src="docs/brand/get-it-on-google-play.png" alt="Get sloppaTV on Google Play" height="80"></a>
-    <a href="https://github.com/brandonp2412/sloppaTV/releases/latest"><img src="docs/brand/get_it_on_github.svg" alt="Get sloppaTV on GitHub" height="80"></a>
+    <a href="https://github.com/brandonp2412/sloppaTV/releases/latest"><img src="docs/brand/get_it_on_github.png" alt="Get sloppaTV on GitHub" height="80"></a>
   </p>
 </div>
 
