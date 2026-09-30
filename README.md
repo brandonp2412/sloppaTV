@@ -1,6 +1,4 @@
 <div align="center">
-  <img src="docs/brand/sloppatv-theme.png" alt="sloppaTV caracal artwork" width="240">
-
   <h1>sloppaTV</h1>
 
   <p>A couch-first Jellyfin client for Android TV.</p>
