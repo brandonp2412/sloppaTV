@@ -8,6 +8,12 @@ on:
   schedule:
     - cron: "0 2 * * 1"
   workflow_dispatch:
+    inputs:
+      play_listing_only:
+        description: "Publish the current Google Play listing/screenshots without releasing a binary"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -17,7 +23,7 @@ env:
 
 jobs:
   release-gate:
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -68,6 +74,7 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
   build:
+    if: github.event_name != 'workflow_dispatch' || inputs.play_listing_only != true
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -355,6 +362,37 @@ jobs:
           fi
 
           exit "$publish_status"
+
+  publish-play-listing:
+    name: Publish Google Play listing metadata
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.play_listing_only == true }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out listing assets
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+
+      - name: Validate Google Play listing assets
+        run: python3 tools/sync_play_store_screenshots.py --validate-only
+
+      - name: Publish metadata and screenshots to Google Play
+        env:
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+          PLAY_TRACK: production
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${SUPPLY_JSON_KEY_DATA:?GOOGLE_PLAY_JSON_KEY secret is required}"
+          bundle exec fastlane android metadata
 
   create-github-release:
     name: Create GitHub release
