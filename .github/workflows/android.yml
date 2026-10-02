@@ -74,7 +74,6 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
   build:
-    if: github.event_name != 'workflow_dispatch' || inputs.play_listing_only != true
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -131,7 +130,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y clang-format clang-tidy cppcheck shellcheck
 
       - name: Set Play version code for main release
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
         shell: bash
         run: |
           play_version_code=$((100000 + GITHUB_RUN_NUMBER))
@@ -140,7 +139,7 @@ jobs:
           echo "Google Play version code: $play_version_code"
 
       - name: Configure Play signing identity
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
         shell: bash
         env:
           SLOPPATV_KEYSTORE_BASE64: ${{ secrets.SLOPPATV_KEYSTORE_BASE64 }}
@@ -217,11 +216,11 @@ jobs:
         run: ./gradlew --no-daemon test assembleDebug
 
       - name: Build signed benchmark and release artifacts
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
         run: ./gradlew --no-daemon assembleBenchmark assembleRelease bundleRelease
 
       - name: Build architecture release APKs
-        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
         run: ./gradlew --no-daemon -PSLOPPATV_SPLIT_APKS=true assembleRelease
 
       - name: Run C++ quality gates
@@ -272,7 +271,13 @@ jobs:
           profile: tv_1080p
           emulator-port: 5554
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: ANDROID_SERIAL=emulator-5554 SLOPPATV_APK="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)" ./tools/ci_screenshots.sh
+          script: |
+            release_apk="$(find artifacts/apks -type f -name '*x86_64-release.apk' -print -quit)"
+            debug_apk="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)"
+            screenshot_apk="${release_apk:-$debug_apk}"
+            test -n "$screenshot_apk"
+            echo "Capturing screenshots from $screenshot_apk"
+            ANDROID_SERIAL=emulator-5554 SLOPPATV_APK="$screenshot_apk" ./tools/ci_screenshots.sh
 
       - name: Verify Play Store screenshot packaging
         run: python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots
@@ -364,8 +369,9 @@ jobs:
           exit "$publish_status"
 
   publish-play-listing:
-    name: Publish Google Play listing metadata
+    name: Publish freshly generated Google Play listing
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.play_listing_only == true }}
+    needs: screenshots
     runs-on: ubuntu-latest
 
     steps:
@@ -375,14 +381,20 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
+      - name: Download freshly generated screenshots
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sloppaTV-screenshots
+          path: artifacts/ci-screenshots
+
+      - name: Replace listing screenshots with fresh captures
+        run: python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots
+
       - name: Set up Ruby
         uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1
         with:
           ruby-version: "3.4"
           bundler-cache: true
-
-      - name: Validate Google Play listing assets
-        run: python3 tools/sync_play_store_screenshots.py --validate-only
 
       - name: Publish metadata and screenshots to Google Play
         env:
@@ -397,7 +409,7 @@ jobs:
   create-github-release:
     name: Create GitHub release
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.release-gate.outputs.should_release == 'true' }}
-    needs: [build, release-gate]
+    needs: [build, screenshots, release-gate]
     runs-on: ubuntu-latest
     permissions:
       contents: write
