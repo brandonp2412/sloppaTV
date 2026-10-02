@@ -271,12 +271,12 @@ jobs:
           profile: tv_1080p
           emulator-port: 5554
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
-          script: |
-            release_apk="$(find artifacts/apks -type f -name '*x86_64-release.apk' -print -quit)"
-            debug_apk="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)"
-            screenshot_apk="${release_apk:-$debug_apk}"
-            test -n "$screenshot_apk"
-            echo "Capturing screenshots from $screenshot_apk"
+          script: >-
+            release_apk="$(find artifacts/apks -type f -name '*x86_64-release.apk' -print -quit)";
+            debug_apk="$(find artifacts/apks -type f -name '*-debug.apk' -print -quit)";
+            screenshot_apk="${release_apk:-$debug_apk}";
+            test -n "$screenshot_apk";
+            echo "Capturing screenshots from $screenshot_apk";
             ANDROID_SERIAL=emulator-5554 SLOPPATV_APK="$screenshot_apk" ./tools/ci_screenshots.sh
 
       - name: Verify Play Store screenshot packaging
