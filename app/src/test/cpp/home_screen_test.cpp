@@ -1,8 +1,10 @@
 #include "home_screen.hpp"
 #include "home_resume_overlay.hpp"
+#include "home_resume_merge.hpp"
 #include "home_visibility.hpp"
 
 #include <cassert>
+#include <filesystem>
 
 int main() {
     assert(homeRowDropsItemWhenPlayed("Continue Watching"));
@@ -225,6 +227,40 @@ int main() {
     const auto toolbarPlan = HomeScreenState::restorePlan(toolbarSnapshot, {nextUp, continueWatching});
     assert(toolbarSnapshot.toolbarFocused);
     assert(toolbarPlan.focusedRow == -1);
+    // A nonempty server Resume list must not suppress a different partly watched episode.
+    JellyfinItem resumedEpisode;
+    resumedEpisode.id = "tatami-e2";
+    resumedEpisode.type = "Episode";
+    resumedEpisode.positionTicks = 400;
+    resumedEpisode.runtimeTicks = 1000;
+    JellyfinItem brieflyPlayed;
+    brieflyPlayed.id = "tatami-e1";
+    brieflyPlayed.type = "Episode";
+    brieflyPlayed.positionTicks = 150;
+    brieflyPlayed.runtimeTicks = 1000;
+    // Some Jellyfin-compatible servers retain the played flag when rewatching.
+    brieflyPlayed.played = true;
+    JellyfinItem finished = brieflyPlayed;
+    finished.id = "finished";
+    finished.positionTicks = 1000;
+    JellyfinItem unstarted = brieflyPlayed;
+    unstarted.id = "unstarted";
+    unstarted.positionTicks = 0;
+    std::vector<JellyfinItem> serverResume{resumedEpisode};
+    mergeHomeResumeCandidates(serverResume, {brieflyPlayed, resumedEpisode, finished, unstarted});
+    assert(serverResume.size() == 2);
+    assert(serverResume[0].id == "tatami-e2");
+    assert(serverResume[1].id == "tatami-e1");
+    assert(serverResume[1].positionTicks == 150);
+    JellyfinItem trustedResume = resumedEpisode;
+    trustedResume.positionTicks = 0; // Some server responses omit UserData.
+    std::vector<JellyfinItem> trusted{trustedResume};
+    mergeHomeResumeCandidates(trusted, {brieflyPlayed});
+    assert(trusted.size() == 2 && trusted.front().id == "tatami-e2");
+    std::vector<JellyfinItem> emptyResume;
+    mergeHomeResumeCandidates(emptyResume, {brieflyPlayed});
+    assert(emptyResume.size() == 1 && emptyResume.front().id == "tatami-e1");
+
     // A just-stopped episode is visible even if the server Resume feed is still empty.
     HomeResumeOverlay overlay;
     JellyfinSession brandog;
@@ -238,6 +274,7 @@ int main() {
     tatami.type = "Episode";
     tatami.name = "Tatami Galaxy";
     tatami.runtimeTicks = 1000;
+    tatami.played = true; // Rewatch of an episode marked Watched on Remux.
     const auto now = HomeResumeOverlay::Clock::now();
     overlay.remember(brandog, tatami, 250, false, now);
     JellyfinHomeData remuxHome;
@@ -258,6 +295,21 @@ int main() {
     overlay.apply(brandog, remuxHome, now);
     assert(remuxHome.rows[0].items.size() == 1);
     assert(remuxHome.rows[0].items[0].positionTicks == 300);
+
+    // A partially watched rewatch survives a full app restart when the server
+    // still reports it as Watched and omits it from Resume.
+    const auto directory = std::filesystem::temp_directory_path() /
+        ("sloppatv-resume-test-" + std::to_string(now.time_since_epoch().count()));
+    std::filesystem::create_directories(directory);
+    overlay.persist(directory.string());
+    HomeResumeOverlay restored;
+    restored.restore(directory.string());
+    JellyfinHomeData restartedHome;
+    restored.apply(brandog, restartedHome);
+    assert(restartedHome.rows.size() == 1);
+    assert(restartedHome.rows[0].title == "Continue Watching");
+    assert(restartedHome.rows[0].items[0].id == "tatami-s1e1");
+    std::filesystem::remove_all(directory);
 
     JellyfinHomeData otherHome;
     otherHome.rows = {{"My Media", {}}, {"Next Up", {}}};
@@ -287,7 +339,12 @@ int main() {
     JellyfinHomeData lateHome;
     lateHome.rows = {{"My Media", {}}};
     overlay.apply(brandog, lateHome, now + std::chrono::minutes(11));
-    assert(lateHome.rows.size() == 1);
+    assert(lateHome.rows.size() == 2);
+    assert(lateHome.rows[0].title == "Continue Watching");
+    JellyfinHomeData expiredHome;
+    expiredHome.rows = {{"My Media", {}}};
+    overlay.apply(brandog, expiredHome, now + std::chrono::hours(24 * 31));
+    assert(expiredHome.rows.size() == 1);
     overlay.remember(brandog, tatami, 0, true, now);
     JellyfinHomeData completedHome;
     overlay.apply(brandog, completedHome, now);

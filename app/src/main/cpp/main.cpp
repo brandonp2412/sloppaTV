@@ -408,6 +408,7 @@ public:
         pendingDeepLinkItemId_ = launchRequest.itemId;
         pendingSearchQuery_ = launchRequest.searchQuery;
         accountSession_.load();
+        homeResume_.restore(dataPath_);
         if (const std::string warning = accountSession_.takeWarning(); !warning.empty())
             __android_log_print(ANDROID_LOG_WARN, kTag, "Unable to read session: %s", warning.c_str());
         if (!settings_.externalPlayerComponent.empty())
@@ -1476,6 +1477,7 @@ private:
         const PlaybackReleaseContext release = playbackCoordinator_.releaseContext(
             true, completed, session_.valid(), playerScreenState_.positionMs());
         homeResume_.remember(session_, release.item, release.plan.cachedPositionTicks, release.plan.markPlayed);
+        homeResume_.persist(dataPath_);
         playbackRequests_.release(true, completed);
         const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
         homeResume_.apply(session_, home_);

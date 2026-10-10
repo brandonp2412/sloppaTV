@@ -1,5 +1,6 @@
 #include "jellyfin.hpp"
 #include "audio_policy.hpp"
+#include "home_resume_merge.hpp"
 #include "home_screen.hpp"
 #include "jellyfin_item_parser.hpp"
 #include "json_boolean.hpp"
@@ -439,22 +440,22 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
                                                       "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" +
                                                       common,
                                                   headers(&session, session.deviceId)));
-        if (resume.ok && !resume.value.empty()) return resume;
         // The Resume index may exclude short sessions even though the item's
-        // UserData has a playable position. Inspect recently played video items
-        // instead of applying the same IsResumable filter a second time.
+        // UserData has a playable position. Import other unfinished episodes
+        // even if Resume already contains a different, resumable episode.
         auto fallback = parseItemList(http_.request(
             "GET", session.server + "/Users/" + session.userId +
                        "/Items?Recursive=true&IncludeItemTypes=Movie,Episode" +
                        "&SortBy=DatePlayed&SortOrder=Descending&Limit=100&EnableUserData=true" + common,
             headers(&session, session.deviceId)));
         if (!fallback.ok) return resume;
-        std::erase_if(fallback.value, [](const JellyfinItem& item) {
-            return item.played || item.positionTicks <= 0 ||
-                   (item.runtimeTicks > 0 && item.positionTicks >= item.runtimeTicks);
-        });
-        if (fallback.value.size() > 30) fallback.value.resize(30);
-        return fallback;
+        if (!resume.ok) {
+            resume.value.clear();
+            resume.error.clear();
+            resume.ok = true;
+        }
+        mergeHomeResumeCandidates(resume.value, std::move(fallback.value));
+        return resume;
     });
     auto nextUpFuture = std::async(std::launch::async, [this, &session, &common] {
         return parseItemList(http_.request("GET",
