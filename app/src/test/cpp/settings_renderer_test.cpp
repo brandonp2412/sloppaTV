@@ -8,6 +8,9 @@
 
 namespace {
 struct FakeRenderer {
+    std::vector<ui_icons::Glyph> icons;
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
     void text(float, float, float, std::string_view value, int, float) { texts.emplace_back(value); }
 
     void textVerticallyCentered(float, float, float, float, std::string_view value, int, float) {

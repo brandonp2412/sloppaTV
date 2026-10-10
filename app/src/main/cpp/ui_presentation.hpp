@@ -9,6 +9,7 @@
 #include "text_layout.hpp"
 #include "ui_components.hpp"
 #include "ui_labels.hpp"
+#include "ui_icons.hpp"
 #include "ui_policy.hpp"
 #include "ui_theme.hpp"
 
@@ -288,6 +289,18 @@ public:
 
     void drawCenteredSingleLineFit(float x, float y, float width, float height, float scale, std::string_view value,
                                    Color color, float horizontalPadding = 0.0f, float verticalPadding = 0.0f) {
+        if (const auto glyph = ui_icons::forLabel(value); glyph && width >= 90.0f && height >= 30.0f) {
+            const float iconSize = std::min(28.0f, height - 12.0f);
+            const float inset = iconSize + 9.0f;
+            const float labelScale =
+                fittedSingleLineScale(scale, value, std::max(1.0f, width - horizontalPadding * 2.0f - inset),
+                                      height - verticalPadding * 2.0f);
+            const float groupWidth = inset + renderer_.textWidth(labelScale, value);
+            const float left = x + (width - groupWidth) * 0.5f;
+            renderer_.icon(*glyph, left, y + (height - iconSize) * 0.5f, iconSize, color);
+            renderer_.textVerticallyCentered(left + inset, y, height, labelScale, value, color);
+            return;
+        }
         const float availableWidth = std::max(1.0f, width - horizontalPadding * 2.0f);
         const float availableHeight = std::max(1.0f, height - verticalPadding * 2.0f);
         const float fittedScale = fittedSingleLineScale(scale, value, availableWidth, availableHeight);
@@ -305,7 +318,9 @@ public:
     float drawChip(float x, float y, std::string_view label, bool selected = false, float scale = 1.45f,
                    float height = 42.0f, float maxWidth = 360.0f) {
         const std::string_view displayLabel = materialLabel(label);
-        const float width = std::round(std::clamp(renderer_.textWidth(scale, displayLabel) + 34.0f, 72.0f, maxWidth));
+        const float iconSpace = ui_icons::forLabel(displayLabel) ? 37.0f : 0.0f;
+        const float width =
+            std::round(std::clamp(renderer_.textWidth(scale, displayLabel) + 34.0f + iconSpace, 72.0f, maxWidth));
         x = std::round(x);
         y = std::round(y);
         renderer_.roundedRect(x, y, width, height, height * 0.5f,

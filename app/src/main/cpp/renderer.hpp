@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui_icons.hpp"
+
 #include <EGL/egl.h>
 #include <GLES3/gl3.h>
 #include <android/native_window.h>
@@ -44,6 +46,8 @@ public:
     void beginClipRect(float x, float y, float w, float h);
     void endClipRect();
 
+    void profileInitial(float x, float y, float width, float height, float scale, std::string_view initial, Color color);
+    void icon(ui_icons::Glyph glyph, float x, float y, float size, Color color);
     void rect(float x, float y, float w, float h, Color color);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3, Color color);
     void roundedRect(float x, float y, float w, float h, float radius, Color color);
@@ -97,6 +101,7 @@ private:
         int width = 0;
         int height = 0;
         std::vector<uint8_t> rgba;
+        std::array<std::array<int, 4>, 95> inkBounds{};
         std::array<float, 95> advances{};
         bool advancesReady = false;
 
@@ -148,10 +153,12 @@ private:
     bool externalProgramFailed_ = false;
     GLuint externalSampleTexture_ = 0;
     GLuint externalSampleFramebuffer_ = 0;
+    GLuint iconTexture_ = 0;
     GLuint fontTexture_ = 0;
     GLuint fontOutlineTexture_ = 0;
     bool fontAtlasAttempted_ = false;
     bool fontOutlineAtlasAttempted_ = false;
+    std::array<std::array<int, 4>, 95> fontInkBounds_{};
     std::array<float, 95> fontAdvances_{};
     bool fontAdvancesReady_ = false;
     JavaVM* vm_ = nullptr;

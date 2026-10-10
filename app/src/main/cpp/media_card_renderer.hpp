@@ -2,6 +2,7 @@
 
 #include "jellyfin_types.hpp"
 #include "ui_policy.hpp"
+#include "ui_icons.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -72,7 +73,7 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
 
     if (options.showState && (item.favorite || (options.showWatchedIndicators && item.played))) {
         const std::string_view label = item.favorite ? "Favorite" : "Watched";
-        const float badgeWidth = item.favorite ? 132.0f : 118.0f;
+        const float badgeWidth = item.favorite ? 154.0f : 140.0f;
         const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
         const float badgeY = bounds[1] + 12.0f;
         // State is useful context, but it must not read as another focused control.
@@ -80,7 +81,12 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
         renderer.roundedRect(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, badgeSurface);
         renderer.roundedOutline(badgeX, badgeY, badgeWidth, 34.0f, 17.0f, 1.0f,
                                 focused && item.favorite ? style.focus : style.outline);
-        drawCentered(badgeX, badgeY, badgeWidth, 34.0f, 1.12f, label,
+        const ColorLike ink = focused && item.favorite ? style.text : style.muted;
+        if (item.favorite)
+            ui_icons::heart(renderer, badgeX + 10.0f, badgeY + 7.0f, 20.0f, ink);
+        else
+            ui_icons::check(renderer, badgeX + 10.0f, badgeY + 7.0f, 20.0f, ink);
+        drawCentered(badgeX + 26.0f, badgeY, badgeWidth - 26.0f, 34.0f, 1.12f, label,
                      focused && item.favorite ? style.text : style.muted, 10.0f, 3.0f);
     }
 

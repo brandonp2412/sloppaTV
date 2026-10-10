@@ -4,6 +4,9 @@
 #include <string_view>
 
 struct FakeUi {
+    std::vector<ui_icons::Glyph> icons;
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
     std::vector<std::string> texts;
     std::vector<float> rowPositions;
     int focusedRows = 0;
@@ -66,7 +69,8 @@ int main() {
     state.navigate(ScreenNavigationKey::Activate);
     FakeUi bottom;
     renderSeerrSeasonPicker(bottom, bottom, state, style);
-    assert(bottom.contains("[x] Season 20"));
+    assert(bottom.contains("Season 20"));
+    assert(bottom.icons.back() == ui_icons::Glyph::Check);
     assert(bottom.contains("16–20 / 20") && bottom.contains("Request 1 season"));
     assert(bottom.rowPositions.size() == 7 && bottom.focusedRows == 1);
     state.submitting = true;

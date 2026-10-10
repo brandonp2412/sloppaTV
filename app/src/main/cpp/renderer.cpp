@@ -1,4 +1,6 @@
 #include "renderer.hpp"
+#include "font_ink_bounds.hpp"
+#include "ui_icon_atlas.hpp"
 #include "renderer_shaders.hpp"
 #include "jni_env.hpp"
 #include "ui_theme.hpp"
@@ -143,6 +145,7 @@ Renderer::PreparedFontAtlas Renderer::prepareFontAtlas(JavaVM* vm, jobject activ
         env->DeleteLocalRef(bitmap);
     }
     if (activityClass) env->DeleteLocalRef(activityClass);
+    prepared.inkBounds = fontInkBounds(prepared.rgba, prepared.width, prepared.height);
     return prepared;
 }
 
@@ -305,6 +308,7 @@ bool Renderer::init(ANativeWindow* window) {
     fontAtlasAttempted_ = true;
     PreparedFontAtlas preparedFont = fontAtlasFuture.get();
     if (preparedFont.valid()) {
+        fontInkBounds_ = preparedFont.inkBounds;
         fontAdvances_ = preparedFont.advances;
         fontAdvancesReady_ = preparedFont.advancesReady;
         fontTexture_ = createTexture(preparedFont.width, preparedFont.height, preparedFont.rgba.data());
@@ -366,6 +370,7 @@ void Renderer::shutdown() {
             if (vbo_) glDeleteBuffers(1, &vbo_);
             if (vao_) glDeleteVertexArrays(1, &vao_);
             if (program_) glDeleteProgram(program_);
+            if (iconTexture_) glDeleteTextures(1, &iconTexture_);
             if (fontTexture_) glDeleteTextures(1, &fontTexture_);
             if (fontOutlineTexture_) glDeleteTextures(1, &fontOutlineTexture_);
             if (textureVbo_) glDeleteBuffers(1, &textureVbo_);
@@ -407,10 +412,12 @@ void Renderer::shutdown() {
     externalProgramFailed_ = false;
     externalSampleTexture_ = 0;
     externalSampleFramebuffer_ = 0;
+    iconTexture_ = 0;
     fontTexture_ = 0;
     fontOutlineTexture_ = 0;
     fontAtlasAttempted_ = false;
     fontOutlineAtlasAttempted_ = false;
+    fontInkBounds_ = {};
     fontAdvances_.fill(0.0f);
     fontAdvancesReady_ = false;
     surfaceWidth_ = 0;
@@ -727,6 +734,48 @@ void Renderer::roundedImageRegion(GLuint texture, float x, float y, float w, flo
     imageRegionTint(texture, x, y, w, h, u0, v0, u1, v1, Color{1.0f, 1.0f, 1.0f, 1.0f}, alpha, radius);
 }
 
+void Renderer::profileInitial(float x, float y, float width, float height, float scale,
+                              std::string_view initial, Color color) {
+    const std::string display = displayText(initial);
+    const unsigned char letter = display.empty() ? '?' : static_cast<unsigned char>(display.front());
+    if (!fontTexture_ || letter < 32 || letter > 126) {
+        textCentered(x, y, width, height, scale, "?", color);
+        return;
+    }
+    const int index = letter - 32;
+    const auto& bounds = fontInkBounds_[index];
+    if (bounds[2] == 0 || bounds[3] == 0) return;
+    const float unit = std::min({10.0f / 64.0f * scale * textScale_,
+                                width / static_cast<float>(bounds[2]), height / static_cast<float>(bounds[3])});
+    const float inkWidth = bounds[2] * unit, inkHeight = bounds[3] * unit;
+    const float u = static_cast<float>(index % 16 * 64 + bounds[0]) / 1024.0f;
+    const float v = static_cast<float>(index / 16 * 64 + bounds[1]) / 384.0f;
+    imageRegionTint(fontTexture_, x + (width - inkWidth) * 0.5f, y + (height - inkHeight) * 0.5f,
+                    inkWidth, inkHeight, u, v, u + bounds[2] / 1024.0f, v + bounds[3] / 384.0f, color, 1.0f, 0.0f);
+}
+
+void Renderer::icon(ui_icons::Glyph glyph, float x, float y, float size, Color color) {
+    if (!ready() || size <= 0.0f) return;
+    if (!iconTexture_) {
+        // White RGB avoids dark fringes when filtering transparent edge texels.
+        std::vector<uint8_t> pixels(ui_icons::atlasWidth * ui_icons::atlasHeight * 4, 255);
+        size_t pixel = 0;
+        for (size_t i = 0; i < sizeof(ui_icons::atlasRuns); i += 2) {
+            for (int n = 0; n < ui_icons::atlasRuns[i]; ++n)
+                pixels[(pixel++) * 4 + 3] = ui_icons::atlasRuns[i + 1];
+        }
+        iconTexture_ = createTexture(ui_icons::atlasWidth, ui_icons::atlasHeight, pixels.data());
+        if (!iconTexture_) return;
+        glBindTexture(GL_TEXTURE_2D, iconTexture_);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    }
+    const int index = static_cast<int>(glyph);
+    const float u = static_cast<float>(index % 4) / 4.0f;
+    const float v = static_cast<float>(index / 4) * 96.0f / ui_icons::atlasHeight;
+    imageRegionTint(iconTexture_, x, y, size, size, u, v, u + 0.25f, v + 96.0f / ui_icons::atlasHeight, color, 1.0f, 0.0f);
+}
+
 void Renderer::imageRegionTint(GLuint texture, float x, float y, float w, float h, float u0, float v0, float u1,
                                float v1, Color tint, float alpha, float radius) {
     if (!ready() || texture == 0 || w <= 0.0f || h <= 0.0f) return;
@@ -989,6 +1038,7 @@ bool Renderer::loadFontAtlas() {
     fontAtlasAttempted_ = true;
     PreparedFontAtlas prepared = prepareFontAtlas(vm_, activity_);
     if (prepared.valid()) {
+        fontInkBounds_ = prepared.inkBounds;
         fontAdvances_ = prepared.advances;
         fontAdvancesReady_ = prepared.advancesReady;
         fontTexture_ = createTexture(prepared.width, prepared.height, prepared.rgba.data());

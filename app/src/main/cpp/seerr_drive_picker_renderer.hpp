@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui_icons.hpp"
+
 #include "seerr_drive_picker_screen.hpp"
 
 #include <cstddef>
@@ -42,9 +44,7 @@ void renderSeerrDrivePickerScreen(RendererLike& renderer, const SeerrDrivePicker
         const float iconX = x + 34.0f;
         const float iconY = y + 30.0f;
         renderer.roundedRect(iconX, iconY, 58.0f, 52.0f, 10.0f, focused ? style.focusSoft : style.panelElevated);
-        renderer.roundedRect(iconX + 10.0f, iconY + 11.0f, 38.0f, 7.0f, 3.5f, focused ? style.focus : style.muted);
-        renderer.roundedRect(iconX + 40.0f, iconY + 33.0f, 7.0f, 7.0f, 3.5f,
-                             focused ? style.focus : style.secondaryText);
+        renderer.icon(ui_icons::Glyph::Server, iconX + 8.0f, iconY + 5.0f, 42.0f, focused ? style.focus : style.muted);
 
         renderer.textVerticallyCentered(x + 120.0f, y + 8.0f, 62.0f, 2.05f, fitText(row.name, 2.05f, 760.0f, 1),
                                         focused ? style.text : style.secondaryText, 760.0f);

@@ -149,7 +149,7 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     constexpr float actionGap = 18.0f;
     constexpr float actionRightInset = 72.0f;
     auto desiredActionWidth = [&](const std::string& action) {
-        return std::round(std::max(145.0f, renderer.textWidth(style.labelScale, materialLabel(action)) + 56.0f));
+        return std::round(std::max(145.0f, renderer.textWidth(style.labelScale, materialLabel(action)) + 90.0f));
     };
     float desiredActionWidths = 0.0f;
     for (const auto& action : actions) desiredActionWidths += desiredActionWidth(action);

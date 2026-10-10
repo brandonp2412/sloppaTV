@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui_icons.hpp"
+
 #include "account_screen.hpp"
 
 #include <algorithm>
@@ -95,8 +97,11 @@ void renderLoginScreen(RendererLike& renderer, float logicalWidth, float logical
         if (index == AccountScreenState::kPasswordField && !value.empty()) value.assign(value.size(), '*');
         const bool placeholder = value.empty() && index == AccountScreenState::kServerField;
         if (placeholder) value = "https://your-jellyfin-server";
-        renderer.textVerticallyCentered(520.0f, bounds[1], bounds[3], 2.35f, fitText(value, 2.35f, 880.0f, 1),
-                                        placeholder ? style.tertiary : style.text, 880.0f);
+        static constexpr std::array<ui_icons::Glyph, 3> fieldIcons{ui_icons::Glyph::Server, ui_icons::Glyph::User,
+                                                                   ui_icons::Glyph::Lock};
+        renderer.icon(fieldIcons[index], bounds[0] + 24.0f, bounds[1] + (bounds[3] - 30.0f) * 0.5f, 30.0f, style.muted);
+        renderer.textVerticallyCentered(566.0f, bounds[1], bounds[3], 2.35f, fitText(value, 2.35f, 832.0f, 1),
+                                        placeholder ? style.tertiary : style.text, 832.0f);
     }
 
     const bool loginFocused = state.loginFocus == AccountScreenState::kLoginAction && !state.keyboardActive;

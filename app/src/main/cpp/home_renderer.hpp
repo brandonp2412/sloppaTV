@@ -79,12 +79,12 @@ void renderHomeScreen(RendererLike& renderer, const std::vector<JellyfinHomeRow>
     const std::array<std::string_view, 3> navLabels{"Home", "Search", "Settings"};
     const std::array<int, 3> navIndices{1, 2, 3};
     const std::array<float, 3> navMinWidths{138.0f, 158.0f, 178.0f};
-    float navX = 960.0f;
+    float navX = 880.0f;
     for (std::size_t index = 0; index < navLabels.size(); ++index) {
         const bool focused = toolbarFocused && state.navIndex() == navIndices[index];
         const bool active = navIndices[index] == 1;
         const float navWidth =
-            std::round(std::max(navMinWidths[index], renderer.textWidth(2.0f, navLabels[index]) + 44.0f));
+            std::round(std::max(navMinWidths[index], renderer.textWidth(2.0f, navLabels[index]) + 72.0f));
         if (focused) {
             const auto bounds = drawTabSurface(navX, 40.0f, navWidth, 54.0f, true, active);
             drawCentered(bounds[0], bounds[1], bounds[2], bounds[3], 2.0f, navLabels[index], style.text, 12.0f, 4.0f);
@@ -110,8 +110,8 @@ void renderHomeScreen(RendererLike& renderer, const std::vector<JellyfinHomeRow>
             session.username.empty()
                 ? "U"
                 : std::string(1, static_cast<char>(std::toupper(static_cast<unsigned char>(session.username.front()))));
-        drawCentered(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], 2.35f, initial, style.text,
-                     6.0f, 6.0f);
+        renderer.profileInitial(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], 2.35f, initial,
+                                style.text);
     }
     if (profileFocused) {
         drawFocusHalo(profileBounds[0], profileBounds[1], profileBounds[2], profileBounds[3], style.focus,

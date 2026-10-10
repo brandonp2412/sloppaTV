@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui_icons.hpp"
+
 #include "settings_screen.hpp"
 #include "ui_policy.hpp"
 
@@ -48,8 +50,10 @@ void renderSettingsScreen(RendererLike& renderer, const SettingsRenderState& sta
     const auto presentation = settingsScreenPresentation(state.screen, state.systemSettingsInputActive);
     const auto settingsSearchBounds =
         drawInputSurface(1070.0f, 52.0f, 760.0f, 58.0f, state.screen.searchFocused(), style.wideInputFocusScale);
-    constexpr float settingsSearchTextWidth = 520.0f;
-    renderer.textVerticallyCentered(1102.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
+    renderer.icon(ui_icons::Glyph::Search, settingsSearchBounds[0] + 22.0f,
+                  settingsSearchBounds[1] + (settingsSearchBounds[3] - 26.0f) * 0.5f, 26.0f, style.muted);
+    constexpr float settingsSearchTextWidth = 480.0f;
+    renderer.textVerticallyCentered(1138.0f, settingsSearchBounds[1], settingsSearchBounds[3], 2.20f,
                                     fitText(presentation.searchText, 2.20f, settingsSearchTextWidth, 1),
                                     presentation.searchPlaceholder ? style.muted : style.text, settingsSearchTextWidth);
     drawCentered(1640.0f, settingsSearchBounds[1], 170.0f, settingsSearchBounds[3], 1.60f,
@@ -83,9 +87,11 @@ void renderSettingsScreen(RendererLike& renderer, const SettingsRenderState& sta
         constexpr float rowWidth = 1700.0f;
         const auto rowBounds = drawListItemSurface(rowX, y - 8.0f, rowWidth, 88.0f, focused, style.cornerMedium,
                                                    style.wideListItemFocusScale);
-        renderer.textVerticallyCentered(rowX + 35.0f, rowBounds[1], rowBounds[3], 2.20f,
-                                        fitText(materialLabel(row->label), 2.20f, 900.0f, 1),
-                                        focused ? style.text : style.secondaryText, 900.0f);
+        renderer.icon(ui_icons::forSetting(row->label), rowBounds[0] + 30.0f,
+                      rowBounds[1] + (rowBounds[3] - 30.0f) * 0.5f, 30.0f, focused ? style.text : style.secondaryText);
+        renderer.textVerticallyCentered(rowX + 80.0f, rowBounds[1], rowBounds[3], 2.20f,
+                                        fitText(materialLabel(row->label), 2.20f, 850.0f, 1),
+                                        focused ? style.text : style.secondaryText, 850.0f);
 
         const std::string& value = row->value;
         constexpr float valueRightInset = 45.0f;

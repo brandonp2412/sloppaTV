@@ -37,6 +37,9 @@ struct CenteredCall {
 };
 
 struct FakeRenderer {
+    std::vector<ui_icons::Glyph> icons;
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
     void roundedRect(float x, float y, float width, float, float, int color) {
         roundedRects.push_back({x, y, width, color});
     }
@@ -153,18 +156,18 @@ int main() {
     assert(renderer.textCalls[7].text == "/mnt/archive");
     assert(renderer.textCalls[7].maxWidth == 920.0f);
 
-    assert(renderer.roundedRects.size() == 13);
+    assert(renderer.icons.size() == 3);
+    assert(renderer.icons[0] == ui_icons::Glyph::Server);
+    assert(renderer.roundedRects.size() == 7);
     assert(renderer.roundedRects[0].color == style.focusSoft);
-    assert(renderer.roundedRects[1].color == style.focus);
+    assert(renderer.roundedRects[1].x == 1085.0f);
+    assert(renderer.roundedRects[1].width == 500.0f);
+    assert(renderer.roundedRects[2].width == 210.0f);
     assert(renderer.roundedRects[2].color == style.focus);
-    assert(renderer.roundedRects[3].x == 1085.0f);
-    assert(renderer.roundedRects[3].width == 500.0f);
-    assert(renderer.roundedRects[4].width == 210.0f);
-    assert(renderer.roundedRects[4].color == style.focus);
-    assert(renderer.roundedRects[8].width == 500.0f);
-    assert(renderer.roundedRects[8].color == style.panelElevated);
-    assert(renderer.roundedRects[9].width == 475.0f);
-    assert(renderer.roundedRects[9].color == style.error);
+    assert(renderer.roundedRects[4].width == 500.0f);
+    assert(renderer.roundedRects[4].color == style.panelElevated);
+    assert(renderer.roundedRects[5].width == 475.0f);
+    assert(renderer.roundedRects[5].color == style.error);
 
     assert(centered.size() == 4);
     assert(centered[0].text == "42% full");

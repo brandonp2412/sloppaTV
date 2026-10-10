@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui_icons.hpp"
+
 #include "search_screen.hpp"
 #include "seerr_storage.hpp"
 #include "ui_policy.hpp"
@@ -54,9 +56,11 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     const auto searchBounds =
         drawInputSurface(72.0f, searchTop, searchWidth, 68.0f, searchFieldFocused, style.wideInputFocusScale);
     const std::string searchDisplay = query.empty() ? "Movies, shows and episodes" : query;
-    renderer.textVerticallyCentered(106.0f, searchBounds[1], searchBounds[3], 2.15f,
-                                    fitTextLines(searchDisplay, 2.15f, searchWidth - 68.0f, 1),
-                                    query.empty() ? style.muted : style.text, searchWidth - 68.0f);
+    renderer.icon(ui_icons::Glyph::Search, searchBounds[0] + 24.0f, searchBounds[1] + (searchBounds[3] - 30.0f) * 0.5f,
+                  30.0f, style.muted);
+    renderer.textVerticallyCentered(144.0f, searchBounds[1], searchBounds[3], 2.15f,
+                                    fitTextLines(searchDisplay, 2.15f, searchWidth - 106.0f, 1),
+                                    query.empty() ? style.muted : style.text, searchWidth - 106.0f);
     const std::string_view searchHint =
         state.keyboard()
             ? "On-screen keyboard"

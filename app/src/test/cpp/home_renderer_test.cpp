@@ -30,6 +30,9 @@ struct RowCall {
 };
 
 struct FakeRenderer {
+    std::vector<std::string> initials;
+    void profileInitial(float, float, float, float, float, std::string_view value, int) { initials.emplace_back(value); }
+
     void rect(float x, float y, float width, float height, int color) { rects.push_back({x, y, width, height, color}); }
 
     void roundedRect(float x, float y, float width, float height, float, int color) {
@@ -236,7 +239,7 @@ int main() {
 
     assert(halos == 1);
     bool sawInitial = false;
-    for (const auto& value : profileCentered)
+    for (const auto& value : toolbarRenderer.initials)
         if (value == "A") sawInitial = true;
     assert(sawInitial);
 

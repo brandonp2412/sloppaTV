@@ -12,6 +12,10 @@ struct TestColor {
 };
 
 struct FakeRenderer {
+    std::vector<ui_icons::Glyph> icons;
+
+    void icon(ui_icons::Glyph glyph, float, float, float, TestColor) { icons.push_back(glyph); }
+
     void verticalGradient(float x, float y, float width, float height, TestColor top, TestColor bottom) {
         assert(x == 0.0f);
         assert(width == 1920.0f);
@@ -110,8 +114,8 @@ int main() {
     assert(renderer.subtitle == "Hello");
     assert(buttonCalls == 1);
     assert(renderer.buttonLabel == "Skip Intro");
-    assert(renderer.triangles == 4);
-    assert(renderer.roundedRects == 3);
+    assert(renderer.icons == std::vector{ui_icons::Glyph::Next});
+    assert(renderer.roundedRects == 2);
     assert(fitCalls == 2);
 
     FakeRenderer quiet;

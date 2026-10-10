@@ -26,6 +26,12 @@ struct TextCall {
 };
 
 struct FakeRenderer {
+    std::vector<ui_icons::Glyph> icons;
+
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
+    void triangle(float, float, float, float, float, float, int) {}
+
     void roundedRect(float x, float y, float width, float height, float radius, int color) {
         rects.push_back({x, y, width, height, radius, color});
     }
@@ -141,6 +147,7 @@ int main() {
     assert(!sawLandscape);
     assert(renderer.outlines.size() == 1);
     assert(renderer.rects.size() == 4);
+    assert(renderer.icons == std::vector{ui_icons::Glyph::Heart});
     assert(renderer.rects[1].color == 7);
     assert(renderer.rects[2].color == 8);
     assert(renderer.rects[3].color == 3);

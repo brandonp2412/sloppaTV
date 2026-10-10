@@ -1,6 +1,7 @@
 #pragma once
 
 #include "player_screen.hpp"
+#include "ui_icons.hpp"
 
 #include <algorithm>
 #include <array>
@@ -41,27 +42,10 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
         const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
 
         if (i == 0 || i == 2) {
-            const bool forward = i == 2;
-            const float center = iconCenterX;
-            if (forward) {
-                renderer.triangle(center - 12.0f, iconCenterY - 14.0f, center - 12.0f, iconCenterY + 14.0f,
-                                  center + 10.0f, iconCenterY, style.text);
-                renderer.roundedRect(center + 13.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, style.text);
-            } else {
-                renderer.roundedRect(center - 17.0f, iconCenterY - 14.0f, 4.0f, 28.0f, 2.0f, style.text);
-                renderer.triangle(center + 12.0f, iconCenterY - 14.0f, center + 12.0f, iconCenterY + 14.0f,
-                                  center - 10.0f, iconCenterY, style.text);
-            }
+            ui_icons::skip(renderer, iconCenterX - 20.0f, iconCenterY - 20.0f, 40.0f, i == 2, style.text);
         } else if (i == 1) {
-            if (state.paused) {
-                const float playLeft = iconCenterX - 22.0f / 3.0f;
-                renderer.triangle(playLeft, iconCenterY - 13.0f, playLeft, iconCenterY + 13.0f, playLeft + 22.0f,
-                                  iconCenterY, style.text);
-            } else {
-                const float pauseLeft = iconCenterX - 10.0f;
-                renderer.roundedRect(pauseLeft, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, style.text);
-                renderer.roundedRect(pauseLeft + 13.0f, iconCenterY - 13.0f, 7.0f, 26.0f, 3.0f, style.text);
-            }
+            renderer.icon(state.paused ? ui_icons::Glyph::Play : ui_icons::Glyph::Pause, iconCenterX - 20.0f,
+                          iconCenterY - 20.0f, 40.0f, style.text);
         } else if (i == 3) {
             constexpr float iconWidth = 36.0f;
             constexpr float gap = 14.0f;
@@ -71,15 +55,11 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float textWidth = renderer.textWidth(labelScale, label);
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
-            renderer.roundedRect(iconX, iconCenterY - 8.0f, 8.0f, 16.0f, 2.0f, style.text);
-            renderer.triangle(iconX + 8.0f, iconCenterY - 8.0f, iconX + 8.0f, iconCenterY + 8.0f, iconX + 20.0f,
-                              iconCenterY, style.text);
-            renderer.roundedRect(iconX + 24.0f, iconCenterY - 9.0f, 3.0f, 18.0f, 1.5f, style.text);
-            renderer.roundedRect(iconX + 31.0f, iconCenterY - 14.0f, 3.0f, 28.0f, 1.5f, style.text);
+            ui_icons::audio(renderer, iconX, iconCenterY - 18.0f, iconWidth, style.text);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
                                             style.text);
         } else {
-            constexpr float iconWidth = 42.0f;
+            constexpr float iconWidth = 36.0f;
             constexpr float gap = 14.0f;
             const std::string label = "Subtitles  " + std::string(materialLabel(state.subtitleTrackLabel));
             const float textAvailableWidth = std::max(1.0f, bounds[2] - 86.0f);
@@ -87,11 +67,7 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float textWidth = renderer.textWidth(labelScale, label);
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
-            renderer.roundedOutline(iconX, iconCenterY - 13.0f, 38.0f, 26.0f, 6.0f, 2.0f, style.text);
-            renderer.roundedRect(iconX + 7.0f, iconCenterY - 5.0f, 10.0f, 3.0f, 1.5f, style.text);
-            renderer.roundedRect(iconX + 21.0f, iconCenterY - 5.0f, 10.0f, 3.0f, 1.5f, style.text);
-            renderer.roundedRect(iconX + 7.0f, iconCenterY + 3.0f, 10.0f, 3.0f, 1.5f, style.text);
-            renderer.roundedRect(iconX + 21.0f, iconCenterY + 3.0f, 10.0f, 3.0f, 1.5f, style.text);
+            ui_icons::subtitles(renderer, iconX, iconCenterY - 18.0f, iconWidth, style.text);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
                                             style.text);
         }

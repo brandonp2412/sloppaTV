@@ -2,11 +2,16 @@
 
 #include <array>
 #include <cassert>
+#include <vector>
 #include <string>
 #include <string_view>
 
 namespace {
 struct FakeRenderer {
+    std::vector<ui_icons::Glyph> icons;
+
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
     void triangle(float, float, float, float, float, float, int) { ++triangles; }
 
     void roundedRect(float, float, float, float, float, int) { ++roundedRects; }
@@ -67,8 +72,8 @@ int main() {
 
     assert(buttonCalls == 1);
     assert(fittedInput == "Skip Intro");
-    assert(renderer.triangles == 2);
-    assert(renderer.roundedRects == 1);
+    assert(renderer.icons == std::vector{ui_icons::Glyph::Next});
+    assert(renderer.triangles == 0);
     assert(renderer.measured == "Skip Intro");
     assert(renderer.measuredScale == 1.82f);
     assert(renderer.text == "Skip Intro");

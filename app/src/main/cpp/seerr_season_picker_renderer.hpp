@@ -1,6 +1,7 @@
 #pragma once
 
 #include "seerr_seasons.hpp"
+#include "ui_icons.hpp"
 
 template <typename ColorLike> struct SeerrSeasonPickerStyle {
     float headlineScale = 0.0f;
@@ -29,10 +30,12 @@ void renderSeerrSeasonPicker(RendererLike& renderer, UiLike& ui, const SeerrSeas
     const auto selected = state.selected();
     const bool canRequest =
         std::any_of(state.seasons.begin(), state.seasons.end(), [](const auto& season) { return season.selectable(); });
-    auto row = [&](float y, const std::string& title, const std::string& detail, bool focused, bool enabled) {
+    auto row = [&](float y, const std::string& title, const std::string& detail, bool focused, bool enabled,
+                   ui_icons::Glyph glyph) {
         ui.drawListItemSurface(120.0f, y, 1680.0f, 88.0f, focused, style.cornerRadius, style.focusScale);
-        renderer.textVerticallyCentered(150.0f, y, 88.0f, 1.85f, ui.fitTextLines(title, 1.85f, 1030.0f, 1),
-                                        enabled ? style.text : style.muted, 1030.0f);
+        renderer.icon(glyph, 148.0f, y + 29.0f, 30.0f, enabled ? style.text : style.muted);
+        renderer.textVerticallyCentered(194.0f, y, 88.0f, 1.85f, ui.fitTextLines(title, 1.85f, 986.0f, 1),
+                                        enabled ? style.text : style.muted, 986.0f);
         ui.drawCenteredSingleLineFit(1210.0f, y, 550.0f, 88.0f, 1.45f, detail, style.muted, 12.0f, 4.0f);
     };
     row(190.0f,
@@ -41,20 +44,20 @@ void renderSeerrSeasonPicker(RendererLike& renderer, UiLike& ui, const SeerrSeas
                                              : "Request " + std::to_string(selected.size()) +
                                                    (selected.size() == 1 ? " season" : " seasons")),
         state.submitting ? "Please wait" : (selected.empty() ? "" : "OK confirms request"), state.selection == 0,
-        !selected.empty() && !state.submitting);
+        !selected.empty() && !state.submitting, ui_icons::Glyph::Add);
     row(290.0f, state.allSelected() ? "Clear selection" : "Select all missing seasons",
-        "Specials are selected separately", state.selection == 1, true);
+        "Specials are selected separately", state.selection == 1, true,
+        state.allSelected() ? ui_icons::Glyph::Close : ui_icons::Glyph::Check);
     constexpr int visible = 5;
     const int count = static_cast<int>(state.seasons.size());
     const int first = std::clamp(state.selection - 4, 0, std::max(0, count - visible));
     for (int index = first; index < std::min(first + visible, count); ++index) {
         const auto& season = state.seasons[static_cast<size_t>(index)];
-        std::string title = (season.selected ? "[x] " : "[ ] ") + season.name;
-        if (!season.selectable()) title = season.name;
+        const std::string& title = season.name;
         std::string detail = std::to_string(season.episodes) + " episodes · " + season.statusLabel();
         if (!season.airDate.empty()) detail += " · " + season.airDate.substr(0, 4);
         row(400.0f + static_cast<float>(index - first) * 104.0f, title, detail, state.selection == index + 2,
-            season.selectable());
+            season.selectable(), season.selected ? ui_icons::Glyph::Check : ui_icons::Glyph::Film);
     }
     ui.drawCenteredSingleLineFit(
         120.0f, 960.0f, 1680.0f, 48.0f, 1.45f,

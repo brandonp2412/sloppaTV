@@ -8,6 +8,10 @@
 
 namespace {
 struct FakeRenderer {
+    std::vector<ui_icons::Glyph> icons;
+
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
     void triangle(float, float, float, float, float, float, int) { ++triangles; }
 
     void roundedRect(float, float, float, float, float, int) { ++roundedRects; }
@@ -71,8 +75,10 @@ int main() {
     assert((paused.primaryButtons == std::vector<std::size_t>{1}));
     assert(paused.fitCalls == 2);
     assert(paused.labelCalls == 2);
-    assert(paused.renderer.triangles == 4);
-    assert(paused.renderer.roundedOutlines == 1);
+    assert(
+        (paused.renderer.icons == std::vector{ui_icons::Glyph::Previous, ui_icons::Glyph::Play, ui_icons::Glyph::Next,
+                                              ui_icons::Glyph::Audio, ui_icons::Glyph::Subtitles}));
+    assert(paused.renderer.triangles == 0);
     assert(paused.renderer.centered.empty());
     assert((paused.renderer.vertical == std::vector<std::string>{"Audio  English", "Subtitles  Off"}));
 
@@ -86,8 +92,8 @@ int main() {
     });
     assert((playing.focusedButtons == std::vector<std::size_t>{4}));
     assert((playing.primaryButtons == std::vector<std::size_t>{1}));
-    assert(playing.renderer.triangles == 3);
-    assert(playing.renderer.roundedRects > paused.renderer.roundedRects);
+    assert(playing.renderer.icons[1] == ui_icons::Glyph::Pause);
+    assert(playing.renderer.icons.size() == 5);
     assert((playing.renderer.vertical == std::vector<std::string>{"Audio  Director", "Subtitles  English"}));
 
     return 0;

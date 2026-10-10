@@ -32,6 +32,12 @@ struct SurfaceCall {
 };
 
 struct FakeRenderer {
+    std::vector<std::string> initials;
+    void profileInitial(float, float, float, float, float, std::string_view value, int) { initials.emplace_back(value); }
+
+    std::vector<ui_icons::Glyph> icons;
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
     void roundedRect(float, float y, float, float, float, int color) { roundedRects.push_back({y, color}); }
 
     void textVerticallyCentered(float x, float y, float, float, std::string_view value, int color, float) {
@@ -114,8 +120,8 @@ int main() {
 
     bool sawFallbackInitial = false;
     bool sawFallbackName = false;
-    for (const auto& call : centeredText) {
-        if (call.text == "?") sawFallbackInitial = true;
+    for (const auto& initial : renderer.initials) {
+        if (initial == "?") sawFallbackInitial = true;
     }
     for (const auto& call : leftText) {
         if (call.text == "User") sawFallbackName = true;
@@ -160,9 +166,9 @@ int main() {
     assert(addRenderer.text.size() == 1);
     assert(addRenderer.text[0].text == "Add another account");
     assert(addRenderer.text[0].y == 797.0f);
-    assert(addCentered.size() == 10);
-    assert(addCentered[8] == "+");
-    assert(addCentered[9] == "Up / Down chooses account   |   Left / Right chooses action");
+    assert(addCentered.size() == 9);
+    assert(addRenderer.icons == std::vector{ui_icons::Glyph::Add});
+    assert(addCentered[8] == "Up / Down chooses account   |   Left / Right chooses action");
 
     return 0;
 }

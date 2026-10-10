@@ -1,5 +1,7 @@
 #pragma once
 
+#include "ui_icons.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
@@ -36,7 +38,8 @@ void renderProfilesScreen(RendererLike& renderer, int savedCount, int profileSel
         const bool focused = index == profileSelection;
         if (index == savedCount) {
             const auto bounds = drawFocusedSurface(250.0f, y, 1420.0f, 108.0f, focused, false);
-            drawCentered(bounds[0] + 30.0f, bounds[1], 90.0f, bounds[3], 3.0f, "+", style.focus, 8.0f, 8.0f);
+            renderer.icon(ui_icons::Glyph::Add, bounds[0] + 56.0f, bounds[1] + (bounds[3] - 34.0f) * 0.5f, 34.0f,
+                          style.focus);
             renderer.textVerticallyCentered(bounds[0] + 120.0f, bounds[1], bounds[3], 2.35f, "Add another account",
                                             style.text, bounds[2] - 160.0f);
             continue;
@@ -54,7 +57,7 @@ void renderProfilesScreen(RendererLike& renderer, int savedCount, int profileSel
                     ? "?"
                     : std::string(1,
                                   static_cast<char>(std::toupper(static_cast<unsigned char>(saved.username.front()))));
-            drawCentered(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, style.text, 8.0f, 8.0f);
+            renderer.profileInitial(280.0f, y + 12.0f, 84.0f, 84.0f, 3.0f, initial, style.text);
         }
 
         const std::string profileName = saved.username.empty() ? "User" : saved.username;

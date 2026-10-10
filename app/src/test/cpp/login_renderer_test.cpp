@@ -19,6 +19,9 @@ struct RectCall {
 };
 
 struct FakeRenderer {
+    std::vector<ui_icons::Glyph> icons;
+    void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
+
     void rect(float, float, float, float, int color) {
         ++rectCalls;
         backgroundColor = color;
