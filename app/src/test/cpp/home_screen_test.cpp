@@ -1,4 +1,6 @@
 #include "home_screen.hpp"
+#include "home_resume_overlay.hpp"
+#include "home_visibility.hpp"
 
 #include <cassert>
 
@@ -223,5 +225,72 @@ int main() {
     const auto toolbarPlan = HomeScreenState::restorePlan(toolbarSnapshot, {nextUp, continueWatching});
     assert(toolbarSnapshot.toolbarFocused);
     assert(toolbarPlan.focusedRow == -1);
+    // A just-stopped episode is visible even if the server Resume feed is still empty.
+    HomeResumeOverlay overlay;
+    JellyfinSession brandog;
+    brandog.server = "https://remux.example";
+    brandog.userId = "brandog";
+    brandog.token = "test";
+    JellyfinSession other = brandog;
+    other.userId = "other";
+    JellyfinItem tatami;
+    tatami.id = "tatami-s1e1";
+    tatami.type = "Episode";
+    tatami.name = "Tatami Galaxy";
+    tatami.runtimeTicks = 1000;
+    const auto now = HomeResumeOverlay::Clock::now();
+    overlay.remember(brandog, tatami, 250, false, now);
+    JellyfinHomeData remuxHome;
+    JellyfinItem nextEpisode;
+    nextEpisode.id = "tatami-s2e1";
+    remuxHome.rows = {{"My Media", {}}, {"Next Up", {nextEpisode}}};
+    overlay.apply(brandog, remuxHome, now);
+    assert(remuxHome.rows.size() == 3);
+    assert(remuxHome.rows[0].title == "Continue Watching");
+    assert(remuxHome.rows[0].items.size() == 1);
+    assert(remuxHome.rows[0].items[0].id == "tatami-s1e1");
+    assert(remuxHome.rows[0].items[0].positionTicks == 250);
+    assert(remuxHome.rows[1].title == "Next Up");
+    assert(remuxHome.rows[2].title == "My Media");
+
+    // The server becomes authoritative once it reports the same episode.
+    remuxHome.rows[0].items[0].positionTicks = 300;
+    overlay.apply(brandog, remuxHome, now);
+    assert(remuxHome.rows[0].items.size() == 1);
+    assert(remuxHome.rows[0].items[0].positionTicks == 300);
+
+    JellyfinHomeData otherHome;
+    otherHome.rows = {{"My Media", {}}, {"Next Up", {}}};
+    overlay.apply(other, otherHome, now);
+    assert(otherHome.rows.size() == 2);
+    assert(otherHome.rows[0].title == "Next Up");
+
+    std::unordered_set<std::string> hidden = {brandog.server + "\n" + brandog.userId + "\n" + tatami.id};
+    HomeVisibility visibility(brandog, hidden);
+    JellyfinHomeData hiddenHome;
+    overlay.apply(brandog, hiddenHome, now);
+    visibility.filter(hiddenHome);
+    assert(hiddenHome.rows.empty());
+
+    std::unordered_set<std::string> toggleHidden;
+    HomeVisibility toggleVisibility(brandog, toggleHidden);
+    JellyfinHomeData toggleHome;
+    toggleHome.rows = {{"Continue Watching", {tatami}}, {"Next Up", {nextEpisode}}};
+    HomeScreenState toggleState;
+    toggleState.setSelections({0, 0});
+    toggleState.setRow(1);
+    assert(toggleVisibility.toggle(tatami, toggleHome, toggleState) == true);
+    assert(toggleHome.rows.size() == 1);
+    assert(toggleHome.rows[0].title == "Next Up");
+    assert(toggleState.row() == 0);
+
+    JellyfinHomeData lateHome;
+    lateHome.rows = {{"My Media", {}}};
+    overlay.apply(brandog, lateHome, now + std::chrono::minutes(11));
+    assert(lateHome.rows.size() == 1);
+    overlay.remember(brandog, tatami, 0, true, now);
+    JellyfinHomeData completedHome;
+    overlay.apply(brandog, completedHome, now);
+    assert(completedHome.rows.empty());
     return 0;
 }

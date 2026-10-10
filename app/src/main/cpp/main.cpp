@@ -50,6 +50,7 @@
 #include "home_navigation_controller.hpp"
 #include "home_renderer.hpp"
 #include "home_row_renderer.hpp"
+#include "home_resume_overlay.hpp"
 #include "home_screen.hpp"
 #include "home_screen_coordinator.hpp"
 #include "home_visibility.hpp"
@@ -1317,6 +1318,7 @@ private:
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
+        if (completion.result.ok) homeResume_.apply(session_, completion.result.value);
         const auto effects = homeCompletions_.complete(completion);
         if (effects.retryDelaySeconds)
             __android_log_print(ANDROID_LOG_WARN, kTag, "Home load failed transiently; retrying in %d seconds: %s",
@@ -1456,7 +1458,17 @@ private:
 
     void stopPlayback(bool completed = false) {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
+        const PlaybackReleaseContext release = playbackCoordinator_.releaseContext(
+            true, completed, session_.valid(), playerScreenState_.positionMs());
+        homeResume_.remember(session_, release.item, release.plan.cachedPositionTicks, release.plan.markPlayed);
         playbackRequests_.release(true, completed);
+        const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
+        homeResume_.apply(session_, home_);
+        homeVisibility_.filter(home_);
+        const HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home_.rows);
+        homeState_.setSelections(restore.selections);
+        homeState_.setRow(restore.focusedRow);
+        homeState_.updateViewport(static_cast<int>(home_.rows.size()));
         lastInteraction_ = std::chrono::steady_clock::now();
         screensaverActive_ = false;
         playbackCoordinator_.finishStop();
@@ -1534,6 +1546,7 @@ private:
     bool serverInfoLoading_ = false;
     ServerInfoScreenCoordinator<decltype(serverInfoAsync_)> serverInfoScreens_;
     JellyfinHomeData home_;
+    HomeResumeOverlay homeResume_;
     SeerrDomainState seerrDomain_;
     SeerrConnectionCoordinator<
         SeerrAsyncExecutor<SeerrClient, SeerrClient, JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>>>

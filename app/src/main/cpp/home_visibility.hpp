@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <utility>
 #include <unordered_set>
 #include <vector>
 
@@ -23,6 +24,9 @@ public:
             if (row.title == "My Media") continue;
             std::erase_if(row.items, [&](const JellyfinItem& item) { return isHidden(item); });
         }
+        std::erase_if(data.rows, [](const JellyfinHomeRow& row) {
+            return (row.title == "Continue Watching" || row.title == "Next Up") && row.items.empty();
+        });
     }
 
     [[nodiscard]] std::optional<bool> toggle(const JellyfinItem& item, JellyfinHomeData& home, HomeScreenState& state) {
@@ -33,8 +37,12 @@ public:
             hiddenItems_.insert(itemKey);
         else
             hiddenItems_.erase(itemKey);
+        const HomeSelectionSnapshot snapshot = state.snapshot(home.rows);
         filter(home);
-        clampSelections(home, state);
+        const HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home.rows);
+        state.setSelections(std::move(restore.selections));
+        state.setRow(restore.focusedRow);
+        state.updateViewport(static_cast<int>(home.rows.size()));
         return hiding;
     }
 
@@ -50,12 +58,6 @@ private:
         return session_.server + "\n" + session_.userId + "\n" + itemId;
     }
 
-    static void clampSelections(const JellyfinHomeData& home, HomeScreenState& state) {
-        std::vector<int> itemCounts;
-        itemCounts.reserve(home.rows.size());
-        for (const auto& row : home.rows) itemCounts.push_back(static_cast<int>(row.items.size()));
-        state.clampSelections(itemCounts);
-    }
 
     const JellyfinSession& session_;
     std::unordered_set<std::string>& hiddenItems_;

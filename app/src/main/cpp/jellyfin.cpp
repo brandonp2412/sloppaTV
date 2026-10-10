@@ -433,11 +433,27 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
 
     auto viewsFuture = std::async(std::launch::async, [this, &session] { return loadViews(session); });
     auto resumeFuture = std::async(std::launch::async, [this, &session, &common] {
-        return parseItemList(http_.request("GET",
-                                           session.server + "/Users/" + session.userId +
-                                               "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" +
-                                               common,
-                                           headers(&session, session.deviceId)));
+        auto resume = parseItemList(http_.request("GET",
+                                                  session.server + "/Users/" + session.userId +
+                                                      "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" +
+                                                      common,
+                                                  headers(&session, session.deviceId)));
+        if (resume.ok && !resume.value.empty()) return resume;
+        // The Resume index may exclude short sessions even though the item's
+        // UserData has a playable position. Inspect recently played video items
+        // instead of applying the same IsResumable filter a second time.
+        auto fallback = parseItemList(http_.request(
+            "GET", session.server + "/Users/" + session.userId +
+                       "/Items?Recursive=true&IncludeItemTypes=Movie,Episode" +
+                       "&SortBy=DatePlayed&SortOrder=Descending&Limit=100&EnableUserData=true" + common,
+            headers(&session, session.deviceId)));
+        if (!fallback.ok) return resume;
+        std::erase_if(fallback.value, [](const JellyfinItem& item) {
+            return item.played || item.positionTicks <= 0 ||
+                   (item.runtimeTicks > 0 && item.positionTicks >= item.runtimeTicks);
+        });
+        if (fallback.value.size() > 30) fallback.value.resize(30);
+        return fallback;
     });
     auto nextUpFuture = std::async(std::launch::async, [this, &session, &common] {
         return parseItemList(http_.request("GET",
