@@ -253,12 +253,13 @@ inline PlaybackProgressPlan planPlaybackProgress(bool playerScreenActive, bool j
     return plan;
 }
 
-inline PlaybackPreparePlan planPlaybackPrepare(bool transcoding, PlaybackMethod method, int64_t elapsedMs) {
+inline PlaybackPreparePlan planPlaybackPrepare(bool transcoding, PlaybackMethod method, int64_t elapsedMs,
+                                               bool isRemux = false) {
     PlaybackPreparePlan plan;
     plan.elapsedMs = elapsedMs;
     plan.transcoding = transcoding;
-    plan.timedOut = playbackPrepareTimedOut(transcoding, elapsedMs);
-    plan.retryWithTranscodeFallback = plan.timedOut && method != PlaybackMethod::Transcode;
+    plan.timedOut = playbackPrepareTimedOut(transcoding, elapsedMs, isRemux);
+    plan.retryWithTranscodeFallback = plan.timedOut && method != PlaybackMethod::Transcode && !isRemux;
     return plan;
 }
 
@@ -806,9 +807,9 @@ public:
 
     void beginPreparing(TimePoint now) { sessionState_.beginPreparing(now); }
 
-    [[nodiscard]] PlaybackPreparePlan preparePlan(TimePoint now) {
+    [[nodiscard]] PlaybackPreparePlan preparePlan(TimePoint now, bool isRemux = false) {
         return planPlaybackPrepare(sessionState_.activeTarget().transcoding, sessionState_.activeTarget().playMethod,
-                                   sessionState_.preparingElapsedMs(now));
+                                   sessionState_.preparingElapsedMs(now), isRemux);
     }
 
     void finishPreparing() { sessionState_.clearPreparing(); }

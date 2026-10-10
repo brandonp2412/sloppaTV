@@ -100,13 +100,13 @@ public:
     PlaybackRuntimeController(PlaybackCoordinator& coordinator, PlayerScreenState& screenState,
                               NativeMediaPlayer& player, VideoSurface& videoSurface, JellyfinSession& session,
                               AppSettings& settings, RequestEpoch& playbackEpoch, bool& loading, std::string& error,
-                              const std::string& dataPath)
+                              const std::string& dataPath, const JellyfinServerInfo* serverInfo = nullptr)
         : coordinator_(coordinator), screenState_(screenState), player_(player), videoSurface_(videoSurface),
           session_(session), settings_(settings), playbackEpoch_(playbackEpoch),
 #ifndef SLOPPATV_BENCHMARK
           loading_(loading),
 #endif
-          error_(error), dataPath_(dataPath) {
+          error_(error), dataPath_(dataPath), serverInfo_(serverInfo) {
 #ifdef SLOPPATV_BENCHMARK
         (void)loading;
 #endif
@@ -542,7 +542,8 @@ public:
         if (status == PlayerStatus::Preparing) {
             mediaSession.updateState(MediaSessionState::Buffering, screenState_.positionMs());
             const auto now = std::chrono::steady_clock::now();
-            const PlaybackPreparePlan preparePlan = coordinator_.preparePlan(now);
+            const bool isRemux = serverInfo_ && serverInfo_->isRemux;
+            const PlaybackPreparePlan preparePlan = coordinator_.preparePlan(now, isRemux);
             if (preparePlan.timedOut) {
                 std::scoped_lock lock(stateMutex);
                 __android_log_print(ANDROID_LOG_WARN, "SloppaTV", "Playback prepare timed out after %lld ms (%s)",
@@ -552,7 +553,8 @@ public:
                     error_.clear();
                     return {};
                 }
-                error_ = "PLAYBACK TOOK TOO LONG TO START";
+                error_ = isRemux ? "REMUX SOURCE DID NOT BECOME READY IN TIME"
+                                 : "PLAYBACK TOOK TOO LONG TO START";
                 return PlaybackHostEffect::stop();
             }
         } else {
@@ -659,5 +661,6 @@ private:
 #endif
     std::string& error_;
     const std::string& dataPath_;
+    const JellyfinServerInfo* serverInfo_;
     std::string softwareDecodeItemId_;
 };

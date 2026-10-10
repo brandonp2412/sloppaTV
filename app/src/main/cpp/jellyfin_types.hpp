@@ -141,6 +141,7 @@ struct JellyfinServerInfo {
     std::string version;
     std::string productName;
     std::string operatingSystem;
+    bool isRemux = false;
 };
 
 struct QuickConnectRequest {

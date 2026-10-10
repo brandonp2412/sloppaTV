@@ -410,6 +410,7 @@ ApiValueResult<JellyfinServerInfo> JellyfinClient::getServerInfo(const JellyfinS
         result.value.version = data.value("Version", std::string{});
         result.value.productName = data.value("ProductName", std::string{});
         result.value.operatingSystem = data.value("OperatingSystem", std::string{});
+        result.value.isRemux = data.contains("RemuxVersion") && data["RemuxVersion"].is_string();
         result.ok = true;
     } catch (const std::exception& e) {
         result.error = std::string("Unable to parse server info: ") + e.what();

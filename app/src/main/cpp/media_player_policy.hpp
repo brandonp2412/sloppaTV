@@ -92,12 +92,14 @@ constexpr int64_t heldSeekDeltaMs(int seekSeconds, int repeatCount) {
     return static_cast<int64_t>(std::max(0, seekSeconds)) * 1000 * heldSeekMultiplier(std::max(0, repeatCount));
 }
 
-constexpr int playbackPrepareTimeoutMs(bool transcoding) {
-    return transcoding ? 30'000 : 15'000;
+// Remux can still be fetching its initial torrent pieces. Aborting direct play
+// after 15 seconds and starting a second transcoding session discards that work.
+constexpr int playbackPrepareTimeoutMs(bool transcoding, bool isRemux = false) {
+    return isRemux ? 45'000 : (transcoding ? 30'000 : 15'000);
 }
 
-constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs) {
-    return elapsedMs >= playbackPrepareTimeoutMs(transcoding);
+constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs, bool isRemux = false) {
+    return elapsedMs >= playbackPrepareTimeoutMs(transcoding, isRemux);
 }
 
 inline bool mpvLogIndicatesHardwareDecoderFailure(std::string_view text) {

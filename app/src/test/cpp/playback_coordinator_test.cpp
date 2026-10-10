@@ -173,6 +173,14 @@ int main() {
     assert(!preparePlan.transcoding);
     assert(preparePlan.timedOut);
     assert(preparePlan.retryWithTranscodeFallback);
+    // A Remux torrent may still be fetching its first pieces at 15 seconds.
+    preparePlan = prepareCoordinator.preparePlan(now, true);
+    assert(!preparePlan.timedOut);
+    assert(!preparePlan.retryWithTranscodeFallback);
+    prepareCoordinator.beginPreparing(now - 45s);
+    preparePlan = prepareCoordinator.preparePlan(now, true);
+    assert(preparePlan.timedOut);
+    assert(!preparePlan.retryWithTranscodeFallback);
     prepareCoordinator.finishPreparing();
     assert(!prepareCoordinator.session().preparing());
     prepareTarget.playMethod = PlaybackMethod::Transcode;

@@ -362,7 +362,7 @@ public:
           playbackCompletionFlow_(playbackCoordinator_, queueState_, detailsFlow_, playerScreenState_),
           trickplayCoordinator_(trickplayState_, playbackCoordinator_, session_, trickplayTileAsync_),
           playbackRuntime_(playbackCoordinator_, playerScreenState_, player_, videoSurface_, session_, settings_,
-                           requestEpochs_.playback, loading_, error_, dataPath_),
+                           requestEpochs_.playback, loading_, error_, dataPath_, &serverInfo_),
           playbackCompletions_(playbackCompletionFlow_, requestEpochs_.playback, screen_, detailsFlow_, detailsScreens_,
                                session_, loading_, error_, playbackRuntime_, playbackTelemetryAsync_),
           externalPlaybackCoordinator_(
