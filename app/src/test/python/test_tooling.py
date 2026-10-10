@@ -375,11 +375,11 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("publish-play-store:", workflow)
         self.assertIn("play_listing_only:", workflow)
         self.assertIn("publish-play-listing:", workflow)
-        self.assertIn("name: Publish freshly generated Google Play listing", workflow)
+        self.assertIn("name: Refresh Google Play default and TV screenshots", workflow)
         self.assertIn("bundle exec fastlane android metadata", workflow)
         self.assertIn("inputs.play_listing_only != true", workflow)
-        self.assertIn("Download freshly generated screenshots", workflow)
-        self.assertIn("Replace listing screenshots with fresh captures", workflow)
+        self.assertIn("--mirror-tv-to-phone", workflow)
+        self.assertIn("# A listing-only refresh is intentionally independent", workflow)
         self.assertIn("*x86_64-release.apk", workflow)
         self.assertIn("Capturing screenshots from $screenshot_apk", workflow)
         self.assertIn("needs: [build, screenshots, release-gate]", workflow)
@@ -700,6 +700,31 @@ class WaydroidToolingTest(unittest.TestCase):
                 encoding="utf-8",
             )
             self.assertEqual(sync_play_store_screenshots.screenshot_files(source), [source / "store.png"])
+
+    def test_metadata_sync_mirrors_store_screenshots_into_web_and_tv(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "generated"
+            source.mkdir()
+            screenshot = source / "02-home.png"
+            # The sync tool reads just the PNG dimensions.
+            screenshot.write_bytes(
+                b"\x89PNG\r\n\x1a\n"
+                + b"\x00\x00\x00\rIHDR"
+                + (1920).to_bytes(4, "big")
+                + (1080).to_bytes(4, "big")
+                + b"\x08\x02"
+            )
+            images = root / "images"
+            sync_play_store_screenshots.sync_screenshots(source, images / "tvScreenshots")
+            sync_play_store_screenshots.sync_screenshots(source, images / "phoneScreenshots")
+            web = images / "phoneScreenshots" / "01-home.png"
+            tv = images / "tvScreenshots" / "01-home.png"
+            self.assertEqual(web.read_bytes(), tv.read_bytes())
+            (images / "phoneScreenshots" / "obsolete.png").write_bytes(b"old")
+            sync_play_store_screenshots.sync_screenshots(images / "tvScreenshots", images / "phoneScreenshots")
+            self.assertFalse((images / "phoneScreenshots" / "obsolete.png").exists())
+            self.assertEqual(web.read_bytes(), tv.read_bytes())
 
     def test_ci_screenshot_script_requires_emulator_serial(self) -> None:
         environment = os.environ.copy()

@@ -149,6 +149,16 @@ def validate(locale: str) -> None:
     )
     if not 1 <= len(screenshots) <= 8:
         raise RuntimeError(f"expected 1-8 Android TV screenshots, found {len(screenshots)}")
+    # Google Play's web/default listing presents phone screenshots ahead of TV
+    # screenshots. An Android TV-only app must keep these categories in sync or
+    # visitors continue seeing the obsolete phone set despite a successful TV upload.
+    phone = images / "phoneScreenshots"
+    if phone.is_dir():
+        phone_shots = sorted(path for path in phone.iterdir() if path.suffix.lower() in IMAGE_SUFFIXES)
+        if [(path.name, path.read_bytes()) for path in phone_shots] != [
+            (path.name, path.read_bytes()) for path in screenshots
+        ]:
+            raise RuntimeError("default/phone screenshots differ from Android TV screenshots")
     for path in screenshots:
         width, height = image_dimensions(path)
         if width < 320 or height < 320 or width > 3840 or height > 3840:
@@ -170,14 +180,22 @@ def main() -> None:
     parser.add_argument("--source", type=Path, help="directory containing generated 1920x1080 screenshots")
     parser.add_argument("--locale", default=DEFAULT_LOCALE)
     parser.add_argument("--validate-only", action="store_true")
+    parser.add_argument(
+        "--mirror-tv-to-phone",
+        action="store_true",
+        help="update web/default screenshots from checked-in TV screenshots, without running an emulator",
+    )
     args = parser.parse_args()
 
-    if args.validate_only and args.source is not None:
-        parser.error("--validate-only cannot be combined with --source")
-    if not args.validate_only:
-        if args.source is None:
-            parser.error("--source is required unless --validate-only is used")
-        sync_screenshots(args.source.resolve(), METADATA_ROOT / args.locale / "images" / "tvScreenshots")
+    if sum((args.validate_only, args.source is not None, args.mirror_tv_to_phone)) != 1:
+        parser.error("choose exactly one of --source, --mirror-tv-to-phone or --validate-only")
+    images = METADATA_ROOT / args.locale / "images"
+    if args.source is not None:
+        source = args.source.resolve()
+        sync_screenshots(source, images / "tvScreenshots")
+        sync_screenshots(source, images / "phoneScreenshots")
+    elif args.mirror_tv_to_phone:
+        sync_screenshots(images / "tvScreenshots", images / "phoneScreenshots")
     validate(args.locale)
 
 

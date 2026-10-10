@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       play_listing_only:
-        description: "Publish the current Google Play listing/screenshots without releasing a binary"
+        description: "Refresh public/default and Android TV screenshots without releasing a binary"
         required: false
         default: false
         type: boolean
@@ -74,6 +74,9 @@ jobs:
           echo "should_release=true" >> "$GITHUB_OUTPUT"
 
   build:
+    # A listing-only refresh is intentionally independent of native build/lint
+    # gates, so stale website screenshots can be fixed without shipping an AAB.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.play_listing_only != true }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -369,9 +372,10 @@ jobs:
           exit "$publish_status"
 
   publish-play-listing:
-    name: Publish freshly generated Google Play listing
+    name: Refresh Google Play default and TV screenshots
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.play_listing_only == true }}
-    needs: screenshots
+    # Use the last vetted, checked-in TV screenshots. No APK or emulator is
+    # required for a metadata-only refresh of the website's obsolete images.
     runs-on: ubuntu-latest
 
     steps:
@@ -381,14 +385,8 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
-      - name: Download freshly generated screenshots
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          name: sloppaTV-screenshots
-          path: artifacts/ci-screenshots
-
-      - name: Replace listing screenshots with fresh captures
-        run: python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots
+      - name: Mirror current TV screenshots into the public/default listing
+        run: python3 tools/sync_play_store_screenshots.py --mirror-tv-to-phone
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@a0102e0972be65f351c307e2d64b9314a57c8073 # v1

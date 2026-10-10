@@ -22,3 +22,6 @@ fastlane/screenshots.html
 fastlane/test_output/
 fastlane/*.json
 .venv/
+
+# Derived for the Google Play website/default listing from TV screenshots.
+fastlane/metadata/android/en-US/images/phoneScreenshots/
