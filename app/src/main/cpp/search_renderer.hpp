@@ -90,13 +90,14 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     constexpr float xGap = 32.0f;
 
     std::vector<int> semanticRows;
-    if (!query.empty() || state.rowItemCount(SearchScreenState::kLibraryRow) > 0 || state.loading()) {
+    if (state.rowItemCount(SearchScreenState::kLibraryRow) > 0 ||
+        (state.rowItemCount(SearchScreenState::kEpisodeRow) == 0 && (!query.empty() || state.loading()))) {
         semanticRows.push_back(SearchScreenState::kLibraryRow);
     }
-    if (seerrConfigured) semanticRows.push_back(SearchScreenState::kSeerrRow);
     if (state.rowItemCount(SearchScreenState::kEpisodeRow) > 0) {
         semanticRows.push_back(SearchScreenState::kEpisodeRow);
     }
+    if (seerrConfigured) semanticRows.push_back(SearchScreenState::kSeerrRow);
     if (semanticRows.empty()) {
         renderEmpty("No results found", seerrConfigured
                                             ? "No Jellyfin or Seerr matches for this search."

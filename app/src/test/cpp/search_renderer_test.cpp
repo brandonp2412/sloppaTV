@@ -213,6 +213,56 @@ int main() {
     assert(contains(centered, "90%"));
     assert(contains(centered, "50%"));
 
+    // When only Remux episodes match, show playable episodes above Seerr rather than a blank library row.
+    SearchScreenState episodeOnly(seerrItems);
+    episodeOnly.setQuery("episode");
+    episodeOnly.setKeyboard(false);
+    JellyfinItem localEpisode;
+    localEpisode.id = "remux-episode";
+    localEpisode.type = "Episode";
+    assert(episodeOnly.finishLibrarySearch("episode", {localEpisode}));
+    episodeOnly.refreshSeerrResults();
+    FakeRenderer episodeRenderer;
+    int episodeCards = 0;
+    int remoteCards = 0;
+    renderSearchScreen(
+        episodeRenderer, episodeOnly, true, false, false, "", false, {}, style,
+        [](float x, float y, float width, float height, bool, float) {
+            return std::array<float, 4>{x, y, width, height};
+        },
+        [](std::string_view value, float, float, int) { return std::string(value); },
+        [](float, float, float, float, float, std::string_view, int) {},
+        [](float, float, float, float, float, std::string_view, int, float, float) {},
+        [](float) {}, [](std::string_view, std::string_view) {},
+        [](float x, float y, float width, float height, bool, float) {
+            return std::array<float, 4>{x, y, width, height};
+        },
+        [](const JellyfinItem&, float, float, float, float, float) { return false; },
+        [&](const JellyfinItem& item, float, float y, float, float, float) {
+            assert(item.id == "seerr:movie:2");
+            assert(y == 764.0f);
+            ++remoteCards;
+        },
+        [](float, float, float, float, int, float) {},
+        [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
+        [&](const JellyfinItem& item, float, float y, float, bool, bool, bool, bool, int) {
+            assert(item.id == "remux-episode");
+            assert(y == 314.0f);
+            ++episodeCards;
+        },
+        [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; },
+        [](int, float) { return 99; });
+    assert(episodeCards == 1);
+    assert(remoteCards == 1);
+    assert(!contains(episodeRenderer.texts, "In your library"));
+    bool episodeHeadingFirst = false;
+    bool seerrHeadingSecond = false;
+    for (const auto& call : episodeRenderer.texts) {
+        if (call.value == "Episodes" && call.y == 258.0f) episodeHeadingFirst = true;
+        if (call.value == "Seerr" && call.y == 710.0f) seerrHeadingSecond = true;
+    }
+    assert(episodeHeadingFirst && seerrHeadingSecond);
+
     SearchScreenState loadingState(noSeerr);
     loadingState.setQuery("loading");
     loadingState.setKeyboard(false);

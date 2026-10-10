@@ -65,14 +65,19 @@ int main() {
     assert(!seerrState.loading());
     assert(state.rowItemCount(SearchScreenState::kSeerrRow) == 1);
     assert(state.results().size() == 8);
-    assert(state.results()[4].id == "seerr:tv:300");
-    assert(state.results()[4].externalSource == "seerr");
-    assert(state.results()[4].externalJellyfinId == "jellyfin-series-300");
-    assert(state.results()[4].externalAvailable);
-    assert(state.results()[5].id == "1");
+    // Every playable library match, including episodes, precedes Seerr requests.
+    assert(state.results()[4].id == "1");
+    assert(state.results()[6].id == "5");
+    assert(state.results()[7].id == "seerr:tv:300");
+    assert(state.results()[7].externalSource == "seerr");
+    assert(state.results()[7].externalJellyfinId == "jellyfin-series-300");
+    assert(state.results()[7].externalAvailable);
 
     state.moveSelection(1, 0, 5);
     assert(state.selection() == 1);
+    state.moveSelection(0, 1, 5);
+    assert(state.selectedRow() == SearchScreenState::kEpisodeRow);
+    assert(state.results()[static_cast<size_t>(state.selection())].id == "3");
     state.moveSelection(0, 1, 5);
     assert(state.selectedRow() == SearchScreenState::kSeerrRow);
     assert(state.results()[static_cast<size_t>(state.selection())].id == "seerr:tv:300");
@@ -80,14 +85,49 @@ int main() {
     assert(selectedSeerr);
     assert(selectedSeerr->id == "seerr:tv:300");
     assert(selectedSeerr->jellyfinId == "jellyfin-series-300");
-    state.moveSelection(0, 1, 5);
-    assert(state.selectedRow() == SearchScreenState::kEpisodeRow);
     state.moveSelection(0, -1, 5);
-    assert(state.selectedRow() == SearchScreenState::kSeerrRow);
+    assert(state.selectedRow() == SearchScreenState::kEpisodeRow);
     state.moveSelection(0, -1, 5);
     assert(state.selectedRow() == SearchScreenState::kLibraryRow);
     assert(state.selectionOnFirstResultRow());
     assert(state.selectedSeerrResult() == nullptr);
+
+    // Episode-only Remux searches must select the playable match, not a Seerr request.
+    SearchScreenState episodeFirst(seerrState.results());
+    episodeFirst.setQuery("bro");
+    JellyfinItem playableEpisode;
+    playableEpisode.id = "remux-episode";
+    playableEpisode.type = "Episode";
+    assert(episodeFirst.finishLibrarySearch("bro", {playableEpisode}));
+    assert(episodeFirst.firstPopulatedRow() == SearchScreenState::kEpisodeRow);
+    assert(episodeFirst.results().front().id == "remux-episode");
+    assert(episodeFirst.selectedRow() == SearchScreenState::kEpisodeRow);
+    episodeFirst.moveSelection(0, 1, 5);
+    assert(episodeFirst.selectedRow() == SearchScreenState::kSeerrRow);
+    assert(episodeFirst.selectedSeerrResult() != nullptr);
+
+    // Seerr's async response can arrive first: later playable matches still receive initial focus.
+    SearchScreenState seerrFirst(seerrState.results());
+    seerrFirst.setQuery("bro");
+    seerrFirst.refreshSeerrResults();
+    assert(seerrFirst.selectedRow() == SearchScreenState::kSeerrRow);
+    assert(seerrFirst.finishLibrarySearch("bro", {playableEpisode}));
+    assert(seerrFirst.selection() == 0);
+    assert(seerrFirst.selectedRow() == SearchScreenState::kEpisodeRow);
+
+    // But a user who already navigated the remote results keeps their explicit selection.
+    std::vector<SeerrMediaItem> twoRemote{seerrState.results().back()};
+    twoRemote.push_back(twoRemote.front());
+    twoRemote.back().id = "seerr:tv:301";
+    twoRemote.back().tmdbId = 301;
+    SearchScreenState userNavigated(twoRemote);
+    userNavigated.setQuery("bro");
+    userNavigated.refreshSeerrResults();
+    userNavigated.moveSelection(1, 0, 5);
+    assert(userNavigated.selection() == 1);
+    assert(userNavigated.finishLibrarySearch("bro", {playableEpisode}));
+    assert(userNavigated.selectedRow() == SearchScreenState::kSeerrRow);
+    assert(userNavigated.selectedSeerrResult()->id == "seerr:tv:301");
 
     seerrState.markRequested("seerr:tv:300", "Episode 1 queued", 42);
     state.refreshSeerrResults();

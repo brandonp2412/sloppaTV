@@ -47,8 +47,8 @@ public:
     using Clock = std::chrono::steady_clock;
     static constexpr auto kDebounceDelay = std::chrono::milliseconds(180);
     static constexpr int kLibraryRow = 0;
-    static constexpr int kSeerrRow = 1;
-    static constexpr int kEpisodeRow = 2;
+    static constexpr int kEpisodeRow = 1;
+    static constexpr int kSeerrRow = 2;
     static constexpr int kRowCount = 3;
 
     explicit SearchScreenState(const std::vector<SeerrMediaItem>& seerrResults) : seerrResults_(seerrResults) {}
@@ -60,6 +60,7 @@ public:
         results_.clear();
         selection_ = 0;
         firstVisible_ = {0, 0, 0};
+        navigatedResults_ = false;
         keyboard_ = true;
         loading_ = false;
         debouncePending_ = false;
@@ -84,8 +85,8 @@ public:
 
     [[nodiscard]] int rowStart(int row) const {
         if (row <= kLibraryRow) return 0;
-        if (row == kSeerrRow) return static_cast<int>(libraryTitles_.size());
-        return static_cast<int>(libraryTitles_.size() + visibleSeerrCount());
+        if (row == kEpisodeRow) return static_cast<int>(libraryTitles_.size());
+        return static_cast<int>(libraryTitles_.size() + episodes_.size());
     }
 
     [[nodiscard]] int rowItemCount(int row) const {
@@ -98,10 +99,10 @@ public:
     [[nodiscard]] int selectedRow() const {
         if (results_.empty()) return firstPopulatedRow();
         const int libraryEnd = static_cast<int>(libraryTitles_.size());
-        const int seerrEnd = libraryEnd + static_cast<int>(visibleSeerrCount());
+        const int episodeEnd = libraryEnd + static_cast<int>(episodes_.size());
         if (selection_ < libraryEnd) return kLibraryRow;
-        if (selection_ < seerrEnd) return kSeerrRow;
-        return kEpisodeRow;
+        if (selection_ < episodeEnd) return kEpisodeRow;
+        return kSeerrRow;
     }
 
     [[nodiscard]] int firstPopulatedRow() const {
@@ -134,18 +135,21 @@ public:
         query_ = std::move(query);
         selection_ = 0;
         firstVisible_ = {0, 0, 0};
+        navigatedResults_ = false;
     }
 
     void append(char value) {
         query_.push_back(value);
         selection_ = 0;
         firstVisible_ = {0, 0, 0};
+        navigatedResults_ = false;
     }
 
     [[nodiscard]] bool backspace() {
         if (!eraseLastUtf8CodePoint(query_)) return false;
         selection_ = 0;
         firstVisible_ = {0, 0, 0};
+        navigatedResults_ = false;
         return true;
     }
 
@@ -154,11 +158,14 @@ public:
     void setLoading(bool loading) { loading_ = loading; }
 
     void setSelection(int selection) {
+        const int previous = selection_;
         selection_ = results_.empty() ? 0 : std::clamp(selection, 0, static_cast<int>(results_.size()) - 1);
+        if (selection_ != previous) navigatedResults_ = true;
     }
 
     [[nodiscard]] bool scheduleDebounce(Clock::time_point now) {
         selection_ = 0;
+        navigatedResults_ = false;
         if (query_.empty()) {
             debouncePending_ = false;
             loading_ = false;
@@ -185,6 +192,7 @@ public:
     [[nodiscard]] bool beginSearch() {
         debouncePending_ = false;
         selection_ = 0;
+        navigatedResults_ = false;
         if (query_.empty()) {
             loading_ = false;
             clearResults();
@@ -210,7 +218,13 @@ public:
             else
                 libraryTitles_.push_back(std::move(item));
         }
+        const bool hasLocalResults = !libraryTitles_.empty() || !episodes_.empty();
         rebuildResults();
+        // Seerr may complete first; do not leave its automatically selected card ahead of playable results.
+        if (hasLocalResults && !navigatedResults_) {
+            selection_ = 0;
+            firstVisible_ = {0, 0, 0};
+        }
         return true;
     }
 
@@ -226,6 +240,7 @@ public:
         results_.clear();
         selection_ = 0;
         firstVisible_ = {0, 0, 0};
+        navigatedResults_ = false;
     }
 
     bool removeItem(const std::string& itemId) {
@@ -305,6 +320,7 @@ public:
 
     void moveSelection(int dx, int dy, int columns) {
         if (results_.empty() || columns <= 0) return;
+        const int previous = selection_;
         int row = selectedRow();
         const int start = rowStart(row);
         const int count = rowItemCount(row);
@@ -337,6 +353,7 @@ public:
         else if (selectedLocal >= first + columns)
             first = selectedLocal - columns + 1;
         firstVisible_[static_cast<size_t>(row)] = std::clamp(first, 0, maxFirst);
+        if (selection_ != previous) navigatedResults_ = true;
     }
 
 private:
@@ -364,10 +381,10 @@ private:
         results_.clear();
         results_.reserve(libraryTitles_.size() + seerrResults_.size() + episodes_.size());
         results_.insert(results_.end(), libraryTitles_.begin(), libraryTitles_.end());
+        results_.insert(results_.end(), episodes_.begin(), episodes_.end());
         for (const auto& item : seerrResults_) {
             if (!duplicatesLocalLibrary(item)) results_.push_back(jellyfinItemFromSeerrMedia(item));
         }
-        results_.insert(results_.end(), episodes_.begin(), episodes_.end());
 
         if (!selectedId.empty()) {
             const auto selected = std::find_if(results_.begin(), results_.end(),
@@ -391,6 +408,7 @@ private:
     std::vector<JellyfinItem> results_;
     int selection_ = 0;
     std::array<int, kRowCount> firstVisible_{0, 0, 0};
+    bool navigatedResults_ = false;
     bool keyboard_ = true;
     bool loading_ = false;
     bool debouncePending_ = false;
