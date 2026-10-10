@@ -129,7 +129,7 @@ public:
         error_.clear();
         playback_.beginUserPlayback(false);
         SeriesPlayAllOptions options{.maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-                                     .maxAudioChannels = settings_.maxAudioChannels,
+                                     .maxAudioChannels = runtime_.serverAudioChannels(),
                                      .overrides = playbackOverridesFor(settings_)};
         if (!seriesPlayback_.playAll(session_, details_.item(), options, playbackEpoch_.begin()))
             rejectPlaybackResolution("PLAY ALL COULD NOT BE STARTED");

@@ -26,6 +26,13 @@ struct AudioCodecCapabilities {
     bool directTrueHd = false;
 };
 
+// For a Remux direct-play source, libmpv can decode/downmix surround locally.
+// Keep the original audio stream available rather than requesting an
+// unnecessary server-side transcode when the HDMI output is stereo.
+constexpr int serverAudioChannels(bool isRemux, int outputChannels) {
+    return isRemux ? 8 : std::clamp(outputChannels, 2, 8);
+}
+
 constexpr int effectiveAudioChannels(int requestedChannels, int routeChannels) {
     const int requested = std::clamp(requestedChannels, 2, 8);
     if (requested <= 2) return 2;

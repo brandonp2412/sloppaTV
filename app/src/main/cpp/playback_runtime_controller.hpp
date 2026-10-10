@@ -121,11 +121,15 @@ public:
         };
     }
 
+    [[nodiscard]] int serverAudioChannels() const {
+        return ::serverAudioChannels(serverInfo_ && serverInfo_->isRemux, settings_.maxAudioChannels);
+    }
+
     [[nodiscard]] PlaybackResolutionOptions resolutionOptions() const {
         const PlaybackLanguagePreferences preferences = coordinator_.languagePreferences();
         return {
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-            .maxAudioChannels = settings_.maxAudioChannels,
+            .maxAudioChannels = serverAudioChannels(),
             .overrides = playbackOverridesFor(settings_),
             .preferredMediaSources = settings_.preferredMediaSources,
             .audioLanguagePreference = preferences.audio,
@@ -206,7 +210,7 @@ public:
         if (stream.restart(session_, std::move(item), previousTarget, shouldReportPrevious,
                            PlaybackStreamResolutionOptions{
                                .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-                               .maxAudioChannels = settings_.maxAudioChannels,
+                               .maxAudioChannels = serverAudioChannels(),
                                .overrides = playbackOverridesFor(settings_),
                                .audioStreamIndex = audioStreamIndex,
                                .subtitleStreamIndex = subtitleStreamIndex,
@@ -318,7 +322,7 @@ public:
         coordinator_.beginPreparing(now);
         player_.startAsync(start.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
-                           start.externalSubtitleUrl, activeDecodeMode());
+                           start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels);
         if (startPositionMs > 0) screenState_.beginInitialPosition(startPositionMs, now);
     }
 
@@ -414,7 +418,7 @@ public:
             stream.resolveFallback(session_, std::move(item), failedTarget, shouldReportPrevious, resumeTicks,
                                    PlaybackStreamResolutionOptions{
                                        .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
-                                       .maxAudioChannels = settings_.maxAudioChannels,
+                                       .maxAudioChannels = serverAudioChannels(),
                                        .overrides = fallbackOverrides,
                                        .audioStreamIndex = audioStreamIndex,
                                        .subtitleStreamIndex = subtitleStreamIndex,

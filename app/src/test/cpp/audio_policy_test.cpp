@@ -12,6 +12,10 @@ bool hasCodec(const std::vector<std::string>& codecs, const std::string& codec) 
 } // namespace
 
 int main() {
+    assert(serverAudioChannels(true, 2) == 8);
+    assert(serverAudioChannels(true, 8) == 8);
+    assert(serverAudioChannels(false, 2) == 2);
+    assert(serverAudioChannels(false, 6) == 6);
     assert(effectiveAudioChannels(2, 8) == 2);
     assert(effectiveAudioChannels(8, 2) == 2);
     assert(effectiveAudioChannels(8, 6) == 6);

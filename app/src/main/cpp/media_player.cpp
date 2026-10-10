@@ -308,7 +308,7 @@ bool NativeMediaPlayer::setOptionLocked(const char* name, const std::string& val
 }
 
 bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int bufferPreset, PlaybackDecodeMode decodeMode,
-                                         std::string& error) {
+                                         int maxAudioChannels, std::string& error) {
     if (!env || !surface || !activity_ || !appContext_) {
         error = "Missing Android playback context or surface";
         return false;
@@ -399,6 +399,11 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
         if (!setOptionLocked(option.name, option.value, option.required, &error)) return false;
     }
 
+    // The server's stereo setting must also constrain embedded playback.
+    // Direct-play bypasses Jellyfin transcoding: mpv otherwise outputs 5.1 PCM
+    // to HDMI even if the account explicitly requests stereo.
+    if (maxAudioChannels <= 2 && !setOptionLocked("audio-channels", "stereo", true, &error)) return false;
+
     const int initializeResult = symbols_->initialize(mpv_);
     if (initializeResult < 0) {
         const char* message = symbols_->errorString(initializeResult);
@@ -475,7 +480,7 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
 void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset,
                                    int embeddedAudioOrdinal, int embeddedSubtitleStreamIndex,
                                    int embeddedSubtitleOrdinal, const std::string& externalSubtitleUrl,
-                                   PlaybackDecodeMode decodeMode) {
+                                   PlaybackDecodeMode decodeMode, int maxAudioChannels) {
     stop();
     if (!surface || url.empty()) {
         std::scoped_lock lock(mutex_);
@@ -495,7 +500,7 @@ void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int6
 
     std::scoped_lock lock(mutex_);
     std::string error;
-    if (!initializeLocked(env, surface, bufferPreset, decodeMode, error)) {
+    if (!initializeLocked(env, surface, bufferPreset, decodeMode, maxAudioChannels, error)) {
         error_ = error;
         cachedStatus_ = PlayerStatus::Error;
         releaseLocked(env);
