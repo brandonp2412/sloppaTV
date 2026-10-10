@@ -4,7 +4,7 @@ import io
 from itertools import groupby
 from pathlib import Path
 
-import cairosvg
+import cairosvg  # ty: ignore[unresolved-import]  # Optional tool dependency; run with --with cairosvg.
 from PIL import Image
 
 # Original paths on a 24-unit grid; keep order aligned with ui_icons::Glyph.
