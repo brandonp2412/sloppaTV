@@ -46,6 +46,15 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.maxBitrateMbps = std::clamp(valueOr(saved, "maxBitrateMbps", settings.maxBitrateMbps), 20, 200);
     settings.playbackBufferPreset =
         std::clamp(valueOr(saved, "playbackBufferPreset", settings.playbackBufferPreset), 0, 2);
+    settings.preferredMediaSources.clear();
+    if (auto it = saved.find("preferredMediaSources"); it != saved.end() && it->is_object()) {
+        for (auto entry = it->begin(); entry != it->end() && settings.preferredMediaSources.size() < 512; ++entry) {
+            if (entry.key().size() == 32 && entry.value().is_string() &&
+                entry.value().get<std::string>().size() == 32) {
+                settings.preferredMediaSources.emplace(entry.key(), entry.value().get<std::string>());
+            }
+        }
+    }
     settings.seekBackSeconds = std::clamp(valueOr(saved, "seekBackSeconds", settings.seekBackSeconds), 5, 60);
     settings.seekForwardSeconds = std::clamp(valueOr(saved, "seekForwardSeconds", settings.seekForwardSeconds), 5, 60);
     settings.zoomMode = std::clamp(valueOr(saved, "zoomMode", settings.zoomMode), 0, 2);
@@ -118,6 +127,7 @@ json writeSettings(const AppSettings& settings) {
     return {
         {"maxBitrateMbps", settings.maxBitrateMbps},
         {"playbackBufferPreset", settings.playbackBufferPreset},
+        {"preferredMediaSources", settings.preferredMediaSources},
         {"seekBackSeconds", settings.seekBackSeconds},
         {"seekForwardSeconds", settings.seekForwardSeconds},
         {"zoomMode", settings.zoomMode},

@@ -41,6 +41,7 @@ struct FakeClient {
                                                    int subtitleStreamIndex) {
         lastServer = session.server;
         resolvedItemName = item.name;
+        resolvedMediaSourceId = item.mediaSourceId;
         lastMaxStreamingBitrate = maxStreamingBitrate;
         lastMaxAudioChannels = maxAudioChannels;
         lastOverrides = overrides;
@@ -59,6 +60,7 @@ struct FakeClient {
     std::string lastServer;
     std::string lastRequestedItemId;
     std::string resolvedItemName;
+    std::string resolvedMediaSourceId;
     int lastMaxStreamingBitrate = 0;
     int lastMaxAudioChannels = 0;
     PlaybackOverrides lastOverrides;
@@ -94,6 +96,10 @@ int main() {
     assert(resolved.target.ok);
     assert(resolved.target.value.audioStreamIndex == 3);
     assert(resolved.target.value.subtitleStreamIndex == 4);
+    options.preferredMediaSources[item.id] = "known-good-source";
+    resolved = resolvePreferredPlayback(client, session, item, options);
+    assert(resolved.item.mediaSourceId == "known-good-source");
+    assert(client.resolvedMediaSourceId == "known-good-source");
 
     client.detailOk = false;
     item.audios = {

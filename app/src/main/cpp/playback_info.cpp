@@ -130,7 +130,8 @@ std::string buildPlaybackInfoRequestBody(const JellyfinSession& session, const J
 }
 
 ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view responseBody, int audioStreamIndex,
-                                                         int subtitleStreamIndex, PlaybackOverrides overrides) {
+                                                         int subtitleStreamIndex, PlaybackOverrides overrides,
+                                                         std::string_view requestedMediaSourceId) {
     ApiValueResult<PlaybackInfoOffer> result;
     try {
         const auto data = json::parse(responseBody);
@@ -181,6 +182,13 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
             if (rank < bestRank) {
                 source = candidate;
                 bestRank = rank;
+            }
+            // Prefer a version proven playable, but only when this playback
+            // request can actually use the advertised route.
+            if (rank < 3 && !requestedMediaSourceId.empty() &&
+                scalarValueOr(*candidate, "Id", std::string{}) == requestedMediaSourceId) {
+                source = candidate;
+                break;
             }
         }
 

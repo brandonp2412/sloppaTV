@@ -1055,7 +1055,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
         return result;
     }
 
-    auto offerResult = parsePlaybackInfoOffer(response.body, audioStreamIndex, subtitleStreamIndex, overrides);
+    auto offerResult = parsePlaybackInfoOffer(response.body, audioStreamIndex, subtitleStreamIndex, overrides, item.mediaSourceId);
     if (!offerResult.ok) {
         result.error = std::move(offerResult.error);
         return result;

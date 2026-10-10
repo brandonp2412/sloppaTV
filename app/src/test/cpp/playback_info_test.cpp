@@ -157,6 +157,31 @@ int main() {
     assert(alternateVersionOffer.value.container == "mp4");
     assert(alternateVersionOffer.value.audioStreamIndex == 2);
     assert(alternateVersionOffer.value.supportsDirectPlay);
+    const auto selectedVersionOffer = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {"Id":"first","Container":"mkv","SupportsDirectPlay":true},
+            {"Id":"known-good","Container":"mp4","SupportsDirectPlay":true}
+        ]
+    })", -1, kSubtitleServerDefaultIndex, {}, "known-good");
+    assert(selectedVersionOffer.ok);
+    assert(selectedVersionOffer.value.mediaSourceId == "known-good");
+    assert(selectedVersionOffer.value.container == "mp4");
+    const auto absentVersionOffer = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {"Id":"first","SupportsDirectPlay":true},
+            {"Id":"other","SupportsDirectPlay":true}
+        ]
+    })", -1, kSubtitleServerDefaultIndex, {}, "not-present");
+    assert(absentVersionOffer.ok);
+    assert(absentVersionOffer.value.mediaSourceId == "first");
+    const auto incompatiblePreferred = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {"Id":"healthy","SupportsDirectPlay":true},
+            {"Id":"preferred","SupportsDirectPlay":false,"SupportsDirectStream":false,"SupportsTranscoding":false}
+        ]
+    })", -1, kSubtitleServerDefaultIndex, {}, "preferred");
+    assert(incompatiblePreferred.ok);
+    assert(incompatiblePreferred.value.mediaSourceId == "healthy");
 
     const auto preferDirectPlayOffer = parsePlaybackInfoOffer(R"({
         "MediaSources": [

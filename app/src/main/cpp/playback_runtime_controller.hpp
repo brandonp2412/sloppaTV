@@ -127,6 +127,7 @@ public:
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
             .maxAudioChannels = settings_.maxAudioChannels,
             .overrides = playbackOverridesFor(settings_),
+            .preferredMediaSources = settings_.preferredMediaSources,
             .audioLanguagePreference = preferences.audio,
             .subtitleLanguagePreference = preferences.subtitle,
             .trackPolicy = trackSelectionPolicy(),

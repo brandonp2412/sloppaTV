@@ -22,6 +22,7 @@ int main() {
     };
     state.savedSessions.push_back(state.currentSession);
     state.hiddenHomeItems.insert("user-1:item-1");
+    state.settings.preferredMediaSources[std::string(32, 'a')] = std::string(32, 'b');
     state.settings.maxBitrateMbps = 80;
     state.settings.stillWatchingAfter = 0;
     state.settings.ambientLetterboxBars = true;
@@ -55,6 +56,7 @@ int main() {
     assert(loaded.savedSessions.front().userId == "user-1");
     assert(loaded.hiddenHomeItems.contains("user-1:item-1"));
     assert(loaded.settings.maxBitrateMbps == 80);
+    assert(loaded.settings.preferredMediaSources.at(std::string(32, 'a')) == std::string(32, 'b'));
     assert(loaded.settings.stillWatchingAfter == 0);
     assert(loaded.settings.ambientLetterboxBars);
     assert(loaded.settings.skipDisabledSeriesIds.size() == 2);

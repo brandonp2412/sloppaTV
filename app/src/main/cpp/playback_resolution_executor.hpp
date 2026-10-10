@@ -117,6 +117,10 @@ public:
                 if (detailed.ok) playable = std::move(detailed.value);
             }
 
+            if (const auto preferred = options.preferredMediaSources.find(playable.id);
+                preferred != options.preferredMediaSources.end()) {
+                playable.mediaSourceId = preferred->second;
+            }
             const auto tracks = selectPlaybackTracks(playable, options.audioLanguagePreference,
                                                      options.subtitleLanguagePreference, options.trackPolicy);
             auto target =

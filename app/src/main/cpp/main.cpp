@@ -1209,6 +1209,21 @@ private:
         applyPlaybackHostEffect(playbackRuntime_.tickActivePlayer(playbackStreamAsync_, playbackTelemetryAsync_,
                                                                   playbackContinuationAsync_, mediaSession_,
                                                                   queueState_, renderer_.ready(), stateMutex_));
+        // Remember a genuinely playable Remux version, not the first advertised
+        // torrent. Source IDs survive refreshed searches, unlike list indices.
+        if (screen_ != Screen::Player || !serverInfo_.isRemux || !playbackCoordinator_.activeItemAvailable()) return;
+        const auto& item = playbackCoordinator_.session().activeItem();
+        const auto& source = playbackCoordinator_.session().activeTarget().mediaSourceId;
+        if (item.id.size() != 32 || source.size() != 32 || source == item.id) return;
+        const auto preferred = settings_.preferredMediaSources.find(item.id);
+        if (preferred != settings_.preferredMediaSources.end() && preferred->second == source) return;
+        if (player_.status() != PlayerStatus::Playing || player_.positionMs() < 5000) return;
+        if (preferred == settings_.preferredMediaSources.end() && settings_.preferredMediaSources.size() >= 512)
+            settings_.preferredMediaSources.erase(settings_.preferredMediaSources.begin());
+        settings_.preferredMediaSources[item.id] = source;
+        persistSession();
+        __android_log_print(ANDROID_LOG_INFO, kTag, "Remembered playable Remux source %.8s for item %.8s",
+                            source.c_str(), item.id.c_str());
     }
 
     void applyAsyncCompletion(SystemTextInputEvent& event) {

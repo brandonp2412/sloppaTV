@@ -5,12 +5,14 @@
 
 #include <optional>
 #include <string>
+#include <map>
 #include <utility>
 
 struct PlaybackResolutionOptions {
     int maxStreamingBitrate = 0;
     int maxAudioChannels = 0;
     PlaybackOverrides overrides;
+    std::map<std::string, std::string> preferredMediaSources;
     std::optional<std::string> audioLanguagePreference;
     std::optional<std::string> subtitleLanguagePreference;
     PlaybackTrackSelectionPolicy trackPolicy;
@@ -26,6 +28,10 @@ PlaybackResolutionResult resolvePreferredPlayback(Client& client, const Jellyfin
                                                   const PlaybackResolutionOptions& options) {
     auto detailed = client.getItem(session, item.id);
     if (detailed.ok) item = std::move(detailed.value);
+    if (const auto preferred = options.preferredMediaSources.find(item.id);
+        preferred != options.preferredMediaSources.end()) {
+        item.mediaSourceId = preferred->second;
+    }
     const auto tracks = selectPlaybackTracks(item, options.audioLanguagePreference, options.subtitleLanguagePreference,
                                              options.trackPolicy);
     auto target = client.resolvePlayback(session, item, options.maxStreamingBitrate, options.maxAudioChannels,
