@@ -20,6 +20,20 @@ int main() {
     state.setActive(activeItem, activeTarget);
     assert(state.activeItem().id == "episode-1");
     assert(state.activeTarget().url == activeTarget.url);
+    state.mergeEmbeddedSubtitles({{
+        .index = 3, .codec = "ass", .language = "eng", .title = "Full Subtitles",
+        .discoveredByPlayer = true,
+    }});
+    assert(state.activeItem().subtitles.size() == 1);
+    assert(state.activeItem().subtitles.front().index == 3);
+    assert(state.activeItem().subtitles.front().discoveredByPlayer);
+    state.mergeEmbeddedSubtitles({{
+        .index = 3, .codec = "ass", .language = "eng", .title = "Full Subtitles [P9]",
+        .discoveredByPlayer = true,
+    }});
+    assert(state.activeItem().subtitles.size() == 1);
+    assert(state.activeItem().subtitles.front().title == "Full Subtitles [P9]");
+
     state.activeTarget().audioStreamIndex = 7;
     assert(state.activeTarget().audioStreamIndex == 7);
 

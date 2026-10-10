@@ -251,6 +251,11 @@ inline int playbackPreferredSubtitlePosition(const JellyfinItem& item,
     return preferred == item.subtitles.end() ? -1 : static_cast<int>(std::distance(item.subtitles.begin(), preferred));
 }
 
+constexpr bool usePlayerDiscoveredTextTrack(const JellyfinSubtitleStream& track, PlaybackMethod playbackMethod) {
+    return playbackMethod == PlaybackMethod::DirectPlay && track.discoveredByPlayer && !track.isExternal &&
+           useNativeSubtitleRenderer(subtitleStrategy(track.codec), true);
+}
+
 inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackCycle(const JellyfinItem& item,
                                                                 int selectedSubtitleStreamIndex,
                                                                 PlaybackMethod playbackMethod,

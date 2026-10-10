@@ -30,6 +30,7 @@ struct JellyfinSubtitleStream {
     bool forced = false;
     bool isDefault = false;
     bool isExternal = false;
+    bool discoveredByPlayer = false;
 };
 
 struct JellyfinPerson {

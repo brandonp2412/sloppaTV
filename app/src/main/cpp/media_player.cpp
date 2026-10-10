@@ -917,6 +917,33 @@ std::string NativeMediaPlayer::subtitleText() const {
     return cachedSubtitleText_;
 }
 
+std::optional<std::vector<EmbeddedSubtitleTrack>> NativeMediaPlayer::embeddedSubtitleTracks() const {
+    std::scoped_lock lock(mutex_);
+    int64_t count = 0;
+    if (!mpv_ || !getIntPropertyLocked("track-list/count", count) || count <= 0) return std::nullopt;
+    std::vector<EmbeddedSubtitleTrack> tracks;
+    for (int64_t i = 0; i < count; ++i) {
+        const int slot = static_cast<int>(i);
+        if (getStringPropertyLocked(trackProperty(slot, "type").c_str()) != "sub") continue;
+        int64_t streamIndex = -1;
+        if (!getIntPropertyLocked(trackProperty(slot, "ff-index").c_str(), streamIndex) || streamIndex < 0 ||
+            streamIndex > std::numeric_limits<int>::max()) continue;
+        bool isDefault = false;
+        bool forced = false;
+        getFlagPropertyLocked(trackProperty(slot, "default").c_str(), isDefault);
+        getFlagPropertyLocked(trackProperty(slot, "forced").c_str(), forced);
+        tracks.push_back({
+            .streamIndex = static_cast<int>(streamIndex),
+            .codec = getStringPropertyLocked(trackProperty(slot, "codec").c_str()),
+            .language = getStringPropertyLocked(trackProperty(slot, "lang").c_str()),
+            .title = getStringPropertyLocked(trackProperty(slot, "title").c_str()),
+            .isDefault = isDefault,
+            .forced = forced,
+        });
+    }
+    return tracks;
+}
+
 bool NativeMediaPlayer::hardwareDecoderFailed() const {
     std::scoped_lock lock(mutex_);
     return hardwareDecoderFailed_;

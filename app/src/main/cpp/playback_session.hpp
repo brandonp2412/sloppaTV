@@ -3,6 +3,7 @@
 #include "app_settings.hpp"
 #include "jellyfin_types.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <utility>
@@ -102,6 +103,25 @@ public:
     }
 
     [[nodiscard]] const JellyfinItem& activeItem() const { return activeItem_; }
+
+    // MediaSource metadata can be unprobed when Remux starts a torrent. Merge
+    // the actual demuxer tracks after playback opens without hiding external
+    // subtitles already offered by the server.
+    void mergeEmbeddedSubtitles(const std::vector<JellyfinSubtitleStream>& discovered) {
+        for (const auto& track : discovered) {
+            if (track.index < 0) continue;
+            auto existing = std::find_if(activeItem_.subtitles.begin(), activeItem_.subtitles.end(),
+                                         [&](const JellyfinSubtitleStream& entry) { return entry.index == track.index; });
+            if (existing == activeItem_.subtitles.end()) {
+                activeItem_.subtitles.push_back(track);
+            } else {
+                if (!track.codec.empty()) existing->codec = track.codec;
+                if (!track.language.empty()) existing->language = track.language;
+                if (!track.title.empty()) existing->title = track.title;
+                existing->discoveredByPlayer = true;
+            }
+        }
+    }
 
     [[nodiscard]] const PlaybackTarget& activeTarget() const { return activeTarget_; }
 

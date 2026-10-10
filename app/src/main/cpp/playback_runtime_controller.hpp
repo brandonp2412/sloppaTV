@@ -269,6 +269,14 @@ public:
 
         if (plan.directPlayStream) {
             const JellyfinSubtitleStream& selected = *plan.directPlayStream;
+            if (usePlayerDiscoveredTextTrack(selected, coordinator_.session().activeTarget().playMethod) &&
+                player_.selectEmbeddedSubtitleStream(selected.index)) {
+                coordinator_.selectSubtitleStream(selected.index);
+                screenState_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(4));
+                error_.clear();
+                reportProgress(telemetry, playerScreenActive, false);
+                return PlaybackRuntimeNotice::None;
+            }
             __android_log_print(ANDROID_LOG_INFO, "SloppaTV",
                                 "Selecting subtitle stream=%d codec=%s external=%d strategy=%d",
                                 plan.subtitleStreamIndex, selected.codec.c_str(), selected.isExternal ? 1 : 0,
@@ -320,6 +328,7 @@ public:
         const PlaybackPlayerStartContext start = coordinator_.playerStartContext();
         const int startPositionMs = positionOverrideMs >= 0 ? positionOverrideMs : start.startPositionMs;
         coordinator_.beginPreparing(now);
+        embeddedSubtitleDiscoveryDone_ = false;
         player_.startAsync(start.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
                            start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels);
@@ -585,6 +594,27 @@ public:
 
         const bool playbackEnded = status == PlayerStatus::Ended;
         if (!playbackEnded && status != PlayerStatus::Playing && status != PlayerStatus::Paused) return {};
+        if (!embeddedSubtitleDiscoveryDone_ && coordinator_.activeTargetUsesDirectPlay() && !playbackEnded) {
+            if (const auto tracks = player_.embeddedSubtitleTracks()) {
+                std::vector<JellyfinSubtitleStream> subtitles;
+                subtitles.reserve(tracks->size());
+                for (const auto& track : *tracks) {
+                    subtitles.push_back({
+                        .index = track.streamIndex,
+                        .codec = track.codec,
+                        .language = normalizeSubtitleLanguage(track.language),
+                        .title = track.title,
+                        .forced = track.forced,
+                        .isDefault = track.isDefault,
+                        .discoveredByPlayer = true,
+                    });
+                }
+                coordinator_.session().mergeEmbeddedSubtitles(subtitles);
+                embeddedSubtitleDiscoveryDone_ = true;
+                __android_log_print(ANDROID_LOG_INFO, "SloppaTV", "Discovered %zu embedded subtitle tracks",
+                                    subtitles.size());
+            }
+        }
         if (playbackEnded && screenState_.durationMs() > 0) {
             screenState_.setPositionMs(screenState_.durationMs());
         }
@@ -668,4 +698,5 @@ private:
     const std::string& dataPath_;
     const JellyfinServerInfo* serverInfo_;
     std::string softwareDecodeItemId_;
+    bool embeddedSubtitleDiscoveryDone_ = false;
 };

@@ -5,6 +5,8 @@
 #include <chrono>
 #include <cstdint>
 #include <mutex>
+#include <optional>
+#include <vector>
 #include <string>
 
 enum class PlayerStatus {
@@ -22,6 +24,15 @@ enum class PlaybackDecodeMode {
 };
 
 struct MpvSymbols;
+
+struct EmbeddedSubtitleTrack {
+    int streamIndex = -1;
+    std::string codec;
+    std::string language;
+    std::string title;
+    bool isDefault = false;
+    bool forced = false;
+};
 
 class NativeMediaPlayer {
 public:
@@ -55,6 +66,8 @@ public:
     [[nodiscard]] std::string videoCodec() const;
     [[nodiscard]] std::string audioCodec() const;
     [[nodiscard]] std::string subtitleText() const;
+    // Returns nullopt until libmpv has parsed the media's track list.
+    [[nodiscard]] std::optional<std::vector<EmbeddedSubtitleTrack>> embeddedSubtitleTracks() const;
     [[nodiscard]] bool hardwareDecoderFailed() const;
     [[nodiscard]] double containerFps() const;
     [[nodiscard]] int64_t droppedFrames() const;

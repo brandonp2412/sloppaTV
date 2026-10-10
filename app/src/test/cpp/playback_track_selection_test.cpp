@@ -5,6 +5,22 @@
 #include <string>
 
 int main() {
+    const JellyfinSubtitleStream embeddedAss{
+        .index = 3, .codec = "ass", .language = "eng", .title = "Full Subtitles",
+        .discoveredByPlayer = true,
+    };
+    assert(usePlayerDiscoveredTextTrack(embeddedAss, PlaybackMethod::DirectPlay));
+    assert(!usePlayerDiscoveredTextTrack(embeddedAss, PlaybackMethod::DirectStream));
+    auto serverOnlyAss = embeddedAss;
+    serverOnlyAss.discoveredByPlayer = false;
+    assert(!usePlayerDiscoveredTextTrack(serverOnlyAss, PlaybackMethod::DirectPlay));
+    auto externalAss = embeddedAss;
+    externalAss.isExternal = true;
+    assert(!usePlayerDiscoveredTextTrack(externalAss, PlaybackMethod::DirectPlay));
+    auto bitmap = embeddedAss;
+    bitmap.codec = "hdmv_pgs_subtitle";
+    assert(!usePlayerDiscoveredTextTrack(bitmap, PlaybackMethod::DirectPlay));
+
     JellyfinItem item;
     item.audios = {
         {.index = 1, .channels = 2, .codec = "aac", .language = "jpn", .title = "Japanese", .isDefault = true},
