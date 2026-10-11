@@ -97,8 +97,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
                                                  : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail.name)
                                           : episodeLabel(detail);
     const float uiScale = uiTextScale(config.uiTextSize);
-    const float titleBottom = hasLogo ? 250.0f : 132.0f + 10.0f * 6.0f * uiScale;
-    const float secondaryY = std::max(268.0f, titleBottom + 10.0f);
+    const float titleBottom = hasLogo ? 250.0f : 132.0f + 11.0f * 6.0f * uiScale;
+    const float secondaryY = std::max(268.0f, titleBottom + 14.0f);
     if (!secondary.empty()) {
         renderer.text(contentX, secondaryY, 2.80f, fitTextLines(secondary, 2.80f, contentWidth, 1), style.secondaryText,
                       contentWidth);
@@ -117,7 +117,10 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     }
     if (!detail.genres.empty()) metadata.emplace_back(detail.genres.front());
 
-    const float metadataY = secondary.empty() ? 294.0f : secondaryY + 50.0f;
+    // The episode subtitle is taller than 50px at every supported text size.
+    // Reserve its actual line height before placing metadata chips below it.
+    const float metadataY =
+        secondary.empty() ? std::max(294.0f, titleBottom + 14.0f) : secondaryY + 11.0f * 2.80f * uiScale + 14.0f;
     float metadataX = contentX;
     for (const auto& value : metadata) {
         const float available = contentX + contentWidth - metadataX;

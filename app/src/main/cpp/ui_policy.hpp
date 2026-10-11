@@ -38,15 +38,21 @@ constexpr bool usesLandscapeMediaCard(std::string_view itemType) {
 }
 
 constexpr float searchMediaRowHeight(bool hasPortraitCard) {
-    return hasPortraitCard ? 430.0f : 300.0f;
+    return hasPortraitCard ? 430.0f : 340.0f;
 }
 
 constexpr float browseMediaRowHeight(bool hasPortraitCard) {
-    return hasPortraitCard ? 390.0f : 300.0f;
+    return hasPortraitCard ? 390.0f : 340.0f;
 }
 
-constexpr int browseMediaVisibleRows(bool syntheticPage) {
-    return syntheticPage ? 4 : 2;
+constexpr int browseMediaVisibleRows(bool syntheticPage, bool hasPortraitCards = false) {
+    // Poster artwork with title and supporting text takes more vertical space
+    // than a 390px pitch. Keep an entire row readable while paging by focus.
+    return syntheticPage ? 4 : (hasPortraitCards ? 1 : 2);
+}
+
+constexpr int mediaGridVisibleRows(bool hasPortraitCards) {
+    return hasPortraitCards ? 1 : 2;
 }
 
 constexpr int browseMediaTitleLineLimit(bool hasPortraitCards) {

@@ -42,11 +42,14 @@ void renderMediaGridScreen(std::string_view title, const std::vector<JellyfinIte
     const bool hasPortraitCards = std::any_of(
         items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
     const float rowStep = searchMediaRowHeight(hasPortraitCards);
-    const int firstRow = mediaFirstVisibleRow(state.selection, 2);
+    // A portrait row can occupy more than 430px once two title lines and
+    // supporting metadata are included, particularly with large UI text.
+    const int visibleRows = mediaGridVisibleRows(hasPortraitCards);
+    const int firstRow = mediaFirstVisibleRow(state.selection, visibleRows);
     for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
         const int row = index / columns - firstRow;
         const int col = index % columns;
-        if (row >= 2) break;
+        if (row >= visibleRows) break;
 
         renderCard(items[static_cast<std::size_t>(index)],
                    MediaGridCardPlacement{

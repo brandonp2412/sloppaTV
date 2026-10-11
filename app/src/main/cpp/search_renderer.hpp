@@ -110,8 +110,18 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     const int selectedRowPosition = selectedPosition == semanticRows.end()
                                         ? 0
                                         : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
-    const int firstSemantic =
-        std::clamp(selectedRowPosition - 1, 0, std::max(0, static_cast<int>(semanticRows.size()) - 2));
+    // Portrait artwork, two title lines and supporting text do not fit within
+    // the 452px semantic-row pitch. Display the selected section in full rather
+    // than letting its caption collide with the next section's heading.
+    const bool hasPortraitSection = std::any_of(semanticRows.begin(), semanticRows.end(), [&](int row) {
+        const int start = state.rowStart(row);
+        const int count = state.rowItemCount(row);
+        return std::any_of(results.begin() + start, results.begin() + start + count,
+                           [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
+    });
+    const int visibleSections = hasPortraitSection ? 1 : 2;
+    const int firstSemantic = std::clamp(selectedRowPosition - visibleSections + 1, 0,
+                                         std::max(0, static_cast<int>(semanticRows.size()) - visibleSections));
 
     auto drawLoadingDots = [&](float x, float y) {
         const double seconds = std::chrono::duration<double>(now().time_since_epoch()).count();
@@ -211,7 +221,8 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
                     item.type == "Series"
                         ? "Press OK to choose seasons"
                         : (item.externalRequested ? item.externalStatus : std::string("Press OK to request"));
-                renderer.text(x + 2.0f, titleY + 27.0f, 1.35f, fitTextLines(requestState, 1.35f, slotWidth - 4.0f, 1),
+                const float requestY = titleY + 11.0f * 1.95f * uiTextScale(2) + 6.0f;
+                renderer.text(x + 2.0f, requestY, 1.35f, fitTextLines(requestState, 1.35f, slotWidth - 4.0f, 1),
                               style.muted, slotWidth - 4.0f);
             }
             return;
@@ -229,7 +240,7 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
         }
     };
 
-    for (int slot = 0; slot < 2 && firstSemantic + slot < static_cast<int>(semanticRows.size()); ++slot) {
+    for (int slot = 0; slot < visibleSections && firstSemantic + slot < static_cast<int>(semanticRows.size()); ++slot) {
         renderResultRow(semanticRows[static_cast<std::size_t>(firstSemantic) + static_cast<std::size_t>(slot)], slot);
     }
 }

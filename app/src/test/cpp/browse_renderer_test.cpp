@@ -117,12 +117,12 @@ int main() {
     assert(centered[2].text == "Genres");
 
     assert(textTiles.empty());
-    assert(artworkCards.size() == 7);
-    assert(artworkCards.front().id == "item-5");
+    assert(artworkCards.size() == 2);
+    assert(artworkCards.front().id == "item-10");
     assert(artworkCards.front().x == 80.0f);
     assert(artworkCards.front().y == 285.0f);
     assert(artworkCards.back().id == "item-11");
-    assert(artworkCards.back().y == 675.0f);
+    assert(artworkCards.back().y == 285.0f);
     assert(!artworkCards.back().focused);
 
     BrowseScreenState emptyState;

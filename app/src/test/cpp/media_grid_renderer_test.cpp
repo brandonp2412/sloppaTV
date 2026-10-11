@@ -46,8 +46,8 @@ int main() {
 
     assert(headers.size() == 1 && headers[0] == "Episodes");
     assert(emptyCalls.empty());
-    assert(cards.size() == 7);
-    assert(cards.front().id == "item-5");
+    assert(cards.size() == 2);
+    assert(cards.front().id == "item-10");
     assert(cards.front().placement.x == 80.0f);
     assert(cards.front().placement.y == 195.0f);
     assert(cards.front().placement.slotWidth == mediaCardWidth());
@@ -57,9 +57,9 @@ int main() {
     assert(cards.front().placement.titleLineLimit == 0);
     assert(cards.back().id == "item-11");
     assert(cards.back().placement.x == 432.0f);
-    assert(cards.back().placement.y == 625.0f);
+    assert(cards.back().placement.y == 195.0f);
     assert(cards.back().placement.focused);
-    assert(cards.back().placement.titleLineLimit == 1);
+    assert(cards.back().placement.titleLineLimit == 0);
 
     std::vector<JellyfinItem> landscape(6);
     for (int index = 0; index < static_cast<int>(landscape.size()); ++index) {
@@ -81,7 +81,7 @@ int main() {
     assert(cards.size() == 6);
     assert(!cards.front().placement.preferSeriesCover);
     assert(!cards.front().placement.alignToPortraitBand);
-    assert(cards.back().placement.y == 495.0f);
+    assert(cards.back().placement.y == 535.0f);
     assert(cards.back().placement.titleLineLimit == 0);
 
     emptyCalls.clear();

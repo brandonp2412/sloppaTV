@@ -1,5 +1,6 @@
 #include "search_renderer.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -162,6 +163,7 @@ int main() {
     int placeholders = 0;
     int halos = 0;
     int lingering = 0;
+    float remoteTitleY = 0.0f;
     int emptyStates = 0;
     renderSearchScreen(
         renderer, state, true, false, false, "", false, storage, style,
@@ -190,8 +192,9 @@ int main() {
             ++halos;
             assert(color == style.focus);
         },
-        [&](float, float, float, std::string_view value, float, int color, SearchScreenState::Clock::time_point) {
+        [&](float, float y, float, std::string_view value, float, int color, SearchScreenState::Clock::time_point) {
             ++lingering;
+            remoteTitleY = y;
             assert(value == "Remote Movie");
             assert(color == style.text);
         },
@@ -203,15 +206,20 @@ int main() {
         [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
 
     assert(emptyStates == 0);
-    assert(mediaCards == 1);
+    assert(mediaCards == 0);
     assert(placeholders == 1);
     assert(halos == 1);
     assert(lingering == 1);
     assert(renderer.rects.size() == 1);
-    assert(contains(renderer.texts, "In your library"));
+    assert(!contains(renderer.texts, "In your library"));
     assert(contains(renderer.texts, "Seerr"));
     assert(contains(centered, "90%"));
     assert(contains(centered, "50%"));
+    // The Seerr status line must start after the full title height at large text.
+    const auto remoteStatus = std::find_if(renderer.texts.begin(), renderer.texts.end(),
+                                           [](const TextCall& call) { return call.value == "Press OK to request"; });
+    assert(remoteStatus != renderer.texts.end());
+    assert(remoteStatus->y >= remoteTitleY + 11.0f * 1.95f * uiTextScale(2) + 4.0f);
 
     // When only Remux episodes match, show playable episodes above Seerr rather than a blank library row.
     SearchScreenState episodeOnly(seerrItems);
@@ -240,7 +248,7 @@ int main() {
         [](const JellyfinItem&, float, float, float, float, float) { return false; },
         [&](const JellyfinItem& item, float, float y, float, float, float) {
             assert(item.id == "seerr:movie:2");
-            assert(y == 764.0f);
+            assert(y == 314.0f);
             ++remoteCards;
         },
         [](float, float, float, float, int, float) {},
@@ -253,7 +261,7 @@ int main() {
         [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; },
         [](int, float) { return 99; });
     assert(episodeCards == 1);
-    assert(remoteCards == 1);
+    assert(remoteCards == 0);
     assert(!contains(episodeRenderer.texts, "In your library"));
     bool episodeHeadingFirst = false;
     bool seerrHeadingSecond = false;
@@ -261,7 +269,7 @@ int main() {
         if (call.value == "Episodes" && call.y == 258.0f) episodeHeadingFirst = true;
         if (call.value == "Seerr" && call.y == 710.0f) seerrHeadingSecond = true;
     }
-    assert(episodeHeadingFirst && seerrHeadingSecond);
+    assert(episodeHeadingFirst && !seerrHeadingSecond);
 
     SearchScreenState loadingState(noSeerr);
     loadingState.setQuery("loading");

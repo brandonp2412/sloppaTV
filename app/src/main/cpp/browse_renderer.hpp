@@ -61,7 +61,9 @@ void renderBrowseScreen(RendererLike& renderer, const BrowseScreenState& state, 
     const bool hasPortraitCards = std::any_of(
         items.begin(), items.end(), [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
     const float rowStep = syntheticPage ? 190.0f : browseMediaRowHeight(hasPortraitCards);
-    const int visibleRows = browseMediaVisibleRows(syntheticPage);
+    // Portrait posters plus their title/metadata exceed the old 390px row pitch.
+    // Page by one full row rather than drawing the next row over the subtitle.
+    const int visibleRows = browseMediaVisibleRows(syntheticPage, hasPortraitCards);
     const int firstRow = mediaFirstVisibleRow(state.selection(), visibleRows);
     for (int index = firstRow * columns; index < static_cast<int>(items.size()); ++index) {
         const int row = index / columns - firstRow;

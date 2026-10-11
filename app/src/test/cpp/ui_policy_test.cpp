@@ -22,11 +22,24 @@ int main() {
     assert(keyboardKeyHeight(655.0f, 5, 14.0f) >= 68.0f);
     assert(keyboardKeyHeight(270.0f, 5, 14.0f) == 82.0f);
     assert(keyboardKeyHeight(610.0f, 0, 14.0f) == 0.0f);
-    // Two poster rows fit the browse canvas below the filter bar, including a large one-line title.
-    assert(285.0f + browseMediaRowHeight(true) + mediaPosterHeight() + 24.0f + 11.0f * 1.8f * uiTextScale(2) <=
-           1080.0f);
-    // Two poster rows, including two title lines and metadata, fit the generic media grid canvas.
-    assert(195.0f + 430.0f + mediaPosterHeight() + 24.0f + 72.0f + 36.0f <= 1080.0f);
+    // A portrait card's title and metadata exceed both old fixed row pitches.
+    // Page portrait grids by one full row; two landscape rows still fit with
+    // at least 24px between their largest supporting labels and next artwork.
+    for (int size = 0; size <= 2; ++size) {
+        const float titleLine = 11.0f * 1.8f * uiTextScale(size);
+        const float supportingLine = 10.0f * 1.45f * uiTextScale(size);
+        const float browsePortrait = mediaPosterHeight() + 24.0f + titleLine + 3.0f + supportingLine;
+        const float gridPortrait = mediaPosterHeight() + 24.0f + 2.0f * titleLine + 3.0f + supportingLine;
+        const float landscape = 180.0f + 24.0f + titleLine + 3.0f + supportingLine;
+        assert(browsePortrait + 20.0f > browseMediaRowHeight(true));
+        assert(gridPortrait + 20.0f > searchMediaRowHeight(true));
+        assert(285.0f + browsePortrait < 1040.0f);
+        assert(195.0f + gridPortrait < 1040.0f);
+        assert(landscape + 24.0f <= browseMediaRowHeight(false));
+        assert(landscape + 24.0f <= searchMediaRowHeight(false));
+        assert(285.0f + browseMediaRowHeight(false) + landscape < 1040.0f);
+        assert(195.0f + searchMediaRowHeight(false) + landscape < 1040.0f);
+    }
     assert(mediaTitleScale() == 2.45f);
     assert(usesLandscapeMediaCard("Episode"));
     assert(usesLandscapeMediaCard("CollectionFolder"));
@@ -35,11 +48,15 @@ int main() {
     assert(!usesLandscapeMediaCard("Movie"));
     assert(!usesLandscapeMediaCard("Series"));
     assert(searchMediaRowHeight(true) == 430.0f);
-    assert(searchMediaRowHeight(false) == 300.0f);
+    assert(searchMediaRowHeight(false) == 340.0f);
     assert(browseMediaRowHeight(true) == 390.0f);
-    assert(browseMediaRowHeight(false) == 300.0f);
+    assert(browseMediaRowHeight(false) == 340.0f);
     assert(browseMediaVisibleRows(false) == 2);
     assert(browseMediaVisibleRows(true) == 4);
+    assert(browseMediaVisibleRows(false, true) == 1);
+    assert(browseMediaVisibleRows(true, true) == 4);
+    assert(mediaGridVisibleRows(true) == 1);
+    assert(mediaGridVisibleRows(false) == 2);
     assert(browseMediaTitleLineLimit(true) == 1);
     assert(browseMediaTitleLineLimit(false) == 0);
     assert(mediaGridTitleLineLimit(0, 2, true) == 0);

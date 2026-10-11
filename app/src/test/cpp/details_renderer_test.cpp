@@ -1,6 +1,8 @@
 #include "details_renderer.hpp"
 
+#include <algorithm>
 #include <array>
+#include <utility>
 #include <cassert>
 #include <string>
 #include <string_view>
@@ -81,6 +83,7 @@ struct Harness {
     int haloCalls = 0;
     std::vector<std::string> centered;
     std::vector<std::string> chips;
+    std::vector<std::pair<std::string, float>> chipPositions;
     std::vector<bool> buttonFocus;
     std::vector<bool> buttonPrimary;
 
@@ -146,8 +149,9 @@ struct Harness {
                 assert(milliseconds >= 0);
                 return std::string("42:00");
             },
-            [&](float, float, std::string_view value, bool, float, float, float available) {
+            [&](float, float y, std::string_view value, bool, float, float, float available) {
                 chips.emplace_back(value);
+                chipPositions.emplace_back(value, y);
                 return std::min(120.0f, available);
             },
             [](std::string_view value) { return std::string(value); },
@@ -253,6 +257,7 @@ int main() {
     episode.seriesName = "Example Series";
     episode.parentIndexNumber = 1;
     episode.indexNumber = 2;
+    episode.productionYear = 2025;
 
     DetailsScreenState episodeState;
     episodeState.beginDetails();
@@ -294,5 +299,39 @@ int main() {
         if (episodeHarness.buttonFocus[index]) ++focusedContextButtons;
     assert(focusedContextButtons == 1);
 
+    // At large text size, episode subtitle typography must clear metadata chips.
+    // Cover the no-logo title path as well as the logo layout above.
+    Harness largeEpisode;
+    largeEpisode.render(episode, episodeState, episodeActions,
+                        DetailsRenderConfig{
+                            .uiTextSize = 2,
+                        });
+    const auto subtitle = std::find_if(largeEpisode.renderer.texts.begin(), largeEpisode.renderer.texts.end(),
+                                       [](const TextCall& item) { return item.value == "S1E2  |  Pilot"; });
+    const auto year = std::find_if(largeEpisode.chipPositions.begin(), largeEpisode.chipPositions.end(),
+                                   [](const std::pair<std::string, float>& item) { return item.first == "2025"; });
+    assert(subtitle != largeEpisode.renderer.texts.end());
+    assert(year != largeEpisode.chipPositions.end());
+    assert(year->second >= subtitle->y + 11.0f * 2.80f * uiTextScale(2) + 12.0f);
+
+    // Worst-case dense Details content still leaves the related-title row
+    // within the 1080px canvas after making room for the secondary title.
+    JellyfinItem denseEpisode = episode;
+    denseEpisode.favorite = true;
+    denseEpisode.played = true;
+    denseEpisode.overview = "A lengthy overview that occupies both supported lines at larger text sizes.";
+    DetailsScreenState relatedState;
+    relatedState.beginDetails();
+    relatedState.setSimilar({similar});
+    Harness denseHarness;
+    denseHarness.render(denseEpisode, relatedState, episodeActions,
+                        DetailsRenderConfig{
+                            .showWatchedIndicators = true,
+                            .uiTextSize = 2,
+                        });
+    const auto similarTitle = std::find_if(denseHarness.renderer.texts.begin(), denseHarness.renderer.texts.end(),
+                                           [](const TextCall& item) { return item.value == "Similar Movie"; });
+    assert(similarTitle != denseHarness.renderer.texts.end());
+    assert(similarTitle->y + 11.0f * 2.10f * uiTextScale(2) < 1080.0f);
     return 0;
 }
