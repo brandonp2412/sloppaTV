@@ -166,6 +166,29 @@ int main() {
     assert(selectedVersionOffer.ok);
     assert(selectedVersionOffer.value.mediaSourceId == "known-good");
     assert(selectedVersionOffer.value.container == "mp4");
+    // The fallback file can tag Italian as the default track despite the
+    // failed (English) source using the same stream index for English.
+    const std::string multilingual = R"({"MediaSources":[{
+        "Id":"fallback-file","SupportsDirectPlay":true,
+        "DefaultAudioStreamIndex":1,
+        "MediaStreams":[
+            {"Type":"Video","Index":0,"Codec":"h264"},
+            {"Type":"Audio","Index":1,"Codec":"eac3","Language":"ita","IsDefault":true,"Channels":2},
+            {"Type":"Audio","Index":2,"Codec":"eac3","Language":"eng","IsDefault":false,"Channels":6},
+            {"Type":"Subtitle","Index":3,"Language":"eng"}
+        ]}]})";
+    const auto english = parsePlaybackInfoOffer(multilingual, 1, kSubtitleOffIndex, {}, {}, "eng");
+    assert(english.ok);
+    assert(english.value.audioStreamIndex == 2);
+    assert(english.value.audioOrdinal == 1);
+    assert(english.value.audioTracks.size() == 2);
+    assert(english.value.audioTracks[0].language == "ita");
+    assert(english.value.audioTracks[1].language == "eng");
+    const auto italian = parsePlaybackInfoOffer(multilingual, -1, kSubtitleOffIndex, {}, {}, "ita");
+    assert(italian.value.audioStreamIndex == 1);
+    assert(italian.value.audioOrdinal == 0);
+    const auto unconfigured = parsePlaybackInfoOffer(multilingual, -1, kSubtitleOffIndex);
+    assert(unconfigured.value.audioStreamIndex == 1);
     const auto absentVersionOffer = parsePlaybackInfoOffer(R"({
         "MediaSources": [
             {"Id":"first","SupportsDirectPlay":true},
@@ -174,6 +197,9 @@ int main() {
     })", -1, kSubtitleServerDefaultIndex, {}, "not-present");
     assert(absentVersionOffer.ok);
     assert(absentVersionOffer.value.mediaSourceId == "first");
+    assert(absentVersionOffer.value.alternativeMediaSourceId == "other");
+    assert(selectedVersionOffer.value.alternativeMediaSourceId == "first");
+    assert(alternateVersionOffer.value.alternativeMediaSourceId.empty());
     const auto incompatiblePreferred = parsePlaybackInfoOffer(R"({
         "MediaSources": [
             {"Id":"healthy","SupportsDirectPlay":true},

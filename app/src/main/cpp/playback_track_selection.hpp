@@ -84,6 +84,7 @@ playbackSubtitleLoadCandidates(const JellyfinItem& item, const JellyfinSubtitleS
 
 inline int playerAudioOrdinal(const PlaybackTarget& target, const JellyfinItem& item) {
     if (target.playMethod != PlaybackMethod::DirectPlay || target.audioStreamIndex < 0) return -1;
+    if (target.audioOrdinal >= 0) return target.audioOrdinal;
     for (size_t index = 0; index < item.audios.size(); ++index) {
         if (item.audios[index].index == target.audioStreamIndex) return static_cast<int>(index);
     }

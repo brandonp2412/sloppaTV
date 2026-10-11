@@ -5,6 +5,14 @@
 #include <string>
 
 int main() {
+    PlaybackTarget switched;
+    switched.audioStreamIndex = 2;
+    switched.audioOrdinal = 1;
+    switched.playMethod = PlaybackMethod::DirectPlay;
+    JellyfinItem staleMetadata;
+    staleMetadata.audios = {{.index = 1, .channels = 2, .codec = "eac3", .language = "eng", .title = "English", .isDefault = true}};
+    assert(playerAudioOrdinal(switched, staleMetadata) == 1);
+
     const JellyfinSubtitleStream embeddedAss{
         .index = 3, .codec = "ass", .language = "eng", .title = "Full Subtitles",
         .discoveredByPlayer = true,

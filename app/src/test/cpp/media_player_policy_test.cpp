@@ -100,6 +100,10 @@ int main() {
     assert(!playbackPrepareTimedOut(true, 30'000, true));
     assert(playbackCachePauseWaitSeconds(false) == 2);
     assert(playbackCachePauseWaitSeconds(true) == 10);
+    assert(!shouldRetrySlowRemuxSource(false, 90'000, true));
+    assert(!shouldRetrySlowRemuxSource(true, 90'000, false));
+    assert(!shouldRetrySlowRemuxSource(true, 29'999, true));
+    assert(shouldRetrySlowRemuxSource(true, 30'000, true));
     assert(mpvLogIndicatesHardwareDecoderFailure("h264_mediacodec: MediaCodec 0x0 failed to start"));
     assert(mpvLogIndicatesHardwareDecoderFailure("MediaCodec initialization ERROR"));
     assert(!mpvLogIndicatesHardwareDecoderFailure("ffmpeg: Could not open codec"));

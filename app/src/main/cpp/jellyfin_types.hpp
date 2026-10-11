@@ -174,9 +174,12 @@ struct PlaybackTarget {
     std::string fallbackTranscodeUrl;
     std::string playSessionId;
     std::string mediaSourceId;
+    std::string alternativeMediaSourceId;
     bool transcoding = false;
     PlaybackMethod playMethod = PlaybackMethod::DirectPlay;
     int audioStreamIndex = -1;
+    int audioOrdinal = -1;
+    std::vector<JellyfinAudioStream> audioTracks;
     int subtitleStreamIndex = kSubtitleOffIndex;
     std::string subtitleUrl;
     int64_t startTicks = 0;

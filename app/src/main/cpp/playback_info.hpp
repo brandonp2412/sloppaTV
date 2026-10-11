@@ -9,7 +9,10 @@
 struct PlaybackInfoOffer {
     std::string playSessionId;
     std::string mediaSourceId;
+    std::string alternativeMediaSourceId;
     int audioStreamIndex = -1;
+    int audioOrdinal = -1;
+    std::vector<JellyfinAudioStream> audioTracks;
     int subtitleStreamIndex = kSubtitleOffIndex;
     std::string subtitleDeliveryUrl;
     std::string transcodingUrl;
@@ -26,4 +29,5 @@ std::string buildPlaybackInfoRequestBody(const JellyfinSession& session, const J
 
 ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view responseBody, int audioStreamIndex,
                                                          int subtitleStreamIndex, PlaybackOverrides overrides = {},
-                                                         std::string_view requestedMediaSourceId = {});
+                                                         std::string_view requestedMediaSourceId = {},
+                                                          std::string_view preferredAudioLanguage = {});

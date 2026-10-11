@@ -1,4 +1,5 @@
 #include "playback_info.hpp"
+#include "audio_policy.hpp"
 
 #include "media_player_policy.hpp"
 #include "subtitle_policy.hpp"
@@ -131,7 +132,8 @@ std::string buildPlaybackInfoRequestBody(const JellyfinSession& session, const J
 
 ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view responseBody, int audioStreamIndex,
                                                          int subtitleStreamIndex, PlaybackOverrides overrides,
-                                                         std::string_view requestedMediaSourceId) {
+                                                         std::string_view requestedMediaSourceId,
+                                                          std::string_view preferredAudioLanguage) {
     ApiValueResult<PlaybackInfoOffer> result;
     try {
         const auto data = json::parse(responseBody);
@@ -195,8 +197,63 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         PlaybackInfoOffer offer;
         offer.playSessionId = scalarValueOr(data, "PlaySessionId", std::string{});
         offer.mediaSourceId = scalarValueOr(*source, "Id", std::string{});
-        offer.audioStreamIndex =
-            audioStreamIndex >= 0 ? audioStreamIndex : scalarValueOr(*source, "DefaultAudioStreamIndex", -1);
+        // Remux returns independently playable versions ordered by quality.
+        // Preserve one alternative so a stalled P2P source can be replaced
+        // without retrying the very same unavailable torrent via transcode.
+        // An explicitly chosen (known-good) version must not be overridden.
+        {
+            for (auto candidate = sources.begin(); candidate != sources.end(); ++candidate) {
+                if (!candidate->is_object() || candidate == source ||
+                    !scalarValueOr(*candidate, "SupportsDirectPlay", false)) continue;
+                const std::string id = scalarValueOr(*candidate, "Id", std::string{});
+                if (id.empty() || id == offer.mediaSourceId) continue;
+                offer.alternativeMediaSourceId = id;
+                break;
+            }
+        }
+        // Stream indexes are scoped to a media file. After choosing a different
+        // torrent, index 1 can be Italian where index 1 was English on the
+        // previous source. Match the intended language against THIS source's
+        // audio tracks and carry the native ordinal to libmpv.
+        offer.audioStreamIndex = scalarValueOr(*source, "DefaultAudioStreamIndex", -1);
+        if (source->contains("MediaStreams") && (*source)["MediaStreams"].is_array()) {
+            for (const auto& track : (*source)["MediaStreams"]) {
+                if (!track.is_object() || scalarValueOr(track, "Type", std::string{}) != "Audio") continue;
+                JellyfinAudioStream audio;
+                audio.index = scalarValueOr(track, "Index", -1);
+                audio.language = scalarValueOr(track, "Language", std::string{});
+                audio.codec = scalarValueOr(track, "Codec", std::string{});
+                audio.title = scalarValueOr(track, "DisplayTitle", std::string{});
+                audio.channels = scalarValueOr(track, "Channels", 0);
+                audio.isDefault = scalarValueOr(track, "IsDefault", false);
+                if (audio.index < 0) continue;
+                offer.audioTracks.push_back(std::move(audio));
+            }
+        }
+        auto chosenAudio = offer.audioTracks.end();
+        if (!preferredAudioLanguage.empty()) {
+            chosenAudio = std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(),
+                                       [&](const JellyfinAudioStream& track) {
+                                           return audioLanguageEquals(track.language, preferredAudioLanguage);
+                                       });
+        }
+        if (chosenAudio == offer.audioTracks.end() && audioStreamIndex >= 0 && preferredAudioLanguage.empty()) {
+            chosenAudio = std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(),
+                                       [&](const JellyfinAudioStream& track) { return track.index == audioStreamIndex; });
+        }
+        if (chosenAudio == offer.audioTracks.end()) {
+            chosenAudio = std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(),
+                                       [](const JellyfinAudioStream& track) { return track.isDefault; });
+        }
+        if (chosenAudio == offer.audioTracks.end() && !offer.audioTracks.empty()) chosenAudio = offer.audioTracks.begin();
+        if (chosenAudio != offer.audioTracks.end()) {
+            offer.audioOrdinal = static_cast<int>(std::distance(offer.audioTracks.begin(), chosenAudio));
+            offer.audioStreamIndex = chosenAudio->index;
+        } else if (audioStreamIndex >= 0) {
+            // Metadata-poor servers: retain the explicit request when there
+            // are no source-local tracks to re-map.
+            offer.audioStreamIndex = audioStreamIndex;
+        }
         offer.subtitleStreamIndex = resolvedSubtitleIndex(
             subtitleStreamIndex, scalarValueOr(*source, "DefaultSubtitleStreamIndex", kSubtitleOffIndex));
         offer.transcodingUrl = scalarValueOr(*source, "TranscodingUrl", std::string{});

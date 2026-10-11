@@ -48,6 +48,7 @@ struct FakeClient {
         if (!detailOk) return result;
         result.value.id = itemId;
         result.value.name = "Detailed";
+        result.value.mediaSourceId = "server-first-source";
         result.value.audios = {
             {.index = 4, .channels = 2, .codec = "aac", .language = "eng", .title = "English", .isDefault = true},
         };
@@ -72,6 +73,7 @@ struct FakeClient {
                                                    int channels, const PlaybackOverrides&, int audioStreamIndex,
                                                    int subtitleStreamIndex) {
         lastResolvedItemId = item.id;
+        lastResolvedMediaSourceId = item.mediaSourceId;
         lastBitrate = bitrate;
         lastChannels = channels;
         lastAudioStreamIndex = audioStreamIndex;
@@ -93,6 +95,7 @@ struct FakeClient {
     std::string nextUpItemId = "series-next";
     std::string lastSeriesId;
     std::string lastResolvedItemId;
+    std::string lastResolvedMediaSourceId;
     int lastBitrate = 0;
     int lastChannels = 0;
     int lastAudioStreamIndex = -1;
@@ -132,6 +135,14 @@ int main() {
     assert(client.lastBitrate == 42'000'000);
     assert(client.lastChannels == 6);
     assert(client.lastAudioStreamIndex == 4);
+
+    options.isRemux = true;
+    assert(executor.resolveQueued(session, queued, options, 7, Origin::Player, 3, 2, true));
+    assert(client.lastResolvedMediaSourceId.empty());
+    options.preferredMediaSources[queued.id] = "proven-source";
+    assert(executor.resolveQueued(session, queued, options, 7, Origin::Player, 3, 2, true));
+    assert(client.lastResolvedMediaSourceId == "proven-source");
+    options.preferredMediaSources.clear();
 
     JellyfinItem playerItem;
     playerItem.id = "player";

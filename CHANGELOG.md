@@ -64,6 +64,10 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Fixed
 
+- Choose the selected torrent’s actual audio track by language and correct libmpv audio ordinal; sync source-scoped audio labels after failover (fixes MobLand selecting Italian instead of English).
+
+- Recover stalled Remux torrent playback by requesting all available sources (rather than silently pinning the first item-metadata source) and switching to an alternate direct-play version after 30 seconds. Preserve explicitly saved, proven sources and the 90-second single-source timeout.
+
 - Remux P2P playback now allows 90 seconds for cold torrent startup and buffers 10 seconds before resuming after a stall, reducing premature failure and repeated underruns on Android TV.
 
 - Prevent native crashes when advancing to the next episode on Remux by keeping libmpv/FFmpeg libraries loaded across player shutdowns while releasing per-episode playback resources.

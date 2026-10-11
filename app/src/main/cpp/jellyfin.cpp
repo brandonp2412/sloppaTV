@@ -1108,8 +1108,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
         return result;
     }
 
-    auto offerResult =
-        parsePlaybackInfoOffer(response.body, audioStreamIndex, subtitleStreamIndex, overrides, item.mediaSourceId);
+    const std::string desiredAudioLanguage = selectedAudio ? selectedAudio->language : std::string{};
+    auto offerResult = parsePlaybackInfoOffer(response.body, audioStreamIndex, subtitleStreamIndex, overrides,
+                                              item.mediaSourceId, desiredAudioLanguage);
     if (!offerResult.ok) {
         result.error = std::move(offerResult.error);
         return result;
@@ -1118,7 +1119,10 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
     PlaybackTarget target;
     target.playSessionId = std::move(offer.playSessionId);
     target.mediaSourceId = std::move(offer.mediaSourceId);
+    target.alternativeMediaSourceId = std::move(offer.alternativeMediaSourceId);
     target.audioStreamIndex = offer.audioStreamIndex;
+    target.audioOrdinal = offer.audioOrdinal;
+    target.audioTracks = std::move(offer.audioTracks);
     target.subtitleStreamIndex = offer.subtitleStreamIndex;
     target.startTicks = item.positionTicks;
     if (!offer.subtitleDeliveryUrl.empty()) {

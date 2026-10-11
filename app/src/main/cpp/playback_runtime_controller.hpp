@@ -132,6 +132,7 @@ public:
         return {
             .maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
             .maxAudioChannels = serverAudioChannels(),
+            .isRemux = isRemuxServer(),
             .overrides = playbackOverridesFor(settings_),
             .preferredMediaSources = settings_.preferredMediaSources,
             .audioLanguagePreference = preferences.audio,
@@ -192,7 +193,8 @@ public:
     }
 
     template <typename StreamExecutor>
-    bool restartAt(StreamExecutor& stream, int positionMs, int audioStreamIndex, int subtitleStreamIndex) {
+    bool restartAt(StreamExecutor& stream, int positionMs, int audioStreamIndex, int subtitleStreamIndex,
+                   const std::string& replacementMediaSourceId = {}) {
         if (!session_.valid()) return false;
         const int targetPositionMs = std::max(0, positionMs);
         const bool wasPaused = player_.status() == PlayerStatus::Paused;
@@ -200,6 +202,7 @@ public:
         if (!restartPlan) return false;
 
         JellyfinItem item = std::move(restartPlan->item);
+        if (!replacementMediaSourceId.empty()) item.mediaSourceId = replacementMediaSourceId;
         const PlaybackTarget previousTarget = std::move(restartPlan->previousTarget);
         const bool shouldReportPrevious = restartPlan->reportPrevious;
         const uint64_t generation = playbackEpoch_.begin();
@@ -560,6 +563,17 @@ public:
             const auto now = std::chrono::steady_clock::now();
             const bool isRemux = serverInfo_ && serverInfo_->isRemux;
             const PlaybackPreparePlan preparePlan = coordinator_.preparePlan(now, isRemux);
+            const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;
+            if (shouldRetrySlowRemuxSource(isRemux, preparePlan.elapsedMs, !alternate.empty())) {
+                std::scoped_lock lock(stateMutex);
+                __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
+                                    "Remux source stalled for %lld ms; trying alternate media source",
+                                    static_cast<long long>(preparePlan.elapsedMs));
+                if (restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
+                    error_.clear();
+                    return {};
+                }
+            }
             if (preparePlan.timedOut) {
                 std::scoped_lock lock(stateMutex);
                 __android_log_print(ANDROID_LOG_WARN, "SloppaTV", "Playback prepare timed out after %lld ms (%s)",

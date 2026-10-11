@@ -11,6 +11,7 @@
 struct PlaybackResolutionOptions {
     int maxStreamingBitrate = 0;
     int maxAudioChannels = 0;
+    bool isRemux = false;
     PlaybackOverrides overrides;
     std::map<std::string, std::string> preferredMediaSources;
     std::optional<std::string> audioLanguagePreference;
@@ -31,6 +32,11 @@ PlaybackResolutionResult resolvePreferredPlayback(Client& client, const Jellyfin
     if (const auto preferred = options.preferredMediaSources.find(item.id);
         preferred != options.preferredMediaSources.end()) {
         item.mediaSourceId = preferred->second;
+    } else if (options.isRemux) {
+        // Item metadata names its first source even without a user choice. Sending
+        // that ID to Remux restricts PlaybackInfo to ONE version, preventing
+        // recovery from an unhealthy torrent. Ask for the whole ranked pool.
+        item.mediaSourceId.clear();
     }
     const auto tracks = selectPlaybackTracks(item, options.audioLanguagePreference, options.subtitleLanguagePreference,
                                              options.trackPolicy);

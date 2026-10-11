@@ -106,6 +106,12 @@ constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs, bool
 // underruns even when average torrent throughput exceeds the video bitrate.
 constexpr int playbackCachePauseWaitSeconds(bool isRemux) { return isRemux ? 10 : 2; }
 
+// Only shorten Remux's cold-start wait when there is another direct-play
+// version to try. A single available torrent retains the full timeout.
+constexpr bool shouldRetrySlowRemuxSource(bool isRemux, int64_t elapsedMs, bool hasAlternate) {
+    return isRemux && hasAlternate && elapsedMs >= 30'000;
+}
+
 inline bool mpvLogIndicatesHardwareDecoderFailure(std::string_view text) {
     std::string normalized(text);
     std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char value) {

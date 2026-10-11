@@ -93,6 +93,9 @@ public:
     void setZoomMode(VideoZoomMode mode) { zoomMode_ = mode; }
 
     void setActive(JellyfinItem item, PlaybackTarget target) {
+        // A fallback can swap to a different file with different track indexes.
+        // Keep the player audio menu tied to the actual selected source.
+        if (!target.audioTracks.empty()) item.audios = target.audioTracks;
         activeItem_ = std::move(item);
         activeTarget_ = std::move(target);
     }

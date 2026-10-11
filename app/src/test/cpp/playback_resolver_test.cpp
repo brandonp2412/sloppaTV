@@ -18,6 +18,7 @@ struct FakeClient {
         JellyfinItem item;
         item.id = itemId;
         item.name = "Detailed";
+        item.mediaSourceId = "server-first-source";
         item.audios = {
             {.index = 2, .channels = 2, .codec = "aac", .language = "eng", .title = "English", .isDefault = true},
             {.index = 3, .channels = 2, .codec = "aac", .language = "jpn", .title = "Japanese", .isDefault = false},
@@ -96,6 +97,10 @@ int main() {
     assert(resolved.target.ok);
     assert(resolved.target.value.audioStreamIndex == 3);
     assert(resolved.target.value.subtitleStreamIndex == 4);
+    options.isRemux = true;
+    resolved = resolvePreferredPlayback(client, session, item, options);
+    assert(resolved.item.mediaSourceId.empty());
+    assert(client.resolvedMediaSourceId.empty());
     options.preferredMediaSources[item.id] = "known-good-source";
     resolved = resolvePreferredPlayback(client, session, item, options);
     assert(resolved.item.mediaSourceId == "known-good-source");

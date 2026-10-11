@@ -120,6 +120,8 @@ public:
             if (const auto preferred = options.preferredMediaSources.find(playable.id);
                 preferred != options.preferredMediaSources.end()) {
                 playable.mediaSourceId = preferred->second;
+            } else if (options.isRemux) {
+                playable.mediaSourceId.clear();
             }
             const auto tracks = selectPlaybackTracks(playable, options.audioLanguagePreference,
                                                      options.subtitleLanguagePreference, options.trackPolicy);
