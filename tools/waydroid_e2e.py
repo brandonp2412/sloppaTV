@@ -568,7 +568,7 @@ def action_view(item_id: str) -> None:
     if not re.fullmatch(r"[0-9a-fA-F-]{32,36}", item_id):
         raise SystemExit("--item-id must be a Jellyfin 32-hex ID or hyphenated UUID")
     adb("logcat", "-c")
-    adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", item_id, "-n", COMPONENT)
+    adb("shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", f"sloppatv://item/{item_id}", "-n", COMPONENT)
     time.sleep(2.5)
     capture("runtime-view")
     audit_logs("runtime-view")
