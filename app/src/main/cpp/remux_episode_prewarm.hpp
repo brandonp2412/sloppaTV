@@ -19,12 +19,12 @@
     return next;
 }
 
-// Remux keeps a torrent lease briefly after a stream closes. Fetch a small
-// initial byte range shortly before the next episode is needed, not at the
-// start of a potentially hour-long episode when the lease would expire.
+// Remux now selects complete current and next episode files and retains the
+// torrent for two hours after playback. Start the next file early, rather
+// than leaving its first download until the end of this episode.
 class RemuxEpisodePrewarmState {
 public:
-    static constexpr int64_t kPrewarmWindowMs = 30'000;
+    static constexpr int64_t kPrewarmStartMs = 5'000;
 
     void remember(std::string currentItemId, JellyfinItem nextItem) {
         if (currentItemId.empty() || nextItem.id.empty() || currentItemId == nextItem.id) return;
@@ -43,8 +43,8 @@ public:
     [[nodiscard]] std::optional<JellyfinItem> takeDue(const std::string& currentItemId, int64_t positionMs,
                                                       int64_t durationMs, bool playing, bool isRemux) {
         if (!currentItemId_.empty() && currentItemId != currentItemId_) clear();
-        if (currentItemId_.empty() || submitted_ || !isRemux || !playing || positionMs < 0 || durationMs <= 0 ||
-            positionMs >= durationMs || durationMs - positionMs > kPrewarmWindowMs)
+        if (currentItemId_.empty() || submitted_ || !isRemux || !playing || positionMs < kPrewarmStartMs ||
+            (durationMs > 0 && positionMs >= durationMs))
             return std::nullopt;
         submitted_ = true;
         return nextItem_;

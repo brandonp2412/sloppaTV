@@ -9,14 +9,14 @@ int main() {
     next.type = "Episode";
     warmup.remember("episode-1", next);
 
-    assert(!warmup.takeDue("episode-1", 50'000, 100'000, true, true));
+    assert(!warmup.takeDue("episode-1", 4'000, 100'000, true, true));
     assert(!warmup.takeDue("episode-1", 75'000, 100'000, true, false));
     assert(!warmup.takeDue("episode-1", 75'000, 100'000, false, true));
     assert(!warmup.takeDue("episode-1", 100'000, 100'000, true, true));
-    assert(!warmup.takeDue("episode-1", 75'000, 0, true, true));
+    assert(!warmup.takeDue("episode-1", 4'000, 0, true, true));
 
-    auto ready = warmup.takeDue("episode-1", 70'000, 100'000, true, true);
-    assert(ready && ready->id == "episode-2");
+    auto ready = warmup.takeDue("episode-1", 5'000, 0, true, true);
+    assert(ready && ready->id == "episode-2"); // Can prefetch before duration is known.
     warmup.remember("episode-1", next);
     assert(!warmup.takeDue("episode-1", 85'000, 100'000, true, true));
 
