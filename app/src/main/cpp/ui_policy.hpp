@@ -74,7 +74,9 @@ constexpr float homeRowImageOffset(int uiTextSize) {
 }
 
 constexpr float homeRowStep(int uiTextSize) {
-    return uiTextSize <= 0 ? 390.0f : (uiTextSize == 1 ? 405.0f : 420.0f);
+    // Reserve a full metadata line plus breathing room before the next row's heading.
+    // Previously the Continue Watching episode subtitle overlapped My media.
+    return uiTextSize <= 0 ? 438.0f : (uiTextSize == 1 ? 453.0f : 468.0f);
 }
 
 constexpr float castRowStep(int uiTextSize) {

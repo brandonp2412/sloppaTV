@@ -57,9 +57,19 @@ int main() {
     assert(homeRowImageOffset(0) == 82.0f);
     assert(homeRowImageOffset(1) == 92.0f);
     assert(homeRowImageOffset(2) == 102.0f);
-    assert(homeRowStep(0) == 390.0f);
-    assert(homeRowStep(1) == 405.0f);
-    assert(homeRowStep(2) == 420.0f);
+    assert(homeRowStep(0) == 438.0f);
+    assert(homeRowStep(1) == 453.0f);
+    assert(homeRowStep(2) == 468.0f);
+    // The first Continue Watching episode subtitle must end well before the
+    // next My media heading for all three configured text sizes.
+    for (int size = 0; size <= 2; ++size) {
+        constexpr float firstRowTop = 150.0f;
+        const float episodeTitleY = firstRowTop + homeRowImageOffset(size) + 202.0f + 22.0f;
+        const float subtitleBottom = episodeTitleY + 11.0f * 2.45f * uiTextScale(size) + 4.0f +
+                                     10.0f * 1.58f * uiTextScale(size);
+        const float nextHeadingY = firstRowTop + homeRowStep(size);
+        assert(nextHeadingY >= subtitleBottom + 28.0f);
+    }
     assert(castRowStep(0) == 400.0f);
     assert(castRowStep(1) == 415.0f);
     assert(castRowStep(2) == 430.0f);

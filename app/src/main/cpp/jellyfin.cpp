@@ -557,9 +557,10 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeSecondary(const Jellyfi
     auto recommended = recommendedFuture.get();
     if (recommended.ok) {
         if (!recommended.value.empty()) result.value.rows.push_back({"Recommended", std::move(recommended.value)});
-    } else {
-        addWarning("Recommendations unavailable");
     }
+    // Recommendations are optional discovery content. Some Jellyfin-compatible
+    // servers (including Remux) do not implement randomly sorted item queries;
+    // don't turn that missing endpoint into a login-time error banner.
 
     auto favorites = favoritesFuture.get();
     if (favorites.ok) {

@@ -91,5 +91,20 @@ int main() {
     assert(empty.calls.empty());
     assert(emptyClockCalls == 0);
 
+    // Playback controls may time out while a subtitle download or media cache
+    // stall remains pending, so the compact status must independently persist.
+    PlayerBufferIndicator buffer;
+    using Clock = PlayerBufferIndicator::Clock;
+    const auto start = Clock::time_point{std::chrono::seconds(10)};
+    buffer.observe(true, false, false, false, false, 0, 0, true, start);
+    assert(playerWaitStatus(true, false, false, buffer, start).find("Resolving Remux") != std::string::npos);
+    buffer.observe(false, true, false, false, false, 0, 0, true, start);
+    assert(playerWaitStatus(false, true, false, buffer, start).find("Opening Remux") != std::string::npos);
+    buffer.observe(false, false, true, false, false, 150000, 10000, true, start + std::chrono::seconds(1));
+    assert(playerWaitStatus(false, false, true, buffer, start + std::chrono::seconds(2)) == "Loading subtitles");
+    assert(playerWaitStatus(false, false, false, buffer, start + std::chrono::seconds(2)).empty());
+    buffer.observe(false, false, true, false, true, 150000, 0, true, start + std::chrono::seconds(5));
+    assert(playerWaitStatus(false, false, true, buffer, start + std::chrono::seconds(5)).find("Buffering from Remux") != std::string::npos);
+    assert(playerWaitStatus(false, false, false, buffer, start + std::chrono::seconds(5)) == "Buffering from Remux");
     return 0;
 }

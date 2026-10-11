@@ -288,9 +288,9 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const bool userOverlayVisible = playerScreenState.overlayVisible(now);
     const bool showNextUp = shouldShowNextUpCard(playbackCoordinator.continuation().nextItem().has_value(), remainingMs,
                                                  userOverlayVisible, skipAffordanceVisible);
-    const bool showOverlay = status == PlayerStatus::Preparing || playbackCoordinator.transitionLoading() ||
-                             playbackCoordinator.fallbackResolving() || userOverlayVisible ||
-                             playerScreenState.skipDisablePromptVisible() || buffer.interrupted();
+    // Buffering must not pin the entire player control overlay on screen.
+    // A separate compact indicator remains visible until playback recovers.
+    const bool showOverlay = userOverlayVisible || playerScreenState.skipDisablePromptVisible();
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
         subtitleText = cue->text;
@@ -332,6 +332,20 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             return ui.drawButtonSurface(x, y, width, height, focused, primary);
         },
         [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
+    const std::string waitStatus = playerWaitStatus(resolving, status == PlayerStatus::Preparing,
+                                                     playbackCoordinator.tracks().subtitleBusy(), buffer, now);
+    if (!waitStatus.empty()) {
+        const auto frame = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+        const int dots = static_cast<int>((frame / 450) % 4);
+        const std::string animated = waitStatus + std::string(static_cast<std::size_t>(dots), '.');
+        constexpr float width = 820.0f;
+        constexpr float height = 80.0f;
+        constexpr float y = 674.0f;
+        renderer.roundedRect((Renderer::logicalWidth() - width) / 2.0f, y, width, height, 20.0f,
+                             Color{0.0f, 0.0f, 0.0f, 0.78f});
+        renderer.textCentered((Renderer::logicalWidth() - width) / 2.0f, y, width, height, 1.7f,
+                              ui.fitText(animated, 1.7f, width - 40.0f, 1), material_tv::onSurface);
+    }
     if (!showOverlay) return;
 
     const auto nextItem = playbackCoordinator.continuation().nextItem();
@@ -413,9 +427,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                            ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
                        });
 
-    // Only contiguous libmpv cache is labelled buffered-ahead time.
-    const std::string aheadLabel = buffer.aheadText();
-    renderer.text(710.0f, 772.0f, 1.40f, aheadLabel, material_tv::onSurfaceVariant, 850.0f);
+    // Keep Remux download progress, but don't print duplicate buffered-ahead text:
+    // the player progress bar already shows its playable buffer.
     const std::string remuxProgress = buffer.remotePrefetchText(now);
     if (!remuxProgress.empty())
         renderer.text(80.0f, 808.0f, 1.35f, remuxProgress, material_tv::onSurfaceVariant, 1650.0f);

@@ -14,7 +14,6 @@ int main() {
     assert(b.statusText(t + std::chrono::seconds(14)).find("Waiting") != std::string::npos);
     b.observe(false, false, true, false, false, 3000, 90000, true, t + std::chrono::seconds(14));
     assert(b.phase() == PlayerBufferPhase::Playing);
-    assert(b.aheadText() == "Player buffered ahead: 1:30");
     b.observe(false, false, true, false, true, 3000, 0, true, t + std::chrono::seconds(18));
     assert(b.phase() == PlayerBufferPhase::Buffering && b.interrupted());
     b.observe(false, false, true, false, true, 3000, 0, true, t + std::chrono::seconds(32));

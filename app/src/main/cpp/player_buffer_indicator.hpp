@@ -108,14 +108,6 @@ public:
         return label;
     }
 
-    [[nodiscard]] std::string aheadText() const {
-        if (phase_ == PlayerBufferPhase::Resolving || phase_ == PlayerBufferPhase::Connecting)
-            return "Player buffer: waiting for data";
-        const int seconds = (cacheAheadMs_ + 500) / 1000;
-        return "Player buffered ahead: " + std::to_string(seconds / 60) + ":" + (seconds % 60 < 10 ? "0" : "") +
-               std::to_string(seconds % 60);
-    }
-
 private:
     PlayerBufferPhase phase_ = PlayerBufferPhase::Resolving;
     bool remux_ = false;
