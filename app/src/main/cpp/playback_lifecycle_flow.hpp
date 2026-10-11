@@ -78,7 +78,7 @@ public:
             player_.startAsync(start.url, videoSurface_.surface(), playerScreen_.positionMs(),
                                settings_.playbackBufferPreset, start.audioOrdinal, start.subtitleStreamIndex,
                                start.subtitleOrdinal, start.externalSubtitleUrl, runtime_.activeDecodeMode(),
-                                settings_.maxAudioChannels);
+                                settings_.maxAudioChannels, runtime_.isRemuxServer());
             coordinator_.setPauseAfterRestart(plan.pauseAfterRestart);
             mediaSession_.updateState(MediaSessionState::Buffering, playerScreen_.positionMs());
             diagnostic = PlaybackLifecycleDiagnostic::RecreatedPlaybackSurface;

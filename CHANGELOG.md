@@ -64,6 +64,8 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Fixed
 
+- Remux P2P playback now allows 90 seconds for cold torrent startup and buffers 10 seconds before resuming after a stall, reducing premature failure and repeated underruns on Android TV.
+
 - Prevent native crashes when advancing to the next episode on Remux by keeping libmpv/FFmpeg libraries loaded across player shutdowns while releasing per-episode playback resources.
 
 - Direct-play embedded subtitles no longer disappear when a fast local subtitle fetch finishes before the Player screen transition; cue application is keyed to the active item/selected stream instead of transient screen state.

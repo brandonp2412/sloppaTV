@@ -42,7 +42,8 @@ public:
     void startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset = 0,
                     int embeddedAudioOrdinal = -1, int embeddedSubtitleStreamIndex = -1,
                     int embeddedSubtitleOrdinal = -1, const std::string& externalSubtitleUrl = {},
-                    PlaybackDecodeMode decodeMode = PlaybackDecodeMode::Hardware, int maxAudioChannels = 8);
+                    PlaybackDecodeMode decodeMode = PlaybackDecodeMode::Hardware, int maxAudioChannels = 8,
+                     bool isRemux = false);
     void stop();
     void togglePause();
     void pause();
@@ -75,7 +76,7 @@ public:
 private:
     bool loadLibrariesLocked(std::string& error);
     bool initializeLocked(JNIEnv* env, jobject surface, int bufferPreset, PlaybackDecodeMode decodeMode,
-                          int maxAudioChannels, std::string& error);
+                          int maxAudioChannels, bool isRemux, std::string& error);
     bool ensureAndroidCaBundleLocked(std::string& error);
     void releaseLocked(JNIEnv* env);
     bool commandLocked(const char* const* args, const char* operation, std::string* error = nullptr) const;

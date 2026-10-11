@@ -310,7 +310,7 @@ bool NativeMediaPlayer::setOptionLocked(const char* name, const std::string& val
 }
 
 bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int bufferPreset, PlaybackDecodeMode decodeMode,
-                                         int maxAudioChannels, std::string& error) {
+                                         int maxAudioChannels, bool isRemux, std::string& error) {
     if (!env || !surface || !activity_ || !appContext_) {
         error = "Missing Android playback context or surface";
         return false;
@@ -338,6 +338,7 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
 
     const PlaybackBufferDurations durations = playbackBufferDurations(bufferPreset);
     const std::string cacheBytes = bufferPreset == 2 ? "128MiB" : (bufferPreset == 1 ? "96MiB" : "64MiB");
+    const std::string cachePauseWait = std::to_string(playbackCachePauseWaitSeconds(isRemux));
     const std::string cacheSecs =
         durations.maxBufferMs > 0 ? std::to_string(std::max(30, durations.maxBufferMs / 1000)) : "120";
 
@@ -379,7 +380,7 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
         {"tls-verify", "yes", true},
         {"cache", "auto", false},
         {"cache-pause", "yes", false},
-        {"cache-pause-wait", "2", false},
+        {"cache-pause-wait", cachePauseWait.c_str(), false},
         {"demuxer-max-bytes", cacheBytes.c_str(), false},
         {"demuxer-max-back-bytes", "16MiB", false},
         {"demuxer-readahead-secs", cacheSecs.c_str(), false},
@@ -477,7 +478,7 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
 void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset,
                                    int embeddedAudioOrdinal, int embeddedSubtitleStreamIndex,
                                    int embeddedSubtitleOrdinal, const std::string& externalSubtitleUrl,
-                                   PlaybackDecodeMode decodeMode, int maxAudioChannels) {
+                                   PlaybackDecodeMode decodeMode, int maxAudioChannels, bool isRemux) {
     stop();
     if (!surface || url.empty()) {
         std::scoped_lock lock(mutex_);
@@ -497,7 +498,7 @@ void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int6
 
     std::scoped_lock lock(mutex_);
     std::string error;
-    if (!initializeLocked(env, surface, bufferPreset, decodeMode, maxAudioChannels, error)) {
+    if (!initializeLocked(env, surface, bufferPreset, decodeMode, maxAudioChannels, isRemux, error)) {
         error_ = error;
         cachedStatus_ = PlayerStatus::Error;
         releaseLocked(env);

@@ -179,6 +179,9 @@ int main() {
     assert(!preparePlan.retryWithTranscodeFallback);
     prepareCoordinator.beginPreparing(now - 45s);
     preparePlan = prepareCoordinator.preparePlan(now, true);
+    assert(!preparePlan.timedOut);
+    prepareCoordinator.beginPreparing(now - 90s);
+    preparePlan = prepareCoordinator.preparePlan(now, true);
     assert(preparePlan.timedOut);
     assert(!preparePlan.retryWithTranscodeFallback);
     prepareCoordinator.finishPreparing();

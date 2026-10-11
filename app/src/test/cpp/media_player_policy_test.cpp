@@ -93,11 +93,13 @@ int main() {
     assert(playbackPrepareTimedOut(false, 15'000));
     assert(!playbackPrepareTimedOut(true, 29'999));
     assert(playbackPrepareTimedOut(true, 30'000));
-    assert(playbackPrepareTimeoutMs(false, true) == 45'000);
-    assert(playbackPrepareTimeoutMs(true, true) == 45'000);
-    assert(!playbackPrepareTimedOut(false, 44'999, true));
-    assert(playbackPrepareTimedOut(false, 45'000, true));
+    assert(playbackPrepareTimeoutMs(false, true) == 90'000);
+    assert(playbackPrepareTimeoutMs(true, true) == 90'000);
+    assert(!playbackPrepareTimedOut(false, 89'999, true));
+    assert(playbackPrepareTimedOut(false, 90'000, true));
     assert(!playbackPrepareTimedOut(true, 30'000, true));
+    assert(playbackCachePauseWaitSeconds(false) == 2);
+    assert(playbackCachePauseWaitSeconds(true) == 10);
     assert(mpvLogIndicatesHardwareDecoderFailure("h264_mediacodec: MediaCodec 0x0 failed to start"));
     assert(mpvLogIndicatesHardwareDecoderFailure("MediaCodec initialization ERROR"));
     assert(!mpvLogIndicatesHardwareDecoderFailure("ffmpeg: Could not open codec"));

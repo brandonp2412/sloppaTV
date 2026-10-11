@@ -95,12 +95,16 @@ constexpr int64_t heldSeekDeltaMs(int seekSeconds, int repeatCount) {
 // Remux can still be fetching its initial torrent pieces. Aborting direct play
 // after 15 seconds and starting a second transcoding session discards that work.
 constexpr int playbackPrepareTimeoutMs(bool transcoding, bool isRemux = false) {
-    return isRemux ? 45'000 : (transcoding ? 30'000 : 15'000);
+    return isRemux ? 90'000 : (transcoding ? 30'000 : 15'000);
 }
 
 constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs, bool isRemux = false) {
     return elapsedMs >= playbackPrepareTimeoutMs(transcoding, isRemux);
 }
+
+// Remux P2P streams arrive in bursts. Two seconds of refilled cache repeatedly
+// underruns even when average torrent throughput exceeds the video bitrate.
+constexpr int playbackCachePauseWaitSeconds(bool isRemux) { return isRemux ? 10 : 2; }
 
 inline bool mpvLogIndicatesHardwareDecoderFailure(std::string_view text) {
     std::string normalized(text);

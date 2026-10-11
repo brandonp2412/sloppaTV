@@ -121,6 +121,8 @@ public:
         };
     }
 
+    [[nodiscard]] bool isRemuxServer() const { return serverInfo_ && serverInfo_->isRemux; }
+
     [[nodiscard]] int serverAudioChannels() const {
         return ::serverAudioChannels(serverInfo_ && serverInfo_->isRemux, settings_.maxAudioChannels);
     }
@@ -331,7 +333,7 @@ public:
         embeddedSubtitleDiscoveryDone_ = false;
         player_.startAsync(start.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
-                           start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels);
+                           start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels, isRemuxServer());
         if (startPositionMs > 0) screenState_.beginInitialPosition(startPositionMs, now);
     }
 
