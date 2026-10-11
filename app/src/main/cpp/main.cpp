@@ -151,6 +151,7 @@
 #include "similar_prefetch_controller.hpp"
 #include "remux_episode_prewarm.hpp"
 #include "home_episode_prewarm.hpp"
+#include "search_result_prewarm.hpp"
 #include "settings_renderer.hpp"
 #include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
@@ -263,7 +264,8 @@ public:
           similarPrefetchApi_(app->activity->vm, app->activity->clazz),
           remuxPrewarmApi_(app->activity->vm, app->activity->clazz),
           remuxStatsApi_(app->activity->vm, app->activity->clazz),
-          homePrewarmApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
+          homePrewarmApi_(app->activity->vm, app->activity->clazz),
+          searchPrewarmApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
           seerrSearch_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
@@ -302,6 +304,11 @@ public:
               1, [] {},
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_WARN, kTag, "Home episode prewarm exception: %s", error.c_str());
+              }),
+          searchPrewarmTasks_(
+              1, [] {},
+              [](const std::string& error) {
+                  __android_log_print(ANDROID_LOG_WARN, kTag, "Remux search prewarm exception: %s", error.c_str());
               }),
           accountAsync_(api_, tasks_, asyncCompletions_), quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_), browseAsync_(api_, tasks_, asyncCompletions_),
@@ -429,7 +436,7 @@ public:
                               searchScreens_, searchFlow_, settingsScreens_, serverInfoScreens_, detailsScreens_,
                               seerrApp_, playbackRequests_, externalPlaybackCoordinator_, similarPrefetch_,
                               externalPlayer_, screen_, navigation_, session_, settings_, settingsFlow_, detailsFlow_,
-                              virtualKeyboard_, accountFlow_, loading_, error_, renderBurstUntil_) {
+                              virtualKeyboard_, accountFlow_, serverInfo_, loading_, error_, renderBurstUntil_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
         artwork_.setDataPath(dataPath_);
@@ -487,6 +494,7 @@ public:
         remuxPrewarmApi_.cancelPendingRequests();
         remuxStatsApi_.cancelPendingRequests();
         homePrewarmApi_.cancelPendingRequests();
+        searchPrewarmApi_.cancelPendingRequests();
         seerr_.cancelPendingRequests();
         seerrSearch_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
@@ -494,6 +502,7 @@ public:
         remuxPrewarmTasks_.shutdown();
         remuxStatsTasks_.shutdown();
         homePrewarmTasks_.shutdown();
+        searchPrewarmTasks_.shutdown();
         tasks_.shutdown();
         stopPlayback();
         brandMark_.release(renderer_);
@@ -1091,6 +1100,38 @@ private:
             __android_log_print(ANDROID_LOG_WARN, kTag, "Home prewarm task submission unavailable");
     }
 
+    void runDueSearchResultPrewarm() {
+        auto next = searchResultPrewarm_.takeDue(session_, searchFlow_.state().query(),
+                                                  screen_ == Screen::Search && serverInfo_.isRemux);
+        if (!next) return;
+        JellyfinSession session = session_;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        const auto searchToken = requestEpochs_.search.token(requestEpochs_.search.snapshot());
+        if (!searchPrewarmTasks_.submit([this, session = std::move(session), next = std::move(*next),
+                                         maxAudioChannels, searchToken] {
+                if (!searchToken.active()) return; // Drop queued work for superseded queries.
+                JellyfinItem candidate = next;
+                // Series cards are not playable. Resolve their next episode (or first
+                // available episode) before asking Remux to prepare the stream.
+                if (candidate.type == "Series") {
+                    auto episode = searchPrewarmApi_.getNextUpForSeries(session, candidate.id);
+                    if (!episode.ok || episode.value.id.empty()) {
+                        auto episodes = searchPrewarmApi_.getSeriesEpisodes(session, candidate.id, 1);
+                        if (!episodes.ok || episodes.value.empty()) return;
+                        candidate = std::move(episodes.value.front());
+                    } else {
+                        candidate = std::move(episode.value);
+                    }
+                }
+                if (!searchToken.active()) return;
+                const auto result = searchPrewarmApi_.prewarmRemuxEpisode(session, candidate, maxAudioChannels);
+                __android_log_print(result.ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, kTag,
+                                    "Remux search prewarm item=%.8s %s%s%s", candidate.id.c_str(),
+                                    result.ok ? "ready" : "failed", result.ok ? "" : ": ", result.error.c_str());
+            }))
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Remux search prewarm queue unavailable");
+    }
+
     void runDueSimilarPrefetch() {
         const bool eligible = screen_ == Screen::Home || screen_ == Screen::Browse || screen_ == Screen::Search ||
                               screen_ == Screen::Details || screen_ == Screen::Player;
@@ -1361,7 +1402,8 @@ private:
         if (effects.refreshPending) refreshSeerrPendingAsync();
         if (effects.refreshStorage) refreshSeerrStorageAsync(true);
         if (effects.deferredRequest) requestSeerrMediaAsync(*effects.deferredRequest);
-        if (effects.retrySearch && screen_ == Screen::Search && !searchFlow_.state().query().empty()) {
+        if (effects.retrySearch && !serverInfo_.isRemux && screen_ == Screen::Search &&
+            !searchFlow_.state().query().empty()) {
             const auto now = std::chrono::steady_clock::now();
             (void)searchFlow_.prepareReconnectRetry(now);
             applyScreenInteractionHostEffects(
@@ -1389,6 +1431,11 @@ private:
     }
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
+        if (serverInfo_.isRemux && screen_ == Screen::Search && completion.result.ok &&
+            requestEpochs_.search.active(completion.generation) &&
+            searchFlow_.state().query() == completion.query) {
+            searchResultPrewarm_.refresh(session_, completion.query, completion.result.value);
+        }
         applyScreenInteractionHostEffects(screenInteractions_.applySearch(searchScreens_.complete(completion)));
     }
 
@@ -1576,6 +1623,7 @@ private:
         applyAsyncCompletions();
         runDueSimilarPrefetch();
         runDueHomeEpisodePrewarm();
+        runDueSearchResultPrewarm();
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
         applyPendingRuntimeLaunchRequest();
@@ -1637,6 +1685,7 @@ private:
     JellyfinClient remuxPrewarmApi_;
     JellyfinClient remuxStatsApi_;
     JellyfinClient homePrewarmApi_;
+    JellyfinClient searchPrewarmApi_;
     SeerrClient seerr_;
     SeerrClient seerrSearch_;
     DisplayModeController displayMode_;
@@ -1650,6 +1699,7 @@ private:
     TaskRunner remuxPrewarmTasks_;
     TaskRunner remuxStatsTasks_;
     TaskRunner homePrewarmTasks_;
+    TaskRunner searchPrewarmTasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
     AccountAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> accountAsync_;
@@ -1735,6 +1785,7 @@ private:
     SimilarPrefetchController similarPrefetch_;
     RemuxEpisodePrewarmState remuxEpisodePrewarm_;
     HomeEpisodePrewarmState homeEpisodePrewarm_;
+    SearchResultPrewarmState searchResultPrewarm_;
     std::string remuxStatsSourceId_;
     std::chrono::steady_clock::time_point remuxStatsNextPoll_{};
     bool remuxStatsInFlight_ = false;

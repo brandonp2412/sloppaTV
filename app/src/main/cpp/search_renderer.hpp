@@ -76,12 +76,12 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     }
 
     if (systemSearchInputActive && results.empty() && !seerrSearchLoading) {
-        drawCentered(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to search Jellyfin and Seerr", style.muted, 16.0f,
+        drawCentered(480.0f, 300.0f, 960.0f, 64.0f, 1.75f, "Type to search your media server", style.muted, 16.0f,
                      5.0f);
         return;
     }
     if (query.empty() && results.empty()) {
-        renderEmpty("Find your next favorite", "Search your library and request anything missing through Seerr.");
+        renderEmpty("Find your next favorite", "Search movies, shows and episodes on your media server.");
         return;
     }
 
@@ -101,7 +101,7 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     if (semanticRows.empty()) {
         renderEmpty("No results found", seerrConfigured
                                             ? "No Jellyfin or Seerr matches for this search."
-                                            : "No Jellyfin matches. Connect Seerr in Settings to search for more.");
+                                            : "No matches on this server.");
         return;
     }
 
@@ -173,7 +173,7 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
             renderer.text(72.0f, labelY, 1.75f, label, style.secondaryText, 520.0f);
             if (semanticRow == SearchScreenState::kLibraryRow && state.loading() && count <= 0) {
                 drawLoadingDots(228.0f, labelY + 8.0f);
-                renderer.text(320.0f, labelY + 1.0f, 1.45f, "Searching Jellyfin…", style.muted, 440.0f);
+                renderer.text(320.0f, labelY + 1.0f, 1.45f, "Searching media server…", style.muted, 440.0f);
                 return;
             }
             if (semanticRow == SearchScreenState::kLibraryRow && count <= 0) {

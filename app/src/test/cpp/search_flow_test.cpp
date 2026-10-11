@@ -106,5 +106,30 @@ int main() {
     assert(jellyfinEpoch.snapshot() == 5);
     assert(seerrEpoch.snapshot() == 5);
 
+    // Remux search only uses the Jellyfin-compatible endpoint. Even when
+    // Seerr was previously populated/configured, its requests stay disabled.
+    SeerrDomainState remuxDomain;
+    FakeSeerrAsync remuxSeerr;
+    FakeJellyfinSearch remuxSearch;
+    RequestEpoch remuxEpoch;
+    RequestEpoch remuxSeerrEpoch;
+    SearchFlow<FakeSeerrAsync, FakeJellyfinSearch> remuxFlow(
+        remuxDomain, remuxSeerr, remuxSearch, remuxEpoch, remuxSeerrEpoch);
+    remuxFlow.state().setQuery("mob");
+    assert(!remuxFlow.scheduleLive(now, false).clearError);
+    assert(!remuxFlow.runDue(true, session(), SeerrEndpoint{}, now + std::chrono::milliseconds(499)).clearError);
+    assert(remuxSearch.searchCount == 0);
+    remuxFlow.state().setQuery("mobland");
+    assert(!remuxFlow.scheduleLive(now + std::chrono::milliseconds(450), false).clearError);
+    assert(!remuxFlow.runDue(true, session(), SeerrEndpoint{}, now + std::chrono::milliseconds(500)).clearError);
+    assert(remuxSearch.searchCount == 0);
+    const auto due = remuxFlow.runDue(true, session(), SeerrEndpoint{}, now + std::chrono::milliseconds(950));
+    assert(due.clearError && !due.refreshSeerrStorage);
+    assert(remuxSearch.searchCount == 1);
+    assert(remuxSearch.lastQuery == "mobland");
+    assert(remuxSeerr.searchCount == 0);
+    assert(!remuxDomain.searchLoading());
+    remuxFlow.cancel();
+
     return 0;
 }

@@ -21,8 +21,9 @@ int main() {
     assert(seerrState.schedule(state.query(), start, true));
     state.refreshSeerrResults();
     assert(!seerrState.loading());
-    assert(!state.debounceDue(start + 179ms));
-    assert(state.debounceDue(start + 180ms));
+    assert(!state.debounceDue(start + 499ms));
+    assert(!state.debounceDue(start + 499ms));
+    assert(state.debounceDue(start + 500ms));
     assert(!seerrState.debounceDue(start + 549ms));
     assert(seerrState.debounceDue(start + 550ms));
     assert(state.beginSearch());

@@ -59,7 +59,7 @@ public:
                                     SimilarPrefetch& similarPrefetch, ExternalPlayer& externalPlayer, Screen& screen,
                                     NavigationStack<Screen>& navigation, JellyfinSession& session,
                                     AppSettings& settings, SettingsFlow& settingsFlow, DetailsFlow& detailsFlow,
-                                    VirtualKeyboardState& keyboard, AccountFlow& accountFlow, bool& loading,
+                                    VirtualKeyboardState& keyboard, AccountFlow& accountFlow, const JellyfinServerInfo& serverInfo, bool& loading,
                                     std::string& error, std::chrono::steady_clock::time_point& renderBurstUntil)
         : api_(api), textInput_(textInput), accountScreens_(accountScreens), accountSession_(accountSession),
           homeScreens_(homeScreens), browseScreens_(browseScreens), searchScreens_(searchScreens),
@@ -67,23 +67,30 @@ public:
           detailsScreens_(detailsScreens), seerrApp_(seerrApp), playbackRequests_(playbackRequests),
           externalPlayback_(externalPlayback), similarPrefetch_(similarPrefetch), externalPlayer_(externalPlayer),
           screen_(screen), navigation_(navigation), session_(session), settings_(settings), settingsFlow_(settingsFlow),
-          detailsFlow_(detailsFlow), keyboard_(keyboard), accountFlow_(accountFlow), loading_(loading), error_(error),
+          detailsFlow_(detailsFlow), keyboard_(keyboard), accountFlow_(accountFlow), serverInfo_(serverInfo),
+          loading_(loading), error_(error),
           renderBurstUntil_(renderBurstUntil) {}
+
+    [[nodiscard]] SeerrEndpoint searchEndpoint() const {
+        // Remux exposes Jellyfin-compatible search. Never fan out its queries
+        // into the unrelated Seerr catalogue even when Seerr is configured.
+        return serverInfo_.isRemux ? SeerrEndpoint{} : seerrApp_.endpoint();
+    }
 
     [[nodiscard]] ScreenInteractionHostEffects scheduleLiveSearch() {
         ScreenInteractionHostEffects host;
-        if (searchScreens_.scheduleLive(seerrApp_.endpoint().configured(), std::chrono::steady_clock::now()))
+        if (searchScreens_.scheduleLive(searchEndpoint().configured(), std::chrono::steady_clock::now()))
             host.wakeLooper = true;
         return host;
     }
 
     [[nodiscard]] ScreenInteractionHostEffects runDueLiveSearch() {
-        return applySearch(searchScreens_.runDue(seerrApp_.endpoint(), std::chrono::steady_clock::now()));
+        return applySearch(searchScreens_.runDue(searchEndpoint(), std::chrono::steady_clock::now()));
     }
 
     [[nodiscard]] ScreenInteractionHostEffects search(bool includeSeerrImmediately = true) {
         return applySearch(
-            searchScreens_.search(seerrApp_.endpoint(), includeSeerrImmediately, std::chrono::steady_clock::now()));
+            searchScreens_.search(searchEndpoint(), includeSeerrImmediately, std::chrono::steady_clock::now()));
     }
 
     [[nodiscard]] ScreenInteractionHostEffects applySystemTextInput(SystemTextInputEffects effects) {
@@ -108,7 +115,7 @@ public:
         if (effects.hideTextInput) textInput_.hide();
         if (effects.openTextInput) {
             const bool shown =
-                textInput_.show(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch);
+                textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
             searchScreens_.applyTextInputShown(shown);
         }
         if (effects.activateKeyboard) host.merge(activateKeyboard(true));
@@ -269,7 +276,7 @@ public:
         case Screen::Browse:
             return applyBrowse(browseScreens_.handle(key));
         case Screen::Search:
-            return applySearch(searchScreens_.handle(key, seerrApp_.endpoint(), std::chrono::steady_clock::now()));
+            return applySearch(searchScreens_.handle(key, searchEndpoint(), std::chrono::steady_clock::now()));
         case Screen::Settings:
             return applySettings(settingsScreens_.handle(key));
         case Screen::Diagnostics:
@@ -315,7 +322,7 @@ private:
     [[nodiscard]] ScreenInteractionHostEffects openSearch() {
         navigation_.push(Screen::Search);
         screen_ = navigation_.current();
-        const bool shown = textInput_.show(searchFlow_.state().query(), "Search Jellyfin & Seerr", kTextInputSearch);
+        const bool shown = textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
         searchScreens_.applyTextInputShown(shown);
         keyboard_.reset();
         error_.clear();
@@ -374,6 +381,7 @@ private:
     DetailsFlow& detailsFlow_;
     VirtualKeyboardState& keyboard_;
     AccountFlow& accountFlow_;
+    const JellyfinServerInfo& serverInfo_;
     bool& loading_;
     std::string& error_;
     std::chrono::steady_clock::time_point& renderBurstUntil_;

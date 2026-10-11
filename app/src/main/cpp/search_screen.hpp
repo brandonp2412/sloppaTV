@@ -45,7 +45,7 @@ struct SearchScreenCommand {
 class SearchScreenState {
 public:
     using Clock = std::chrono::steady_clock;
-    static constexpr auto kDebounceDelay = std::chrono::milliseconds(180);
+    static constexpr auto kDebounceDelay = std::chrono::milliseconds(500);
     static constexpr int kLibraryRow = 0;
     static constexpr int kEpisodeRow = 1;
     static constexpr int kSeerrRow = 2;
@@ -54,6 +54,7 @@ public:
     explicit SearchScreenState(const std::vector<SeerrMediaItem>& seerrResults) : seerrResults_(seerrResults) {}
 
     void reset() {
+        seerrEnabled_ = true;
         query_.clear();
         libraryTitles_.clear();
         episodes_.clear();
@@ -186,6 +187,12 @@ public:
     }
 
     [[nodiscard]] bool debounceDue(Clock::time_point now) const { return debouncePending_ && now >= debounceDeadline_; }
+
+    void setSeerrEnabled(bool enabled) {
+        if (seerrEnabled_ == enabled) return;
+        seerrEnabled_ = enabled;
+        rebuildResults();
+    }
 
     void refreshSeerrResults() { rebuildResults(); }
 
@@ -367,6 +374,7 @@ private:
     }
 
     [[nodiscard]] size_t visibleSeerrCount() const {
+        if (!seerrEnabled_) return 0;
         return static_cast<size_t>(
             std::count_if(seerrResults_.begin(), seerrResults_.end(),
                           [&](const SeerrMediaItem& item) { return !duplicatesLocalLibrary(item); }));
@@ -382,8 +390,10 @@ private:
         results_.reserve(libraryTitles_.size() + seerrResults_.size() + episodes_.size());
         results_.insert(results_.end(), libraryTitles_.begin(), libraryTitles_.end());
         results_.insert(results_.end(), episodes_.begin(), episodes_.end());
-        for (const auto& item : seerrResults_) {
-            if (!duplicatesLocalLibrary(item)) results_.push_back(jellyfinItemFromSeerrMedia(item));
+        if (seerrEnabled_) {
+            for (const auto& item : seerrResults_) {
+                if (!duplicatesLocalLibrary(item)) results_.push_back(jellyfinItemFromSeerrMedia(item));
+            }
         }
 
         if (!selectedId.empty()) {
@@ -409,6 +419,7 @@ private:
     int selection_ = 0;
     std::array<int, kRowCount> firstVisible_{0, 0, 0};
     bool navigatedResults_ = false;
+    bool seerrEnabled_ = true;
     bool keyboard_ = true;
     bool loading_ = false;
     bool debouncePending_ = false;

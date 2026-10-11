@@ -43,6 +43,7 @@ public:
 
     [[nodiscard]] SearchScheduleEffects scheduleLive(std::chrono::steady_clock::time_point now, bool seerrConfigured) {
         jellyfinEpoch_.invalidate();
+        state_.setSeerrEnabled(seerrConfigured);
         const auto seerrPlan = coordinator_.schedule(state_.query(), now, seerrConfigured);
         if (seerrPlan.resultsChanged) state_.refreshSeerrResults();
         if (seerrPlan.invalidateRequest) seerrEpoch_.invalidate();
@@ -90,6 +91,7 @@ public:
     [[nodiscard]] SearchDispatchEffects
     search(const JellyfinSession& session, SeerrEndpoint endpoint, bool includeSeerrImmediately = true,
            std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now()) {
+        state_.setSeerrEnabled(endpoint.configured());
         if (state_.query().empty()) {
             coordinator_.reset();
             state_.refreshSeerrResults();
@@ -111,6 +113,7 @@ public:
 
     [[nodiscard]] SearchDispatchEffects searchSeerr(SeerrEndpoint endpoint, bool immediate,
                                                     std::chrono::steady_clock::time_point now) {
+        if (!endpoint.configured()) return {};
         auto plan = immediate ? coordinator_.prepareImmediate(endpoint, state_.query())
                               : coordinator_.prepareDue(std::move(endpoint), state_.query(), now);
         if (plan.resultsChanged) state_.refreshSeerrResults();

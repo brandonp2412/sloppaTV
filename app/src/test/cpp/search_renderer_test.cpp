@@ -286,7 +286,7 @@ int main() {
         [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int) {},
         [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
 
-    assert(contains(loadingRenderer.texts, "Searching Jellyfin…"));
+    assert(contains(loadingRenderer.texts, "Searching media server…"));
     int pulseRects = 0;
     for (const auto& rect : loadingRenderer.roundedRects)
         if (rect.color == 99) ++pulseRects;
