@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <string_view>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <utility>
@@ -47,9 +48,9 @@ public:
                 entry.item.runtimeTicks = saved.value("runtimeTicks", int64_t{0});
                 entry.time = Clock::time_point{std::chrono::milliseconds(saved.value("savedAtMs", int64_t{0}))};
                 if (entry.server.empty() || entry.userId.empty() || entry.item.id.empty() ||
-                    (entry.item.type != "Episode" && entry.item.type != "Movie") ||
-                    entry.item.positionTicks <= 0 || entry.time > Clock::now() ||
-                    Clock::now() - entry.time > std::chrono::hours(24 * 30)) continue;
+                    (entry.item.type != "Episode" && entry.item.type != "Movie") || entry.item.positionTicks <= 0 ||
+                    entry.time > Clock::now() || Clock::now() - entry.time > std::chrono::hours(24 * 30))
+                    continue;
                 recent_.push_back(std::move(entry));
             }
         } catch (const nlohmann::json::exception&) {
@@ -63,14 +64,22 @@ public:
         for (const auto& entry : recent_) {
             if (entry.time > Clock::now() || Clock::now() - entry.time > std::chrono::hours(24 * 30)) continue;
             data.push_back({
-                {"server", entry.server}, {"userId", entry.userId}, {"id", entry.item.id},
-                {"type", entry.item.type}, {"name", entry.item.name},
-                {"seriesId", entry.item.seriesId}, {"seriesName", entry.item.seriesName},
+                {"server", entry.server},
+                {"userId", entry.userId},
+                {"id", entry.item.id},
+                {"type", entry.item.type},
+                {"name", entry.item.name},
+                {"seriesId", entry.item.seriesId},
+                {"seriesName", entry.item.seriesName},
                 {"seriesPrimaryImageTag", entry.item.seriesPrimaryImageTag},
-                {"imageTag", entry.item.imageTag}, {"thumbTag", entry.item.thumbTag},
-                {"backdropTag", entry.item.backdropTag}, {"backdropItemId", entry.item.backdropItemId},
-                {"positionTicks", entry.item.positionTicks}, {"runtimeTicks", entry.item.runtimeTicks},
-                {"savedAtMs", std::chrono::duration_cast<std::chrono::milliseconds>(entry.time.time_since_epoch()).count()},
+                {"imageTag", entry.item.imageTag},
+                {"thumbTag", entry.item.thumbTag},
+                {"backdropTag", entry.item.backdropTag},
+                {"backdropItemId", entry.item.backdropItemId},
+                {"positionTicks", entry.item.positionTicks},
+                {"runtimeTicks", entry.item.runtimeTicks},
+                {"savedAtMs",
+                 std::chrono::duration_cast<std::chrono::milliseconds>(entry.time.time_since_epoch()).count()},
             });
         }
         const std::string path = dataPath + "/recent-resume.json";
@@ -85,10 +94,26 @@ public:
         if (std::rename(tmp.c_str(), path.c_str()) != 0) std::remove(tmp.c_str());
     }
 
+    // Manual watched/unwatched clears resume state. Mask stale in-flight loads.
+    void forget(const JellyfinSession& session, std::string_view itemId, Clock::time_point now = Clock::now()) {
+        if (!session.valid() || itemId.empty()) return;
+        std::erase_if(recent_, [&](const Entry& entry) {
+            return entry.server == session.server && entry.userId == session.userId && entry.item.id == itemId;
+        });
+        std::erase_if(dismissed_, [&](const Dismissal& entry) {
+            return entry.server == session.server && entry.userId == session.userId && entry.itemId == itemId;
+        });
+        dismissed_.push_back({session.server, session.userId, std::string(itemId), now});
+        if (dismissed_.size() > 24) dismissed_.erase(dismissed_.begin());
+    }
+
     void remember(const JellyfinSession& session, JellyfinItem item, int64_t positionTicks, bool completed,
                   Clock::time_point now = Clock::now()) {
         std::erase_if(recent_, [&](const Entry& entry) {
             return entry.server == session.server && entry.userId == session.userId && entry.item.id == item.id;
+        });
+        std::erase_if(dismissed_, [&](const Dismissal& entry) {
+            return entry.server == session.server && entry.userId == session.userId && entry.itemId == item.id;
         });
         // An item may be marked Watched from an earlier viewing. A new partial
         // rewatch still belongs in Continue Watching until it is finished.
@@ -100,10 +125,17 @@ public:
         if (recent_.size() > 12) recent_.resize(12);
     }
 
-    void apply(const JellyfinSession& session, JellyfinHomeData& home,
-               Clock::time_point now = Clock::now()) const {
+    void apply(const JellyfinSession& session, JellyfinHomeData& home, Clock::time_point now = Clock::now()) const {
         auto resume = std::find_if(home.rows.begin(), home.rows.end(),
                                    [](const JellyfinHomeRow& row) { return row.title == "Continue Watching"; });
+        if (resume != home.rows.end()) {
+            std::erase_if(resume->items, [&](const JellyfinItem& item) {
+                return std::any_of(dismissed_.begin(), dismissed_.end(), [&](const Dismissal& entry) {
+                    return entry.server == session.server && entry.userId == session.userId &&
+                           entry.itemId == item.id && now >= entry.time && now - entry.time < std::chrono::minutes(2);
+                });
+            });
+        }
         for (auto entry = recent_.rbegin(); entry != recent_.rend(); ++entry) {
             if (entry->server != session.server || entry->userId != session.userId ||
                 now - entry->time > std::chrono::hours(24 * 30) || now < entry->time)
@@ -116,6 +148,8 @@ public:
                                                [&](const JellyfinItem& item) { return item.id == entry->item.id; });
             if (existing == resume->items.end()) resume->items.insert(resume->items.begin(), entry->item);
         }
+        std::erase_if(home.rows,
+                      [](const JellyfinHomeRow& row) { return row.title == "Continue Watching" && row.items.empty(); });
         // Prioritize active viewing over browsing and hypothetical next episodes.
         std::stable_sort(home.rows.begin(), home.rows.end(), [](const JellyfinHomeRow& a, const JellyfinHomeRow& b) {
             const auto rank = [](const std::string& title) {
@@ -135,5 +169,14 @@ private:
         JellyfinItem item;
         Clock::time_point time;
     };
+
+    struct Dismissal {
+        std::string server;
+        std::string userId;
+        std::string itemId;
+        Clock::time_point time;
+    };
+
     std::vector<Entry> recent_;
+    std::vector<Dismissal> dismissed_;
 };

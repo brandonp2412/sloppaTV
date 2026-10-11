@@ -85,10 +85,15 @@ ItemMutationController::preparePlayedToggle(JellyfinHomeData& home, HomeScreenSt
 
     JellyfinItem updated = detail;
     updated.played = preparation.desired;
-    if (preparation.desired) updated.positionTicks = 0;
+    updated.positionTicks = 0; // Both watched and unwatched reset resume progress on Remux.
     updateCachedUserData(home, homeState, browseState, searchState, detailsState, queueState, updated, hiddenFromHome);
     detail.played = preparation.desired;
-    if (preparation.desired) detail.positionTicks = 0;
+    detail.positionTicks = 0;
+    for (auto& row : home.rows) {
+        if (row.title == "Continue Watching")
+            std::erase_if(row.items, [&](const JellyfinItem& entry) { return entry.id == detail.id; });
+    }
+    clampHomeSelections(home, homeState);
 
     if (preparation.desired) {
         for (auto& row : home.rows) {
@@ -161,7 +166,7 @@ ItemMutationCompletionEffects ItemMutationController::apply(PlayedCompletion& co
 
     if (detailVisible && detail.id == completion.item.id) {
         detail.played = completion.desired;
-        if (completion.desired) detail.positionTicks = 0;
+        detail.positionTicks = 0;
     }
     return effects;
 }

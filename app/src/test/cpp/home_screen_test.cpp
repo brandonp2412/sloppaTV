@@ -345,6 +345,31 @@ int main() {
     expiredHome.rows = {{"My Media", {}}};
     overlay.apply(brandog, expiredHome, now + std::chrono::hours(24 * 31));
     assert(expiredHome.rows.size() == 1);
+    // Both manual watched and unwatched reset resume. Local overlay must not
+    // restore an old position or accept a stale in-flight server home result.
+    overlay.forget(brandog, tatami.id, now);
+    JellyfinHomeData staleHome;
+    staleHome.rows = {{"Continue Watching", {tatami}}, {"Next Up", {nextEpisode}}};
+    overlay.apply(brandog, staleHome, now + std::chrono::seconds(1));
+    assert(staleHome.rows.size() == 1);
+    assert(staleHome.rows[0].title == "Next Up");
+    JellyfinHomeData otherAfterForget;
+    otherAfterForget.rows = {{"Continue Watching", {tatami}}};
+    overlay.apply(other, otherAfterForget, now + std::chrono::seconds(1));
+    assert(otherAfterForget.rows[0].items.size() == 1);
+    std::filesystem::create_directories(directory);
+    overlay.persist(directory.string());
+    HomeResumeOverlay forgottenAfterRestart;
+    forgottenAfterRestart.restore(directory.string());
+    JellyfinHomeData afterRestart;
+    forgottenAfterRestart.apply(brandog, afterRestart);
+    assert(afterRestart.rows.empty());
+    std::filesystem::remove_all(directory);
+    // Starting a new partial rewatch makes the item eligible again.
+    overlay.remember(brandog, tatami, 400, false, now);
+    JellyfinHomeData rewatchedHome;
+    overlay.apply(brandog, rewatchedHome, now);
+    assert(rewatchedHome.rows[0].items.size() == 1);
     overlay.remember(brandog, tatami, 0, true, now);
     JellyfinHomeData completedHome;
     overlay.apply(brandog, completedHome, now);

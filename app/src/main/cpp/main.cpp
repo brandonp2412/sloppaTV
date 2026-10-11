@@ -150,6 +150,7 @@
 #include "settings_screen_coordinator.hpp"
 #include "similar_prefetch_controller.hpp"
 #include "remux_episode_prewarm.hpp"
+#include "home_episode_prewarm.hpp"
 #include "settings_renderer.hpp"
 #include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
@@ -253,7 +254,8 @@ public:
     explicit SloppaApp(android_app* app)
         : app_(app), renderer_(app->activity->vm, app->activity->clazz), api_(app->activity->vm, app->activity->clazz),
           similarPrefetchApi_(app->activity->vm, app->activity->clazz),
-          remuxPrewarmApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
+          remuxPrewarmApi_(app->activity->vm, app->activity->clazz),
+          homePrewarmApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
           seerrSearch_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
@@ -279,6 +281,11 @@ public:
               1, [] {},
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_WARN, kTag, "Remux episode prewarm exception: %s", error.c_str());
+              }),
+          homePrewarmTasks_(
+              1, [] {},
+              [](const std::string& error) {
+                  __android_log_print(ANDROID_LOG_WARN, kTag, "Home episode prewarm exception: %s", error.c_str());
               }),
           accountAsync_(api_, tasks_, asyncCompletions_), quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_), browseAsync_(api_, tasks_, asyncCompletions_),
@@ -462,11 +469,13 @@ public:
         api_.cancelPendingRequests();
         similarPrefetchApi_.cancelPendingRequests();
         remuxPrewarmApi_.cancelPendingRequests();
+        homePrewarmApi_.cancelPendingRequests();
         seerr_.cancelPendingRequests();
         seerrSearch_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         similarPrefetchTasks_.shutdown();
         remuxPrewarmTasks_.shutdown();
+        homePrewarmTasks_.shutdown();
         tasks_.shutdown();
         stopPlayback();
         brandMark_.release(renderer_);
@@ -1048,6 +1057,22 @@ private:
         scheduleSimilarPrefetch(items[static_cast<size_t>(selection)]);
     }
 
+    void runDueHomeEpisodePrewarm() {
+        if (!session_.valid()) return;
+        auto next =
+            homeEpisodePrewarm_.takeDue(std::chrono::steady_clock::now(), screen_ == Screen::Home, serverInfo_.isRemux);
+        if (!next) return;
+        JellyfinSession session = session_;
+        const int maxAudioChannels = settings_.maxAudioChannels;
+        if (!homePrewarmTasks_.submit([this, session = std::move(session), next = std::move(*next), maxAudioChannels] {
+                const auto result = homePrewarmApi_.prewarmRemuxEpisode(session, next, maxAudioChannels);
+                __android_log_print(result.ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, kTag,
+                                    "Remux home episode prewarm item=%.8s %s%s%s", next.id.c_str(),
+                                    result.ok ? "ready" : "failed", result.ok ? "" : ": ", result.error.c_str());
+            }))
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Home prewarm task submission unavailable");
+    }
+
     void runDueSimilarPrefetch() {
         const bool eligible = screen_ == Screen::Home || screen_ == Screen::Browse || screen_ == Screen::Search ||
                               screen_ == Screen::Details || screen_ == Screen::Player;
@@ -1337,6 +1362,22 @@ private:
         if (effects.notice) showNotice(std::move(*effects.notice));
     }
 
+    void applyAsyncCompletion(PlayedCompletion& completion) {
+        const bool committed = completion.result.ok && requestEpochs_.session.active(completion.sessionEpoch);
+        applyContentCompletionHostEffects(contentCompletions_.complete(completion));
+        if (committed) {
+            homeResume_.forget(session_, completion.item.id);
+            homeResume_.persist(dataPath_);
+            const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
+            homeVisibility_.filter(home_);
+            const HomeRestorePlan restored = HomeScreenState::restorePlan(snapshot, home_.rows);
+            homeState_.setSelections(restored.selections);
+            homeState_.setRow(restored.focusedRow);
+            homeState_.updateViewport(static_cast<int>(home_.rows.size()));
+            homeEpisodePrewarm_.refresh(session_, home_);
+        }
+    }
+
     template <typename Completion>
         requires isContentCompletionV<Completion>
     void applyAsyncCompletion(Completion& completion) {
@@ -1390,6 +1431,7 @@ private:
             if (effects.triggerSearch) searchAsync();
         }
         if (effects.refreshSeerrPending) refreshSeerrPendingAsync();
+        if (effects.primaryReadyMs) homeEpisodePrewarm_.refresh(session_, home_);
         scheduleFocusedHomePrefetch();
     }
 
@@ -1480,6 +1522,7 @@ private:
     void tick() {
         applyAsyncCompletions();
         runDueSimilarPrefetch();
+        runDueHomeEpisodePrewarm();
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
         applyPendingRuntimeLaunchRequest();
@@ -1539,6 +1582,7 @@ private:
     JellyfinClient api_;
     JellyfinClient similarPrefetchApi_;
     JellyfinClient remuxPrewarmApi_;
+    JellyfinClient homePrewarmApi_;
     SeerrClient seerr_;
     SeerrClient seerrSearch_;
     DisplayModeController displayMode_;
@@ -1550,6 +1594,7 @@ private:
     TaskRunner tasks_;
     TaskRunner similarPrefetchTasks_;
     TaskRunner remuxPrewarmTasks_;
+    TaskRunner homePrewarmTasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
     AccountAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> accountAsync_;
@@ -1634,6 +1679,7 @@ private:
 
     SimilarPrefetchController similarPrefetch_;
     RemuxEpisodePrewarmState remuxEpisodePrewarm_;
+    HomeEpisodePrewarmState homeEpisodePrewarm_;
 
     VirtualKeyboardState virtualKeyboard_;
     AccountScreenCoordinator<decltype(accountAsync_), decltype(quickConnectAsync_)> accountScreens_;

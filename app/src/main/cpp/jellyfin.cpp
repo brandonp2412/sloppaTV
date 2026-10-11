@@ -957,7 +957,13 @@ ApiResult JellyfinClient::prewarmRemuxEpisode(const JellyfinSession& session, co
 
     // PlaybackInfo makes Remux resolve and probe the chosen media source. A
     // transcoding URL must never be fetched speculatively: it can start ffmpeg.
-    const auto resolved = resolvePlayback(session, item, 120000000, maxAudioChannels);
+    // Home rows can contain only summary fields, so use the full codec/source
+    // information before asking Remux to resolve the playback path.
+    const auto detail = getItem(session, item.id);
+    JellyfinItem candidate = detail.ok ? detail.value : item;
+    if (!item.mediaSourceId.empty()) candidate.mediaSourceId = item.mediaSourceId;
+    if (item.positionTicks > 0) candidate.positionTicks = item.positionTicks;
+    const auto resolved = resolvePlayback(session, candidate, 120000000, maxAudioChannels);
     if (!resolved.ok) return {.ok = false, .error = resolved.error};
     if (resolved.value.playMethod != PlaybackMethod::DirectPlay)
         return {.ok = true, .error = {}}; // Metadata/source probe warmed; avoid speculative transcoding.

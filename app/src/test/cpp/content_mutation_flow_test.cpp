@@ -52,5 +52,21 @@ int main() {
     assert(!home.rows.front().items.front().played);
     assert(homeState.row() == 0);
 
+    // Unwatched also clears the old resume position, not just the played flag.
+    detail.played = true;
+    detail.positionTicks = 40;
+    home.rows[0].items = {detail};
+    const auto unwatch =
+        flow.preparePlayedToggle(home, homeState, browseState, searchState, detailsState, queueState, detail, false, 8);
+    assert(!unwatch.desired);
+    assert(detail.positionTicks == 0);
+    assert(!detail.played);
+    assert(home.rows[0].items.empty());
+    flow.rejectPlayedToggle(unwatch.item, false, home, homeState, browseState, searchState, detailsState, queueState,
+                            detail);
+    assert(detail.played && detail.positionTicks == 40);
+    assert(home.rows[0].items.size() == 1);
+    assert(home.rows[0].items[0].positionTicks == 40);
+
     return 0;
 }
