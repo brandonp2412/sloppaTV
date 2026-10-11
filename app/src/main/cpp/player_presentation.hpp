@@ -334,19 +334,18 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
     const std::string waitStatus = playerWaitStatus(resolving, status == PlayerStatus::Preparing,
                                                      playbackCoordinator.tracks().subtitleBusy(), buffer, now);
-    if (!waitStatus.empty()) {
-        const auto frame = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-        const int dots = static_cast<int>((frame / 450) % 4);
-        const std::string animated = waitStatus + std::string(static_cast<std::size_t>(dots), '.');
-        constexpr float width = 820.0f;
-        constexpr float height = 80.0f;
-        constexpr float y = 674.0f;
-        renderer.roundedRect((Renderer::logicalWidth() - width) / 2.0f, y, width, height, 20.0f,
-                             Color{0.0f, 0.0f, 0.0f, 0.78f});
-        renderer.textCentered((Renderer::logicalWidth() - width) / 2.0f, y, width, height, 1.7f,
-                              ui.fitText(animated, 1.7f, width - 40.0f, 1), material_tv::onSurface);
+    // The controls time out independently of buffering or subtitle downloads.
+    // Keep only the existing left-aligned player status lines when they are hidden.
+    if (!showOverlay) {
+        if (!waitStatus.empty()) {
+            renderer.text(80.0f, 772.0f, 2.0f, ui.fitText(waitStatus, 2.0f, 580.0f, 1),
+                          material_tv::onSurfaceSecondary, 580.0f);
+            const std::string remuxProgress = buffer.remotePrefetchText(now);
+            if (!remuxProgress.empty())
+                renderer.text(80.0f, 808.0f, 1.35f, remuxProgress, material_tv::onSurfaceVariant, 1650.0f);
+        }
+        return;
     }
-    if (!showOverlay) return;
 
     const auto nextItem = playbackCoordinator.continuation().nextItem();
     if (showNextUp && nextItem) {
@@ -412,12 +411,11 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             finishLabel = "Ends " + formatLocalClock(finishAt, settings.clock24Hour);
         }
     }
-    const std::string state = buffer.statusText(now);
     renderPlayerStatus(renderer,
                        PlayerStatusRenderState{
                            .clockText = clockText,
                            .finishText = finishLabel,
-                           .statusText = state,
+                           .statusText = waitStatus,
                        },
                        PlayerStatusRenderStyle<Color>{
                            .muted = material_tv::onSurfaceVariant,
