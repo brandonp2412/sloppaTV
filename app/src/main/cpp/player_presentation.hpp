@@ -332,20 +332,11 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             return ui.drawButtonSurface(x, y, width, height, focused, primary);
         },
         [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
+    // The status and Remux progress belong to the playback controls. When the
+    // overlay is dismissed or times out, render no standalone status text.
+    if (!showOverlay) return;
     const std::string waitStatus = playerWaitStatus(resolving, status == PlayerStatus::Preparing,
                                                      playbackCoordinator.tracks().subtitleBusy(), buffer, now);
-    // The controls time out independently of buffering or subtitle downloads.
-    // Keep only the existing left-aligned player status lines when they are hidden.
-    if (!showOverlay) {
-        if (!waitStatus.empty()) {
-            renderer.text(80.0f, 772.0f, 2.0f, ui.fitText(waitStatus, 2.0f, 580.0f, 1),
-                          material_tv::onSurfaceSecondary, 580.0f);
-            const std::string remuxProgress = buffer.remotePrefetchText(now);
-            if (!remuxProgress.empty())
-                renderer.text(80.0f, 808.0f, 1.35f, remuxProgress, material_tv::onSurfaceVariant, 1650.0f);
-        }
-        return;
-    }
 
     const auto nextItem = playbackCoordinator.continuation().nextItem();
     if (showNextUp && nextItem) {
