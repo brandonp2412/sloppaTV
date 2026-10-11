@@ -951,6 +951,25 @@ bool JellyfinClient::isStaticStreamAvailable(const JellyfinSession& session, con
     return response.ok();
 }
 
+ApiResult JellyfinClient::prewarmRemuxEpisode(const JellyfinSession& session, const JellyfinItem& item,
+                                              int maxAudioChannels) const {
+    if (!session.valid() || item.id.empty()) return {.ok = false, .error = "Invalid episode prewarm request"};
+
+    // PlaybackInfo makes Remux resolve and probe the chosen media source. A
+    // transcoding URL must never be fetched speculatively: it can start ffmpeg.
+    const auto resolved = resolvePlayback(session, item, 120000000, maxAudioChannels);
+    if (!resolved.ok) return {.ok = false, .error = resolved.error};
+    if (resolved.value.playMethod != PlaybackMethod::DirectPlay)
+        return {.ok = true, .error = {}}; // Metadata/source probe warmed; avoid speculative transcoding.
+
+    auto requestHeaders = headers(&session, session.deviceId);
+    requestHeaders["Range"] = "bytes=0-65535";
+    const auto response = http_.request("GET", resolved.value.url, requestHeaders);
+    if (response.status != 206 || response.body.empty() || response.body.size() > 65536)
+        return {.ok = false, .error = "Remux did not return a bounded partial stream: " + apiError(response)};
+    return {.ok = true, .error = {}};
+}
+
 ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSession& session, const JellyfinItem& item,
                                                                int maxStreamingBitrate, int maxAudioChannels,
                                                                PlaybackOverrides overrides, int audioStreamIndex,

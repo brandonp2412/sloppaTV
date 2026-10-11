@@ -75,6 +75,8 @@ public:
     ApiResult refreshMetadata(const JellyfinSession& session, const JellyfinItem& item) const;
     ApiResult deleteItem(const JellyfinSession& session, const JellyfinItem& item) const;
     [[nodiscard]] bool isStaticStreamAvailable(const JellyfinSession& session, const JellyfinItem& item) const;
+    ApiResult prewarmRemuxEpisode(const JellyfinSession& session, const JellyfinItem& item,
+                                  int maxAudioChannels = 8) const;
     ApiValueResult<PlaybackTarget> resolvePlayback(const JellyfinSession& session, const JellyfinItem& item,
                                                    int maxStreamingBitrate = 120000000, int maxAudioChannels = 8,
                                                    PlaybackOverrides overrides = {}, int audioStreamIndex = -1,

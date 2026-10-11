@@ -67,6 +67,7 @@ CPP_TESTS = [
     "media_session_policy_test.cpp",
     "playback_continuation_test.cpp",
     "playback_continuation_executor_test.cpp",
+    "remux_episode_prewarm_test.cpp",
     "playback_coordinator_test.cpp",
     "playback_profile_test.cpp",
     "playback_resolution_executor_test.cpp",

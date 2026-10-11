@@ -149,6 +149,7 @@
 #include "settings_screen.hpp"
 #include "settings_screen_coordinator.hpp"
 #include "similar_prefetch_controller.hpp"
+#include "remux_episode_prewarm.hpp"
 #include "settings_renderer.hpp"
 #include "status_overlay_renderer.hpp"
 #include "subtitle_load_executor.hpp"
@@ -251,7 +252,8 @@ class SloppaApp {
 public:
     explicit SloppaApp(android_app* app)
         : app_(app), renderer_(app->activity->vm, app->activity->clazz), api_(app->activity->vm, app->activity->clazz),
-          similarPrefetchApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
+          similarPrefetchApi_(app->activity->vm, app->activity->clazz),
+          remuxPrewarmApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
           seerrSearch_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
           mediaSession_(app->activity->vm, app->activity->clazz),
@@ -272,6 +274,11 @@ public:
               },
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_ERROR, kTag, "Similar prefetch exception: %s", error.c_str());
+              }),
+          remuxPrewarmTasks_(
+              1, [] {},
+              [](const std::string& error) {
+                  __android_log_print(ANDROID_LOG_WARN, kTag, "Remux episode prewarm exception: %s", error.c_str());
               }),
           accountAsync_(api_, tasks_, asyncCompletions_), quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_), browseAsync_(api_, tasks_, asyncCompletions_),
@@ -454,10 +461,12 @@ public:
     ~SloppaApp() {
         api_.cancelPendingRequests();
         similarPrefetchApi_.cancelPendingRequests();
+        remuxPrewarmApi_.cancelPendingRequests();
         seerr_.cancelPendingRequests();
         seerrSearch_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         similarPrefetchTasks_.shutdown();
+        remuxPrewarmTasks_.shutdown();
         tasks_.shutdown();
         stopPlayback();
         brandMark_.release(renderer_);
@@ -1210,6 +1219,33 @@ private:
         applyPlaybackHostEffect(playbackRuntime_.tickActivePlayer(playbackStreamAsync_, playbackTelemetryAsync_,
                                                                   playbackContinuationAsync_, mediaSession_,
                                                                   queueState_, renderer_.ready(), stateMutex_));
+        // Begin a small speculative range fetch only near the episode boundary;
+        // Remux releases inactive torrent leases after a short grace period.
+        if (screen_ == Screen::Player && playbackCoordinator_.activeItemAvailable()) {
+            const auto& current = playbackCoordinator_.session().activeItem();
+            const std::string& currentId = current.id;
+            if (serverInfo_.isRemux) {
+                if (const JellyfinItem* queued = remuxQueuedNextEpisode(current, queueState_))
+                    remuxEpisodePrewarm_.remember(currentId, *queued);
+            }
+            auto next = remuxEpisodePrewarm_.takeDue(currentId, playerScreenState_.positionMs(),
+                                                     playerScreenState_.durationMs(),
+                                                     player_.status() == PlayerStatus::Playing, serverInfo_.isRemux);
+            if (next) {
+                JellyfinSession session = session_;
+                const int maxAudioChannels = settings_.maxAudioChannels;
+                if (!remuxPrewarmTasks_.submit(
+                        [this, session = std::move(session), next = std::move(*next), maxAudioChannels] {
+                            const auto result = remuxPrewarmApi_.prewarmRemuxEpisode(session, next, maxAudioChannels);
+                            __android_log_print(result.ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, kTag,
+                                                "Remux next episode prewarm item=%.8s %s%s%s", next.id.c_str(),
+                                                result.ok ? "ready" : "failed", result.ok ? "" : ": ",
+                                                result.error.c_str());
+                        })) {
+                    __android_log_print(ANDROID_LOG_WARN, kTag, "Remux next episode prewarm queue unavailable");
+                }
+            }
+        }
         // Remember a genuinely playable Remux version, not the first advertised
         // torrent. Source IDs survive refreshed searches, unlike list indices.
         if (screen_ != Screen::Player || !serverInfo_.isRemux || !playbackCoordinator_.activeItemAvailable()) return;
@@ -1403,6 +1439,9 @@ private:
         if (completion.ok && !completion.item.id.empty()) {
             similarPrefetch_.rememberDetail(session_, completion.item);
             scheduleSimilarPrefetch(completion.item);
+            if (serverInfo_.isRemux && playbackCoordinator_.activeItemAvailable() &&
+                playbackCoordinator_.session().activeItem().id == completion.currentItemId)
+                remuxEpisodePrewarm_.remember(completion.currentItemId, completion.item);
         }
         applyPlaybackCompletionApplicationEffects(playbackCompletions_.complete(completion));
     }
@@ -1474,6 +1513,7 @@ private:
 
     void stopPlayback(bool completed = false) {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
+        remuxEpisodePrewarm_.clear();
         const PlaybackReleaseContext release = playbackCoordinator_.releaseContext(
             true, completed, session_.valid(), playerScreenState_.positionMs());
         homeResume_.remember(session_, release.item, release.plan.cachedPositionTicks, release.plan.markPlayed);
@@ -1498,6 +1538,7 @@ private:
     Renderer renderer_;
     JellyfinClient api_;
     JellyfinClient similarPrefetchApi_;
+    JellyfinClient remuxPrewarmApi_;
     SeerrClient seerr_;
     SeerrClient seerrSearch_;
     DisplayModeController displayMode_;
@@ -1508,6 +1549,7 @@ private:
     VideoSurface videoSurface_;
     TaskRunner tasks_;
     TaskRunner similarPrefetchTasks_;
+    TaskRunner remuxPrewarmTasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
     AccountAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> accountAsync_;
@@ -1591,6 +1633,7 @@ private:
     NativeTextInputBridge<decltype(asyncCompletions_)> textInputBridge_;
 
     SimilarPrefetchController similarPrefetch_;
+    RemuxEpisodePrewarmState remuxEpisodePrewarm_;
 
     VirtualKeyboardState virtualKeyboard_;
     AccountScreenCoordinator<decltype(accountAsync_), decltype(quickConnectAsync_)> accountScreens_;
