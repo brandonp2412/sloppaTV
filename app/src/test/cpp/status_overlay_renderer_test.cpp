@@ -67,7 +67,7 @@ int main() {
                         },
                         style, [](std::string_view value, float, float, int) { return std::string(value); });
     assert(loading.rects.size() == 2);
-    assert(loading.rects[0].x == 1600.0f && loading.rects[0].y == 120.0f);
+    assert(loading.rects[0].x == 1370.0f && loading.rects[0].y == 120.0f);
     assert(hasText(loading.texts, "Loading…", 120.0f));
 
     FakeRenderer player;

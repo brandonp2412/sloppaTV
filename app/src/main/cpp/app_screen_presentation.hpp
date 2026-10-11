@@ -170,7 +170,7 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
         case Screen::Player:
             renderPlayerPresentation(frame.renderer, frame.player, frame.videoSurface, frame.playbackCoordinator,
                                      frame.playerScreenState, frame.trickplayState, frame.settings, frame.session,
-                                     frame.artwork, frame.lastInteraction);
+                                     frame.artwork, frame.lastInteraction, frame.serverInfo.isRemux);
             break;
         }
     };
@@ -194,9 +194,20 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
         renderQueueOverlayPresentation(frame.renderer, frame.ui, frame.queueState);
     }
 
-    const StatusOverlayRenderState status =
-        frame.statusOverlayState.renderState(frame.error, frame.loading || frame.homeLoading || frame.mutationLoading,
-                                             frame.screen == Screen::Player, std::chrono::steady_clock::now());
+    const std::string_view loadingLabel =
+        frame.screen == Screen::Player
+            ? (frame.playbackCoordinator.fallbackResolving()      ? "Retrying playback stream"
+               : frame.playbackCoordinator.transitionLoading()    ? "Resolving stream source"
+               : frame.player.status() == PlayerStatus::Preparing ? "Opening video stream"
+                                                                  : "Buffering video")
+            : (frame.screen == Screen::Home && frame.homeLoading ? "Syncing Continue Watching"
+               : frame.screen == Screen::Login                   ? "Connecting to media server"
+               : frame.screen == Screen::Browse                  ? "Loading library items"
+               : frame.screen == Screen::Search                  ? "Searching media libraries"
+                                                                 : "Loading media details");
+    const StatusOverlayRenderState status = frame.statusOverlayState.renderState(
+        frame.error, frame.loading || frame.homeLoading || frame.mutationLoading, frame.screen == Screen::Player,
+        std::chrono::steady_clock::now(), loadingLabel);
     renderStatusOverlay(
         frame.renderer, status,
         StatusOverlayRenderStyle<Color>{

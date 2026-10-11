@@ -435,18 +435,18 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
 
     auto viewsFuture = std::async(std::launch::async, [this, &session] { return loadViews(session); });
     auto resumeFuture = std::async(std::launch::async, [this, &session, &common] {
-        auto resume = parseItemList(http_.request("GET",
-                                                  session.server + "/Users/" + session.userId +
-                                                      "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" +
-                                                      common,
-                                                  headers(&session, session.deviceId)));
+        auto resume = parseItemList(
+            http_.request("GET",
+                          session.server + "/Users/" + session.userId +
+                              "/Items/Resume?Limit=30&MediaTypes=Video&ExcludeItemTypes=AudioBook" + common,
+                          headers(&session, session.deviceId)));
         // The Resume index may exclude short sessions even though the item's
         // UserData has a playable position. Import other unfinished episodes
         // even if Resume already contains a different, resumable episode.
         auto fallback = parseItemList(http_.request(
-            "GET", session.server + "/Users/" + session.userId +
-                       "/Items?Recursive=true&IncludeItemTypes=Movie,Episode" +
-                       "&SortBy=DatePlayed&SortOrder=Descending&Limit=100&EnableUserData=true" + common,
+            "GET",
+            session.server + "/Users/" + session.userId + "/Items?Recursive=true&IncludeItemTypes=Movie,Episode" +
+                "&SortBy=DatePlayed&SortOrder=Descending&Limit=100&EnableUserData=true" + common,
             headers(&session, session.deviceId)));
         if (!fallback.ok) return resume;
         if (!resume.ok) {
@@ -976,6 +976,33 @@ ApiResult JellyfinClient::prewarmRemuxEpisode(const JellyfinSession& session, co
     return {.ok = true, .error = {}};
 }
 
+ApiValueResult<RemuxPrefetchStatus> JellyfinClient::remuxPrefetchStatus(const JellyfinSession& session,
+                                                                        const std::string& sourceId) const {
+    ApiValueResult<RemuxPrefetchStatus> result;
+    if (!session.valid() || sourceId.empty()) return result;
+    const auto response = http_.request("GET", session.server + "/Remux/Prefetch/" + urlEncode(sourceId),
+                                        headers(&session, session.deviceId));
+    if (!response.ok() || response.body.empty()) return result;
+    try {
+        const auto data = json::parse(response.body);
+        if (!data.is_object()) return result;
+        result.value.currentCachedBytes = data.value("currentCachedBytes", uint64_t{0});
+        result.value.currentTotalBytes = data.value("currentTotalBytes", uint64_t{0});
+        result.value.nextCachedBytes = data.contains("nextCachedBytes") && data["nextCachedBytes"].is_number_unsigned()
+                                           ? data["nextCachedBytes"].get<uint64_t>()
+                                           : 0;
+        result.value.nextTotalBytes = data.contains("nextTotalBytes") && data["nextTotalBytes"].is_number_unsigned()
+                                          ? data["nextTotalBytes"].get<uint64_t>()
+                                          : 0;
+        result.value.downloadMiBps = data.value("downloadMibps", 0.0);
+        result.value.livePeers = data.value("livePeers", uint64_t{0});
+        result.ok = result.value.currentTotalBytes > 0;
+    } catch (const json::exception&) {
+        return result;
+    }
+    return result;
+}
+
 ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSession& session, const JellyfinItem& item,
                                                                int maxStreamingBitrate, int maxAudioChannels,
                                                                PlaybackOverrides overrides, int audioStreamIndex,
@@ -1081,7 +1108,8 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
         return result;
     }
 
-    auto offerResult = parsePlaybackInfoOffer(response.body, audioStreamIndex, subtitleStreamIndex, overrides, item.mediaSourceId);
+    auto offerResult =
+        parsePlaybackInfoOffer(response.body, audioStreamIndex, subtitleStreamIndex, overrides, item.mediaSourceId);
     if (!offerResult.ok) {
         result.error = std::move(offerResult.error);
         return result;

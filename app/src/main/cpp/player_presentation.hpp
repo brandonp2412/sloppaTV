@@ -232,11 +232,16 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                               PlaybackCoordinator& playbackCoordinator, PlayerScreenState& playerScreenState,
                               TrickplayPreviewState& trickplayState, const AppSettings& settings,
                               const JellyfinSession& session, ArtworkLike& artwork,
-                              std::chrono::steady_clock::time_point lastInteraction) {
+                              std::chrono::steady_clock::time_point lastInteraction, bool isRemux) {
     PlayerPresentationUi<ArtworkLike> ui(renderer, artwork, session, settings, lastInteraction);
     const PlayerStatus status = player.status();
     const auto now = std::chrono::steady_clock::now();
     const auto& activeItem = playbackCoordinator.session().activeItem();
+    auto& buffer = playerScreenState.bufferIndicator();
+    const bool resolving = playbackCoordinator.transitionLoading() || playbackCoordinator.fallbackResolving();
+    buffer.observe(resolving, status == PlayerStatus::Preparing, status == PlayerStatus::Playing,
+                   status == PlayerStatus::Paused, player.pausedForCache(), player.positionMs(),
+                   player.bufferedAheadMs(), isRemux, now);
     std::string videoError;
     if (videoSurface.ready()) {
         videoSurface.update(videoError);
@@ -285,7 +290,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                                                  userOverlayVisible, skipAffordanceVisible);
     const bool showOverlay = status == PlayerStatus::Preparing || playbackCoordinator.transitionLoading() ||
                              playbackCoordinator.fallbackResolving() || userOverlayVisible ||
-                             playerScreenState.skipDisablePromptVisible();
+                             playerScreenState.skipDisablePromptVisible() || buffer.interrupted();
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
         subtitleText = cue->text;
@@ -393,11 +398,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             finishLabel = "Ends " + formatLocalClock(finishAt, settings.clock24Hour);
         }
     }
-    const std::string state =
-        playbackCoordinator.fallbackResolving()
-            ? "Retrying playback"
-            : (playbackCoordinator.transitionLoading() ? (activeItem.id.empty() ? "Loading episode" : "Switching track")
-                                                       : (status == PlayerStatus::Preparing ? "Loading" : ""));
+    const std::string state = buffer.statusText(now);
     renderPlayerStatus(renderer,
                        PlayerStatusRenderState{
                            .clockText = clockText,
@@ -412,12 +413,20 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                            ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
                        });
 
+    // Only contiguous libmpv cache is labelled buffered-ahead time.
+    const std::string aheadLabel = buffer.aheadText();
+    renderer.text(710.0f, 772.0f, 1.40f, aheadLabel, material_tv::onSurfaceVariant, 850.0f);
+    const std::string remuxProgress = buffer.remotePrefetchText(now);
+    if (!remuxProgress.empty())
+        renderer.text(80.0f, 808.0f, 1.35f, remuxProgress, material_tv::onSurfaceVariant, 1650.0f);
+
     const std::string positionText = formatPlaybackTime(position);
     const std::string durationText = formatPlaybackTime(duration);
     renderPlayerProgress(renderer,
                          PlayerProgressRenderState{
                              .positionMs = position,
                              .durationMs = duration,
+                             .bufferAheadMs = buffer.cacheAheadMs(),
                              .skipButtonVisible = skipAffordanceVisible,
                              .positionText = positionText,
                              .durationText = durationText,

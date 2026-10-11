@@ -1,6 +1,7 @@
 #pragma once
 
 #include "media_player_policy.hpp"
+#include "player_buffer_indicator.hpp"
 #include "player_ambient_bars.hpp"
 
 #include <algorithm>
@@ -74,6 +75,7 @@ public:
     }
 
     void resetPosition() {
+        bufferIndicator_.reset();
         positionMs_ = 0;
         durationMs_ = 0;
         pendingSeekTargetMs_ = -1;
@@ -288,6 +290,10 @@ public:
 
     [[nodiscard]] bool windowRestorePending() const { return windowRestorePending_; }
 
+    [[nodiscard]] PlayerBufferIndicator& bufferIndicator() { return bufferIndicator_; }
+
+    [[nodiscard]] const PlayerBufferIndicator& bufferIndicator() const { return bufferIndicator_; }
+
     [[nodiscard]] bool resumeOnFocusRequested() const { return resumeOnFocus_; }
 
     void completeWindowRestore() {
@@ -427,5 +433,6 @@ private:
     bool skipDisableEnabling_ = false;
     std::string skipDisableSeriesId_;
     std::string skipDisableSeriesName_;
+    PlayerBufferIndicator bufferIndicator_;
     AmbientBarColorState ambientBars_;
 };

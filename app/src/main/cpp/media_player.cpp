@@ -871,6 +871,19 @@ int NativeMediaPlayer::positionMs() const {
     return getDoublePropertyLocked("time-pos", value) ? boundedMs(value) : 0;
 }
 
+int NativeMediaPlayer::bufferedAheadMs() const {
+    std::scoped_lock lock(mutex_);
+    if (!mpv_) return 0;
+    double seconds = 0.0;
+    return getDoublePropertyLocked("demuxer-cache-duration", seconds) && seconds > 0.0 ? boundedMs(seconds) : 0;
+}
+
+bool NativeMediaPlayer::pausedForCache() const {
+    std::scoped_lock lock(mutex_);
+    bool waiting = false;
+    return mpv_ && getFlagPropertyLocked("paused-for-cache", waiting) && waiting;
+}
+
 int NativeMediaPlayer::durationMs() const {
     std::scoped_lock lock(mutex_);
     double value = 0.0;
@@ -925,7 +938,8 @@ std::optional<std::vector<EmbeddedSubtitleTrack>> NativeMediaPlayer::embeddedSub
         if (getStringPropertyLocked(trackProperty(slot, "type").c_str()) != "sub") continue;
         int64_t streamIndex = -1;
         if (!getIntPropertyLocked(trackProperty(slot, "ff-index").c_str(), streamIndex) || streamIndex < 0 ||
-            streamIndex > std::numeric_limits<int>::max()) continue;
+            streamIndex > std::numeric_limits<int>::max())
+            continue;
         bool isDefault = false;
         bool forced = false;
         getFlagPropertyLocked(trackProperty(slot, "default").c_str(), isDefault);

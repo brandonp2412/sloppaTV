@@ -231,6 +231,13 @@ void logPlaybackReportFailure(const char* stage, const std::string& itemId, cons
 
 using QueuedPlaybackCompletion = AppQueuedPlaybackCompletion;
 
+struct RemuxPrefetchCompletion {
+    std::string userId;
+    std::string itemId;
+    std::string sourceId;
+    ApiValueResult<RemuxPrefetchStatus> result;
+};
+
 using AsyncCompletion = std::variant<
     SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion, SeerrSeasonsCompletion,
     SeerrStorageRefreshCompletion, SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
@@ -243,7 +250,7 @@ using AsyncCompletion = std::variant<
     ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion, ArtworkLoadCompletion,
     MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion, PlaybackReportCompletion,
     QueuedPlaybackCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, StreamRestartCompletion,
-    FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion>;
+    FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion, RemuxPrefetchCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -255,6 +262,7 @@ public:
         : app_(app), renderer_(app->activity->vm, app->activity->clazz), api_(app->activity->vm, app->activity->clazz),
           similarPrefetchApi_(app->activity->vm, app->activity->clazz),
           remuxPrewarmApi_(app->activity->vm, app->activity->clazz),
+          remuxStatsApi_(app->activity->vm, app->activity->clazz),
           homePrewarmApi_(app->activity->vm, app->activity->clazz), seerr_(app->activity->vm, app->activity->clazz),
           seerrSearch_(app->activity->vm, app->activity->clazz),
           player_(app->activity->vm, app->activity->clazz, app->activity->internalDataPath),
@@ -281,6 +289,14 @@ public:
               1, [] {},
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_WARN, kTag, "Remux episode prewarm exception: %s", error.c_str());
+              }),
+          remuxStatsTasks_(
+              1,
+              [app] {
+                  if (app && app->looper) ALooper_wake(app->looper);
+              },
+              [](const std::string& error) {
+                  __android_log_print(ANDROID_LOG_WARN, kTag, "Remux stats exception: %s", error.c_str());
               }),
           homePrewarmTasks_(
               1, [] {},
@@ -469,12 +485,14 @@ public:
         api_.cancelPendingRequests();
         similarPrefetchApi_.cancelPendingRequests();
         remuxPrewarmApi_.cancelPendingRequests();
+        remuxStatsApi_.cancelPendingRequests();
         homePrewarmApi_.cancelPendingRequests();
         seerr_.cancelPendingRequests();
         seerrSearch_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
         similarPrefetchTasks_.shutdown();
         remuxPrewarmTasks_.shutdown();
+        remuxStatsTasks_.shutdown();
         homePrewarmTasks_.shutdown();
         tasks_.shutdown();
         stopPlayback();
@@ -1239,11 +1257,36 @@ private:
         return transitionEffects.handled;
     }
 
+    void scheduleRemuxPrefetchStatus() {
+        if (!serverInfo_.isRemux || !session_.valid() || !playbackCoordinator_.activeItemAvailable() ||
+            !playbackCoordinator_.activeTargetAvailable() || remuxStatsInFlight_)
+            return;
+        const auto& target = playbackCoordinator_.session().activeTarget();
+        const std::string& itemId = playbackCoordinator_.session().activeItem().id;
+        const std::string& sourceId = target.mediaSourceId;
+        if (sourceId.empty() || sourceId == itemId) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (sourceId == remuxStatsSourceId_ && now < remuxStatsNextPoll_) return;
+        const JellyfinSession session = session_;
+        const std::string copyItemId = itemId;
+        const std::string copySourceId = sourceId;
+        if (remuxStatsTasks_.submit([this, session, copyItemId, copySourceId] {
+                auto result = remuxStatsApi_.remuxPrefetchStatus(session, copySourceId);
+                asyncCompletions_.push(
+                    RemuxPrefetchCompletion{session.userId, copyItemId, copySourceId, std::move(result)});
+            })) {
+            remuxStatsInFlight_ = true;
+            remuxStatsSourceId_ = sourceId;
+            remuxStatsNextPoll_ = now + std::chrono::seconds(5);
+        }
+    }
+
     void tickActivePlayer() {
         if (screen_ != Screen::Player) return;
         applyPlaybackHostEffect(playbackRuntime_.tickActivePlayer(playbackStreamAsync_, playbackTelemetryAsync_,
                                                                   playbackContinuationAsync_, mediaSession_,
                                                                   queueState_, renderer_.ready(), stateMutex_));
+        scheduleRemuxPrefetchStatus();
         // Begin a small speculative range fetch only near the episode boundary;
         // Remux releases inactive torrent leases after a short grace period.
         if (screen_ == Screen::Player && playbackCoordinator_.activeItemAvailable()) {
@@ -1410,6 +1453,16 @@ private:
         accountSession_.applyAuthenticatedSession(accountScreens_.complete(completion));
     }
 
+    void applyAsyncCompletion(RemuxPrefetchCompletion& completion) {
+        remuxStatsInFlight_ = false;
+        if (!completion.result.ok || screen_ != Screen::Player || completion.userId != session_.userId ||
+            !playbackCoordinator_.activeTargetAvailable() ||
+            playbackCoordinator_.session().activeItem().id != completion.itemId ||
+            playbackCoordinator_.session().activeTarget().mediaSourceId != completion.sourceId)
+            return;
+        playerScreenState_.bufferIndicator().setRemotePrefetch(std::move(completion.result.value));
+    }
+
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
         if (completion.result.ok) homeResume_.apply(session_, completion.result.value);
         const auto effects = homeCompletions_.complete(completion);
@@ -1557,8 +1610,8 @@ private:
     void stopPlayback(bool completed = false) {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
         remuxEpisodePrewarm_.clear();
-        const PlaybackReleaseContext release = playbackCoordinator_.releaseContext(
-            true, completed, session_.valid(), playerScreenState_.positionMs());
+        const PlaybackReleaseContext release =
+            playbackCoordinator_.releaseContext(true, completed, session_.valid(), playerScreenState_.positionMs());
         homeResume_.remember(session_, release.item, release.plan.cachedPositionTicks, release.plan.markPlayed);
         homeResume_.persist(dataPath_);
         playbackRequests_.release(true, completed);
@@ -1582,6 +1635,7 @@ private:
     JellyfinClient api_;
     JellyfinClient similarPrefetchApi_;
     JellyfinClient remuxPrewarmApi_;
+    JellyfinClient remuxStatsApi_;
     JellyfinClient homePrewarmApi_;
     SeerrClient seerr_;
     SeerrClient seerrSearch_;
@@ -1594,6 +1648,7 @@ private:
     TaskRunner tasks_;
     TaskRunner similarPrefetchTasks_;
     TaskRunner remuxPrewarmTasks_;
+    TaskRunner remuxStatsTasks_;
     TaskRunner homePrewarmTasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
     RequestEpochs requestEpochs_;
@@ -1680,6 +1735,9 @@ private:
     SimilarPrefetchController similarPrefetch_;
     RemuxEpisodePrewarmState remuxEpisodePrewarm_;
     HomeEpisodePrewarmState homeEpisodePrewarm_;
+    std::string remuxStatsSourceId_;
+    std::chrono::steady_clock::time_point remuxStatsNextPoll_{};
+    bool remuxStatsInFlight_ = false;
 
     VirtualKeyboardState virtualKeyboard_;
     AccountScreenCoordinator<decltype(accountAsync_), decltype(quickConnectAsync_)> accountScreens_;

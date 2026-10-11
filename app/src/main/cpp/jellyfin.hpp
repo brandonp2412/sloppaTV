@@ -2,6 +2,7 @@
 
 #include "device_capabilities.hpp"
 #include "jellyfin_types.hpp"
+#include "remux_prefetch_status.hpp"
 #include "jni_http.hpp"
 #include "media_player_policy.hpp"
 
@@ -77,6 +78,8 @@ public:
     [[nodiscard]] bool isStaticStreamAvailable(const JellyfinSession& session, const JellyfinItem& item) const;
     ApiResult prewarmRemuxEpisode(const JellyfinSession& session, const JellyfinItem& item,
                                   int maxAudioChannels = 8) const;
+    ApiValueResult<RemuxPrefetchStatus> remuxPrefetchStatus(const JellyfinSession& session,
+                                                            const std::string& sourceId) const;
     ApiValueResult<PlaybackTarget> resolvePlayback(const JellyfinSession& session, const JellyfinItem& item,
                                                    int maxStreamingBitrate = 120000000, int maxAudioChannels = 8,
                                                    PlaybackOverrides overrides = {}, int audioStreamIndex = -1,

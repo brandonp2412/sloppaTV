@@ -7,6 +7,7 @@
 
 struct StatusOverlayRenderState {
     bool loading = false;
+    std::string_view loadingText = "Loading…";
     bool playerScreen = false;
     bool noticeVisible = false;
     std::string_view notice;
@@ -41,7 +42,7 @@ public:
     }
 
     [[nodiscard]] StatusOverlayRenderState renderState(std::string_view error, bool loading, bool playerScreen,
-                                                       TimePoint now) {
+                                                       TimePoint now, std::string_view loadingText = "Loading…") {
         if (!noticePersistent_ && !notice_.empty() && now >= noticeUntil_) clearNotice();
 
         if (error.empty()) {
@@ -55,6 +56,7 @@ public:
 
         return {
             .loading = loading,
+            .loadingText = loadingText,
             .playerScreen = playerScreen,
             .noticeVisible = !notice_.empty() && (noticePersistent_ || now < noticeUntil_),
             .notice = notice_,
@@ -84,14 +86,14 @@ template <typename RendererLike, typename ColorLike, typename FitText>
 void renderStatusOverlay(RendererLike& renderer, const StatusOverlayRenderState& state,
                          const StatusOverlayRenderStyle<ColorLike>& style, FitText&& fitText) {
     if (state.loading) {
-        constexpr float loadingX = 1600.0f;
+        constexpr float loadingX = 1370.0f;
         constexpr float loadingY = 120.0f;
-        constexpr float loadingWidth = 210.0f;
+        constexpr float loadingWidth = 440.0f;
         constexpr float loadingHeight = 48.0f;
         renderer.roundedRect(loadingX, loadingY, loadingWidth, loadingHeight, loadingHeight * 0.5f,
                              style.panelElevated);
         renderer.roundedRect(loadingX + 18.0f, loadingY + 16.0f, 16.0f, 16.0f, 8.0f, style.focus);
-        renderer.textVerticallyCentered(loadingX + 52.0f, loadingY, loadingHeight, 1.60f, "Loading…", style.text,
+        renderer.textVerticallyCentered(loadingX + 52.0f, loadingY, loadingHeight, 1.50f, state.loadingText, style.text,
                                         loadingWidth - 70.0f);
     }
 

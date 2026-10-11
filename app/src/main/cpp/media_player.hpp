@@ -43,7 +43,7 @@ public:
                     int embeddedAudioOrdinal = -1, int embeddedSubtitleStreamIndex = -1,
                     int embeddedSubtitleOrdinal = -1, const std::string& externalSubtitleUrl = {},
                     PlaybackDecodeMode decodeMode = PlaybackDecodeMode::Hardware, int maxAudioChannels = 8,
-                     bool isRemux = false);
+                    bool isRemux = false);
     void stop();
     void togglePause();
     void pause();
@@ -60,6 +60,8 @@ public:
     [[nodiscard]] std::string error() const;
     [[nodiscard]] int positionMs() const;
     [[nodiscard]] int durationMs() const;
+    [[nodiscard]] int bufferedAheadMs() const;
+    [[nodiscard]] bool pausedForCache() const;
     [[nodiscard]] bool seekable() const;
     [[nodiscard]] int videoWidth() const;
     [[nodiscard]] int videoHeight() const;

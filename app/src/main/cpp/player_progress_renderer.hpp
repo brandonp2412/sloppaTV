@@ -14,6 +14,7 @@ template <typename ColorLike> struct PlayerProgressRenderStyle {
 struct PlayerProgressRenderState {
     int positionMs = 0;
     int durationMs = 0;
+    int bufferAheadMs = 0;
     bool skipButtonVisible = false;
     std::string_view positionText;
     std::string_view durationText;
@@ -35,6 +36,13 @@ void renderPlayerProgress(RendererLike& renderer, const PlayerProgressRenderStat
     const float progress =
         std::clamp(static_cast<float>(state.positionMs) / static_cast<float>(state.durationMs), 0.0f, 1.0f);
     const float progressPixels = progressWidth * progress;
+    const float bufferedEnd = std::clamp(static_cast<float>(state.positionMs + std::max(0, state.bufferAheadMs)) /
+                                             static_cast<float>(state.durationMs),
+                                         progress, 1.0f);
+    const float bufferedPixels = progressWidth * bufferedEnd;
+    if (bufferedPixels > progressPixels)
+        renderer.roundedRect(progressX + progressPixels, progressTrackY, bufferedPixels - progressPixels, 7.0f, 3.5f,
+                             style.text);
     renderer.roundedRect(progressX, progressTrackY, progressPixels, 7.0f, 3.5f, style.focus);
     const float thumbCenterX = playbackProgressThumbCenterX(progressX, progressWidth, progress, 9.0f);
     renderer.roundedRect(thumbCenterX - 9.0f, progressTrackY - 5.5f, 18.0f, 18.0f, 9.0f, style.text);
