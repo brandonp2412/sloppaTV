@@ -64,6 +64,8 @@ All notable user-visible and release-engineering changes are recorded here.
 
 ### Fixed
 
+- Prevent native crashes when advancing to the next episode on Remux by keeping libmpv/FFmpeg libraries loaded across player shutdowns while releasing per-episode playback resources.
+
 - Direct-play embedded subtitles no longer disappear when a fast local subtitle fetch finishes before the Player screen transition; cue application is keyed to the active item/selected stream instead of transient screen state.
 - Embedded SRT/VTT and ASS/SSA no longer depend on Java subtitle overlay views above NativeActivity's EGL surface; styled ASS/SSA tracks use Jellyfin's SRT conversion and all supported text subtitles render through the native GLES path.
 - ASS/SSA subtitles selected during transcoded playback now use Jellyfin's SRT conversion and the native GLES subtitle renderer, avoiding the silent Media3/libass external-track failure seen on Hell's Paradise in Waydroid.

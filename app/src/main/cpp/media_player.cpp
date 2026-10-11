@@ -173,6 +173,8 @@ NativeMediaPlayer::NativeMediaPlayer(JavaVM* vm, jobject activity, const char* d
 
 NativeMediaPlayer::~NativeMediaPlayer() {
     stop();
+    delete symbols_;
+    symbols_ = nullptr;
     ScopedEnv scoped(vm_);
     JNIEnv* env = scoped.get();
     if (env && appContext_) env->DeleteGlobalRef(appContext_);
@@ -453,16 +455,11 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
         env->DeleteGlobalRef(surface_);
         surface_ = nullptr;
     }
-    delete symbols_;
-    symbols_ = nullptr;
-    if (avcodecLibrary_) {
-        dlclose(avcodecLibrary_);
-        avcodecLibrary_ = nullptr;
-    }
-    if (mpvLibrary_) {
-        dlclose(mpvLibrary_);
-        mpvLibrary_ = nullptr;
-    }
+    // Retain the dynamically loaded libraries for the process lifetime. FFmpeg
+    // and mpv may leave exiting decoder/work threads with TLS destructors in
+    // these libraries; dlclose here makes pthread_key_clean_all jump into
+    // unmapped code on a subsequent episode transition (SIGSEGV).
+    // The mpv handle and Surface above are still fully released each time.
     pendingAudioOrdinal_ = -1;
     pendingSubtitleStreamIndex_ = -1;
     pendingSubtitleOrdinal_ = -1;
