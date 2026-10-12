@@ -75,6 +75,14 @@ public final class HttpBridgeHarness {
     }
 
     public static void main(String[] args) {
+        if (args[0].equals("POLICY")) {
+            System.out.println(HttpBridge.defaultRequestTimeoutMs(args[1], args[2]));
+            System.out.println(HttpBridge.readTimeoutMs(
+                args[1], args[2], HttpBridge.defaultRequestTimeoutMs(args[1], args[2])
+            ));
+            System.out.println(HttpBridge.readTimeoutMs(args[1], args[2], 100));
+            return;
+        }
         if (args[0].equals("CANCEL") || args[0].equals("CANCEL_REUSE")) {
             final HttpBridge.Result[] result = new HttpBridge.Result[1];
             HttpBridge.register(42);
@@ -198,6 +206,28 @@ public final class HttpBridgeHarness {
             base64.b64decode(lines[2]).decode(),
             base64.b64decode(lines[3]).decode(),
         )
+
+    def test_playback_info_timeout_is_scoped_to_the_endpoint(self) -> None:
+        cases = [
+            ("POST", "/Items/123/PlaybackInfo?UserId=42", [95_000, 90_000, 100]),
+            ("GET", "/items/123/playbackinfo", [95_000, 90_000, 100]),
+            ("POST", "/Items/123/PlaybackInfoExtra", [45_000, 30_000, 100]),
+            ("GET", "/Users/123/Items/456", [45_000, 30_000, 100]),
+            ("POST", "/System/Info", [45_000, 30_000, 100]),
+        ]
+        for method, path, expected in cases:
+            with self.subTest(method=method, path=path):
+                completed = subprocess.run(
+                    [
+                        "java", "-cp", str(self.classes), "app.sloppatv.HttpBridgeHarness",
+                        "POLICY", method, self.base_url + path,
+                    ],
+                    check=True,
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual([int(value) for value in completed.stdout.splitlines()], expected)
 
     def test_follows_redirects_and_collects_cookies(self) -> None:
         status, body, error, cookies = self._request("GET", self.base_url + "/redirect")

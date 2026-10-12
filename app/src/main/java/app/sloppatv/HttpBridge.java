@@ -9,6 +9,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -19,6 +20,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class HttpBridge {
     private static final long REQUEST_TIMEOUT_MS = 45_000;
+    // A cold Remux torrent can take longer than 30 seconds to probe before
+    // returning PlaybackInfo. Only media-source negotiation gets extra time.
+    private static final long PLAYBACK_INFO_REQUEST_TIMEOUT_MS = 95_000;
+    private static final int PLAYBACK_INFO_READ_TIMEOUT_MS = 90_000;
     private static final int MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
     private static final String RESPONSE_TOO_LARGE = "HTTP response exceeds 64 MiB limit";
     private static final ScheduledExecutorService DEADLINE_EXECUTOR = Executors.newSingleThreadScheduledExecutor(
@@ -63,8 +68,27 @@ public final class HttpBridge {
         }
     }
 
+    static boolean isPlaybackInfoRequest(String method, String url) {
+        if (!"POST".equals(method) && !"GET".equals(method)) return false;
+        try {
+            String path = new URI(url).getPath();
+            return path != null && path.toLowerCase(Locale.ROOT).endsWith("/playbackinfo");
+        } catch (URISyntaxException error) {
+            return false;
+        }
+    }
+
+    static long defaultRequestTimeoutMs(String method, String url) {
+        return isPlaybackInfoRequest(method, url) ? PLAYBACK_INFO_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+    }
+
+    static int readTimeoutMs(String method, String url, long deadlineMs) {
+        int readTimeout = isPlaybackInfoRequest(method, url) ? PLAYBACK_INFO_READ_TIMEOUT_MS : 30_000;
+        return (int) Math.max(1, Math.min((long) readTimeout, deadlineMs));
+    }
+
     public static Result perform(String method, String url, String[] headerPairs, byte[] requestBody) {
-        return perform(method, url, headerPairs, requestBody, REQUEST_TIMEOUT_MS, 0);
+        return perform(method, url, headerPairs, requestBody, defaultRequestTimeoutMs(method, url), 0);
     }
 
     static Result perform(
@@ -110,7 +134,7 @@ public final class HttpBridge {
             );
 
             connection.setConnectTimeout(10_000);
-            connection.setReadTimeout(30_000);
+            connection.setReadTimeout(readTimeoutMs(method, url, requestTimeoutMs));
             connection.setInstanceFollowRedirects(true);
             connection.setRequestMethod(method);
             if (headerPairs != null) {
