@@ -18,8 +18,9 @@ public:
     void reset() { *this = {}; }
 
     void observe(bool resolving, bool preparing, bool playing, bool paused, bool cachePaused, int positionMs,
-                 int cacheAheadMs, bool remux, TimePoint now = Clock::now()) {
+                 int cacheAheadMs, bool remux, bool episode, TimePoint now = Clock::now()) {
         remux_ = remux;
+        episode_ = episode;
         cacheAheadMs_ = std::max(0, cacheAheadMs);
         if (resolving) {
             phase_ = PlayerBufferPhase::Resolving;
@@ -66,7 +67,8 @@ public:
     [[nodiscard]] std::string statusText(TimePoint now = Clock::now()) const {
         switch (phase_) {
         case PlayerBufferPhase::Resolving:
-            return remux_ ? "Resolving Remux episode stream" : "Resolving episode stream";
+            return episode_ ? (remux_ ? "Resolving Remux episode stream" : "Resolving episode stream")
+                            : (remux_ ? "Resolving Remux stream" : "Resolving stream");
         case PlayerBufferPhase::Connecting:
             if (phaseStarted_ != TimePoint{} && now - phaseStarted_ >= std::chrono::seconds(12))
                 return remux_ ? "Waiting for Remux stream data" : "Waiting for video data";
@@ -111,6 +113,7 @@ public:
 private:
     PlayerBufferPhase phase_ = PlayerBufferPhase::Resolving;
     bool remux_ = false;
+    bool episode_ = false;
     int cacheAheadMs_ = 0;
     int lastPositionMs_ = -1;
     TimePoint phaseStarted_{};

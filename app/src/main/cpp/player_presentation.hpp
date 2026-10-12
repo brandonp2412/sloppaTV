@@ -241,7 +241,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const bool resolving = playbackCoordinator.transitionLoading() || playbackCoordinator.fallbackResolving();
     buffer.observe(resolving, status == PlayerStatus::Preparing, status == PlayerStatus::Playing,
                    status == PlayerStatus::Paused, player.pausedForCache(), player.positionMs(),
-                   player.bufferedAheadMs(), isRemux, now);
+                   player.bufferedAheadMs(), isRemux, activeItem.type == "Episode", now);
     std::string videoError;
     if (videoSurface.ready()) {
         videoSurface.update(videoError);
