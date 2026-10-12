@@ -334,6 +334,44 @@ int main() {
     const auto noSources = parsePlaybackInfoOffer(R"({"MediaSources":[]})", -1, kSubtitleServerDefaultIndex);
     assert(!noSources.ok);
     assert(noSources.error == "Jellyfin returned no playable media source");
+
+    const auto remuxNoStreamsPlaceholder = parsePlaybackInfoOffer(R"({
+        "MediaSources": [{
+            "Id": "episode",
+            "Name": "No streams found",
+            "Path": "/videos/no-streams",
+            "Container": "mp4",
+            "SupportsDirectPlay": true,
+            "SupportsDirectStream": true,
+            "SupportsTranscoding": true
+        }]
+    })",
+                                                                  -1, kSubtitleServerDefaultIndex);
+    assert(!remuxNoStreamsPlaceholder.ok);
+    assert(remuxNoStreamsPlaceholder.error == "Jellyfin returned no playable media source");
+
+    const auto placeholderBeforeRealSource = parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {
+                "Id": "episode",
+                "Name": "No streams found",
+                "Path": "/videos/no-streams",
+                "Container": "mp4",
+                "SupportsDirectPlay": true
+            },
+            {
+                "Id": "real-source",
+                "Name": "Torrentio",
+                "Path": "/stream/real-source",
+                "Container": "mkv",
+                "SupportsDirectPlay": true
+            }
+        ]
+    })",
+                                                                  -1, kSubtitleServerDefaultIndex);
+    assert(placeholderBeforeRealSource.ok);
+    assert(placeholderBeforeRealSource.value.mediaSourceId == "real-source");
+    assert(placeholderBeforeRealSource.value.directPlaySourceCount == 1);
     const auto noObjectSources =
         parsePlaybackInfoOffer(R"({"MediaSources":[null,"bad"]})", -1, kSubtitleServerDefaultIndex);
     assert(!noObjectSources.ok);

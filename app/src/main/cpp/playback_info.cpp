@@ -22,6 +22,14 @@ template <typename T> T scalarValueOr(const json& value, const char* key, T fall
     }
 }
 
+bool isNoStreamsPlaceholder(const json& source) {
+    // Remux exposes an explicit sentinel media source when provider lookup
+    // yielded no playable streams. It advertises DirectPlay/DirectStream so
+    // generic Jellyfin clients can render its placeholder clip, but SloppaTV
+    // must not mistake that clip for successful media playback.
+    return source.is_object() && scalarValueOr(source, "Path", std::string{}) == "/videos/no-streams";
+}
+
 std::string joinCodecs(const std::vector<std::string>& codecs) {
     std::ostringstream out;
     for (size_t index = 0; index < codecs.size(); ++index) {
@@ -144,8 +152,9 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         }
 
         const auto& sources = data["MediaSources"];
-        const auto firstObject =
-            std::find_if(sources.begin(), sources.end(), [](const json& candidate) { return candidate.is_object(); });
+        const auto firstObject = std::find_if(sources.begin(), sources.end(), [](const json& candidate) {
+            return candidate.is_object() && !isNoStreamsPlaceholder(candidate);
+        });
         if (firstObject == sources.end()) {
             result.error = "Jellyfin returned no playable media source";
             return result;
@@ -171,7 +180,7 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         auto source = firstObject;
         int bestRank = 4;
         for (auto candidate = firstObject; candidate != sources.end(); ++candidate) {
-            if (!candidate->is_object()) continue;
+            if (!candidate->is_object() || isNoStreamsPlaceholder(*candidate)) continue;
             const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
             const PlaybackServerRoute route = choosePlaybackServerRoute(
                 {
@@ -199,14 +208,17 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         offer.sourceCount = static_cast<int>(sources.size());
         offer.directPlaySourceCount = static_cast<int>(std::count_if(
             sources.begin(), sources.end(), [](const json& candidate) {
-                return candidate.is_object() && scalarValueOr(candidate, "SupportsDirectPlay", false);
+                return candidate.is_object() && !isNoStreamsPlaceholder(candidate) &&
+                       scalarValueOr(candidate, "SupportsDirectPlay", false);
             }));
         offer.playSessionId = scalarValueOr(data, "PlaySessionId", std::string{});
         offer.mediaSourceId = scalarValueOr(*source, "Id", std::string{});
         // Remux lists versions in quality order. Once a source has stalled,
         // never offer an earlier version again (A -> B -> A loop).
         for (auto candidate = std::next(source); candidate != sources.end(); ++candidate) {
-            if (!candidate->is_object() || !scalarValueOr(*candidate, "SupportsDirectPlay", false)) continue;
+            if (!candidate->is_object() || isNoStreamsPlaceholder(*candidate) ||
+                !scalarValueOr(*candidate, "SupportsDirectPlay", false))
+                continue;
             const std::string id = scalarValueOr(*candidate, "Id", std::string{});
             if (id.empty() || id == offer.mediaSourceId) continue;
             offer.alternativeMediaSourceId = id;
