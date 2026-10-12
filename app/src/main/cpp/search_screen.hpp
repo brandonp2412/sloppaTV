@@ -66,7 +66,11 @@ public:
         loading_ = false;
         debouncePending_ = false;
         debounceDeadline_ = {};
+        seerrRequestSearch_ = false;
     }
+
+    void setSeerrRequestSearch(bool enabled) { seerrRequestSearch_ = enabled; }
+    [[nodiscard]] bool seerrRequestSearch() const { return seerrRequestSearch_; }
 
     [[nodiscard]] const std::string& query() const { return query_; }
 
@@ -412,6 +416,7 @@ private:
     }
 
     const std::vector<SeerrMediaItem>& seerrResults_;
+    bool seerrRequestSearch_ = false;
     std::string query_;
     std::vector<JellyfinItem> libraryTitles_;
     std::vector<JellyfinItem> episodes_;

@@ -28,6 +28,7 @@ template <typename UiLike, typename ArtworkLike> struct AppScreenPresentationFra
     bool homeLoading = false;
     bool mutationLoading = false;
     bool seerrConfigured = false;
+    bool seerrSearchEnabled = false;
     bool systemSearchInputActive = false;
     bool systemSettingsSearchActive = false;
     bool systemSeerrApiKeyActive = false;
@@ -117,7 +118,7 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
             renderContentBrowse(frame.renderer, frame.ui, frame.browseState, frame.settings, frame.loading);
             break;
         case Screen::Search:
-            renderContentSearch(frame.renderer, frame.ui, frame.searchState, frame.settings, frame.seerrConfigured,
+            renderContentSearch(frame.renderer, frame.ui, frame.searchState, frame.settings, frame.seerrSearchEnabled,
                                 frame.systemSearchInputActive, frame.seerrDomain.searchLoading(),
                                 frame.seerrDomain.searchError(), frame.seerrDomain.storageLoading(),
                                 frame.seerrDomain.storageTargets(), frame.lastInteraction, renderKeyboard);
@@ -140,7 +141,8 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
         case Screen::ItemMenu:
             renderContentDetails(
                 frame.renderer, frame.ui, frame.detailsFlow.item(), frame.detailsFlow.state(),
-                frame.detailsFlow.detailActions(frame.playbackCoordinator.continuation().stillWatchingPrompt()),
+                frame.detailsFlow.detailActions(frame.playbackCoordinator.continuation().stillWatchingPrompt(),
+                                                frame.serverInfo.isRemux && frame.seerrConfigured),
                 frame.settings, frame.playbackCoordinator.continuation().stillWatchingPrompt(),
                 frame.screen == Screen::ItemMenu);
             break;

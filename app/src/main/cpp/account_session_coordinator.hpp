@@ -143,6 +143,7 @@ public:
             homeScreens_.focusInitialForSession();
             save();
             loadHome();
+            if (!settings_.seerrServer.empty()) (void)seerrApp_.connect(false);
             return;
         case AccountProfileAction::ForgetSession:
             if (!command.removedSession) return;

@@ -45,7 +45,7 @@ struct DetailsNavigationAction {
 class DetailsNavigationController {
 public:
     [[nodiscard]] static DetailsNavigationAction handleDetails(DetailsScreenState& state, DetailsNavigationKey key,
-                                                               const JellyfinItem& item);
+                                                               const JellyfinItem& item, bool canAddToSeerr = false);
     [[nodiscard]] static DetailsNavigationAction handleCast(DetailsScreenState& state, DetailsNavigationKey key,
                                                             const std::vector<JellyfinPerson>& people, int columns);
     [[nodiscard]] static DetailsNavigationAction handlePersonItems(DetailsScreenState& state, DetailsNavigationKey key,

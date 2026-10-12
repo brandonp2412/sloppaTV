@@ -98,7 +98,6 @@ ItemMutationController::preparePlayedToggle(JellyfinHomeData& home, HomeScreenSt
     if (preparation.desired) {
         for (auto& row : home.rows) {
             if (!homeRowDropsItemWhenPlayed(row.title)) continue;
-            if (row.title == "Next Up" && preparation.nextUpReplacementIndex >= 0) continue;
             std::erase_if(row.items, [&](const JellyfinItem& homeItem) { return homeItem.id == detail.id; });
         }
         clampHomeSelections(home, homeState);
@@ -151,17 +150,22 @@ ItemMutationCompletionEffects ItemMutationController::apply(PlayedCompletion& co
                                   [](const JellyfinHomeRow& candidate) { return candidate.title == "Next Up"; });
     if (completion.nextUpReplacementIndex >= 0 && nextUpRow != home.rows.end()) {
         const size_t replacementIndex = static_cast<size_t>(completion.nextUpReplacementIndex);
-        const bool slotStillMatches =
+        const bool oldItemStillPresent =
             replacementIndex < nextUpRow->items.size() && nextUpRow->items[replacementIndex].id == completion.item.id;
-        if (completion.nextUpReplacement && slotStillMatches && !replacementHidden) {
+        if (completion.nextUpReplacement && !replacementHidden) {
             const std::string replacementId = completion.nextUpReplacement->id;
-            nextUpRow->items[replacementIndex] = std::move(*completion.nextUpReplacement);
-            effects.nextUpAnimation =
-                NextUpReplacementAnimation{.index = completion.nextUpReplacementIndex, .itemId = replacementId};
-        } else if (slotStillMatches) {
+            const size_t insertAt = std::min(replacementIndex, nextUpRow->items.size());
+            if (oldItemStillPresent)
+                nextUpRow->items[replacementIndex] = std::move(*completion.nextUpReplacement);
+            else
+                nextUpRow->items.insert(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(insertAt),
+                                        std::move(*completion.nextUpReplacement));
+            effects.nextUpAnimation = NextUpReplacementAnimation{.index = static_cast<int>(insertAt),
+                                                                 .itemId = replacementId};
+        } else if (oldItemStillPresent) {
             nextUpRow->items.erase(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(replacementIndex));
-            clampHomeSelections(home, homeState);
         }
+        clampHomeSelections(home, homeState);
     }
 
     if (detailVisible && detail.id == completion.item.id) {

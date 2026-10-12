@@ -99,7 +99,7 @@ int main() {
     assert(playbackPrepareTimedOut(false, 90'000, true));
     assert(!playbackPrepareTimedOut(true, 30'000, true));
     assert(playbackCachePauseWaitSeconds(false) == 2);
-    assert(playbackCachePauseWaitSeconds(true) == 10);
+    assert(playbackCachePauseWaitSeconds(true) == 20);
     assert(!shouldRetrySlowRemuxSource(false, 90'000, true));
     assert(!shouldRetrySlowRemuxSource(true, 90'000, false));
     assert(!shouldRetrySlowRemuxSource(true, 29'999, true));

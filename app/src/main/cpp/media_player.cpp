@@ -469,6 +469,7 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     hardwareDecoderFailed_ = false;
     serverHttpErrorCount_ = 0;
     cachedStatus_ = PlayerStatus::Idle;
+    startedPlayback_ = false;
     cachedVideoWidth_ = 0;
     cachedVideoHeight_ = 0;
     cachedSubtitleText_.clear();
@@ -604,7 +605,15 @@ std::string NativeMediaPlayer::getStringPropertyLocked(const char* name) const {
 void NativeMediaPlayer::togglePause() {
     std::scoped_lock lock(mutex_);
     bool paused = false;
-    if (getFlagPropertyLocked("pause", paused)) setFlagPropertyLocked("pause", !paused);
+    bool pausedForCache = false;
+    (void)getFlagPropertyLocked("paused-for-cache", pausedForCache);
+    if (cachedStatus_ == PlayerStatus::Preparing || pausedForCache) {
+        // An explicit Play press overrides the default cache wait.
+        setFlagPropertyLocked("cache-pause", false);
+        setFlagPropertyLocked("pause", false);
+    } else if (getFlagPropertyLocked("pause", paused)) {
+        setFlagPropertyLocked("pause", !paused);
+    }
     lastSnapshotPoll_ = {};
 }
 
@@ -827,6 +836,8 @@ PlayerStatus NativeMediaPlayer::status() const {
     bool idle = false;
     const bool haveEof = getFlagPropertyLocked("eof-reached", eof);
     const bool havePaused = getFlagPropertyLocked("pause", paused);
+    bool waitingForCache = false;
+    (void)getFlagPropertyLocked("paused-for-cache", waitingForCache);
     const bool haveIdle = getFlagPropertyLocked("idle-active", idle);
     double duration = 0.0;
     const bool haveDuration = getDoublePropertyLocked("duration", duration) && duration > 0.0;
@@ -845,13 +856,15 @@ PlayerStatus NativeMediaPlayer::status() const {
 
     if (haveEof && eof) {
         cachedStatus_ = PlayerStatus::Ended;
-    } else if (!haveDuration && ((haveIdle && idle) || !havePosition)) {
+    } else if ((!startedPlayback_ && waitingForCache) ||
+               (!haveDuration && ((haveIdle && idle) || !havePosition))) {
         cachedStatus_ = PlayerStatus::Preparing;
     } else if (havePaused && paused) {
         cachedStatus_ = PlayerStatus::Paused;
     } else {
         cachedStatus_ = PlayerStatus::Playing;
     }
+    if (cachedStatus_ == PlayerStatus::Playing && !waitingForCache) startedPlayback_ = true;
     if (cachedStatus_ == PlayerStatus::Playing || cachedStatus_ == PlayerStatus::Paused) {
         serverHttpErrorCount_ = 0;
         logPlaybackTelemetryLocked();

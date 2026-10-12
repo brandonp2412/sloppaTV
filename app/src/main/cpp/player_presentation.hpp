@@ -288,9 +288,10 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const bool userOverlayVisible = playerScreenState.overlayVisible(now);
     const bool showNextUp = shouldShowNextUpCard(playbackCoordinator.continuation().nextItem().has_value(), remainingMs,
                                                  userOverlayVisible, skipAffordanceVisible);
-    // Buffering must not pin the entire player control overlay on screen.
-    // A separate compact indicator remains visible until playback recovers.
-    const bool showOverlay = userOverlayVisible || playerScreenState.skipDisablePromptVisible();
+    // During first load, keep playback controls available even on slow sources.
+    // The normal overlay timeout resumes once playback has started.
+    const bool preparingInitialPlayback = resolving || status == PlayerStatus::Preparing;
+    const bool showOverlay = preparingInitialPlayback || userOverlayVisible || playerScreenState.skipDisablePromptVisible();
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
         subtitleText = cue->text;
@@ -444,7 +445,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
 
     renderPlayerTrickplayPresentation(renderer, ui, playbackCoordinator, playerScreenState, trickplayState);
 
-    if (playerScreenState.controlsActive(now)) {
+    if (preparingInitialPlayback || playerScreenState.controlsActive(now)) {
         renderPlayerControls(
             renderer,
             PlayerControlsRenderState{

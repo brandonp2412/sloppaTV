@@ -55,14 +55,15 @@ enum class DetailsAction {
     PlayAll,
     ToggleFavorite,
     TogglePlayed,
+    AddToSeerr,
     OpenCast,
     OpenItemMenu,
     Back,
 };
 
-inline std::vector<DetailsAction> detailActionIdsFor(const JellyfinItem& item) {
+inline std::vector<DetailsAction> detailActionIdsFor(const JellyfinItem& item, bool canAddToSeerr = false) {
     std::vector<DetailsAction> result;
-    result.reserve(7);
+    result.reserve(9);
     result.push_back(DetailsAction::StartPlayback);
     if (item.type == "Series") {
         result.push_back(DetailsAction::OpenEpisodes);
@@ -70,6 +71,7 @@ inline std::vector<DetailsAction> detailActionIdsFor(const JellyfinItem& item) {
     }
     result.push_back(DetailsAction::ToggleFavorite);
     result.push_back(DetailsAction::TogglePlayed);
+    if (canAddToSeerr && (item.type == "Movie" || item.type == "Series")) result.push_back(DetailsAction::AddToSeerr);
     if (!item.people.empty()) result.push_back(DetailsAction::OpenCast);
     if (item.type != "Series") result.push_back(DetailsAction::OpenItemMenu);
     result.push_back(DetailsAction::Back);
@@ -90,6 +92,8 @@ inline std::string detailsActionLabel(DetailsAction action, const JellyfinItem& 
         return item.favorite ? "UNFAVORITE" : "FAVORITE";
     case DetailsAction::TogglePlayed:
         return item.played ? "MARK UNWATCHED" : "MARK WATCHED";
+    case DetailsAction::AddToSeerr:
+        return "ADD TO SEERR";
     case DetailsAction::OpenCast:
         return "CAST";
     case DetailsAction::OpenItemMenu:
@@ -257,16 +261,16 @@ public:
         episodeContextSelection_ = 0;
     }
 
-    [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt) const {
-        const auto ids = detailActionIdsFor(item);
+    [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt, bool canAddToSeerr = false) const {
+        const auto ids = detailActionIdsFor(item, canAddToSeerr);
         std::vector<std::string> result;
         result.reserve(ids.size());
         for (DetailsAction action : ids) result.push_back(detailsActionLabel(action, item, stillWatchingPrompt));
         return result;
     }
 
-    [[nodiscard]] std::optional<DetailsAction> selectedAction(const JellyfinItem& item) const {
-        const auto ids = detailActionIdsFor(item);
+    [[nodiscard]] std::optional<DetailsAction> selectedAction(const JellyfinItem& item, bool canAddToSeerr = false) const {
+        const auto ids = detailActionIdsFor(item, canAddToSeerr);
         if (actionSelection_ < 0 || actionSelection_ >= static_cast<int>(ids.size())) return std::nullopt;
         return ids[static_cast<size_t>(actionSelection_)];
     }

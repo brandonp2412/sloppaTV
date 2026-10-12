@@ -37,6 +37,9 @@ public:
           request_(request), refresh_(refresh), completions_(completions) {}
 
     void resetForSessionChange() {
+        domain_.requests().resetPending();
+        domain_.resetSearch();
+        domain_.connection().failConnect();
         domain_.seasonPicker.cancel();
         settings_.seerrSessionCookie.clear();
         domain_.resetStorageForSessionClear();

@@ -123,9 +123,9 @@ ItemMenuScreenInput itemMenuInput(DetailsNavigationKey key) {
 } // namespace
 
 DetailsNavigationAction DetailsNavigationController::handleDetails(DetailsScreenState& state, DetailsNavigationKey key,
-                                                                   const JellyfinItem& item) {
+                                                                   const JellyfinItem& item, bool canAddToSeerr) {
     const DetailsScreenCommand command =
-        state.handleInput(detailsInput(key), static_cast<int>(detailActionIdsFor(item).size()), item.type == "Episode");
+        state.handleInput(detailsInput(key), static_cast<int>(detailActionIdsFor(item, canAddToSeerr).size()), item.type == "Episode");
     switch (command.type) {
     case DetailsScreenCommandType::None:
         return {};
@@ -149,7 +149,7 @@ DetailsNavigationAction DetailsNavigationController::handleDetails(DetailsScreen
         }
         return {};
     case DetailsScreenCommandType::ActivateAction:
-        if (const auto action = state.selectedAction(item)) {
+        if (const auto action = state.selectedAction(item, canAddToSeerr)) {
             return navigationDetailAction(*action);
         }
         return {};

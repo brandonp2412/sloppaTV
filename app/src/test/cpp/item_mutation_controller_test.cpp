@@ -52,6 +52,36 @@ int main() {
     }
 
     {
+        // A watched episode should vanish from Next Up immediately, without waiting
+        // for the server to return the next episode (or leaving the old card visible).
+        JellyfinItem current = item("episode-1");
+        JellyfinHomeData home = homeWithNextUp(current);
+        HomeScreenState homeState;
+        BrowseScreenState browse;
+        const std::vector<SeerrMediaItem> seerrItems;
+        SearchScreenState search(seerrItems);
+        DetailsScreenState details;
+        PlaybackQueueState queue;
+        JellyfinItem detail = current;
+        const auto prepared = ItemMutationController::preparePlayedToggle(
+            home, homeState, browse, search, details, queue, detail, false, 9);
+        assert(prepared.desired);
+        assert(prepared.nextUpReplacementIndex == 0);
+        assert(home.rows[0].items.empty());
+        std::optional<PlayedRollbackState> rollback = prepared.rollback;
+        PlayedCompletion completion;
+        completion.item = current;
+        completion.desired = true;
+        completion.sessionEpoch = 9;
+        completion.nextUpReplacementIndex = 0;
+        completion.nextUpReplacement = item("episode-2");
+        completion.result.ok = true;
+        auto effects = ItemMutationController::apply(completion, true, true, false, rollback, home, homeState, detail);
+        assert(home.rows[0].items.size() == 1);
+        assert(home.rows[0].items[0].id == "episode-2");
+        assert(effects.nextUpAnimation);
+    }
+    {
         JellyfinItem current = item("episode-1");
         JellyfinItem replacement = item("episode-2");
         JellyfinHomeData home = homeWithNextUp(current);

@@ -64,10 +64,10 @@ public:
             return sameIdentity(candidate, saved);
         });
         if (existing == sessions_.end()) {
-            sessions_.insert(sessions_.begin(), std::move(saved));
+            sessions_.push_back(std::move(saved));
         } else {
+            // Refresh credentials without rearranging the user's saved accounts.
             *existing = std::move(saved);
-            std::rotate(sessions_.begin(), existing, std::next(existing));
         }
         if (sessions_.size() > kMaxSavedSessions) sessions_.resize(kMaxSavedSessions);
     }

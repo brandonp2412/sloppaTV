@@ -3,16 +3,52 @@
 #include "jellyfin_types.hpp"
 
 #include <algorithm>
+#include <charconv>
+#include <string_view>
 #include <ctime>
 #include <iomanip>
 #include <sstream>
 #include <string>
 
+inline int episodeNumberFromText(std::string_view text, std::string_view marker) {
+    const auto start = text.find(marker);
+    if (start == std::string_view::npos) return -1;
+    std::size_t digit = start + marker.size();
+    while (digit < text.size() && text[digit] == ' ') ++digit;
+    const std::size_t begin = digit;
+    while (digit < text.size() && text[digit] >= '0' && text[digit] <= '9') ++digit;
+    if (begin == digit) return -1;
+    int result = -1;
+    const auto [end, error] = std::from_chars(text.data() + begin, text.data() + digit, result);
+    return error == std::errc{} && end == text.data() + digit ? result : -1;
+}
+
 inline std::string episodeNumberLabel(const JellyfinItem& item) {
     if (item.type != "Episode") return {};
+    int season = item.parentIndexNumber;
+    int episode = item.indexNumber;
+    // Jellyfin-compatible providers occasionally omit numeric index fields but
+    // preserve an explicit S01E02 label in the episode title.
+    if (season < 0 || episode < 0) {
+        const std::string_view name(item.name);
+        for (std::size_t s = name.find_first_of("Ss"); s != std::string_view::npos;
+             s = name.find_first_of("Ss", s + 1)) {
+            const int parsedSeason = episodeNumberFromText(name.substr(s), name.substr(s, 1));
+            const auto e = name.find_first_of("Ee", s + 1);
+            if (parsedSeason < 0 || e == std::string_view::npos) continue;
+            const int parsedEpisode = episodeNumberFromText(name.substr(e), name.substr(e, 1));
+            if (parsedEpisode < 0) continue;
+            if (season < 0) season = parsedSeason;
+            if (episode < 0) episode = parsedEpisode;
+            break;
+        }
+    }
+    if (season < 0) season = episodeNumberFromText(item.seasonName, "Season");
+    if (season < 0) season = episodeNumberFromText(item.name, "Season");
+    if (episode < 0) episode = episodeNumberFromText(item.name, "Episode");
     std::string result;
-    if (item.parentIndexNumber >= 0) result += "S" + std::to_string(item.parentIndexNumber);
-    if (item.indexNumber >= 0) result += "E" + std::to_string(item.indexNumber);
+    if (season >= 0) result += "S" + std::to_string(season);
+    if (episode >= 0) result += "E" + std::to_string(episode);
     return result;
 }
 

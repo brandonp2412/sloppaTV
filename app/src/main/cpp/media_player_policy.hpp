@@ -104,7 +104,7 @@ constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs, bool
 
 // Remux P2P streams arrive in bursts. Two seconds of refilled cache repeatedly
 // underruns even when average torrent throughput exceeds the video bitrate.
-constexpr int playbackCachePauseWaitSeconds(bool isRemux) { return isRemux ? 10 : 2; }
+constexpr int playbackCachePauseWaitSeconds(bool isRemux) { return isRemux ? 20 : 2; }
 
 // Only shorten Remux's cold-start wait when there is another direct-play
 // version to try. A single available torrent retains the full timeout.

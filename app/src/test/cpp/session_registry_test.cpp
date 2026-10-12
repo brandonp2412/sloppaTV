@@ -38,13 +38,18 @@ int main() {
     auto second = session("https://two.test", "user-2", "token-c", "Beta");
     registry.remember(second, "device-2");
     assert(registry.size() == 2);
-    assert(registry.at(0)->userId == "user-2");
-    assert(registry.at(1)->userId == "user-1");
+    assert(registry.at(0)->userId == "user-1");
+    assert(registry.at(1)->userId == "user-2");
+    // Switching back to an existing account may refresh its token, not its position.
+    registry.remember(second, "device-3");
+    registry.remember(first, "device-3");
+    assert(registry.at(0)->userId == "user-1");
+    assert(registry.at(1)->userId == "user-2");
 
     auto stored = registry.exportStored();
     assert(stored.size() == 2);
-    assert(stored[0].username == "Beta");
-    assert(stored[1].token == "token-b");
+    assert(stored[0].username == "Alpha");
+    assert(stored[1].token == "token-c");
 
     SessionRegistry imported;
     imported.importStored(stored, "device-3");
@@ -76,7 +81,7 @@ int main() {
     assert(bounded.at(1)->userId == "user-0");
     assert(bounded.at(15)->userId == "user-14");
 
-    assert(SessionRegistry::sameIdentity(*imported.at(0), second));
+    assert(SessionRegistry::sameIdentity(*imported.at(1), second));
     assert(imported.removeIdentity(second));
     assert(imported.size() == 1);
     assert(!imported.removeIdentity(second));

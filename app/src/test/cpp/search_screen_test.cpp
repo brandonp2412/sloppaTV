@@ -10,6 +10,11 @@ int main() {
     SearchScreenState state(seerrState.results());
     const auto start = SearchScreenState::Clock::now();
 
+    assert(!state.seerrRequestSearch());
+    state.setSeerrRequestSearch(true);
+    assert(state.seerrRequestSearch());
+    state.setSeerrRequestSearch(false);
+    assert(!state.seerrRequestSearch());
     assert(state.query().empty());
     assert(state.results().empty());
     assert(state.keyboard());

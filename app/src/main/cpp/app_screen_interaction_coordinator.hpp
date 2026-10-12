@@ -72,9 +72,7 @@ public:
           renderBurstUntil_(renderBurstUntil) {}
 
     [[nodiscard]] SeerrEndpoint searchEndpoint() const {
-        // Remux exposes Jellyfin-compatible search. Never fan out its queries
-        // into the unrelated Seerr catalogue even when Seerr is configured.
-        return serverInfo_.isRemux ? SeerrEndpoint{} : seerrApp_.endpoint();
+        return serverInfo_.isRemux && !searchFlow_.state().seerrRequestSearch() ? SeerrEndpoint{} : seerrApp_.endpoint();
     }
 
     [[nodiscard]] ScreenInteractionHostEffects scheduleLiveSearch() {
@@ -115,7 +113,7 @@ public:
         if (effects.hideTextInput) textInput_.hide();
         if (effects.openTextInput) {
             const bool shown =
-                textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
+                textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux && !searchFlow_.state().seerrRequestSearch() ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
             searchScreens_.applyTextInputShown(shown);
         }
         if (effects.activateKeyboard) host.merge(activateKeyboard(true));
@@ -183,6 +181,11 @@ public:
             break;
         case DetailsScreenHostAction::BeginSeriesPlayAll:
             playbackRequests_.beginSeriesPlayAll();
+            break;
+        case DetailsScreenHostAction::SearchSeerr:
+            searchFlow_.state().setQuery(detailsFlow_.item().name);
+            host.merge(openSearch(true));
+            host.merge(search());
             break;
         case DetailsScreenHostAction::DeleteSeerrRequest:
             host.seerrEffects.push_back(seerrApp_.deleteCurrentRequest());
@@ -283,7 +286,7 @@ public:
             serverInfoScreens_.handleDiagnostics(key);
             return {};
         case Screen::Details:
-            return applyDetails(detailsScreens_.handleDetails(detailsKey));
+            return applyDetails(detailsScreens_.handleDetails(detailsKey, serverInfo_.isRemux && seerrApp_.endpoint().configured()));
         case Screen::Cast:
             return applyDetails(detailsScreens_.handleCast(detailsKey, mediaGridColumns()));
         case Screen::PersonItems:
@@ -319,10 +322,11 @@ private:
         return host;
     }
 
-    [[nodiscard]] ScreenInteractionHostEffects openSearch() {
+    [[nodiscard]] ScreenInteractionHostEffects openSearch(bool seerrRequested = false) {
+        searchFlow_.state().setSeerrRequestSearch(seerrRequested);
         navigation_.push(Screen::Search);
         screen_ = navigation_.current();
-        const bool shown = textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
+        const bool shown = textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux && !seerrRequested ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
         searchScreens_.applyTextInputShown(shown);
         keyboard_.reset();
         error_.clear();

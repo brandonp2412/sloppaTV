@@ -63,6 +63,7 @@ CPP_TESTS = [
     "login_renderer_test.cpp",
     "media_card_renderer_test.cpp",
     "media_grid_renderer_test.cpp",
+    "media_display_text_test.cpp",
     "media_player_policy_test.cpp",
     "media_session_policy_test.cpp",
     "playback_continuation_test.cpp",

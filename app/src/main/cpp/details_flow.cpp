@@ -63,8 +63,8 @@ bool DetailsFlow::beginSeason(const JellyfinItem& season) {
     return true;
 }
 
-std::vector<std::string> DetailsFlow::detailActions(bool stillWatchingPrompt) const {
-    return state_.actions(item_, stillWatchingPrompt);
+std::vector<std::string> DetailsFlow::detailActions(bool stillWatchingPrompt, bool canAddToSeerr) const {
+    return state_.actions(item_, stillWatchingPrompt, canAddToSeerr);
 }
 
 std::vector<std::string> DetailsFlow::itemMenuActions(bool seerrRequest, bool hasExternalPlayer, bool hasQueue,
@@ -72,8 +72,8 @@ std::vector<std::string> DetailsFlow::itemMenuActions(bool seerrRequest, bool ha
     return state_.itemMenuActions(item_, seerrRequest, hasExternalPlayer, hasQueue, hiddenFromHome);
 }
 
-DetailsFlowCommand DetailsFlow::handleDetails(DetailsNavigationKey key) {
-    const DetailsNavigationAction navigation = DetailsNavigationController::handleDetails(state_, key, item_);
+DetailsFlowCommand DetailsFlow::handleDetails(DetailsNavigationKey key, bool canAddToSeerr) {
+    const DetailsNavigationAction navigation = DetailsNavigationController::handleDetails(state_, key, item_, canAddToSeerr);
     switch (navigation.type) {
     case DetailsNavigationActionType::Back: {
         auto result = command(DetailsFlowAction::ExitDetails);
@@ -105,6 +105,8 @@ DetailsFlowCommand DetailsFlow::handleDetails(DetailsNavigationKey key) {
             return command(DetailsFlowAction::ToggleFavorite);
         case DetailsAction::TogglePlayed:
             return command(DetailsFlowAction::TogglePlayed);
+        case DetailsAction::AddToSeerr:
+            return command(DetailsFlowAction::SearchSeerr);
         case DetailsAction::OpenCast:
             return command(DetailsFlowAction::OpenCast);
         case DetailsAction::OpenItemMenu:

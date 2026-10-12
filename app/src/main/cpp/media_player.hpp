@@ -109,6 +109,7 @@ private:
     jobject surface_ = nullptr;
     mutable std::string error_;
     mutable PlayerStatus cachedStatus_ = PlayerStatus::Idle;
+    mutable bool startedPlayback_ = false;
     mutable int cachedVideoWidth_ = 0;
     mutable int cachedVideoHeight_ = 0;
     mutable std::string cachedSubtitleText_;

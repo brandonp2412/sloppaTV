@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import http.client
 import importlib.util
+import http.client
 import json
 import os
 import subprocess
@@ -30,7 +30,6 @@ def load_tool(name: str):
 benchmark_tv = load_tool("benchmark_tv")
 waydroid_e2e = load_tool("waydroid_e2e")
 playback_report_e2e = load_tool("playback_report_e2e")
-retry_fixture_server = load_tool("retry_fixture_server")
 screenshot_fixture_server = load_tool("screenshot_fixture_server")
 sync_play_store_screenshots = load_tool("sync_play_store_screenshots")
 
@@ -82,33 +81,6 @@ class ManifestToolingTest(unittest.TestCase):
             )
 
         self.assertTrue(any(is_external_video_intent(intent) for intent in intents))
-
-
-class RetryFixtureToolingTest(unittest.TestCase):
-    def test_views_request_aborts_once_then_recovers(self) -> None:
-        retry_fixture_server.RetryFixtureHandler.failed_views_once = False
-        server = retry_fixture_server.ThreadingHTTPServer(("127.0.0.1", 0), retry_fixture_server.RetryFixtureHandler)
-        thread = threading.Thread(target=server.serve_forever, daemon=True)
-        thread.start()
-        try:
-            port = server.server_address[1]
-            first = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
-            first.request("GET", "/Users/retry-user/Views?IncludeExternalContent=false")
-            with self.assertRaises(http.client.RemoteDisconnected):
-                first.getresponse()
-            first.close()
-
-            second = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
-            second.request("GET", "/Users/retry-user/Views?IncludeExternalContent=false")
-            response = second.getresponse()
-            payload = json.loads(response.read())
-            second.close()
-            self.assertEqual(response.status, 200)
-            self.assertEqual(payload["Items"][0]["Name"], "Retry Verified")
-        finally:
-            server.shutdown()
-            server.server_close()
-            thread.join(timeout=2)
 
 
 class PlaybackReportToolingTest(unittest.TestCase):

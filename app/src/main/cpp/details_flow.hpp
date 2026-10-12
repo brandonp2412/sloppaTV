@@ -17,6 +17,7 @@ enum class DetailsFlowAction {
     BeginSeriesPlayAll,
     ToggleFavorite,
     TogglePlayed,
+    SearchSeerr,
     OpenCast,
     BackToDetails,
     OpenPersonItems,
@@ -59,11 +60,11 @@ public:
     [[nodiscard]] bool beginSeries();
     [[nodiscard]] bool beginSeason(const JellyfinItem& season);
 
-    [[nodiscard]] std::vector<std::string> detailActions(bool stillWatchingPrompt) const;
+    [[nodiscard]] std::vector<std::string> detailActions(bool stillWatchingPrompt, bool canAddToSeerr = false) const;
     [[nodiscard]] std::vector<std::string> itemMenuActions(bool seerrRequest, bool hasExternalPlayer, bool hasQueue,
                                                            bool hiddenFromHome) const;
 
-    [[nodiscard]] DetailsFlowCommand handleDetails(DetailsNavigationKey key);
+    [[nodiscard]] DetailsFlowCommand handleDetails(DetailsNavigationKey key, bool canAddToSeerr = false);
     [[nodiscard]] DetailsFlowCommand handleCast(DetailsNavigationKey key, int columns);
     [[nodiscard]] DetailsFlowCommand handlePersonItems(DetailsNavigationKey key, int columns);
     [[nodiscard]] DetailsFlowCommand handleItemMenu(DetailsNavigationKey key, bool seerrRequest, bool hasExternalPlayer,

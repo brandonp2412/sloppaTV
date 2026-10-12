@@ -29,6 +29,13 @@ int main() {
     assert(actions[2] == "PLAY ALL");
     assert(std::find(actions.begin(), actions.end(), "MORE") == actions.end());
     assert(actions.back() == "BACK");
+    const auto remuxSeerrActions = state.actions(series, false, true);
+    assert(std::find(remuxSeerrActions.begin(), remuxSeerrActions.end(), "ADD TO SEERR") != remuxSeerrActions.end());
+    assert(std::find(actions.begin(), actions.end(), "ADD TO SEERR") == actions.end());
+    JellyfinItem episode;
+    episode.type = "Episode";
+    const auto episodeActions = detailActionIdsFor(episode, true);
+    assert(std::find(episodeActions.begin(), episodeActions.end(), DetailsAction::AddToSeerr) == episodeActions.end());
 
     state.moveAction(1, static_cast<int>(actions.size()));
     assert(state.actionSelection() == 1);

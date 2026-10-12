@@ -514,7 +514,8 @@ public:
         trackState_.resetPlayback();
     }
 
-    void markPlaybackStopReported() { sessionState_.requestHomeRefresh(); }
+    void requestHomeRefresh() { sessionState_.requestHomeRefresh(); }
+    void markPlaybackStopReported() { requestHomeRefresh(); }
 
     [[nodiscard]] bool consumeHomeRefreshRequest() { return sessionState_.takeHomeRefreshRequest(); }
 

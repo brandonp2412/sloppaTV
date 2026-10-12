@@ -27,6 +27,7 @@ enum class DetailsScreenHostAction {
     None,
     BeginPlayback,
     BeginSeriesPlayAll,
+    SearchSeerr,
     DeleteSeerrRequest,
     PlayExternal,
     ViewQueue,
@@ -78,9 +79,9 @@ public:
         contentMutation_.reset();
     }
 
-    [[nodiscard]] DetailsScreenEffects handleDetails(DetailsNavigationKey key) {
+    [[nodiscard]] DetailsScreenEffects handleDetails(DetailsNavigationKey key, bool canAddToSeerr = false) {
         DetailsScreenEffects effects;
-        const DetailsFlowCommand command = details_.handleDetails(key);
+        const DetailsFlowCommand command = details_.handleDetails(key, canAddToSeerr);
         if (details_.state().similarFocused()) {
             if (const auto* selected = details_.state().selectedSimilar()) effects.prefetchItem = *selected;
         }
@@ -237,6 +238,9 @@ private:
             return;
         case DetailsFlowAction::TogglePlayed:
             togglePlayedAsync();
+            return;
+        case DetailsFlowAction::SearchSeerr:
+            effects.action = DetailsScreenHostAction::SearchSeerr;
             return;
         case DetailsFlowAction::OpenCast:
             openCast();

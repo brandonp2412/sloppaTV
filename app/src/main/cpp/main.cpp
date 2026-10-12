@@ -457,7 +457,7 @@ public:
         if (session_.valid()) {
             resetNavigation(Screen::Home);
             loadHomeAsync();
-            if (!settings_.seerrServer.empty() && !settings_.seerrSessionCookie.empty()) {
+            if (!settings_.seerrServer.empty()) {
                 connectSeerrAsync(false);
             }
         } else {
@@ -1550,6 +1550,7 @@ private:
 
     void applyPlaybackCompletionApplicationEffects(PlaybackCompletionApplicationEffects effects) {
         if (effects.popToDetails) popScreen(Screen::Details);
+        if (effects.saveSessionCount > 0) playbackCoordinator_.requestHomeRefresh();
         for (int i = 0; i < effects.saveSessionCount; ++i) persistSession();
         if (effects.stopPlayback) stopPlayback();
         if (effects.diagnostic) {
