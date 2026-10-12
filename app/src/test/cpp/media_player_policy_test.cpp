@@ -108,6 +108,11 @@ int main() {
     assert(mpvLogIndicatesHardwareDecoderFailure("MediaCodec initialization ERROR"));
     assert(!mpvLogIndicatesHardwareDecoderFailure("ffmpeg: Could not open codec"));
     assert(!mpvLogIndicatesHardwareDecoderFailure("MediaCodec configured successfully"));
+    assert(mpvLogIndicatesFatalVideoFailure("Could not initialize video chain."));
+    assert(mpvLogIndicatesFatalVideoFailure(
+        "Cannot convert decoder/filter output to any format supported by the output."));
+    assert(!mpvLogIndicatesFatalVideoFailure("h264_mediacodec: MediaCodec 0x0 failed to start"));
+    assert(!mpvLogIndicatesFatalVideoFailure("audio decoder failed"));
     assert(mpvHttpStatus("HTTP error 500") == 500);
     assert(mpvHttpStatus("curl: HTTP error 503 while fetching") == 503);
     assert(mpvHttpStatus("HTTP error nope") == 0);

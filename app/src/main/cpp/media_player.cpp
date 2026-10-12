@@ -792,6 +792,12 @@ PlayerStatus NativeMediaPlayer::status() const {
             __android_log_print(ANDROID_LOG_INFO, kTag, "core[%s/%s] %s", message->prefix ? message->prefix : "?",
                                 message->level ? message->level : "?", safeText.c_str());
             if (mpvLogIndicatesHardwareDecoderFailure(safeText)) hardwareDecoderFailed_ = true;
+            if (mpvLogIndicatesFatalVideoFailure(safeText)) {
+                error_ = "Video decoder/output failed";
+                cachedStatus_ = PlayerStatus::Error;
+                __android_log_print(ANDROID_LOG_ERROR, kTag, "%s: %s", error_.c_str(), safeText.c_str());
+                return cachedStatus_;
+            }
             const int httpStatus = mpvHttpStatus(safeText);
             if (cachedStatus_ == PlayerStatus::Preparing && httpStatus >= 500 && httpStatus <= 599) {
                 ++serverHttpErrorCount_;

@@ -122,6 +122,16 @@ inline bool mpvLogIndicatesHardwareDecoderFailure(std::string_view text) {
            normalized.find("error") != std::string::npos;
 }
 
+inline bool mpvLogIndicatesFatalVideoFailure(std::string_view text) {
+    std::string normalized(text);
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char value) {
+        return static_cast<char>(value >= 'A' && value <= 'Z' ? value - 'A' + 'a' : value);
+    });
+    return normalized.find("could not initialize video chain") != std::string::npos ||
+           normalized.find("cannot convert decoder/filter output to any format supported by the output") !=
+               std::string::npos;
+}
+
 inline int mpvHttpStatus(std::string_view text) {
     constexpr std::string_view marker = "HTTP error ";
     const size_t begin = text.find(marker);
