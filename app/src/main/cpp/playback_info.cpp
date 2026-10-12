@@ -5,6 +5,7 @@
 #include "subtitle_policy.hpp"
 
 #include <algorithm>
+#include <iterator>
 #include <nlohmann/json.hpp>
 #include <sstream>
 
@@ -195,21 +196,21 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         }
 
         PlaybackInfoOffer offer;
+        offer.sourceCount = static_cast<int>(sources.size());
+        offer.directPlaySourceCount = static_cast<int>(std::count_if(
+            sources.begin(), sources.end(), [](const json& candidate) {
+                return candidate.is_object() && scalarValueOr(candidate, "SupportsDirectPlay", false);
+            }));
         offer.playSessionId = scalarValueOr(data, "PlaySessionId", std::string{});
         offer.mediaSourceId = scalarValueOr(*source, "Id", std::string{});
-        // Remux returns independently playable versions ordered by quality.
-        // Preserve one alternative so a stalled P2P source can be replaced
-        // without retrying the very same unavailable torrent via transcode.
-        // An explicitly chosen (known-good) version must not be overridden.
-        {
-            for (auto candidate = sources.begin(); candidate != sources.end(); ++candidate) {
-                if (!candidate->is_object() || candidate == source ||
-                    !scalarValueOr(*candidate, "SupportsDirectPlay", false)) continue;
-                const std::string id = scalarValueOr(*candidate, "Id", std::string{});
-                if (id.empty() || id == offer.mediaSourceId) continue;
-                offer.alternativeMediaSourceId = id;
-                break;
-            }
+        // Remux lists versions in quality order. Once a source has stalled,
+        // never offer an earlier version again (A -> B -> A loop).
+        for (auto candidate = std::next(source); candidate != sources.end(); ++candidate) {
+            if (!candidate->is_object() || !scalarValueOr(*candidate, "SupportsDirectPlay", false)) continue;
+            const std::string id = scalarValueOr(*candidate, "Id", std::string{});
+            if (id.empty() || id == offer.mediaSourceId) continue;
+            offer.alternativeMediaSourceId = id;
+            break;
         }
         // Stream indexes are scoped to a media file. After choosing a different
         // torrent, index 1 can be Italian where index 1 was English on the

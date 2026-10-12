@@ -10,6 +10,8 @@ struct PlaybackInfoOffer {
     std::string playSessionId;
     std::string mediaSourceId;
     std::string alternativeMediaSourceId;
+    int sourceCount = 0;
+    int directPlaySourceCount = 0;
     int audioStreamIndex = -1;
     int audioOrdinal = -1;
     std::vector<JellyfinAudioStream> audioTracks;

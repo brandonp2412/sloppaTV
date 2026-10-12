@@ -166,6 +166,25 @@ int main() {
     assert(selectedVersionOffer.ok);
     assert(selectedVersionOffer.value.mediaSourceId == "known-good");
     assert(selectedVersionOffer.value.container == "mp4");
+    assert(selectedVersionOffer.value.alternativeMediaSourceId.empty());
+    const std::string threeVersionResponse = R"({
+        "MediaSources": [
+            {"Id":"slow", "SupportsDirectPlay":true},
+            {"Id":"cached", "SupportsDirectPlay":true},
+            {"Id":"backup", "SupportsDirectPlay":true},
+            {"Id":"unavailable", "SupportsDirectPlay":false}
+        ]
+    })";
+    const auto firstChoice = parsePlaybackInfoOffer(threeVersionResponse, -1, kSubtitleOffIndex);
+    const auto secondChoice = parsePlaybackInfoOffer(threeVersionResponse, -1, kSubtitleOffIndex, {}, "cached");
+    const auto lastChoice = parsePlaybackInfoOffer(threeVersionResponse, -1, kSubtitleOffIndex, {}, "backup");
+    assert(firstChoice.ok && firstChoice.value.mediaSourceId == "slow" &&
+           firstChoice.value.alternativeMediaSourceId == "cached");
+    assert(firstChoice.value.sourceCount == 4 && firstChoice.value.directPlaySourceCount == 3);
+    assert(secondChoice.ok && secondChoice.value.mediaSourceId == "cached" &&
+           secondChoice.value.alternativeMediaSourceId == "backup");
+    assert(lastChoice.ok && lastChoice.value.mediaSourceId == "backup" &&
+           lastChoice.value.alternativeMediaSourceId.empty());
     // The fallback file can tag Italian as the default track despite the
     // failed (English) source using the same stream index for English.
     const std::string multilingual = R"({"MediaSources":[{
@@ -198,7 +217,6 @@ int main() {
     assert(absentVersionOffer.ok);
     assert(absentVersionOffer.value.mediaSourceId == "first");
     assert(absentVersionOffer.value.alternativeMediaSourceId == "other");
-    assert(selectedVersionOffer.value.alternativeMediaSourceId == "first");
     assert(alternateVersionOffer.value.alternativeMediaSourceId.empty());
     const auto incompatiblePreferred = parsePlaybackInfoOffer(R"({
         "MediaSources": [

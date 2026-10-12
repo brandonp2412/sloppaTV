@@ -203,6 +203,11 @@ public:
 
         JellyfinItem item = std::move(restartPlan->item);
         if (!replacementMediaSourceId.empty()) item.mediaSourceId = replacementMediaSourceId;
+        __android_log_print(ANDROID_LOG_INFO, "SloppaTV",
+                            "Playback restart item=%s title=%s series=%s S%dE%d preferredSource=%s atMs=%d",
+                            item.id.c_str(), item.name.c_str(), item.seriesId.c_str(),
+                            item.parentIndexNumber, item.indexNumber,
+                            item.mediaSourceId.empty() ? "(auto)" : item.mediaSourceId.c_str(), targetPositionMs);
         const PlaybackTarget previousTarget = std::move(restartPlan->previousTarget);
         const bool shouldReportPrevious = restartPlan->reportPrevious;
         const uint64_t generation = playbackEpoch_.begin();
@@ -566,9 +571,15 @@ public:
             const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;
             if (shouldRetrySlowRemuxSource(isRemux, preparePlan.elapsedMs, !alternate.empty())) {
                 std::scoped_lock lock(stateMutex);
+                const auto& item = coordinator_.session().activeItem();
+                const auto& target = coordinator_.session().activeTarget();
                 __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
-                                    "Remux source stalled for %lld ms; trying alternate media source",
-                                    static_cast<long long>(preparePlan.elapsedMs));
+                                    "Remux source stalled item=%s title=%s S%dE%d source=%s next=%s "
+                                    "elapsedMs=%lld positionMs=%d",
+                                    item.id.c_str(), item.name.c_str(),
+                                    item.parentIndexNumber, item.indexNumber,
+                                    target.mediaSourceId.c_str(), alternate.c_str(),
+                                    static_cast<long long>(preparePlan.elapsedMs), screenState_.positionMs());
                 if (restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
                     error_.clear();
                     return {};
@@ -576,9 +587,18 @@ public:
             }
             if (preparePlan.timedOut) {
                 std::scoped_lock lock(stateMutex);
-                __android_log_print(ANDROID_LOG_WARN, "SloppaTV", "Playback prepare timed out after %lld ms (%s)",
+                const auto& item = coordinator_.session().activeItem();
+                const auto& target = coordinator_.session().activeTarget();
+                __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
+                                    "Playback prepare timeout item=%s title=%s S%dE%d source=%s alt=%s "
+                                    "elapsedMs=%lld mode=%s positionMs=%d",
+                                    item.id.c_str(), item.name.c_str(),
+                                    item.parentIndexNumber, item.indexNumber,
+                                    target.mediaSourceId.c_str(),
+                                    target.alternativeMediaSourceId.empty() ? "(none)"
+                                                                           : target.alternativeMediaSourceId.c_str(),
                                     static_cast<long long>(preparePlan.elapsedMs),
-                                    preparePlan.transcoding ? "transcode" : "direct");
+                                    preparePlan.transcoding ? "transcode" : "direct", screenState_.positionMs());
                 if (preparePlan.retryWithTranscodeFallback && retryWithFallback(stream, rendererReady)) {
                     error_.clear();
                     return {};
@@ -604,6 +624,12 @@ public:
                 error_.clear();
                 return {};
             }
+            const auto& item = coordinator_.session().activeItem();
+            const auto& target = coordinator_.session().activeTarget();
+            __android_log_print(ANDROID_LOG_ERROR, "SloppaTV",
+                                "Playback failed item=%s title=%s S%dE%d source=%s reason=%s",
+                                item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
+                                target.mediaSourceId.c_str(), playerError.c_str());
             error_ = playerError;
             return PlaybackHostEffect::stop();
         }

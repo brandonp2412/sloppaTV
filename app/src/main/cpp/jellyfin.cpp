@@ -14,6 +14,7 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <future>
 #include <iomanip>
@@ -840,14 +841,21 @@ ApiValueResult<JellyfinItem> JellyfinClient::getNextUpForSeries(const JellyfinSe
                             "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb";
     auto items = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (!items.ok) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "NextUp selection failed series=%s reason=%s",
+                            seriesId.c_str(), items.error.c_str());
         result.error = items.error;
         return result;
     }
     if (items.value.empty()) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "NextUp selection empty series=%s", seriesId.c_str());
         result.error = "No next episode was returned for this series";
         return result;
     }
     result.value = std::move(items.value.front());
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "NextUp selected series=%s episode=%s title=%s S%dE%d",
+                        seriesId.c_str(), result.value.id.c_str(), result.value.name.c_str(),
+                        result.value.parentIndexNumber, result.value.indexNumber);
     result.ok = true;
     return result;
 }
@@ -1093,6 +1101,14 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
 
     const std::string requestBody = buildPlaybackInfoRequestBody(
         session, item, plan, overrides, maxStreamingBitrate, maxAudioChannels, audioStreamIndex, subtitleStreamIndex);
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "PlaybackInfo request item=%s title=%s series=%s S%dE%d preferredSource=%s "
+                        "resumeTicks=%lld audio=%d subtitle=%d",
+                        item.id.c_str(), item.name.c_str(), item.seriesId.c_str(),
+                        item.parentIndexNumber, item.indexNumber,
+                        item.mediaSourceId.empty() ? "(auto)" : item.mediaSourceId.c_str(),
+                        static_cast<long long>(item.positionTicks), audioStreamIndex, subtitleStreamIndex);
+    const auto playbackInfoStartedAt = std::chrono::steady_clock::now();
 
     std::string url = session.server + "/Items/" + item.id + "/PlaybackInfo?UserId=" + session.userId +
                       "&StartTimeTicks=" + std::to_string(item.positionTicks) +
@@ -1104,8 +1120,14 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
            std::to_string(std::max(1000000, maxStreamingBitrate));
 
     const auto response = http_.request("POST", url, headers(&session, session.deviceId), requestBody);
+    const auto playbackInfoElapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - playbackInfoStartedAt).count();
     if (!response.ok()) {
         result.error = apiError(response);
+        __android_log_print(ANDROID_LOG_WARN, kTag,
+                            "PlaybackInfo HTTP failed item=%s S%dE%d status=%d elapsedMs=%lld reason=%s",
+                            item.id.c_str(), item.parentIndexNumber, item.indexNumber,
+                            response.status, static_cast<long long>(playbackInfoElapsedMs), result.error.c_str());
         return result;
     }
 
@@ -1114,9 +1136,22 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
                                               item.mediaSourceId, desiredAudioLanguage);
     if (!offerResult.ok) {
         result.error = std::move(offerResult.error);
+        __android_log_print(ANDROID_LOG_WARN, kTag,
+                            "PlaybackInfo invalid item=%s S%dE%d elapsedMs=%lld reason=%s",
+                            item.id.c_str(), item.parentIndexNumber, item.indexNumber,
+                            static_cast<long long>(playbackInfoElapsedMs), result.error.c_str());
         return result;
     }
     auto& offer = offerResult.value;
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "PlaybackInfo selected item=%s S%dE%d elapsedMs=%lld sources=%d direct=%d "
+                        "selected=%s alternate=%s container=%s",
+                        item.id.c_str(), item.parentIndexNumber, item.indexNumber,
+                        static_cast<long long>(playbackInfoElapsedMs),
+                        offer.sourceCount, offer.directPlaySourceCount,
+                        offer.mediaSourceId.c_str(),
+                        offer.alternativeMediaSourceId.empty() ? "(none)" : offer.alternativeMediaSourceId.c_str(),
+                        offer.container.c_str());
     PlaybackTarget target;
     target.playSessionId = std::move(offer.playSessionId);
     target.mediaSourceId = std::move(offer.mediaSourceId);
@@ -1168,7 +1203,9 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
         return result;
     }
 
-    __android_log_print(ANDROID_LOG_INFO, kTag, "Playback target: %s audio=%d subtitle=%d%s externalSubtitle=%d",
+    __android_log_print(ANDROID_LOG_INFO, kTag,
+                        "Playback target: item=%s S%dE%d source=%s method=%s audio=%d subtitle=%d%s externalSubtitle=%d",
+                        item.id.c_str(), item.parentIndexNumber, item.indexNumber, target.mediaSourceId.c_str(),
                         playbackMethodName(target.playMethod), target.audioStreamIndex, target.subtitleStreamIndex,
                         subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "",
                         !target.subtitleUrl.empty());
