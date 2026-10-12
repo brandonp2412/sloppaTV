@@ -745,5 +745,18 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("SLOPPATV_APK must point to a built APK", result.stderr)
 
 
+class HttpBridgeActivityDeadlineTest(unittest.TestCase):
+    def test_activity_uses_endpoint_specific_http_deadline(self) -> None:
+        source = (ROOT / "app/src/main/java/app/sloppatv/SloppaNativeActivity.java").read_text()
+        self.assertIn(
+            "HttpBridge.defaultRequestTimeoutMs(method, url)",
+            source,
+        )
+        self.assertNotIn(
+            "HttpBridge.perform(method, url, headerPairs, requestBody, 45_000, requestId)",
+            source,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

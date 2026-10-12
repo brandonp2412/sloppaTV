@@ -119,7 +119,7 @@ public final class SloppaNativeActivity extends NativeActivity {
         byte[] requestBody,
         long requestId
     ) {
-        return HttpBridge.perform(method, url, headerPairs, requestBody, 45_000, requestId);
+        return HttpBridge.perform(method, url, headerPairs, requestBody, HttpBridge.defaultRequestTimeoutMs(method, url), requestId);
     }
 
     public void registerHttpRequestBridge(long requestId) {
