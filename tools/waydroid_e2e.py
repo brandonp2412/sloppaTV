@@ -17,6 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-waydroid"
 DEFAULT_PACKAGE = "app.sloppatv"
 DEFAULT_COMPONENT = "app.sloppatv/app.sloppatv.SloppaNativeActivity"
+
+
+def component_for_package(package: str) -> str:
+    return f"{package}/app.sloppatv.SloppaNativeActivity"
+
+
 SERIAL = ""
 PACKAGE = DEFAULT_PACKAGE
 COMPONENT = DEFAULT_COMPONENT
@@ -688,7 +694,7 @@ def main() -> None:
         help="Explicit target identity guard; physical TV use must be opted into",
     )
     parser.add_argument("--package", default=DEFAULT_PACKAGE)
-    parser.add_argument("--component", default=DEFAULT_COMPONENT)
+    parser.add_argument("--component")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_key = sub.add_parser("key")
@@ -717,7 +723,7 @@ def main() -> None:
     args = parser.parse_args()
     SERIAL = args.serial
     PACKAGE = args.package
-    COMPONENT = args.component
+    COMPONENT = args.component or component_for_package(PACKAGE)
     ARTIFACTS = (
         ROOT
         / "artifacts"

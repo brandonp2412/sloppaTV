@@ -387,6 +387,12 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertFalse(waydroid_e2e.model_matches_target("sdk_gphone64_x86_64", "android-tv-emulator"))
         self.assertFalse(waydroid_e2e.model_matches_target("Google TV Streamer", "android-tv-emulator"))
 
+    def test_component_defaults_follow_package_override(self) -> None:
+        self.assertEqual(
+            waydroid_e2e.component_for_package("app.sloppatv.remuxtest"),
+            "app.sloppatv.remuxtest/app.sloppatv.SloppaNativeActivity",
+        )
+
     def test_capture_guard_requires_sloppatv_to_be_foreground(self) -> None:
         resumed = "mResumedActivity: ActivityRecord{123 app.sloppatv/app.sloppatv.SloppaNativeActivity}"
         launcher = "mResumedActivity: ActivityRecord{123 com.google.android.tvlauncher/.MainActivity}"
