@@ -48,7 +48,14 @@ android {
         }
         ndk {
             if (!splitReleaseApks) {
-                abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+                // A single ABI is enough for an isolated E2E test APK.
+                val e2eAbi = providers.gradleProperty("SLOPPATV_E2E_ABI").orNull
+                    ?.takeIf { providers.gradleProperty("SLOPPATV_E2E_ISOLATED").orNull == "true" }
+                require(e2eAbi == null || e2eAbi in listOf("armeabi-v7a", "arm64-v8a", "x86_64")) {
+                    "Unsupported SloppaTV E2E ABI: $e2eAbi"
+                }
+                abiFilters += if (e2eAbi == null) listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+                    else listOf(e2eAbi)
             }
         }
     }
