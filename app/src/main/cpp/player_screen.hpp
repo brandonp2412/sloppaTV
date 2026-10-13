@@ -18,6 +18,8 @@ enum class PlayerScreenInput {
     Left,
     Right,
     Activate,
+    Play,
+    Pause,
     PlayPause,
     Previous,
     Next,
@@ -41,6 +43,8 @@ enum class PlayerScreenCommandType {
     PreviousEpisode,
     NextEpisode,
     ActivatePlayback,
+    Play,
+    Pause,
     TogglePause,
     CycleAudioTrack,
     CycleSubtitleTrack,
@@ -205,6 +209,10 @@ public:
             return {.type = PlayerScreenCommandType::NextEpisode};
         case PlayerScreenInput::Activate:
             return {.type = PlayerScreenCommandType::ActivatePlayback};
+        case PlayerScreenInput::Play:
+            return {.type = PlayerScreenCommandType::Play};
+        case PlayerScreenInput::Pause:
+            return {.type = PlayerScreenCommandType::Pause};
         case PlayerScreenInput::PlayPause:
             return {.type = PlayerScreenCommandType::TogglePause};
         case PlayerScreenInput::Left:

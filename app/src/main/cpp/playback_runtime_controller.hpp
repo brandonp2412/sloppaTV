@@ -499,6 +499,16 @@ public:
             player_.togglePause();
             reportProgress(telemetry, playerScreenActive, true);
             return {};
+        case PlayerScreenCommandType::Play:
+            if (!shouldHandlePauseToggle(repeatCount)) return {};
+            player_.play();
+            reportProgress(telemetry, playerScreenActive, true);
+            return {};
+        case PlayerScreenCommandType::Pause:
+            if (!shouldHandlePauseToggle(repeatCount)) return {};
+            player_.pause();
+            reportProgress(telemetry, playerScreenActive, true);
+            return {};
         case PlayerScreenCommandType::CycleAudioTrack:
             cycleAudioTrack(stream, telemetry, playerScreenActive);
             return {};

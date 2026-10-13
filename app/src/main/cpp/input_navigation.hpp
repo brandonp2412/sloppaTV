@@ -34,6 +34,8 @@ inline PlayerScreenInput playerScreenInputForAndroidKey(int32_t key) {
     if (key == AKEYCODE_DPAD_LEFT) return PlayerScreenInput::Left;
     if (key == AKEYCODE_DPAD_RIGHT) return PlayerScreenInput::Right;
     if (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) return PlayerScreenInput::Activate;
+    if (key == AKEYCODE_MEDIA_PLAY) return PlayerScreenInput::Play;
+    if (key == AKEYCODE_MEDIA_PAUSE) return PlayerScreenInput::Pause;
     if (key == AKEYCODE_MEDIA_PLAY_PAUSE) return PlayerScreenInput::PlayPause;
     if (key == AKEYCODE_MEDIA_PREVIOUS) return PlayerScreenInput::Previous;
     if (key == AKEYCODE_MEDIA_NEXT) return PlayerScreenInput::Next;
