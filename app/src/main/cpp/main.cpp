@@ -935,6 +935,13 @@ private:
         if (textEntry.searchChanged) applyScreenInteractionHostEffects(screenInteractions_.scheduleLiveSearch());
         if (textEntry.handled) return 1;
 
+        if (screen_ == Screen::Search && (key == AKEYCODE_DPAD_CENTER || key == AKEYCODE_ENTER) &&
+            searchFlow_.selectedResult()) {
+            // The user is committing to this result. Abort speculative Remux
+            // preparation before Details loading can overlap the real playback
+            // request for the same item/episode.
+            cancelSearchResultPrewarm();
+        }
         applyScreenInteractionHostEffects(screenInteractions_.dispatch(screenNavigationKeyForAndroidKey(key),
                                                                        detailsNavigationKeyForAndroidKey(key)));
         return 1;
