@@ -52,6 +52,7 @@ public:
             if (previous != attempted_.end() && now - previous->second < kCooldown) continue;
             pending_.push_back(item);
         }
+        if (!pending_.empty()) nextDue_ = now + kSpacing;
     }
 
     [[nodiscard]] std::optional<JellyfinItem> takeDue(const JellyfinSession& session, std::string_view query,

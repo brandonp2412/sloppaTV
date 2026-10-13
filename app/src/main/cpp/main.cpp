@@ -466,23 +466,41 @@ public:
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: constructor complete");
     }
 
+    void cancelSearchResultPrewarm() {
+        searchResultPrewarm_.reset();
+        searchPrewarmEpoch_.invalidate();
+        searchPrewarmApi_.cancelPendingRequests();
+    }
+
+    void applyNavigationTransition(Screen previous) {
+        if (previous == Screen::Search && screen_ != Screen::Search) cancelSearchResultPrewarm();
+    }
+
     void resetNavigation(Screen screen) {
+        const Screen previous = screen_;
         navigation_.reset(screen);
         screen_ = screen;
+        applyNavigationTransition(previous);
     }
 
     void pushScreen(Screen screen) {
+        const Screen previous = screen_;
         navigation_.push(screen);
         screen_ = navigation_.current();
+        applyNavigationTransition(previous);
     }
 
     void replaceScreen(Screen screen) {
+        const Screen previous = screen_;
         navigation_.replace(screen);
         screen_ = navigation_.current();
+        applyNavigationTransition(previous);
     }
 
     void popScreen(Screen fallback = Screen::Home) {
+        const Screen previous = screen_;
         screen_ = navigation_.popOr(fallback);
+        applyNavigationTransition(previous);
         if (screen_ == Screen::Browse && session_.valid() && !loading_ && !browseState_.activeContainer().id.empty()) {
             browseScreens_.loadPage(false);
         }
@@ -1106,7 +1124,7 @@ private:
         if (!next) return;
         JellyfinSession session = session_;
         const int maxAudioChannels = settings_.maxAudioChannels;
-        const auto searchToken = requestEpochs_.search.token(requestEpochs_.search.snapshot());
+        const auto searchToken = searchPrewarmEpoch_.token(searchPrewarmEpoch_.snapshot());
         if (!searchPrewarmTasks_.submit([this, session = std::move(session), next = std::move(*next),
                                          maxAudioChannels, searchToken] {
                 if (!searchToken.active()) return; // Drop queued work for superseded queries.
@@ -1787,6 +1805,7 @@ private:
     RemuxEpisodePrewarmState remuxEpisodePrewarm_;
     HomeEpisodePrewarmState homeEpisodePrewarm_;
     SearchResultPrewarmState searchResultPrewarm_;
+    RequestEpoch searchPrewarmEpoch_;
     std::string remuxStatsSourceId_;
     std::chrono::steady_clock::time_point remuxStatsNextPoll_{};
     bool remuxStatsInFlight_ = false;
