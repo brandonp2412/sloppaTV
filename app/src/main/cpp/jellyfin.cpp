@@ -968,7 +968,8 @@ ApiResult JellyfinClient::prewarmRemuxEpisode(const JellyfinSession& session, co
     // Home rows can contain only summary fields, so use the full codec/source
     // information before asking Remux to resolve the playback path.
     const auto detail = getItem(session, item.id);
-    JellyfinItem candidate = detail.ok ? detail.value : item;
+    if (!detail.ok) return {.ok = false, .error = detail.error.empty() ? "Episode prewarm detail lookup failed" : detail.error};
+    JellyfinItem candidate = detail.value;
     if (!item.mediaSourceId.empty()) candidate.mediaSourceId = item.mediaSourceId;
     if (item.positionTicks > 0) candidate.positionTicks = item.positionTicks;
     const auto resolved = resolvePlayback(session, candidate, 120000000, maxAudioChannels);

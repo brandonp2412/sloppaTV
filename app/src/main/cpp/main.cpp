@@ -1647,7 +1647,8 @@ private:
     void tick() {
         applyAsyncCompletions();
         runDueSimilarPrefetch();
-        runDueHomeEpisodePrewarm();
+        // Home-screen Remux playback probes can take tens of seconds while source
+        // resolution runs. Keep speculative work off the critical playback path.
         runDueSearchResultPrewarm();
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
