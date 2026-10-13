@@ -38,7 +38,8 @@ android {
 
         externalNativeBuild {
             cmake {
-                cppFlags += listOf("-std=c++20", "-fexceptions", "-frtti", "-O3")
+                // Let CMake apply each variant's optimisation level: debug should not compile at -O3.
+                cppFlags += listOf("-std=c++20", "-fexceptions", "-frtti")
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
                     "-DSLOPPATV_VERSION_NAME=$sloppaVersionName",
@@ -75,6 +76,11 @@ android {
     buildTypes {
         getByName("debug") {
             versionNameSuffix = "-debug"
+            // Isolated E2E builds must never replace the household app or its watch state.
+            if (providers.gradleProperty("SLOPPATV_E2E_ISOLATED").orNull == "true") {
+                applicationIdSuffix = ".remuxtest"
+                manifestPlaceholders["appLabel"] = "sloppaTV E2E"
+            }
             // A local key.properties deliberately makes debug and release use the same
             // identity, so home devices can upgrade either build in place. A clean
             // checkout still gets Android's normal debug signing configuration.
