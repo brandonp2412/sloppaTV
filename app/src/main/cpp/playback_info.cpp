@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
+#include <vector>
 #include <nlohmann/json.hpp>
 #include <sstream>
 
@@ -28,6 +30,28 @@ bool isNoStreamsPlaceholder(const json& source) {
     // generic Jellyfin clients can render its placeholder clip, but SloppaTV
     // must not mistake that clip for successful media playback.
     return source.is_object() && scalarValueOr(source, "Path", std::string{}) == "/videos/no-streams";
+}
+
+// Remux exposes the addon's advertised swarm counts as optional metadata.
+// Counts are only a ranking hint: actual availability is established by the
+// server's bounded source probe, and cached/debrid sources take precedence.
+std::optional<int64_t> advertisedTorrentSeeders(const json& source) {
+    const auto remux = source.find("Remux");
+    if (remux == source.end() || !remux->is_object()) return std::nullopt;
+    const auto provider = remux->find("ProviderInfo");
+    if (provider == remux->end() || !provider->is_object() ||
+        scalarValueOr(*provider, "service_cached", false)) return std::nullopt;
+    const auto count = provider->find("seeders");
+    if (count == provider->end() || !count->is_number_integer()) return std::nullopt;
+    const int64_t seeders = count->get<int64_t>();
+    return seeders >= 0 ? std::optional<int64_t>{seeders} : std::nullopt;
+}
+
+int availabilityTier(int64_t seeders) {
+    if (seeders >= 20) return 3;
+    if (seeders >= 5) return 2;
+    if (seeders >= 1) return 1;
+    return 0;
 }
 
 std::string joinCodecs(const std::vector<std::string>& codecs) {
@@ -177,10 +201,25 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
             }
             return 3;
         };
-        auto source = firstObject;
-        int bestRank = 4;
+        std::vector<json::const_iterator> candidates;
         for (auto candidate = firstObject; candidate != sources.end(); ++candidate) {
-            if (!candidate->is_object() || isNoStreamsPlaceholder(*candidate)) continue;
+            if (candidate->is_object() && !isNoStreamsPlaceholder(*candidate)) candidates.push_back(candidate);
+        }
+        // Only compare seed counts when every candidate exposes the same P2P
+        // metric. Mixed debrid/cached/local sources retain Remux's ordering.
+        const bool comparableTorrents = candidates.size() > 1 &&
+            std::all_of(candidates.begin(), candidates.end(), [](const auto& candidate) {
+                return advertisedTorrentSeeders(*candidate).has_value();
+            });
+        if (comparableTorrents) {
+            std::stable_sort(candidates.begin(), candidates.end(), [](const auto& left, const auto& right) {
+                return availabilityTier(*advertisedTorrentSeeders(*left)) >
+                       availabilityTier(*advertisedTorrentSeeders(*right));
+            });
+        }
+        auto source = candidates.front();
+        int bestRank = 4;
+        for (auto candidate : candidates) {
             const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
             const PlaybackServerRoute route = choosePlaybackServerRoute(
                 {
@@ -213,13 +252,12 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
             }));
         offer.playSessionId = scalarValueOr(data, "PlaySessionId", std::string{});
         offer.mediaSourceId = scalarValueOr(*source, "Id", std::string{});
-        // Remux lists versions in quality order. Once a source has stalled,
-        // never offer an earlier version again (A -> B -> A loop).
-        for (auto candidate = std::next(source); candidate != sources.end(); ++candidate) {
-            if (!candidate->is_object() || isNoStreamsPlaceholder(*candidate) ||
-                !scalarValueOr(*candidate, "SupportsDirectPlay", false))
-                continue;
-            const std::string id = scalarValueOr(*candidate, "Id", std::string{});
+        // Fall back through this request's availability-ranked ordering, never
+        // backwards to an already attempted version (A -> B -> A loop).
+        for (auto candidate = std::next(std::find(candidates.begin(), candidates.end(), source));
+             candidate != candidates.end(); ++candidate) {
+            if (!scalarValueOr(**candidate, "SupportsDirectPlay", false)) continue;
+            const std::string id = scalarValueOr(**candidate, "Id", std::string{});
             if (id.empty() || id == offer.mediaSourceId) continue;
             offer.alternativeMediaSourceId = id;
             break;

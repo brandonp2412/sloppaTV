@@ -187,6 +187,21 @@ int main() {
            lastChoice.value.alternativeMediaSourceId.empty());
     // The fallback file can tag Italian as the default track despite the
     // failed (English) source using the same stream index for English.
+    // Availability hints only affect comparable P2P candidates; an advertised
+    // zero-seeder UHD release must not displace a healthier HD release.
+    const auto seededOffer = parsePlaybackInfoOffer(R"({"MediaSources":[
+        {"Id":"4k-zero","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":0}}},
+        {"Id":"hd-healthy","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":46}}},
+        {"Id":"hd-backup","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":2}}}
+    ]})", -1, kSubtitleOffIndex);
+    assert(seededOffer.ok && seededOffer.value.mediaSourceId == "hd-healthy");
+    assert(seededOffer.value.alternativeMediaSourceId == "hd-backup");
+    const auto mixedSources = parsePlaybackInfoOffer(R"({"MediaSources":[
+        {"Id":"debrid-cached","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"service_cached":true}}},
+        {"Id":"torrent-seeded","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":82}}}
+    ]})", -1, kSubtitleOffIndex);
+    assert(mixedSources.ok && mixedSources.value.mediaSourceId == "debrid-cached");
+    assert(mixedSources.value.alternativeMediaSourceId == "torrent-seeded");
     const std::string multilingual = R"({"MediaSources":[{
         "Id":"fallback-file","SupportsDirectPlay":true,
         "DefaultAudioStreamIndex":1,
