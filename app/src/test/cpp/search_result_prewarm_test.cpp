@@ -25,30 +25,35 @@ int main() {
     warm.refresh(session, "mobland", candidates, now);
     assert(!warm.takeDue(session, "mob", true, now).has_value());
     assert(!warm.takeDue(session, "mobland", false, now).has_value());
-    auto first = warm.takeDue(session, "mobland", true, now);
-    assert(first && first->id == "item-0");
+    // Initial prewarming is intentionally delayed to avoid racing playback.
     assert(!warm.takeDue(session, "mobland", true, now + 2s).has_value());
-    auto second = warm.takeDue(session, "mobland", true, now + 3s);
+    auto first = warm.takeDue(session, "mobland", true, now + 3s);
+    assert(first && first->id == "item-0");
+    assert(!warm.takeDue(session, "mobland", true, now + 5s).has_value());
+    auto second = warm.takeDue(session, "mobland", true, now + 6s);
     assert(second && second->id == "item-1");
-    auto third = warm.takeDue(session, "mobland", true, now + 6s);
+    auto third = warm.takeDue(session, "mobland", true, now + 9s);
     assert(third && third->id == "item-2");
     assert(!warm.takeDue(session, "mobland", true, now + 30s).has_value());
 
     // Debouncing a new query replaces the pending candidates; already-warmed
     // items are not requeued when the user types a slightly different query.
-    warm.refresh(session, "moblands", candidates, now + 7s);
-    auto next = warm.takeDue(session, "moblands", true, now + 9s);
-    assert(next && next->id == "item-3");
-    warm.refresh(session, "another", candidates, now + 10s);
+    warm.refresh(session, "moblands", candidates, now + 10s);
     assert(!warm.takeDue(session, "moblands", true, now + 12s).has_value());
-    auto different = warm.takeDue(session, "another", true, now + 12s);
+    auto next = warm.takeDue(session, "moblands", true, now + 13s);
+    assert(next && next->id == "item-3");
+    warm.refresh(session, "another", candidates, now + 14s);
+    assert(!warm.takeDue(session, "moblands", true, now + 16s).has_value());
+    assert(!warm.takeDue(session, "another", true, now + 16s).has_value());
+    auto different = warm.takeDue(session, "another", true, now + 17s);
     assert(different && different->id == "item-4");
 
     JellyfinSession other = session;
     other.userId = "user-b";
-    assert(!warm.takeDue(other, "another", true, now + 16s).has_value());
-    warm.refresh(other, "another", candidates, now + 16s);
-    auto newAccount = warm.takeDue(other, "another", true, now + 16s);
+    assert(!warm.takeDue(other, "another", true, now + 20s).has_value());
+    warm.refresh(other, "another", candidates, now + 20s);
+    assert(!warm.takeDue(other, "another", true, now + 22s).has_value());
+    auto newAccount = warm.takeDue(other, "another", true, now + 23s);
     assert(newAccount && newAccount->id == "item-0");
 
     std::vector<JellyfinItem> invalid(5);
@@ -62,15 +67,16 @@ int main() {
     invalid[3] = invalid[2];
     invalid[4].id = "no-id";
     invalid[4].type = "Episode";
-    warm.refresh(other, "abc", invalid, now + 20s);
-    auto playable = warm.takeDue(other, "abc", true, now + 20s);
+    warm.refresh(other, "abc", invalid, now + 27s);
+    assert(!warm.takeDue(other, "abc", true, now + 29s).has_value());
+    auto playable = warm.takeDue(other, "abc", true, now + 30s);
     assert(playable && playable->id == "playable");
-    auto final = warm.takeDue(other, "abc", true, now + 23s);
+    auto final = warm.takeDue(other, "abc", true, now + 33s);
     assert(final && final->id == "no-id");
-    assert(!warm.takeDue(other, "abc", true, now + 26s).has_value());
-    warm.refresh(other, "ab", invalid, now + 30s);
-    assert(!warm.takeDue(other, "ab", true, now + 30s).has_value());
+    assert(!warm.takeDue(other, "abc", true, now + 36s).has_value());
+    warm.refresh(other, "ab", invalid, now + 40s);
+    assert(!warm.takeDue(other, "ab", true, now + 43s).has_value());
     warm.reset();
-    assert(!warm.takeDue(other, "abc", true, now + 33s).has_value());
+    assert(!warm.takeDue(other, "abc", true, now + 46s).has_value());
     return 0;
 }
