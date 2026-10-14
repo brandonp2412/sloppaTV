@@ -342,6 +342,34 @@ class WaydroidToolingTest(unittest.TestCase):
                 step["key"] for step in suite["steps"][restart_index + 1 : capture_index] if step["action"] == "key"
             ]
             self.assertEqual(keys[:down_count], ["DPAD_DOWN"] * down_count, capture_name)
+        for name, expected_centers in (
+            ("05-movie-browse", 1),
+            ("06-movie-details", 2),
+            ("07-cast", 3),
+            ("09-item-menu", 3),
+            ("10-player-cc-video", 3),
+            ("12-series-browse", 1),
+            ("13-series-details", 2),
+        ):
+            capture = next(
+                i
+                for i, step in enumerate(suite["steps"])
+                if step.get("action") == "capture" and step.get("name") == name
+            )
+            restart = max(i for i, step in enumerate(suite["steps"][:capture]) if step["action"] == "restart")
+            self.assertEqual(
+                sum(step.get("key") == "DPAD_CENTER" for step in suite["steps"][restart:capture]),
+                expected_centers,
+                name,
+            )
+        for needle in (
+            "GET /Users/fixture-user/Items/movie-big-buck-bunny?",
+            "GET /Users/fixture-user/Items/series-open-classics?",
+            "POST /Items/movie-big-buck-bunny/PlaybackInfo",
+        ):
+            self.assertTrue(
+                any(step.get("fresh") and step.get("contains") == needle for step in suite["steps"]), needle
+            )
         playback_index = next(
             index for index, step in enumerate(suite["steps"]) if step["action"] == "playback_session"
         )
@@ -361,6 +389,20 @@ class WaydroidToolingTest(unittest.TestCase):
         )
         seek_steps = suite["steps"][player_video_index + 1 : player_controls_index]
         self.assertGreaterEqual(sum(step.get("key") == "DPAD_RIGHT" for step in seek_steps), 18)
+
+    def test_fixture_log_fresh_assertion_rejects_stale_requests(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            log = Path(directory) / "fixture-server.log"
+            needle = "POST /Items/movie-big-buck-bunny/PlaybackInfo"
+            log.write_text(needle + "\n", encoding="utf-8")
+            stale_end = log.stat().st_size
+            with patch.object(waydroid_e2e, "ARTIFACTS", Path(directory)):
+                waydroid_e2e.wait_for_fixture_log(needle, 0.1)
+                with self.assertRaisesRegex(RuntimeError, "did not receive expected request"):
+                    waydroid_e2e.wait_for_fixture_log(needle, 0.05, start_offset=stale_end)
+                with log.open("a", encoding="utf-8") as stream:
+                    stream.write(needle + "\n")
+                waydroid_e2e.wait_for_fixture_log(needle, 0.1, start_offset=stale_end)
 
     def test_main_branch_pipeline_publishes_generated_store_screenshots(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "android.yml").read_text(encoding="utf-8")

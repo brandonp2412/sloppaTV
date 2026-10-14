@@ -319,12 +319,15 @@ def load_screenshot_suite(path: Path) -> dict:
     return suite
 
 
-def wait_for_fixture_log(needle: str, timeout_seconds: float) -> None:
+def wait_for_fixture_log(needle: str, timeout_seconds: float, *, start_offset: int = 0) -> None:
     log_path = ARTIFACTS / "fixture-server.log"
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        if log_path.is_file() and needle in log_path.read_text(encoding="utf-8", errors="replace"):
-            return
+        if log_path.is_file():
+            with log_path.open("rb") as log:
+                log.seek(start_offset)
+                if needle.encode() in log.read():
+                    return
         time.sleep(0.1)
     raise RuntimeError(f"fixture server did not receive expected request within {timeout_seconds:g}s: {needle}")
 
@@ -335,6 +338,8 @@ def screenshot_suite(path: Path) -> Path:
     # from a previous installation otherwise make a clean run look broken.
     adb("logcat", "-c")
     screenshots: list[dict[str, int | str | bool]] = []
+    fixture_log_offset = 0
+    fixture_log_path = ARTIFACTS / "fixture-server.log"
     for step in suite["steps"]:
         action = step["action"]
         if action == "launch":
@@ -342,6 +347,7 @@ def screenshot_suite(path: Path) -> Path:
         elif action == "restart":
             restart()
         elif action == "key":
+            fixture_log_offset = fixture_log_path.stat().st_size if fixture_log_path.is_file() else 0
             key(step["key"])
         elif action == "text":
             adb("shell", "input", "text", step["value"])
@@ -359,7 +365,8 @@ def screenshot_suite(path: Path) -> Path:
                 COMPONENT,
             )
         elif action == "fixture_log":
-            wait_for_fixture_log(step["contains"], float(step.get("timeout_seconds", 8)))
+            start_offset = fixture_log_offset if step.get("fresh", False) else 0
+            wait_for_fixture_log(step["contains"], float(step.get("timeout_seconds", 8)), start_offset=start_offset)
         elif action == "playback_session":
             require_playback_session(float(step.get("timeout_seconds", 5)))
         elif action == "capture":
