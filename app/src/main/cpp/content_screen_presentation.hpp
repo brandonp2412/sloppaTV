@@ -71,11 +71,6 @@ void renderContentMediaArtworkCard(Renderer& renderer, UiLike& ui, const AppSett
         [&ui](float imageX, float imageY, float imageWidth, float imageHeight, Color color, float radius) {
             ui.drawFocusHalo(imageX, imageY, imageWidth, imageHeight, color, radius);
         },
-        [&ui](float centeredX, float centeredY, float centeredWidth, float centeredHeight, float scale,
-              std::string_view value, Color color, float horizontalPadding, float verticalPadding) {
-            ui.drawCenteredSingleLineFit(centeredX, centeredY, centeredWidth, centeredHeight, scale, value, color,
-                                         horizontalPadding, verticalPadding);
-        },
         [&ui](std::string_view value, float scale, float maxWidth, int maxLines) {
             return ui.fitTextLines(value, scale, maxWidth, maxLines);
         },
