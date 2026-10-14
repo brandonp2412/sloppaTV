@@ -322,6 +322,27 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("GET /Shows/series-open-classics/Seasons", fixture_assertions)
         self.assertIn("GET /Shows/series-open-classics/Episodes", fixture_assertions)
         self.assertIn("POST /Items/movie-big-buck-bunny/PlaybackInfo", fixture_assertions)
+        self.assertIn("GET /Users/fixture-user/Items/movie-big-buck-bunny?", fixture_assertions)
+        self.assertIn("GET /Users/fixture-user/Items/series-open-classics?", fixture_assertions)
+        for capture_name, down_count in (
+            ("05-movie-browse", 2),
+            ("09-item-menu", 2),
+            ("10-player-cc-video", 2),
+            ("12-series-browse", 3),
+        ):
+            capture_index = next(
+                index for index, step in enumerate(suite["steps"])
+                if step.get("action") == "capture" and step.get("name") == capture_name
+            )
+            restart_index = max(
+                index for index, step in enumerate(suite["steps"][:capture_index])
+                if step["action"] == "restart"
+            )
+            keys = [
+                step["key"] for step in suite["steps"][restart_index + 1 : capture_index]
+                if step["action"] == "key"
+            ]
+            self.assertEqual(keys[:down_count], ["DPAD_DOWN"] * down_count, capture_name)
         playback_index = next(
             index for index, step in enumerate(suite["steps"]) if step["action"] == "playback_session"
         )
