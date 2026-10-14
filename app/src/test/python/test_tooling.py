@@ -331,16 +331,15 @@ class WaydroidToolingTest(unittest.TestCase):
             ("12-series-browse", 3),
         ):
             capture_index = next(
-                index for index, step in enumerate(suite["steps"])
+                index
+                for index, step in enumerate(suite["steps"])
                 if step.get("action") == "capture" and step.get("name") == capture_name
             )
             restart_index = max(
-                index for index, step in enumerate(suite["steps"][:capture_index])
-                if step["action"] == "restart"
+                index for index, step in enumerate(suite["steps"][:capture_index]) if step["action"] == "restart"
             )
             keys = [
-                step["key"] for step in suite["steps"][restart_index + 1 : capture_index]
-                if step["action"] == "key"
+                step["key"] for step in suite["steps"][restart_index + 1 : capture_index] if step["action"] == "key"
             ]
             self.assertEqual(keys[:down_count], ["DPAD_DOWN"] * down_count, capture_name)
         playback_index = next(
