@@ -205,9 +205,9 @@ public:
         if (!replacementMediaSourceId.empty()) item.mediaSourceId = replacementMediaSourceId;
         __android_log_print(ANDROID_LOG_INFO, "SloppaTV",
                             "Playback restart item=%s title=%s series=%s S%dE%d preferredSource=%s atMs=%d",
-                            item.id.c_str(), item.name.c_str(), item.seriesId.c_str(),
-                            item.parentIndexNumber, item.indexNumber,
-                            item.mediaSourceId.empty() ? "(auto)" : item.mediaSourceId.c_str(), targetPositionMs);
+                            item.id.c_str(), item.name.c_str(), item.seriesId.c_str(), item.parentIndexNumber,
+                            item.indexNumber, item.mediaSourceId.empty() ? "(auto)" : item.mediaSourceId.c_str(),
+                            targetPositionMs);
         const PlaybackTarget previousTarget = std::move(restartPlan->previousTarget);
         const bool shouldReportPrevious = restartPlan->reportPrevious;
         const uint64_t generation = playbackEpoch_.begin();
@@ -586,8 +586,7 @@ public:
                 __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
                                     "Remux source stalled item=%s title=%s S%dE%d source=%s next=%s "
                                     "elapsedMs=%lld positionMs=%d",
-                                    item.id.c_str(), item.name.c_str(),
-                                    item.parentIndexNumber, item.indexNumber,
+                                    item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
                                     target.mediaSourceId.c_str(), alternate.c_str(),
                                     static_cast<long long>(preparePlan.elapsedMs), screenState_.positionMs());
                 if (restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
@@ -602,19 +601,17 @@ public:
                 __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
                                     "Playback prepare timeout item=%s title=%s S%dE%d source=%s alt=%s "
                                     "elapsedMs=%lld mode=%s positionMs=%d",
-                                    item.id.c_str(), item.name.c_str(),
-                                    item.parentIndexNumber, item.indexNumber,
+                                    item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
                                     target.mediaSourceId.c_str(),
                                     target.alternativeMediaSourceId.empty() ? "(none)"
-                                                                           : target.alternativeMediaSourceId.c_str(),
+                                                                            : target.alternativeMediaSourceId.c_str(),
                                     static_cast<long long>(preparePlan.elapsedMs),
                                     preparePlan.transcoding ? "transcode" : "direct", screenState_.positionMs());
                 if (preparePlan.retryWithTranscodeFallback && retryWithFallback(stream, rendererReady)) {
                     error_.clear();
                     return {};
                 }
-                error_ = isRemux ? "REMUX SOURCE DID NOT BECOME READY IN TIME"
-                                 : "PLAYBACK TOOK TOO LONG TO START";
+                error_ = isRemux ? "REMUX SOURCE DID NOT BECOME READY IN TIME" : "PLAYBACK TOOK TOO LONG TO START";
                 return PlaybackHostEffect::stop();
             }
         } else {
@@ -637,8 +634,8 @@ public:
             const auto& item = coordinator_.session().activeItem();
             const auto& target = coordinator_.session().activeTarget();
             __android_log_print(ANDROID_LOG_ERROR, "SloppaTV",
-                                "Playback failed item=%s title=%s S%dE%d source=%s reason=%s",
-                                item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
+                                "Playback failed item=%s title=%s S%dE%d source=%s reason=%s", item.id.c_str(),
+                                item.name.c_str(), item.parentIndexNumber, item.indexNumber,
                                 target.mediaSourceId.c_str(), playerError.c_str());
             error_ = playerError;
             return PlaybackHostEffect::stop();

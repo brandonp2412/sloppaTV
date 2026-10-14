@@ -124,8 +124,8 @@ ItemMenuScreenInput itemMenuInput(DetailsNavigationKey key) {
 
 DetailsNavigationAction DetailsNavigationController::handleDetails(DetailsScreenState& state, DetailsNavigationKey key,
                                                                    const JellyfinItem& item, bool canAddToSeerr) {
-    const DetailsScreenCommand command =
-        state.handleInput(detailsInput(key), static_cast<int>(detailActionIdsFor(item, canAddToSeerr).size()), item.type == "Episode");
+    const DetailsScreenCommand command = state.handleInput(
+        detailsInput(key), static_cast<int>(detailActionIdsFor(item, canAddToSeerr).size()), item.type == "Episode");
     switch (command.type) {
     case DetailsScreenCommandType::None:
         return {};

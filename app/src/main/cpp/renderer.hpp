@@ -46,7 +46,8 @@ public:
     void beginClipRect(float x, float y, float w, float h);
     void endClipRect();
 
-    void profileInitial(float x, float y, float width, float height, float scale, std::string_view initial, Color color);
+    void profileInitial(float x, float y, float width, float height, float scale, std::string_view initial,
+                        Color color);
     void icon(ui_icons::Glyph glyph, float x, float y, float size, Color color);
     void rect(float x, float y, float w, float h, Color color);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3, Color color);

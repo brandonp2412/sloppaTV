@@ -515,6 +515,7 @@ public:
     }
 
     void requestHomeRefresh() { sessionState_.requestHomeRefresh(); }
+
     void markPlaybackStopReported() { requestHomeRefresh(); }
 
     [[nodiscard]] bool consumeHomeRefreshRequest() { return sessionState_.takeHomeRefreshRequest(); }

@@ -59,8 +59,9 @@ public:
                                     SimilarPrefetch& similarPrefetch, ExternalPlayer& externalPlayer, Screen& screen,
                                     NavigationStack<Screen>& navigation, JellyfinSession& session,
                                     AppSettings& settings, SettingsFlow& settingsFlow, DetailsFlow& detailsFlow,
-                                    VirtualKeyboardState& keyboard, AccountFlow& accountFlow, const JellyfinServerInfo& serverInfo, bool& loading,
-                                    std::string& error, std::chrono::steady_clock::time_point& renderBurstUntil)
+                                    VirtualKeyboardState& keyboard, AccountFlow& accountFlow,
+                                    const JellyfinServerInfo& serverInfo, bool& loading, std::string& error,
+                                    std::chrono::steady_clock::time_point& renderBurstUntil)
         : api_(api), textInput_(textInput), accountScreens_(accountScreens), accountSession_(accountSession),
           homeScreens_(homeScreens), browseScreens_(browseScreens), searchScreens_(searchScreens),
           searchFlow_(searchFlow), settingsScreens_(settingsScreens), serverInfoScreens_(serverInfoScreens),
@@ -68,11 +69,11 @@ public:
           externalPlayback_(externalPlayback), similarPrefetch_(similarPrefetch), externalPlayer_(externalPlayer),
           screen_(screen), navigation_(navigation), session_(session), settings_(settings), settingsFlow_(settingsFlow),
           detailsFlow_(detailsFlow), keyboard_(keyboard), accountFlow_(accountFlow), serverInfo_(serverInfo),
-          loading_(loading), error_(error),
-          renderBurstUntil_(renderBurstUntil) {}
+          loading_(loading), error_(error), renderBurstUntil_(renderBurstUntil) {}
 
     [[nodiscard]] SeerrEndpoint searchEndpoint() const {
-        return serverInfo_.isRemux && !searchFlow_.state().seerrRequestSearch() ? SeerrEndpoint{} : seerrApp_.endpoint();
+        return serverInfo_.isRemux && !searchFlow_.state().seerrRequestSearch() ? SeerrEndpoint{}
+                                                                                : seerrApp_.endpoint();
     }
 
     [[nodiscard]] ScreenInteractionHostEffects scheduleLiveSearch() {
@@ -112,8 +113,11 @@ public:
         ScreenInteractionHostEffects host;
         if (effects.hideTextInput) textInput_.hide();
         if (effects.openTextInput) {
-            const bool shown =
-                textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux && !searchFlow_.state().seerrRequestSearch() ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
+            const bool shown = textInput_.show(searchFlow_.state().query(),
+                                               (serverInfo_.isRemux && !searchFlow_.state().seerrRequestSearch()
+                                                    ? "Search Remux"
+                                                    : "Search Jellyfin & Seerr"),
+                                               kTextInputSearch);
             searchScreens_.applyTextInputShown(shown);
         }
         if (effects.activateKeyboard) host.merge(activateKeyboard(true));
@@ -286,7 +290,8 @@ public:
             serverInfoScreens_.handleDiagnostics(key);
             return {};
         case Screen::Details:
-            return applyDetails(detailsScreens_.handleDetails(detailsKey, serverInfo_.isRemux && seerrApp_.endpoint().configured()));
+            return applyDetails(
+                detailsScreens_.handleDetails(detailsKey, serverInfo_.isRemux && seerrApp_.endpoint().configured()));
         case Screen::Cast:
             return applyDetails(detailsScreens_.handleCast(detailsKey, mediaGridColumns()));
         case Screen::PersonItems:
@@ -326,7 +331,9 @@ private:
         searchFlow_.state().setSeerrRequestSearch(seerrRequested);
         navigation_.push(Screen::Search);
         screen_ = navigation_.current();
-        const bool shown = textInput_.show(searchFlow_.state().query(), (serverInfo_.isRemux && !seerrRequested ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
+        const bool shown = textInput_.show(
+            searchFlow_.state().query(),
+            (serverInfo_.isRemux && !seerrRequested ? "Search Remux" : "Search Jellyfin & Seerr"), kTextInputSearch);
         searchScreens_.applyTextInputShown(shown);
         keyboard_.reset();
         error_.clear();

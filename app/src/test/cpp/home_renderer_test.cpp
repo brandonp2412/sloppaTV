@@ -31,7 +31,10 @@ struct RowCall {
 
 struct FakeRenderer {
     std::vector<std::string> initials;
-    void profileInitial(float, float, float, float, float, std::string_view value, int) { initials.emplace_back(value); }
+
+    void profileInitial(float, float, float, float, float, std::string_view value, int) {
+        initials.emplace_back(value);
+    }
 
     void rect(float x, float y, float width, float height, int color) { rects.push_back({x, y, width, height, color}); }
 

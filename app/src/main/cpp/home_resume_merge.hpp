@@ -20,9 +20,10 @@ inline void mergeHomeResumeCandidates(std::vector<JellyfinItem>& resume, std::ve
     merged.reserve(std::min(limit, resume.size() + recent.size()));
     auto add = [&](JellyfinItem& item, bool serverReportedResume) {
         if (merged.size() >= limit || item.id.empty() || (item.type != "Episode" && item.type != "Movie") ||
-            (!serverReportedResume && (item.positionTicks <= 0 ||
-                                       (item.runtimeTicks > 0 && item.positionTicks >= item.runtimeTicks))) ||
-            !seen.insert(item.id).second) return;
+            (!serverReportedResume &&
+             (item.positionTicks <= 0 || (item.runtimeTicks > 0 && item.positionTicks >= item.runtimeTicks))) ||
+            !seen.insert(item.id).second)
+            return;
         merged.push_back(std::move(item));
     };
     // Trust entries from Resume even if that endpoint omitted UserData, then

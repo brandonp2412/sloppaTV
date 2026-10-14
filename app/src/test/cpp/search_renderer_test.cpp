@@ -26,6 +26,7 @@ struct RectCall {
 
 struct FakeRenderer {
     std::vector<ui_icons::Glyph> icons;
+
     void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
 
     void text(float x, float y, float, std::string_view value, int color, float) {
@@ -240,8 +241,8 @@ int main() {
         },
         [](std::string_view value, float, float, int) { return std::string(value); },
         [](float, float, float, float, float, std::string_view, int) {},
-        [](float, float, float, float, float, std::string_view, int, float, float) {},
-        [](float) {}, [](std::string_view, std::string_view) {},
+        [](float, float, float, float, float, std::string_view, int, float, float) {}, [](float) {},
+        [](std::string_view, std::string_view) {},
         [](float x, float y, float width, float height, bool, float) {
             return std::array<float, 4>{x, y, width, height};
         },
@@ -258,8 +259,7 @@ int main() {
             assert(y == 314.0f);
             ++episodeCards;
         },
-        [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; },
-        [](int, float) { return 99; });
+        [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
     assert(episodeCards == 1);
     assert(remoteCards == 0);
     assert(!contains(episodeRenderer.texts, "In your library"));

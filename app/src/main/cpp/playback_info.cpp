@@ -39,8 +39,8 @@ std::optional<int64_t> advertisedTorrentSeeders(const json& source) {
     const auto remux = source.find("Remux");
     if (remux == source.end() || !remux->is_object()) return std::nullopt;
     const auto provider = remux->find("ProviderInfo");
-    if (provider == remux->end() || !provider->is_object() ||
-        scalarValueOr(*provider, "service_cached", false)) return std::nullopt;
+    if (provider == remux->end() || !provider->is_object() || scalarValueOr(*provider, "service_cached", false))
+        return std::nullopt;
     const auto count = provider->find("seeders");
     if (count == provider->end() || !count->is_number_integer()) return std::nullopt;
     const int64_t seeders = count->get<int64_t>();
@@ -166,7 +166,7 @@ std::string buildPlaybackInfoRequestBody(const JellyfinSession& session, const J
 ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view responseBody, int audioStreamIndex,
                                                          int subtitleStreamIndex, PlaybackOverrides overrides,
                                                          std::string_view requestedMediaSourceId,
-                                                          std::string_view preferredAudioLanguage) {
+                                                         std::string_view preferredAudioLanguage) {
     ApiValueResult<PlaybackInfoOffer> result;
     try {
         const auto data = json::parse(responseBody);
@@ -207,8 +207,8 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         }
         // Only compare seed counts when every candidate exposes the same P2P
         // metric. Mixed debrid/cached/local sources retain Remux's ordering.
-        const bool comparableTorrents = candidates.size() > 1 &&
-            std::all_of(candidates.begin(), candidates.end(), [](const auto& candidate) {
+        const bool comparableTorrents =
+            candidates.size() > 1 && std::all_of(candidates.begin(), candidates.end(), [](const auto& candidate) {
                 return advertisedTorrentSeeders(*candidate).has_value();
             });
         if (comparableTorrents) {
@@ -245,8 +245,8 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
 
         PlaybackInfoOffer offer;
         offer.sourceCount = static_cast<int>(sources.size());
-        offer.directPlaySourceCount = static_cast<int>(std::count_if(
-            sources.begin(), sources.end(), [](const json& candidate) {
+        offer.directPlaySourceCount =
+            static_cast<int>(std::count_if(sources.begin(), sources.end(), [](const json& candidate) {
                 return candidate.is_object() && !isNoStreamsPlaceholder(candidate) &&
                        scalarValueOr(candidate, "SupportsDirectPlay", false);
             }));
@@ -283,20 +283,22 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         }
         auto chosenAudio = offer.audioTracks.end();
         if (!preferredAudioLanguage.empty()) {
-            chosenAudio = std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(),
-                                       [&](const JellyfinAudioStream& track) {
-                                           return audioLanguageEquals(track.language, preferredAudioLanguage);
-                                       });
+            chosenAudio =
+                std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(), [&](const JellyfinAudioStream& track) {
+                    return audioLanguageEquals(track.language, preferredAudioLanguage);
+                });
         }
         if (chosenAudio == offer.audioTracks.end() && audioStreamIndex >= 0 && preferredAudioLanguage.empty()) {
-            chosenAudio = std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(),
-                                       [&](const JellyfinAudioStream& track) { return track.index == audioStreamIndex; });
+            chosenAudio =
+                std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(),
+                             [&](const JellyfinAudioStream& track) { return track.index == audioStreamIndex; });
         }
         if (chosenAudio == offer.audioTracks.end()) {
             chosenAudio = std::find_if(offer.audioTracks.begin(), offer.audioTracks.end(),
                                        [](const JellyfinAudioStream& track) { return track.isDefault; });
         }
-        if (chosenAudio == offer.audioTracks.end() && !offer.audioTracks.empty()) chosenAudio = offer.audioTracks.begin();
+        if (chosenAudio == offer.audioTracks.end() && !offer.audioTracks.empty())
+            chosenAudio = offer.audioTracks.begin();
         if (chosenAudio != offer.audioTracks.end()) {
             offer.audioOrdinal = static_cast<int>(std::distance(offer.audioTracks.begin(), chosenAudio));
             offer.audioStreamIndex = chosenAudio->index;

@@ -82,8 +82,8 @@ int main() {
     for (int size = 0; size <= 2; ++size) {
         constexpr float firstRowTop = 150.0f;
         const float episodeTitleY = firstRowTop + homeRowImageOffset(size) + 202.0f + 22.0f;
-        const float subtitleBottom = episodeTitleY + 11.0f * 2.45f * uiTextScale(size) + 4.0f +
-                                     10.0f * 1.58f * uiTextScale(size);
+        const float subtitleBottom =
+            episodeTitleY + 11.0f * 2.45f * uiTextScale(size) + 4.0f + 10.0f * 1.58f * uiTextScale(size);
         const float nextHeadingY = firstRowTop + homeRowStep(size);
         assert(nextHeadingY >= subtitleBottom + 28.0f);
     }

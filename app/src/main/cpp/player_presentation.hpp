@@ -291,7 +291,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     // During first load, keep playback controls available even on slow sources.
     // The normal overlay timeout resumes once playback has started.
     const bool preparingInitialPlayback = resolving || status == PlayerStatus::Preparing;
-    const bool showOverlay = preparingInitialPlayback || userOverlayVisible || playerScreenState.skipDisablePromptVisible();
+    const bool showOverlay =
+        preparingInitialPlayback || userOverlayVisible || playerScreenState.skipDisablePromptVisible();
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
         subtitleText = cue->text;
@@ -337,7 +338,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     // overlay is dismissed or times out, render no standalone status text.
     if (!showOverlay) return;
     const std::string waitStatus = playerWaitStatus(resolving, status == PlayerStatus::Preparing,
-                                                     playbackCoordinator.tracks().subtitleBusy(), buffer, now);
+                                                    playbackCoordinator.tracks().subtitleBusy(), buffer, now);
 
     const auto nextItem = playbackCoordinator.continuation().nextItem();
     if (showNextUp && nextItem) {

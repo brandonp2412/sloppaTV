@@ -8,7 +8,8 @@
 // Visible bounds in each 64px font cell, independent of advance/baseline padding.
 inline std::array<std::array<int, 4>, 95> fontInkBounds(const std::vector<uint8_t>& rgba, int width, int height) {
     std::array<std::array<int, 4>, 95> bounds{};
-    if (width != 1024 || height != 384 || rgba.size() != static_cast<size_t>(width * height * 4)) return bounds;
+    if (width != 1024 || height != 384 || rgba.size() != static_cast<size_t>(width) * static_cast<size_t>(height) * 4U)
+        return bounds;
     for (int glyph = 0; glyph < 95; ++glyph) {
         int left = 64, top = 64, right = -1, bottom = -1;
         for (int y = 0; y < 64; ++y) {

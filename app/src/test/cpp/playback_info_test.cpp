@@ -162,7 +162,8 @@ int main() {
             {"Id":"first","Container":"mkv","SupportsDirectPlay":true},
             {"Id":"known-good","Container":"mp4","SupportsDirectPlay":true}
         ]
-    })", -1, kSubtitleServerDefaultIndex, {}, "known-good");
+    })",
+                                                             -1, kSubtitleServerDefaultIndex, {}, "known-good");
     assert(selectedVersionOffer.ok);
     assert(selectedVersionOffer.value.mediaSourceId == "known-good");
     assert(selectedVersionOffer.value.container == "mp4");
@@ -193,13 +194,15 @@ int main() {
         {"Id":"4k-zero","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":0}}},
         {"Id":"hd-healthy","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":46}}},
         {"Id":"hd-backup","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":2}}}
-    ]})", -1, kSubtitleOffIndex);
+    ]})",
+                                                    -1, kSubtitleOffIndex);
     assert(seededOffer.ok && seededOffer.value.mediaSourceId == "hd-healthy");
     assert(seededOffer.value.alternativeMediaSourceId == "hd-backup");
     const auto mixedSources = parsePlaybackInfoOffer(R"({"MediaSources":[
         {"Id":"debrid-cached","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"service_cached":true}}},
         {"Id":"torrent-seeded","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":82}}}
-    ]})", -1, kSubtitleOffIndex);
+    ]})",
+                                                     -1, kSubtitleOffIndex);
     assert(mixedSources.ok && mixedSources.value.mediaSourceId == "debrid-cached");
     assert(mixedSources.value.alternativeMediaSourceId == "torrent-seeded");
     const std::string multilingual = R"({"MediaSources":[{
@@ -228,7 +231,8 @@ int main() {
             {"Id":"first","SupportsDirectPlay":true},
             {"Id":"other","SupportsDirectPlay":true}
         ]
-    })", -1, kSubtitleServerDefaultIndex, {}, "not-present");
+    })",
+                                                           -1, kSubtitleServerDefaultIndex, {}, "not-present");
     assert(absentVersionOffer.ok);
     assert(absentVersionOffer.value.mediaSourceId == "first");
     assert(absentVersionOffer.value.alternativeMediaSourceId == "other");
@@ -238,7 +242,8 @@ int main() {
             {"Id":"healthy","SupportsDirectPlay":true},
             {"Id":"preferred","SupportsDirectPlay":false,"SupportsDirectStream":false,"SupportsTranscoding":false}
         ]
-    })", -1, kSubtitleServerDefaultIndex, {}, "preferred");
+    })",
+                                                              -1, kSubtitleServerDefaultIndex, {}, "preferred");
     assert(incompatiblePreferred.ok);
     assert(incompatiblePreferred.value.mediaSourceId == "healthy");
 
@@ -383,7 +388,7 @@ int main() {
             }
         ]
     })",
-                                                                  -1, kSubtitleServerDefaultIndex);
+                                                                    -1, kSubtitleServerDefaultIndex);
     assert(placeholderBeforeRealSource.ok);
     assert(placeholderBeforeRealSource.value.mediaSourceId == "real-source");
     assert(placeholderBeforeRealSource.value.directPlaySourceCount == 1);

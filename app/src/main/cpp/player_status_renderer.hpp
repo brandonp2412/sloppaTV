@@ -9,11 +9,10 @@
 // This compact wait message is rendered independently of the timed playback controls.
 // Subtitle downloads can outlast their initial four-second button feedback.
 inline std::string playerWaitStatus(bool resolving, bool preparing, bool subtitleBusy,
-                                    const PlayerBufferIndicator& buffer,
-                                    PlayerBufferIndicator::TimePoint now) {
+                                    const PlayerBufferIndicator& buffer, PlayerBufferIndicator::TimePoint now) {
     if (resolving || preparing) return buffer.statusText(now);
-    if (subtitleBusy) return buffer.interrupted() ? "Loading subtitles; " + buffer.statusText(now)
-                                                 : "Loading subtitles";
+    if (subtitleBusy)
+        return buffer.interrupted() ? "Loading subtitles; " + buffer.statusText(now) : "Loading subtitles";
     if (buffer.interrupted()) return buffer.statusText(now);
     return {};
 }

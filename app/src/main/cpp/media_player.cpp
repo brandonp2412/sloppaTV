@@ -862,8 +862,7 @@ PlayerStatus NativeMediaPlayer::status() const {
 
     if (haveEof && eof) {
         cachedStatus_ = PlayerStatus::Ended;
-    } else if ((!startedPlayback_ && waitingForCache) ||
-               (!haveDuration && ((haveIdle && idle) || !havePosition))) {
+    } else if ((!startedPlayback_ && waitingForCache) || (!haveDuration && ((haveIdle && idle) || !havePosition))) {
         cachedStatus_ = PlayerStatus::Preparing;
     } else if (havePaused && paused) {
         cachedStatus_ = PlayerStatus::Paused;

@@ -113,8 +113,8 @@ int main() {
     FakeJellyfinSearch remuxSearch;
     RequestEpoch remuxEpoch;
     RequestEpoch remuxSeerrEpoch;
-    SearchFlow<FakeSeerrAsync, FakeJellyfinSearch> remuxFlow(
-        remuxDomain, remuxSeerr, remuxSearch, remuxEpoch, remuxSeerrEpoch);
+    SearchFlow<FakeSeerrAsync, FakeJellyfinSearch> remuxFlow(remuxDomain, remuxSeerr, remuxSearch, remuxEpoch,
+                                                             remuxSeerrEpoch);
     remuxFlow.state().setQuery("mob");
     assert(!remuxFlow.scheduleLive(now, false).clearError);
     assert(!remuxFlow.runDue(true, session(), SeerrEndpoint{}, now + std::chrono::milliseconds(499)).clearError);

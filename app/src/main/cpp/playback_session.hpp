@@ -113,8 +113,9 @@ public:
     void mergeEmbeddedSubtitles(const std::vector<JellyfinSubtitleStream>& discovered) {
         for (const auto& track : discovered) {
             if (track.index < 0) continue;
-            auto existing = std::find_if(activeItem_.subtitles.begin(), activeItem_.subtitles.end(),
-                                         [&](const JellyfinSubtitleStream& entry) { return entry.index == track.index; });
+            auto existing =
+                std::find_if(activeItem_.subtitles.begin(), activeItem_.subtitles.end(),
+                             [&](const JellyfinSubtitleStream& entry) { return entry.index == track.index; });
             if (existing == activeItem_.subtitles.end()) {
                 activeItem_.subtitles.push_back(track);
             } else {

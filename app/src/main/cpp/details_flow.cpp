@@ -73,7 +73,8 @@ std::vector<std::string> DetailsFlow::itemMenuActions(bool seerrRequest, bool ha
 }
 
 DetailsFlowCommand DetailsFlow::handleDetails(DetailsNavigationKey key, bool canAddToSeerr) {
-    const DetailsNavigationAction navigation = DetailsNavigationController::handleDetails(state_, key, item_, canAddToSeerr);
+    const DetailsNavigationAction navigation =
+        DetailsNavigationController::handleDetails(state_, key, item_, canAddToSeerr);
     switch (navigation.type) {
     case DetailsNavigationActionType::Back: {
         auto result = command(DetailsFlowAction::ExitDetails);

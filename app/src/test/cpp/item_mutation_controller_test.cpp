@@ -63,8 +63,8 @@ int main() {
         DetailsScreenState details;
         PlaybackQueueState queue;
         JellyfinItem detail = current;
-        const auto prepared = ItemMutationController::preparePlayedToggle(
-            home, homeState, browse, search, details, queue, detail, false, 9);
+        const auto prepared = ItemMutationController::preparePlayedToggle(home, homeState, browse, search, details,
+                                                                          queue, detail, false, 9);
         assert(prepared.desired);
         assert(prepared.nextUpReplacementIndex == 0);
         assert(home.rows[0].items.empty());

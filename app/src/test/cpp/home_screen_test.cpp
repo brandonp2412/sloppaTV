@@ -299,7 +299,7 @@ int main() {
     // A partially watched rewatch survives a full app restart when the server
     // still reports it as Watched and omits it from Resume.
     const auto directory = std::filesystem::temp_directory_path() /
-        ("sloppatv-resume-test-" + std::to_string(now.time_since_epoch().count()));
+                           ("sloppatv-resume-test-" + std::to_string(now.time_since_epoch().count()));
     std::filesystem::create_directories(directory);
     overlay.persist(directory.string());
     HomeResumeOverlay restored;

@@ -261,7 +261,8 @@ public:
         episodeContextSelection_ = 0;
     }
 
-    [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt, bool canAddToSeerr = false) const {
+    [[nodiscard]] std::vector<std::string> actions(const JellyfinItem& item, bool stillWatchingPrompt,
+                                                   bool canAddToSeerr = false) const {
         const auto ids = detailActionIdsFor(item, canAddToSeerr);
         std::vector<std::string> result;
         result.reserve(ids.size());
@@ -269,7 +270,8 @@ public:
         return result;
     }
 
-    [[nodiscard]] std::optional<DetailsAction> selectedAction(const JellyfinItem& item, bool canAddToSeerr = false) const {
+    [[nodiscard]] std::optional<DetailsAction> selectedAction(const JellyfinItem& item,
+                                                              bool canAddToSeerr = false) const {
         const auto ids = detailActionIdsFor(item, canAddToSeerr);
         if (actionSelection_ < 0 || actionSelection_ >= static_cast<int>(ids.size())) return std::nullopt;
         return ids[static_cast<size_t>(actionSelection_)];

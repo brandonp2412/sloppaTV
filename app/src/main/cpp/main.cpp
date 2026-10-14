@@ -1127,33 +1127,33 @@ private:
 
     void runDueSearchResultPrewarm() {
         auto next = searchResultPrewarm_.takeDue(session_, searchFlow_.state().query(),
-                                                  screen_ == Screen::Search && serverInfo_.isRemux);
+                                                 screen_ == Screen::Search && serverInfo_.isRemux);
         if (!next) return;
         JellyfinSession session = session_;
         const int maxAudioChannels = settings_.maxAudioChannels;
         const auto searchToken = searchPrewarmEpoch_.token(searchPrewarmEpoch_.snapshot());
-        if (!searchPrewarmTasks_.submit([this, session = std::move(session), next = std::move(*next),
-                                         maxAudioChannels, searchToken] {
-                if (!searchToken.active()) return; // Drop queued work for superseded queries.
-                JellyfinItem candidate = next;
-                // Series cards are not playable. Resolve their next episode (or first
-                // available episode) before asking Remux to prepare the stream.
-                if (candidate.type == "Series") {
-                    auto episode = searchPrewarmApi_.getNextUpForSeries(session, candidate.id);
-                    if (!episode.ok || episode.value.id.empty()) {
-                        auto episodes = searchPrewarmApi_.getSeriesEpisodes(session, candidate.id, 1);
-                        if (!episodes.ok || episodes.value.empty()) return;
-                        candidate = std::move(episodes.value.front());
-                    } else {
-                        candidate = std::move(episode.value);
+        if (!searchPrewarmTasks_.submit(
+                [this, session = std::move(session), next = std::move(*next), maxAudioChannels, searchToken] {
+                    if (!searchToken.active()) return; // Drop queued work for superseded queries.
+                    JellyfinItem candidate = next;
+                    // Series cards are not playable. Resolve their next episode (or first
+                    // available episode) before asking Remux to prepare the stream.
+                    if (candidate.type == "Series") {
+                        auto episode = searchPrewarmApi_.getNextUpForSeries(session, candidate.id);
+                        if (!episode.ok || episode.value.id.empty()) {
+                            auto episodes = searchPrewarmApi_.getSeriesEpisodes(session, candidate.id, 1);
+                            if (!episodes.ok || episodes.value.empty()) return;
+                            candidate = std::move(episodes.value.front());
+                        } else {
+                            candidate = std::move(episode.value);
+                        }
                     }
-                }
-                if (!searchToken.active()) return;
-                const auto result = searchPrewarmApi_.prewarmRemuxEpisode(session, candidate, maxAudioChannels);
-                __android_log_print(result.ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, kTag,
-                                    "Remux search prewarm item=%.8s %s%s%s", candidate.id.c_str(),
-                                    result.ok ? "ready" : "failed", result.ok ? "" : ": ", result.error.c_str());
-            }))
+                    if (!searchToken.active()) return;
+                    const auto result = searchPrewarmApi_.prewarmRemuxEpisode(session, candidate, maxAudioChannels);
+                    __android_log_print(result.ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, kTag,
+                                        "Remux search prewarm item=%.8s %s%s%s", candidate.id.c_str(),
+                                        result.ok ? "ready" : "failed", result.ok ? "" : ": ", result.error.c_str());
+                }))
             __android_log_print(ANDROID_LOG_WARN, kTag, "Remux search prewarm queue unavailable");
     }
 
@@ -1457,8 +1457,7 @@ private:
 
     void applyAsyncCompletion(JellyfinSearchCompletion& completion) {
         if (serverInfo_.isRemux && screen_ == Screen::Search && completion.result.ok &&
-            requestEpochs_.search.active(completion.generation) &&
-            searchFlow_.state().query() == completion.query) {
+            requestEpochs_.search.active(completion.generation) && searchFlow_.state().query() == completion.query) {
             searchResultPrewarm_.refresh(session_, completion.query, completion.result.value);
         }
         applyScreenInteractionHostEffects(screenInteractions_.applySearch(searchScreens_.complete(completion)));
@@ -1532,7 +1531,7 @@ private:
             playbackCoordinator_.session().activeItem().id != completion.itemId ||
             playbackCoordinator_.session().activeTarget().mediaSourceId != completion.sourceId)
             return;
-        playerScreenState_.bufferIndicator().setRemotePrefetch(std::move(completion.result.value));
+        playerScreenState_.bufferIndicator().setRemotePrefetch(completion.result.value);
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {

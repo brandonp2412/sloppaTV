@@ -38,6 +38,7 @@ struct CenteredCall {
 
 struct FakeRenderer {
     std::vector<ui_icons::Glyph> icons;
+
     void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
 
     void roundedRect(float x, float y, float width, float, float, int color) {

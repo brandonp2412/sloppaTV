@@ -40,7 +40,7 @@ public:
         const HomeSelectionSnapshot snapshot = state.snapshot(home.rows);
         filter(home);
         const HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home.rows);
-        state.setSelections(std::move(restore.selections));
+        state.setSelections(restore.selections);
         state.setRow(restore.focusedRow);
         state.updateViewport(static_cast<int>(home.rows.size()));
         return hiding;
@@ -57,7 +57,6 @@ private:
     [[nodiscard]] std::string key(const std::string& itemId) const {
         return session_.server + "\n" + session_.userId + "\n" + itemId;
     }
-
 
     const JellyfinSession& session_;
     std::unordered_set<std::string>& hiddenItems_;

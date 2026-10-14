@@ -5,6 +5,7 @@
 
 struct FakeUi {
     std::vector<ui_icons::Glyph> icons;
+
     void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
 
     std::vector<std::string> texts;

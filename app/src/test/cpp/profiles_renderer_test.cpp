@@ -33,9 +33,13 @@ struct SurfaceCall {
 
 struct FakeRenderer {
     std::vector<std::string> initials;
-    void profileInitial(float, float, float, float, float, std::string_view value, int) { initials.emplace_back(value); }
+
+    void profileInitial(float, float, float, float, float, std::string_view value, int) {
+        initials.emplace_back(value);
+    }
 
     std::vector<ui_icons::Glyph> icons;
+
     void icon(ui_icons::Glyph glyph, float, float, float, int) { icons.push_back(glyph); }
 
     void roundedRect(float, float y, float, float, float, int color) { roundedRects.push_back({y, color}); }

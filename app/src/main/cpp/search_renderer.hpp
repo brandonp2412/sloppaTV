@@ -99,9 +99,8 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     }
     if (seerrConfigured) semanticRows.push_back(SearchScreenState::kSeerrRow);
     if (semanticRows.empty()) {
-        renderEmpty("No results found", seerrConfigured
-                                            ? "No Jellyfin or Seerr matches for this search."
-                                            : "No matches on this server.");
+        renderEmpty("No results found",
+                    seerrConfigured ? "No Jellyfin or Seerr matches for this search." : "No matches on this server.");
         return;
     }
 

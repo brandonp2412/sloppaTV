@@ -160,8 +160,8 @@ ItemMutationCompletionEffects ItemMutationController::apply(PlayedCompletion& co
             else
                 nextUpRow->items.insert(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(insertAt),
                                         std::move(*completion.nextUpReplacement));
-            effects.nextUpAnimation = NextUpReplacementAnimation{.index = static_cast<int>(insertAt),
-                                                                 .itemId = replacementId};
+            effects.nextUpAnimation =
+                NextUpReplacementAnimation{.index = static_cast<int>(insertAt), .itemId = replacementId};
         } else if (oldItemStillPresent) {
             nextUpRow->items.erase(nextUpRow->items.begin() + static_cast<std::ptrdiff_t>(replacementIndex));
         }

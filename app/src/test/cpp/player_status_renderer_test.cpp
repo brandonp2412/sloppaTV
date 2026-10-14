@@ -104,7 +104,8 @@ int main() {
     assert(playerWaitStatus(false, false, true, buffer, start + std::chrono::seconds(2)) == "Loading subtitles");
     assert(playerWaitStatus(false, false, false, buffer, start + std::chrono::seconds(2)).empty());
     buffer.observe(false, false, true, false, true, 150000, 0, true, true, start + std::chrono::seconds(5));
-    assert(playerWaitStatus(false, false, true, buffer, start + std::chrono::seconds(5)).find("Buffering from Remux") != std::string::npos);
+    assert(playerWaitStatus(false, false, true, buffer, start + std::chrono::seconds(5)).find("Buffering from Remux") !=
+           std::string::npos);
     assert(playerWaitStatus(false, false, false, buffer, start + std::chrono::seconds(5)) == "Buffering from Remux");
     return 0;
 }

@@ -734,8 +734,8 @@ void Renderer::roundedImageRegion(GLuint texture, float x, float y, float w, flo
     imageRegionTint(texture, x, y, w, h, u0, v0, u1, v1, Color{1.0f, 1.0f, 1.0f, 1.0f}, alpha, radius);
 }
 
-void Renderer::profileInitial(float x, float y, float width, float height, float scale,
-                              std::string_view initial, Color color) {
+void Renderer::profileInitial(float x, float y, float width, float height, float scale, std::string_view initial,
+                              Color color) {
     const std::string display = displayText(initial);
     const unsigned char letter = display.empty() ? '?' : static_cast<unsigned char>(display.front());
     if (!fontTexture_ || letter < 32 || letter > 126) {
@@ -745,13 +745,15 @@ void Renderer::profileInitial(float x, float y, float width, float height, float
     const int index = letter - 32;
     const auto& bounds = fontInkBounds_[index];
     if (bounds[2] == 0 || bounds[3] == 0) return;
-    const float unit = std::min({10.0f / 64.0f * scale * textScale_,
-                                width / static_cast<float>(bounds[2]), height / static_cast<float>(bounds[3])});
-    const float inkWidth = bounds[2] * unit, inkHeight = bounds[3] * unit;
+    const float unit = std::min({10.0f / 64.0f * scale * textScale_, width / static_cast<float>(bounds[2]),
+                                 height / static_cast<float>(bounds[3])});
+    const float inkWidth = static_cast<float>(bounds[2]) * unit;
+    const float inkHeight = static_cast<float>(bounds[3]) * unit;
     const float u = static_cast<float>(index % 16 * 64 + bounds[0]) / 1024.0f;
     const float v = static_cast<float>(index / 16 * 64 + bounds[1]) / 384.0f;
-    imageRegionTint(fontTexture_, x + (width - inkWidth) * 0.5f, y + (height - inkHeight) * 0.5f,
-                    inkWidth, inkHeight, u, v, u + bounds[2] / 1024.0f, v + bounds[3] / 384.0f, color, 1.0f, 0.0f);
+    imageRegionTint(fontTexture_, x + (width - inkWidth) * 0.5f, y + (height - inkHeight) * 0.5f, inkWidth, inkHeight,
+                    u, v, u + static_cast<float>(bounds[2]) / 1024.0f, v + static_cast<float>(bounds[3]) / 384.0f,
+                    color, 1.0f, 0.0f);
 }
 
 void Renderer::icon(ui_icons::Glyph glyph, float x, float y, float size, Color color) {
@@ -761,8 +763,7 @@ void Renderer::icon(ui_icons::Glyph glyph, float x, float y, float size, Color c
         std::vector<uint8_t> pixels(ui_icons::atlasWidth * ui_icons::atlasHeight * 4, 255);
         size_t pixel = 0;
         for (size_t i = 0; i < sizeof(ui_icons::atlasRuns); i += 2) {
-            for (int n = 0; n < ui_icons::atlasRuns[i]; ++n)
-                pixels[(pixel++) * 4 + 3] = ui_icons::atlasRuns[i + 1];
+            for (int n = 0; n < ui_icons::atlasRuns[i]; ++n) pixels[(pixel++) * 4 + 3] = ui_icons::atlasRuns[i + 1];
         }
         iconTexture_ = createTexture(ui_icons::atlasWidth, ui_icons::atlasHeight, pixels.data());
         if (!iconTexture_) return;
@@ -773,7 +774,8 @@ void Renderer::icon(ui_icons::Glyph glyph, float x, float y, float size, Color c
     const int index = static_cast<int>(glyph);
     const float u = static_cast<float>(index % 4) / 4.0f;
     const float v = static_cast<float>(index / 4) * 96.0f / ui_icons::atlasHeight;
-    imageRegionTint(iconTexture_, x, y, size, size, u, v, u + 0.25f, v + 96.0f / ui_icons::atlasHeight, color, 1.0f, 0.0f);
+    imageRegionTint(iconTexture_, x, y, size, size, u, v, u + 0.25f, v + 96.0f / ui_icons::atlasHeight, color, 1.0f,
+                    0.0f);
 }
 
 void Renderer::imageRegionTint(GLuint texture, float x, float y, float w, float h, float u0, float v0, float u1,

@@ -46,8 +46,9 @@ public:
         std::unordered_set<std::string> seen;
         for (const JellyfinItem& item : results) {
             if (pending_.size() >= kMaxCandidates) break;
-            if ((item.type != "Movie" && item.type != "Series" && item.type != "Episode") ||
-                item.id.empty() || !item.externalSource.empty() || !seen.insert(item.id).second) continue;
+            if ((item.type != "Movie" && item.type != "Series" && item.type != "Episode") || item.id.empty() ||
+                !item.externalSource.empty() || !seen.insert(item.id).second)
+                continue;
             const auto previous = attempted_.find(item.id);
             if (previous != attempted_.end() && now - previous->second < kCooldown) continue;
             pending_.push_back(item);
@@ -57,8 +58,8 @@ public:
 
     [[nodiscard]] std::optional<JellyfinItem> takeDue(const JellyfinSession& session, std::string_view query,
                                                       bool searchingRemux, TimePoint now = Clock::now()) {
-        if (!searchingRemux || query != query_ ||
-            session.server + "\n" + session.userId != identity_ || now < nextDue_ || pending_.empty())
+        if (!searchingRemux || query != query_ || session.server + "\n" + session.userId != identity_ ||
+            now < nextDue_ || pending_.empty())
             return std::nullopt;
         JellyfinItem candidate = std::move(pending_.front());
         pending_.erase(pending_.begin());

@@ -70,6 +70,7 @@ public:
     }
 
     void setSeerrRequestSearch(bool enabled) { seerrRequestSearch_ = enabled; }
+
     [[nodiscard]] bool seerrRequestSearch() const { return seerrRequestSearch_; }
 
     [[nodiscard]] const std::string& query() const { return query_; }

@@ -55,7 +55,8 @@ public:
             .homeLoading = homeLoading_,
             .mutationLoading = contentMutation_.loading(),
             .seerrConfigured = seerrApp_.endpoint().configured(),
-            .seerrSearchEnabled = (!serverInfo_.isRemux || searchFlow_.state().seerrRequestSearch()) && seerrApp_.endpoint().configured(),
+            .seerrSearchEnabled =
+                (!serverInfo_.isRemux || searchFlow_.state().seerrRequestSearch()) && seerrApp_.endpoint().configured(),
             .systemSearchInputActive = textInput_.mode() == kTextInputSearch,
             .systemSettingsSearchActive = textInput_.mode() == kTextInputSettingsSearch,
             .systemSeerrApiKeyActive = textInput_.mode() == kTextInputSeerrApiKey,
