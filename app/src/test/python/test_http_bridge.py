@@ -219,8 +219,13 @@ public final class HttpBridgeHarness {
             with self.subTest(method=method, path=path):
                 completed = subprocess.run(
                     [
-                        "java", "-cp", str(self.classes), "app.sloppatv.HttpBridgeHarness",
-                        "POLICY", method, self.base_url + path,
+                        "java",
+                        "-cp",
+                        str(self.classes),
+                        "app.sloppatv.HttpBridgeHarness",
+                        "POLICY",
+                        method,
+                        self.base_url + path,
                     ],
                     check=True,
                     cwd=ROOT,
