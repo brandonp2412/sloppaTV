@@ -328,7 +328,6 @@ class WaydroidToolingTest(unittest.TestCase):
             ("05-movie-browse", 2),
             ("09-item-menu", 2),
             ("10-player-cc-video", 2),
-            ("12-series-browse", 3),
         ):
             capture_index = next(
                 index
@@ -342,6 +341,16 @@ class WaydroidToolingTest(unittest.TestCase):
                 step["key"] for step in suite["steps"][restart_index + 1 : capture_index] if step["action"] == "key"
             ]
             self.assertEqual(keys[:down_count], ["DPAD_DOWN"] * down_count, capture_name)
+        series_capture = next(
+            i
+            for i, step in enumerate(suite["steps"])
+            if step.get("action") == "capture" and step.get("name") == "12-series-browse"
+        )
+        series_restart = max(i for i, step in enumerate(suite["steps"][:series_capture]) if step["action"] == "restart")
+        series_keys = [
+            step["key"] for step in suite["steps"][series_restart + 1 : series_capture] if step["action"] == "key"
+        ]
+        self.assertEqual(series_keys, ["DPAD_UP"] * 8 + ["DPAD_DOWN"] * 3 + ["DPAD_RIGHT", "DPAD_CENTER"])
         for name, expected_centers in (
             ("05-movie-browse", 1),
             ("06-movie-details", 2),
