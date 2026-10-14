@@ -65,17 +65,24 @@ public:
     }
 
     [[nodiscard]] std::string statusText(TimePoint now = Clock::now()) const {
+        const bool remoteProgressFresh =
+            remux_ && remoteReceivedAt_ != TimePoint{} && now - remoteReceivedAt_ <= std::chrono::seconds(20) &&
+            remotePrefetch_.livePeers > 0 && remotePrefetch_.downloadMiBps > 0.0;
         switch (phase_) {
         case PlayerBufferPhase::Resolving:
             return episode_ ? (remux_ ? "Resolving Remux episode stream" : "Resolving episode stream")
                             : (remux_ ? "Resolving Remux stream" : "Resolving stream");
         case PlayerBufferPhase::Connecting:
-            if (phaseStarted_ != TimePoint{} && now - phaseStarted_ >= std::chrono::seconds(12))
+            if (phaseStarted_ != TimePoint{} && now - phaseStarted_ >= std::chrono::seconds(12)) {
+                if (remoteProgressFresh) return "Buffering—downloading slowly";
                 return remux_ ? "Waiting for Remux stream data" : "Waiting for video data";
+            }
             return remux_ ? "Opening Remux stream" : "Opening video stream";
         case PlayerBufferPhase::Buffering:
+            if (remoteProgressFresh) return "Buffering—downloading slowly";
             return remux_ ? "Buffering from Remux" : "Buffering video";
         case PlayerBufferPhase::Stalled:
+            if (remoteProgressFresh) return "Buffering—downloading slowly";
             return remux_ ? "Remux stream stalled - waiting for data" : "Stream stalled - waiting for data";
         case PlayerBufferPhase::Playing:
             return {};

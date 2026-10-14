@@ -862,8 +862,11 @@ PlayerStatus NativeMediaPlayer::status() const {
 
     if (haveEof && eof) {
         cachedStatus_ = PlayerStatus::Ended;
-    } else if ((!startedPlayback_ && waitingForCache) ||
-               (!haveDuration && ((haveIdle && idle) || !havePosition))) {
+    } else if (waitingForCache || (!haveDuration && ((haveIdle && idle) || !havePosition))) {
+        // A cache underrun is buffering even after playback has started.
+        // Reporting Playing here leaves the media session at STATE_PLAYING,
+        // prevents Remux's stall/fallback timer from running, and can present a
+        // frozen frame as active playback.
         cachedStatus_ = PlayerStatus::Preparing;
     } else if (havePaused && paused) {
         cachedStatus_ = PlayerStatus::Paused;
