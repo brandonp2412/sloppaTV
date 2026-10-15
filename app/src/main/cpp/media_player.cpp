@@ -343,7 +343,13 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
         durations.maxBufferMs > 0 ? std::to_string(std::max(30, durations.maxBufferMs / 1000)) : "120";
 
     if (decodeMode == PlaybackDecodeMode::Software) {
-        if (!setOptionLocked("vo", "gpu", true, &error) || !setOptionLocked("gpu-context", "android", true, &error) ||
+        // The legacy gpu VO can fail its software-frame upload path on Android
+        // environments where MediaCodec is unavailable (notably Waydroid),
+        // leaving audio running with no decoded video. gpu-next/libplacebo is
+        // included in our embedded mpv build and accepts the software yuv420p
+        // fallback while keeping the normal mediacodec_embed path untouched.
+        if (!setOptionLocked("vo", "gpu-next", true, &error) ||
+            !setOptionLocked("gpu-context", "android", true, &error) ||
             !setOptionLocked("hwdec", "no", true, &error)) {
             return false;
         }
@@ -813,6 +819,10 @@ PlayerStatus NativeMediaPlayer::status() const {
             if (end->error < 0) {
                 const char* message = symbols_->errorString(end->error);
                 error_ = std::string("mpv playback ended with error: ") + (message ? message : "unknown");
+                cachedStatus_ = PlayerStatus::Error;
+                __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error_.c_str());
+            } else if (!startedPlayback_) {
+                error_ = "Playback ended before media started";
                 cachedStatus_ = PlayerStatus::Error;
                 __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error_.c_str());
             } else {
