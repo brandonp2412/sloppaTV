@@ -31,15 +31,18 @@ constexpr int kMpvFormatNodeMap = 8;
 constexpr int kMpvFormatByteArray = 9;
 
 struct MpvNode;
+
 struct MpvNodeList {
     int num;
     MpvNode* values;
     char** keys;
 };
+
 struct MpvByteArray {
     void* data;
     size_t size;
 };
+
 struct MpvNode {
     union {
         char* string;
@@ -49,6 +52,7 @@ struct MpvNode {
         MpvNodeList* list;
         MpvByteArray* byteArray;
     } value;
+
     int format;
 };
 #endif
@@ -320,8 +324,7 @@ bool NativeMediaPlayer::loadLibrariesLocked(std::string& error) {
     symbols->command = loadSymbol<MpvSymbols::Command>(mpvLibrary_, "mpv_command");
 #ifdef SLOPPATV_E2E_TELEMETRY
     symbols->commandRet = loadSymbol<MpvSymbols::CommandRet>(mpvLibrary_, "mpv_command_ret");
-    symbols->freeNodeContents =
-        loadSymbol<MpvSymbols::FreeNodeContents>(mpvLibrary_, "mpv_free_node_contents");
+    symbols->freeNodeContents = loadSymbol<MpvSymbols::FreeNodeContents>(mpvLibrary_, "mpv_free_node_contents");
 #endif
     symbols->errorString = loadSymbol<MpvSymbols::ErrorString>(mpvLibrary_, "mpv_error_string");
     symbols->free = loadSymbol<MpvSymbols::MpvFree>(mpvLibrary_, "mpv_free");
@@ -859,11 +862,16 @@ void NativeMediaPlayer::logDecodedFrameTelemetryLocked(std::chrono::steady_clock
             if (!map->keys || !map->keys[i]) continue;
             const std::string key(map->keys[i]);
             const MpvNode& value = map->values[i];
-            if (key == "w" && value.format == kMpvFormatInt64) width = value.value.int64;
-            else if (key == "h" && value.format == kMpvFormatInt64) height = value.value.int64;
-            else if (key == "stride" && value.format == kMpvFormatInt64) stride = value.value.int64;
-            else if (key == "format" && value.format == kMpvFormatString && value.value.string) format = value.value.string;
-            else if (key == "data" && value.format == kMpvFormatByteArray) bytes = value.value.byteArray;
+            if (key == "w" && value.format == kMpvFormatInt64)
+                width = value.value.int64;
+            else if (key == "h" && value.format == kMpvFormatInt64)
+                height = value.value.int64;
+            else if (key == "stride" && value.format == kMpvFormatInt64)
+                stride = value.value.int64;
+            else if (key == "format" && value.format == kMpvFormatString && value.value.string)
+                format = value.value.string;
+            else if (key == "data" && value.format == kMpvFormatByteArray)
+                bytes = value.value.byteArray;
         }
     }
 

@@ -65,9 +65,9 @@ public:
     }
 
     [[nodiscard]] std::string statusText(TimePoint now = Clock::now()) const {
-        const bool remoteProgressFresh =
-            remux_ && remoteReceivedAt_ != TimePoint{} && now - remoteReceivedAt_ <= std::chrono::seconds(20) &&
-            remotePrefetch_.livePeers > 0 && remotePrefetch_.downloadMiBps > 0.0;
+        const bool remoteProgressFresh = remux_ && remoteReceivedAt_ != TimePoint{} &&
+                                         now - remoteReceivedAt_ <= std::chrono::seconds(20) &&
+                                         remotePrefetch_.livePeers > 0 && remotePrefetch_.downloadMiBps > 0.0;
         switch (phase_) {
         case PlayerBufferPhase::Resolving:
             return episode_ ? (remux_ ? "Resolving Remux episode stream" : "Resolving episode stream")

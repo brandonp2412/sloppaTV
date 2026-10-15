@@ -151,8 +151,7 @@ public:
         const auto now = std::chrono::steady_clock::now();
         const PlaybackTelemetryReadPlan plan = coordinator_.consumeTelemetryRead(now, force, screenState_.durationMs());
         if (!plan.read) return;
-        screenState_.applyObservedPosition(
-            coordinator_.logicalPositionFromPlayerPosition(player_.positionMs()), now);
+        screenState_.applyObservedPosition(coordinator_.logicalPositionFromPlayerPosition(player_.positionMs()), now);
         if (plan.knownDurationMs > 0) {
             screenState_.setDurationMs(plan.knownDurationMs);
         } else if (plan.probeDuration) {
@@ -344,12 +343,10 @@ public:
     void startResolvedTarget(int positionOverrideMs = -1) {
         const auto now = std::chrono::steady_clock::now();
         const PlaybackPlayerStartContext start = coordinator_.playerStartContext();
-        const int logicalStartPositionMs =
-            positionOverrideMs >= 0 ? positionOverrideMs : start.logicalStartPositionMs;
-        const int playerStartPositionMs =
-            positionOverrideMs >= 0
-                ? coordinator_.playerPositionFromLogicalPosition(logicalStartPositionMs)
-                : start.playerStartPositionMs;
+        const int logicalStartPositionMs = positionOverrideMs >= 0 ? positionOverrideMs : start.logicalStartPositionMs;
+        const int playerStartPositionMs = positionOverrideMs >= 0
+                                              ? coordinator_.playerPositionFromLogicalPosition(logicalStartPositionMs)
+                                              : start.playerStartPositionMs;
         coordinator_.beginPreparing(now);
         embeddedSubtitleDiscoveryDone_ = false;
         player_.startAsync(start.url, videoSurface_.surface(), playerStartPositionMs, settings_.playbackBufferPreset,
@@ -687,8 +684,7 @@ public:
                 pendingSeekTargetMs >= 0 ? pendingSeekTargetMs : screenState_.recentSeekTargetMs();
             if (recoveryTargetMs >= 0) {
                 const auto now = std::chrono::steady_clock::now();
-                const int observedPositionMs =
-                    coordinator_.logicalPositionFromPlayerPosition(player_.positionMs());
+                const int observedPositionMs = coordinator_.logicalPositionFromPlayerPosition(player_.positionMs());
                 const bool mediaSeekable = player_.seekable();
                 const bool seekFailureMatured = pendingSeekTargetMs >= 0
                                                     ? screenState_.pendingSeekAppearsFailed(observedPositionMs, now)

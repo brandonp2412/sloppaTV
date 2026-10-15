@@ -24,7 +24,6 @@ struct PlaybackResolutionResult {
     ApiValueResult<PlaybackTarget> target;
 };
 
-
 inline JellyfinItem playbackNegotiationItem(const JellyfinItem& item, bool heterogeneousRemuxPool) {
     JellyfinItem negotiation = item;
     if (!heterogeneousRemuxPool) return negotiation;
@@ -60,8 +59,7 @@ PlaybackResolutionResult resolvePreferredPlayback(Client& client, const Jellyfin
     }
     const auto tracks = selectPlaybackTracks(item, options.audioLanguagePreference, options.subtitleLanguagePreference,
                                              options.trackPolicy);
-    const JellyfinItem negotiation =
-        playbackNegotiationItem(item, options.isRemux && item.mediaSourceId.empty());
+    const JellyfinItem negotiation = playbackNegotiationItem(item, options.isRemux && item.mediaSourceId.empty());
     auto target = client.resolvePlayback(session, negotiation, options.maxStreamingBitrate, options.maxAudioChannels,
                                          options.overrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
     return {

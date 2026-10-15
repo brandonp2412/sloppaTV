@@ -463,8 +463,7 @@ public:
     }
 
     [[nodiscard]] int logicalPositionFromPlayerPosition(int playerPositionMs) const {
-        return clampSeekPositionMs(
-            static_cast<int64_t>(playerTimelineBaseMs()) + std::max(0, playerPositionMs));
+        return clampSeekPositionMs(static_cast<int64_t>(playerTimelineBaseMs()) + std::max(0, playerPositionMs));
     }
 
     [[nodiscard]] int playerPositionFromLogicalPosition(int logicalPositionMs) const {
@@ -776,8 +775,7 @@ public:
         return PlaybackPlayerStartContext{
             .url = target.url,
             .logicalStartPositionMs = logicalStartPositionMs,
-            .playerStartPositionMs =
-                target.playMethod == PlaybackMethod::DirectPlay ? logicalStartPositionMs : 0,
+            .playerStartPositionMs = target.playMethod == PlaybackMethod::DirectPlay ? logicalStartPositionMs : 0,
             .audioOrdinal = playerAudioOrdinal(target, item),
             .subtitleStreamIndex =
                 mode == PlaybackPlayerStartMode::WindowRestore && target.playMethod == PlaybackMethod::DirectPlay

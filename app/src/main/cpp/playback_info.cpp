@@ -201,17 +201,18 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
                 },
                 overrides);
             if (firstRoute == PlaybackServerRoute::Unavailable) {
-                const auto usable = std::find_if(std::next(candidates.begin()), candidates.end(), [&](const auto& candidate) {
-                    const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
-                    return choosePlaybackServerRoute(
-                               {
-                                   .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
-                                   .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
-                                   .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
-                                   .transcodingUrl = transcodingUrl,
-                               },
-                               overrides) != PlaybackServerRoute::Unavailable;
-                });
+                const auto usable =
+                    std::find_if(std::next(candidates.begin()), candidates.end(), [&](const auto& candidate) {
+                        const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
+                        return choosePlaybackServerRoute(
+                                   {
+                                       .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
+                                       .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
+                                       .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
+                                       .transcodingUrl = transcodingUrl,
+                                   },
+                                   overrides) != PlaybackServerRoute::Unavailable;
+                    });
                 if (usable != candidates.end()) source = *usable;
             }
         }

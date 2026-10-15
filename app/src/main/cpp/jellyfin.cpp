@@ -1188,10 +1188,8 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
     if (route == PlaybackServerRoute::DirectPlay) {
         target.url = session.server + "/Videos/" + item.id + "/stream." + container +
                      "?Static=true&MediaSourceId=" + urlEncode(target.mediaSourceId);
-        if (!target.playSessionId.empty())
-            target.url += "&PlaySessionId=" + urlEncode(target.playSessionId);
-        if (!session.deviceId.empty())
-            target.url += "&DeviceId=" + urlEncode(session.deviceId);
+        if (!target.playSessionId.empty()) target.url += "&PlaySessionId=" + urlEncode(target.playSessionId);
+        if (!session.deviceId.empty()) target.url += "&DeviceId=" + urlEncode(session.deviceId);
         target.url += "&api_key=" + urlEncode(session.token);
         target.playMethod = PlaybackMethod::DirectPlay;
     } else if (route == PlaybackServerRoute::DirectStream || route == PlaybackServerRoute::Transcode) {
