@@ -151,7 +151,8 @@ public:
         const auto now = std::chrono::steady_clock::now();
         const PlaybackTelemetryReadPlan plan = coordinator_.consumeTelemetryRead(now, force, screenState_.durationMs());
         if (!plan.read) return;
-        screenState_.applyObservedPosition(player_.positionMs(), now);
+        screenState_.applyObservedPosition(
+            coordinator_.logicalPositionFromPlayerPosition(player_.positionMs()), now);
         if (plan.knownDurationMs > 0) {
             screenState_.setDurationMs(plan.knownDurationMs);
         } else if (plan.probeDuration) {
@@ -279,7 +280,12 @@ public:
 
         if (plan.directPlayStream) {
             const JellyfinSubtitleStream& selected = *plan.directPlayStream;
-            if (usePlayerDiscoveredTextTrack(selected, coordinator_.session().activeTarget().playMethod) &&
+            const PlaybackMethod activeMethod = coordinator_.session().activeTarget().playMethod;
+            const bool canCompositeEmbeddedBitmap =
+                activeDecodeMode() == PlaybackDecodeMode::Software && selected.discoveredByPlayer &&
+                activeMethod == PlaybackMethod::DirectPlay &&
+                canSwitchEmbeddedSubtitleInPlayer(plan.strategy, selected.isExternal);
+            if ((usePlayerDiscoveredTextTrack(selected, activeMethod) || canCompositeEmbeddedBitmap) &&
                 player_.selectEmbeddedSubtitleStream(selected.index)) {
                 coordinator_.selectSubtitleStream(selected.index);
                 screenState_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(4));
@@ -307,14 +313,16 @@ public:
         }
 
         refreshTelemetry(true);
-        if (!restartAt(stream, screenState_.positionMs(), cycle.audioStreamIndex, plan.subtitleStreamIndex))
+        const std::string currentMediaSourceId = coordinator_.session().activeTarget().mediaSourceId;
+        if (!restartAt(stream, screenState_.positionMs(), cycle.audioStreamIndex, plan.subtitleStreamIndex,
+                       currentMediaSourceId))
             return PlaybackRuntimeNotice::SubtitleStartFailed;
         return PlaybackRuntimeNotice::None;
     }
 
     void seekTo(int positionMs) {
         const int targetMs = std::max(0, positionMs);
-        player_.seekTo(targetMs);
+        player_.seekTo(coordinator_.playerPositionFromLogicalPosition(targetMs));
         screenState_.beginSeek(targetMs, std::chrono::steady_clock::now());
     }
 
@@ -336,13 +344,18 @@ public:
     void startResolvedTarget(int positionOverrideMs = -1) {
         const auto now = std::chrono::steady_clock::now();
         const PlaybackPlayerStartContext start = coordinator_.playerStartContext();
-        const int startPositionMs = positionOverrideMs >= 0 ? positionOverrideMs : start.startPositionMs;
+        const int logicalStartPositionMs =
+            positionOverrideMs >= 0 ? positionOverrideMs : start.logicalStartPositionMs;
+        const int playerStartPositionMs =
+            positionOverrideMs >= 0
+                ? coordinator_.playerPositionFromLogicalPosition(logicalStartPositionMs)
+                : start.playerStartPositionMs;
         coordinator_.beginPreparing(now);
         embeddedSubtitleDiscoveryDone_ = false;
-        player_.startAsync(start.url, videoSurface_.surface(), startPositionMs, settings_.playbackBufferPreset,
+        player_.startAsync(start.url, videoSurface_.surface(), playerStartPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
                            start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels, isRemuxServer());
-        if (startPositionMs > 0) screenState_.beginInitialPosition(startPositionMs, now);
+        if (logicalStartPositionMs > 0) screenState_.beginInitialPosition(logicalStartPositionMs, now);
     }
 
     bool retryWithSoftwareDecode(bool rendererReady) {
@@ -674,7 +687,8 @@ public:
                 pendingSeekTargetMs >= 0 ? pendingSeekTargetMs : screenState_.recentSeekTargetMs();
             if (recoveryTargetMs >= 0) {
                 const auto now = std::chrono::steady_clock::now();
-                const int observedPositionMs = player_.positionMs();
+                const int observedPositionMs =
+                    coordinator_.logicalPositionFromPlayerPosition(player_.positionMs());
                 const bool mediaSeekable = player_.seekable();
                 const bool seekFailureMatured = pendingSeekTargetMs >= 0
                                                     ? screenState_.pendingSeekAppearsFailed(observedPositionMs, now)

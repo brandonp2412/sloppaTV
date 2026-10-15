@@ -97,8 +97,15 @@ public:
         return tasks_.submit([this, session = std::move(session), selected = std::move(selected),
                               options = std::move(options), generation, queuedPlaybackIndex]() mutable {
             JellyfinItem playable = selected;
-            if (selected.type == "Series") {
-                auto next = client_.getNextUpForSeries(session, selected.id);
+            if (selected.type != "Series") {
+                // Deep links and some cached navigation entries can carry only an item ID.
+                // Hydrate the selection before PlaybackInfo so Remux sees the real media
+                // metadata/source pool instead of an ID-only placeholder.
+                auto detailed = client_.getItem(session, selected.id);
+                if (detailed.ok) playable = std::move(detailed.value);
+            }
+            if (playable.type == "Series") {
+                auto next = client_.getNextUpForSeries(session, playable.id);
                 if (!next.ok) {
                     if (!epoch_.active(generation)) return;
                     ApiValueResult<PlaybackTarget> failed;
@@ -125,8 +132,10 @@ public:
             }
             const auto tracks = selectPlaybackTracks(playable, options.audioLanguagePreference,
                                                      options.subtitleLanguagePreference, options.trackPolicy);
+            const JellyfinItem negotiation =
+                playbackNegotiationItem(playable, options.isRemux && playable.mediaSourceId.empty());
             auto target =
-                client_.resolvePlayback(session, playable, options.maxStreamingBitrate, options.maxAudioChannels,
+                client_.resolvePlayback(session, negotiation, options.maxStreamingBitrate, options.maxAudioChannels,
                                         options.overrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
             if (!epoch_.active(generation)) return;
             completions_.push(BeginPlaybackCompletion{

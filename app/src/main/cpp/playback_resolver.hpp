@@ -24,6 +24,26 @@ struct PlaybackResolutionResult {
     ApiValueResult<PlaybackTarget> target;
 };
 
+
+inline JellyfinItem playbackNegotiationItem(const JellyfinItem& item, bool heterogeneousRemuxPool) {
+    JellyfinItem negotiation = item;
+    if (!heterogeneousRemuxPool) return negotiation;
+
+    // Remux can return many torrent versions with different codecs, profiles,
+    // HDR modes, and resolutions. The hydrated item's video fields describe
+    // only one source, so using them to prune the DeviceProfile can disable
+    // direct play for a different healthy fallback before Remux evaluates it.
+    negotiation.videoCodec.clear();
+    negotiation.videoProfile.clear();
+    negotiation.videoRangeType.clear();
+    negotiation.videoBitDepth = 0;
+    negotiation.videoLevel = 0;
+    negotiation.videoWidth = 0;
+    negotiation.videoHeight = 0;
+    negotiation.videoFrameRate = 0.0f;
+    return negotiation;
+}
+
 template <typename Client>
 PlaybackResolutionResult resolvePreferredPlayback(Client& client, const JellyfinSession& session, JellyfinItem item,
                                                   const PlaybackResolutionOptions& options) {
@@ -40,7 +60,9 @@ PlaybackResolutionResult resolvePreferredPlayback(Client& client, const Jellyfin
     }
     const auto tracks = selectPlaybackTracks(item, options.audioLanguagePreference, options.subtitleLanguagePreference,
                                              options.trackPolicy);
-    auto target = client.resolvePlayback(session, item, options.maxStreamingBitrate, options.maxAudioChannels,
+    const JellyfinItem negotiation =
+        playbackNegotiationItem(item, options.isRemux && item.mediaSourceId.empty());
+    auto target = client.resolvePlayback(session, negotiation, options.maxStreamingBitrate, options.maxAudioChannels,
                                          options.overrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
     return {
         .item = std::move(item),

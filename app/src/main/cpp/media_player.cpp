@@ -26,6 +26,33 @@ constexpr int kMpvFormatDouble = 5;
 constexpr int kMpvEventLogMessage = 2;
 constexpr int kMpvEventEndFile = 7;
 
+#ifdef SLOPPATV_E2E_TELEMETRY
+constexpr int kMpvFormatNodeMap = 8;
+constexpr int kMpvFormatByteArray = 9;
+
+struct MpvNode;
+struct MpvNodeList {
+    int num;
+    MpvNode* values;
+    char** keys;
+};
+struct MpvByteArray {
+    void* data;
+    size_t size;
+};
+struct MpvNode {
+    union {
+        char* string;
+        int flag;
+        int64_t int64;
+        double doubleValue;
+        MpvNodeList* list;
+        MpvByteArray* byteArray;
+    } value;
+    int format;
+};
+#endif
+
 struct MpvEvent {
     int eventId;
     int error;
@@ -91,6 +118,10 @@ struct MpvSymbols {
     using SetProperty = int (*)(void*, const char*, int, void*);
     using GetProperty = int (*)(void*, const char*, int, void*);
     using Command = int (*)(void*, const char* const*);
+#ifdef SLOPPATV_E2E_TELEMETRY
+    using CommandRet = int (*)(void*, const char* const*, MpvNode*);
+    using FreeNodeContents = void (*)(MpvNode*);
+#endif
     using ErrorString = const char* (*)(int);
     using MpvFree = void (*)(void*);
     using RequestLogMessages = int (*)(void*, const char*);
@@ -104,14 +135,23 @@ struct MpvSymbols {
     SetProperty setProperty = nullptr;
     GetProperty getProperty = nullptr;
     Command command = nullptr;
+#ifdef SLOPPATV_E2E_TELEMETRY
+    CommandRet commandRet = nullptr;
+    FreeNodeContents freeNodeContents = nullptr;
+#endif
     ErrorString errorString = nullptr;
     MpvFree free = nullptr;
     RequestLogMessages requestLogMessages = nullptr;
     WaitEvent waitEvent = nullptr;
 
     [[nodiscard]] bool complete() const {
-        return create && initialize && terminateDestroy && setOptionString && setOption && setProperty && getProperty &&
-               command && errorString && free && requestLogMessages && waitEvent;
+        const bool base = create && initialize && terminateDestroy && setOptionString && setOption && setProperty &&
+                          getProperty && command && errorString && free && requestLogMessages && waitEvent;
+#ifdef SLOPPATV_E2E_TELEMETRY
+        return base && commandRet && freeNodeContents;
+#else
+        return base;
+#endif
     }
 };
 
@@ -278,6 +318,11 @@ bool NativeMediaPlayer::loadLibrariesLocked(std::string& error) {
     symbols->setProperty = loadSymbol<MpvSymbols::SetProperty>(mpvLibrary_, "mpv_set_property");
     symbols->getProperty = loadSymbol<MpvSymbols::GetProperty>(mpvLibrary_, "mpv_get_property");
     symbols->command = loadSymbol<MpvSymbols::Command>(mpvLibrary_, "mpv_command");
+#ifdef SLOPPATV_E2E_TELEMETRY
+    symbols->commandRet = loadSymbol<MpvSymbols::CommandRet>(mpvLibrary_, "mpv_command_ret");
+    symbols->freeNodeContents =
+        loadSymbol<MpvSymbols::FreeNodeContents>(mpvLibrary_, "mpv_free_node_contents");
+#endif
     symbols->errorString = loadSymbol<MpvSymbols::ErrorString>(mpvLibrary_, "mpv_error_string");
     symbols->free = loadSymbol<MpvSymbols::MpvFree>(mpvLibrary_, "mpv_free");
     symbols->requestLogMessages = loadSymbol<MpvSymbols::RequestLogMessages>(mpvLibrary_, "mpv_request_log_messages");
@@ -466,10 +511,15 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     pendingSubtitleOrdinal_ = -1;
     pendingSubtitleOff_ = false;
     telemetryLogged_ = false;
+#ifdef SLOPPATV_E2E_TELEMETRY
+    decodedFrameTelemetrySamples_ = 0;
+    lastDecodedFrameTelemetry_ = {};
+#endif
     hardwareDecoderFailed_ = false;
     serverHttpErrorCount_ = 0;
     cachedStatus_ = PlayerStatus::Idle;
     startedPlayback_ = false;
+    readinessPositionSeconds_ = -1.0;
     cachedVideoWidth_ = 0;
     cachedVideoHeight_ = 0;
     cachedSubtitleText_.clear();
@@ -772,6 +822,78 @@ void NativeMediaPlayer::logPlaybackTelemetryLocked() const {
     telemetryLogged_ = true;
 }
 
+#ifdef SLOPPATV_E2E_TELEMETRY
+void NativeMediaPlayer::logDecodedFrameTelemetryLocked(std::chrono::steady_clock::time_point now) const {
+    if (!mpv_ || !symbols_ || !symbols_->commandRet || !symbols_->freeNodeContents ||
+        decodedFrameTelemetrySamples_ >= 3) {
+        return;
+    }
+    if (lastDecodedFrameTelemetry_ != std::chrono::steady_clock::time_point{} &&
+        now - lastDecodedFrameTelemetry_ < std::chrono::milliseconds(1500)) {
+        return;
+    }
+    lastDecodedFrameTelemetry_ = now;
+
+    const char* args[] = {"screenshot-raw", "video", nullptr};
+    MpvNode result{};
+    const int rc = symbols_->commandRet(mpv_, args, &result);
+    if (rc < 0) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "E2E decoded-frame sample failed rc=%d", rc);
+        return;
+    }
+
+    int64_t width = 0;
+    int64_t height = 0;
+    int64_t stride = 0;
+    const char* format = "unknown";
+    const MpvByteArray* bytes = nullptr;
+    if (result.format == kMpvFormatNodeMap && result.value.list) {
+        const MpvNodeList* map = result.value.list;
+        for (int i = 0; i < map->num; ++i) {
+            if (!map->keys || !map->keys[i]) continue;
+            const std::string key(map->keys[i]);
+            const MpvNode& value = map->values[i];
+            if (key == "w" && value.format == kMpvFormatInt64) width = value.value.int64;
+            else if (key == "h" && value.format == kMpvFormatInt64) height = value.value.int64;
+            else if (key == "stride" && value.format == kMpvFormatInt64) stride = value.value.int64;
+            else if (key == "format" && value.format == kMpvFormatString && value.value.string) format = value.value.string;
+            else if (key == "data" && value.format == kMpvFormatByteArray) bytes = value.value.byteArray;
+        }
+    }
+
+    if (bytes && bytes->data && bytes->size > 0) {
+        const auto* data = static_cast<const uint8_t*>(bytes->data);
+        const size_t step = std::max<size_t>(1, bytes->size / 131072);
+        uint64_t hash = 1469598103934665603ULL;
+        uint8_t minByte = 255;
+        uint8_t maxByte = 0;
+        size_t sampled = 0;
+        size_t nonzero = 0;
+        for (size_t i = 0; i < bytes->size; i += step) {
+            const uint8_t value = data[i];
+            hash ^= static_cast<uint64_t>(value);
+            hash *= 1099511628211ULL;
+            minByte = std::min(minByte, value);
+            maxByte = std::max(maxByte, value);
+            nonzero += value != 0;
+            ++sampled;
+        }
+        ++decodedFrameTelemetrySamples_;
+        __android_log_print(
+            ANDROID_LOG_INFO, kTag,
+            "E2E decoded-frame sample=%d w=%lld h=%lld stride=%lld format=%s bytes=%zu hash=%016llx min=%u max=%u "
+            "sampled=%zu nonzero=%zu",
+            decodedFrameTelemetrySamples_, static_cast<long long>(width), static_cast<long long>(height),
+            static_cast<long long>(stride), format, bytes->size, static_cast<unsigned long long>(hash),
+            static_cast<unsigned>(minByte), static_cast<unsigned>(maxByte), sampled, nonzero);
+    } else {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "E2E decoded-frame sample returned no pixel bytes format=%d",
+                            result.format);
+    }
+    symbols_->freeNodeContents(&result);
+}
+#endif
+
 PlayerStatus NativeMediaPlayer::status() const {
     const auto now = std::chrono::steady_clock::now();
     std::scoped_lock lock(mutex_);
@@ -815,6 +937,15 @@ PlayerStatus NativeMediaPlayer::status() const {
                 error_ = std::string("mpv playback ended with error: ") + (message ? message : "unknown");
                 cachedStatus_ = PlayerStatus::Error;
                 __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error_.c_str());
+            } else if (!startedPlayback_) {
+                // A transport/server failure can surface as a clean MPV_END_FILE
+                // before mpv ever becomes playable (for example, an HLS variant
+                // returning HTTP 500 while waiting for its first segment). Treat
+                // that as a failed load so the playback controller can try the
+                // next Remux/Jellyfin source instead of marking the item complete.
+                error_ = "Playback ended before becoming ready";
+                cachedStatus_ = PlayerStatus::Error;
+                __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error_.c_str());
             } else {
                 cachedStatus_ = PlayerStatus::Ended;
                 __android_log_print(ANDROID_LOG_INFO, kTag, "Embedded playback reached end of file");
@@ -849,6 +980,14 @@ PlayerStatus NativeMediaPlayer::status() const {
     const bool haveDuration = getDoublePropertyLocked("duration", duration) && duration > 0.0;
     double position = 0.0;
     const bool havePosition = getDoublePropertyLocked("time-pos", position) && position >= 0.0;
+    bool positionAdvanced = startedPlayback_;
+    if (havePosition && !startedPlayback_) {
+        if (readinessPositionSeconds_ < 0.0) {
+            readinessPositionSeconds_ = position;
+        } else if (position > readinessPositionSeconds_ + 0.05) {
+            positionAdvanced = true;
+        }
+    }
 
     int64_t width = 0;
     int64_t height = 0;
@@ -861,11 +1000,26 @@ PlayerStatus NativeMediaPlayer::status() const {
     cachedSubtitleText_ = getStringPropertyLocked("sub-text");
 
     if (haveEof && eof) {
-        cachedStatus_ = PlayerStatus::Ended;
-    } else if ((!startedPlayback_ && waitingForCache) || (!haveDuration && ((haveIdle && idle) || !havePosition))) {
+        if (!startedPlayback_) {
+            error_ = "Playback ended before becoming ready";
+            cachedStatus_ = PlayerStatus::Error;
+            __android_log_print(ANDROID_LOG_ERROR, kTag, "%s", error_.c_str());
+        } else {
+            cachedStatus_ = PlayerStatus::Ended;
+        }
+    } else if (waitingForCache || (!haveDuration && ((haveIdle && idle) || !havePosition))) {
+        // A cache underrun is buffering even after playback has started.
+        // Reporting Playing here leaves the media session at STATE_PLAYING,
+        // prevents Remux's stall/fallback timer from running, and can present a
+        // frozen frame as active playback.
         cachedStatus_ = PlayerStatus::Preparing;
     } else if (havePaused && paused) {
         cachedStatus_ = PlayerStatus::Paused;
+    } else if (!positionAdvanced) {
+        // time-pos can become available at a static resume offset before a
+        // decoder has produced usable playback. Do not advertise PLAYING until
+        // the playback clock actually advances from the first observed value.
+        cachedStatus_ = PlayerStatus::Preparing;
     } else {
         cachedStatus_ = PlayerStatus::Playing;
     }
@@ -873,6 +1027,11 @@ PlayerStatus NativeMediaPlayer::status() const {
     if (cachedStatus_ == PlayerStatus::Playing || cachedStatus_ == PlayerStatus::Paused) {
         serverHttpErrorCount_ = 0;
         logPlaybackTelemetryLocked();
+#ifdef SLOPPATV_E2E_TELEMETRY
+        if (cachedStatus_ == PlayerStatus::Playing && !waitingForCache) {
+            logDecodedFrameTelemetryLocked(now);
+        }
+#endif
     }
     lastSnapshotPoll_ = now;
     return cachedStatus_;

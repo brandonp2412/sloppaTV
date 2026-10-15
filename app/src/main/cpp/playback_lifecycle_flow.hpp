@@ -75,7 +75,8 @@ public:
             }
             const PlaybackPlayerStartContext start =
                 coordinator_.playerStartContext(PlaybackPlayerStartMode::WindowRestore);
-            player_.startAsync(start.url, videoSurface_.surface(), playerScreen_.positionMs(),
+            player_.startAsync(start.url, videoSurface_.surface(),
+                               coordinator_.playerPositionFromLogicalPosition(playerScreen_.positionMs()),
                                settings_.playbackBufferPreset, start.audioOrdinal, start.subtitleStreamIndex,
                                start.subtitleOrdinal, start.externalSubtitleUrl, runtime_.activeDecodeMode(),
                                settings_.maxAudioChannels, runtime_.isRemuxServer());

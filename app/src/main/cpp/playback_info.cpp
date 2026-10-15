@@ -32,28 +32,6 @@ bool isNoStreamsPlaceholder(const json& source) {
     return source.is_object() && scalarValueOr(source, "Path", std::string{}) == "/videos/no-streams";
 }
 
-// Remux exposes the addon's advertised swarm counts as optional metadata.
-// Counts are only a ranking hint: actual availability is established by the
-// server's bounded source probe, and cached/debrid sources take precedence.
-std::optional<int64_t> advertisedTorrentSeeders(const json& source) {
-    const auto remux = source.find("Remux");
-    if (remux == source.end() || !remux->is_object()) return std::nullopt;
-    const auto provider = remux->find("ProviderInfo");
-    if (provider == remux->end() || !provider->is_object() || scalarValueOr(*provider, "service_cached", false))
-        return std::nullopt;
-    const auto count = provider->find("seeders");
-    if (count == provider->end() || !count->is_number_integer()) return std::nullopt;
-    const int64_t seeders = count->get<int64_t>();
-    return seeders >= 0 ? std::optional<int64_t>{seeders} : std::nullopt;
-}
-
-int availabilityTier(int64_t seeders) {
-    if (seeders >= 20) return 3;
-    if (seeders >= 5) return 2;
-    if (seeders >= 1) return 1;
-    return 0;
-}
-
 std::string joinCodecs(const std::vector<std::string>& codecs) {
     std::ostringstream out;
     for (size_t index = 0; index < codecs.size(); ++index) {
@@ -188,58 +166,53 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         // cannot accidentally select a direct-play-only version and report a false
         // "no playback path" failure. Stable ranking preserves the first server result
         // when routes are equivalent or when older/noisy servers omit all capability flags.
-        const auto routeRank = [](PlaybackServerRoute route) {
-            switch (route) {
-            case PlaybackServerRoute::DirectPlay:
-                return 0;
-            case PlaybackServerRoute::DirectStream:
-                return 1;
-            case PlaybackServerRoute::Transcode:
-                return 2;
-            case PlaybackServerRoute::Unavailable:
-                return 3;
-            }
-            return 3;
-        };
         std::vector<json::const_iterator> candidates;
         for (auto candidate = firstObject; candidate != sources.end(); ++candidate) {
             if (candidate->is_object() && !isNoStreamsPlaceholder(*candidate)) candidates.push_back(candidate);
         }
-        // Only compare seed counts when every candidate exposes the same P2P
-        // metric. Mixed debrid/cached/local sources retain Remux's ordering.
-        const bool comparableTorrents =
-            candidates.size() > 1 && std::all_of(candidates.begin(), candidates.end(), [](const auto& candidate) {
-                return advertisedTorrentSeeders(*candidate).has_value();
-            });
-        if (comparableTorrents) {
-            std::stable_sort(candidates.begin(), candidates.end(), [](const auto& left, const auto& right) {
-                return availabilityTier(*advertisedTorrentSeeders(*left)) >
-                       availabilityTier(*advertisedTorrentSeeders(*right));
-            });
-        }
+        // Preserve the server's ordering. Remux may have spent the PlaybackInfo
+        // budget proving the first torrent (or one of its internal fallbacks)
+        // readable; re-sorting by advertised seeders or preferring an unprobed
+        // later DirectPlay flag can make the URL SloppaTV opens differ from the
+        // source whose bytes were actually verified.
         auto source = candidates.front();
-        int bestRank = 4;
-        for (auto candidate : candidates) {
-            const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
-            const PlaybackServerRoute route = choosePlaybackServerRoute(
+        if (!requestedMediaSourceId.empty()) {
+            const auto requested = std::find_if(candidates.begin(), candidates.end(), [&](const auto& candidate) {
+                if (scalarValueOr(*candidate, "Id", std::string{}) != requestedMediaSourceId) return false;
+                const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
+                return choosePlaybackServerRoute(
+                           {
+                               .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
+                               .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
+                               .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
+                               .transcodingUrl = transcodingUrl,
+                           },
+                           overrides) != PlaybackServerRoute::Unavailable;
+            });
+            if (requested != candidates.end()) source = *requested;
+        } else {
+            const std::string firstTranscodingUrl = scalarValueOr(*source, "TranscodingUrl", std::string{});
+            const PlaybackServerRoute firstRoute = choosePlaybackServerRoute(
                 {
-                    .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
-                    .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
-                    .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
-                    .transcodingUrl = transcodingUrl,
+                    .supportsDirectPlay = scalarValueOr(*source, "SupportsDirectPlay", false),
+                    .supportsDirectStream = scalarValueOr(*source, "SupportsDirectStream", false),
+                    .supportsTranscoding = scalarValueOr(*source, "SupportsTranscoding", false),
+                    .transcodingUrl = firstTranscodingUrl,
                 },
                 overrides);
-            const int rank = routeRank(route);
-            if (rank < bestRank) {
-                source = candidate;
-                bestRank = rank;
-            }
-            // Prefer a version proven playable, but only when this playback
-            // request can actually use the advertised route.
-            if (rank < 3 && !requestedMediaSourceId.empty() &&
-                scalarValueOr(*candidate, "Id", std::string{}) == requestedMediaSourceId) {
-                source = candidate;
-                break;
+            if (firstRoute == PlaybackServerRoute::Unavailable) {
+                const auto usable = std::find_if(std::next(candidates.begin()), candidates.end(), [&](const auto& candidate) {
+                    const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
+                    return choosePlaybackServerRoute(
+                               {
+                                   .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
+                                   .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
+                                   .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
+                                   .transcodingUrl = transcodingUrl,
+                               },
+                               overrides) != PlaybackServerRoute::Unavailable;
+                });
+                if (usable != candidates.end()) source = *usable;
             }
         }
 

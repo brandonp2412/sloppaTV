@@ -74,6 +74,10 @@ if(SLOPPATV_BENCHMARK)
     target_compile_definitions(sloppatv PRIVATE SLOPPATV_BENCHMARK=1)
 endif()
 
+if(SLOPPATV_E2E_TELEMETRY)
+    target_compile_definitions(sloppatv PRIVATE SLOPPATV_E2E_TELEMETRY=1)
+endif()
+
 target_link_libraries(sloppatv PRIVATE
     android
     dl
