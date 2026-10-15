@@ -7,6 +7,8 @@ import argparse
 import json
 import mimetypes
 import re
+import time
+import threading
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -39,34 +41,43 @@ def image_tags(item_id: str, *, thumb: bool = True) -> dict[str, str]:
     return tags
 
 
-def media_source(item_id: str) -> dict[str, object]:
+def media_source(
+    item_id: str, *, with_audio: bool = False, video_codec: str = "h264"
+) -> dict[str, object]:
+    streams: list[dict[str, object]] = [
+        {
+            "Type": "Video",
+            "Index": 0,
+            "Codec": video_codec,
+            "Profile": "Main" if video_codec == "hevc" else "High",
+            "Level": 31,
+            "VideoRangeType": "SDR",
+            "Width": 1280,
+            "Height": 720,
+            "BitDepth": 10 if video_codec == "hevc" else 8,
+            "RealFrameRate": 24.0,
+        }
+    ]
+    if with_audio:
+        streams.append(
+            {
+                "Type": "Audio",
+                "Index": 1,
+                "Codec": "aac",
+                "Channels": 2,
+                "SampleRate": 48000,
+            }
+        )
     return {
         "Id": f"{item_id}-source",
         "Container": "mp4",
         "SupportsDirectPlay": True,
         "SupportsDirectStream": True,
-        # Waydroid's platform decoder can reject the deterministic fixture's
-        # direct-play path even though physical Android TV accepts it. Offer the
-        # same local clip as a transcode fallback so player UI screenshots still
-        # exercise the real playback screen instead of falling back to Details.
         "SupportsTranscoding": True,
         "TranscodingUrl": f"/Videos/{item_id}/stream.mp4",
-        "DefaultAudioStreamIndex": -1,
+        "DefaultAudioStreamIndex": 1 if with_audio else -1,
         "DefaultSubtitleStreamIndex": -1,
-        "MediaStreams": [
-            {
-                "Type": "Video",
-                "Index": 0,
-                "Codec": "h264",
-                "Profile": "High",
-                "Level": 31,
-                "VideoRangeType": "SDR",
-                "Width": 1280,
-                "Height": 720,
-                "BitDepth": 8,
-                "RealFrameRate": 24.0,
-            }
-        ],
+        "MediaStreams": streams,
     }
 
 
@@ -222,6 +233,38 @@ MOVIES = [
     GLASS_HALF,
     DAILY_DWEEBS,
 ]
+
+def e2e_movie(item_id: str, name: str, *, position_seconds: int = 0) -> dict[str, object]:
+    item = cast(dict[str, object], deepcopy(BIG_BUCK_BUNNY))
+    item["Id"] = item_id
+    item["Name"] = name
+    item["UserData"] = user_data(position_seconds=position_seconds)
+    item["MediaSources"] = [media_source(item_id, with_audio=True)]
+    return item
+
+
+E2E_NORMAL_ID = "eeee0000000000000000000000000001"
+E2E_SLOW_ID = "eeee0000000000000000000000000002"
+E2E_STALL_ID = "eeee0000000000000000000000000003"
+E2E_ERROR_ID = "eeee0000000000000000000000000004"
+E2E_RESUME_STALL_ID = "eeee0000000000000000000000000005"
+E2E_DECODER_ID = "eeee0000000000000000000000000006"
+E2E_ITEMS = [
+    e2e_movie(E2E_NORMAL_ID, "E2E Normal"),
+    e2e_movie(E2E_SLOW_ID, "E2E Slow"),
+    e2e_movie(E2E_STALL_ID, "E2E Stall"),
+    e2e_movie(E2E_ERROR_ID, "E2E HTTP Error"),
+    e2e_movie(E2E_RESUME_STALL_ID, "E2E Resume Stall", position_seconds=24),
+    e2e_movie(E2E_DECODER_ID, "E2E Decoder Fallback"),
+]
+E2E_STREAM_MODES = {
+    E2E_NORMAL_ID: "normal",
+    E2E_SLOW_ID: "slow",
+    E2E_STALL_ID: "stall",
+    E2E_ERROR_ID: "error",
+    E2E_RESUME_STALL_ID: "resume_stall",
+    E2E_DECODER_ID: "decoder",
+}
 
 CAMINANDES = {
     "Id": "series-caminandes",
@@ -475,7 +518,10 @@ VIEWS = [
     },
 ]
 
-ALL_ITEMS = {str(value["Id"]): value for value in [*MOVIES, *SERIES, *SEASONS, *ALL_EPISODES, *VIEWS]}
+ALL_ITEMS = {
+    str(value["Id"]): value
+    for value in [*MOVIES, *SERIES, *SEASONS, *ALL_EPISODES, *VIEWS, *E2E_ITEMS]
+}
 
 PRIMARY_ART = {
     "movies": "movies-library.jpg",
@@ -577,6 +623,13 @@ for episode_item, source_movie in zip(OPEN_CLASSICS_EPISODES, MOVIES, strict=Tru
     PRIMARY_ART[episode_item["Id"]] = PRIMARY_ART[source_movie["Id"]]
     THUMB_ART[episode_item["Id"]] = THUMB_ART[source_movie["Id"]]
 VIDEO_FILE = MEDIA_ROOT / "big-buck-bunny-clip.mp4"
+PLAYBACK_MEDIA_FILE = VIDEO_FILE
+PLAYBACK_HEVC_MEDIA_FILE = VIDEO_FILE
+for _e2e_item in E2E_ITEMS:
+    _id = str(_e2e_item["Id"])
+    PRIMARY_ART[_id] = PRIMARY_ART[BIG_BUCK_BUNNY["Id"]]
+    THUMB_ART[_id] = THUMB_ART[BIG_BUCK_BUNNY["Id"]]
+    BACKDROP_ART[_id] = BACKDROP_ART[BIG_BUCK_BUNNY["Id"]]
 
 
 def list_payload(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -606,6 +659,8 @@ def matching_search_items(term: str) -> list[dict[str, Any]]:
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "sloppaTVScreenshotFixture/2.0"
+    stalled_items: set[str] = set()
+    stall_lock = threading.Lock()
 
     def log_message(self, format: str, *args: Any) -> None:
         print(format % args, flush=True)
@@ -624,7 +679,17 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", "0")
         self.end_headers()
 
-    def send_file(self, path: Path, *, content_type: str | None = None) -> None:
+    def send_file(
+        self,
+        path: Path,
+        *,
+        content_type: str | None = None,
+        mode: str = "normal",
+        fault_key: str = "",
+    ) -> None:
+        if mode == "error":
+            self.send_error(503, "deterministic E2E media failure")
+            return
         if not path.is_file():
             self.send_error(404)
             return
@@ -647,6 +712,10 @@ class Handler(BaseHTTPRequestHandler):
                 return
             status = 206
         length = end - start + 1
+        print(
+            f"RANGE mode={mode} start={start} end={end} size={size} header={range_header or '-'}",
+            flush=True,
+        )
         self.send_response(status)
         self.send_header("Accept-Ranges", "bytes")
         self.send_header(
@@ -661,12 +730,36 @@ class Handler(BaseHTTPRequestHandler):
         with path.open("rb") as handle:
             handle.seek(start)
             remaining = length
+            sent = 0
+            stalled = False
+            chunk_size = 16 * 1024 if mode in {"slow", "stall", "resume_stall"} else 64 * 1024
             while remaining > 0:
-                chunk = handle.read(min(64 * 1024, remaining))
+                chunk = handle.read(min(chunk_size, remaining))
                 if not chunk:
                     break
-                self.wfile.write(chunk)
+                try:
+                    self.wfile.write(chunk)
+                    self.wfile.flush()
+                except (BrokenPipeError, ConnectionResetError):
+                    break
+                sent += len(chunk)
                 remaining -= len(chunk)
+                if mode == "slow":
+                    time.sleep(0.08)
+                elif mode in {"stall", "resume_stall"}:
+                    time.sleep(0.12)
+                    stall_after = 64 * 1024 if mode == "resume_stall" else 384 * 1024
+                    if not stalled and sent >= stall_after:
+                        should_stall = False
+                        with self.stall_lock:
+                            if fault_key not in self.stalled_items:
+                                self.stalled_items.add(fault_key)
+                                should_stall = True
+                        if should_stall:
+                            print(f"STALL key={fault_key} start={start} after={sent}", flush=True)
+                            time.sleep(9.0)
+                            print(f"STALL resume key={fault_key} start={start} after={sent}", flush=True)
+                        stalled = True
 
     def send_item_artwork(self, item_id: str, image_kind: str) -> None:
         if image_kind == "Primary":
@@ -695,10 +788,14 @@ class Handler(BaseHTTPRequestHandler):
         playback = re.fullmatch(r"/Items/([^/]+)/PlaybackInfo", path)
         if playback:
             item_id = playback.group(1)
+            is_e2e = item_id in E2E_STREAM_MODES
+            video_codec = "hevc" if E2E_STREAM_MODES.get(item_id) == "decoder" else "h264"
             self.send_json(
                 {
                     "PlaySessionId": "fixture-play-session",
-                    "MediaSources": [media_source(item_id)],
+                    "MediaSources": [
+                        media_source(item_id, with_audio=is_e2e, video_codec=video_codec)
+                    ],
                 }
             )
             return
@@ -736,7 +833,10 @@ class Handler(BaseHTTPRequestHandler):
 
         stream = re.fullmatch(r"/Videos/([^/]+)/stream\.mp4", path)
         if stream:
-            self.send_file(VIDEO_FILE, content_type="video/mp4")
+            item_id = stream.group(1)
+            mode = E2E_STREAM_MODES.get(item_id, "normal")
+            media = PLAYBACK_HEVC_MEDIA_FILE if mode == "decoder" else PLAYBACK_MEDIA_FILE
+            self.send_file(media, content_type="video/mp4", mode=mode, fault_key=item_id)
             return
 
         image = re.fullmatch(r"/Items/([^/]+)/Images/(Primary|Thumb)", path)
@@ -867,9 +967,14 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
+    global PLAYBACK_MEDIA_FILE, PLAYBACK_HEVC_MEDIA_FILE
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=18096)
+    parser.add_argument("--playback-media-file", type=Path, default=VIDEO_FILE)
+    parser.add_argument("--playback-hevc-media-file", type=Path)
     args = parser.parse_args()
+    PLAYBACK_MEDIA_FILE = args.playback_media_file
+    PLAYBACK_HEVC_MEDIA_FILE = args.playback_hevc_media_file or PLAYBACK_MEDIA_FILE
     ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()
 
 

@@ -1346,33 +1346,10 @@ private:
                                                                   playbackContinuationAsync_, mediaSession_,
                                                                   queueState_, renderer_.ready(), stateMutex_));
         scheduleRemuxPrefetchStatus();
-        // Begin a small speculative range fetch only near the episode boundary;
-        // Remux releases inactive torrent leases after a short grace period.
-        if (screen_ == Screen::Player && playbackCoordinator_.activeItemAvailable()) {
-            const auto& current = playbackCoordinator_.session().activeItem();
-            const std::string& currentId = current.id;
-            if (serverInfo_.isRemux) {
-                if (const JellyfinItem* queued = remuxQueuedNextEpisode(current, queueState_))
-                    remuxEpisodePrewarm_.remember(currentId, *queued);
-            }
-            auto next = remuxEpisodePrewarm_.takeDue(currentId, playerScreenState_.positionMs(),
-                                                     playerScreenState_.durationMs(),
-                                                     player_.status() == PlayerStatus::Playing, serverInfo_.isRemux);
-            if (next) {
-                JellyfinSession session = session_;
-                const int maxAudioChannels = settings_.maxAudioChannels;
-                if (!remuxPrewarmTasks_.submit(
-                        [this, session = std::move(session), next = std::move(*next), maxAudioChannels] {
-                            const auto result = remuxPrewarmApi_.prewarmRemuxEpisode(session, next, maxAudioChannels);
-                            __android_log_print(result.ok ? ANDROID_LOG_INFO : ANDROID_LOG_WARN, kTag,
-                                                "Remux next episode prewarm item=%.8s %s%s%s", next.id.c_str(),
-                                                result.ok ? "ready" : "failed", result.ok ? "" : ": ",
-                                                result.error.c_str());
-                        })) {
-                    __android_log_print(ANDROID_LOG_WARN, kTag, "Remux next episode prewarm queue unavailable");
-                }
-            }
-        }
+        // Do not speculatively resolve/probe the next Remux episode while the
+        // foreground stream is active. PlaybackInfo can start a P2P torrent and
+        // consume the same bandwidth/probe budget as the current or explicitly
+        // requested title; foreground playback owns those resources.
         // Remember a genuinely playable Remux version, not the first advertised
         // torrent. Source IDs survive refreshed searches, unlike list indices.
         if (screen_ != Screen::Player || !serverInfo_.isRemux || !playbackCoordinator_.activeItemAvailable()) return;
@@ -1641,8 +1618,6 @@ private:
     void tick() {
         applyAsyncCompletions();
         runDueSimilarPrefetch();
-        runDueHomeEpisodePrewarm();
-        runDueSearchResultPrewarm();
         const auto mediaSessionCommand = mediaSession_.takeCommand();
         if (mediaSessionCommand) handleMediaSessionCommand(*mediaSessionCommand);
         applyPendingRuntimeLaunchRequest();

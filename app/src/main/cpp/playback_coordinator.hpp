@@ -87,7 +87,8 @@ enum class PlaybackPlayerStartMode {
 
 struct PlaybackPlayerStartContext {
     std::string url;
-    int startPositionMs = 0;
+    int logicalStartPositionMs = 0;
+    int playerStartPositionMs = 0;
     int audioOrdinal = -1;
     int subtitleStreamIndex = kSubtitleOffIndex;
     int subtitleOrdinal = -1;
@@ -456,6 +457,20 @@ public:
         return sessionState_.activeTarget().playMethod == PlaybackMethod::DirectPlay;
     }
 
+    [[nodiscard]] int playerTimelineBaseMs() const {
+        const auto& target = sessionState_.activeTarget();
+        return target.playMethod == PlaybackMethod::DirectPlay ? 0 : playbackPositionMsFromTicks(target.startTicks);
+    }
+
+    [[nodiscard]] int logicalPositionFromPlayerPosition(int playerPositionMs) const {
+        return clampSeekPositionMs(
+            static_cast<int64_t>(playerTimelineBaseMs()) + std::max(0, playerPositionMs));
+    }
+
+    [[nodiscard]] int playerPositionFromLogicalPosition(int logicalPositionMs) const {
+        return std::max(0, clampSeekPositionMs(logicalPositionMs) - playerTimelineBaseMs());
+    }
+
     [[nodiscard]] PlaybackTelemetryState& telemetry() { return telemetryState_; }
 
     [[nodiscard]] const PlaybackTelemetryState& telemetry() const { return telemetryState_; }
@@ -756,9 +771,12 @@ public:
     playerStartContext(PlaybackPlayerStartMode mode = PlaybackPlayerStartMode::Resolved) const {
         const auto& item = sessionState_.activeItem();
         const auto& target = sessionState_.activeTarget();
+        const int logicalStartPositionMs = playbackPositionMsFromTicks(target.startTicks);
         return PlaybackPlayerStartContext{
             .url = target.url,
-            .startPositionMs = initialPlayerSeekMs(target.startTicks),
+            .logicalStartPositionMs = logicalStartPositionMs,
+            .playerStartPositionMs =
+                target.playMethod == PlaybackMethod::DirectPlay ? logicalStartPositionMs : 0,
             .audioOrdinal = playerAudioOrdinal(target, item),
             .subtitleStreamIndex =
                 mode == PlaybackPlayerStartMode::WindowRestore && target.playMethod == PlaybackMethod::DirectPlay

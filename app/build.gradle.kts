@@ -10,6 +10,14 @@ val splitReleaseApks = providers.gradleProperty("SLOPPATV_SPLIT_APKS")
     .orNull
     ?.toBooleanStrictOrNull()
     ?: false
+val e2eApplicationIdSuffix = providers.gradleProperty("SLOPPATV_E2E_APP_SUFFIX")
+    .orNull
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "remuxtest"
+require(Regex("[a-z][a-z0-9_]*").matches(e2eApplicationIdSuffix)) {
+    "SLOPPATV_E2E_APP_SUFFIX must be one lowercase Android package segment"
+}
 
 val releaseSigningPropertiesFile = rootProject.file("key.properties")
 val releaseSigningProperties = Properties().apply {
@@ -43,6 +51,8 @@ android {
                 arguments += listOf(
                     "-DANDROID_STL=c++_shared",
                     "-DSLOPPATV_VERSION_NAME=$sloppaVersionName",
+                    "-DSLOPPATV_E2E_TELEMETRY=" +
+                        if (providers.gradleProperty("SLOPPATV_E2E_ISOLATED").orNull == "true") "ON" else "OFF",
                 )
             }
         }
@@ -85,7 +95,7 @@ android {
             versionNameSuffix = "-debug"
             // Isolated E2E builds must never replace the household app or its watch state.
             if (providers.gradleProperty("SLOPPATV_E2E_ISOLATED").orNull == "true") {
-                applicationIdSuffix = ".remuxtest"
+                applicationIdSuffix = ".$e2eApplicationIdSuffix"
                 manifestPlaceholders["appLabel"] = "sloppaTV E2E"
             }
             // A local key.properties deliberately makes debug and release use the same

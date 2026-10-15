@@ -95,6 +95,9 @@ private:
                                       int fallbackOrdinal) const;
     void applyPendingTracksLocked() const;
     void logPlaybackTelemetryLocked() const;
+#ifdef SLOPPATV_E2E_TELEMETRY
+    void logDecodedFrameTelemetryLocked(std::chrono::steady_clock::time_point now) const;
+#endif
 
     JavaVM* vm_ = nullptr;
     jobject activity_ = nullptr;
@@ -110,6 +113,7 @@ private:
     mutable std::string error_;
     mutable PlayerStatus cachedStatus_ = PlayerStatus::Idle;
     mutable bool startedPlayback_ = false;
+    mutable double readinessPositionSeconds_ = -1.0;
     mutable int cachedVideoWidth_ = 0;
     mutable int cachedVideoHeight_ = 0;
     mutable std::string cachedSubtitleText_;
@@ -119,6 +123,10 @@ private:
     mutable int pendingSubtitleOrdinal_ = -1;
     mutable bool pendingSubtitleOff_ = false;
     mutable bool telemetryLogged_ = false;
+#ifdef SLOPPATV_E2E_TELEMETRY
+    mutable int decodedFrameTelemetrySamples_ = 0;
+    mutable std::chrono::steady_clock::time_point lastDecodedFrameTelemetry_{};
+#endif
     mutable bool hardwareDecoderFailed_ = false;
     mutable int serverHttpErrorCount_ = 0;
 };
