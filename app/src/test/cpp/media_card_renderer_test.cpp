@@ -43,10 +43,14 @@ struct FakeRenderer {
     void text(float x, float y, float scale, std::string_view value, int color, float maxWidth) {
         texts.push_back({x, y, scale, std::string(value), color, maxWidth});
     }
+    void textCentered(float x, float y, float width, float, float scale, std::string_view value, int color) {
+        centeredTexts.push_back({x, y, scale, std::string(value), color, width});
+    }
 
     std::vector<RectCall> rects;
     std::vector<RectCall> outlines;
     std::vector<TextCall> texts;
+    std::vector<TextCall> centeredTexts;
 };
 
 MediaCardRenderStyle<int> style() {
@@ -91,7 +95,6 @@ int main() {
     int artworkCalls = 0;
     int placeholderCalls = 0;
     int haloCalls = 0;
-    int centeredCalls = 0;
     bool sawSeriesCover = false;
     bool sawLandscape = true;
 
@@ -127,12 +130,6 @@ int main() {
             ++haloCalls;
             assert(color == 8);
         },
-        [&](float, float, float, float, float scale, std::string_view value, int color, float, float) {
-            ++centeredCalls;
-            assert(scale == 1.12f);
-            assert(value == "Favorite");
-            assert(color == 5);
-        },
         [](std::string_view value, float, float, int) { return std::string(value); },
         [](const JellyfinItem& item) {
             assert(item.id == "episode-1");
@@ -142,7 +139,10 @@ int main() {
     assert(artworkCalls == 1);
     assert(placeholderCalls == 1);
     assert(haloCalls == 1);
-    assert(centeredCalls == 1);
+    assert(renderer.centeredTexts.size() == 1);
+    assert(renderer.centeredTexts[0].value == "Favorite");
+    assert(renderer.centeredTexts[0].scale == 1.12f);
+    assert(renderer.centeredTexts[0].color == 5);
     assert(sawSeriesCover);
     assert(!sawLandscape);
     assert(renderer.outlines.size() == 1);
@@ -167,7 +167,6 @@ int main() {
 
     FakeRenderer landscapeRenderer;
     bool landscapeArtwork = false;
-    int landscapeCentered = 0;
     renderMediaArtworkCardContent(
         landscapeRenderer, landscapeItem, 100.0f, 120.0f, 320.0f, false,
         MediaArtworkCardRenderOptions{
@@ -176,7 +175,7 @@ int main() {
             .alignToPortraitBand = false,
             .titleLineLimit = 0,
             .uiTextSize = 0,
-            .showWatchedIndicators = false,
+            .showWatchedIndicators = true,
         },
         style(), bounds,
         [&](const JellyfinItem&, bool seriesCover, bool landscape, float, float, float, float, float) {
@@ -186,14 +185,16 @@ int main() {
         },
         [](const JellyfinItem&, float, float, float, float, float) { assert(false); },
         [](float, float, float, float, int, float) { assert(false); },
-        [&](float, float, float, float, float, std::string_view, int, float, float) { ++landscapeCentered; },
         [](std::string_view value, float, float, int) { return std::string(value); },
         [](const JellyfinItem&) { return std::string(); });
 
     assert(landscapeArtwork);
-    assert(landscapeCentered == 0);
-    assert(landscapeRenderer.rects.size() == 1);
-    assert(landscapeRenderer.outlines.empty());
+    // Watched state must produce exactly one check, with its label rendered as plain text.
+    assert(landscapeRenderer.icons == std::vector{ui_icons::Glyph::Check});
+    assert(landscapeRenderer.centeredTexts.size() == 1);
+    assert(landscapeRenderer.centeredTexts[0].value == "Watched");
+    assert(landscapeRenderer.rects.size() == 2);
+    assert(landscapeRenderer.outlines.size() == 1);
     assert(landscapeRenderer.texts.size() == 1);
 
     JellyfinItem genre;

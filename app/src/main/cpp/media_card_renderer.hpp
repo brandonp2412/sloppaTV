@@ -37,12 +37,12 @@ template <typename ColorLike> struct MediaCardRenderStyle {
 };
 
 template <typename RendererLike, typename ColorLike, typename FocusedBounds, typename DrawArtwork,
-          typename DrawPlaceholder, typename DrawHalo, typename DrawCentered, typename FitText, typename SecondaryLabel>
+          typename DrawPlaceholder, typename DrawHalo, typename FitText, typename SecondaryLabel>
 void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& item, float x, float y, float slotWidth,
                                    bool focused, const MediaArtworkCardRenderOptions& options,
                                    const MediaCardRenderStyle<ColorLike>& style, FocusedBounds&& focusedBounds,
                                    DrawArtwork&& drawArtwork, DrawPlaceholder&& drawPlaceholder, DrawHalo&& drawHalo,
-                                   DrawCentered&& drawCentered, FitText&& fitText, SecondaryLabel&& secondaryLabel) {
+                                   FitText&& fitText, SecondaryLabel&& secondaryLabel) {
     const bool seriesCoverForEpisode = options.preferSeriesCover && item.type == "Episode" && !item.seriesId.empty() &&
                                        !item.seriesPrimaryImageTag.empty();
     const bool landscape = usesLandscapeMediaCard(item.type) && !seriesCoverForEpisode;
@@ -86,8 +86,9 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
             ui_icons::heart(renderer, badgeX + 10.0f, badgeY + 7.0f, 20.0f, ink);
         else
             ui_icons::check(renderer, badgeX + 10.0f, badgeY + 7.0f, 20.0f, ink);
-        drawCentered(badgeX + 26.0f, badgeY, badgeWidth - 26.0f, 34.0f, 1.12f, label,
-                     focused && item.favorite ? style.text : style.muted, 10.0f, 3.0f);
+        // The badge already draws an icon; avoid the auto-icon label helper.
+        renderer.textCentered(badgeX + 26.0f, badgeY, badgeWidth - 26.0f, 34.0f, 1.12f, label,
+                              focused && item.favorite ? style.text : style.muted);
     }
 
     if (focused) drawHalo(bounds[0], bounds[1], bounds[2], bounds[3], style.focus, cardRadius);
