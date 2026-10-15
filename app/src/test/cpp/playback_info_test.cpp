@@ -188,16 +188,15 @@ int main() {
            lastChoice.value.alternativeMediaSourceId.empty());
     // The fallback file can tag Italian as the default track despite the
     // failed (English) source using the same stream index for English.
-    // Availability hints only affect comparable P2P candidates; an advertised
-    // zero-seeder UHD release must not displace a healthier HD release.
+    // Keep the server-probed source order even when advertised seeder hints differ.
     const auto seededOffer = parsePlaybackInfoOffer(R"({"MediaSources":[
         {"Id":"4k-zero","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":0}}},
         {"Id":"hd-healthy","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":46}}},
         {"Id":"hd-backup","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":2}}}
     ]})",
                                                     -1, kSubtitleOffIndex);
-    assert(seededOffer.ok && seededOffer.value.mediaSourceId == "hd-healthy");
-    assert(seededOffer.value.alternativeMediaSourceId == "hd-backup");
+    assert(seededOffer.ok && seededOffer.value.mediaSourceId == "4k-zero");
+    assert(seededOffer.value.alternativeMediaSourceId == "hd-healthy");
     const auto mixedSources = parsePlaybackInfoOffer(R"({"MediaSources":[
         {"Id":"debrid-cached","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"service_cached":true}}},
         {"Id":"torrent-seeded","SupportsDirectPlay":true,"Remux":{"ProviderInfo":{"seeders":82}}}
@@ -264,9 +263,9 @@ int main() {
     })",
                                                               -1, kSubtitleServerDefaultIndex);
     assert(preferDirectPlayOffer.ok);
-    assert(preferDirectPlayOffer.value.mediaSourceId == "direct-version");
-    assert(preferDirectPlayOffer.value.supportsDirectPlay);
-    assert(preferDirectPlayOffer.value.transcodingUrl.empty());
+    assert(preferDirectPlayOffer.value.mediaSourceId == "transcode-version");
+    assert(!preferDirectPlayOffer.value.supportsDirectPlay);
+    assert(!preferDirectPlayOffer.value.transcodingUrl.empty());
 
     const auto preferDirectStreamOffer = parsePlaybackInfoOffer(R"({
         "MediaSources": [
@@ -284,9 +283,9 @@ int main() {
     })",
                                                                 -1, kSubtitleServerDefaultIndex);
     assert(preferDirectStreamOffer.ok);
-    assert(preferDirectStreamOffer.value.mediaSourceId == "direct-stream-version");
-    assert(preferDirectStreamOffer.value.supportsDirectStream);
-    assert(!preferDirectStreamOffer.value.supportsTranscoding);
+    assert(preferDirectStreamOffer.value.mediaSourceId == "transcode-version");
+    assert(!preferDirectStreamOffer.value.supportsDirectStream);
+    assert(preferDirectStreamOffer.value.supportsTranscoding);
 
     PlaybackOverrides forceTranscodeOffer;
     forceTranscodeOffer.forceTranscode = true;

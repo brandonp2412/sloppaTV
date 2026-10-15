@@ -20,12 +20,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class HttpBridge {
     private static final long REQUEST_TIMEOUT_MS = 45_000;
-    // Remux may deliberately keep a verified-growing slow torrent alive for up
-    // to five minutes after the bounded prompt probes. PlaybackInfo is the only
-    // request allowed to wait through that grace; healthy sources still return
-    // immediately and all other HTTP requests keep the normal short deadline.
-    private static final long PLAYBACK_INFO_REQUEST_TIMEOUT_MS = 390_000;
-    private static final int PLAYBACK_INFO_READ_TIMEOUT_MS = 385_000;
+    // Keep a bounded PlaybackInfo wait; slow downloads continue independently.
+    private static final long PLAYBACK_INFO_REQUEST_TIMEOUT_MS = 95_000;
+    private static final int PLAYBACK_INFO_READ_TIMEOUT_MS = 90_000;
     private static final int MAX_RESPONSE_BYTES = 64 * 1024 * 1024;
     private static final String RESPONSE_TOO_LARGE = "HTTP response exceeds 64 MiB limit";
     private static final ScheduledExecutorService DEADLINE_EXECUTOR = Executors.newSingleThreadScheduledExecutor(

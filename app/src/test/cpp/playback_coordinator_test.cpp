@@ -289,7 +289,7 @@ int main() {
 
     auto playerStart = playerStartCoordinator.playerStartContext();
     assert(playerStart.url == playerStartTarget.url);
-    assert(playerStart.startPositionMs == 1234);
+    assert(playerStart.playerStartPositionMs == 1234);
     assert(playerStart.audioOrdinal == 1);
     assert(playerStart.subtitleStreamIndex == 11);
     assert(playerStart.subtitleOrdinal == 0);

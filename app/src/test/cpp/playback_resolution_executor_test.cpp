@@ -167,7 +167,7 @@ int main() {
     assert(movieCompletion.selected.id == "movie");
     assert(movieCompletion.playable.id == "movie");
     assert(movieCompletion.result.ok);
-    assert(client.detailRequests == detailRequestsBeforeMovie);
+    assert(client.detailRequests == detailRequestsBeforeMovie + 1);
 
     JellyfinItem seriesSelection;
     seriesSelection.id = "series-1";

@@ -7,13 +7,13 @@ import argparse
 import json
 import mimetypes
 import re
-import time
 import threading
+import time
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 from urllib.parse import parse_qs, urlsplit
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "screenshot-fixtures"
@@ -41,9 +41,7 @@ def image_tags(item_id: str, *, thumb: bool = True) -> dict[str, str]:
     return tags
 
 
-def media_source(
-    item_id: str, *, with_audio: bool = False, video_codec: str = "h264"
-) -> dict[str, object]:
+def media_source(item_id: str, *, with_audio: bool = False, video_codec: str = "h264") -> dict[str, object]:
     streams: list[dict[str, object]] = [
         {
             "Type": "Video",
@@ -234,8 +232,9 @@ MOVIES = [
     DAILY_DWEEBS,
 ]
 
+
 def e2e_movie(item_id: str, name: str, *, position_seconds: int = 0) -> dict[str, object]:
-    item = cast(dict[str, object], deepcopy(BIG_BUCK_BUNNY))
+    item = deepcopy(BIG_BUCK_BUNNY)
     item["Id"] = item_id
     item["Name"] = name
     item["UserData"] = user_data(position_seconds=position_seconds)
@@ -518,10 +517,7 @@ VIEWS = [
     },
 ]
 
-ALL_ITEMS = {
-    str(value["Id"]): value
-    for value in [*MOVIES, *SERIES, *SEASONS, *ALL_EPISODES, *VIEWS, *E2E_ITEMS]
-}
+ALL_ITEMS = {str(value["Id"]): value for value in [*MOVIES, *SERIES, *SEASONS, *ALL_EPISODES, *VIEWS, *E2E_ITEMS]}
 
 PRIMARY_ART = {
     "movies": "movies-library.jpg",
@@ -659,7 +655,7 @@ def matching_search_items(term: str) -> list[dict[str, Any]]:
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "sloppaTVScreenshotFixture/2.0"
-    stalled_items: set[str] = set()
+    stalled_items: ClassVar[set[str]] = set()
     stall_lock = threading.Lock()
 
     def log_message(self, format: str, *args: Any) -> None:
@@ -793,9 +789,7 @@ class Handler(BaseHTTPRequestHandler):
             self.send_json(
                 {
                     "PlaySessionId": "fixture-play-session",
-                    "MediaSources": [
-                        media_source(item_id, with_audio=is_e2e, video_codec=video_codec)
-                    ],
+                    "MediaSources": [media_source(item_id, with_audio=is_e2e, video_codec=video_codec)],
                 }
             )
             return

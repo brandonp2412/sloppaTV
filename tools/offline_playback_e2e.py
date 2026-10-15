@@ -98,16 +98,10 @@ def wait_position_delta(
     while time.monotonic() < deadline:
         last = session_snapshot(serial, package)
         samples.append({"t": round(time.time(), 3), "session": last})
-        if (
-            last is not None
-            and int(last["state"]) == PLAYING
-            and int(last["position_ms"]) >= start_ms + delta_ms
-        ):
+        if last is not None and int(last["state"]) == PLAYING and int(last["position_ms"]) >= start_ms + delta_ms:
             return last
         time.sleep(0.2)
-    raise RuntimeError(
-        f"media session position did not advance by {delta_ms}ms from {start_ms}; last={last}"
-    )
+    raise RuntimeError(f"media session position did not advance by {delta_ms}ms from {start_ms}; last={last}")
 
 
 def capture(serial: str, path: Path) -> None:
@@ -149,9 +143,7 @@ def audio_proof(serial: str, package: str) -> dict[str, object]:
     flinger = adb(serial, "shell", "dumpsys", "media.audio_flinger", timeout=60)
     uid_lines = [line.strip() for line in flinger.splitlines() if re.search(rf"\b{uid}\b", line)]
     active_track_lines = [
-        line.strip()
-        for line in flinger.splitlines()
-        if pid > 0 and re.search(rf"^\s*\d+\s+yes\s+{pid}\s+", line)
+        line.strip() for line in flinger.splitlines() if pid > 0 and re.search(rf"^\s*\d+\s+yes\s+{pid}\s+", line)
     ]
     return {
         "uid": uid,
@@ -267,9 +259,7 @@ def strict_playback(
     a = artifacts / f"{scenario}-frame-a.png"
     b = artifacts / f"{scenario}-frame-b.png"
     capture(serial, a)
-    after = wait_position_delta(
-        serial, package, int(before["position_ms"]), 1500, 9.0, samples
-    )
+    after = wait_position_delta(serial, package, int(before["position_ms"]), 1500, 9.0, samples)
     capture(serial, b)
     motion = roi_diff(a, b)
     if scenario in {"stall", "resume_stall"} and motion < 0.03:
@@ -283,8 +273,7 @@ def strict_playback(
     frame_hashes = re.findall(r"E2E decoded-frame sample=\d+ .*?hash=([0-9a-fA-F]+)", logs)
     if len(set(frame_hashes)) < 2:
         raise RuntimeError(
-            f"libmpv raw decoded-frame hashes did not change: {frame_hashes[-8:]}; "
-            f"compositor_motion={motion:.3f}"
+            f"libmpv raw decoded-frame hashes did not change: {frame_hashes[-8:]}; compositor_motion={motion:.3f}"
         )
     result["compositor_motion_verified"] = motion >= 0.03
 
@@ -301,14 +290,10 @@ def strict_playback(
             raise RuntimeError(f"pause did not hold position: {paused} -> {paused_later}")
         key(serial, "DPAD_CENTER")
         resumed = wait_state(serial, package, {PLAYING}, 4, samples)
-        resumed_later = wait_position_delta(
-            serial, package, int(resumed["position_ms"]), 500, 9.0, samples
-        )
+        resumed_later = wait_position_delta(serial, package, int(resumed["position_ms"]), 500, 9.0, samples)
         seek_before = int(resumed_later["position_ms"])
         key(serial, "DPAD_RIGHT")
-        seek_after = wait_position_delta(
-            serial, package, seek_before, 4000, 9.0, samples
-        )
+        seek_after = wait_position_delta(serial, package, seek_before, 4000, 9.0, samples)
         result["controls"] = {
             "paused": paused,
             "paused_later": paused_later,
