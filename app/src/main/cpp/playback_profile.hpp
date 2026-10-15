@@ -177,7 +177,13 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(const PlaybackDeviceCapabilit
 }
 
 inline PlaybackRequestFlags playbackRequestFlags(const PlaybackProfilePlan& plan, PlaybackOverrides overrides) {
-    const bool streamCopyAllowed = !overrides.forceTranscode && plan.directVideoSupported && !plan.serverSubtitle;
+    // These flags are request-wide permissions. Per-source codec compatibility
+    // belongs in DirectPlayProfiles/CodecProfiles, which already exclude the
+    // unsupported codec from plan.videoCodecs. Gating the whole request on
+    // the summary item's codec prevents Jellyfin/Remux from selecting another
+    // compatible version (for example an H.264 fallback when the first listed
+    // version is unsupported HEVC Main10).
+    const bool streamCopyAllowed = !overrides.forceTranscode && !plan.serverSubtitle;
     return {
         .enableDirectPlay = streamCopyAllowed && !overrides.forceServerStream,
         .enableDirectStream = streamCopyAllowed,
