@@ -28,3 +28,4 @@ fastlane/metadata/android/en-US/images/phoneScreenshots/
 
 # Local Serena agent state
 .serena/
+AGENTS.md
