@@ -1,0 +1,1346 @@
+{
+  "date": "2026-10-16",
+  "device": "Google TV Streamer",
+  "account": "Existing Remux account",
+  "app_code_commit": "aa91d5e5",
+  "remux_code_commit": "c8a20eed",
+  "remux_build": "Cargo dev profile",
+  "release_apk_sha256": "8d81388ecaec26817a2bd77fd179482363e1953e6bc3f2a933523495ac6d7074",
+  "remux_binary_sha256": "989e2e4489192235e9b8ed6b025a5b79f6dc843358044b756e05c19d8aeca61e",
+  "coverage": "Decoded playback samples at the beginning, midpoint and near the end, with audio output, pause/resume, and seeking. Not a continuous full-runtime viewing of each episode.",
+  "episodes": [
+    {
+      "episode": 1,
+      "title": "Stick or Twist",
+      "item_id": "9836b0a14dd7573b9d8f19c328705c45",
+      "startup_seconds": 9.3,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "audio": "ATSC A/52B (AC-3, E-AC-3)"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1800000,
+          "actual_before_ms": 1810267,
+          "actual_after_ms": 1820694,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 3510000,
+          "actual_before_ms": 3520225,
+          "actual_after_ms": 3530444,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1/s01e01"
+    },
+    {
+      "episode": 2,
+      "title": "Jigsaw Puzzle",
+      "item_id": "62878afad80857cdb45805cb070aa655",
+      "startup_seconds": 25.09,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "TrueHD"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1560000,
+          "actual_before_ms": 1570235,
+          "actual_after_ms": 1580579,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 3030000,
+          "actual_before_ms": 3040454,
+          "actual_after_ms": 3050881,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-lavf-v2-episode2/s01e02"
+    },
+    {
+      "episode": 3,
+      "title": "Plan B",
+      "item_id": "6df0b47cc4b652d098bb85d36aa60889",
+      "startup_seconds": 34.61,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "TrueHD"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1440000,
+          "actual_before_ms": 1450282,
+          "actual_after_ms": 1460584,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 2790000,
+          "actual_before_ms": 2800172,
+          "actual_after_ms": 2810391,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1/s01e03"
+    },
+    {
+      "episode": 4,
+      "title": "Rat Trap",
+      "item_id": "3ebbc55321925bf1bef6ca554b7589f0",
+      "startup_seconds": 30.9,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "audio": "ATSC A/52B (AC-3, E-AC-3)"
+        },
+        {
+          "hwdec": "mediacodec",
+          "video": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "audio": "ATSC A/52A (AC-3)"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1260000,
+          "actual_before_ms": 1270186,
+          "actual_after_ms": 1280613,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 2430000,
+          "actual_before_ms": 2440355,
+          "actual_after_ms": 2450740,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1-recovery/s01e04"
+    },
+    {
+      "episode": 5,
+      "title": "Funeral for a Friend",
+      "item_id": "7b30f72b5acb597988c7b4ac069bbbce",
+      "startup_seconds": 21.59,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "TrueHD"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1260000,
+          "actual_before_ms": 1268642,
+          "actual_after_ms": 1278986,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 2430000,
+          "actual_before_ms": 2440271,
+          "actual_after_ms": 2450573,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1-recovery/s01e05"
+    },
+    {
+      "episode": 6,
+      "title": "Antwerp Blues",
+      "item_id": "b7b32682f1c45075b75e5f932301fbd9",
+      "startup_seconds": 44.65,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.264 / AVC / MPEG-4 AVC / MPEG-4 part 10",
+          "audio": "ATSC A/52B (AC-3, E-AC-3)"
+        },
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "AAC (Advanced Audio Coding)"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1290000,
+          "actual_before_ms": 1297254,
+          "actual_after_ms": 1307681,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 2490000,
+          "actual_before_ms": 2500302,
+          "actual_after_ms": 2510687,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1-recovery/s01e06"
+    },
+    {
+      "episode": 7,
+      "title": "The Crossroads",
+      "item_id": "080bd070a00a5d29ace9778726b6d6fb",
+      "startup_seconds": 7.2,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "AAC (Advanced Audio Coding)"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1230000,
+          "actual_before_ms": 1243284,
+          "actual_after_ms": 1253836,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 2370000,
+          "actual_before_ms": 2380253,
+          "actual_after_ms": 2391723,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1-recovery/s01e07"
+    },
+    {
+      "episode": 8,
+      "title": "Helter Skelter",
+      "item_id": "903c2ff37799599badd66c299644487c",
+      "startup_seconds": 3.62,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "AAC (Advanced Audio Coding)"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1350000,
+          "actual_before_ms": 1360192,
+          "actual_after_ms": 1370661,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 2610000,
+          "actual_before_ms": 2620368,
+          "actual_after_ms": 2630753,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1-recovery/s01e08"
+    },
+    {
+      "episode": 9,
+      "title": "Beggars Banquet",
+      "item_id": "48752b116e6751debcc69422d8835466",
+      "startup_seconds": 3.61,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "AAC (Advanced Audio Coding)"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1440000,
+          "actual_before_ms": 1450324,
+          "actual_after_ms": 1460751,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 2790000,
+          "actual_before_ms": 2800381,
+          "actual_after_ms": 2810808,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1-recovery/s01e09"
+    },
+    {
+      "episode": 10,
+      "title": "The Beast in Me",
+      "item_id": "9edaebc317325cc2b749992efd5186fb",
+      "startup_seconds": 7.21,
+      "passed": true,
+      "visually_reviewed": true,
+      "watch_state_restored": true,
+      "decoders": [
+        {
+          "hwdec": "mediacodec",
+          "video": "H.265 / HEVC (High Efficiency Video Coding)",
+          "audio": "AAC (Advanced Audio Coding)"
+        }
+      ],
+      "seek_checks": [
+        {
+          "stage": "middle",
+          "target_ms": 1650000,
+          "actual_before_ms": 1660242,
+          "actual_after_ms": 1670627,
+          "audio_output_active": true
+        },
+        {
+          "stage": "ending",
+          "target_ms": 3210000,
+          "actual_before_ms": 3220050,
+          "actual_after_ms": 3230477,
+          "audio_output_active": true
+        }
+      ],
+      "evidence": "artifacts/e2e-physical-tv/mobland/verified-season1-recovery/s01e10"
+    }
+  ],
+  "completion_status": "Stopped at user request; final-release end-to-end recheck incomplete",
+  "final_release_attempt": {
+    "id": "62878afad80857cdb45805cb070aa655",
+    "name": "Jigsaw Puzzle",
+    "episode": 2,
+    "pass": false,
+    "startup_seconds": 19.79,
+    "playing": [
+      {
+        "state": 3,
+        "position_ms": 169,
+        "raw_position_ms": 83,
+        "updated_ms": 1476099454,
+        "speed": 1.0
+      },
+      {
+        "state": 6,
+        "position_ms": 6381,
+        "raw_position_ms": 6381,
+        "updated_ms": 1476105988,
+        "speed": 0.0
+      },
+      {
+        "state": 3,
+        "position_ms": 19454,
+        "raw_position_ms": 16850,
+        "updated_ms": 1476118396,
+        "speed": 1.0
+      }
+    ],
+    "audio": {
+      "uid": 10146,
+      "pid": 14660,
+      "telemetry_audio": [
+        "AAC",
+        "AAC",
+        "AAC",
+        "AAC",
+        "AAC"
+      ],
+      "codec_initialized": true,
+      "output_active": true,
+      "audio_flinger_uid_lines": [
+        "14660  10146  app.sloppatv",
+        "4913    1   14660  10146  app.sloppatv"
+      ],
+      "audio_flinger_active_uid_lines": [
+        "688    yes  14660    4913    1274 A  0x000 00000005 00000003  48000  3   1  0     0     0     0     0  000E8800  11286   11286 A         0    11264      false  458.08 t"
+      ]
+    },
+    "controls": {
+      "paused": {
+        "state": 2,
+        "position_ms": 20020,
+        "raw_position_ms": 20020,
+        "updated_ms": 1476121597,
+        "speed": 0.0
+      },
+      "held": {
+        "state": 2,
+        "position_ms": 20020,
+        "raw_position_ms": 20020,
+        "updated_ms": 1476121597,
+        "speed": 0.0
+      },
+      "resumed": {
+        "state": 3,
+        "position_ms": 20183,
+        "raw_position_ms": 20061,
+        "updated_ms": 1476123958,
+        "speed": 1.0
+      },
+      "sought": {
+        "state": 3,
+        "position_ms": 32242,
+        "raw_position_ms": 32063,
+        "updated_ms": 1476125811,
+        "speed": 1.0
+      },
+      "after_seek": {
+        "state": 3,
+        "position_ms": 42206,
+        "raw_position_ms": 37078,
+        "updated_ms": 1476131192,
+        "speed": 1.0
+      }
+    },
+    "deep_seeks": [],
+    "error": "middle seek did not reach 1560000: {'state': 3, 'position_ms': 1212986, 'raw_position_ms': 1212499, 'updated_ms': 1476250723, 'speed': 1.0}",
+    "samples": [
+      {
+        "t": 1792120663.654,
+        "session": null
+      },
+      {
+        "t": 1792120663.953,
+        "session": null
+      },
+      {
+        "t": 1792120664.253,
+        "session": null
+      },
+      {
+        "t": 1792120664.551,
+        "session": null
+      },
+      {
+        "t": 1792120664.862,
+        "session": null
+      },
+      {
+        "t": 1792120665.166,
+        "session": null
+      },
+      {
+        "t": 1792120665.475,
+        "session": null
+      },
+      {
+        "t": 1792120665.778,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120666.072,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120666.365,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120666.664,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120666.964,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120667.268,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120667.561,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120667.859,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120668.155,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120668.454,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120668.754,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120669.056,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120669.363,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120669.661,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120669.968,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120670.268,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120670.585,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120670.887,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120671.185,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120671.487,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120671.783,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120672.086,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120672.385,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120672.686,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120672.986,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120673.285,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120673.586,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120673.886,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120674.186,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120674.485,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120674.789,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120675.089,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120675.391,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120675.697,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120676.001,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120676.294,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120676.59,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120676.891,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120677.194,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120677.49,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120677.79,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120678.096,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120678.402,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120678.73,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120679.084,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120679.413,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120679.725,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120680.033,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120680.334,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120680.632,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120680.935,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120681.237,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120681.535,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120681.834,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120682.137,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120682.438,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120682.735,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120683.046,
+        "session": {
+          "state": 6,
+          "position_ms": 0,
+          "raw_position_ms": 0,
+          "updated_ms": 1476081821,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120683.342,
+        "session": {
+          "state": 3,
+          "position_ms": 169,
+          "raw_position_ms": 83,
+          "updated_ms": 1476099454,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120691.629,
+        "session": {
+          "state": 6,
+          "position_ms": 6381,
+          "raw_position_ms": 6381,
+          "updated_ms": 1476105988,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120692.245,
+        "session": {
+          "state": 3,
+          "position_ms": 6691,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120692.848,
+        "session": {
+          "state": 3,
+          "position_ms": 7291,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120693.456,
+        "session": {
+          "state": 3,
+          "position_ms": 7901,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120694.069,
+        "session": {
+          "state": 3,
+          "position_ms": 8511,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120694.67,
+        "session": {
+          "state": 3,
+          "position_ms": 9111,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120695.277,
+        "session": {
+          "state": 3,
+          "position_ms": 9721,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120695.877,
+        "session": {
+          "state": 3,
+          "position_ms": 10321,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120696.477,
+        "session": {
+          "state": 3,
+          "position_ms": 10921,
+          "raw_position_ms": 6464,
+          "updated_ms": 1476108213,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120697.087,
+        "session": {
+          "state": 3,
+          "position_ms": 11756,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120697.686,
+        "session": {
+          "state": 3,
+          "position_ms": 12356,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120698.294,
+        "session": {
+          "state": 3,
+          "position_ms": 12966,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120698.892,
+        "session": {
+          "state": 3,
+          "position_ms": 13566,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120699.494,
+        "session": {
+          "state": 3,
+          "position_ms": 14166,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120700.097,
+        "session": {
+          "state": 3,
+          "position_ms": 14766,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120700.715,
+        "session": {
+          "state": 3,
+          "position_ms": 15386,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120701.32,
+        "session": {
+          "state": 3,
+          "position_ms": 15986,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120701.92,
+        "session": {
+          "state": 3,
+          "position_ms": 16586,
+          "raw_position_ms": 11678,
+          "updated_ms": 1476113202,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120702.521,
+        "session": {
+          "state": 3,
+          "position_ms": 17164,
+          "raw_position_ms": 16850,
+          "updated_ms": 1476118396,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120705.541,
+        "session": {
+          "state": 2,
+          "position_ms": 20020,
+          "raw_position_ms": 20020,
+          "updated_ms": 1476121597,
+          "speed": 0.0
+        }
+      },
+      {
+        "t": 1792120707.884,
+        "session": {
+          "state": 3,
+          "position_ms": 20183,
+          "raw_position_ms": 20061,
+          "updated_ms": 1476123958,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120708.0,
+        "session": {
+          "state": 3,
+          "position_ms": 20293,
+          "raw_position_ms": 20061,
+          "updated_ms": 1476123958,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120708.303,
+        "session": {
+          "state": 3,
+          "position_ms": 20603,
+          "raw_position_ms": 20061,
+          "updated_ms": 1476123958,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120708.605,
+        "session": {
+          "state": 3,
+          "position_ms": 20903,
+          "raw_position_ms": 20061,
+          "updated_ms": 1476123958,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120708.904,
+        "session": {
+          "state": 3,
+          "position_ms": 21203,
+          "raw_position_ms": 20061,
+          "updated_ms": 1476123958,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120709.206,
+        "session": {
+          "state": 3,
+          "position_ms": 21503,
+          "raw_position_ms": 20061,
+          "updated_ms": 1476123958,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120709.511,
+        "session": {
+          "state": 3,
+          "position_ms": 21803,
+          "raw_position_ms": 20061,
+          "updated_ms": 1476123958,
+          "speed": 1.0
+        }
+      },
+      {
+        "t": 1792120709.796,
+        "session": {
+          "state": 3,
+          "position_ms": 32242,
+          "raw_position_ms": 32063,
+          "updated_ms": 1476125811,
+          "speed": 1.0
+        }
+      }
+    ],
+    "watch_state_restored": true
+  },
+  "latest_source_retry_physical_check": "Interrupted; unverified",
+  "watch_state_independently_restored": true
+}
