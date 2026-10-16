@@ -113,6 +113,14 @@ int main() {
         "Cannot convert decoder/filter output to any format supported by the output."));
     assert(!mpvLogIndicatesFatalVideoFailure("h264_mediacodec: MediaCodec 0x0 failed to start"));
     assert(!mpvLogIndicatesFatalVideoFailure("audio decoder failed"));
+    // A cold resume needs both container-index and distant-range reads before
+    // mpv can fill its cache; do not discard it at the beginning-only deadline.
+    assert(!shouldRetrySlowRemuxSource(true, 30'000, true, true));
+    assert(!shouldRetrySlowRemuxSource(true, 89'999, true, true));
+    assert(shouldRetrySlowRemuxSource(true, 90'000, true, true));
+    assert(!shouldRetrySlowRemuxSource(true, 90'000, false, true));
+    assert(!shouldRetrySlowRemuxSource(false, 90'000, true, true));
+
     assert(mpvHttpStatus("HTTP error 500") == 500);
     assert(mpvHttpStatus("curl: HTTP error 503 while fetching") == 503);
     assert(mpvHttpStatus("HTTP error nope") == 0);

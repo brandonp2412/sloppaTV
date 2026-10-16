@@ -108,10 +108,13 @@ constexpr int playbackCachePauseWaitSeconds(bool isRemux) {
     return isRemux ? 20 : 2;
 }
 
-// Only shorten Remux's cold-start wait when there is another direct-play
-// version to try. A single available torrent retains the full timeout.
-constexpr bool shouldRetrySlowRemuxSource(bool isRemux, int64_t elapsedMs, bool hasAlternate) {
-    return isRemux && hasAlternate && elapsedMs >= 30'000;
+// A resumed torrent must read the container index and a distant media range
+// before filling the player cache. Keep its full preparation budget: switching
+// sources after 30 seconds discards those reads and starts the cold seek again.
+// Playback from the beginning can still try another offered version sooner.
+constexpr bool shouldRetrySlowRemuxSource(bool isRemux, int64_t elapsedMs, bool hasAlternate, bool resuming = false) {
+    const int retryAfterMs = resuming ? playbackPrepareTimeoutMs(false, true) : 30'000;
+    return isRemux && hasAlternate && elapsedMs >= retryAfterMs;
 }
 
 inline bool mpvLogIndicatesHardwareDecoderFailure(std::string_view text) {

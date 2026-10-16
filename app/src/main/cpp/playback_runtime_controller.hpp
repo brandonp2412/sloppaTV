@@ -590,7 +590,8 @@ public:
             const bool isRemux = serverInfo_ && serverInfo_->isRemux;
             const PlaybackPreparePlan preparePlan = coordinator_.preparePlan(now, isRemux);
             const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;
-            if (shouldRetrySlowRemuxSource(isRemux, preparePlan.elapsedMs, !alternate.empty())) {
+            if (shouldRetrySlowRemuxSource(isRemux, preparePlan.elapsedMs, !alternate.empty(),
+                                           coordinator_.session().activeTarget().startTicks > 0)) {
                 std::scoped_lock lock(stateMutex);
                 const auto& item = coordinator_.session().activeItem();
                 const auto& target = coordinator_.session().activeTarget();
