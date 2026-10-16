@@ -38,6 +38,8 @@ class NativeMediaPlayer {
 public:
     NativeMediaPlayer(JavaVM* vm, jobject activity, const char* dataPath);
     ~NativeMediaPlayer();
+    NativeMediaPlayer(const NativeMediaPlayer&) = delete;
+    NativeMediaPlayer& operator=(const NativeMediaPlayer&) = delete;
 
     void startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset = 0,
                     int embeddedAudioOrdinal = -1, int embeddedSubtitleStreamIndex = -1,

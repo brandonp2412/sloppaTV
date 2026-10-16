@@ -437,6 +437,7 @@ public final class SloppaNativeActivity extends NativeActivity {
         }
     }
 
+    @android.annotation.TargetApi(Build.VERSION_CODES.Q)
     @SuppressWarnings("deprecation")
     private static boolean isDirectPlaybackSupportedLegacy(
         AudioFormat format,

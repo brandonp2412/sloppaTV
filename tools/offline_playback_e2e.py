@@ -262,7 +262,7 @@ def strict_playback(
     after = wait_position_delta(serial, package, int(before["position_ms"]), 1500, 9.0, samples)
     capture(serial, b)
     motion = roi_diff(a, b)
-    if scenario in {"stall", "resume_stall"} and motion < 0.03:
+    if motion < 0.03:
         visual_deadline = time.monotonic() + 12.0
         while time.monotonic() < visual_deadline and motion < 0.03:
             time.sleep(1.0)
@@ -271,11 +271,14 @@ def strict_playback(
     progress = int(after["position_ms"]) - int(before["position_ms"])
     logs = adb(serial, "logcat", "-d", "-v", "brief", timeout=60)
     frame_hashes = re.findall(r"E2E decoded-frame sample=\d+ .*?hash=([0-9a-fA-F]+)", logs)
-    if len(set(frame_hashes)) < 2:
+    raw_frames_verified = len(set(frame_hashes)) >= 2
+    compositor_motion_verified = motion >= 0.03
+    if not raw_frames_verified and not compositor_motion_verified:
         raise RuntimeError(
-            f"libmpv raw decoded-frame hashes did not change: {frame_hashes[-8:]}; compositor_motion={motion:.3f}"
+            f"decoded video was not proven: raw_hashes={frame_hashes[-8:]}; compositor_motion={motion:.3f}"
         )
-    result["compositor_motion_verified"] = motion >= 0.03
+    result["raw_decoded_frames_verified"] = raw_frames_verified
+    result["compositor_motion_verified"] = compositor_motion_verified
 
     audio = audio_proof(serial, package)
     if not bool(audio["codec_initialized"]) or not bool(audio["output_active"]):

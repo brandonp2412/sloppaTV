@@ -841,6 +841,11 @@ void NativeMediaPlayer::logDecodedFrameTelemetryLocked(std::chrono::steady_clock
         decodedFrameTelemetrySamples_ >= 3) {
         return;
     }
+    // mediacodec_embed renders opaque hardware-decoded frames directly to the
+    // Android SurfaceTexture, so mpv cannot service screenshot-raw for them.
+    // The E2E harness verifies those frames from compositor screenshots instead.
+    const std::string hwdec = getStringPropertyLocked("hwdec-current");
+    if (!hwdec.empty() && hwdec != "none" && hwdec != "no") return;
     if (lastDecodedFrameTelemetry_ != std::chrono::steady_clock::time_point{} &&
         now - lastDecodedFrameTelemetry_ < std::chrono::milliseconds(1500)) {
         return;
