@@ -267,26 +267,11 @@ std::vector<std::string> DeviceCodecSupport::jellyfinVideoCodecs() const {
 }
 
 std::vector<std::string> DeviceCodecSupport::jellyfinAudioCodecs(int maxAudioChannels) const {
-    return advertisedAudioCodecs(
-        AudioCodecCapabilities{
-            .aac = aac,
-            .mp3 = mp3,
-            .mp2 = mp2,
-            .pcm = pcm,
-            .ac3 = ac3,
-            .eac3 = eac3,
-            .dts = dts,
-            .truehd = truehd,
-            .flac = flac,
-            .opus = opus,
-            .vorbis = vorbis,
-            .directAc3 = directAc3,
-            .directEac3 = directEac3,
-            .directDts = directDts,
-            .directDtsHd = directDtsHd,
-            .directTrueHd = directTrueHd,
-        },
-        maxAudioChannels);
+    // Audio is decoded by the bundled FFmpeg in libmpv, not Android's
+    // MediaCodec list. In particular, the Streamer has no TrueHD/DTS platform
+    // decoder even though libmpv can decode these tracks to PCM locally.
+    // HDMI passthrough capabilities remain separate from software decoding.
+    return advertisedAudioCodecs(embeddedMpvAudioCodecs(), maxAudioChannels);
 }
 
 std::vector<std::string> DeviceCodecSupport::jellyfinTranscodingAudioCodecs(int maxAudioChannels) const {

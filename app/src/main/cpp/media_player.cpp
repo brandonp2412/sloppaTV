@@ -413,6 +413,11 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
         }
     }
 
+    // Remux serves sparse torrent files over HTTP ranges. The native Matroska
+    // demuxer can lose sync after distant seeks and report an early EOF;
+    // FFmpeg's demuxer handles the same verified ranges correctly.
+    if (isRemux && !setOptionLocked("demuxer", "lavf", true, &error)) return false;
+
     const struct {
         const char* name;
         const char* value;

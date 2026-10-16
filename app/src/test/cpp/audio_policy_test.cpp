@@ -21,6 +21,16 @@ int main() {
     assert(effectiveAudioChannels(8, 6) == 6);
     assert(effectiveAudioChannels(6, 8) == 6);
 
+    // A stereo HDMI route can still direct-play Remux TrueHD/DTS tracks:
+    // FFmpeg decodes/downmixes locally even without platform decoders or
+    // compressed passthrough. Normal stereo server negotiation stays limited.
+    const auto embedded = embeddedMpvAudioCodecs();
+    const auto remuxStereo = advertisedAudioCodecs(embedded, serverAudioChannels(true, 2));
+    assert(audioStreamCopyAllowed(remuxStereo, "truehd", 6, serverAudioChannels(true, 2)));
+    assert(audioStreamCopyAllowed(remuxStereo, "dts", 8, serverAudioChannels(true, 2)));
+    const auto jellyfinStereo = advertisedAudioCodecs(embedded, serverAudioChannels(false, 2));
+    assert(!audioStreamCopyAllowed(jellyfinStereo, "truehd", 6, 2));
+
     AudioCodecCapabilities codecs{
         .aac = true,
         .mp3 = true,

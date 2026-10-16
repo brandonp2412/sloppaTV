@@ -35,6 +35,18 @@ int main() {
     assert(b.remotePrefetchText(t + std::chrono::seconds(42)).find("current 50%") != std::string::npos);
     assert(b.remotePrefetchText(t + std::chrono::seconds(42)).find("next 25%") != std::string::npos);
     assert(b.remotePrefetchText(t + std::chrono::seconds(65)).empty());
+    // A 60 Hz render loop advances by less than 125 ms per observation.
+    // It must stay Playing instead of falsely reporting a stall after 15 s.
+    PlayerBufferIndicator smooth;
+    for (int ms = 0; ms <= 20000; ms += 16) {
+        smooth.observe(false, false, true, false, false, ms, 30000, true, true, t + std::chrono::milliseconds(ms));
+        assert(smooth.phase() == PlayerBufferPhase::Playing);
+    }
+    smooth.observe(false, false, true, false, false, 20000, 0, true, true, t + std::chrono::seconds(24));
+    assert(smooth.phase() == PlayerBufferPhase::Buffering);
+    smooth.observe(false, false, true, false, false, 20000, 0, true, true, t + std::chrono::seconds(36));
+    assert(smooth.phase() == PlayerBufferPhase::Stalled);
+
     b.reset();
     assert(b.cacheAheadMs() == 0);
     return 0;

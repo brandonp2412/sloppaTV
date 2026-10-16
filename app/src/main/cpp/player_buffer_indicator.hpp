@@ -46,8 +46,11 @@ public:
         }
         if (lastAdvancing_ == TimePoint{} || positionMs > lastPositionMs_ + 125 || positionMs + 500 < lastPositionMs_) {
             lastAdvancing_ = now;
+            // Compare against the last confirmed advance, not the previous
+            // render frame: normal 16-50 ms increments must accumulate past
+            // the 125 ms jitter threshold.
+            lastPositionMs_ = positionMs;
         }
-        lastPositionMs_ = positionMs;
         const auto idle = now - lastAdvancing_;
         if (cachePaused || idle >= std::chrono::seconds(3)) {
             phase_ = idle >= std::chrono::seconds(15) ? PlayerBufferPhase::Stalled : PlayerBufferPhase::Buffering;

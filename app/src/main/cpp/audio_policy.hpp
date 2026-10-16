@@ -26,6 +26,24 @@ struct AudioCodecCapabilities {
     bool directTrueHd = false;
 };
 
+// Decoders shipped in the pinned mpv-core-no-vulkan AAR. Keep this list
+// independent of Android MediaCodec and compressed HDMI passthrough support.
+constexpr AudioCodecCapabilities embeddedMpvAudioCodecs() {
+    return {
+        .aac = true,
+        .mp3 = true,
+        .mp2 = true,
+        .pcm = true,
+        .ac3 = true,
+        .eac3 = true,
+        .dts = true,
+        .truehd = true,
+        .flac = true,
+        .opus = true,
+        .vorbis = true,
+    };
+}
+
 // For a Remux direct-play source, libmpv can decode/downmix surround locally.
 // Keep the original audio stream available rather than requesting an
 // unnecessary server-side transcode when the HDMI output is stereo.
