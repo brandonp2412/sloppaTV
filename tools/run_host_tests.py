@@ -147,7 +147,11 @@ CPP_TESTS = [
 ]
 
 LINKED_CPP_TESTS = [
-    ("playback_completion_flow_test.cpp", ["playback_completion_flow.cpp", "playback_completion_controller.cpp", "player_completion_controller.cpp"], []),
+    (
+        "playback_completion_flow_test.cpp",
+        ["playback_completion_flow.cpp", "playback_completion_controller.cpp", "player_completion_controller.cpp"],
+        [],
+    ),
     ("account_completion_controller_test.cpp", ["account_completion_controller.cpp"], []),
     (
         "account_flow_test.cpp",
