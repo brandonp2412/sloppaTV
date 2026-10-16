@@ -26,6 +26,7 @@
 #include <limits>
 #include <string>
 #include <utility>
+#include <vector>
 
 enum class PlaybackRuntimeNotice {
     None,
@@ -636,6 +637,22 @@ public:
         if (status == PlayerStatus::Error) {
             std::scoped_lock lock(stateMutex);
             const std::string playerError = player_.error();
+            // A torrent may pass metadata probing yet fail the first HTTP range.
+            // Try the offered source before converting the same unavailable input.
+            const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;
+            const std::string itemId = coordinator_.session().activeItem().id;
+            if (failedSourceItemId_ != itemId) {
+                failedSourceItemId_ = itemId;
+                failedSources_.clear();
+            }
+            failedSources_.push_back(coordinator_.session().activeTarget().mediaSourceId);
+            if (serverInfo_ && serverInfo_->isRemux && coordinator_.activeTargetUsesDirectPlay() &&
+                !alternate.empty() &&
+                std::find(failedSources_.begin(), failedSources_.end(), alternate) == failedSources_.end() &&
+                restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
+                error_.clear();
+                return {};
+            }
             if (retryWithSoftwareDecode(rendererReady) || retryWithoutSubtitle(stream) ||
                 retryWithFallback(stream, rendererReady)) {
                 error_.clear();
@@ -650,6 +667,8 @@ public:
             error_ = playerError;
             return PlaybackHostEffect::stop();
         }
+
+        if (status == PlayerStatus::Playing) failedSources_.clear();
 
         const bool playbackEnded = status == PlayerStatus::Ended;
         if (playbackEnded && coordinator_.activeTargetUsesDirectPlay()) {
@@ -778,5 +797,7 @@ private:
     const std::string& dataPath_;
     const JellyfinServerInfo* serverInfo_;
     std::string softwareDecodeItemId_;
+    std::string failedSourceItemId_;
+    std::vector<std::string> failedSources_;
     bool embeddedSubtitleDiscoveryDone_ = false;
 };
