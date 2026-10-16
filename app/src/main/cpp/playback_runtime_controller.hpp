@@ -675,8 +675,8 @@ public:
             // Sparse Remux streams can report a truncated duration on premature EOF.
             // Preserve the known episode runtime when deciding if an early seek finished playback.
             const int recoveryDurationMs = std::max(player_.durationMs(), screenState_.durationMs());
-            const int recoveryTargetMs = screenState_.prematureSeekEndTarget(
-                recoveryDurationMs, std::chrono::steady_clock::now());
+            const int recoveryTargetMs =
+                screenState_.prematureSeekEndTarget(recoveryDurationMs, std::chrono::steady_clock::now());
             if (recoveryTargetMs >= 0) {
                 std::scoped_lock lock(stateMutex);
                 const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;

@@ -43,6 +43,7 @@ struct FakeRenderer {
     void text(float x, float y, float scale, std::string_view value, int color, float maxWidth) {
         texts.push_back({x, y, scale, std::string(value), color, maxWidth});
     }
+
     void textCentered(float x, float y, float width, float, float scale, std::string_view value, int color) {
         centeredTexts.push_back({x, y, scale, std::string(value), color, width});
     }

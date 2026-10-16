@@ -36,7 +36,8 @@ PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(FallbackPlaybackC
 
 PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(BeginPlaybackCompletion& completion,
                                                                bool activeGeneration, bool activeDetailsSelection) {
-    auto effects = PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_);
+    auto effects =
+        PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_);
     if (activeGeneration && activeDetailsSelection) {
         const bool openedPlayer = coordinator_.transitionLoading();
         coordinator_.finishPlaybackResolution();
@@ -50,7 +51,8 @@ PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(BeginPlaybackComp
 
 PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(SeriesPlayAllCompletion& completion,
                                                                bool activeGeneration, bool activeDetailsSelection) {
-    auto effects = PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_);
+    auto effects =
+        PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_);
     if (activeGeneration && activeDetailsSelection) {
         const bool openedPlayer = coordinator_.transitionLoading();
         coordinator_.finishPlaybackResolution();

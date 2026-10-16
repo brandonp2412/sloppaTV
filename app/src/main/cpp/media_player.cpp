@@ -397,8 +397,7 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
         // included in our embedded mpv build and accepts the software yuv420p
         // fallback while keeping the normal mediacodec_embed path untouched.
         if (!setOptionLocked("vo", "gpu-next", true, &error) ||
-            !setOptionLocked("gpu-context", "android", true, &error) ||
-            !setOptionLocked("hwdec", "no", true, &error)) {
+            !setOptionLocked("gpu-context", "android", true, &error) || !setOptionLocked("hwdec", "no", true, &error)) {
             return false;
         }
     } else {
@@ -1026,21 +1025,17 @@ PlayerStatus NativeMediaPlayer::status() const {
         } else {
             cachedStatus_ = PlayerStatus::Ended;
         }
-    } else if (waitingForCache || (!haveDuration && ((haveIdle && idle) || !havePosition))) {
-        // A cache underrun is buffering even after playback has started.
-        // Reporting Playing here leaves the media session at STATE_PLAYING,
-        // prevents Remux's stall/fallback timer from running, and can present a
-        // frozen frame as active playback.
-        cachedStatus_ = PlayerStatus::Preparing;
-    } else if (havePaused && paused) {
-        cachedStatus_ = PlayerStatus::Paused;
-    } else if (!positionAdvanced) {
-        // time-pos can become available at a static resume offset before a
-        // decoder has produced usable playback. Do not advertise PLAYING until
-        // the playback clock actually advances from the first observed value.
-        cachedStatus_ = PlayerStatus::Preparing;
     } else {
-        cachedStatus_ = PlayerStatus::Playing;
+        // A cache underrun, or a static resume offset before the playback
+        // clock advances, must never be reported as active playback.
+        const bool buffering = waitingForCache || (!haveDuration && ((haveIdle && idle) || !havePosition));
+        if (buffering) {
+            cachedStatus_ = PlayerStatus::Preparing;
+        } else if (havePaused && paused) {
+            cachedStatus_ = PlayerStatus::Paused;
+        } else {
+            cachedStatus_ = positionAdvanced ? PlayerStatus::Playing : PlayerStatus::Preparing;
+        }
     }
     if (cachedStatus_ == PlayerStatus::Playing && !waitingForCache) startedPlayback_ = true;
     if (cachedStatus_ == PlayerStatus::Playing || cachedStatus_ == PlayerStatus::Paused) {

@@ -209,8 +209,7 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
                                                                  : "Loading media details");
     const StatusOverlayRenderState status = frame.statusOverlayState.renderState(
         frame.error, (frame.loading || frame.homeLoading || frame.mutationLoading) && frame.screen != Screen::Player,
-        frame.screen == Screen::Player,
-        std::chrono::steady_clock::now(), loadingLabel);
+        frame.screen == Screen::Player, std::chrono::steady_clock::now(), loadingLabel);
     renderStatusOverlay(
         frame.renderer, status,
         StatusOverlayRenderStyle<Color>{
