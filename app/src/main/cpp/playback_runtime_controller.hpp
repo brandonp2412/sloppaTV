@@ -672,9 +672,11 @@ public:
 
         const bool playbackEnded = status == PlayerStatus::Ended;
         if (playbackEnded && coordinator_.activeTargetUsesDirectPlay()) {
-            const int actualDurationMs = player_.durationMs();
+            // Sparse Remux streams can report a truncated duration on premature EOF.
+            // Preserve the known episode runtime when deciding if an early seek finished playback.
+            const int recoveryDurationMs = std::max(player_.durationMs(), screenState_.durationMs());
             const int recoveryTargetMs = screenState_.prematureSeekEndTarget(
-                actualDurationMs > 0 ? actualDurationMs : screenState_.durationMs(), std::chrono::steady_clock::now());
+                recoveryDurationMs, std::chrono::steady_clock::now());
             if (recoveryTargetMs >= 0) {
                 std::scoped_lock lock(stateMutex);
                 const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;

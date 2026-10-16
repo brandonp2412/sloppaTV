@@ -63,6 +63,13 @@ public:
     [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int64_t positionTicks) const {
         for (const auto& segment : mediaSegments_) {
             if (segment.endTicks - segment.startTicks < 30000000) continue;
+            // External intro markers can be for a different cut or episode.
+            // Do not offer a skip that would jump through most of this video.
+            if (segment.type == "Intro" &&
+                (segment.endTicks > 8LL * 60 * 10000000 ||
+                 (activeItem_.runtimeTicks > 0 && segment.endTicks > activeItem_.runtimeTicks / 3))) {
+                continue;
+            }
             if (positionTicks >= segment.startTicks && positionTicks < segment.endTicks - 5000000) return &segment;
         }
         return nullptr;

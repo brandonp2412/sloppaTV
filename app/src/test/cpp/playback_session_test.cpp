@@ -78,6 +78,22 @@ int main() {
     assert(!state.activeSkippableSegment(75'000'000));
     assert(state.mediaSegmentsRequested());
 
+    // A marker from a mismatched episode/cut must never skip to the end.
+    JellyfinItem shortEpisode;
+    shortEpisode.id = "short-episode";
+    shortEpisode.runtimeTicks = 18LL * 60 * 10000000;
+    state.setActive(shortEpisode, activeTarget);
+    state.setMediaSegments({
+        {"Intro", 0, 17LL * 60 * 10000000},
+        {"Outro", 17LL * 60 * 10000000, 18LL * 60 * 10000000},
+    });
+    assert(state.activeSkippableSegment(10LL * 10000000) == nullptr);
+    assert(state.activeSkippableSegment(17LL * 60 * 10000000) != nullptr);
+    state.setMediaSegments({{"Intro", 80LL * 10000000, 170LL * 10000000}});
+    assert(state.activeSkippableSegment(90LL * 10000000) != nullptr);
+    state.setMediaSegments({{"Intro", 0, 9LL * 60 * 10000000}});
+    assert(state.activeSkippableSegment(10LL * 10000000) == nullptr);
+
     state.requestHomeRefresh();
     assert(state.homeRefreshRequested());
     assert(state.takeHomeRefreshRequest());
