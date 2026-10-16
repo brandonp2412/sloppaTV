@@ -157,6 +157,13 @@ int main() {
     assert(shouldFallbackAfterUnseekableSeek(false, 10'000, 0, true));
     assert(!shouldFallbackAfterUnseekableSeek(false, 10'000, -1, true));
 
+    assert(prematureSeekEnd(1'260'000, 2'505'632, 20'000));
+    assert(prematureSeekEnd(3'030'000, 3'106'896, 10'000));
+    assert(!prematureSeekEnd(3'030'000, 3'106'896, 76'000));
+    assert(!prematureSeekEnd(1'260'000, 2'505'632, 90'001));
+    assert(!prematureSeekEnd(-1, 2'505'632, 0));
+    assert(!prematureSeekEnd(1'260'000, 0, 0));
+
     assert(static_cast<int>(StartupStep::StartPlayback) < static_cast<int>(StartupStep::ReadTrackMetadata));
     return 0;
 }

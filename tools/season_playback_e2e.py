@@ -175,7 +175,7 @@ def run_episode(serial: str, package: str, item: dict, output: Path) -> dict:
         result["deep_seeks"] = []
         for label, target in (("middle", duration_ms // 2), ("ending", duration_ms - 90000)):
             seek(serial, package, target)
-            deadline = time.monotonic() + 65
+            deadline = time.monotonic() + 115
             reached = None
             while time.monotonic() < deadline:
                 reached = session_snapshot(serial, package)

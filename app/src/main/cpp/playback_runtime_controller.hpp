@@ -652,6 +652,27 @@ public:
         }
 
         const bool playbackEnded = status == PlayerStatus::Ended;
+        if (playbackEnded && coordinator_.activeTargetUsesDirectPlay()) {
+            const int actualDurationMs = player_.durationMs();
+            const int recoveryTargetMs = screenState_.prematureSeekEndTarget(
+                actualDurationMs > 0 ? actualDurationMs : screenState_.durationMs(), std::chrono::steady_clock::now());
+            if (recoveryTargetMs >= 0) {
+                std::scoped_lock lock(stateMutex);
+                const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;
+                screenState_.setPositionMs(recoveryTargetMs);
+                __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
+                                    "Stream ended prematurely after seek target=%d; retrying same episode",
+                                    recoveryTargetMs);
+                if ((!alternate.empty() &&
+                     restartAt(stream, recoveryTargetMs, -1, kSubtitleServerDefaultIndex, alternate)) ||
+                    retryWithFallback(stream, rendererReady, true)) {
+                    error_.clear();
+                    return {};
+                }
+                error_ = "Stream ended while seeking";
+                return PlaybackHostEffect::stop();
+            }
+        }
         if (!playbackEnded && status != PlayerStatus::Playing && status != PlayerStatus::Paused) return {};
         if (!embeddedSubtitleDiscoveryDone_ && coordinator_.activeTargetUsesDirectPlay() && !playbackEnded) {
             if (const auto tracks = player_.embeddedSubtitleTracks()) {

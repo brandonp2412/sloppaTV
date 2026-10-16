@@ -210,5 +210,17 @@ int main() {
     assert(!state.windowRestorePending());
     assert(!state.resumeOnFocusRequested());
 
+    PlayerScreenState seekEnd;
+    seekEnd.beginPlayback(0, 2'505'632);
+    assert(seekEnd.prematureSeekEndTarget(2'505'632, now) == -1);
+    seekEnd.beginSeek(1'260'000, now);
+    // Telemetry may already have cleared pendingSeekTarget after a failed
+    // HTTP seek; the most recent explicit target must still be recoverable.
+    seekEnd.applyObservedPosition(2'505'632, now + 20s);
+    assert(seekEnd.prematureSeekEndTarget(2'505'632, now + 20s) == 1'260'000);
+    assert(seekEnd.prematureSeekEndTarget(2'505'632, now + 91s) == -1);
+    seekEnd.beginSeek(2'500'000, now);
+    assert(seekEnd.prematureSeekEndTarget(2'505'632, now + 1s) == -1);
+
     return 0;
 }

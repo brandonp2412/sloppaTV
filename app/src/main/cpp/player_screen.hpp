@@ -291,6 +291,12 @@ public:
                !postSeekPositionMatchesTarget(observedPositionMs, lastSeekTargetMs_, 3000);
     }
 
+    [[nodiscard]] int prematureSeekEndTarget(int durationMs, TimePoint now) const {
+        if (lastSeekIssued_ == TimePoint{}) return -1;
+        const int64_t elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastSeekIssued_).count();
+        return prematureSeekEnd(lastSeekTargetMs_, durationMs, elapsedMs) ? lastSeekTargetMs_ : -1;
+    }
+
     void beginWindowRestore(bool resumePlayback) {
         windowRestorePending_ = true;
         if (resumePlayback) resumeOnFocus_ = true;

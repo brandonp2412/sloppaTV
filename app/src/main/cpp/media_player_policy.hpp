@@ -232,6 +232,13 @@ constexpr bool shouldFallbackAfterUnseekableSeek(bool mediaSeekable, int observe
            !postSeekPositionMatchesTarget(observedPositionMs, targetPositionMs) && seekFailureMatured;
 }
 
+// An EOF soon after seeking must not complete the episode if it could not
+// naturally have reached the end. Allow timestamp/runtime rounding at EOF.
+constexpr bool prematureSeekEnd(int targetMs, int durationMs, int64_t elapsedMs) {
+    return targetMs >= 0 && durationMs > 0 && elapsedMs >= 0 && elapsedMs <= 90'000 &&
+           static_cast<int64_t>(targetMs) + elapsedMs + 15'000 < durationMs;
+}
+
 constexpr int clampSeekPositionMs(int64_t positionMs) {
     return static_cast<int>(std::clamp<int64_t>(positionMs, 0, std::numeric_limits<int>::max()));
 }
