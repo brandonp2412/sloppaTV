@@ -292,7 +292,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     // The normal overlay timeout resumes once playback has started.
     const bool preparingInitialPlayback = resolving || status == PlayerStatus::Preparing;
     const bool showOverlay =
-        preparingInitialPlayback || userOverlayVisible || playerScreenState.skipDisablePromptVisible();
+        preparingInitialPlayback || buffer.interrupted() || userOverlayVisible ||
+        playerScreenState.skipDisablePromptVisible();
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
         subtitleText = cue->text;

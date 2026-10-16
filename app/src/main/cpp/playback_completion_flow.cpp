@@ -36,14 +36,30 @@ PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(FallbackPlaybackC
 
 PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(BeginPlaybackCompletion& completion,
                                                                bool activeGeneration, bool activeDetailsSelection) {
-    return apply(
-        PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_));
+    auto effects = PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_);
+    if (activeGeneration && activeDetailsSelection) {
+        const bool openedPlayer = coordinator_.transitionLoading();
+        coordinator_.finishPlaybackResolution();
+        if (!effects.transition && openedPlayer) {
+            coordinator_.session().clearActive();
+            effects.popToDetails = true;
+        }
+    }
+    return apply(std::move(effects));
 }
 
 PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(SeriesPlayAllCompletion& completion,
                                                                bool activeGeneration, bool activeDetailsSelection) {
-    return apply(
-        PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_));
+    auto effects = PlaybackCompletionController::apply(completion, activeGeneration, activeDetailsSelection, queueState_);
+    if (activeGeneration && activeDetailsSelection) {
+        const bool openedPlayer = coordinator_.transitionLoading();
+        coordinator_.finishPlaybackResolution();
+        if (!effects.transition && openedPlayer) {
+            coordinator_.session().clearActive();
+            effects.popToDetails = true;
+        }
+    }
+    return apply(std::move(effects));
 }
 
 PlaybackCompletionHostEffects PlaybackCompletionFlow::complete(SubtitleLoadCompletion& completion,

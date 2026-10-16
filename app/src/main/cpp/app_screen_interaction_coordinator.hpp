@@ -185,6 +185,7 @@ public:
             break;
         case DetailsScreenHostAction::BeginSeriesPlayAll:
             playbackRequests_.beginSeriesPlayAll();
+            openPendingRemuxPlayer();
             break;
         case DetailsScreenHostAction::SearchSeerr:
             searchFlow_.state().setQuery(detailsFlow_.item().name);
@@ -344,8 +345,16 @@ private:
         if (loading_ || detailsFlow_.item().id.empty()) return;
         if (const auto player = settingsFlow_.selectedExternalPlayer())
             externalPlayback_.prepare(*player);
-        else
+        else {
             playbackRequests_.beginPlayback();
+            openPendingRemuxPlayer();
+        }
+    }
+
+    void openPendingRemuxPlayer() {
+        if (!serverInfo_.isRemux || !loading_) return;
+        navigation_.push(Screen::Player);
+        screen_ = navigation_.current();
     }
 
     void schedulePrefetch(const JellyfinItem& item, ScreenInteractionHostEffects& host) {

@@ -80,12 +80,14 @@ public:
     }
 
     [[nodiscard]] PlaybackCompletionApplicationEffects complete(BeginPlaybackCompletion& completion) {
-        const bool activeDetailsSelection = screen_ == Screen::Details && details_.item().id == completion.selected.id;
+        const bool activeDetailsSelection = (screen_ == Screen::Details || screen_ == Screen::Player) &&
+                                            details_.item().id == completion.selected.id;
         return apply(flow_.complete(completion, epoch_.active(completion.generation), activeDetailsSelection));
     }
 
     [[nodiscard]] PlaybackCompletionApplicationEffects complete(SeriesPlayAllCompletion& completion) {
-        const bool activeDetailsSelection = screen_ == Screen::Details && details_.item().id == completion.series.id;
+        const bool activeDetailsSelection = (screen_ == Screen::Details || screen_ == Screen::Player) &&
+                                            details_.item().id == completion.series.id;
         return apply(flow_.complete(completion, epoch_.active(completion.generation), activeDetailsSelection));
     }
 

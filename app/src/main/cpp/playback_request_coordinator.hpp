@@ -128,6 +128,7 @@ public:
         loading_ = true;
         error_.clear();
         playback_.beginUserPlayback(false);
+        prepareInitialPlayer();
         SeriesPlayAllOptions options{.maxStreamingBitrate = settings_.maxBitrateMbps * 1000000,
                                      .maxAudioChannels = runtime_.serverAudioChannels(),
                                      .overrides = playbackOverridesFor(settings_)};
@@ -141,12 +142,16 @@ public:
         if (selection.resetQueue) queue_.reset();
         loading_ = true;
         error_.clear();
+        prepareInitialPlayer();
         if (!resolution_.resolveSelection(session_, details_.item(), runtime_.resolutionOptions(),
                                           playbackEpoch_.begin(), selection.queuedPlaybackIndex))
             rejectPlaybackResolution("PLAYBACK COULD NOT BE STARTED");
     }
 
-    void release(bool reportStop, bool completed = false) { releaseFlow_.release(reportStop, completed, runtime_); }
+    void release(bool reportStop, bool completed = false) {
+        loading_ = false;
+        releaseFlow_.release(reportStop, completed, runtime_);
+    }
 
     [[nodiscard]] PlaybackRequestHostEffects queueAutoplay(JellyfinItem nextItem) {
         const int queuedNextIndex = queue_.autoplayAdvanceIndex(nextItem);
@@ -173,8 +178,18 @@ public:
     }
 
 private:
+    void prepareInitialPlayer() {
+        if (!runtime_.isRemuxServer()) return;
+        playback_.session().setActive(details_.item(), {});
+        playerScreen_.resetPosition();
+        playerScreen_.beginPlayback(playbackPositionMsFromTicks(details_.item().positionTicks),
+                                    playbackPositionMsFromTicks(details_.item().runtimeTicks));
+        playback_.beginPlaybackResolution(true);
+    }
+
     void rejectPlaybackResolution(std::string error) {
         playbackEpoch_.invalidate();
+        if (runtime_.isRemuxServer() && screen_ != Screen::Player) playback_.session().clearActive();
         loading_ = false;
         playback_.finishPlaybackResolution();
         error_ = std::move(error);
