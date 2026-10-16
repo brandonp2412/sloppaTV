@@ -11,6 +11,37 @@ module = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(module)
 
 
+def test_navigation_cycle_sends_events_and_checks_foreground() -> None:
+    foreground = f"topResumedActivity={module.PACKAGE}/.MainActivity"
+    with (
+        mock.patch.object(module, "key") as key,
+        mock.patch.object(module, "adb", return_value=foreground) as adb,
+        mock.patch.object(module.time, "sleep"),
+    ):
+        module.navigation_cycle(3)
+
+    assert [call.args[0] for call in key.call_args_list] == ["RIGHT", "RIGHT", "RIGHT"]
+    adb.assert_called_once_with(
+        "shell",
+        "dumpsys",
+        "activity",
+        "activities",
+        capture=True,
+        timeout=60.0,
+    )
+
+
+def test_soak_rejects_negative_navigation_events_before_adb() -> None:
+    with mock.patch.object(module, "adb") as adb:
+        try:
+            module.soak(60, 60, -1)
+        except SystemExit as error:
+            assert "navigation events" in str(error)
+        else:
+            raise AssertionError("negative navigation events should be rejected")
+    adb.assert_not_called()
+
+
 def test_action_view_uses_registered_deep_link() -> None:
     with (
         mock.patch.object(module, "adb") as adb,

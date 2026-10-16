@@ -151,6 +151,23 @@ int main() {
     assert(nullable.audios.empty());
     assert(nullable.subtitles.size() == 1 && nullable.subtitles[0].index == 4);
 
+    const nlohmann::json numericBooleans = {
+        {"Id", "numeric-booleans"},
+        {"CanDelete", 1},
+        {"UserData", {{"IsFavorite", 1}, {"Played", 0}}},
+        {"MediaSources",
+         {{{"Id", "numeric-bool-source"},
+           {"MediaStreams",
+            {{{"Type", "Audio"}, {"Index", 1}, {"IsDefault", 1}},
+             {{"Type", "Subtitle"}, {"Index", 2}, {"IsForced", 1}, {"IsDefault", 1}, {"IsExternal", 0}}}}}}}};
+    const JellyfinItem numericBooleanItem = parseJellyfinItem(numericBooleans);
+    assert(!numericBooleanItem.canDelete);
+    assert(!numericBooleanItem.favorite && !numericBooleanItem.played);
+    assert(numericBooleanItem.audios.size() == 1 && !numericBooleanItem.audios[0].isDefault);
+    assert(numericBooleanItem.subtitles.size() == 1);
+    assert(!numericBooleanItem.subtitles[0].forced);
+    assert(!numericBooleanItem.subtitles[0].isDefault && !numericBooleanItem.subtitles[0].isExternal);
+
     const nlohmann::json secondValid = {{"Id", "movie-2"}, {"Name", "Second"}, {"Type", "Movie"}};
     const nlohmann::json malformed = {{"Id", "broken"}, {"ProductionYear", "not-a-number"}};
     const auto items = parseJellyfinItems(

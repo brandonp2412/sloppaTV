@@ -45,6 +45,22 @@ FATAL_PATTERNS = (
     re.compile(r"Fatal signal", re.IGNORECASE),
     re.compile(r"native crash", re.IGNORECASE),
 )
+NAVIGATION_PATTERN = (
+    "RIGHT",
+    "RIGHT",
+    "RIGHT",
+    "RIGHT",
+    "LEFT",
+    "LEFT",
+    "LEFT",
+    "LEFT",
+    "DOWN",
+    "RIGHT",
+    "RIGHT",
+    "LEFT",
+    "LEFT",
+    "UP",
+)
 
 
 def adb(*args: str, capture: bool = False, timeout: float = 30.0) -> str:
@@ -136,6 +152,12 @@ def wait_for_foreground(timeout_seconds: float = 5.0) -> None:
             return
         time.sleep(0.1)
     raise RuntimeError(f"{PACKAGE} did not become the foreground activity within {timeout_seconds:g}s")
+
+
+def require_foreground() -> None:
+    activity_dump = adb("shell", "dumpsys", "activity", "activities", capture=True, timeout=60.0)
+    if not foreground_is_package(activity_dump, PACKAGE):
+        raise RuntimeError(f"{PACKAGE} is not the foreground activity")
 
 
 def launch() -> None:
@@ -649,25 +671,59 @@ def soak_summary(samples: list[dict[str, int | float | str]]) -> dict[str, int |
     }
 
 
-def soak(seconds: int, sample_seconds: int) -> None:
+def navigation_cycle(events_per_cycle: int) -> None:
+    if events_per_cycle < 1:
+        raise SystemExit("navigation events per cycle must be >= 1")
+    for index in range(events_per_cycle):
+        key(NAVIGATION_PATTERN[index % len(NAVIGATION_PATTERN)])
+        time.sleep(0.05)
+    require_foreground()
+
+
+def soak(seconds: int, sample_seconds: int, navigation_events: int = 0) -> None:
     if seconds < sample_seconds or sample_seconds < 1:
         raise SystemExit("soak duration must be >= sample interval >= 1 second")
+    if navigation_events < 0:
+        raise SystemExit("navigation events per cycle must be >= 0")
     adb("logcat", "-c")
-    ensure_running()
+    if navigation_events:
+        restart()
+        time.sleep(3.0)
+        require_running()
+        require_foreground()
+    else:
+        ensure_running()
     started = time.monotonic()
     samples: list[dict[str, int | float | str]] = []
+    total_navigation_events = 0
     while True:
         elapsed = time.monotonic() - started
+        if navigation_events:
+            require_running()
+            require_foreground()
         sample = memory_snapshot()
         sample["elapsed_seconds"] = round(elapsed, 1)
+        if navigation_events:
+            sample["navigation_events"] = total_navigation_events
         samples.append(sample)
-        print(
+        message = (
             f"soak t={elapsed:.0f}s PSS={sample['total_pss_kb']}KB "
             f"RSS={sample['total_rss_kb']}KB CPU={sample['cpu_pct']}%"
         )
+        if navigation_events:
+            message += f" events={total_navigation_events}"
+        print(message)
         if elapsed >= seconds:
             break
-        time.sleep(min(sample_seconds, max(0.0, seconds - elapsed)))
+        if navigation_events:
+            cycle_started = time.monotonic()
+            navigation_cycle(navigation_events)
+            total_navigation_events += navigation_events
+            remaining = sample_seconds - (time.monotonic() - cycle_started)
+            if remaining > 0:
+                time.sleep(min(remaining, max(0.0, seconds - (time.monotonic() - started))))
+        else:
+            time.sleep(min(sample_seconds, max(0.0, seconds - elapsed)))
 
     summary = soak_summary(samples)
     evidence = {
@@ -678,6 +734,9 @@ def soak(seconds: int, sample_seconds: int) -> None:
         "summary": summary,
         "samples": samples,
     }
+    if navigation_events:
+        evidence["navigation_events_per_cycle"] = navigation_events
+        evidence["total_navigation_events"] = total_navigation_events
     print(
         f"soak summary PSS growth={summary.get('pss_growth_kb', 0)}KB "
         f"({summary.get('pss_growth_pct', 0.0)}%) RSS growth={summary.get('rss_growth_kb', 0)}KB "
@@ -726,6 +785,12 @@ def main() -> None:
     p_soak = sub.add_parser("soak")
     p_soak.add_argument("--seconds", type=int, default=1800)
     p_soak.add_argument("--sample-seconds", type=int, default=60)
+    p_soak.add_argument(
+        "--navigation-events",
+        type=int,
+        default=0,
+        help="DPAD events to send between memory samples; defaults to no navigation",
+    )
 
     args = parser.parse_args()
     SERIAL = args.serial
@@ -769,7 +834,7 @@ def main() -> None:
     elif args.command == "audit-logs":
         audit_logs(args.name)
     elif args.command == "soak":
-        soak(args.seconds, args.sample_seconds)
+        soak(args.seconds, args.sample_seconds, args.navigation_events)
 
 
 if __name__ == "__main__":

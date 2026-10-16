@@ -134,6 +134,20 @@ int main() {
     assert(noisyOffer.value.transcodingUrl.empty());
     assert(noisyOffer.value.supportsDirectPlay);
 
+    const auto numericBooleanOffer = parsePlaybackInfoOffer(R"({
+        "MediaSources": [{
+            "Id": "numeric-boolean-source",
+            "SupportsDirectPlay": true,
+            "SupportsDirectStream": 1,
+            "SupportsTranscoding": 1
+        }]
+    })",
+                                                            -1, kSubtitleServerDefaultIndex);
+    assert(numericBooleanOffer.ok);
+    assert(numericBooleanOffer.value.supportsDirectPlay);
+    assert(!numericBooleanOffer.value.supportsDirectStream);
+    assert(!numericBooleanOffer.value.supportsTranscoding);
+
     const auto alternateVersionOffer = parsePlaybackInfoOffer(R"({
         "MediaSources": [
             {
