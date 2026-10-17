@@ -31,11 +31,17 @@ public:
         }
         pending_.clear();
         std::unordered_set<std::string> seen;
+        bool movieQueued = false;
         for (const auto& row : home.rows) {
-            if (row.title != "Continue Watching" && row.title != "Resume Playing" && row.title != "Next Up") continue;
+            const bool resumeRow = row.title == "Continue Watching" || row.title == "Resume Playing";
+            if (!resumeRow && row.title != "Next Up") continue;
             for (size_t i = 0; i < std::min(kFirstPageCards, row.items.size()); ++i) {
                 const auto& item = row.items[i];
-                if (item.type == "Episode" && !item.id.empty() && seen.insert(item.id).second) pending_.push_back(item);
+                const bool resumeMovie = resumeRow && item.type == "Movie" && !movieQueued;
+                if ((item.type != "Episode" && !resumeMovie) || item.id.empty() || !seen.insert(item.id).second)
+                    continue;
+                pending_.push_back(item);
+                if (resumeMovie) movieQueued = true;
             }
         }
     }

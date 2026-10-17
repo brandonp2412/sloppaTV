@@ -29,9 +29,11 @@ int main() {
     assert(second && second->id == "next-2");
     auto third = state.takeDue(now + std::chrono::seconds(4), true, true);
     assert(third && third->id == "continue-1");
-    assert(!state.takeDue(now + std::chrono::seconds(6), true, true));
-    state.refresh(account, home);
+    auto fourth = state.takeDue(now + std::chrono::seconds(6), true, true);
+    assert(fourth && fourth->id == "movie");
     assert(!state.takeDue(now + std::chrono::seconds(8), true, true));
+    state.refresh(account, home);
+    assert(!state.takeDue(now + std::chrono::seconds(10), true, true));
     state.refresh(account, home);
     assert(state.takeDue(now + std::chrono::minutes(3), true, true)->id == "next-1");
     JellyfinSession other = account;

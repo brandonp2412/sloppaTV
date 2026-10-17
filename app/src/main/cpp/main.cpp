@@ -1114,6 +1114,11 @@ private:
         auto next =
             homeEpisodePrewarm_.takeDue(std::chrono::steady_clock::now(), screen_ == Screen::Home, serverInfo_.isRemux);
         if (!next) return;
+        const auto preferred = settings_.preferredMediaSources.find(next->id);
+        // Only prewarm a resume movie when its previously playable release is known.
+        // Probing an arbitrary 4K torrent on Home can delay foreground playback.
+        if (next->type == "Movie" && preferred == settings_.preferredMediaSources.end()) return;
+        if (preferred != settings_.preferredMediaSources.end()) next->mediaSourceId = preferred->second;
         JellyfinSession session = session_;
         const int maxAudioChannels = settings_.maxAudioChannels;
         if (!homePrewarmTasks_.submit([this, session = std::move(session), next = std::move(*next), maxAudioChannels] {
