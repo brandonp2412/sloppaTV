@@ -48,7 +48,7 @@ public:
     }
 
     void playQueued(int index, bool restartCurrent = false, bool replacingCompleted = false) {
-        if (loading_ || index < 0 || index >= queue_.size() || !session_.valid()) return;
+        if ((loading_ && screen_ != Screen::Player) || index < 0 || index >= queue_.size() || !session_.valid()) return;
         if (index == queue_.currentIndex() && screen_ == Screen::Player && !restartCurrent) {
             queue_.closeOverlay();
             return;
@@ -70,7 +70,7 @@ public:
     }
 
     void playItem(JellyfinItem item) {
-        if (loading_ || screen_ != Screen::Player || !session_.valid() || item.id.empty()) return;
+        if (screen_ != Screen::Player || !session_.valid() || item.id.empty()) return;
         queue_.reset();
         release(true, false);
         loading_ = true;
@@ -82,7 +82,7 @@ public:
     }
 
     void playAdjacent(int direction) {
-        if (direction == 0 || loading_ || screen_ != Screen::Player) return;
+        if (direction == 0 || screen_ != Screen::Player) return;
         const int current = queue_.currentIndex();
         if (current >= 0) {
             const int target = direction > 0 ? queue_.nextIndex(true) : current - 1;
