@@ -103,8 +103,13 @@ int main() {
     assert(client.resolvedMediaSourceId.empty());
     options.preferredMediaSources[item.id] = "known-good-source";
     resolved = resolvePreferredPlayback(client, session, item, options);
+    assert(resolved.item.mediaSourceId.empty());
+    assert(client.resolvedMediaSourceId.empty());
+    options.isRemux = false;
+    resolved = resolvePreferredPlayback(client, session, item, options);
     assert(resolved.item.mediaSourceId == "known-good-source");
     assert(client.resolvedMediaSourceId == "known-good-source");
+    options.isRemux = true;
 
     client.detailOk = false;
     item.audios = {

@@ -45,17 +45,25 @@ inline JellyfinItem playbackNegotiationItem(const JellyfinItem& item, bool heter
 
 template <typename Client>
 PlaybackResolutionResult resolvePreferredPlayback(Client& client, const JellyfinSession& session, JellyfinItem item,
-                                                  const PlaybackResolutionOptions& options) {
+                                                  const PlaybackResolutionOptions& options,
+                                                  bool startFromBeginning = false) {
     auto detailed = client.getItem(session, item.id);
-    if (detailed.ok) item = std::move(detailed.value);
-    if (const auto preferred = options.preferredMediaSources.find(item.id);
-        preferred != options.preferredMediaSources.end()) {
-        item.mediaSourceId = preferred->second;
-    } else if (options.isRemux) {
-        // Item metadata names its first source even without a user choice. Sending
-        // that ID to Remux restricts PlaybackInfo to ONE version, preventing
-        // recovery from an unhealthy torrent. Ask for the whole ranked pool.
+    if (detailed.ok) {
+        const int64_t selectedPositionTicks = item.positionTicks;
+        item = std::move(detailed.value);
+        // The server can lag a just-reported local stop, but an explicit restart
+        // must still override stale server resume data.
+        item.positionTicks = startFromBeginning ? 0 : std::max(item.positionTicks, selectedPositionTicks);
+    }
+    if (options.isRemux) {
+        // A remembered source is an automatic prewarm hint, not a user request to
+        // lock playback to that release. Sending it as MediaSourceId makes Remux
+        // restrict fallback to the same resolution. Keep foreground negotiation
+        // automatic so an unhealthy 4K source can recover to a viable 1080p/720p.
         item.mediaSourceId.clear();
+    } else if (const auto preferred = options.preferredMediaSources.find(item.id);
+               preferred != options.preferredMediaSources.end()) {
+        item.mediaSourceId = preferred->second;
     }
     const auto tracks = selectPlaybackTracks(item, options.audioLanguagePreference, options.subtitleLanguagePreference,
                                              options.trackPolicy);

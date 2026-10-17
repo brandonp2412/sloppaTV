@@ -64,8 +64,8 @@ public:
         JellyfinItem queued = *queue_.itemAt(index);
         if (restartCurrent) queued.positionTicks = 0;
         if (!resolution_.resolveQueued(session_, std::move(queued), runtime_.resolutionOptions(),
-                                       playbackEpoch_.begin(), originScreen, index, previousQueueIndex,
-                                       replacingPlayer))
+                                       playbackEpoch_.begin(), originScreen, index, previousQueueIndex, replacingPlayer,
+                                       restartCurrent))
             rejectPlaybackResolution("PLAYBACK COULD NOT BE STARTED");
     }
 

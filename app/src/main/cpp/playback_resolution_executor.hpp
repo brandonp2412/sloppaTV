@@ -45,11 +45,11 @@ public:
     template <typename Origin>
     bool resolveQueued(JellyfinSession session, JellyfinItem item, PlaybackResolutionOptions options,
                        uint64_t generation, Origin originScreen, int index, int previousQueueIndex,
-                       bool replacingPlayer) {
+                       bool replacingPlayer, bool startFromBeginning = false) {
         return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
                               generation, originScreen = std::move(originScreen), index, previousQueueIndex,
-                              replacingPlayer]() mutable {
-            auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options);
+                              replacingPlayer, startFromBeginning]() mutable {
+            auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options, startFromBeginning);
             if (!epoch_.active(generation)) return;
             completions_.push(QueuedPlaybackResolutionCompletion<Origin>{
                 .generation = generation,
@@ -130,11 +130,11 @@ public:
                 if (detailed.ok) playable = std::move(detailed.value);
             }
 
-            if (const auto preferred = options.preferredMediaSources.find(playable.id);
-                preferred != options.preferredMediaSources.end()) {
-                playable.mediaSourceId = preferred->second;
-            } else if (options.isRemux) {
+            if (options.isRemux) {
                 playable.mediaSourceId.clear();
+            } else if (const auto preferred = options.preferredMediaSources.find(playable.id);
+                       preferred != options.preferredMediaSources.end()) {
+                playable.mediaSourceId = preferred->second;
             }
             const auto tracks = selectPlaybackTracks(playable, options.audioLanguagePreference,
                                                      options.subtitleLanguagePreference, options.trackPolicy);

@@ -49,6 +49,7 @@ struct FakeClient {
         result.value.id = itemId;
         result.value.name = "Detailed";
         result.value.mediaSourceId = "server-first-source";
+        result.value.positionTicks = 100;
         result.value.audios = {
             {.index = 4, .channels = 2, .codec = "aac", .language = "eng", .title = "English", .isDefault = true},
         };
@@ -137,13 +138,21 @@ int main() {
     assert(client.lastBitrate == 42'000'000);
     assert(client.lastChannels == 6);
     assert(client.lastAudioStreamIndex == 4);
+    assert(client.lastResolvedPositionTicks == 100); // Hydration may supply a newer resume point.
+    assert(executor.resolveQueued(session, queued, options, 7, Origin::Player, 3, 2, true, true));
+    assert(client.lastResolvedPositionTicks == 0); // Explicit restart beats stale server progress.
+    assert(std::get<QueuedCompletion>(completions.events.back()).item.positionTicks == 0);
 
     options.isRemux = true;
     assert(executor.resolveQueued(session, queued, options, 7, Origin::Player, 3, 2, true));
     assert(client.lastResolvedMediaSourceId.empty());
     options.preferredMediaSources[queued.id] = "proven-source";
     assert(executor.resolveQueued(session, queued, options, 7, Origin::Player, 3, 2, true));
+    assert(client.lastResolvedMediaSourceId.empty());
+    options.isRemux = false;
+    assert(executor.resolveQueued(session, queued, options, 7, Origin::Player, 3, 2, true));
     assert(client.lastResolvedMediaSourceId == "proven-source");
+    options.isRemux = true;
     options.preferredMediaSources.clear();
 
     JellyfinItem playerItem;
