@@ -85,6 +85,19 @@ void readSettings(const json& saved, AppSettings& settings) {
     settings.subtitleBackground =
         subtitleStyleDefaultsVersion < 1 ? false : valueOr(saved, "subtitleBackground", settings.subtitleBackground);
     settings.subtitlePosition = std::clamp(valueOr(saved, "subtitlePosition", settings.subtitlePosition), 0, 2);
+    settings.seriesTrackPreferences.clear();
+    if (saved.contains("seriesTrackPreferences") && saved["seriesTrackPreferences"].is_object()) {
+        for (auto it = saved["seriesTrackPreferences"].begin(); it != saved["seriesTrackPreferences"].end(); ++it) {
+            if (!it.value().is_object()) continue;
+            SeriesTrackPreferences preferences;
+            if (it.value().contains("audioLanguage") && it.value()["audioLanguage"].is_string())
+                preferences.audioLanguage = it.value()["audioLanguage"].get<std::string>();
+            if (it.value().contains("subtitleLanguage") && it.value()["subtitleLanguage"].is_string())
+                preferences.subtitleLanguage = it.value()["subtitleLanguage"].get<std::string>();
+            if (preferences.audioLanguage || preferences.subtitleLanguage)
+                settings.seriesTrackPreferences.emplace(it.key(), std::move(preferences));
+        }
+    }
     settings.autoSubtitles = valueOr(saved, "autoSubtitles", settings.autoSubtitles);
     settings.autoSubtitleLanguage =
         normalizeSubtitleLanguage(valueOr(saved, "autoSubtitleLanguage", settings.autoSubtitleLanguage));
@@ -124,7 +137,15 @@ void readSettings(const json& saved, AppSettings& settings) {
 }
 
 json writeSettings(const AppSettings& settings) {
+    json seriesTracks = json::object();
+    for (const auto& [key, preference] : settings.seriesTrackPreferences) {
+        json value = json::object();
+        if (preference.audioLanguage) value["audioLanguage"] = *preference.audioLanguage;
+        if (preference.subtitleLanguage) value["subtitleLanguage"] = *preference.subtitleLanguage;
+        if (!value.empty()) seriesTracks[key] = std::move(value);
+    }
     return {
+        {"seriesTrackPreferences", std::move(seriesTracks)},
         {"maxBitrateMbps", settings.maxBitrateMbps},
         {"playbackBufferPreset", settings.playbackBufferPreset},
         {"preferredMediaSources", settings.preferredMediaSources},

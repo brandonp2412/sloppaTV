@@ -1047,9 +1047,20 @@ private:
 
     void handlePlayerKey(int32_t key, int repeatCount = 0) {
         if (handleSkipDisablePromptKey(key, repeatCount)) return;
-        applyPlaybackHostEffect(playbackRuntime_.handlePlayerInput(playerScreenInputForAndroidKey(key), repeatCount,
-                                                                   subtitleLoadAsync_, playbackStreamAsync_,
-                                                                   playbackTelemetryAsync_, screen_ == Screen::Player));
+        const PlaybackLanguagePreferences before = playbackCoordinator_.languagePreferences();
+        PlaybackHostEffect effect = playbackRuntime_.handlePlayerInput(
+            playerScreenInputForAndroidKey(key), repeatCount, subtitleLoadAsync_, playbackStreamAsync_,
+            playbackTelemetryAsync_, screen_ == Screen::Player);
+        const PlaybackLanguagePreferences after = playbackCoordinator_.languagePreferences();
+        const auto& item = playbackCoordinator_.session().activeItem();
+        const std::string preferenceKey = seriesTrackPreferenceKey(session_.server, session_.userId, item.seriesId);
+        if (!preferenceKey.empty() && (before.audio != after.audio || before.subtitle != after.subtitle)) {
+            auto& saved = settings_.seriesTrackPreferences[preferenceKey];
+            if (before.audio != after.audio && after.audio) saved.audioLanguage = after.audio;
+            if (before.subtitle != after.subtitle && after.subtitle) saved.subtitleLanguage = after.subtitle;
+            persistSession();
+        }
+        applyPlaybackHostEffect(std::move(effect));
     }
 
     void handleMediaSessionCommand(const MediaSessionCommand& command) {

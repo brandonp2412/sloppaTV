@@ -33,6 +33,15 @@ int main() {
     state.settings.autoSubtitles = true;
     state.settings.autoSubtitleLanguage = "eng";
     state.settings.autoSubtitleSourceLanguage = "different";
+    const std::string seriesKey = seriesTrackPreferenceKey("https://jellyfin.example", "user-1", "series-1");
+    state.settings.seriesTrackPreferences[seriesKey] = {
+        .audioLanguage = "jpn",
+        .subtitleLanguage = std::string{}, // off, distinct from no preference
+    };
+    state.settings
+        .seriesTrackPreferences[seriesTrackPreferenceKey("https://jellyfin.example", "user-1", "series-2")] = {
+        .subtitleLanguage = "eng",
+    };
     state.settings.clock24Hour = true;
     state.settings.safeAreaPercent = 4;
     state.settings.avcLevelOverride = 51;
@@ -76,6 +85,16 @@ int main() {
     assert(loaded.settings.autoSubtitles);
     assert(loaded.settings.autoSubtitleLanguage == "eng");
     assert(loaded.settings.autoSubtitleSourceLanguage == "different");
+    assert(loaded.settings.seriesTrackPreferences.size() == 2);
+    assert(loaded.settings.seriesTrackPreferences.at(seriesKey).audioLanguage == "jpn");
+    assert(loaded.settings.seriesTrackPreferences.at(seriesKey).subtitleLanguage.has_value());
+    assert(loaded.settings.seriesTrackPreferences.at(seriesKey).subtitleLanguage->empty());
+    assert(!loaded.settings.seriesTrackPreferences
+                .at(seriesTrackPreferenceKey("https://jellyfin.example", "user-1", "series-2"))
+                .audioLanguage);
+    assert(loaded.settings.seriesTrackPreferences
+               .at(seriesTrackPreferenceKey("https://jellyfin.example", "user-1", "series-2"))
+               .subtitleLanguage == "eng");
     assert(loaded.settings.clock24Hour);
     assert(loaded.settings.safeAreaPercent == 4);
     assert(loaded.settings.avcLevelOverride == 51);

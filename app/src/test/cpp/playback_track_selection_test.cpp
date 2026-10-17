@@ -139,10 +139,72 @@ int main() {
 
     autoPolicy.autoSubtitleSourceLanguage = "any";
     assert(playbackAutoSubtitleIndexForItem(item, 3, autoPolicy) == 6);
+    JellyfinItem unprobedRemux;
+    unprobedRemux.audios = item.audios;
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, false) == kSubtitleOffIndex);
+    JellyfinSubtitleStream discoveredEnglish = embeddedAss;
+    discoveredEnglish.index = 9;
+    discoveredEnglish.isDefault = true;
+    unprobedRemux.subtitles = {discoveredEnglish};
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, false) == 9);
+    auto bitmapEnglish = discoveredEnglish;
+    bitmapEnglish.codec = "pgs";
+    bitmapEnglish.index = 10;
+    unprobedRemux.subtitles = {bitmapEnglish, discoveredEnglish};
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, false) == 9);
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, true) == 10);
+    unprobedRemux.subtitles = {bitmapEnglish};
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, false) == kSubtitleOffIndex);
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, true) == 10);
 
     const auto selectedTracks = selectPlaybackTracks(item, std::optional<std::string>{"jpn"}, std::nullopt, autoPolicy);
     assert(selectedTracks.audioStreamIndex == 1);
     assert(selectedTracks.subtitleStreamIndex == 6);
+
+    // Saved show overrides beat auto subtitles, survive new episodes, and never leak to other accounts/series.
+    item.seriesId = "series-1";
+    auto seriesPolicy = autoPolicy;
+    seriesPolicy.server = "https://jellyfin.example";
+    seriesPolicy.userId = "user-1";
+    const std::string key = seriesTrackPreferenceKey(seriesPolicy.server, seriesPolicy.userId, item.seriesId);
+    seriesPolicy.seriesTrackPreferences[key] = {.audioLanguage = "eng", .subtitleLanguage = std::string{}};
+    auto selected = selectPlaybackTracks(item, std::nullopt, std::nullopt, seriesPolicy);
+    assert(selected.audioStreamIndex == 3);
+    assert(selected.subtitleStreamIndex == kSubtitleOffIndex);
+    auto anotherEpisode = item;
+    anotherEpisode.id = "episode-2";
+    assert(selectPlaybackTracks(anotherEpisode, std::nullopt, std::nullopt, seriesPolicy).subtitleStreamIndex ==
+           kSubtitleOffIndex);
+    auto audioSwitch =
+        planPlaybackAudioTrackCycle(item, 3, kSubtitleOffIndex, PlaybackMethod::DirectPlay, seriesPolicy);
+    assert(audioSwitch.subtitleStreamIndex == kSubtitleOffIndex);
+    seriesPolicy.seriesTrackPreferences[key].subtitleLanguage = "eng";
+    assert(selectPlaybackTracks(item, std::nullopt, std::nullopt, seriesPolicy).subtitleStreamIndex == 6);
+    // A saved manual choice should not be blocked by the automatic "different audio" condition.
+    seriesPolicy.autoSubtitleSourceLanguage = "different";
+    assert(selectPlaybackTracks(item, std::nullopt, std::nullopt, seriesPolicy).subtitleStreamIndex == 6);
+    auto otherShow = item;
+    otherShow.seriesId = "series-2";
+    assert(selectPlaybackTracks(otherShow, std::nullopt, std::nullopt, seriesPolicy).audioStreamIndex == -1);
+    assert(selectPlaybackTracks(otherShow, std::nullopt, std::nullopt, seriesPolicy).subtitleStreamIndex == 6);
+    // In-memory choices from another show must not leak into an unconfigured series.
+    assert(
+        selectPlaybackTracks(otherShow, std::optional<std::string>{"eng"}, std::optional<std::string>{""}, seriesPolicy)
+            .audioStreamIndex == -1);
+    assert(
+        selectPlaybackTracks(otherShow, std::optional<std::string>{"eng"}, std::optional<std::string>{""}, seriesPolicy)
+            .subtitleStreamIndex == 6);
+    seriesPolicy.userId = "user-2";
+    assert(selectPlaybackTracks(item, std::nullopt, std::nullopt, seriesPolicy).audioStreamIndex == -1);
+    seriesPolicy.userId = "user-1";
+    seriesPolicy.seriesTrackPreferences[key].subtitleLanguage = std::string{};
+    auto remuxEpisode = unprobedRemux;
+    remuxEpisode.seriesId = item.seriesId;
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(remuxEpisode, 1, seriesPolicy, true) == kSubtitleOffIndex);
+    seriesPolicy.seriesTrackPreferences[key].subtitleLanguage = "eng";
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(remuxEpisode, 1, seriesPolicy, true) == 10);
+    seriesPolicy.autoSubtitles = false;
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(remuxEpisode, 1, seriesPolicy, true) == 10);
 
     autoPolicy.autoSubtitles = false;
     assert(playbackAutoSubtitleIndexForItem(item, 1, autoPolicy) == kSubtitleOffIndex);

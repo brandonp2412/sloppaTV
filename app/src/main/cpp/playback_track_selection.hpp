@@ -3,6 +3,7 @@
 #include "audio_policy.hpp"
 #include "jellyfin_types.hpp"
 #include "media_player_policy.hpp"
+#include "series_track_preferences.hpp"
 #include "subtitle_policy.hpp"
 
 #include <algorithm>
@@ -15,7 +16,15 @@ struct PlaybackTrackSelectionPolicy {
     std::string autoSubtitleLanguage;
     std::string autoSubtitleSourceLanguage;
     std::vector<std::string> allowedSubtitleLanguages;
+    std::string server{};
+    std::string userId{};
+    SeriesTrackPreferenceMap seriesTrackPreferences{};
 };
+
+inline const SeriesTrackPreferences* playbackSeriesTrackPreferences(const JellyfinItem& item,
+                                                                    const PlaybackTrackSelectionPolicy& policy) {
+    return findSeriesTrackPreferences(policy.seriesTrackPreferences, policy.server, policy.userId, item.seriesId);
+}
 
 struct PlaybackTrackSelection {
     int audioStreamIndex = -1;
@@ -169,6 +178,38 @@ inline int playbackAutoSubtitleIndexForItem(const JellyfinItem& item, int audioS
     return selected == item.subtitles.end() ? kSubtitleOffIndex : selected->index;
 }
 
+// Remux can offer no subtitle metadata until libmpv opens the selected file.
+// Only auto-select tracks that the current decoder can display directly.
+inline int playbackAutoDiscoveredSubtitleIndexForItem(const JellyfinItem& item, int audioStreamIndex,
+                                                      const PlaybackTrackSelectionPolicy& policy, bool softwareDecode) {
+    const auto* manual = playbackSeriesTrackPreferences(item, policy);
+    if (!policy.autoSubtitles && !(manual && manual->subtitleLanguage)) return kSubtitleOffIndex;
+    JellyfinItem playable;
+    playable.audios = item.audios;
+    for (const auto& subtitle : item.subtitles) {
+        if (!subtitle.discoveredByPlayer || subtitle.isExternal) continue;
+        const SubtitleStrategy strategy = subtitleStrategy(subtitle.codec);
+        if (useNativeSubtitleRenderer(strategy, true) ||
+            (softwareDecode && canSwitchEmbeddedSubtitleInPlayer(strategy, false))) {
+            playable.subtitles.push_back(subtitle);
+        }
+    }
+    if (manual && manual->subtitleLanguage) {
+        std::vector<SubtitlePreferenceCandidate> candidates;
+        for (const auto& track : playable.subtitles) {
+            if (playbackSubtitleAllowed(track, policy.allowedSubtitleLanguages) &&
+                !isLikelySignsOnlySubtitle(track.title) && !track.forced)
+                candidates.push_back({track.index, track.language});
+        }
+        return subtitleIndexForQueuePreference(candidates, manual->subtitleLanguage);
+    }
+    return playbackAutoSubtitleIndexForItem(playable, audioStreamIndex, policy);
+}
+
+inline int playbackSubtitleIndexForItem(const JellyfinItem& item, int audioStreamIndex,
+                                        const std::optional<std::string>& languagePreference,
+                                        const PlaybackTrackSelectionPolicy& policy);
+
 inline PlaybackAudioCyclePlan planPlaybackAudioTrackCycle(const JellyfinItem& item, int selectedAudioStreamIndex,
                                                           int selectedSubtitleStreamIndex,
                                                           PlaybackMethod playbackMethod,
@@ -187,9 +228,12 @@ inline PlaybackAudioCyclePlan planPlaybackAudioTrackCycle(const JellyfinItem& it
     plan.available = true;
     plan.audioStreamIndex = item.audios[next].index;
     plan.audioOrdinal = static_cast<int>(next);
-    plan.subtitleStreamIndex = policy.autoSubtitles
-                                   ? playbackAutoSubtitleIndexForItem(item, plan.audioStreamIndex, policy)
-                                   : selectedSubtitleStreamIndex;
+    const auto* saved = playbackSeriesTrackPreferences(item, policy);
+    plan.subtitleStreamIndex =
+        saved && saved->subtitleLanguage
+            ? playbackSubtitleIndexForItem(item, plan.audioStreamIndex, saved->subtitleLanguage, policy)
+        : policy.autoSubtitles ? playbackAutoSubtitleIndexForItem(item, plan.audioStreamIndex, policy)
+                               : selectedSubtitleStreamIndex;
     plan.tryEmbeddedSwitch =
         plan.subtitleStreamIndex == selectedSubtitleStreamIndex && playbackMethod == PlaybackMethod::DirectPlay;
     return plan;
@@ -205,12 +249,30 @@ inline int playbackSubtitleIndexForItem(const JellyfinItem& item, int audioStrea
     (void)policy;
     return kSubtitleOffIndex;
 #else
-    if (policy.autoSubtitles) return playbackAutoSubtitleIndexForItem(item, audioStreamIndex, policy);
+    if (languagePreference.has_value()) {
+        if (languagePreference->empty()) return kSubtitleOffIndex;
+        // Temporary manual selections and saved series preferences take precedence over auto subtitles.
+    } else if (policy.autoSubtitles) {
+        return playbackAutoSubtitleIndexForItem(item, audioStreamIndex, policy);
+    }
     std::vector<SubtitlePreferenceCandidate> candidates;
     candidates.reserve(item.subtitles.size());
     for (const auto& subtitle : item.subtitles) {
         if (playbackSubtitleAllowed(subtitle, policy.allowedSubtitleLanguages)) {
             candidates.push_back({subtitle.index, subtitle.language});
+        }
+    }
+    if (languagePreference && !languagePreference->empty()) {
+        const std::string preferred = normalizeSubtitleLanguage(*languagePreference);
+        // A manual choice means full subtitles in that language where available.
+        for (const bool requireDefault : {true, false}) {
+            for (const auto& subtitle : item.subtitles) {
+                if (!playbackSubtitleAllowed(subtitle, policy.allowedSubtitleLanguages) ||
+                    normalizeSubtitleLanguage(subtitle.language) != preferred || subtitle.forced ||
+                    isLikelySignsOnlySubtitle(subtitle.title) || (requireDefault && !subtitle.isDefault))
+                    continue;
+                return subtitle.index;
+            }
         }
     }
     return subtitleIndexForQueuePreference(candidates, languagePreference);
@@ -222,9 +284,16 @@ inline PlaybackTrackSelection selectPlaybackTracks(const JellyfinItem& item,
                                                    const std::optional<std::string>& subtitleLanguagePreference,
                                                    const PlaybackTrackSelectionPolicy& policy) {
     PlaybackTrackSelection selection;
-    selection.audioStreamIndex = playbackAudioIndexForItem(item, audioLanguagePreference);
-    selection.subtitleStreamIndex =
-        playbackSubtitleIndexForItem(item, selection.audioStreamIndex, subtitleLanguagePreference, policy);
+    const auto* saved = playbackSeriesTrackPreferences(item, policy);
+    const bool seriesScoped = !item.seriesId.empty() && !policy.server.empty() && !policy.userId.empty();
+    const std::optional<std::string> audio = saved && saved->audioLanguage ? saved->audioLanguage
+                                             : seriesScoped                ? std::nullopt
+                                                                           : audioLanguagePreference;
+    const std::optional<std::string> subtitle = saved && saved->subtitleLanguage ? saved->subtitleLanguage
+                                                : seriesScoped                   ? std::nullopt
+                                                                                 : subtitleLanguagePreference;
+    selection.audioStreamIndex = playbackAudioIndexForItem(item, audio);
+    selection.subtitleStreamIndex = playbackSubtitleIndexForItem(item, selection.audioStreamIndex, subtitle, policy);
     return selection;
 }
 

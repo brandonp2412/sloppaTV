@@ -2,6 +2,7 @@
 
 #include "media_player_policy.hpp"
 #include "screensaver_policy.hpp"
+#include "series_track_preferences.hpp"
 #include "subtitle_policy.hpp"
 
 #include <algorithm>
@@ -49,6 +50,7 @@ struct AppSettings {
     int playbackBufferPreset = 0;
     // Reuse sources that have reached real playback instead of a failed first candidate.
     std::map<std::string, std::string> preferredMediaSources;
+    SeriesTrackPreferenceMap seriesTrackPreferences;
     int seekBackSeconds = 10;
     int seekForwardSeconds = 10;
     int zoomMode = static_cast<int>(VideoZoomMode::Fit);
