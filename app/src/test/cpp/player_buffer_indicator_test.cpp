@@ -47,6 +47,52 @@ int main() {
     smooth.observe(false, false, true, false, false, 20000, 0, true, true, t + std::chrono::seconds(36));
     assert(smooth.phase() == PlayerBufferPhase::Stalled);
 
+    // Torrent totals alone are not a startup ETA. Only consecutive readable
+    // bytes from Remux's actual startup-range check can produce one.
+    PlayerBufferIndicator startup;
+    startup.observe(false, true, false, false, false, 0, 0, true, false, t);
+    RemuxPrefetchStatus measure;
+    measure.currentTotalBytes = 100000000;
+    measure.currentCachedBytes = 80000000;
+    measure.downloadMiBps = 4.0;
+    measure.livePeers = 8;
+    startup.setRemotePrefetch(measure, t + std::chrono::seconds(1));
+    assert(startup.statusText(t + std::chrono::seconds(1)).find("remaining") == std::string::npos);
+    measure.startupRequiredBytes = 10000000;
+    measure.startupReadableBytes = 1000000;
+    startup.setRemotePrefetch(measure, t + std::chrono::seconds(3));
+    measure.startupReadableBytes = 2000000;
+    startup.setRemotePrefetch(measure, t + std::chrono::seconds(5));
+    assert(startup.statusText(t + std::chrono::seconds(5)).find("remaining") == std::string::npos);
+    measure.startupReadableBytes = 3000000;
+    startup.setRemotePrefetch(measure, t + std::chrono::seconds(7));
+    assert(startup.statusText(t + std::chrono::seconds(7)).find("~15s remaining") != std::string::npos);
+    assert(startup.startupProgress(t + std::chrono::seconds(7)).has_value());
+    assert(*startup.startupProgress(t + std::chrono::seconds(7)) == 0.3f);
+    assert(!startup.startupProgress(t + std::chrono::seconds(16)).has_value());
+    assert(startup.statusText(t + std::chrono::seconds(16)).find("remaining") == std::string::npos);
+    measure.startupReady = true;
+    startup.setRemotePrefetch(measure, t + std::chrono::seconds(17));
+    assert(startup.statusText(t + std::chrono::seconds(17)).find("remaining") == std::string::npos);
+    startup.clearRemotePrefetch();
+    assert(startup.statusText(t + std::chrono::seconds(18)).find("remaining") == std::string::npos);
+
+    // Successful startups teach the resolve and player-start phases. A cold
+    // start without sufficient history still shows a plain stage message.
+    PlayerBufferIndicator learned;
+    for (int sample = 0; sample < 3; ++sample) {
+        const auto start = t + std::chrono::seconds(100 * sample + 1);
+        learned.observe(true, false, false, false, false, 0, 0, true, false, start);
+        learned.observe(false, true, false, false, false, 0, 0, true, false, start + std::chrono::seconds(15));
+        learned.observe(false, false, true, false, false, 1000, 0, true, false, start + std::chrono::seconds(23));
+        learned.reset();
+    }
+    const auto next = t + std::chrono::seconds(305);
+    learned.observe(true, false, false, false, false, 0, 0, true, false, next);
+    assert(learned.statusText(next + std::chrono::seconds(2)).find("remaining") != std::string::npos);
+    learned.observe(false, true, false, false, false, 0, 0, true, false, next + std::chrono::seconds(15));
+    assert(learned.statusText(next + std::chrono::seconds(16)).find("remaining") != std::string::npos);
+
     b.reset();
     assert(b.cacheAheadMs() == 0);
     return 0;

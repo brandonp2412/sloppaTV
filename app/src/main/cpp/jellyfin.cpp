@@ -1006,6 +1006,9 @@ ApiValueResult<RemuxPrefetchStatus> JellyfinClient::remuxPrefetchStatus(const Je
                                           : 0;
         result.value.downloadMiBps = data.value("downloadMibps", 0.0);
         result.value.livePeers = data.value("livePeers", uint64_t{0});
+        result.value.startupRequiredBytes = data.value("startupRequiredBytes", uint64_t{0});
+        result.value.startupReadableBytes = data.value("startupReadableBytes", uint64_t{0});
+        result.value.startupReady = data.value("startupReady", false);
         result.ok = result.value.currentTotalBytes > 0;
     } catch (const json::exception&) {
         return result;

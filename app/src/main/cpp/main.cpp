@@ -1328,15 +1328,28 @@ private:
         return transitionEffects.handled;
     }
 
+    [[nodiscard]] std::string activeRemuxPrefetchSource() const {
+        if (!playbackCoordinator_.activeItemAvailable()) return {};
+        const auto& item = playbackCoordinator_.session().activeItem();
+        if (playbackCoordinator_.activeTargetAvailable())
+            return playbackCoordinator_.session().activeTarget().mediaSourceId;
+        // While PlaybackInfo is pending, a previously selected source can
+        // already be downloading. Do not assume which source auto-selection picks.
+        if (const auto preferred = settings_.preferredMediaSources.find(item.id);
+            preferred != settings_.preferredMediaSources.end())
+            return preferred->second;
+        return item.mediaSourceId;
+    }
+
     void scheduleRemuxPrefetchStatus() {
         if (!serverInfo_.isRemux || !session_.valid() || !playbackCoordinator_.activeItemAvailable() ||
-            !playbackCoordinator_.activeTargetAvailable() || remuxStatsInFlight_)
+            remuxStatsInFlight_)
             return;
-        const auto& target = playbackCoordinator_.session().activeTarget();
         const std::string& itemId = playbackCoordinator_.session().activeItem().id;
-        const std::string& sourceId = target.mediaSourceId;
+        const std::string sourceId = activeRemuxPrefetchSource();
         if (sourceId.empty() || sourceId == itemId) return;
         const auto now = std::chrono::steady_clock::now();
+        if (sourceId != remuxStatsSourceId_) playerScreenState_.bufferIndicator().clearRemotePrefetch();
         if (sourceId == remuxStatsSourceId_ && now < remuxStatsNextPoll_) return;
         const JellyfinSession session = session_;
         const std::string copyItemId = itemId;
@@ -1348,7 +1361,10 @@ private:
             })) {
             remuxStatsInFlight_ = true;
             remuxStatsSourceId_ = sourceId;
-            remuxStatsNextPoll_ = now + std::chrono::seconds(5);
+            remuxStatsNextPoll_ =
+                now + (playbackCoordinator_.transitionLoading() || player_.status() == PlayerStatus::Preparing
+                           ? std::chrono::seconds(2)
+                           : std::chrono::seconds(5));
         }
     }
 
@@ -1509,9 +1525,9 @@ private:
     void applyAsyncCompletion(RemuxPrefetchCompletion& completion) {
         remuxStatsInFlight_ = false;
         if (!completion.result.ok || screen_ != Screen::Player || completion.userId != session_.userId ||
-            !playbackCoordinator_.activeTargetAvailable() ||
+            !playbackCoordinator_.activeItemAvailable() ||
             playbackCoordinator_.session().activeItem().id != completion.itemId ||
-            playbackCoordinator_.session().activeTarget().mediaSourceId != completion.sourceId)
+            activeRemuxPrefetchSource() != completion.sourceId)
             return;
         playerScreenState_.bufferIndicator().setRemotePrefetch(completion.result.value);
     }

@@ -8,4 +8,7 @@ struct RemuxPrefetchStatus {
     std::uint64_t nextTotalBytes = 0;
     double downloadMiBps = 0.0;
     std::uint64_t livePeers = 0;
+    std::uint64_t startupRequiredBytes = 0;
+    std::uint64_t startupReadableBytes = 0;
+    bool startupReady = false;
 };

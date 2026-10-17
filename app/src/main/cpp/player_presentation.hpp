@@ -418,11 +418,20 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                            ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
                        });
 
-    // Keep Remux download progress, but don't print duplicate buffered-ahead text:
-    // the player progress bar already shows its playable buffer.
-    const std::string remuxProgress = buffer.remotePrefetchText(now);
-    if (!remuxProgress.empty())
-        renderer.text(80.0f, 808.0f, 1.35f, remuxProgress, material_tv::onSurfaceVariant, 1650.0f);
+    // During startup, this track measures verified consecutive bytes at the
+    // requested range, not the torrent's overall downloaded percentage.
+    const auto startupProgress = preparingInitialPlayback ? buffer.startupProgress(now) : std::nullopt;
+    if (startupProgress) {
+        constexpr float width = 590.0f;
+        renderer.roundedRect(80.0f, 817.0f, width, 6.0f, 3.0f, material_tv::track);
+        if (*startupProgress > 0.0f)
+            renderer.roundedRect(80.0f, 817.0f, width * *startupProgress, 6.0f, 3.0f, material_tv::primary);
+    } else {
+        // Once playing, retain the separate downloaded-file telemetry.
+        const std::string remuxProgress = buffer.remotePrefetchText(now);
+        if (!remuxProgress.empty())
+            renderer.text(80.0f, 808.0f, 1.35f, remuxProgress, material_tv::onSurfaceVariant, 1650.0f);
+    }
 
     const std::string positionText = formatPlaybackTime(position);
     const std::string durationText = formatPlaybackTime(duration);
