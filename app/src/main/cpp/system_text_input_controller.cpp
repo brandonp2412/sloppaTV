@@ -85,15 +85,13 @@ SystemTextInputEffects SystemTextInputController::apply(const SystemTextInputEve
             original_.clear();
             effects.saveSession = true;
             effects.refreshSeerr = true;
-            effects.notice = settings.seerrServer.empty() ? SystemTextInputNotice::SeerrDisconnected
-                                                          : SystemTextInputNotice::SeerrServerSaved;
+
         } else if (event.mode == kTextInputSeerrApiKey) {
             settings.seerrApiKey = event.value;
             original_.clear();
             effects.saveSession = true;
             effects.refreshSeerr = true;
-            effects.notice = settings.seerrApiKey.empty() ? SystemTextInputNotice::SeerrApiKeyCleared
-                                                          : SystemTextInputNotice::SeerrApiKeySaved;
+
         } else if (isLoginMode(event.mode)) {
             account.finishTextField(loginField(event.mode), event.value);
         }

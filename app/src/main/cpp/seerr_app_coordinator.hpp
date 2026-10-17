@@ -77,11 +77,7 @@ public:
         case SeerrDomainState::ConnectAction::Submit:
             break;
         }
-        if (announce) {
-            effects.clearError = true;
-            effects.notice = "CONNECTING SEERR WITH JELLYFIN...";
-            effects.noticeSeconds = 30;
-        }
+        if (announce) effects.clearError = true;
         if (!connection_.submit(std::move(plan), announce) && announce) {
             effects.notice = "COULD NOT START SEERR CONNECTION";
             effects.noticeSeconds = 4;
@@ -103,8 +99,6 @@ public:
         SeerrCompletionHostEffects effects;
         const auto status = domain_.prepareStoragePicker(item);
         if (status == SeerrStorageState::PickerStatus::Loading) {
-            effects.notice = "LOADING SEERR STORAGE...";
-            effects.noticeSeconds = 4;
             return effects;
         }
         if (status == SeerrStorageState::PickerStatus::Unavailable) {
@@ -154,8 +148,6 @@ public:
             effects.noticeSeconds = 5;
             return effects;
         case SeerrDomainState::RequestAction::DeferredForConnection:
-            effects.notice = "REFRESHING SEERR SESSION...";
-            effects.noticeSeconds = 4;
             return effects;
         case SeerrDomainState::RequestAction::ChooseStorage:
             refreshStorage(plan.refreshStorage);
@@ -174,7 +166,6 @@ public:
         }
         mutations_.begin();
         effects.clearError = true;
-        effects.notice = "SENDING REQUEST TO SEERR...";
         if (!request_.submit(std::move(plan))) {
             mutations_.finish();
             effects.notice.reset();

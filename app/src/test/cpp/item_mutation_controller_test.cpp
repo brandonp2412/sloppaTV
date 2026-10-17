@@ -134,7 +134,7 @@ int main() {
         completion.result.ok = true;
         auto effects = ItemMutationController::apply(completion, true);
         assert(effects.finishLoading);
-        assert(effects.notice == "METADATA REFRESH REQUESTED");
+        assert(!effects.notice);
     }
 
     {
@@ -149,7 +149,7 @@ int main() {
         assert(effects.finishLoading);
         assert(effects.removeCachedItemId == "delete-me");
         assert(effects.closeDeletedItem);
-        assert(effects.notice == "MEDIA DELETED");
+        assert(!effects.notice);
         assert(detail.id.empty());
         assert(!detailsState.deleteConfirmation());
     }

@@ -40,7 +40,7 @@ int main() {
     assert(effects.invalidateSeerrStorage);
     assert(effects.saveSession);
     assert(effects.refreshSeerr);
-    assert(effects.notice == SystemTextInputNotice::SeerrServerSaved);
+    assert(effects.notice == SystemTextInputNotice::None);
     assert(effects.renderBurst.count() == 500);
 
     settings.seerrApiKey = "old-key";
@@ -50,7 +50,7 @@ int main() {
     assert(settings.seerrApiKey.empty());
     assert(effects.saveSession);
     assert(effects.refreshSeerr);
-    assert(effects.notice == SystemTextInputNotice::SeerrApiKeyCleared);
+    assert(effects.notice == SystemTextInputNotice::None);
 
     search.setQuery("old");
     assert(search.scheduleDebounce(SearchScreenState::Clock::now()));

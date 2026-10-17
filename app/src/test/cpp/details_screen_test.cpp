@@ -24,7 +24,10 @@ int main() {
     assert(actionIds[1] == DetailsAction::OpenEpisodes);
     assert(actionIds[2] == DetailsAction::PlayAll);
     const auto actions = state.actions(series, false);
-    assert(actions.front() == "PLAY NEXT");
+    assert(actions.front() == "PLAY");
+    series.positionTicks = 10000000;
+    assert(state.actions(series, false).front() == "PLAY NEXT");
+    series.positionTicks = 0;
     assert(actions[1] == "EPISODES");
     assert(actions[2] == "PLAY ALL");
     assert(std::find(actions.begin(), actions.end(), "MORE") == actions.end());

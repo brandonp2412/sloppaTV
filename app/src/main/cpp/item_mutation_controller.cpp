@@ -180,10 +180,7 @@ ItemMutationCompletionEffects ItemMutationController::apply(MetadataRefreshCompl
 
     ItemMutationCompletionEffects effects;
     effects.finishLoading = true;
-    if (!completion.result.ok)
-        effects.error = completion.result.error;
-    else
-        effects.notice = "METADATA REFRESH REQUESTED";
+    if (!completion.result.ok) effects.error = completion.result.error;
     return effects;
 }
 
@@ -205,7 +202,6 @@ ItemMutationCompletionEffects ItemMutationController::apply(DeleteItemCompletion
 
     detail = {};
     effects.closeDeletedItem = true;
-    effects.notice = "MEDIA DELETED";
     return effects;
 }
 

@@ -355,10 +355,6 @@ private:
         const auto hiding = homeVisibility_.toggle(details_.item(), home_, homeState_);
         if (!hiding) return;
         effects.persistSession = true;
-        effects.notice = DetailsScreenNotice{
-            .message = *hiding ? "HIDDEN FROM HOME" : "HOME VISIBILITY RESTORED",
-            .duration = std::chrono::seconds(2),
-        };
     }
 
     void toggleFavoriteAsync() {

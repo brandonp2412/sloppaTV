@@ -83,7 +83,8 @@ inline std::string detailsActionLabel(DetailsAction action, const JellyfinItem& 
     case DetailsAction::StartPlayback:
         return stillWatchingPrompt
                    ? "KEEP WATCHING"
-                   : (item.type == "Series" ? "PLAY NEXT" : (item.positionTicks > 0 ? "RESUME" : "PLAY"));
+                   : (item.type == "Series" ? ((item.played || item.positionTicks > 0) ? "PLAY NEXT" : "PLAY")
+                                            : (item.positionTicks > 0 ? "RESUME" : "PLAY"));
     case DetailsAction::OpenEpisodes:
         return "EPISODES";
     case DetailsAction::PlayAll:

@@ -68,7 +68,6 @@ public:
         effects.syncHome = true;
         effects.closeItem = true;
         effects.clearError = true;
-        effects.notice = "SEERR REQUEST DELETED";
         return effects;
     }
 
@@ -89,7 +88,6 @@ public:
         effects.syncHome = true;
         effects.clearError = true;
         effects.refreshStorage = true;
-        effects.notice = "REQUEST SENT TO SEERR";
         return effects;
     }
 
@@ -186,7 +184,6 @@ public:
         effects.log = SeerrCompletionLog{SeerrCompletionLogLevel::Info, "Seerr session refreshed"};
         if (completion.announce) {
             effects.clearError = true;
-            effects.notice = "SEERR CONNECTED WITH JELLYFIN";
         }
         return effects;
     }
