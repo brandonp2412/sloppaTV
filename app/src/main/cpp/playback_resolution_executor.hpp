@@ -102,7 +102,13 @@ public:
                 // Hydrate the selection before PlaybackInfo so Remux sees the real media
                 // metadata/source pool instead of an ID-only placeholder.
                 auto detailed = client_.getItem(session, selected.id);
-                if (detailed.ok) playable = std::move(detailed.value);
+                if (detailed.ok) {
+                    playable = std::move(detailed.value);
+                    // The server item can lag a just-reported local stop. Keep the
+                    // newest known resume point instead of replacing it with zero
+                    // (or an older position) during hydration.
+                    playable.positionTicks = std::max(playable.positionTicks, selected.positionTicks);
+                }
             }
             if (playable.type == "Series") {
                 auto next = client_.getNextUpForSeries(session, playable.id);

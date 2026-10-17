@@ -74,6 +74,7 @@ struct FakeClient {
                                                    int subtitleStreamIndex) {
         lastResolvedItemId = item.id;
         lastResolvedMediaSourceId = item.mediaSourceId;
+        lastResolvedPositionTicks = item.positionTicks;
         lastBitrate = bitrate;
         lastChannels = channels;
         lastAudioStreamIndex = audioStreamIndex;
@@ -96,6 +97,7 @@ struct FakeClient {
     std::string lastSeriesId;
     std::string lastResolvedItemId;
     std::string lastResolvedMediaSourceId;
+    int64_t lastResolvedPositionTicks = 0;
     int lastBitrate = 0;
     int lastChannels = 0;
     int lastAudioStreamIndex = -1;
@@ -161,12 +163,15 @@ int main() {
     JellyfinItem movieSelection;
     movieSelection.id = "movie";
     movieSelection.type = "Movie";
+    movieSelection.positionTicks = 762'750'000;
     const int detailRequestsBeforeMovie = client.detailRequests;
     assert(executor.resolveSelection(session, movieSelection, options, 7, -1));
     const auto& movieCompletion = std::get<BeginPlaybackCompletion>(completions.events.back());
     assert(movieCompletion.selected.id == "movie");
     assert(movieCompletion.playable.id == "movie");
     assert(movieCompletion.result.ok);
+    assert(movieCompletion.playable.positionTicks == movieSelection.positionTicks);
+    assert(client.lastResolvedPositionTicks == movieSelection.positionTicks);
     assert(client.detailRequests == detailRequestsBeforeMovie + 1);
 
     JellyfinItem seriesSelection;
