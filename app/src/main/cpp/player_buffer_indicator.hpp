@@ -137,7 +137,8 @@ public:
         } else if (stats.startupReadableBytes > remotePrefetch_.startupReadableBytes &&
                    remoteReceivedAt_ != TimePoint{} && now > remoteReceivedAt_) {
             const double interval = std::chrono::duration<double>(now - remoteReceivedAt_).count();
-            const double rate = (stats.startupReadableBytes - remotePrefetch_.startupReadableBytes) / interval;
+            const double rate =
+                static_cast<double>(stats.startupReadableBytes - remotePrefetch_.startupReadableBytes) / interval;
             if (std::isfinite(rate) && rate > 0.0) {
                 observedReadRate_ = positiveReadSamples_ ? 0.35 * rate + 0.65 * observedReadRate_ : rate;
                 ++positiveReadSamples_;
