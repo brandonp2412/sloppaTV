@@ -101,8 +101,10 @@ public:
 
     void setActive(JellyfinItem item, PlaybackTarget target) {
         // A fallback can swap to a different file with different track indexes.
-        // Keep the player audio menu tied to the actual selected source.
+        // Keep player track menus tied to the actual selected source.
         if (!target.audioTracks.empty()) item.audios = target.audioTracks;
+        if (!target.subtitleTracks.empty()) item.subtitles = target.subtitleTracks;
+        if (!target.mediaSourceId.empty()) item.mediaSourceId = target.mediaSourceId;
         activeItem_ = std::move(item);
         activeTarget_ = std::move(target);
     }

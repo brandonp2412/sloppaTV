@@ -119,6 +119,9 @@ public:
             .autoSubtitleLanguage = settings_.autoSubtitleLanguage,
             .autoSubtitleSourceLanguage = settings_.autoSubtitleSourceLanguage,
             .allowedSubtitleLanguages = settings_.subtitleLanguages,
+            .server = session_.server,
+            .userId = session_.userId,
+            .seriesTrackPreferences = settings_.seriesTrackPreferences,
         };
     }
 
@@ -300,7 +303,8 @@ public:
             if (plan.action == PlaybackSubtitleCycleAction::LoadNative) {
                 player_.disableSubtitles();
                 coordinator_.prepareNativeSubtitleLoad(plan.subtitleStreamIndex);
-                if (!loadSubtitle(subtitles, selected)) return PlaybackRuntimeNotice::SubtitleStartFailed;
+                if (!loadSubtitle(subtitles, selected, selected.deliveryUrl))
+                    return PlaybackRuntimeNotice::SubtitleStartFailed;
                 screenState_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(4));
                 reportProgress(telemetry, playerScreenActive, false);
                 return PlaybackRuntimeNotice::None;
@@ -350,6 +354,8 @@ public:
                                               : start.playerStartPositionMs;
         coordinator_.beginPreparing(now);
         embeddedSubtitleDiscoveryDone_ = false;
+        embeddedSubtitleDiscoveryStarted_ = {};
+        embeddedSubtitleDiscoveryLastPoll_ = {};
         player_.startAsync(start.url, videoSurface_.surface(), playerStartPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
                            start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels, isRemuxServer());
@@ -696,7 +702,14 @@ public:
             }
         }
         if (!playbackEnded && status != PlayerStatus::Playing && status != PlayerStatus::Paused) return {};
-        if (!embeddedSubtitleDiscoveryDone_ && coordinator_.activeTargetUsesDirectPlay() && !playbackEnded) {
+        const auto discoveryNow = std::chrono::steady_clock::now();
+        if (embeddedSubtitleDiscoveryStarted_ == std::chrono::steady_clock::time_point{})
+            embeddedSubtitleDiscoveryStarted_ = discoveryNow;
+        if (!embeddedSubtitleDiscoveryDone_ && coordinator_.activeTargetUsesDirectPlay() && !playbackEnded &&
+            discoveryNow - embeddedSubtitleDiscoveryStarted_ < std::chrono::seconds(30) &&
+            (embeddedSubtitleDiscoveryLastPoll_ == std::chrono::steady_clock::time_point{} ||
+             discoveryNow - embeddedSubtitleDiscoveryLastPoll_ >= std::chrono::seconds(1))) {
+            embeddedSubtitleDiscoveryLastPoll_ = discoveryNow;
             if (const auto tracks = player_.embeddedSubtitleTracks()) {
                 std::vector<JellyfinSubtitleStream> subtitles;
                 subtitles.reserve(tracks->size());
@@ -711,10 +724,23 @@ public:
                         .discoveredByPlayer = true,
                     });
                 }
-                coordinator_.session().mergeEmbeddedSubtitles(subtitles);
-                embeddedSubtitleDiscoveryDone_ = true;
-                __android_log_print(ANDROID_LOG_INFO, "SloppaTV", "Discovered %zu embedded subtitle tracks",
-                                    subtitles.size());
+                if (!subtitles.empty()) {
+                    coordinator_.session().mergeEmbeddedSubtitles(subtitles);
+                    embeddedSubtitleDiscoveryDone_ = true;
+                    if (!coordinator_.selectedSubtitleStream()) {
+                        const auto& item = coordinator_.session().activeItem();
+                        const int preferred = playbackAutoDiscoveredSubtitleIndexForItem(
+                            item, coordinator_.session().activeTarget().audioStreamIndex, trackSelectionPolicy(),
+                            activeDecodeMode() == PlaybackDecodeMode::Software);
+                        if (preferred >= 0 && player_.selectEmbeddedSubtitleStream(preferred)) {
+                            coordinator_.selectSubtitleStream(preferred);
+                            __android_log_print(ANDROID_LOG_INFO, "SloppaTV",
+                                                "Auto-selected discovered subtitle stream %d", preferred);
+                        }
+                    }
+                    __android_log_print(ANDROID_LOG_INFO, "SloppaTV", "Discovered %zu embedded subtitle tracks",
+                                        subtitles.size());
+                }
             }
         }
         if (playbackEnded && screenState_.durationMs() > 0) {
@@ -803,4 +829,6 @@ private:
     std::string failedSourceItemId_;
     std::vector<std::string> failedSources_;
     bool embeddedSubtitleDiscoveryDone_ = false;
+    std::chrono::steady_clock::time_point embeddedSubtitleDiscoveryStarted_{};
+    std::chrono::steady_clock::time_point embeddedSubtitleDiscoveryLastPoll_{};
 };

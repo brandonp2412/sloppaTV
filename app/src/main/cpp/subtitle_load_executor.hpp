@@ -82,9 +82,10 @@ public:
                 const auto fetchSubtitle = [&] {
                     auto response =
                         client_.downloadSubtitleText(session, subtitleItem, candidate.index, candidate.codec);
-                    if ((!response.ok || response.value.empty()) && candidateIndex == 0 &&
-                        !request.deliveryUrl.empty()) {
-                        response = client_.downloadSubtitleUrl(session, request.deliveryUrl);
+                    std::string candidateDeliveryUrl = candidate.deliveryUrl;
+                    if (candidateDeliveryUrl.empty() && candidateIndex == 0) candidateDeliveryUrl = request.deliveryUrl;
+                    if ((!response.ok || response.value.empty()) && !candidateDeliveryUrl.empty()) {
+                        response = client_.downloadSubtitleUrl(session, candidateDeliveryUrl);
                     }
                     if ((!response.ok || response.value.empty()) && subtitleMayFallbackToSrt(candidate.codec)) {
                         response = client_.downloadSubtitleSrt(session, subtitleItem, candidate.index);

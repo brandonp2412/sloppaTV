@@ -1161,6 +1161,7 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
     target.audioStreamIndex = offer.audioStreamIndex;
     target.audioOrdinal = offer.audioOrdinal;
     target.audioTracks = std::move(offer.audioTracks);
+    target.subtitleTracks = std::move(offer.subtitleTracks);
     target.subtitleStreamIndex = offer.subtitleStreamIndex;
     target.startTicks = item.positionTicks;
     if (!offer.subtitleDeliveryUrl.empty()) {
@@ -1539,7 +1540,13 @@ ApiValueResult<std::string> JellyfinClient::downloadSubtitleUrl(const JellyfinSe
         result.error = "Subtitle request is incomplete";
         return result;
     }
-    const auto response = http_.request("GET", url, headers(&session, session.deviceId));
+    std::string requestUrl = url;
+    if (requestUrl.front() == '/') {
+        std::string server = session.server;
+        while (!server.empty() && server.back() == '/') server.pop_back();
+        requestUrl = server + requestUrl;
+    }
+    const auto response = http_.request("GET", requestUrl, headers(&session, session.deviceId));
     if (!response.ok()) {
         result.error = apiError(response);
         return result;

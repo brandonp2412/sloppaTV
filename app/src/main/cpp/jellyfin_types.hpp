@@ -31,6 +31,7 @@ struct JellyfinSubtitleStream {
     bool isDefault = false;
     bool isExternal = false;
     bool discoveredByPlayer = false;
+    std::string deliveryUrl{};
 };
 
 struct JellyfinPerson {
@@ -180,6 +181,7 @@ struct PlaybackTarget {
     int audioStreamIndex = -1;
     int audioOrdinal = -1;
     std::vector<JellyfinAudioStream> audioTracks;
+    std::vector<JellyfinSubtitleStream> subtitleTracks;
     int subtitleStreamIndex = kSubtitleOffIndex;
     std::string subtitleUrl;
     int64_t startTicks = 0;

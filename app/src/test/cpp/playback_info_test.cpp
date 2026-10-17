@@ -79,7 +79,7 @@ int main() {
             "SupportsTranscoding":true,
             "TranscodingUrl":"/Videos/episode/master.m3u8",
             "MediaStreams":[
-                {"Type":"Subtitle","Index":7,"Codec":"srt","DeliveryMethod":"External","DeliveryUrl":"/Videos/episode/subtitles/7/0/Stream.srt"}
+                {"Type":"Subtitle","Index":7,"Codec":"srt","Language":"eng","DisplayTitle":"English External","IsDefault":true,"IsForced":false,"IsExternal":true,"DeliveryMethod":"External","DeliveryUrl":"/Videos/episode/subtitles/7/0/Stream.srt"}
             ]
         }]
     })";
@@ -89,6 +89,14 @@ int main() {
     assert(offer.value.mediaSourceId == "resolved-source");
     assert(offer.value.audioStreamIndex == 3);
     assert(offer.value.subtitleStreamIndex == 7);
+    assert(offer.value.subtitleTracks.size() == 1);
+    assert(offer.value.subtitleTracks[0].index == 7);
+    assert(offer.value.subtitleTracks[0].codec == "srt");
+    assert(offer.value.subtitleTracks[0].language == "eng");
+    assert(offer.value.subtitleTracks[0].title == "English External");
+    assert(offer.value.subtitleTracks[0].isDefault);
+    assert(offer.value.subtitleTracks[0].isExternal);
+    assert(offer.value.subtitleTracks[0].deliveryUrl == "/Videos/episode/subtitles/7/0/Stream.srt");
     assert(offer.value.subtitleDeliveryUrl == "/Videos/episode/subtitles/7/0/Stream.srt");
     assert(offer.value.transcodingUrl == "/Videos/episode/master.m3u8");
     assert(offer.value.container == "mkv");

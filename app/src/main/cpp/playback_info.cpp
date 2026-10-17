@@ -243,16 +243,29 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         offer.audioStreamIndex = scalarValueOr(*source, "DefaultAudioStreamIndex", -1);
         if (source->contains("MediaStreams") && (*source)["MediaStreams"].is_array()) {
             for (const auto& track : (*source)["MediaStreams"]) {
-                if (!track.is_object() || scalarValueOr(track, "Type", std::string{}) != "Audio") continue;
-                JellyfinAudioStream audio;
-                audio.index = scalarValueOr(track, "Index", -1);
-                audio.language = scalarValueOr(track, "Language", std::string{});
-                audio.codec = scalarValueOr(track, "Codec", std::string{});
-                audio.title = scalarValueOr(track, "DisplayTitle", std::string{});
-                audio.channels = scalarValueOr(track, "Channels", 0);
-                audio.isDefault = scalarValueOr(track, "IsDefault", false);
-                if (audio.index < 0) continue;
-                offer.audioTracks.push_back(std::move(audio));
+                if (!track.is_object()) continue;
+                const std::string type = scalarValueOr(track, "Type", std::string{});
+                if (type == "Audio") {
+                    JellyfinAudioStream audio;
+                    audio.index = scalarValueOr(track, "Index", -1);
+                    audio.language = scalarValueOr(track, "Language", std::string{});
+                    audio.codec = scalarValueOr(track, "Codec", std::string{});
+                    audio.title = scalarValueOr(track, "DisplayTitle", std::string{});
+                    audio.channels = scalarValueOr(track, "Channels", 0);
+                    audio.isDefault = scalarValueOr(track, "IsDefault", false);
+                    if (audio.index >= 0) offer.audioTracks.push_back(std::move(audio));
+                } else if (type == "Subtitle") {
+                    JellyfinSubtitleStream subtitle;
+                    subtitle.index = scalarValueOr(track, "Index", -1);
+                    subtitle.language = scalarValueOr(track, "Language", std::string{});
+                    subtitle.codec = scalarValueOr(track, "Codec", std::string{});
+                    subtitle.title = scalarValueOr(track, "DisplayTitle", std::string{});
+                    subtitle.forced = scalarValueOr(track, "IsForced", false);
+                    subtitle.isDefault = scalarValueOr(track, "IsDefault", false);
+                    subtitle.isExternal = scalarValueOr(track, "IsExternal", false);
+                    subtitle.deliveryUrl = scalarValueOr(track, "DeliveryUrl", std::string{});
+                    if (subtitle.index >= 0) offer.subtitleTracks.push_back(std::move(subtitle));
+                }
             }
         }
         auto chosenAudio = offer.audioTracks.end();

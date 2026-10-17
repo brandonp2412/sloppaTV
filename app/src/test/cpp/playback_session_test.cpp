@@ -12,6 +12,30 @@ int main() {
     assert(!state.fallbackAttempted());
     assert(state.zoomMode() == VideoZoomMode::Fit);
 
+    {
+        PlaybackSessionState selectedSourceState;
+        JellyfinItem staleItem;
+        JellyfinSubtitleStream staleSubtitle;
+        staleSubtitle.index = 2;
+        staleSubtitle.codec = "ass";
+        staleSubtitle.language = "ita";
+        staleItem.subtitles.push_back(staleSubtitle);
+        PlaybackTarget selectedSource;
+        selectedSource.mediaSourceId = "selected-source";
+        selectedSource.subtitleTracks.push_back({
+            .index = 9,
+            .codec = "srt",
+            .language = "eng",
+            .title = "English (External)",
+            .isExternal = true,
+        });
+        selectedSourceState.setActive(std::move(staleItem), std::move(selectedSource));
+        assert(selectedSourceState.activeItem().subtitles.size() == 1);
+        assert(selectedSourceState.activeItem().subtitles.front().index == 9);
+        assert(selectedSourceState.activeItem().subtitles.front().isExternal);
+        assert(selectedSourceState.activeItem().mediaSourceId == "selected-source");
+    }
+
     JellyfinItem activeItem;
     activeItem.id = "episode-1";
     PlaybackTarget activeTarget;

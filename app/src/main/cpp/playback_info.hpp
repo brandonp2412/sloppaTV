@@ -16,6 +16,7 @@ struct PlaybackInfoOffer {
     int audioOrdinal = -1;
     std::vector<JellyfinAudioStream> audioTracks;
     int subtitleStreamIndex = kSubtitleOffIndex;
+    std::vector<JellyfinSubtitleStream> subtitleTracks;
     std::string subtitleDeliveryUrl;
     std::string transcodingUrl;
     std::string container;

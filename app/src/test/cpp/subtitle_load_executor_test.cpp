@@ -45,8 +45,8 @@ struct FakeClient {
         return response(textResponses, subtitleIndex);
     }
 
-    ApiValueResult<std::string> downloadSubtitleUrl(const JellyfinSession&, const std::string&) {
-        calls.push_back("url");
+    ApiValueResult<std::string> downloadSubtitleUrl(const JellyfinSession&, const std::string& url) {
+        calls.push_back("url:" + url);
         return deliveryResponse;
     }
 
@@ -133,8 +133,18 @@ int main() {
     client.textResponses.clear();
     client.deliveryResponse = success(kValidSrt);
     assert(executor.load(session, request(3, {subtitle(3, "srt")}, "https://media.example/subtitle")));
-    assert((client.calls == std::vector<std::string>{"text:3", "url"}));
+    assert((client.calls == std::vector<std::string>{"text:3", "url:https://media.example/subtitle"}));
     assert(completions.events.back().loadedSubtitle.index == 3);
+
+    client.calls.clear();
+    client.textResponses.clear();
+    client.deliveryResponse = success(kValidSrt);
+    auto providerSubtitle = subtitle(31, "webvtt");
+    providerSubtitle.isExternal = true;
+    providerSubtitle.deliveryUrl = "https://media.example/provider-31.vtt";
+    assert(executor.load(session, request(31, {providerSubtitle})));
+    assert((client.calls == std::vector<std::string>{"text:31", "url:https://media.example/provider-31.vtt"}));
+    assert(completions.events.back().loadedSubtitle.index == 31);
 
     client.calls.clear();
     client.deliveryResponse = {};
