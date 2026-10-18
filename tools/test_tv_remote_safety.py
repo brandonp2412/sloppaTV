@@ -15,6 +15,7 @@ class TvRemoteSafetyTest(unittest.TestCase):
         self.assertFalse(ready(bt.replace("num_devices:1", "num_devices:0"), inp, acc))
         self.assertFalse(ready(bt, "virtual-remote", acc))
         self.assertFalse(ready(bt, inp, acc.replace("Bound services:{Service[label=Key Mapper", "Bound services:{}")))
+        self.assertFalse(ready(bt, inp, acc + "\nUi Automation[eventTypes=TYPES_ALL_MASK]"))
         self.assertTrue(ready(bt, inp, ""))
 
 

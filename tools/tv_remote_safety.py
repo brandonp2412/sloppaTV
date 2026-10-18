@@ -12,7 +12,8 @@ def ready(bt: str, inputs: str, accessibility: str) -> bool:
         return False
     mapper = "io.github.sds100.keymapper/" in accessibility
     bound = "Bound services:{Service[label=Key Mapper" in accessibility
-    return not mapper or bound
+    ui_automation = bool(re.search(r"(?m)^Ui Automation\[(?!\])", accessibility))
+    return (not mapper or bound) and not ui_automation
 
 
 def check_tv_remote(serial: str) -> None:
@@ -29,7 +30,7 @@ def check_tv_remote(serial: str) -> None:
     accessibility = shell("dumpsys", "accessibility")
     if not ready(bt, inputs, accessibility):
         raise RuntimeError(
-            "Physical TV remote HID or Key Mapper accessibility service is unhealthy; "
+            "Physical TV remote HID, Key Mapper binding, or UiAutomation state is unsafe; "
             "refusing ADB input. Never reset, unpair, or grab the remote."
         )
 
