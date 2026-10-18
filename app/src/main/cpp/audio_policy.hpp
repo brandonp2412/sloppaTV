@@ -76,9 +76,25 @@ inline std::string normalizeAudioLanguage(std::string language) {
 }
 
 inline bool audioLanguageEquals(std::string_view left, std::string_view right) {
-    return left.size() == right.size() &&
-           std::equal(left.begin(), left.end(), right.begin(),
-                      [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+    const auto canonical = [](std::string_view value) {
+        // Jellyfin stream tags and saved preferences can use different ISO-639
+        // lengths (or ISO-639-2 bibliographic variants) for the same language.
+        struct Alias {
+            std::string_view from;
+            std::string_view to;
+        };
+        static constexpr Alias aliases[] = {
+            {"en", "eng"}, {"ko", "kor"},  {"ru", "rus"}, {"ja", "jpn"}, {"fr", "fra"}, {"fre", "fra"},
+            {"de", "deu"}, {"ger", "deu"}, {"es", "spa"}, {"pt", "por"}, {"zh", "zho"}, {"chi", "zho"},
+        };
+        for (const Alias& alias : aliases) {
+            if (value == alias.from) return alias.to;
+        }
+        return value;
+    };
+    const std::string normalizedLeft = normalizeAudioLanguage(std::string(left));
+    const std::string normalizedRight = normalizeAudioLanguage(std::string(right));
+    return canonical(normalizedLeft) == canonical(normalizedRight);
 }
 
 inline int audioIndexForQueuePreference(const std::vector<AudioPreferenceCandidate>& audios,

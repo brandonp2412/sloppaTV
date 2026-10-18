@@ -107,6 +107,19 @@ int main() {
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"ENG"}) == 3);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"jpn"}) == 1);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"fra"}) == -1);
+    // Server and player settings may alternate ISO-639-1 and ISO-639-2.
+    assert(audioLanguageEquals("ko", "kor"));
+    assert(audioLanguageEquals("rus", "RU"));
+    assert(audioLanguageEquals("eng", "en"));
+    assert(audioLanguageEquals("JPN", "ja"));
+    assert(audioLanguageEquals("fre", "fr"));
+    assert(audioLanguageEquals("ger", "deu"));
+    assert(!audioLanguageEquals("kor", "rus"));
+    assert(!audioLanguageEquals("en", "ja"));
+    const std::vector<AudioPreferenceCandidate> mixedDubTracks{{1, "rus"}, {2, "kor"}};
+    assert(audioIndexForQueuePreference(mixedDubTracks, std::optional<std::string>{"ko"}) == 2);
+    assert(audioIndexForQueuePreference(mixedDubTracks, std::optional<std::string>{"ru"}) == 1);
+
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{""}) == -1);
     return 0;
 }

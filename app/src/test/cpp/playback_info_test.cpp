@@ -94,6 +94,27 @@ int main() {
     assert(offer.value.container == "mkv");
     assert(offer.value.supportsDirectPlay);
 
+    // A chosen dub must survive server track tags with a different ISO-639 length.
+    const auto alternateDubOffer = R"({
+        "MediaSources":[{
+            "Id":"multi-audio",
+            "SupportsDirectPlay":true,
+            "DefaultAudioStreamIndex":1,
+            "MediaStreams":[
+                {"Type":"Audio","Index":1,"Language":"rus","IsDefault":true},
+                {"Type":"Audio","Index":2,"Language":"kor","IsDefault":false}
+            ]
+        }]
+    })";
+    const auto koreanDub = parsePlaybackInfoOffer(alternateDubOffer, -1, kSubtitleServerDefaultIndex, {}, "", "ko");
+    assert(koreanDub.ok);
+    assert(koreanDub.value.audioStreamIndex == 2);
+    assert(koreanDub.value.audioOrdinal == 1);
+    const auto russianDub = parsePlaybackInfoOffer(alternateDubOffer, -1, kSubtitleServerDefaultIndex, {}, "", "ru");
+    assert(russianDub.ok);
+    assert(russianDub.value.audioStreamIndex == 1);
+    assert(russianDub.value.audioOrdinal == 0);
+
     const std::string pgsResponse = R"({
         "MediaSources":[{
             "Id":"source",
