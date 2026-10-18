@@ -1128,6 +1128,12 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
             .count();
     if (!response.ok()) {
         result.error = apiError(response);
+        if (response.status == 503) {
+            const auto body = json::parse(response.body, nullptr, false);
+            if (body.is_object() && body.value("ErrorCode", std::string{}) == "P2P_SOURCE_BUFFERING") {
+                result.error = "Buffering—downloading slowly. Wait, then press Play to retry.";
+            }
+        }
         __android_log_print(ANDROID_LOG_WARN, kTag,
                             "PlaybackInfo HTTP failed item=%s S%dE%d status=%d elapsedMs=%lld reason=%s",
                             item.id.c_str(), item.parentIndexNumber, item.indexNumber, response.status,
