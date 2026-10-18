@@ -20,6 +20,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TypedDict
 
+from tv_remote_safety import check_tv_remote
+
 
 @dataclass(frozen=True)
 class App:
@@ -279,6 +281,7 @@ def main() -> None:
     if args.settle_seconds < 0:
         parser.error("--settle-seconds cannot be negative")
 
+    check_tv_remote(args.serial)
     adb(args.serial, "shell", "input", "keyevent", "224", capture=False)
     print("STARTUP")
     startup = startup_benchmark(args.serial, args.runs)

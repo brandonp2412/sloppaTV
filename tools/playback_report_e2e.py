@@ -13,6 +13,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from tv_remote_safety import check_tv_remote
+
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-physical-tv"
 CLIENT = "sloppaTV Report E2E"
@@ -215,6 +217,7 @@ def main() -> int:
     if model.strip() != "Google TV Streamer":
         raise SystemExit(f"Refusing device {args.serial}: expected Google TV Streamer, got {model!r}")
 
+    check_tv_remote(args.serial)
     observer = JellyfinObserver(args.server, args.insecure)
     original_volume = stream_volume(args.serial)
     ARTIFACTS.mkdir(parents=True, exist_ok=True)

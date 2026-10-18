@@ -11,6 +11,8 @@ from pathlib import Path
 
 from PIL import Image, ImageChops, ImageStat
 
+from tv_remote_safety import check_tv_remote
+
 PLAYING = 3
 PAUSED = 2
 BUFFERING = 6
@@ -345,6 +347,7 @@ def main() -> None:
         parser.error("offline fixture login requires app.sloppatv.offlinefixture; preserve live E2E app")
     if args.login and args.server_url != "http://127.0.0.1:1024":
         parser.error("offline fixture server must be http://127.0.0.1:1024")
+    check_tv_remote(args.serial)
     args.artifacts.mkdir(parents=True, exist_ok=True)
     if args.login:
         login(args.serial, args.package, args.server_url)

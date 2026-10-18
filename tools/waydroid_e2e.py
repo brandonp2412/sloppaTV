@@ -13,6 +13,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from tv_remote_safety import check_tv_remote
+
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-waydroid"
 DEFAULT_PACKAGE = "app.sloppatv"
@@ -809,6 +811,7 @@ def main() -> None:
     )
 
     verify_target(args.target)
+    check_tv_remote(args.serial)
     if args.command == "key":
         for value in args.keys:
             key(value)
