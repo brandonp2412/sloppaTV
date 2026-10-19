@@ -383,6 +383,31 @@ int main() {
     assert(!remuxNoStreamsPlaceholder.ok);
     assert(remuxNoStreamsPlaceholder.error == "Jellyfin returned no playable media source");
 
+    const auto proxyNoStreamsPlaceholder = parsePlaybackInfoOffer(R"({
+        "MediaSources": [{
+            "Path": "https://remux.example/videos/no-streams?token=abc",
+            "SupportsDirectPlay": true
+        }]
+    })",
+                                                                  -1, kSubtitleServerDefaultIndex);
+    assert(!proxyNoStreamsPlaceholder.ok);
+    const auto directUrlNoStreamsPlaceholder = parsePlaybackInfoOffer(R"({
+        "MediaSources": [{
+            "DirectStreamUrl": "/videos/no-streams?api_key=abc",
+            "SupportsDirectStream": true
+        }]
+    })",
+                                                                      -1, kSubtitleServerDefaultIndex);
+    assert(!directUrlNoStreamsPlaceholder.ok);
+    const auto nonPlaceholderSimilarPath = parsePlaybackInfoOffer(R"({
+        "MediaSources": [{
+            "Path": "/videos/no-streams-real",
+            "SupportsDirectPlay": true
+        }]
+    })",
+                                                                  -1, kSubtitleServerDefaultIndex);
+    assert(nonPlaceholderSimilarPath.ok);
+
     const auto placeholderBeforeRealSource = parsePlaybackInfoOffer(R"({
         "MediaSources": [
             {
