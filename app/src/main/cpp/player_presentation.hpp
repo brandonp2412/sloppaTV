@@ -278,7 +278,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                                 ? std::max(0, playerScreenState.durationMs() - playerScreenState.positionMs())
                                 : 0;
     const JellyfinMediaSegment* activeSkipSegment =
-        playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs());
+        playbackCoordinator.activeSkippableSegment(playerScreenState.positionMs(), playerScreenState.durationMs());
     const bool skipDisabledForSeries = activeSkipSegment && canDisableSkipForSegmentType(activeSkipSegment->type) &&
                                        skipSegmentsDisabledForSeries(settings, activeItem.seriesId);
     const JellyfinMediaSegment* skipSegment = skipDisabledForSeries ? nullptr : activeSkipSegment;
