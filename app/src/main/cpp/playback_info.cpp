@@ -25,11 +25,21 @@ template <typename T> T scalarValueOr(const json& value, const char* key, T fall
 }
 
 bool isNoStreamsPlaceholder(const json& source) {
-    // Remux exposes an explicit sentinel media source when provider lookup
-    // yielded no playable streams. It advertises DirectPlay/DirectStream so
-    // generic Jellyfin clients can render its placeholder clip, but SloppaTV
-    // must not mistake that clip for successful media playback.
-    return source.is_object() && scalarValueOr(source, "Path", std::string{}) == "/videos/no-streams";
+    // A gateway can return the Remux placeholder as an absolute or query-bearing URL.
+    // Never report its intentionally playable clip as decoded media content.
+    if (!source.is_object()) return false;
+    const auto isSentinelUrl = [](std::string_view url) {
+        const auto scheme = url.find("://");
+        if (scheme != std::string_view::npos) {
+            const auto path = url.find('/', scheme + 3);
+            if (path == std::string_view::npos) return false;
+            url.remove_prefix(path);
+        }
+        url = url.substr(0, url.find_first_of("?#"));
+        return url == "/videos/no-streams";
+    };
+    return isSentinelUrl(scalarValueOr(source, "Path", std::string{})) ||
+           isSentinelUrl(scalarValueOr(source, "DirectStreamUrl", std::string{}));
 }
 
 std::string joinCodecs(const std::vector<std::string>& codecs) {
