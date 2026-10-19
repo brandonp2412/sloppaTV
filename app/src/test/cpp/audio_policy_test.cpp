@@ -104,6 +104,15 @@ int main() {
     };
     assert(audioIndexForQueuePreference(audioTracks, std::nullopt) == -1);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"eng"}) == 3);
+    // Three-letter stream tags and regional user preferences must round-trip.
+    assert(audioLanguageEquals("ita", "it-IT"));
+    assert(audioLanguageEquals("nld", "nl-NL"));
+    assert(audioLanguageEquals("ENG", "en_NZ"));
+    assert(!audioLanguageEquals("ita", "en-NZ"));
+    const std::vector<AudioPreferenceCandidate> locales{{1, "en-US"}, {2, "en-NZ"}, {3, "ita"}};
+    assert(audioIndexForQueuePreference(locales, std::optional<std::string>{"en-NZ"}) == 2);
+    assert(audioIndexForQueuePreference(locales, std::optional<std::string>{"eng"}) == 1);
+    assert(audioIndexForQueuePreference(locales, std::optional<std::string>{"it-IT"}) == 3);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"ENG"}) == 3);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"jpn"}) == 1);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"fra"}) == -1);

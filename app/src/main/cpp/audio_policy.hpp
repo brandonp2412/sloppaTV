@@ -84,22 +84,30 @@ inline bool audioLanguageEquals(std::string_view left, std::string_view right) {
             std::string_view to;
         };
         static constexpr Alias aliases[] = {
-            {"en", "eng"}, {"ko", "kor"},  {"ru", "rus"}, {"ja", "jpn"}, {"fr", "fra"}, {"fre", "fra"},
-            {"de", "deu"}, {"ger", "deu"}, {"es", "spa"}, {"pt", "por"}, {"zh", "zho"}, {"chi", "zho"},
+            {"en", "eng"}, {"ko", "kor"},  {"ru", "rus"},  {"ja", "jpn"}, {"fr", "fra"}, {"fre", "fra"},
+            {"de", "deu"}, {"ger", "deu"}, {"es", "spa"},  {"pt", "por"}, {"zh", "zho"}, {"chi", "zho"},
+            {"it", "ita"}, {"nl", "nld"},  {"dut", "nld"}, {"hi", "hin"}, {"sv", "swe"}, {"no", "nor"},
         };
         for (const Alias& alias : aliases) {
             if (value == alias.from) return alias.to;
         }
         return value;
     };
-    const std::string normalizedLeft = normalizeAudioLanguage(std::string(left));
-    const std::string normalizedRight = normalizeAudioLanguage(std::string(right));
+    const auto primaryLanguage = [](std::string_view value) { return value.substr(0, value.find_first_of("-_")); };
+    const std::string normalizedLeft = normalizeAudioLanguage(std::string(primaryLanguage(left)));
+    const std::string normalizedRight = normalizeAudioLanguage(std::string(primaryLanguage(right)));
     return canonical(normalizedLeft) == canonical(normalizedRight);
 }
 
 inline int audioIndexForQueuePreference(const std::vector<AudioPreferenceCandidate>& audios,
                                         const std::optional<std::string>& languagePreference) {
     if (!languagePreference.has_value() || languagePreference->empty()) return -1;
+    // Prefer the exact locale before falling back to the same primary language.
+    const auto exact = std::find_if(audios.begin(), audios.end(), [&](const AudioPreferenceCandidate& audio) {
+        return audio.index >= 0 &&
+               normalizeAudioLanguage(audio.language) == normalizeAudioLanguage(*languagePreference);
+    });
+    if (exact != audios.end()) return exact->index;
     const auto match = std::find_if(audios.begin(), audios.end(), [&](const AudioPreferenceCandidate& audio) {
         return audio.index >= 0 && audioLanguageEquals(audio.language, *languagePreference);
     });
