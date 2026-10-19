@@ -661,12 +661,19 @@ public:
         return true;
     }
 
-    [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int positionMs) const {
-        return sessionState_.activeSkippableSegment(playbackTicksFromPositionMs(positionMs));
+    [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int positionMs, int durationMs = 0) const {
+        const auto* segment = sessionState_.activeSkippableSegment(playbackTicksFromPositionMs(positionMs));
+        if (segment && segment->type == "Intro" && durationMs > 0) {
+            const int endMs = playbackPositionMsFromTicks(segment->endTicks);
+            // Intro markers belong to metadata, which may describe a different cut.
+            // Refuse a skip that would land near the end of the actual playback.
+            if (endMs >= durationMs - 5000 || endMs > durationMs / 3) return nullptr;
+        }
+        return segment;
     }
 
-    [[nodiscard]] std::optional<int> activeSkippableSegmentEndMs(int positionMs) const {
-        const auto* segment = activeSkippableSegment(positionMs);
+    [[nodiscard]] std::optional<int> activeSkippableSegmentEndMs(int positionMs, int durationMs = 0) const {
+        const auto* segment = activeSkippableSegment(positionMs, durationMs);
         if (segment == nullptr) return std::nullopt;
         return playbackPositionMsFromTicks(segment->endTicks);
     }

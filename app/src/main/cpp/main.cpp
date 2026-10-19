@@ -997,7 +997,7 @@ private:
 
     bool beginPlayerSkipButtonPress() {
         const auto now = std::chrono::steady_clock::now();
-        const auto* segment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs());
+        const auto* segment = playbackCoordinator_.activeSkippableSegment(playerScreenState_.positionMs(), playerScreenState_.durationMs());
         if (!segment || !canDisableSkipForSegmentType(segment->type)) return false;
         const auto& item = playbackCoordinator_.session().activeItem();
         if (item.seriesId.empty()) return false;

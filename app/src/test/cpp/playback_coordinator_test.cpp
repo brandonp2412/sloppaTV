@@ -98,6 +98,11 @@ int main() {
     assert(activeSegment != nullptr);
     assert(activeSegment->type == "Intro");
     assert(coordinator.activeSkippableSegmentEndMs(1000) == std::optional<int>{5000});
+    // A stale intro marker must never offer a seek to the end of a shorter cut.
+    assert(coordinator.activeSkippableSegment(1000, 12000) == nullptr);
+    assert(!coordinator.activeSkippableSegmentEndMs(1000, 12000));
+    assert(coordinator.activeSkippableSegment(1000, 20000) != nullptr);
+    assert(coordinator.activeSkippableSegmentEndMs(1000, 20000) == std::optional<int>{5000});
     assert(coordinator.activeSkippableSegment(4499) != nullptr);
     assert(coordinator.activeSkippableSegment(4500) == nullptr);
     assert(!coordinator.activeSkippableSegmentEndMs(4500));
