@@ -523,7 +523,7 @@ ApiValueResult<std::vector<SeerrMediaItem>> SeerrClient::search(const std::strin
             for (const auto& value : *values) {
                 if (!value.is_object()) continue;
                 SeerrMediaItem item = itemFromSearchResult(value);
-                if (item.id.empty() || (item.available && !item.television())) continue;
+                if (!includeSeerrSearchResult(item)) continue;
                 result.value.push_back(std::move(item));
                 if (result.value.size() >= 24) break;
             }

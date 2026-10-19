@@ -125,6 +125,7 @@ CPP_TESTS = [
     "seerr_request_state_test.cpp",
     "seerr_search_coordinator_test.cpp",
     "seerr_search_state_test.cpp",
+    "seerr_search_visibility_test.cpp",
     "seerr_storage_state_test.cpp",
     "server_info_executor_test.cpp",
     "series_playback_executor_test.cpp",

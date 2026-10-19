@@ -30,6 +30,11 @@ struct SeerrMediaItem {
     [[nodiscard]] bool television() const { return mediaType == "tv"; }
 };
 
+// Remux may not index media that Seerr marks available. Local TMDB dedup happens in SearchScreenState.
+inline bool includeSeerrSearchResult(const SeerrMediaItem& item) {
+    return item.valid();
+}
+
 inline std::string seerrMediaId(const std::string& mediaType, int tmdbId) {
     if ((mediaType != "movie" && mediaType != "tv") || tmdbId <= 0) return {};
     return "seerr:" + mediaType + ":" + std::to_string(tmdbId);
