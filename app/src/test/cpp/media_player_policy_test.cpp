@@ -120,6 +120,14 @@ int main() {
     assert(shouldRetrySlowRemuxSource(true, 90'000, true, true));
     assert(!shouldRetrySlowRemuxSource(true, 90'000, false, true));
     assert(!shouldRetrySlowRemuxSource(false, 90'000, true, true));
+    // A slow first source may be offered again as the alternate after a retry.
+    // Do not bounce A -> B -> A, and do not retry the current or empty source.
+    assert(shouldUseRemuxAlternate("A", "B", {}));
+    assert(!shouldUseRemuxAlternate("B", "A", {"A"}));
+    assert(!shouldUseRemuxAlternate("B", "B", {}));
+    assert(!shouldUseRemuxAlternate("A", "", {}));
+    assert(shouldUseRemuxAlternate("B", "C", {"A"}));
+    assert(!shouldUseRemuxAlternate("B", "C", {"A", "C"}));
 
     assert(mpvHttpStatus("HTTP error 500") == 500);
     assert(mpvHttpStatus("curl: HTTP error 503 while fetching") == 503);
