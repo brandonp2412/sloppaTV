@@ -231,9 +231,32 @@ def run_acceptance(
 
     minimum = initial["position_ticks"] + 30_000_000
     progress = wait_for_session(observer, item_id, paused=False, minimum_position_ticks=minimum, timeout=16.0)
-    screenshots, cold_start_frames = capture_video_candidates(serial, directory)
+    screenshots, opening_frame_candidates = capture_video_candidates(serial, directory)
+    opening_screenshots = screenshots
+    sustained_screenshots: list[str] = []
+    sustained_frame_candidates = False
+    sustained_observation = None
+    sustained_skip_reason = None
+    if opening_frame_candidates:
+        # Animated studio logos can look like playback even if the film later goes black.
+        # Demand a second moving pair at least one minute into the item.
+        checkpoint = initial["position_ticks"] + 600_000_000
+        runtime = initial.get("runtime_ticks") or 0
+        if runtime and checkpoint + 450_000_000 < runtime:
+            try:
+                sustained_observation = wait_for_session(
+                    observer, item_id, paused=False, minimum_position_ticks=checkpoint, timeout=65.0
+                )
+                sustained_screenshots, sustained_frame_candidates = capture_video_candidates(
+                    serial, directory, max_attempts=6, prefix="sustained"
+                )
+            except RuntimeError as exc:
+                sustained_skip_reason = str(exc)
+        else:
+            sustained_skip_reason = "Cannot safely sample one minute into a short/unknown-duration item"
     pre_seek_screenshots = None
     seek_observation = None
+    cold_start_frames = opening_frame_candidates and sustained_frame_candidates
     moving_frame_candidates = cold_start_frames
     if not cold_start_frames:
         # Black openings can outlast the sampling window while playback advances.
@@ -291,6 +314,10 @@ def run_acceptance(
         "resumed": resumed,
         "stopped": True,
         "screenshots": screenshots,
+        "opening_screenshots": opening_screenshots,
+        "sustained_screenshots": sustained_screenshots,
+        "sustained_observation": sustained_observation,
+        "sustained_skip_reason": sustained_skip_reason,
         "pre_seek_screenshots": pre_seek_screenshots,
         "seek_observation": seek_observation,
         "audio_telemetry": str(audio_telemetry),
@@ -298,6 +325,8 @@ def run_acceptance(
             "status": "SESSION_ONLY_UNVERIFIED",
             "decoded_video": False,
             "nonblank_moving_frame_candidates": moving_frame_candidates,
+            "opening_frame_candidates": opening_frame_candidates,
+            "sustained_frame_candidates": sustained_frame_candidates,
             "cold_start_frame_candidates": cold_start_frames,
             "post_seek_only": moving_frame_candidates and not cold_start_frames,
             "audio": False,

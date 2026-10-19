@@ -34,7 +34,9 @@ class StrictPlaybackReportTests(unittest.TestCase):
             self.assertEqual(result["screenshots"], ["first.png", "later.png"])
             self.assertEqual(result["verification"]["status"], "SESSION_ONLY_UNVERIFIED")
             self.assertFalse(result["verification"]["decoded_video"])
-            self.assertTrue(result["verification"]["nonblank_moving_frame_candidates"])
+            self.assertFalse(result["verification"]["nonblank_moving_frame_candidates"])
+            self.assertTrue(result["verification"]["opening_frame_candidates"])
+            self.assertFalse(result["verification"]["sustained_frame_candidates"])
             self.assertFalse(result["verification"]["audio"])
             self.assertEqual((Path(temp) / "audio-flinger.txt").read_text(), "audio telemetry")
             self.assertFalse(any(args[:4] == ("shell", "cmd", "media_session", "volume") for args in calls))
@@ -157,6 +159,76 @@ class StrictPlaybackReportTests(unittest.TestCase):
             paths, verified = report.capture_video_candidates("tv", Path("/tmp"), max_attempts=3)
         self.assertFalse(verified)
         self.assertEqual(paths, ["still1", "still2"])
+
+    def test_animated_logo_then_black_needs_post_seek_proof(self):
+        states = [
+            {"paused": False, "position_ticks": 10_000_000, "runtime_ticks": 80_000_000_000},
+            {"paused": False, "position_ticks": 80_000_000},
+            {"paused": False, "position_ticks": 620_000_000},
+            {"paused": False, "position_ticks": 790_000_000},
+            {"paused": True, "position_ticks": 790_000_000},
+            {"paused": True, "position_ticks": 790_000_000},
+            {"paused": False, "position_ticks": 790_000_000},
+        ]
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch.object(report, "adb", return_value="audio telemetry"),
+            patch.object(
+                report,
+                "capture_video_candidates",
+                side_effect=[
+                    (["logo1", "logo2"], True),
+                    (["black1", "black2"], False),
+                    (["movie1", "movie2"], True),
+                ],
+            ) as captures,
+            patch.object(report, "wait_for_session", side_effect=states) as sessions,
+            patch.object(report, "playback_session_for_item", return_value=None),
+            patch.object(report, "wait_for_stopped"),
+            patch.object(report.time, "sleep"),
+        ):
+            result = report.run_acceptance("tv", Mock(sessions=lambda: []), "movie", Path(temp))
+        self.assertEqual(captures.call_count, 3)
+        self.assertEqual(captures.call_args_list[1].kwargs["prefix"], "sustained")
+        self.assertEqual(captures.call_args_list[2].kwargs["prefix"], "post-seek")
+        self.assertEqual(sessions.call_args_list[2].kwargs["minimum_position_ticks"], 610_000_000)
+        self.assertTrue(result["verification"]["opening_frame_candidates"])
+        self.assertFalse(result["verification"]["sustained_frame_candidates"])
+        self.assertFalse(result["verification"]["cold_start_frame_candidates"])
+        self.assertTrue(result["verification"]["post_seek_only"])
+        self.assertEqual(result["sustained_screenshots"], ["black1", "black2"])
+
+    def test_opening_and_sustained_frames_support_cold_candidate(self):
+        states = [
+            {"paused": False, "position_ticks": 10_000_000, "runtime_ticks": 80_000_000_000},
+            {"paused": False, "position_ticks": 80_000_000},
+            {"paused": False, "position_ticks": 620_000_000},
+            {"paused": True, "position_ticks": 620_000_000},
+            {"paused": True, "position_ticks": 620_000_000},
+            {"paused": False, "position_ticks": 620_000_000},
+        ]
+        with (
+            tempfile.TemporaryDirectory() as temp,
+            patch.object(report, "adb", return_value="audio telemetry"),
+            patch.object(
+                report,
+                "capture_video_candidates",
+                side_effect=[
+                    (["logo1", "logo2"], True),
+                    (["film1", "film2"], True),
+                ],
+            ) as captures,
+            patch.object(report, "wait_for_session", side_effect=states),
+            patch.object(report, "playback_session_for_item", return_value=None),
+            patch.object(report, "wait_for_stopped"),
+            patch.object(report.time, "sleep"),
+        ):
+            result = report.run_acceptance("tv", Mock(sessions=lambda: []), "movie", Path(temp))
+        self.assertEqual(captures.call_count, 2)
+        self.assertTrue(result["verification"]["cold_start_frame_candidates"])
+        self.assertTrue(result["verification"]["sustained_frame_candidates"])
+        self.assertFalse(result["verification"]["post_seek_only"])
+        self.assertIsNone(result["seek_observation"])
 
 
 if __name__ == "__main__":
