@@ -4,7 +4,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 import ssl
 import subprocess
 import time
@@ -90,18 +89,6 @@ def adb(serial: str, *args: str, capture: bool = False) -> str:
     return result.stdout.strip() if capture else ""
 
 
-def stream_volume(serial: str) -> int:
-    output = adb(serial, "shell", "cmd", "media_session", "volume", "--stream", "3", "--get", capture=True)
-    match = re.search(r"volume is (\d+)", output)
-    if not match:
-        raise RuntimeError("Unable to read Android TV media volume")
-    return int(match.group(1))
-
-
-def set_stream_volume(serial: str, value: int) -> None:
-    adb(serial, "shell", "cmd", "media_session", "volume", "--stream", "3", "--set", str(max(0, value)))
-
-
 def playback_session_for_item(sessions: list[dict[str, Any]], item_id: str) -> dict[str, Any] | None:
     normalized = item_id.replace("-", "").lower()
     matches = []
@@ -162,15 +149,36 @@ def wait_for_stopped(observer: JellyfinObserver, item_id: str, timeout: float = 
     raise RuntimeError("Jellyfin session still reports the item after playback stopped")
 
 
-def run_acceptance(serial: str, observer: JellyfinObserver, item_id: str) -> dict[str, Any]:
+def capture_frame(serial: str, phase: str, directory: Path) -> str:
+    directory.mkdir(parents=True, exist_ok=True)
+    remote = f"/sdcard/sloppatv-report-{phase}.png"
+    target = directory / f"{phase}.png"
+    adb(serial, "shell", "screencap", "-p", remote)
+    try:
+        adb(serial, "pull", remote, str(target))
+    finally:
+        adb(serial, "shell", "rm", remote)
+    if not target.is_file() or target.stat().st_size == 0:
+        raise RuntimeError(f"Missing physical TV screenshot: {target}")
+    return str(target)
+
+
+def run_acceptance(serial: str, observer: JellyfinObserver, item_id: str, directory: Path | None = None) -> dict[str, Any]:
+    if directory is None:
+        directory = ARTIFACTS / datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     adb(serial, "shell", "input", "keyevent", "KEYCODE_WAKEUP")
     initial = wait_for_session(observer, item_id)
     if initial["paused"]:
         adb(serial, "shell", "input", "keyevent", "KEYCODE_DPAD_CENTER")
         initial = wait_for_session(observer, item_id, paused=False)
 
+    first_frame = capture_frame(serial, "initial", directory)
     minimum = initial["position_ticks"] + 30_000_000
     progress = wait_for_session(observer, item_id, paused=False, minimum_position_ticks=minimum, timeout=16.0)
+
+    progressed_frame = capture_frame(serial, "progress", directory)
+    audio_telemetry = directory / "audio-flinger.txt"
+    audio_telemetry.write_text(adb(serial, "shell", "dumpsys", "media.audio_flinger", capture=True), encoding="utf-8")
 
     adb(serial, "shell", "input", "keyevent", "KEYCODE_DPAD_CENTER")
     paused = wait_for_session(observer, item_id, paused=True)
@@ -197,6 +205,14 @@ def run_acceptance(serial: str, observer: JellyfinObserver, item_id: str) -> dic
         "paused_stable": paused_stable,
         "resumed": resumed,
         "stopped": True,
+        "screenshots": [first_frame, progressed_frame],
+        "audio_telemetry": str(audio_telemetry),
+        "verification": {
+            "status": "SESSION_ONLY_UNVERIFIED",
+            "decoded_video": False,
+            "audio": False,
+            "reason": "Position/session state is not proof; screenshots need visual review and output audio verification",
+        },
     }
 
 
@@ -209,6 +225,7 @@ def main() -> int:
     parser.add_argument("--username", default=os.getenv("JELLYFIN_LOCAL_USERNAME", ""))
     parser.add_argument("--password", default=os.getenv("JELLYFIN_LOCAL_PASSWORD", ""))
     parser.add_argument("--insecure", action="store_true")
+    parser.add_argument("--session-only", action="store_true", help="Permit session controls check without decoded/audio proof")
     args = parser.parse_args()
     if not args.server or not args.username:
         raise SystemExit("Set Jellyfin server credentials or pass --server/--username/--password")
@@ -219,10 +236,8 @@ def main() -> int:
 
     check_tv_remote(args.serial)
     observer = JellyfinObserver(args.server, args.insecure)
-    original_volume = stream_volume(args.serial)
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     try:
-        set_stream_volume(args.serial, 0)
         observer.login(args.username, args.password)
         evidence = run_acceptance(args.serial, observer, args.item_id)
         path = ARTIFACTS / "playback-report.json"
@@ -231,7 +246,9 @@ def main() -> int:
         print(f"wrote {path}")
     finally:
         observer.logout()
-        set_stream_volume(args.serial, original_volume)
+    if not args.session_only:
+        print("INCOMPLETE: session state is not decoded video/audio evidence; manually review screenshots and audio.")
+        return 2
     return 0
 
 
