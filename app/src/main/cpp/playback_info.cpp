@@ -190,31 +190,31 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
                            overrides) != PlaybackServerRoute::Unavailable;
             });
             if (requested != candidates.end()) source = *requested;
-        } else {
-            const std::string firstTranscodingUrl = scalarValueOr(*source, "TranscodingUrl", std::string{});
-            const PlaybackServerRoute firstRoute = choosePlaybackServerRoute(
-                {
-                    .supportsDirectPlay = scalarValueOr(*source, "SupportsDirectPlay", false),
-                    .supportsDirectStream = scalarValueOr(*source, "SupportsDirectStream", false),
-                    .supportsTranscoding = scalarValueOr(*source, "SupportsTranscoding", false),
-                    .transcodingUrl = firstTranscodingUrl,
-                },
-                overrides);
-            if (firstRoute == PlaybackServerRoute::Unavailable) {
-                const auto usable =
-                    std::find_if(std::next(candidates.begin()), candidates.end(), [&](const auto& candidate) {
-                        const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
-                        return choosePlaybackServerRoute(
-                                   {
-                                       .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
-                                       .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
-                                       .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
-                                       .transcodingUrl = transcodingUrl,
-                                   },
-                                   overrides) != PlaybackServerRoute::Unavailable;
-                    });
-                if (usable != candidates.end()) source = *usable;
-            }
+        }
+        // A stale requested source must not suppress route-compatible fallback.
+        // Preserve the response's availability-ranked order for all candidates.
+        const std::string selectedTranscodingUrl = scalarValueOr(*source, "TranscodingUrl", std::string{});
+        const PlaybackServerRoute selectedRoute = choosePlaybackServerRoute(
+            {
+                .supportsDirectPlay = scalarValueOr(*source, "SupportsDirectPlay", false),
+                .supportsDirectStream = scalarValueOr(*source, "SupportsDirectStream", false),
+                .supportsTranscoding = scalarValueOr(*source, "SupportsTranscoding", false),
+                .transcodingUrl = selectedTranscodingUrl,
+            },
+            overrides);
+        if (selectedRoute == PlaybackServerRoute::Unavailable) {
+            const auto usable = std::find_if(candidates.begin(), candidates.end(), [&](const auto& candidate) {
+                const std::string transcodingUrl = scalarValueOr(*candidate, "TranscodingUrl", std::string{});
+                return choosePlaybackServerRoute(
+                           {
+                               .supportsDirectPlay = scalarValueOr(*candidate, "SupportsDirectPlay", false),
+                               .supportsDirectStream = scalarValueOr(*candidate, "SupportsDirectStream", false),
+                               .supportsTranscoding = scalarValueOr(*candidate, "SupportsTranscoding", false),
+                               .transcodingUrl = transcodingUrl,
+                           },
+                           overrides) != PlaybackServerRoute::Unavailable;
+            });
+            if (usable != candidates.end()) source = *usable;
         }
 
         PlaybackInfoOffer offer;

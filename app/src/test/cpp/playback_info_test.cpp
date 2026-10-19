@@ -249,6 +249,23 @@ int main() {
     assert(absentVersionOffer.ok);
     assert(absentVersionOffer.value.mediaSourceId == "first");
     assert(absentVersionOffer.value.alternativeMediaSourceId == "other");
+    // A remembered media version can disappear after a server-side refresh.
+    // Its absence must not bypass the playback-mode fallback.
+    PlaybackOverrides staleSourceOverrides;
+    staleSourceOverrides.forceTranscode = true;
+    const auto staleForcedTranscode =
+        parsePlaybackInfoOffer(R"({
+        "MediaSources": [
+            {"Id":"direct-only","SupportsDirectPlay":true},
+            {"Id":"ready-transcode","SupportsTranscoding":true,
+             "TranscodingUrl":"/Videos/item/master.m3u8"}
+        ]
+    })",
+                               -1, kSubtitleServerDefaultIndex, staleSourceOverrides, "removed-source");
+    assert(staleForcedTranscode.ok);
+    assert(staleForcedTranscode.value.mediaSourceId == "ready-transcode");
+    assert(staleForcedTranscode.value.supportsTranscoding);
+
     assert(alternateVersionOffer.value.alternativeMediaSourceId.empty());
     const auto incompatiblePreferred = parsePlaybackInfoOffer(R"({
         "MediaSources": [
