@@ -596,8 +596,9 @@ public:
             const bool isRemux = serverInfo_ && serverInfo_->isRemux;
             const PlaybackPreparePlan preparePlan = coordinator_.preparePlan(now, isRemux);
             const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;
-            if (shouldRetrySlowRemuxSource(isRemux, preparePlan.elapsedMs, !alternate.empty(),
-                                           coordinator_.session().activeTarget().startTicks > 0)) {
+            if (shouldRetrySlowRemuxSource(
+                    isRemux, preparePlan.elapsedMs, !alternate.empty(),
+                    remuxNeedsResumeReadBudget(coordinator_.session().activeTarget().startTicks))) {
                 std::scoped_lock lock(stateMutex);
                 const auto& item = coordinator_.session().activeItem();
                 const auto& target = coordinator_.session().activeTarget();
@@ -607,7 +608,8 @@ public:
                                     item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
                                     target.mediaSourceId.c_str(), alternate.c_str(),
                                     static_cast<long long>(preparePlan.elapsedMs), screenState_.positionMs());
-                if (restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
+                if (restartAt(stream, remuxFallbackStartPositionMs(screenState_.positionMs()), -1,
+                              kSubtitleServerDefaultIndex, alternate)) {
                     error_.clear();
                     return {};
                 }
@@ -656,7 +658,8 @@ public:
             if (serverInfo_ && serverInfo_->isRemux && coordinator_.activeTargetUsesDirectPlay() &&
                 !alternate.empty() &&
                 std::find(failedSources_.begin(), failedSources_.end(), alternate) == failedSources_.end() &&
-                restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
+                restartAt(stream, remuxFallbackStartPositionMs(screenState_.positionMs()), -1,
+                          kSubtitleServerDefaultIndex, alternate)) {
                 error_.clear();
                 return {};
             }
