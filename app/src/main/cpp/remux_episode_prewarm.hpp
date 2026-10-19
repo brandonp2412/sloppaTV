@@ -1,12 +1,29 @@
 #pragma once
 
+#include "http_response.hpp"
 #include "jellyfin_types.hpp"
 #include "playback_queue.hpp"
 
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
+
+// A broken upstream proxy can answer a byte-range probe with a 206 HTML/JSON
+// error page. That is not evidence of playable buffered media.
+[[nodiscard]] inline bool isUsableRemuxPrefetchRange(const HttpResponse& response) {
+    if (response.status != 206 || response.body.empty() || response.body.size() > 65536) return false;
+    std::string_view bytes(response.body);
+    while (!bytes.empty() &&
+           (bytes.front() == ' ' || bytes.front() == '\n' || bytes.front() == '\r' || bytes.front() == '\t'))
+        bytes.remove_prefix(1);
+    if (bytes.size() >= 3 && bytes.substr(0, 3) == "\xef\xbb\xbf") bytes.remove_prefix(3);
+    while (!bytes.empty() &&
+           (bytes.front() == ' ' || bytes.front() == '\n' || bytes.front() == '\r' || bytes.front() == '\t'))
+        bytes.remove_prefix(1);
+    return !bytes.empty() && bytes.front() != '<' && bytes.front() != '{' && bytes.front() != '[';
+}
 
 // Playlist/Play All bypasses the next-episode API lookup. Only speculate on
 // the next queued episode from the same series, never unrelated queue entries.

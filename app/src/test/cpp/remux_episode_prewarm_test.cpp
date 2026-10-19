@@ -3,6 +3,24 @@
 #include <cassert>
 
 int main() {
+    HttpResponse media;
+    media.status = 206;
+    media.body = "\x1a\x45\xdf\xa3";
+    assert(isUsableRemuxPrefetchRange(media));
+    media.status = 200;
+    assert(!isUsableRemuxPrefetchRange(media));
+    media.status = 206;
+    media.body.clear();
+    assert(!isUsableRemuxPrefetchRange(media));
+    media.body.assign(65537, 'x');
+    assert(!isUsableRemuxPrefetchRange(media));
+    for (const char* document : {"<!DOCTYPE html><html>", "  <html>login</html>", "{\"error\":\"expired\"}",
+                                 "[\"unauthorized\"]", "\xef\xbb\xbf   {\"message\":\"bad\"}"}) {
+        media.body = document;
+        assert(!isUsableRemuxPrefetchRange(media));
+    }
+    media.body = std::string("\x00\x00\x00\x18", 4) + "ftypisom";
+    assert(isUsableRemuxPrefetchRange(media));
     RemuxEpisodePrewarmState warmup;
     JellyfinItem next;
     next.id = "episode-2";

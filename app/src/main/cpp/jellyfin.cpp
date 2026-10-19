@@ -8,6 +8,7 @@
 #include "jni_env.hpp"
 #include "media_player_policy.hpp"
 #include "playback_info.hpp"
+#include "remux_episode_prewarm.hpp"
 #include "playback_profile.hpp"
 
 #include <android/log.h>
@@ -981,7 +982,7 @@ ApiResult JellyfinClient::prewarmRemuxEpisode(const JellyfinSession& session, co
     auto requestHeaders = headers(&session, session.deviceId);
     requestHeaders["Range"] = "bytes=0-65535";
     const auto response = http_.request("GET", resolved.value.url, requestHeaders);
-    if (response.status != 206 || response.body.empty() || response.body.size() > 65536)
+    if (!isUsableRemuxPrefetchRange(response))
         return {.ok = false, .error = "Remux did not return a bounded partial stream: " + apiError(response)};
     return {.ok = true, .error = {}};
 }
