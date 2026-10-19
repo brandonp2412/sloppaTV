@@ -98,9 +98,14 @@ public:
     }
 
     [[nodiscard]] std::string statusText(TimePoint now = Clock::now()) const {
+        // Aggregate torrent throughput does not prove the selected startup
+        // range is growing. Only claim slow downloading when those bytes advance.
         const bool remoteProgressFresh = remux_ && remoteReceivedAt_ != TimePoint{} &&
                                          now - remoteReceivedAt_ <= std::chrono::seconds(20) &&
-                                         remotePrefetch_.livePeers > 0 && remotePrefetch_.downloadMiBps > 0.0;
+                                         remotePrefetch_.livePeers > 0 && remotePrefetch_.downloadMiBps > 0.0 &&
+                                         remotePrefetch_.startupRequiredBytes > 0 && !remotePrefetch_.startupReady &&
+                                         lastReadProgressAt_ != TimePoint{} &&
+                                         now - lastReadProgressAt_ <= std::chrono::seconds(20);
         switch (phase_) {
         case PlayerBufferPhase::Resolving: {
             const std::string label = episode_

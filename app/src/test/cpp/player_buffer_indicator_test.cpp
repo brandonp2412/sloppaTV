@@ -35,6 +35,25 @@ int main() {
     assert(b.remotePrefetchText(t + std::chrono::seconds(42)).find("current 50%") != std::string::npos);
     assert(b.remotePrefetchText(t + std::chrono::seconds(42)).find("next 25%") != std::string::npos);
     assert(b.remotePrefetchText(t + std::chrono::seconds(65)).empty());
+    // Peers downloading other pieces must not disguise a stalled startup
+    // range as useful buffering; the label follows selected readable bytes.
+    PlayerBufferIndicator sourceProgress;
+    sourceProgress.observe(false, true, false, false, false, 0, 0, true, false, t);
+    RemuxPrefetchStatus source;
+    source.livePeers = 4;
+    source.downloadMiBps = 8.0;
+    source.startupRequiredBytes = 1000;
+    sourceProgress.setRemotePrefetch(source, t + std::chrono::seconds(1));
+    assert(sourceProgress.statusText(t + std::chrono::seconds(15)).find("Waiting for Remux stream data") !=
+           std::string::npos);
+    source.startupReadableBytes = 100;
+    sourceProgress.setRemotePrefetch(source, t + std::chrono::seconds(16));
+    assert(sourceProgress.statusText(t + std::chrono::seconds(16)).find("Buffering—downloading slowly") !=
+           std::string::npos);
+    sourceProgress.setRemotePrefetch(source, t + std::chrono::seconds(37));
+    assert(sourceProgress.statusText(t + std::chrono::seconds(37)).find("Waiting for Remux stream data") !=
+           std::string::npos);
+
     // A 60 Hz render loop advances by less than 125 ms per observation.
     // It must stay Playing instead of falsely reporting a stall after 15 s.
     PlayerBufferIndicator smooth;
