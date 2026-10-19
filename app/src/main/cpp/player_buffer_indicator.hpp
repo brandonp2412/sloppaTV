@@ -43,7 +43,10 @@ public:
         episode_ = episode;
         cacheAheadMs_ = std::max(0, cacheAheadMs);
         if (resolving) {
-            if (phase_ != PlayerBufferPhase::Resolving || phaseStarted_ == TimePoint{}) phaseStarted_ = now;
+            if (phase_ != PlayerBufferPhase::Resolving || phaseStarted_ == TimePoint{}) {
+                phaseStarted_ = now;
+                lastAdvancing_ = {};
+            }
             phase_ = PlayerBufferPhase::Resolving;
             lastPositionMs_ = positionMs;
             return;
@@ -53,6 +56,7 @@ public:
                 if (phase_ == PlayerBufferPhase::Resolving && phaseStarted_ != TimePoint{})
                     learnDuration(now - phaseStarted_, resolveAverageSeconds_, resolveSamples_);
                 phaseStarted_ = now;
+                lastAdvancing_ = {};
             }
             phase_ = PlayerBufferPhase::Connecting;
             lastPositionMs_ = positionMs;

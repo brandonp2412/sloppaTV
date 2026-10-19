@@ -93,6 +93,19 @@ int main() {
     learned.observe(false, true, false, false, false, 0, 0, true, false, next + std::chrono::seconds(15));
     assert(learned.statusText(next + std::chrono::seconds(16)).find("remaining") != std::string::npos);
 
+    // A replacement stream must not inherit the previous item's stalled clock.
+    PlayerBufferIndicator replacement;
+    replacement.observe(false, false, true, false, false, 1000, 0, true, false, t);
+    replacement.observe(true, false, false, false, false, 0, 0, true, false, t + std::chrono::seconds(30));
+    replacement.observe(false, true, false, false, false, 0, 0, true, false, t + std::chrono::seconds(31));
+    replacement.observe(false, false, true, false, false, 0, 0, true, false, t + std::chrono::seconds(32));
+    assert(replacement.phase() == PlayerBufferPhase::Playing);
+
+    // The direct connecting path also starts a new progress clock.
+    replacement.observe(false, true, false, false, false, 0, 0, true, false, t + std::chrono::seconds(60));
+    replacement.observe(false, false, true, false, false, 0, 0, true, false, t + std::chrono::seconds(61));
+    assert(replacement.phase() == PlayerBufferPhase::Playing);
+
     b.reset();
     assert(b.cacheAheadMs() == 0);
     return 0;
