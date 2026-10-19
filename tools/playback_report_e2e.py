@@ -111,6 +111,7 @@ def snapshot(session: dict[str, Any]) -> dict[str, Any]:
         "item": item.get("Name"),
         "item_id": item.get("Id"),
         "position_ticks": int(state.get("PositionTicks") or 0),
+        "runtime_ticks": int(item.get("RunTimeTicks") or 0),
         "paused": bool(state.get("IsPaused")),
         "play_method": state.get("PlayMethod"),
         "audio_stream_index": state.get("AudioStreamIndex"),
@@ -163,7 +164,63 @@ def capture_frame(serial: str, phase: str, directory: Path) -> str:
     return str(target)
 
 
-def run_acceptance(serial: str, observer: JellyfinObserver, item_id: str, directory: Path | None = None) -> dict[str, Any]:
+def sample_frame_luma(path: str) -> bytes:
+    # Sample the central movie image; ignore letterboxing and player controls.
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-i",
+            path,
+            "-vf",
+            "crop=iw*0.8:ih*0.6:iw*0.1:ih*0.2,scale=48:27,format=gray",
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "pipe:1",
+        ],
+        check=True,
+        capture_output=True,
+        timeout=12,
+    )
+    if len(result.stdout) != 48 * 27:
+        raise RuntimeError(f"Cannot sample TV screenshot: {path}")
+    return result.stdout
+
+
+def is_nonblank_frame(luma: bytes) -> bool:
+    return sum(value > 30 for value in luma) >= len(luma) // 10 and max(luma) - min(luma) >= 24
+
+
+def are_distinct_frames(first: bytes, second: bytes) -> bool:
+    return sum(abs(a - b) > 16 for a, b in zip(first, second, strict=True)) >= len(first) // 10
+
+
+def capture_video_candidates(
+    serial: str, directory: Path, max_attempts: int = 12, *, prefix: str = "video"
+) -> tuple[list[str], bool]:
+    previous: tuple[str, bytes] | None = None
+    saved: list[str] = []
+    for attempt in range(max_attempts):
+        path = capture_frame(serial, f"{prefix}-{attempt:02d}", directory)
+        saved.append(path)
+        pixels = sample_frame_luma(path)
+        if is_nonblank_frame(pixels):
+            if previous and are_distinct_frames(previous[1], pixels):
+                return [previous[0], path], True
+            if previous is None:
+                previous = (path, pixels)
+        if attempt < max_attempts - 1:
+            time.sleep(2.5)
+    return saved[-2:], False
+
+
+def run_acceptance(
+    serial: str, observer: JellyfinObserver, item_id: str, directory: Path | None = None
+) -> dict[str, Any]:
     if directory is None:
         directory = ARTIFACTS / datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     adb(serial, "shell", "input", "keyevent", "KEYCODE_WAKEUP")
@@ -172,11 +229,39 @@ def run_acceptance(serial: str, observer: JellyfinObserver, item_id: str, direct
         adb(serial, "shell", "input", "keyevent", "KEYCODE_DPAD_CENTER")
         initial = wait_for_session(observer, item_id, paused=False)
 
-    first_frame = capture_frame(serial, "initial", directory)
     minimum = initial["position_ticks"] + 30_000_000
     progress = wait_for_session(observer, item_id, paused=False, minimum_position_ticks=minimum, timeout=16.0)
-
-    progressed_frame = capture_frame(serial, "progress", directory)
+    screenshots, cold_start_frames = capture_video_candidates(serial, directory)
+    pre_seek_screenshots = None
+    seek_observation = None
+    moving_frame_candidates = cold_start_frames
+    if not cold_start_frames:
+        # Black openings can outlast the sampling window while playback advances.
+        # Keep cold-start decode unverified even if a later seek exposes video.
+        pre_seek_screenshots = screenshots
+        runtime = initial.get("runtime_ticks") or 0
+        # Reserve 45 seconds at the end. Never seek unknown/short programmes
+        # into their outro, particularly short episodes or specials.
+        seek_steps = (
+            min(12, max(0, (runtime - progress["position_ticks"] - 450_000_000) // 100_000_000)) if runtime else 0
+        )
+        if seek_steps:
+            for _ in range(seek_steps):
+                adb(serial, "shell", "input", "keyevent", "KEYCODE_DPAD_RIGHT")
+                time.sleep(0.08)
+            seek_observation = wait_for_session(
+                observer,
+                item_id,
+                paused=False,
+                minimum_position_ticks=progress["position_ticks"] + seek_steps * 5_000_000,
+                timeout=18.0,
+            )
+            screenshots, moving_frame_candidates = capture_video_candidates(
+                serial,
+                directory,
+                max_attempts=8,
+                prefix="post-seek",
+            )
     audio_telemetry = directory / "audio-flinger.txt"
     audio_telemetry.write_text(adb(serial, "shell", "dumpsys", "media.audio_flinger", capture=True), encoding="utf-8")
 
@@ -205,13 +290,18 @@ def run_acceptance(serial: str, observer: JellyfinObserver, item_id: str, direct
         "paused_stable": paused_stable,
         "resumed": resumed,
         "stopped": True,
-        "screenshots": [first_frame, progressed_frame],
+        "screenshots": screenshots,
+        "pre_seek_screenshots": pre_seek_screenshots,
+        "seek_observation": seek_observation,
         "audio_telemetry": str(audio_telemetry),
         "verification": {
             "status": "SESSION_ONLY_UNVERIFIED",
             "decoded_video": False,
+            "nonblank_moving_frame_candidates": moving_frame_candidates,
+            "cold_start_frame_candidates": cold_start_frames,
+            "post_seek_only": moving_frame_candidates and not cold_start_frames,
             "audio": False,
-            "reason": "Position/session state is not proof; screenshots need visual review and output audio verification",
+            "reason": "Frame sampling is only a precheck; visual review, decoder confirmation, and output audio verification remain required",
         },
     }
 
@@ -225,7 +315,9 @@ def main() -> int:
     parser.add_argument("--username", default=os.getenv("JELLYFIN_LOCAL_USERNAME", ""))
     parser.add_argument("--password", default=os.getenv("JELLYFIN_LOCAL_PASSWORD", ""))
     parser.add_argument("--insecure", action="store_true")
-    parser.add_argument("--session-only", action="store_true", help="Permit session controls check without decoded/audio proof")
+    parser.add_argument(
+        "--session-only", action="store_true", help="Permit session controls check without decoded/audio proof"
+    )
     args = parser.parse_args()
     if not args.server or not args.username:
         raise SystemExit("Set Jellyfin server credentials or pass --server/--username/--password")
