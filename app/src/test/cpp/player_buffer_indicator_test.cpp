@@ -125,6 +125,27 @@ int main() {
     replacement.observe(false, false, true, false, false, 0, 0, true, false, t + std::chrono::seconds(61));
     assert(replacement.phase() == PlayerBufferPhase::Playing);
 
+    // Switching sources must discard progress from the previous selected file.
+    PlayerBufferIndicator switched;
+    switched.observe(false, true, false, false, false, 0, 0, true, false, t);
+    RemuxPrefetchStatus previous;
+    previous.livePeers = 6;
+    previous.downloadMiBps = 4.0;
+    previous.startupRequiredBytes = 1000;
+    switched.setRemotePrefetch(previous, t + std::chrono::seconds(1));
+    previous.startupReadableBytes = 250;
+    switched.setRemotePrefetch(previous, t + std::chrono::seconds(2));
+    assert(switched.remotePrefetchText(t + std::chrono::seconds(3)).find("6 peers") != std::string::npos);
+    switched.observe(false, false, true, false, false, 5000, 0, true, false, t + std::chrono::seconds(3));
+    switched.observe(true, false, false, false, false, 0, 0, true, false, t + std::chrono::seconds(4));
+    assert(switched.remotePrefetchText(t + std::chrono::seconds(5)).empty());
+    assert(!switched.startupProgress(t + std::chrono::seconds(5)).has_value());
+    switched.observe(false, true, false, false, false, 0, 0, true, false, t + std::chrono::seconds(6));
+    previous.startupReadableBytes = 250;
+    switched.setRemotePrefetch(previous, t + std::chrono::seconds(7));
+    assert(switched.statusText(t + std::chrono::seconds(20)).find("Waiting for Remux stream data") !=
+           std::string::npos);
+
     b.reset();
     assert(b.cacheAheadMs() == 0);
     return 0;
