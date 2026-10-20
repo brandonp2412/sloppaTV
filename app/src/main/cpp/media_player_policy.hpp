@@ -157,6 +157,13 @@ inline int mpvHttpStatus(std::string_view text) {
     return (a - '0') * 100 + (b - '0') * 10 + (c - '0');
 }
 
+// A live MPV handle can retain its duration and PLAYING flag after sparse
+// HTTP ranges stop advancing. Detect a stuck playback clock independently of
+// mpv's paused-for-cache flag; do not mistake an intentional pause for a stall.
+constexpr bool playbackClockStalled(bool hasPlayed, bool havePosition, bool paused, int64_t unchangedMs) {
+    return hasPlayed && !paused && (!havePosition || unchangedMs >= 3'000);
+}
+
 constexpr bool repeatedPlaybackServerError(int httpStatus, int errorCount) {
     return httpStatus >= 500 && httpStatus <= 599 && errorCount >= 3;
 }

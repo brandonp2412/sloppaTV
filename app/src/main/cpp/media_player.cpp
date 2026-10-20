@@ -533,6 +533,8 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
     cachedStatus_ = PlayerStatus::Idle;
     startedPlayback_ = false;
     readinessPositionSeconds_ = -1.0;
+    lastClockPositionSeconds_ = -1.0;
+    lastClockAdvance_ = {};
     cachedVideoWidth_ = 0;
     cachedVideoHeight_ = 0;
     cachedSubtitleText_.clear();
@@ -1003,6 +1005,16 @@ PlayerStatus NativeMediaPlayer::status() const {
     const bool haveDuration = getDoublePropertyLocked("duration", duration) && duration > 0.0;
     double position = 0.0;
     const bool havePosition = getDoublePropertyLocked("time-pos", position) && position >= 0.0;
+    if (havePosition && (lastClockPositionSeconds_ < 0.0 || std::abs(position - lastClockPositionSeconds_) >= 0.05)) {
+        lastClockPositionSeconds_ = position;
+        lastClockAdvance_ = now;
+    }
+    if (havePaused && paused) lastClockAdvance_ = now;
+    const int64_t unchangedMs =
+        lastClockAdvance_ == std::chrono::steady_clock::time_point{}
+            ? 0
+            : std::chrono::duration_cast<std::chrono::milliseconds>(now - lastClockAdvance_).count();
+    const bool stalledClock = playbackClockStalled(startedPlayback_, havePosition, havePaused && paused, unchangedMs);
     bool positionAdvanced = startedPlayback_;
     if (havePosition && !startedPlayback_) {
         if (readinessPositionSeconds_ < 0.0) {
@@ -1034,7 +1046,7 @@ PlayerStatus NativeMediaPlayer::status() const {
         // A cache underrun, or a static resume offset before the playback
         // clock advances, must never be reported as active playback.
         const bool buffering = waitingForCache || (!haveDuration && ((haveIdle && idle) || !havePosition));
-        if (buffering) {
+        if (buffering || stalledClock) {
             cachedStatus_ = PlayerStatus::Preparing;
         } else if (havePaused && paused) {
             cachedStatus_ = PlayerStatus::Paused;
