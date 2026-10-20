@@ -29,3 +29,4 @@ indent-style = "space"
 
 [tool.ty.environment]
 python-version = "3.12"
+extra-paths = ["tools"]
