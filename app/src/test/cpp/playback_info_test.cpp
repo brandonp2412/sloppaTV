@@ -234,6 +234,16 @@ int main() {
     assert(english.value.audioTracks.size() == 2);
     assert(english.value.audioTracks[0].language == "ita");
     assert(english.value.audioTracks[1].language == "eng");
+    // Fallback sources can label English as "en" or "English".
+    auto aliasVersion = nlohmann::json::parse(multilingual);
+    aliasVersion["MediaSources"][0]["MediaStreams"][2]["Language"] = "en";
+    const auto aliasEnglish = parsePlaybackInfoOffer(aliasVersion.dump(), 1, kSubtitleOffIndex, {}, {}, "eng");
+    assert(aliasEnglish.ok && aliasEnglish.value.audioStreamIndex == 2);
+    assert(aliasEnglish.value.audioOrdinal == 1);
+    aliasVersion["MediaSources"][0]["MediaStreams"][2]["Language"] = "English";
+    const auto namedEnglish = parsePlaybackInfoOffer(aliasVersion.dump(), 1, kSubtitleOffIndex, {}, {}, "en");
+    assert(namedEnglish.ok && namedEnglish.value.audioStreamIndex == 2);
+    assert(namedEnglish.value.audioOrdinal == 1);
     const auto italian = parsePlaybackInfoOffer(multilingual, -1, kSubtitleOffIndex, {}, {}, "ita");
     assert(italian.value.audioStreamIndex == 1);
     assert(italian.value.audioOrdinal == 0);
