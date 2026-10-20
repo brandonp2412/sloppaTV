@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from tv_remote_safety import check_tv_remote
+from media_session_evidence import app_session_block
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-waydroid"
@@ -200,11 +201,10 @@ def ensure_running() -> str:
 
 
 def media_session_playback_state(output: str, package: str) -> int | None:
-    session = re.search(
-        rf"(?s)\b{re.escape(package)}/sloppaTV\b.*?"
-        rf"state=PlaybackState \{{state=(?:[A-Z_]+\()?(\d+)\)?(?:,|\s)",
-        output,
-    )
+    block = app_session_block(output, package)
+    if block is None:
+        return None
+    session = re.search(r"state=PlaybackState \{state=(?:[A-Z_]+\()?(\d+)\)?(?:,|\s)", block)
     return int(session.group(1)) if session else None
 
 

@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageStat
 
 from tv_remote_safety import check_tv_remote
+from media_session_evidence import app_session_block, active_audio_track_lines
 
 PLAYING = 3
 PAUSED = 2
@@ -45,11 +46,13 @@ def session_snapshot(serial: str, package: str) -> dict[str, int | float] | None
         elapsed_realtime_ms = int(float(uptime_text.split()[0]) * 1000)
     except (IndexError, ValueError):
         return None
+    block = app_session_block(session_text, package)
+    if block is None:
+        return None
     match = re.search(
-        rf"(?s)\b{re.escape(package)}/sloppaTV\b.*?"
         r"state=PlaybackState \{state=(?:[A-Z_]+\()?(\d+)\)?"
         r".*?position=(-?\d+).*?speed=([0-9.+-]+).*?updated=(\d+)",
-        session_text,
+        block,
     )
     if not match:
         return None
@@ -144,9 +147,7 @@ def audio_proof(serial: str, package: str) -> dict[str, object]:
     pid = int(pid_text.split()[0]) if pid_text else -1
     flinger = adb(serial, "shell", "dumpsys", "media.audio_flinger", timeout=60)
     uid_lines = [line.strip() for line in flinger.splitlines() if re.search(rf"\b{uid}\b", line)]
-    active_track_lines = [
-        line.strip() for line in flinger.splitlines() if pid > 0 and re.search(rf"^\s*\d+\s+yes\s+{pid}\s+", line)
-    ]
+    active_track_lines = active_audio_track_lines(flinger, pid)
     return {
         "uid": uid,
         "pid": pid,
