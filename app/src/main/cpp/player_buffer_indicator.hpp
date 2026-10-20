@@ -22,15 +22,19 @@ public:
         remux_ = remux;
         episode_ = episode;
         cacheAheadMs_ = std::max(0, cacheAheadMs);
-        if (resolving) {
-            phase_ = PlayerBufferPhase::Resolving;
-            if (phaseStarted_ == TimePoint{}) phaseStarted_ = now;
-            lastPositionMs_ = positionMs;
-            return;
-        }
-        if (preparing) {
-            if (phase_ != PlayerBufferPhase::Connecting) phaseStarted_ = now;
-            phase_ = PlayerBufferPhase::Connecting;
+        if (resolving || preparing) {
+            if (playbackAdvanced_) {
+                // A source retry after real playback is rebuffering, not a new cold start.
+                if (phase_ != PlayerBufferPhase::Buffering && phase_ != PlayerBufferPhase::Stalled) phaseStarted_ = now;
+                phase_ = now - phaseStarted_ >= std::chrono::seconds(15) ? PlayerBufferPhase::Stalled
+                                                                         : PlayerBufferPhase::Buffering;
+            } else if (resolving) {
+                if (phase_ != PlayerBufferPhase::Resolving || phaseStarted_ == TimePoint{}) phaseStarted_ = now;
+                phase_ = PlayerBufferPhase::Resolving;
+            } else {
+                if (phase_ != PlayerBufferPhase::Connecting) phaseStarted_ = now;
+                phase_ = PlayerBufferPhase::Connecting;
+            }
             lastPositionMs_ = positionMs;
             return;
         }
@@ -44,7 +48,9 @@ public:
             reset();
             return;
         }
-        if (lastAdvancing_ == TimePoint{} || positionMs > lastPositionMs_ + 125 || positionMs + 500 < lastPositionMs_) {
+        const bool advanced = lastPositionMs_ >= 0 && positionMs > lastPositionMs_ + 125;
+        if (lastAdvancing_ == TimePoint{} || advanced || positionMs + 500 < lastPositionMs_) {
+            if (advanced) playbackAdvanced_ = true;
             lastAdvancing_ = now;
             // Compare against the last confirmed advance, not the previous
             // render frame: normal 16-50 ms increments must accumulate past
@@ -126,6 +132,7 @@ private:
     bool episode_ = false;
     int cacheAheadMs_ = 0;
     int lastPositionMs_ = -1;
+    bool playbackAdvanced_ = false;
     TimePoint phaseStarted_{};
     TimePoint lastAdvancing_{};
     RemuxPrefetchStatus remotePrefetch_{};
