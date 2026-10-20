@@ -125,6 +125,12 @@ int main() {
     assert(mpvHttpStatus("curl: HTTP error 503 while fetching") == 503);
     assert(mpvHttpStatus("HTTP error nope") == 0);
     assert(mpvHttpStatus("network error") == 0);
+    assert(!playbackClockStalled(false, true, false, 99'000));
+    assert(!playbackClockStalled(true, true, false, 2'999));
+    assert(playbackClockStalled(true, true, false, 3'000));
+    assert(playbackClockStalled(true, false, false, 0));
+    assert(!playbackClockStalled(true, true, true, 99'000));
+    assert(!playbackClockStalled(true, true, false, 100)); // Fresh progress or seek.
     assert(!repeatedPlaybackServerError(500, 2));
     assert(repeatedPlaybackServerError(500, 3));
     assert(repeatedPlaybackServerError(503, 4));
