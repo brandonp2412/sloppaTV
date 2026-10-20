@@ -673,16 +673,27 @@ int main() {
     auto releasePlan = planPlaybackRelease(true, false, true, true, releaseItem, releaseTarget, 12345);
     assert(releasePlan.reportTicks == 123'450'000);
     assert(releasePlan.cachedPositionTicks == 123'450'000);
+    assert(releasePlan.updateCachedPosition);
     assert(!releasePlan.markPlayed);
     assert(releasePlan.reportStop);
 
     releasePlan = planPlaybackRelease(true, true, true, true, releaseItem, releaseTarget, 12345);
     assert(releasePlan.reportTicks == releaseItem.runtimeTicks);
     assert(releasePlan.cachedPositionTicks == 0);
+    assert(releasePlan.updateCachedPosition);
     assert(releasePlan.markPlayed);
     assert(releasePlan.reportStop);
 
+    releaseItem.positionTicks = 987'650'000;
     releasePlan = planPlaybackRelease(true, false, false, true, releaseItem, releaseTarget, 12345);
+    assert(!releasePlan.reportStop);
+    assert(!releasePlan.updateCachedPosition);
+    assert(releasePlan.cachedPositionTicks == releaseItem.positionTicks);
+    assert(!releasePlan.markPlayed);
+    // A timeout or back press at 0ms must not clear Continue Watching.
+    releasePlan = planPlaybackRelease(true, false, false, true, releaseItem, releaseTarget, 0);
+    assert(!releasePlan.updateCachedPosition);
+    assert(releasePlan.cachedPositionTicks == 987'650'000);
     assert(!releasePlan.reportStop);
 
     releaseItem.runtimeTicks = 0;

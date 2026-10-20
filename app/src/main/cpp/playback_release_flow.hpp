@@ -41,7 +41,7 @@ public:
         const PlaybackReleasePlan plan = release.plan;
         const auto& item = release.item;
         const auto& target = release.target;
-        if (!item.id.empty()) {
+        if (!item.id.empty() && plan.updateCachedPosition) {
             JellyfinItem updated = item;
             updated.positionTicks = plan.cachedPositionTicks;
             if (plan.markPlayed) updated.played = true;
