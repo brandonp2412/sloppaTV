@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageStat
-
 from tv_remote_safety import check_tv_remote
 
 PLAYING = 3
