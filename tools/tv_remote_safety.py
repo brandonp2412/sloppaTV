@@ -20,7 +20,10 @@ def check_tv_remote(serial: str) -> None:
     def shell(*args: str) -> str:
         return subprocess.run(
             ["adb", "-s", serial, "shell", *args],
-            check=True, capture_output=True, text=True, timeout=12,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=12,
         ).stdout
 
     if shell("getprop", "ro.product.model").strip() != "Google TV Streamer":

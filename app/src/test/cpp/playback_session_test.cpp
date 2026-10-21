@@ -36,6 +36,33 @@ int main() {
         assert(selectedSourceState.activeItem().mediaSourceId == "selected-source");
     }
 
+    // A source fallback without probed tracks must not retain indexes from
+    // the failed torrent. The player discovers missing tracks on open.
+    {
+        PlaybackSessionState swapped;
+        JellyfinItem stale;
+        stale.mediaSourceId = "old-release";
+        JellyfinAudioStream audio;
+        audio.index = 4;
+        stale.audios.push_back(audio);
+        JellyfinSubtitleStream subtitle;
+        subtitle.index = 8;
+        stale.subtitles.push_back(subtitle);
+        PlaybackTarget unprobed;
+        unprobed.mediaSourceId = "new-release";
+        swapped.setActive(stale, unprobed);
+        assert(swapped.activeItem().audios.empty());
+        assert(swapped.activeItem().subtitles.empty());
+        assert(swapped.activeItem().mediaSourceId == "new-release");
+
+        // Without a source change, the hydrated track list is still valid.
+        swapped.clearActive();
+        unprobed.mediaSourceId = "old-release";
+        swapped.setActive(stale, unprobed);
+        assert(swapped.activeItem().audios.size() == 1);
+        assert(swapped.activeItem().subtitles.size() == 1);
+    }
+
     JellyfinItem activeItem;
     activeItem.id = "episode-1";
     PlaybackTarget activeTarget;

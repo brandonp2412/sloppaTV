@@ -100,10 +100,20 @@ public:
     void setZoomMode(VideoZoomMode mode) { zoomMode_ = mode; }
 
     void setActive(JellyfinItem item, PlaybackTarget target) {
-        // A fallback can swap to a different file with different track indexes.
-        // Keep player track menus tied to the actual selected source.
-        if (!target.audioTracks.empty()) item.audios = target.audioTracks;
-        if (!target.subtitleTracks.empty()) item.subtitles = target.subtitleTracks;
+        // An unprobed fallback may omit tracks. Never reuse track indexes from
+        // the failed source; native demux discovery fills them in after open.
+        const bool switchedSource =
+            !target.mediaSourceId.empty() &&
+            ((!item.mediaSourceId.empty() && item.mediaSourceId != target.mediaSourceId) ||
+             (!activeTarget_.mediaSourceId.empty() && activeTarget_.mediaSourceId != target.mediaSourceId));
+        if (!target.audioTracks.empty())
+            item.audios = target.audioTracks;
+        else if (switchedSource)
+            item.audios.clear();
+        if (!target.subtitleTracks.empty())
+            item.subtitles = target.subtitleTracks;
+        else if (switchedSource)
+            item.subtitles.clear();
         if (!target.mediaSourceId.empty()) item.mediaSourceId = target.mediaSourceId;
         activeItem_ = std::move(item);
         activeTarget_ = std::move(target);

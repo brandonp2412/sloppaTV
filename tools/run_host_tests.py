@@ -212,6 +212,7 @@ def run(command: list[str]) -> None:
     print("+", " ".join(command), flush=True)
     env = os.environ.copy()
     env["TMPDIR"] = str(TEMP_DIR)
+    env["PYTHONPATH"] = os.pathsep.join(filter(None, (str(ROOT / "tools"), env.get("PYTHONPATH", ""))))
     subprocess.run(command, cwd=ROOT, check=True, env=env)
 
 
