@@ -43,8 +43,10 @@ public:
         episode_ = episode;
         cacheAheadMs_ = std::max(0, cacheAheadMs);
         if ((resolving || preparing) && playbackAdvanced_) {
-            if (phase_ != PlayerBufferPhase::Buffering && phase_ != PlayerBufferPhase::Stalled)
+            if (phase_ != PlayerBufferPhase::Buffering && phase_ != PlayerBufferPhase::Stalled) {
                 phaseStarted_ = now;
+                clearRemotePrefetch();
+            }
             phase_ = now - phaseStarted_ >= std::chrono::seconds(15) ? PlayerBufferPhase::Stalled
                                                                      : PlayerBufferPhase::Buffering;
             lastPositionMs_ = positionMs;
