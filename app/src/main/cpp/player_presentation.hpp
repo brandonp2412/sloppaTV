@@ -92,15 +92,22 @@ public:
                                   ? material_tv::primaryContainer
                                   : (focused ? material_tv::surfaceContainerHighest : material_tv::surfaceContainer);
         renderer_.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius, surface);
-        if (!focused && !primary) {
-            renderer_.roundedOutline(bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius, 1.5f,
-                                     material_tv::outline);
-        }
-        if (focused) {
-            material_tv::focusRing(renderer_, bounds[0], bounds[1], bounds[2], bounds[3], renderedRadius,
-                                   material_tv::primary);
-        }
+        // Filled tonal controls avoid five persistent outlined pills competing
+        // with the video. The filled focus state is the navigation indicator.
+
         return bounds;
+    }
+
+    [[nodiscard]] std::array<float, 4> drawFloatingControl(float x, float y, float width, float height,
+                                                          bool focused) {
+        // Overlay controls are icons and text, not raised buttons. Only the
+        // focused control has a small underline for remote navigation.
+        if (focused) {
+            constexpr float indicatorWidth = 54.0f;
+            renderer_.roundedRect(x + (width - indicatorWidth) * 0.5f, y + height + 7.0f,
+                                  indicatorWidth, 4.0f, 2.0f, material_tv::primary);
+        }
+        return {x, y, width, height};
     }
 
     void drawModalSurface(float x, float y, float width, float height, float radius) {
@@ -330,8 +337,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         [&ui](std::string_view value, float scale, float maxWidth, int maxLines) {
             return ui.fitText(value, scale, maxWidth, maxLines);
         },
-        [&ui](float x, float y, float width, float height, bool focused, bool primary) {
-            return ui.drawButtonSurface(x, y, width, height, focused, primary);
+        [&ui](float x, float y, float width, float height, bool focused, bool) {
+            return ui.drawFloatingControl(x, y, width, height, focused);
         },
         [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
     // The status and Remux progress belong to the playback controls. When the
@@ -465,14 +472,55 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 .audioTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Audio),
                 .subtitleTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle),
             },
-            PlayerControlsRenderStyle<Color>{.text = material_tv::onSurface},
-            [&ui](float x, float y, float width, float height, bool focused, bool primary) {
-                return ui.drawButtonSurface(x, y, width, height, focused, primary);
+            PlayerControlsRenderStyle<Color>{
+                .text = material_tv::onSurface,
+                .muted = material_tv::onSurfaceSecondary,
+                .focused = material_tv::primary,
+            },
+            [&ui](float x, float y, float width, float height, bool focused, bool) {
+                return ui.drawFloatingControl(x, y, width, height, focused);
             },
             [&ui](float scale, std::string_view value, float width, float height) {
                 return ui.fittedSingleLineScale(scale, value, width, height);
             },
             [](std::string_view value) { return materialLabel(value); });
+    }
+
+    if (playerScreenState.trackPicker() != PlayerTrackPicker::None) {
+        const auto& options = playerScreenState.trackOptions();
+        const int count = static_cast<int>(options.size());
+        const int visible = std::min(count, 8);
+        const int chosen = static_cast<int>(playerScreenState.trackPickerSelection());
+        const int first = std::clamp(chosen - 4, 0, std::max(0, count - visible));
+        constexpr float x = 490.0f;
+        constexpr float width = 940.0f;
+        const float height = 150.0f + visible * 73.0f;
+        const float y = (Renderer::logicalHeight() - height) * 0.5f;
+        renderer.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(),
+                      Color{0.0f, 0.0f, 0.0f, 0.65f});
+        ui.drawModalSurface(x, y, width, height, material_tv::cornerLarge);
+        const std::string heading = playerScreenState.trackPicker() == PlayerTrackPicker::Audio
+                                        ? "Audio track" : "Subtitles";
+        ui.drawLeftAlignedSingleLineFit(x + 42.0f, y + 24.0f, width - 84.0f, 56.0f, 2.15f,
+                                        heading, material_tv::onSurface);
+        for (int i = 0; i < visible; ++i) {
+            const int index = first + i;
+            const auto& option = options[static_cast<std::size_t>(index)];
+            const float rowY = y + 92.0f + i * 73.0f;
+            const bool focused = index == chosen;
+            const auto row = ui.drawButtonSurface(x + 28.0f, rowY, width - 56.0f, 66.0f, focused);
+            const float labelWidth = row[2] - (option.active ? 180.0f : 65.0f);
+            ui.drawLeftAlignedSingleLineFit(row[0] + 27.0f, row[1] + 5.0f,
+                                            labelWidth, row[3] - 10.0f, 1.5f, option.label,
+                                            material_tv::onSurface);
+            if (option.active) {
+                ui.drawRightAlignedSingleLine(row[0] + row[2] - 24.0f, row[1] + 21.0f, 1.3f,
+                                              "Selected", material_tv::primary, 130.0f);
+            }
+        }
+        ui.drawLeftAlignedSingleLineFit(x + 42.0f, y + height - 47.0f, width - 84.0f, 28.0f, 1.1f,
+                                        "Up / Down to choose  ·  OK to select  ·  Back to close",
+                                        material_tv::onSurfaceVariant);
     }
 
     if (playerScreenState.skipDisablePromptVisible()) {

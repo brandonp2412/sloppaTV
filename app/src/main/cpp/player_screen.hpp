@@ -8,7 +8,9 @@
 #include <chrono>
 #include <cstddef>
 #include <string>
+#include <string_view>
 #include <utility>
+#include <vector>
 
 enum class PlayerScreenInput {
     None,
@@ -46,14 +48,25 @@ enum class PlayerScreenCommandType {
     Play,
     Pause,
     TogglePause,
-    CycleAudioTrack,
-    CycleSubtitleTrack,
+    OpenAudioPicker,
+    OpenSubtitlePicker,
+    SelectAudioTrack,
+    SelectSubtitleTrack,
     SeekBackward,
     SeekForward,
 };
 
 struct PlayerScreenCommand {
     PlayerScreenCommandType type = PlayerScreenCommandType::None;
+    int trackIndex = -1;
+};
+
+enum class PlayerTrackPicker { None, Audio, Subtitle };
+
+struct PlayerTrackOption {
+    int index = -1;
+    std::string label;
+    bool active = false;
 };
 
 class PlayerScreenState {
@@ -67,6 +80,9 @@ public:
         controlsActive_ = false;
         controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = {};
+        picker_ = PlayerTrackPicker::None;
+        pickerOptions_.clear();
+        pickerSelected_ = 0;
         overlayUntil_ = {};
         seekFeedbackSeconds_ = 0;
         seekFeedbackStarted_ = {};
@@ -92,6 +108,7 @@ public:
     }
 
     void beginPlayback(int positionMs, int durationMs) {
+        closeTrackPicker();
         controlsActive_ = false;
         controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = {};
@@ -129,6 +146,29 @@ public:
     void hideControls() {
         controlsActive_ = false;
         controlsUntil_ = {};
+    }
+
+    [[nodiscard]] PlayerTrackPicker trackPicker() const { return picker_; }
+    [[nodiscard]] const std::vector<PlayerTrackOption>& trackOptions() const { return pickerOptions_; }
+    [[nodiscard]] std::size_t trackPickerSelection() const { return pickerSelected_; }
+
+    void openTrackPicker(PlayerTrackPicker kind, std::vector<PlayerTrackOption> options, TimePoint now) {
+        if (options.empty()) return;
+        picker_ = kind;
+        pickerOptions_ = std::move(options);
+        pickerSelected_ = 0;
+        for (std::size_t i = 0; i < pickerOptions_.size(); ++i) {
+            if (pickerOptions_[i].active) { pickerSelected_ = i; break; }
+        }
+        controlsActive_ = true;
+        controlsUntil_ = now + std::chrono::minutes(5);
+        showOverlayFor(now, std::chrono::minutes(5));
+    }
+
+    void closeTrackPicker() {
+        picker_ = PlayerTrackPicker::None;
+        pickerOptions_.clear();
+        pickerSelected_ = 0;
     }
 
     void moveControl(int delta) {
@@ -171,6 +211,24 @@ public:
     [[nodiscard]] bool shouldDismissOnBack(TimePoint now) const { return overlayVisible(now); }
 
     [[nodiscard]] PlayerScreenCommand handleInput(PlayerScreenInput input, TimePoint now) {
+        if (picker_ != PlayerTrackPicker::None) {
+            refreshControls(now);
+            if (input == PlayerScreenInput::Back) {
+                closeTrackPicker();
+            } else if (input == PlayerScreenInput::Up && pickerSelected_ > 0) {
+                --pickerSelected_;
+            } else if (input == PlayerScreenInput::Down && pickerSelected_ + 1 < pickerOptions_.size()) {
+                ++pickerSelected_;
+            } else if (input == PlayerScreenInput::Activate) {
+                const auto type = picker_ == PlayerTrackPicker::Audio
+                                      ? PlayerScreenCommandType::SelectAudioTrack
+                                      : PlayerScreenCommandType::SelectSubtitleTrack;
+                const int index = pickerOptions_[pickerSelected_].index;
+                closeTrackPicker();
+                return {.type = type, .trackIndex = index};
+            }
+            return {};
+        }
         if (input == PlayerScreenInput::Back) {
             if (shouldDismissOnBack(now)) {
                 dismissOverlay(now);
@@ -399,15 +457,18 @@ private:
         case PlayerControl::NextEpisode:
             return {.type = PlayerScreenCommandType::NextEpisode};
         case PlayerControl::AudioTrack:
-            return {.type = PlayerScreenCommandType::CycleAudioTrack};
+            return {.type = PlayerScreenCommandType::OpenAudioPicker};
         case PlayerControl::SubtitleTrack:
-            return {.type = PlayerScreenCommandType::CycleSubtitleTrack};
+            return {.type = PlayerScreenCommandType::OpenSubtitlePicker};
         case PlayerControl::Count:
             return {};
         }
         return {};
     }
 
+    PlayerTrackPicker picker_ = PlayerTrackPicker::None;
+    std::vector<PlayerTrackOption> pickerOptions_;
+    std::size_t pickerSelected_ = 0;
     bool controlsActive_ = false;
     PlayerControl controlSelection_ = PlayerControl::PlayPause;
     TimePoint controlsUntil_{};

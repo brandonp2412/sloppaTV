@@ -238,8 +238,11 @@ public:
     }
 
     template <typename StreamExecutor, typename TelemetryExecutor>
-    void cycleAudioTrack(StreamExecutor& stream, TelemetryExecutor& telemetry, bool playerScreenActive) {
-        const PlaybackAudioCyclePlan plan = coordinator_.beginAudioTrackCycle(trackSelectionPolicy());
+    void cycleAudioTrack(StreamExecutor& stream, TelemetryExecutor& telemetry, bool playerScreenActive,
+                         std::optional<int> requestedIndex = std::nullopt) {
+        const PlaybackAudioCyclePlan plan = requestedIndex
+            ? coordinator_.beginAudioTrackSelection(*requestedIndex, trackSelectionPolicy())
+            : coordinator_.beginAudioTrackCycle(trackSelectionPolicy());
         if (!plan.available) {
             error_ = "ONLY ONE AUDIO TRACK";
             return;
@@ -258,8 +261,11 @@ public:
 
     template <typename SubtitleExecutor, typename StreamExecutor, typename TelemetryExecutor>
     PlaybackRuntimeNotice cycleSubtitleTrack(SubtitleExecutor& subtitles, StreamExecutor& stream,
-                                             TelemetryExecutor& telemetry, bool playerScreenActive) {
-        const PlaybackSubtitleCycleContext cycle = coordinator_.beginSubtitleTrackCycle(settings_.subtitleLanguages);
+                                             TelemetryExecutor& telemetry, bool playerScreenActive,
+                                             std::optional<int> requestedIndex = std::nullopt) {
+        const PlaybackSubtitleCycleContext cycle = requestedIndex
+            ? coordinator_.beginSubtitleTrackSelection(*requestedIndex, settings_.subtitleLanguages)
+            : coordinator_.beginSubtitleTrackCycle(settings_.subtitleLanguages);
         const PlaybackSubtitleCyclePlan& plan = cycle.plan;
         if (cycle.busy) {
             if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) error_ = "NO SUBTITLE TRACKS";
@@ -526,14 +532,43 @@ public:
             player_.pause();
             reportProgress(telemetry, playerScreenActive, true);
             return {};
-        case PlayerScreenCommandType::CycleAudioTrack:
-            cycleAudioTrack(stream, telemetry, playerScreenActive);
-            return {};
-        case PlayerScreenCommandType::CycleSubtitleTrack:
-            if (cycleSubtitleTrack(subtitles, stream, telemetry, playerScreenActive) ==
-                PlaybackRuntimeNotice::SubtitleStartFailed) {
-                return PlaybackHostEffect::simple(PlaybackHostEffectType::SubtitleStartFailed);
+        case PlayerScreenCommandType::OpenAudioPicker: {
+            std::vector<PlayerTrackOption> options;
+            const auto& item = coordinator_.session().activeItem();
+            const int selected = coordinator_.tracks().selectedAudioServerIndex();
+            for (const auto& track : item.audios) {
+                std::string label = track.title.empty() ? track.language : track.title;
+                if (label.empty()) label = "Audio " + std::to_string(track.index);
+                if (!track.codec.empty() && track.title.empty()) label += " (" + track.codec + ")";
+                options.push_back({track.index, std::move(label), track.index == selected});
             }
+            if (options.empty()) { error_ = "NO AUDIO TRACKS"; return {}; }
+            screenState_.openTrackPicker(PlayerTrackPicker::Audio, std::move(options), now);
+            return {};
+        }
+        case PlayerScreenCommandType::OpenSubtitlePicker: {
+            std::vector<PlayerTrackOption> options;
+            const int selected = coordinator_.tracks().selectedSubtitleServerIndex();
+            options.push_back({-1, "Off", selected < 0});
+            for (const auto& track : coordinator_.session().activeItem().subtitles) {
+                if (!playbackSubtitleAllowed(track, settings_.subtitleLanguages)) continue;
+                std::string label = track.title.empty() ? track.language : track.title;
+                if (label.empty()) label = "Subtitle " + std::to_string(track.index);
+                if (track.forced) label += " (forced)";
+                options.push_back({track.index, std::move(label), track.index == selected});
+            }
+            screenState_.openTrackPicker(PlayerTrackPicker::Subtitle, std::move(options), now);
+            return {};
+        }
+        case PlayerScreenCommandType::SelectAudioTrack:
+            if (command.trackIndex != coordinator_.tracks().selectedAudioServerIndex())
+                cycleAudioTrack(stream, telemetry, playerScreenActive, command.trackIndex);
+            return {};
+        case PlayerScreenCommandType::SelectSubtitleTrack:
+            if (command.trackIndex != coordinator_.tracks().selectedSubtitleServerIndex() &&
+                cycleSubtitleTrack(subtitles, stream, telemetry, playerScreenActive, command.trackIndex) ==
+                    PlaybackRuntimeNotice::SubtitleStartFailed)
+                return PlaybackHostEffect::simple(PlaybackHostEffectType::SubtitleStartFailed);
             return {};
         case PlayerScreenCommandType::SeekBackward:
         case PlayerScreenCommandType::SeekForward: {

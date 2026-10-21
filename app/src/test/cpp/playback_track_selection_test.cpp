@@ -215,6 +215,11 @@ int main() {
     assert(audioCycle.audioOrdinal == 1);
     assert(audioCycle.subtitleStreamIndex == 6);
     assert(audioCycle.tryEmbeddedSwitch);
+    const auto exactAudio = planPlaybackAudioTrackSelection(item, 3, 6, PlaybackMethod::DirectPlay, autoPolicy);
+    assert(exactAudio.available);
+    assert(exactAudio.audioStreamIndex == 3 && exactAudio.audioOrdinal == 1);
+    assert(exactAudio.tryEmbeddedSwitch);
+    assert(!planPlaybackAudioTrackSelection(item, 100, 6, PlaybackMethod::DirectPlay, autoPolicy).available);
 
     audioCycle = planPlaybackAudioTrackCycle(item, 3, 6, PlaybackMethod::DirectStream, autoPolicy);
     assert(audioCycle.available);
@@ -261,6 +266,15 @@ int main() {
     assert(subtitleCycle.strategy == SubtitleStrategy::ClientText);
     assert(subtitleCycle.directPlayStream);
     assert(subtitleCycle.directPlayStream->index == 6);
+    auto exactSubtitle = planPlaybackSubtitleTrackSelection(item, 6, PlaybackMethod::DirectPlay, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::LoadNative);
+    assert(exactSubtitle.subtitleStreamIndex == 6);
+    exactSubtitle = planPlaybackSubtitleTrackSelection(item, -1, PlaybackMethod::DirectPlay, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::DisableInPlayer);
+    exactSubtitle = planPlaybackSubtitleTrackSelection(item, 999, PlaybackMethod::DirectPlay, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::NoSubtitles);
+    exactSubtitle = planPlaybackSubtitleTrackSelection(item, 8, PlaybackMethod::DirectPlay, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::NoAllowedTracks);
 
     subtitleCycle =
         planPlaybackSubtitleTrackCycle(item, 6, PlaybackMethod::DirectPlay, carriedPolicy.allowedSubtitleLanguages);

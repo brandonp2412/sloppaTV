@@ -43,7 +43,7 @@ struct Harness {
     void render(const PlayerControlsRenderState& state) {
         std::size_t buttonIndex = 0;
         renderPlayerControls(
-            renderer, state, PlayerControlsRenderStyle<int>{.text = 1},
+            renderer, state, PlayerControlsRenderStyle<int>{.text = 1, .muted = 2, .focused = 3},
             [&](float x, float y, float width, float height, bool focused, bool primary) {
                 if (focused) focusedButtons.push_back(buttonIndex);
                 if (primary) primaryButtons.push_back(buttonIndex);

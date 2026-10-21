@@ -13,6 +13,8 @@
 
 template <typename ColorLike> struct PlayerControlsRenderStyle {
     ColorLike text{};
+    ColorLike muted{};
+    ColorLike focused{};
 };
 
 struct PlayerControlsRenderState {
@@ -27,9 +29,9 @@ template <typename RendererLike, typename ColorLike, typename DrawButton, typena
 void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderState& state,
                           const PlayerControlsRenderStyle<ColorLike>& style, DrawButton&& drawButton,
                           FitScale&& fitScale, MaterialLabel&& materialLabel) {
-    constexpr std::array<float, 5> controlWidths{112.0f, 112.0f, 112.0f, 330.0f, 370.0f};
+    constexpr std::array<float, 5> controlWidths{94.0f, 94.0f, 94.0f, 298.0f, 340.0f};
     constexpr float controlHeight = 66.0f;
-    constexpr float controlGap = 18.0f;
+    constexpr float controlGap = 20.0f;
     constexpr float controlY = 925.0f;
     const float controlGroupWidth = std::accumulate(controlWidths.begin(), controlWidths.end(), 0.0f) +
                                     controlGap * static_cast<float>(controlWidths.size() - 1);
@@ -37,15 +39,16 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
 
     for (std::size_t i = 0; i < controlWidths.size(); ++i) {
         const bool selected = i == static_cast<std::size_t>(state.selection);
+        const auto tint = selected ? style.focused : style.muted;
         const auto bounds = drawButton(x, controlY, controlWidths[i], controlHeight, selected, i == 1);
         const float iconCenterX = std::round(bounds[0] + bounds[2] * 0.5f);
         const float iconCenterY = std::round(bounds[1] + bounds[3] * 0.5f);
 
         if (i == 0 || i == 2) {
-            ui_icons::skip(renderer, iconCenterX - 20.0f, iconCenterY - 20.0f, 40.0f, i == 2, style.text);
+            ui_icons::skip(renderer, iconCenterX - 20.0f, iconCenterY - 20.0f, 40.0f, i == 2, tint);
         } else if (i == 1) {
             renderer.icon(state.paused ? ui_icons::Glyph::Play : ui_icons::Glyph::Pause, iconCenterX - 20.0f,
-                          iconCenterY - 20.0f, 40.0f, style.text);
+                          iconCenterY - 20.0f, 40.0f, tint);
         } else if (i == 3) {
             constexpr float iconWidth = 36.0f;
             constexpr float gap = 14.0f;
@@ -55,9 +58,9 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float textWidth = renderer.textWidth(labelScale, label);
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
-            ui_icons::audio(renderer, iconX, iconCenterY - 18.0f, iconWidth, style.text);
+            ui_icons::audio(renderer, iconX, iconCenterY - 18.0f, iconWidth, tint);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
-                                            style.text);
+                                            tint);
         } else {
             constexpr float iconWidth = 36.0f;
             constexpr float gap = 14.0f;
@@ -67,9 +70,9 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float textWidth = renderer.textWidth(labelScale, label);
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
-            ui_icons::subtitles(renderer, iconX, iconCenterY - 18.0f, iconWidth, style.text);
+            ui_icons::subtitles(renderer, iconX, iconCenterY - 18.0f, iconWidth, tint);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
-                                            style.text);
+                                            tint);
         }
 
         x += controlWidths[i] + controlGap;

@@ -40,6 +40,12 @@ void renderPlayerStatus(RendererLike& renderer, const PlayerStatusRenderState& s
                       590.0f);
     }
     if (!state.statusText.empty()) {
-        renderer.text(80.0f, 772.0f, 2.0f, state.statusText, style.secondary, 580.0f);
+        // The status has the entire lower-left row. Fit its glyphs into that
+        // row instead of wrapping at the old arbitrary 580px limit.
+        const float available = state.finishText.empty() ? 1480.0f : 1040.0f;
+        float scale = 2.0f;
+        const float measured = renderer.textWidth(scale, state.statusText);
+        if (measured > available) scale *= available / measured;
+        renderer.text(80.0f, 772.0f, scale, state.statusText, style.secondary, available);
     }
 }

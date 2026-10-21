@@ -418,7 +418,7 @@ int main() {
     })",
                                                                   -1, kSubtitleServerDefaultIndex);
     assert(!remuxNoStreamsPlaceholder.ok);
-    assert(remuxNoStreamsPlaceholder.error == "Jellyfin returned no playable media source");
+    assert(remuxNoStreamsPlaceholder.error == "No playable Remux source (720p minimum)");
 
     const auto placeholderBeforeRealSource = parsePlaybackInfoOffer(R"({
         "MediaSources": [

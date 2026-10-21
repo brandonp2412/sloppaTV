@@ -59,10 +59,10 @@ int main() {
     assert(command.type == PlayerScreenCommandType::NextEpisode);
     inputState.moveControl(1);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
-    assert(command.type == PlayerScreenCommandType::CycleAudioTrack);
+    assert(command.type == PlayerScreenCommandType::OpenAudioPicker);
     inputState.moveControl(1);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
-    assert(command.type == PlayerScreenCommandType::CycleSubtitleTrack);
+    assert(command.type == PlayerScreenCommandType::OpenSubtitlePicker);
     inputState.moveControl(-3);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
     assert(command.type == PlayerScreenCommandType::TogglePause);
@@ -197,6 +197,20 @@ int main() {
     const auto ambientStart = ambient.displayColor(now);
     const auto ambientLater = ambient.displayColor(now + 3s);
     assert(ambientLater.r > ambientStart.r);
+
+    state.openTrackPicker(PlayerTrackPicker::Subtitle,
+                          {{-1, "Off", false}, {6, "English", true}, {9, "French", false}}, now);
+    assert(state.trackPicker() == PlayerTrackPicker::Subtitle);
+    assert(state.trackPickerSelection() == 1);
+    assert(state.handleInput(PlayerScreenInput::Down, now + 1s).type == PlayerScreenCommandType::None);
+    assert(state.trackPickerSelection() == 2);
+    auto chosen = state.handleInput(PlayerScreenInput::Activate, now + 2s);
+    assert(chosen.type == PlayerScreenCommandType::SelectSubtitleTrack);
+    assert(chosen.trackIndex == 9);
+    assert(state.trackPicker() == PlayerTrackPicker::None);
+    state.openTrackPicker(PlayerTrackPicker::Audio, {{2, "English", true}}, now);
+    assert(state.handleInput(PlayerScreenInput::Back, now + 1s).type == PlayerScreenCommandType::None);
+    assert(state.trackPicker() == PlayerTrackPicker::None);
 
     state.resetSession();
     assert(!state.controlsActive(now));

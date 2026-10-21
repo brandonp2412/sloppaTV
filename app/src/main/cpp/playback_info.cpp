@@ -158,7 +158,9 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
             return candidate.is_object() && !isNoStreamsPlaceholder(candidate);
         });
         if (firstObject == sources.end()) {
-            result.error = "Jellyfin returned no playable media source";
+            const bool remuxUnavailable = std::any_of(sources.begin(), sources.end(), isNoStreamsPlaceholder);
+            result.error = remuxUnavailable ? "No playable Remux source (720p minimum)"
+                                            : "Jellyfin returned no playable media source";
             return result;
         }
         // Jellyfin can return multiple media versions. Rank each source with the same
