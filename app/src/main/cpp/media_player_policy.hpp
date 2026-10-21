@@ -108,6 +108,16 @@ constexpr int playbackCachePauseWaitSeconds(bool isRemux) {
     return isRemux ? 20 : 2;
 }
 
+// A subsecond clock value during a failed cold start still addresses the
+// initial media range. Do not grant its replacement the distant-seek budget.
+constexpr bool remuxNeedsResumeReadBudget(int64_t startTicks) {
+    return startTicks >= 10'000'000;
+}
+
+constexpr int remuxFallbackStartPositionMs(int positionMs) {
+    return positionMs < 1000 ? 0 : positionMs;
+}
+
 // A resumed torrent must read the container index and a distant media range
 // before filling the player cache. Keep its full preparation budget: switching
 // sources after 30 seconds discards those reads and starts the cold seek again.

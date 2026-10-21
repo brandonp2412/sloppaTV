@@ -198,8 +198,8 @@ int main() {
     const auto ambientLater = ambient.displayColor(now + 3s);
     assert(ambientLater.r > ambientStart.r);
 
-    state.openTrackPicker(PlayerTrackPicker::Subtitle,
-                          {{-1, "Off", false}, {6, "English", true}, {9, "French", false}}, now);
+    state.openTrackPicker(PlayerTrackPicker::Subtitle, {{-1, "Off", false}, {6, "English", true}, {9, "French", false}},
+                          now);
     assert(state.trackPicker() == PlayerTrackPicker::Subtitle);
     assert(state.trackPickerSelection() == 1);
     assert(state.handleInput(PlayerScreenInput::Down, now + 1s).type == PlayerScreenCommandType::None);

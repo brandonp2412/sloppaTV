@@ -59,8 +59,7 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
             ui_icons::audio(renderer, iconX, iconCenterY - 18.0f, iconWidth, tint);
-            renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
-                                            tint);
+            renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, tint);
         } else {
             constexpr float iconWidth = 36.0f;
             constexpr float gap = 14.0f;
@@ -71,8 +70,7 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float groupWidth = iconWidth + gap + textWidth;
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
             ui_icons::subtitles(renderer, iconX, iconCenterY - 18.0f, iconWidth, tint);
-            renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label,
-                                            tint);
+            renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, tint);
         }
 
         x += controlWidths[i] + controlGap;

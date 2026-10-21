@@ -34,10 +34,9 @@ int main() {
     state.settings.autoSubtitleLanguage = "eng";
     state.settings.autoSubtitleSourceLanguage = "different";
     const std::string seriesKey = seriesTrackPreferenceKey("https://jellyfin.example", "user-1", "series-1");
-    state.settings.seriesTrackPreferences[seriesKey] = {
-        .audioLanguage = "jpn",
-        .subtitleLanguage = std::string{}, // off, distinct from no preference
-    };
+    auto& seriesPreference = state.settings.seriesTrackPreferences[seriesKey];
+    seriesPreference.audioLanguage = "jpn";
+    seriesPreference.subtitleLanguage = std::string{}; // off, distinct from no preference
     state.settings
         .seriesTrackPreferences[seriesTrackPreferenceKey("https://jellyfin.example", "user-1", "series-2")] = {
         .subtitleLanguage = "eng",

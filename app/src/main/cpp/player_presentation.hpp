@@ -98,14 +98,13 @@ public:
         return bounds;
     }
 
-    [[nodiscard]] std::array<float, 4> drawFloatingControl(float x, float y, float width, float height,
-                                                          bool focused) {
+    [[nodiscard]] std::array<float, 4> drawFloatingControl(float x, float y, float width, float height, bool focused) {
         // Overlay controls are icons and text, not raised buttons. Only the
         // focused control has a small underline for remote navigation.
         if (focused) {
             constexpr float indicatorWidth = 54.0f;
-            renderer_.roundedRect(x + (width - indicatorWidth) * 0.5f, y + height + 7.0f,
-                                  indicatorWidth, 4.0f, 2.0f, material_tv::primary);
+            renderer_.roundedRect(x + (width - indicatorWidth) * 0.5f, y + height + 7.0f, indicatorWidth, 4.0f, 2.0f,
+                                  material_tv::primary);
         }
         return {x, y, width, height};
     }
@@ -494,28 +493,26 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         const int first = std::clamp(chosen - 4, 0, std::max(0, count - visible));
         constexpr float x = 490.0f;
         constexpr float width = 940.0f;
-        const float height = 150.0f + visible * 73.0f;
+        const float height = 150.0f + static_cast<float>(visible) * 73.0f;
         const float y = (Renderer::logicalHeight() - height) * 0.5f;
-        renderer.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(),
-                      Color{0.0f, 0.0f, 0.0f, 0.65f});
+        renderer.rect(0.0f, 0.0f, Renderer::logicalWidth(), Renderer::logicalHeight(), Color{0.0f, 0.0f, 0.0f, 0.65f});
         ui.drawModalSurface(x, y, width, height, material_tv::cornerLarge);
-        const std::string heading = playerScreenState.trackPicker() == PlayerTrackPicker::Audio
-                                        ? "Audio track" : "Subtitles";
-        ui.drawLeftAlignedSingleLineFit(x + 42.0f, y + 24.0f, width - 84.0f, 56.0f, 2.15f,
-                                        heading, material_tv::onSurface);
+        const std::string heading =
+            playerScreenState.trackPicker() == PlayerTrackPicker::Audio ? "Audio track" : "Subtitles";
+        ui.drawLeftAlignedSingleLineFit(x + 42.0f, y + 24.0f, width - 84.0f, 56.0f, 2.15f, heading,
+                                        material_tv::onSurface);
         for (int i = 0; i < visible; ++i) {
             const int index = first + i;
             const auto& option = options[static_cast<std::size_t>(index)];
-            const float rowY = y + 92.0f + i * 73.0f;
+            const float rowY = y + 92.0f + static_cast<float>(i) * 73.0f;
             const bool focused = index == chosen;
             const auto row = ui.drawButtonSurface(x + 28.0f, rowY, width - 56.0f, 66.0f, focused);
             const float labelWidth = row[2] - (option.active ? 180.0f : 65.0f);
-            ui.drawLeftAlignedSingleLineFit(row[0] + 27.0f, row[1] + 5.0f,
-                                            labelWidth, row[3] - 10.0f, 1.5f, option.label,
-                                            material_tv::onSurface);
+            ui.drawLeftAlignedSingleLineFit(row[0] + 27.0f, row[1] + 5.0f, labelWidth, row[3] - 10.0f, 1.5f,
+                                            option.label, material_tv::onSurface);
             if (option.active) {
-                ui.drawRightAlignedSingleLine(row[0] + row[2] - 24.0f, row[1] + 21.0f, 1.3f,
-                                              "Selected", material_tv::primary, 130.0f);
+                ui.drawRightAlignedSingleLine(row[0] + row[2] - 24.0f, row[1] + 21.0f, 1.3f, "Selected",
+                                              material_tv::primary, 130.0f);
             }
         }
         ui.drawLeftAlignedSingleLineFit(x + 42.0f, y + height - 47.0f, width - 84.0f, 28.0f, 1.1f,

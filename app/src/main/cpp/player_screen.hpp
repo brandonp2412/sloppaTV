@@ -149,7 +149,9 @@ public:
     }
 
     [[nodiscard]] PlayerTrackPicker trackPicker() const { return picker_; }
+
     [[nodiscard]] const std::vector<PlayerTrackOption>& trackOptions() const { return pickerOptions_; }
+
     [[nodiscard]] std::size_t trackPickerSelection() const { return pickerSelected_; }
 
     void openTrackPicker(PlayerTrackPicker kind, std::vector<PlayerTrackOption> options, TimePoint now) {
@@ -158,7 +160,10 @@ public:
         pickerOptions_ = std::move(options);
         pickerSelected_ = 0;
         for (std::size_t i = 0; i < pickerOptions_.size(); ++i) {
-            if (pickerOptions_[i].active) { pickerSelected_ = i; break; }
+            if (pickerOptions_[i].active) {
+                pickerSelected_ = i;
+                break;
+            }
         }
         controlsActive_ = true;
         controlsUntil_ = now + std::chrono::minutes(5);
@@ -220,9 +225,8 @@ public:
             } else if (input == PlayerScreenInput::Down && pickerSelected_ + 1 < pickerOptions_.size()) {
                 ++pickerSelected_;
             } else if (input == PlayerScreenInput::Activate) {
-                const auto type = picker_ == PlayerTrackPicker::Audio
-                                      ? PlayerScreenCommandType::SelectAudioTrack
-                                      : PlayerScreenCommandType::SelectSubtitleTrack;
+                const auto type = picker_ == PlayerTrackPicker::Audio ? PlayerScreenCommandType::SelectAudioTrack
+                                                                      : PlayerScreenCommandType::SelectSubtitleTrack;
                 const int index = pickerOptions_[pickerSelected_].index;
                 closeTrackPicker();
                 return {.type = type, .trackIndex = index};

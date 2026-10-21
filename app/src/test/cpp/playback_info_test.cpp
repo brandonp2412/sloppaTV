@@ -237,8 +237,7 @@ int main() {
         {"Id":"last-direct","SupportsDirectPlay":true}
     ]})";
     const auto primary = parsePlaybackInfoOffer(routeFallbacks, -1, kSubtitleOffIndex);
-    const auto transcodeBackup =
-        parsePlaybackInfoOffer(routeFallbacks, -1, kSubtitleOffIndex, {}, "transcode-backup");
+    const auto transcodeBackup = parsePlaybackInfoOffer(routeFallbacks, -1, kSubtitleOffIndex, {}, "transcode-backup");
     const auto directStreamBackup =
         parsePlaybackInfoOffer(routeFallbacks, -1, kSubtitleOffIndex, {}, "direct-stream-backup");
     assert(primary.ok && primary.value.alternativeMediaSourceId == "transcode-backup");

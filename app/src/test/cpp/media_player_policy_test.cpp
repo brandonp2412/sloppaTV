@@ -5,6 +5,25 @@
 #include <limits>
 
 int main() {
+    // Failed cold starts can move the clock by two or three video frames before
+    // buffering. Their alternate remains a cold start, not a distant resume.
+    assert(remuxFallbackStartPositionMs(-1) == 0);
+    assert(remuxFallbackStartPositionMs(0) == 0);
+    assert(remuxFallbackStartPositionMs(83) == 0);
+    assert(remuxFallbackStartPositionMs(130) == 0);
+    assert(remuxFallbackStartPositionMs(999) == 0);
+    assert(remuxFallbackStartPositionMs(1000) == 1000);
+    assert(remuxFallbackStartPositionMs(263000) == 263000);
+    assert(!remuxNeedsResumeReadBudget(-1));
+    assert(!remuxNeedsResumeReadBudget(0));
+    assert(!remuxNeedsResumeReadBudget(830'000));
+    assert(!remuxNeedsResumeReadBudget(1'300'000));
+    assert(!remuxNeedsResumeReadBudget(9'999'999));
+    assert(remuxNeedsResumeReadBudget(10'000'000));
+    assert(remuxNeedsResumeReadBudget(2'630'000'000));
+    assert(shouldRetrySlowRemuxSource(true, 30'000, true, remuxNeedsResumeReadBudget(830'000)));
+    assert(!shouldRetrySlowRemuxSource(true, 30'000, true, remuxNeedsResumeReadBudget(2'630'000'000)));
+
     assert(clampSeekPositionMs(-1) == 0);
     assert(clampSeekPositionMs(0) == 0);
     assert(clampSeekPositionMs(1234) == 1234);
