@@ -13,8 +13,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from tv_remote_safety import check_tv_remote
 from media_session_evidence import app_session_block
+from tv_remote_safety import check_tv_remote
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts" / "e2e-waydroid"

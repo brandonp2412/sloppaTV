@@ -9,9 +9,9 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from media_session_evidence import active_audio_track_lines, app_session_block
 from PIL import Image, ImageChops, ImageStat
 from tv_remote_safety import check_tv_remote
-from media_session_evidence import app_session_block, active_audio_track_lines
 
 PLAYING = 3
 PAUSED = 2
@@ -127,6 +127,56 @@ def roi_diff(a: Path, b: Path) -> float:
     box = (0, int(h * 0.1), w, int(h * 0.78))
     stat = ImageStat.Stat(ImageChops.difference(ia.crop(box), ib.crop(box)))
     return sum(stat.mean) / 3.0
+
+
+def video_frame_nonblank(path: Path) -> bool:
+    """Require substantial picture content away from progress controls and subtitles."""
+    with Image.open(path) as screenshot:
+        w, h = screenshot.size
+        region = screenshot.crop((int(w * 0.08), int(h * 0.12), int(w * 0.92), int(h * 0.76)))
+        region.thumbnail((160, 90))
+        gray = region.convert("L")
+    histogram = gray.histogram()
+    bright = sum(histogram[42:]) / sum(histogram)
+    return bright >= 0.012 and ImageStat.Stat(gray).stddev[0] >= 7.0
+
+
+def decoded_frame_pair(
+    serial: str,
+    package: str,
+    artifacts: Path,
+    scenario: str,
+    samples: list[dict[str, object]],
+    timeout_seconds: float = 35,
+) -> tuple[int, float]:
+    """Wait for *two* different nonblank composited frames while playback advances."""
+    first_position: int | None = None
+    first = artifacts / f"{scenario}-frame-a.png"
+    second = artifacts / f"{scenario}-frame-b.png"
+    deadline = time.monotonic() + timeout_seconds
+    max_motion = 0.0
+    while time.monotonic() < deadline:
+        session = session_snapshot(serial, package)
+        samples.append({"t": round(time.time(), 3), "session": session})
+        if session is None or int(session["state"]) != PLAYING:
+            time.sleep(1.5)
+            continue
+        position = int(session["position_ms"])
+        path = first if first_position is None else second
+        capture(serial, path)
+        if video_frame_nonblank(path):
+            if first_position is None:
+                first_position = position
+            elif position - first_position >= 1500:
+                motion = roi_diff(first, second)
+                max_motion = max(max_motion, motion)
+                if motion >= 1.0:
+                    return position - first_position, motion
+        time.sleep(2.0)
+    raise RuntimeError(
+        f"two different nonblank decoded frames not proven within {timeout_seconds}s; "
+        f"first_position={first_position}; max_motion={max_motion:.3f}"
+    )
 
 
 def package_uid(serial: str, package: str) -> int:
@@ -256,29 +306,13 @@ def strict_playback(
     else:
         wait_state(serial, package, {PLAYING}, 18, samples)
 
-    before = session_snapshot(serial, package)
-    assert before is not None
-    a = artifacts / f"{scenario}-frame-a.png"
-    b = artifacts / f"{scenario}-frame-b.png"
-    capture(serial, a)
-    after = wait_position_delta(serial, package, int(before["position_ms"]), 1500, 9.0, samples)
-    capture(serial, b)
-    motion = roi_diff(a, b)
-    if motion < 0.03:
-        visual_deadline = time.monotonic() + 12.0
-        while time.monotonic() < visual_deadline and motion < 0.03:
-            time.sleep(1.0)
-            capture(serial, b)
-            motion = roi_diff(a, b)
-    progress = int(after["position_ms"]) - int(before["position_ms"])
+    progress, motion = decoded_frame_pair(serial, package, artifacts, scenario, samples)
     logs = adb(serial, "logcat", "-d", "-v", "brief", timeout=60)
     frame_hashes = re.findall(r"E2E decoded-frame sample=\d+ .*?hash=([0-9a-fA-F]+)", logs)
     raw_frames_verified = len(set(frame_hashes)) >= 2
     compositor_motion_verified = motion >= 0.03
-    if not raw_frames_verified and not compositor_motion_verified:
-        raise RuntimeError(
-            f"decoded video was not proven: raw_hashes={frame_hashes[-8:]}; compositor_motion={motion:.3f}"
-        )
+    # Raw decoder hashes alone cannot prove that the screen actually displayed
+    # nonblank video. decoded_frame_pair enforces that prerequisite.
     result["raw_decoded_frames_verified"] = raw_frames_verified
     result["compositor_motion_verified"] = compositor_motion_verified
 

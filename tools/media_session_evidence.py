@@ -1,4 +1,5 @@
 """Read only the requested app-owned Android MediaSession and audio track."""
+
 from __future__ import annotations
 
 import re
@@ -13,7 +14,7 @@ def app_session_block(output: str, package: str) -> str | None:
     for i, heading in enumerate(headings):
         if heading.group().strip().startswith(expected):
             end = headings[i + 1].start() if i + 1 < len(headings) else len(output)
-            block = output[heading.end():end]
+            block = output[heading.end() : end]
             return block if re.search(r"(?m)^\s*active=true\s*$", block) else None
     return None
 
