@@ -210,12 +210,14 @@ inline int playbackSubtitleIndexForItem(const JellyfinItem& item, int audioStrea
                                         const std::optional<std::string>& languagePreference,
                                         const PlaybackTrackSelectionPolicy& policy);
 
-inline PlaybackAudioCyclePlan planPlaybackAudioTrackSelection(
-    const JellyfinItem& item, int requestedAudioIndex, int selectedSubtitleStreamIndex,
-    PlaybackMethod playbackMethod, const PlaybackTrackSelectionPolicy& policy) {
+inline PlaybackAudioCyclePlan planPlaybackAudioTrackSelection(const JellyfinItem& item, int requestedAudioIndex,
+                                                              int selectedSubtitleStreamIndex,
+                                                              PlaybackMethod playbackMethod,
+                                                              const PlaybackTrackSelectionPolicy& policy) {
     PlaybackAudioCyclePlan plan;
-    const auto chosen = std::find_if(item.audios.begin(), item.audios.end(),
-                                     [&](const JellyfinAudioStream& track) { return track.index == requestedAudioIndex; });
+    const auto chosen = std::find_if(item.audios.begin(), item.audios.end(), [&](const JellyfinAudioStream& track) {
+        return track.index == requestedAudioIndex;
+    });
     if (chosen == item.audios.end()) return plan;
     plan.available = true;
     plan.audioStreamIndex = chosen->index;
@@ -246,8 +248,8 @@ inline PlaybackAudioCyclePlan planPlaybackAudioTrackCycle(const JellyfinItem& it
             ? 0
             : (static_cast<size_t>(std::distance(item.audios.begin(), selected)) + 1) % item.audios.size();
 
-    return planPlaybackAudioTrackSelection(item, item.audios[next].index, selectedSubtitleStreamIndex,
-                                           playbackMethod, policy);
+    return planPlaybackAudioTrackSelection(item, item.audios[next].index, selectedSubtitleStreamIndex, playbackMethod,
+                                           policy);
 }
 
 inline int playbackSubtitleIndexForItem(const JellyfinItem& item, int audioStreamIndex,
@@ -337,15 +339,15 @@ constexpr bool usePlayerDiscoveredTextTrack(const JellyfinSubtitleStream& track,
            useNativeSubtitleRenderer(subtitleStrategy(track.codec), true);
 }
 
-inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackSelection(
-    const JellyfinItem& item, int requestedSubtitleIndex, PlaybackMethod playbackMethod,
-    const std::vector<std::string>& allowedLanguages) {
+inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackSelection(const JellyfinItem& item,
+                                                                    int requestedSubtitleIndex,
+                                                                    PlaybackMethod playbackMethod,
+                                                                    const std::vector<std::string>& allowedLanguages) {
     PlaybackSubtitleCyclePlan plan;
     if (requestedSubtitleIndex >= 0) {
-        const auto chosen = std::find_if(item.subtitles.begin(), item.subtitles.end(),
-                                        [&](const JellyfinSubtitleStream& track) {
-                                            return track.index == requestedSubtitleIndex;
-                                        });
+        const auto chosen =
+            std::find_if(item.subtitles.begin(), item.subtitles.end(),
+                         [&](const JellyfinSubtitleStream& track) { return track.index == requestedSubtitleIndex; });
         if (chosen == item.subtitles.end()) return plan;
         if (!playbackSubtitleAllowed(*chosen, allowedLanguages)) {
             plan.action = PlaybackSubtitleCycleAction::NoAllowedTracks;
@@ -358,10 +360,9 @@ inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackSelection(
         return plan;
     }
     if (requestedSubtitleIndex >= 0) {
-        const auto chosen = std::find_if(item.subtitles.begin(), item.subtitles.end(),
-                                        [&](const JellyfinSubtitleStream& track) {
-                                            return track.index == requestedSubtitleIndex;
-                                        });
+        const auto chosen =
+            std::find_if(item.subtitles.begin(), item.subtitles.end(),
+                         [&](const JellyfinSubtitleStream& track) { return track.index == requestedSubtitleIndex; });
         plan.strategy = subtitleStrategy(chosen->codec);
         if (playbackMethod == PlaybackMethod::DirectPlay) {
             plan.directPlayStream = *chosen;

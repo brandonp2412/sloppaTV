@@ -894,19 +894,20 @@ public:
         return plan;
     }
 
-    [[nodiscard]] PlaybackAudioCyclePlan beginAudioTrackSelection(int index, const PlaybackTrackSelectionPolicy& policy) {
-        PlaybackAudioCyclePlan plan = planPlaybackAudioTrackSelection(
-            sessionState_.activeItem(), index, trackState_.selectedSubtitleServerIndex(),
-            sessionState_.activeTarget().playMethod, policy);
+    [[nodiscard]] PlaybackAudioCyclePlan beginAudioTrackSelection(int index,
+                                                                  const PlaybackTrackSelectionPolicy& policy) {
+        PlaybackAudioCyclePlan plan = planPlaybackAudioTrackSelection(sessionState_.activeItem(), index,
+                                                                      trackState_.selectedSubtitleServerIndex(),
+                                                                      sessionState_.activeTarget().playMethod, policy);
         if (plan.available) rememberAudioLanguagePreference(plan.audioStreamIndex);
         return plan;
     }
 
-    [[nodiscard]] PlaybackSubtitleCycleContext beginSubtitleTrackSelection(
-        int index, const std::vector<std::string>& allowedLanguages) {
+    [[nodiscard]] PlaybackSubtitleCycleContext
+    beginSubtitleTrackSelection(int index, const std::vector<std::string>& allowedLanguages) {
         PlaybackSubtitleCycleContext cycle{
             .plan = planPlaybackSubtitleTrackSelection(sessionState_.activeItem(), index,
-                                                        sessionState_.activeTarget().playMethod, allowedLanguages),
+                                                       sessionState_.activeTarget().playMethod, allowedLanguages),
             .audioStreamIndex = trackState_.selectedAudioServerIndex(),
             .busy = trackState_.subtitleBusy(),
         };

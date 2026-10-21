@@ -240,9 +240,9 @@ public:
     template <typename StreamExecutor, typename TelemetryExecutor>
     void cycleAudioTrack(StreamExecutor& stream, TelemetryExecutor& telemetry, bool playerScreenActive,
                          std::optional<int> requestedIndex = std::nullopt) {
-        const PlaybackAudioCyclePlan plan = requestedIndex
-            ? coordinator_.beginAudioTrackSelection(*requestedIndex, trackSelectionPolicy())
-            : coordinator_.beginAudioTrackCycle(trackSelectionPolicy());
+        const PlaybackAudioCyclePlan plan =
+            requestedIndex ? coordinator_.beginAudioTrackSelection(*requestedIndex, trackSelectionPolicy())
+                           : coordinator_.beginAudioTrackCycle(trackSelectionPolicy());
         if (!plan.available) {
             error_ = "ONLY ONE AUDIO TRACK";
             return;
@@ -263,9 +263,9 @@ public:
     PlaybackRuntimeNotice cycleSubtitleTrack(SubtitleExecutor& subtitles, StreamExecutor& stream,
                                              TelemetryExecutor& telemetry, bool playerScreenActive,
                                              std::optional<int> requestedIndex = std::nullopt) {
-        const PlaybackSubtitleCycleContext cycle = requestedIndex
-            ? coordinator_.beginSubtitleTrackSelection(*requestedIndex, settings_.subtitleLanguages)
-            : coordinator_.beginSubtitleTrackCycle(settings_.subtitleLanguages);
+        const PlaybackSubtitleCycleContext cycle =
+            requestedIndex ? coordinator_.beginSubtitleTrackSelection(*requestedIndex, settings_.subtitleLanguages)
+                           : coordinator_.beginSubtitleTrackCycle(settings_.subtitleLanguages);
         const PlaybackSubtitleCyclePlan& plan = cycle.plan;
         if (cycle.busy) {
             if (plan.action == PlaybackSubtitleCycleAction::NoSubtitles) error_ = "NO SUBTITLE TRACKS";
@@ -542,7 +542,10 @@ public:
                 if (!track.codec.empty() && track.title.empty()) label += " (" + track.codec + ")";
                 options.push_back({track.index, std::move(label), track.index == selected});
             }
-            if (options.empty()) { error_ = "NO AUDIO TRACKS"; return {}; }
+            if (options.empty()) {
+                error_ = "NO AUDIO TRACKS";
+                return {};
+            }
             screenState_.openTrackPicker(PlayerTrackPicker::Audio, std::move(options), now);
             return {};
         }
@@ -631,8 +634,9 @@ public:
             const bool isRemux = serverInfo_ && serverInfo_->isRemux;
             const PlaybackPreparePlan preparePlan = coordinator_.preparePlan(now, isRemux);
             const std::string alternate = coordinator_.session().activeTarget().alternativeMediaSourceId;
-            if (shouldRetrySlowRemuxSource(isRemux, preparePlan.elapsedMs, !alternate.empty(),
-                                           coordinator_.session().activeTarget().startTicks > 0)) {
+            if (shouldRetrySlowRemuxSource(
+                    isRemux, preparePlan.elapsedMs, !alternate.empty(),
+                    remuxNeedsResumeReadBudget(coordinator_.session().activeTarget().startTicks))) {
                 std::scoped_lock lock(stateMutex);
                 const auto& item = coordinator_.session().activeItem();
                 const auto& target = coordinator_.session().activeTarget();
@@ -648,7 +652,8 @@ public:
                                         item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
                                         failedSource.c_str(), alternate.c_str(),
                                         static_cast<long long>(preparePlan.elapsedMs), screenState_.positionMs());
-                    if (restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
+                    if (restartAt(stream, remuxFallbackStartPositionMs(screenState_.positionMs()), -1,
+                                  kSubtitleServerDefaultIndex, alternate)) {
                         failedSources_.push_back(failedSource);
                         error_.clear();
                         return {};
@@ -699,7 +704,8 @@ public:
             if (serverInfo_ && serverInfo_->isRemux && coordinator_.activeTargetUsesDirectPlay() &&
                 shouldUseRemuxAlternate(coordinator_.session().activeTarget().mediaSourceId, alternate,
                                         failedSources_) &&
-                restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
+                restartAt(stream, remuxFallbackStartPositionMs(screenState_.positionMs()), -1,
+                          kSubtitleServerDefaultIndex, alternate)) {
                 error_.clear();
                 return {};
             }

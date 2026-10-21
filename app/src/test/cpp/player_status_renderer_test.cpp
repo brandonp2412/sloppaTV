@@ -72,10 +72,9 @@ int main() {
     assert(renderer.calls[1].maxWidth == 1040.0f);
 
     FakeRenderer longStatus;
-    renderPlayerStatus(longStatus,
-                       PlayerStatusRenderState{.clockText = {}, .finishText = {}, .statusText = std::string(200, 'x')},
-                       PlayerStatusRenderStyle<TestColor>{},
-                       [](float, float, float, std::string_view, TestColor, float) {});
+    renderPlayerStatus(
+        longStatus, PlayerStatusRenderState{.clockText = {}, .finishText = {}, .statusText = std::string(200, 'x')},
+        PlayerStatusRenderStyle<TestColor>{}, [](float, float, float, std::string_view, TestColor, float) {});
     assert(longStatus.calls.size() == 1);
     assert(longStatus.calls[0].scale < 2.0f);
     assert(longStatus.textWidth(longStatus.calls[0].scale, longStatus.calls[0].value) <= 1480.1f);
