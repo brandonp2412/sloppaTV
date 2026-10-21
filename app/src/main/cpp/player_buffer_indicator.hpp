@@ -51,7 +51,11 @@ public:
             return;
         }
         if (resolving) {
-            if (phase_ != PlayerBufferPhase::Resolving || phaseStarted_ == TimePoint{}) phaseStarted_ = now;
+            if (phase_ != PlayerBufferPhase::Resolving || phaseStarted_ == TimePoint{}) {
+                phaseStarted_ = now;
+                lastAdvancing_ = {};
+                clearRemotePrefetch();
+            }
             phase_ = PlayerBufferPhase::Resolving;
             lastPositionMs_ = positionMs;
             return;
@@ -61,6 +65,8 @@ public:
                 if (phase_ == PlayerBufferPhase::Resolving && phaseStarted_ != TimePoint{})
                     learnDuration(now - phaseStarted_, resolveAverageSeconds_, resolveSamples_);
                 phaseStarted_ = now;
+                lastAdvancing_ = {};
+                clearRemotePrefetch();
             }
             phase_ = PlayerBufferPhase::Connecting;
             lastPositionMs_ = positionMs;
@@ -104,9 +110,13 @@ public:
     }
 
     [[nodiscard]] std::string statusText(TimePoint now = Clock::now()) const {
-        const bool remoteProgressFresh = remux_ && remoteReceivedAt_ != TimePoint{} &&
-                                         now - remoteReceivedAt_ <= std::chrono::seconds(20) &&
-                                         remotePrefetch_.livePeers > 0 && remotePrefetch_.downloadMiBps > 0.0;
+        // Aggregate torrent throughput does not prove the selected startup
+        // range is growing. Only claim slow downloading when those bytes advance.
+        const bool remoteProgressFresh =
+            remux_ && remoteReceivedAt_ != TimePoint{} && now - remoteReceivedAt_ <= std::chrono::seconds(20) &&
+            remotePrefetch_.livePeers > 0 && remotePrefetch_.downloadMiBps > 0.0 &&
+            remotePrefetch_.startupRequiredBytes > 0 && !remotePrefetch_.startupReady &&
+            lastReadProgressAt_ != TimePoint{} && now - lastReadProgressAt_ <= std::chrono::seconds(20);
         switch (phase_) {
         case PlayerBufferPhase::Resolving: {
             const std::string label = episode_

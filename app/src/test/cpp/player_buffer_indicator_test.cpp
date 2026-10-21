@@ -36,6 +36,25 @@ int main() {
     assert(b.remotePrefetchText(t + std::chrono::seconds(42)).find("current 50%") != std::string::npos);
     assert(b.remotePrefetchText(t + std::chrono::seconds(42)).find("next 25%") != std::string::npos);
     assert(b.remotePrefetchText(t + std::chrono::seconds(65)).empty());
+    // Peers downloading other pieces must not disguise a stalled startup
+    // range as useful buffering; the label follows selected readable bytes.
+    PlayerBufferIndicator sourceProgress;
+    sourceProgress.observe(false, true, false, false, false, 0, 0, true, false, t);
+    RemuxPrefetchStatus source;
+    source.livePeers = 4;
+    source.downloadMiBps = 8.0;
+    source.startupRequiredBytes = 1000;
+    sourceProgress.setRemotePrefetch(source, t + std::chrono::seconds(1));
+    assert(sourceProgress.statusText(t + std::chrono::seconds(15)).find("Waiting for Remux stream data") !=
+           std::string::npos);
+    source.startupReadableBytes = 100;
+    sourceProgress.setRemotePrefetch(source, t + std::chrono::seconds(16));
+    assert(sourceProgress.statusText(t + std::chrono::seconds(16)).find("Buffering—downloading slowly") !=
+           std::string::npos);
+    sourceProgress.setRemotePrefetch(source, t + std::chrono::seconds(37));
+    assert(sourceProgress.statusText(t + std::chrono::seconds(37)).find("Waiting for Remux stream data") !=
+           std::string::npos);
+
     // A 60 Hz render loop advances by less than 125 ms per observation.
     // It must stay Playing instead of falsely reporting a stall after 15 s.
     PlayerBufferIndicator smooth;
@@ -117,6 +136,40 @@ int main() {
     reconnect.reset();
     reconnect.observe(true, false, false, false, false, 0, 0, true, false, t + 21s);
     assert(reconnect.phase() == PlayerBufferPhase::Resolving);
+
+    // A replacement stream must not inherit the previous item's stalled clock.
+    PlayerBufferIndicator replacement;
+    replacement.observe(false, false, true, false, false, 1000, 0, true, false, t);
+    replacement.observe(true, false, false, false, false, 0, 0, true, false, t + std::chrono::seconds(30));
+    replacement.observe(false, true, false, false, false, 0, 0, true, false, t + std::chrono::seconds(31));
+    replacement.observe(false, false, true, false, false, 0, 0, true, false, t + std::chrono::seconds(32));
+    assert(replacement.phase() == PlayerBufferPhase::Playing);
+
+    // The direct connecting path also starts a new progress clock.
+    replacement.observe(false, true, false, false, false, 0, 0, true, false, t + std::chrono::seconds(60));
+    replacement.observe(false, false, true, false, false, 0, 0, true, false, t + std::chrono::seconds(61));
+    assert(replacement.phase() == PlayerBufferPhase::Playing);
+
+    // Switching sources must discard progress from the previous selected file.
+    PlayerBufferIndicator switched;
+    switched.observe(false, true, false, false, false, 0, 0, true, false, t);
+    RemuxPrefetchStatus previous;
+    previous.livePeers = 6;
+    previous.downloadMiBps = 4.0;
+    previous.startupRequiredBytes = 1000;
+    switched.setRemotePrefetch(previous, t + std::chrono::seconds(1));
+    previous.startupReadableBytes = 250;
+    switched.setRemotePrefetch(previous, t + std::chrono::seconds(2));
+    assert(switched.remotePrefetchText(t + std::chrono::seconds(3)).find("6 peers") != std::string::npos);
+    switched.observe(false, false, true, false, false, 5000, 0, true, false, t + std::chrono::seconds(3));
+    switched.observe(true, false, false, false, false, 0, 0, true, false, t + std::chrono::seconds(4));
+    assert(switched.remotePrefetchText(t + std::chrono::seconds(5)).empty());
+    assert(!switched.startupProgress(t + std::chrono::seconds(5)).has_value());
+    switched.observe(false, true, false, false, false, 0, 0, true, false, t + std::chrono::seconds(6));
+    previous.startupReadableBytes = 250;
+    switched.setRemotePrefetch(previous, t + std::chrono::seconds(7));
+    assert(switched.statusText(t + std::chrono::seconds(20)).find("Waiting for Remux stream data") !=
+           std::string::npos);
 
     b.reset();
     assert(b.cacheAheadMs() == 0);
