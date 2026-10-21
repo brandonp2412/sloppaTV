@@ -65,11 +65,10 @@ DetailsCompletionEffects DetailsCompletionController::apply(DetailsItemCompletio
 
     if (!activeScreen || detail.id != completion.itemId) return finishLoading();
     if (!completion.result.ok) {
-        if (detail.type.empty()) {
-            detail.type = "Unavailable";
-            detail.name = "Item unavailable";
-            detail.overview = "This title could not be loaded from the current library. Go back and search again.";
-        }
+        // Partially populated or cached items can retain a playable type on lookup failure.
+        detail.type = "Unavailable";
+        if (detail.name.empty()) detail.name = "Item unavailable";
+        detail.overview = "This title could not be loaded from the current library. Go back and search again.";
         return finishWithError("DETAILS: " + completion.result.error);
     }
 
