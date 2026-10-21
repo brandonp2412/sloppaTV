@@ -170,6 +170,15 @@ int main() {
         assert(failed.finishLoading);
         assert(failed.error == "DETAILS: missing");
 
+        JellyfinItem deepLink;
+        deepLink.id = "movie-1";
+        const auto missing = DetailsCompletionController::apply(completion, true, true, deepLink);
+        assert(missing.finishLoading);
+        assert(deepLink.name == "Item unavailable");
+        assert(deepLink.type == "Unavailable");
+        assert(!deepLink.overview.empty());
+        assert(deepLink.id == "movie-1");
+
         completion.result.ok = true;
         completion.result.error.clear();
         completion.result.value = item("movie-1");
