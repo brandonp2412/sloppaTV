@@ -137,6 +137,8 @@ public:
         }
         case PlayerBufferPhase::Buffering:
             if (remoteProgressFresh) return "Buffering—downloading slowly";
+            if (phaseStarted_ != TimePoint{} && now - phaseStarted_ >= std::chrono::seconds(12))
+                return remux_ ? "Waiting for Remux stream data" : "Waiting for video data";
             return remux_ ? "Buffering from Remux" : "Buffering video";
         case PlayerBufferPhase::Stalled:
             if (remoteProgressFresh) return "Buffering—downloading slowly";
