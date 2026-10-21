@@ -64,7 +64,14 @@ DetailsCompletionEffects DetailsCompletionController::apply(DetailsItemCompletio
     if (!activeGeneration) return {};
 
     if (!activeScreen || detail.id != completion.itemId) return finishLoading();
-    if (!completion.result.ok) return finishWithError("DETAILS: " + completion.result.error);
+    if (!completion.result.ok) {
+        if (detail.type.empty()) {
+            detail.type = "Unavailable";
+            detail.name = "Item unavailable";
+            detail.overview = "This title could not be loaded from the current library. Go back and search again.";
+        }
+        return finishWithError("DETAILS: " + completion.result.error);
+    }
 
     detail = std::move(completion.result.value);
     return finishLoading();

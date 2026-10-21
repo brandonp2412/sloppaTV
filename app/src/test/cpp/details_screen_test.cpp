@@ -19,6 +19,11 @@ int main() {
     series.people.push_back({.id = "p6", .name = "Six", .imageTag = "", .role = ""});
 
     state.beginDetails();
+    JellyfinItem unloaded;
+    unloaded.id = "stale-catalogue-id";
+    assert(state.actions(unloaded, false) == std::vector<std::string>{"BACK"});
+    unloaded.type = "Unavailable";
+    assert(state.actions(unloaded, false) == std::vector<std::string>{"BACK"});
     const auto actionIds = detailActionIdsFor(series);
     assert(actionIds.front() == DetailsAction::StartPlayback);
     assert(actionIds[1] == DetailsAction::OpenEpisodes);

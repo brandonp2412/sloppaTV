@@ -64,6 +64,10 @@ enum class DetailsAction {
 inline std::vector<DetailsAction> detailActionIdsFor(const JellyfinItem& item, bool canAddToSeerr = false) {
     std::vector<DetailsAction> result;
     result.reserve(9);
+    if (item.type != "Movie" && item.type != "Series" && item.type != "Episode" && item.type != "BoxSet") {
+        result.push_back(DetailsAction::Back);
+        return result;
+    }
     result.push_back(DetailsAction::StartPlayback);
     if (item.type == "Series") {
         result.push_back(DetailsAction::OpenEpisodes);
