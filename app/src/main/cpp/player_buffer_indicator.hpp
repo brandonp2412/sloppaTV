@@ -42,6 +42,14 @@ public:
         remux_ = remux;
         episode_ = episode;
         cacheAheadMs_ = std::max(0, cacheAheadMs);
+        if ((resolving || preparing) && playbackAdvanced_) {
+            if (phase_ != PlayerBufferPhase::Buffering && phase_ != PlayerBufferPhase::Stalled)
+                phaseStarted_ = now;
+            phase_ = now - phaseStarted_ >= std::chrono::seconds(15) ? PlayerBufferPhase::Stalled
+                                                                     : PlayerBufferPhase::Buffering;
+            lastPositionMs_ = positionMs;
+            return;
+        }
         if (resolving) {
             if (phase_ != PlayerBufferPhase::Resolving || phaseStarted_ == TimePoint{}) phaseStarted_ = now;
             phase_ = PlayerBufferPhase::Resolving;
@@ -70,7 +78,9 @@ public:
         }
         if (phase_ == PlayerBufferPhase::Connecting && phaseStarted_ != TimePoint{})
             learnDuration(now - phaseStarted_, connectAverageSeconds_, connectSamples_);
-        if (lastAdvancing_ == TimePoint{} || positionMs > lastPositionMs_ + 125 || positionMs + 500 < lastPositionMs_) {
+        const bool advanced = lastPositionMs_ >= 0 && positionMs > lastPositionMs_ + 125;
+        if (lastAdvancing_ == TimePoint{} || advanced || positionMs + 500 < lastPositionMs_) {
+            if (advanced) playbackAdvanced_ = true;
             lastAdvancing_ = now;
             // Compare against the last confirmed advance, not the previous
             // render frame: normal 16-50 ms increments must accumulate past
@@ -210,6 +220,8 @@ private:
     bool episode_ = false;
     int cacheAheadMs_ = 0;
     int lastPositionMs_ = -1;
+    bool playbackAdvanced_ = false;
+    bool playbackAdvanced_ = false;
     TimePoint phaseStarted_{};
     TimePoint lastAdvancing_{};
     RemuxPrefetchStatus remotePrefetch_{};

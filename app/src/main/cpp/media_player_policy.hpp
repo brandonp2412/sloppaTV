@@ -117,6 +117,13 @@ constexpr bool shouldRetrySlowRemuxSource(bool isRemux, int64_t elapsedMs, bool 
     return isRemux && hasAlternate && elapsedMs >= retryAfterMs;
 }
 
+inline bool shouldUseRemuxAlternate(std::string_view currentSourceId, std::string_view alternateSourceId,
+                                    const std::vector<std::string>& failedSources) {
+    return !alternateSourceId.empty() && alternateSourceId != currentSourceId &&
+           std::none_of(failedSources.begin(), failedSources.end(),
+                        [&](const std::string& failed) { return failed == alternateSourceId; });
+}
+
 inline bool mpvLogIndicatesHardwareDecoderFailure(std::string_view text) {
     std::string normalized(text);
     std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char value) {

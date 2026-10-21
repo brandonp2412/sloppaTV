@@ -601,15 +601,23 @@ public:
                 std::scoped_lock lock(stateMutex);
                 const auto& item = coordinator_.session().activeItem();
                 const auto& target = coordinator_.session().activeTarget();
-                __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
-                                    "Remux source stalled item=%s title=%s S%dE%d source=%s next=%s "
-                                    "elapsedMs=%lld positionMs=%d",
-                                    item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
-                                    target.mediaSourceId.c_str(), alternate.c_str(),
-                                    static_cast<long long>(preparePlan.elapsedMs), screenState_.positionMs());
-                if (restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
-                    error_.clear();
-                    return {};
+                if (failedSourceItemId_ != item.id) {
+                    failedSourceItemId_ = item.id;
+                    failedSources_.clear();
+                }
+                if (shouldUseRemuxAlternate(target.mediaSourceId, alternate, failedSources_)) {
+                    const std::string failedSource = target.mediaSourceId;
+                    __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
+                                        "Remux source stalled item=%s title=%s S%dE%d source=%s next=%s "
+                                        "elapsedMs=%lld positionMs=%d",
+                                        item.id.c_str(), item.name.c_str(), item.parentIndexNumber, item.indexNumber,
+                                        failedSource.c_str(), alternate.c_str(),
+                                        static_cast<long long>(preparePlan.elapsedMs), screenState_.positionMs());
+                    if (restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
+                        failedSources_.push_back(failedSource);
+                        error_.clear();
+                        return {};
+                    }
                 }
             }
             if (preparePlan.timedOut) {
@@ -654,8 +662,8 @@ public:
             }
             failedSources_.push_back(coordinator_.session().activeTarget().mediaSourceId);
             if (serverInfo_ && serverInfo_->isRemux && coordinator_.activeTargetUsesDirectPlay() &&
-                !alternate.empty() &&
-                std::find(failedSources_.begin(), failedSources_.end(), alternate) == failedSources_.end() &&
+                shouldUseRemuxAlternate(coordinator_.session().activeTarget().mediaSourceId, alternate,
+                                        failedSources_) &&
                 restartAt(stream, screenState_.positionMs(), -1, kSubtitleServerDefaultIndex, alternate)) {
                 error_.clear();
                 return {};

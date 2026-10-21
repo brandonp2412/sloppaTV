@@ -4,6 +4,7 @@
 #include <chrono>
 
 int main() {
+    using namespace std::chrono_literals;
     PlayerBufferIndicator b;
     const auto t = PlayerBufferIndicator::Clock::now();
     b.observe(true, false, false, false, false, 0, 0, true, true, t);
@@ -92,6 +93,30 @@ int main() {
     assert(learned.statusText(next + std::chrono::seconds(2)).find("remaining") != std::string::npos);
     learned.observe(false, true, false, false, false, 0, 0, true, false, next + std::chrono::seconds(15));
     assert(learned.statusText(next + std::chrono::seconds(16)).find("remaining") != std::string::npos);
+
+    // A resumed item starts at a nonzero timestamp but has not yet advanced.
+    PlayerBufferIndicator coldResume;
+    coldResume.observe(true, false, false, false, false, 500000, 0, true, false, t);
+    coldResume.observe(false, true, false, false, false, 500000, 0, true, false, t + 1s);
+    assert(coldResume.phase() == PlayerBufferPhase::Connecting);
+    coldResume.observe(true, false, false, false, false, 500000, 0, true, false, t + 2s);
+    assert(coldResume.phase() == PlayerBufferPhase::Resolving);
+
+    // Midstream source resolution must say buffering, not opening, after progress.
+    PlayerBufferIndicator reconnect;
+    reconnect.observe(false, true, false, false, false, 100000, 0, true, false, t);
+    reconnect.observe(false, false, true, false, false, 100000, 2000, true, false, t + 1s);
+    reconnect.observe(false, false, true, false, false, 100250, 2000, true, false, t + 2s);
+    reconnect.observe(true, false, false, false, false, 100250, 0, true, false, t + 3s);
+    assert(reconnect.phase() == PlayerBufferPhase::Buffering);
+    assert(reconnect.statusText(t + 3s) == "Buffering from Remux");
+    reconnect.observe(false, true, false, false, false, 100250, 0, true, false, t + 19s);
+    assert(reconnect.phase() == PlayerBufferPhase::Stalled);
+    reconnect.observe(false, false, true, false, false, 100500, 2000, true, false, t + 20s);
+    assert(reconnect.phase() == PlayerBufferPhase::Playing);
+    reconnect.reset();
+    reconnect.observe(true, false, false, false, false, 0, 0, true, false, t + 21s);
+    assert(reconnect.phase() == PlayerBufferPhase::Resolving);
 
     b.reset();
     assert(b.cacheAheadMs() == 0);
