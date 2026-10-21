@@ -28,9 +28,9 @@ void DetailsFlow::reset() {
     state_.reset();
 }
 
-void DetailsFlow::beginDetails(JellyfinItem item) {
+void DetailsFlow::beginDetails(JellyfinItem item, bool preserveEpisodeGrid) {
     item_ = std::move(item);
-    state_.beginDetails();
+    state_.beginDetails(preserveEpisodeGrid);
 }
 
 bool DetailsFlow::beginCast() {

@@ -128,6 +128,7 @@ public:
     }
 
     void openDetails(const JellyfinItem& item, bool replaceCurrent = false) {
+        const bool preserveEpisodeGrid = !replaceCurrent && screen_ == Screen::Episodes;
         if (replaceCurrent)
             replaceScreen(Screen::Details);
         else
@@ -135,7 +136,7 @@ public:
         playbackCoordinator_.dismissStillWatchingPrompt();
 
         const auto prefetchedDetail = similarPrefetch_.cachedDetail(session_, item.id);
-        details_.beginDetails(prefetchedDetail ? *prefetchedDetail : item);
+        details_.beginDetails(prefetchedDetail ? *prefetchedDetail : item, preserveEpisodeGrid);
 
         const std::string id = details_.item().id;
         const auto prefetchedSimilar = similarPrefetch_.cached(session_, id);

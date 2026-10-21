@@ -249,15 +249,17 @@ public:
         episodeContextSelection_ = 0;
     }
 
-    void beginDetails() {
+    void beginDetails(bool preserveEpisodeGrid = false) {
         actionSelection_ = 0;
         similar_.clear();
         similarSelection_ = 0;
         similarFocused_ = false;
-        seriesDetail_ = {};
-        seasons_.clear();
-        selectedSeason_ = {};
-        episodes_.clear();
+        if (!preserveEpisodeGrid) {
+            seriesDetail_ = {};
+            seasons_.clear();
+            selectedSeason_ = {};
+            episodes_.clear();
+        }
         episodeContextFocused_ = false;
         episodeContextSelection_ = 0;
     }
