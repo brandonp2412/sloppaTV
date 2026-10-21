@@ -20,6 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public final class HttpBridge {
     private static final long REQUEST_TIMEOUT_MS = 45_000;
+    private static final long ITEM_DETAILS_REQUEST_TIMEOUT_MS = 15_000;
     // Keep a bounded PlaybackInfo wait; slow downloads continue independently.
     private static final long PLAYBACK_INFO_REQUEST_TIMEOUT_MS = 95_000;
     private static final int PLAYBACK_INFO_READ_TIMEOUT_MS = 90_000;
@@ -77,8 +78,19 @@ public final class HttpBridge {
         }
     }
 
+    static boolean isItemDetailsRequest(String method, String url) {
+        if (!"GET".equals(method)) return false;
+        try {
+            String path = new URI(url).getPath();
+            return path != null && path.matches("(?i)/users/[^/]+/items/[^/]+");
+        } catch (URISyntaxException error) {
+            return false;
+        }
+    }
+
     static long defaultRequestTimeoutMs(String method, String url) {
-        return isPlaybackInfoRequest(method, url) ? PLAYBACK_INFO_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
+        if (isPlaybackInfoRequest(method, url)) return PLAYBACK_INFO_REQUEST_TIMEOUT_MS;
+        return isItemDetailsRequest(method, url) ? ITEM_DETAILS_REQUEST_TIMEOUT_MS : REQUEST_TIMEOUT_MS;
     }
 
     static int readTimeoutMs(String method, String url, long deadlineMs) {

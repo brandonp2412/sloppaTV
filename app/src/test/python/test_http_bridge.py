@@ -212,7 +212,10 @@ public final class HttpBridgeHarness {
             ("POST", "/Items/123/PlaybackInfo?UserId=42", [95_000, 90_000, 100]),
             ("GET", "/items/123/playbackinfo", [95_000, 90_000, 100]),
             ("POST", "/Items/123/PlaybackInfoExtra", [45_000, 30_000, 100]),
-            ("GET", "/Users/123/Items/456", [45_000, 30_000, 100]),
+            ("GET", "/Users/123/Items/456", [15_000, 15_000, 100]),
+            ("GET", "/users/123/items/456?Fields=Overview", [15_000, 15_000, 100]),
+            ("GET", "/Users/123/Items/456/PlaybackInfo", [95_000, 90_000, 100]),
+            ("POST", "/Users/123/Items/456", [45_000, 30_000, 100]),
             ("POST", "/System/Info", [45_000, 30_000, 100]),
         ]
         for method, path, expected in cases:
