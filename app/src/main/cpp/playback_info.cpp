@@ -230,9 +230,21 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         // backwards to an already attempted version (A -> B -> A loop).
         for (auto candidate = std::next(std::find(candidates.begin(), candidates.end(), source));
              candidate != candidates.end(); ++candidate) {
-            if (!scalarValueOr(**candidate, "SupportsDirectPlay", false)) continue;
             const std::string id = scalarValueOr(**candidate, "Id", std::string{});
             if (id.empty() || id == offer.mediaSourceId) continue;
+            const std::string transcodingUrl = scalarValueOr(**candidate, "TranscodingUrl", std::string{});
+            // A viable backup may require DirectStream or transcoding. Applying
+            // the same route policy as selection avoids skipping the only usable
+            // fallback when DirectPlay is unavailable on the alternate source.
+            if (choosePlaybackServerRoute(
+                    {
+                        .supportsDirectPlay = scalarValueOr(**candidate, "SupportsDirectPlay", false),
+                        .supportsDirectStream = scalarValueOr(**candidate, "SupportsDirectStream", false),
+                        .supportsTranscoding = scalarValueOr(**candidate, "SupportsTranscoding", false),
+                        .transcodingUrl = transcodingUrl,
+                    },
+                    overrides) == PlaybackServerRoute::Unavailable)
+                continue;
             offer.alternativeMediaSourceId = id;
             break;
         }

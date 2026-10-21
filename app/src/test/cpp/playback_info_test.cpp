@@ -226,6 +226,25 @@ int main() {
                                                      -1, kSubtitleOffIndex);
     assert(mixedSources.ok && mixedSources.value.mediaSourceId == "debrid-cached");
     assert(mixedSources.value.alternativeMediaSourceId == "torrent-seeded");
+    // A fallback must include transcode-only or direct-stream-only versions,
+    // while skipping versions with no viable route or no transcode URL.
+    const std::string routeFallbacks = R"({"MediaSources":[
+        {"Id":"first","SupportsDirectPlay":true},
+        {"Id":"unplayable"},
+        {"Id":"missing-url","SupportsTranscoding":true},
+        {"Id":"transcode-backup","SupportsTranscoding":true,"TranscodingUrl":"/Videos/item/master.m3u8"},
+        {"Id":"direct-stream-backup","SupportsDirectStream":true,"TranscodingUrl":"/Videos/item/stream.m3u8"},
+        {"Id":"last-direct","SupportsDirectPlay":true}
+    ]})";
+    const auto primary = parsePlaybackInfoOffer(routeFallbacks, -1, kSubtitleOffIndex);
+    const auto transcodeBackup =
+        parsePlaybackInfoOffer(routeFallbacks, -1, kSubtitleOffIndex, {}, "transcode-backup");
+    const auto directStreamBackup =
+        parsePlaybackInfoOffer(routeFallbacks, -1, kSubtitleOffIndex, {}, "direct-stream-backup");
+    assert(primary.ok && primary.value.alternativeMediaSourceId == "transcode-backup");
+    assert(transcodeBackup.ok && transcodeBackup.value.mediaSourceId == "transcode-backup" &&
+           transcodeBackup.value.alternativeMediaSourceId == "direct-stream-backup");
+    assert(directStreamBackup.ok && directStreamBackup.value.alternativeMediaSourceId == "last-direct");
     const std::string multilingual = R"({"MediaSources":[{
         "Id":"fallback-file","SupportsDirectPlay":true,
         "DefaultAudioStreamIndex":1,
