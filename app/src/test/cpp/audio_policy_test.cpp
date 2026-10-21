@@ -105,6 +105,14 @@ int main() {
     assert(audioIndexForQueuePreference(audioTracks, std::nullopt) == -1);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"eng"}) == 3);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"ENG"}) == 3);
+    // Explicit English survives a different source's ISO-639-1/name metadata.
+    const std::vector<AudioPreferenceCandidate> fallbackTracks{{1, "ru"}, {4, "en"}, {6, "English"}};
+    assert(audioIndexForQueuePreference(fallbackTracks, std::optional<std::string>{"eng"}) == 4);
+    assert(audioIndexForQueuePreference(fallbackTracks, std::optional<std::string>{"ENG"}) == 4);
+    assert(audioIndexForQueuePreference(fallbackTracks, std::optional<std::string>{"rus"}) == 1);
+    assert(audioLanguageEquals("GER", "deu"));
+    assert(audioLanguageEquals("fre", "fra"));
+    assert(!audioLanguageEquals("rus", "eng"));
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"jpn"}) == 1);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{"fra"}) == -1);
     assert(audioIndexForQueuePreference(audioTracks, std::optional<std::string>{""}) == -1);

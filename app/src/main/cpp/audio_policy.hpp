@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 struct AudioCodecCapabilities {
@@ -75,10 +76,28 @@ inline std::string normalizeAudioLanguage(std::string language) {
     return language;
 }
 
+inline std::string canonicalAudioLanguage(std::string language) {
+    language = normalizeAudioLanguage(std::move(language));
+    // Jellyfin and provider fallbacks mix ISO 639-1, ISO 639-2, and names.
+    // Canonicalize before carrying a language preference across media versions.
+    if (language == "en" || language == "english") return "eng";
+    if (language == "ja" || language == "japanese") return "jpn";
+    if (language == "es" || language == "spanish") return "spa";
+    if (language == "fr" || language == "fre" || language == "french") return "fra";
+    if (language == "de" || language == "ger" || language == "german") return "deu";
+    if (language == "it" || language == "italian") return "ita";
+    if (language == "pt" || language == "portuguese") return "por";
+    if (language == "ru" || language == "russian") return "rus";
+    if (language == "ko" || language == "korean") return "kor";
+    if (language == "zh" || language == "chi" || language == "chinese") return "zho";
+    if (language == "nl" || language == "dut" || language == "dutch") return "nld";
+    if (language == "sv" || language == "swedish") return "swe";
+    if (language == "mi" || language == "mao" || language == "maori") return "mri";
+    return language;
+}
+
 inline bool audioLanguageEquals(std::string_view left, std::string_view right) {
-    return left.size() == right.size() &&
-           std::equal(left.begin(), left.end(), right.begin(),
-                      [](unsigned char a, unsigned char b) { return std::tolower(a) == std::tolower(b); });
+    return canonicalAudioLanguage(std::string(left)) == canonicalAudioLanguage(std::string(right));
 }
 
 inline int audioIndexForQueuePreference(const std::vector<AudioPreferenceCandidate>& audios,
