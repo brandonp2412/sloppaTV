@@ -145,6 +145,16 @@ int main() {
     state.setMediaSegments({{"Intro", 0, 9LL * 60 * 10000000}});
     assert(state.activeSkippableSegment(10LL * 10000000) == nullptr);
 
+    // Bad Outro/Recap markers can also point beyond this episode; never seek past EOF.
+    state.setMediaSegments({{"Outro", 17LL * 60 * 10000000, 19LL * 60 * 10000000}});
+    assert(state.activeSkippableSegment(17LL * 60 * 10000000) == nullptr);
+    state.setMediaSegments({{"Recap", -10'000'000, 60'000'000}});
+    assert(state.activeSkippableSegment(0) == nullptr);
+    state.setMediaSegments({{"Outro", 60'000'000, 10'000'000}});
+    assert(state.activeSkippableSegment(20'000'000) == nullptr);
+    state.setMediaSegments({{"Outro", 17LL * 60 * 10000000, 18LL * 60 * 10000000}});
+    assert(state.activeSkippableSegment(17LL * 60 * 10000000) != nullptr);
+
     state.requestHomeRefresh();
     assert(state.homeRefreshRequested());
     assert(state.takeHomeRefreshRequest());

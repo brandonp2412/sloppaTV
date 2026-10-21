@@ -62,6 +62,11 @@ public:
 
     [[nodiscard]] const JellyfinMediaSegment* activeSkippableSegment(int64_t positionTicks) const {
         for (const auto& segment : mediaSegments_) {
+            // Bad external markers must not seek outside this episode's runtime.
+            if (segment.startTicks < 0 || segment.endTicks <= segment.startTicks ||
+                (activeItem_.runtimeTicks > 0 && segment.endTicks > activeItem_.runtimeTicks)) {
+                continue;
+            }
             if (segment.endTicks - segment.startTicks < 30000000) continue;
             // External intro markers can be for a different cut or episode.
             // Do not offer a skip that would jump through most of this video.
