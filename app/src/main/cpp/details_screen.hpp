@@ -194,7 +194,7 @@ inline std::vector<ItemMenuAction> itemMenuActionIdsFor(const JellyfinItem& item
     result.push_back(ItemMenuAction::TogglePlayed);
     result.push_back(ItemMenuAction::ToggleHomeVisibility);
     result.push_back(ItemMenuAction::RefreshMetadata);
-    if (item.canDelete) result.push_back(ItemMenuAction::DeleteMedia);
+    result.push_back(ItemMenuAction::DeleteMedia);
     result.push_back(ItemMenuAction::Back);
     return result;
 }

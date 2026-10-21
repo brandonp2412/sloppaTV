@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <fstream>
 #include <iterator>
+#include <unordered_set>
 #include <string_view>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -148,8 +149,34 @@ public:
                                                [&](const JellyfinItem& item) { return item.id == entry->item.id; });
             if (existing == resume->items.end()) resume->items.insert(resume->items.begin(), entry->item);
         }
-        std::erase_if(home.rows,
-                      [](const JellyfinHomeRow& row) { return row.title == "Continue Watching" && row.items.empty(); });
+        bool emptiedNextUp = false;
+        const auto current = std::find_if(home.rows.begin(), home.rows.end(),
+                                          [](const JellyfinHomeRow& row) { return row.title == "Continue Watching"; });
+        if (current != home.rows.end()) {
+            std::unordered_set<std::string> ids;
+            std::unordered_set<std::string> seriesIds;
+            std::unordered_set<std::string> seriesNames;
+            for (const auto& item : current->items) {
+                if (!item.id.empty()) ids.insert(item.id);
+                if (item.type != "Episode") continue;
+                if (!item.seriesId.empty()) seriesIds.insert(item.seriesId);
+                if (!item.seriesName.empty()) seriesNames.insert(item.seriesName);
+            }
+            for (auto& row : home.rows) {
+                if (row.title != "Next Up") continue;
+                const size_t oldSize = row.items.size();
+                std::erase_if(row.items, [&](const JellyfinItem& item) {
+                    return (!item.id.empty() && ids.contains(item.id)) ||
+                           (item.type == "Episode" &&
+                            ((!item.seriesId.empty() && seriesIds.contains(item.seriesId)) ||
+                             (!item.seriesName.empty() && seriesNames.contains(item.seriesName))));
+                });
+                emptiedNextUp |= oldSize > 0 && row.items.empty();
+            }
+        }
+        std::erase_if(home.rows, [emptiedNextUp](const JellyfinHomeRow& row) {
+            return (row.title == "Continue Watching" || (emptiedNextUp && row.title == "Next Up")) && row.items.empty();
+        });
         // Prioritize active viewing over browsing and hypothetical next episodes.
         std::stable_sort(home.rows.begin(), home.rows.end(), [](const JellyfinHomeRow& a, const JellyfinHomeRow& b) {
             const auto rank = [](const std::string& title) {

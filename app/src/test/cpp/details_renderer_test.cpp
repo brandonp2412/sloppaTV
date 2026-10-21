@@ -77,6 +77,7 @@ struct Harness {
     FakeRenderer renderer;
     bool backdrop = false;
     bool logo = false;
+    float titleFitWidth = 0.0f;
     int backdropCalls = 0;
     int artworkCalls = 0;
     int placeholderCalls = 0;
@@ -136,7 +137,10 @@ struct Harness {
                 assert(item.id == detail.id);
                 return logo;
             },
-            [](std::string_view value, float, float, int) { return std::string(value); },
+            [&](std::string_view value, float, float width, int) {
+                if (value == "The Tatami Time Machine Blues") titleFitWidth = width;
+                return std::string(value);
+            },
             [](const JellyfinItem& item) {
                 if (item.type != "Episode") return std::string();
                 return std::string("S1E2");
@@ -244,6 +248,11 @@ int main() {
     series.id = "series";
     series.name = "Example Series";
     series.type = "Series";
+
+    series.name = "The Tatami Time Machine Blues";
+    Harness titleHarness;
+    titleHarness.render(series, movieState, movieActions, DetailsRenderConfig{});
+    assert(titleHarness.titleFitWidth > 1500.0f);
 
     JellyfinItem season;
     season.id = "season-1";

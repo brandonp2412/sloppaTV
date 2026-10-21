@@ -15,6 +15,7 @@ struct ItemMenuRenderState {
     int deleteConfirmationSelection = 1;
     int itemMenuSelection = 0;
     bool seerrRequest = false;
+    bool canDelete = false;
     std::string_view itemName;
     std::string_view itemType;
     std::string_view externalStatus;
@@ -122,13 +123,19 @@ void renderItemMenuScreen(RendererLike& renderer, float logicalWidth, float logi
         const float y = firstActionY + static_cast<float>(index) * rowStep;
         const bool focused = state.itemMenuSelection == static_cast<int>(index);
         const bool destructive = actions[index] == "DELETE MEDIA" || actions[index] == "DELETE REQUEST";
+        const bool disabled = actions[index] == "DELETE MEDIA" && !state.canDelete;
         const auto bounds = drawFocusedSurface(panelX + 30.0f, y, panelWidth - 60.0f, 52.0f, focused,
-                                               focused && !destructive, destructive);
+                                               focused && !destructive && !disabled, destructive && !disabled);
         const auto glyph = ui_icons::forLabel(actions[index]).value_or(ui_icons::Glyph::More);
         renderer.icon(glyph, bounds[0] + 22.0f, bounds[1] + (bounds[3] - 28.0f) * 0.5f, 28.0f,
-                      destructive && !focused ? style.muted : style.text);
+                      disabled                  ? style.tertiary
+                      : destructive && !focused ? style.muted
+                                                : style.text);
         renderer.textVerticallyCentered(bounds[0] + 64.0f, bounds[1], bounds[3], 1.70f, materialLabel(actions[index]),
-                                        destructive && !focused ? style.muted : style.text, bounds[2] - 88.0f);
+                                        disabled                  ? style.tertiary
+                                        : destructive && !focused ? style.muted
+                                                                  : style.text,
+                                        bounds[2] - 88.0f);
     }
     drawCentered(panelX + 40.0f, panelY + panelHeight - 56.0f, panelWidth - 80.0f, 44.0f, 1.30f,
                  "OK selects   |   Back closes", style.tertiary, 10.0f, 3.0f);

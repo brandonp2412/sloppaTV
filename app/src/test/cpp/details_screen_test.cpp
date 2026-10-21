@@ -113,6 +113,12 @@ int main() {
     menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Activate, static_cast<int>(menu.size()));
     assert(menuCommand.type == ItemMenuScreenCommandType::ActivateAction);
 
+    // An unfinished home row has no CanDelete field yet. Keep the action slot stable.
+    JellyfinItem pending = series;
+    pending.canDelete = false;
+    const auto pendingMenu = state.itemMenuActions(pending, false, true, true, false);
+    assert(pendingMenu == menu);
+
     const auto seerrMenu = state.itemMenuActions(series, true, false, false, false);
     assert(seerrMenu.size() == 2);
     assert(seerrMenu[0] == "DELETE REQUEST");

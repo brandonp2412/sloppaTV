@@ -214,6 +214,7 @@ void renderItemMenuPresentation(RendererLike& renderer, UiLike& ui, const Jellyf
             .deleteConfirmationSelection = detailsState.deleteConfirmationSelection(),
             .itemMenuSelection = detailsState.itemMenuSelection(),
             .seerrRequest = isSeerrItem(detail),
+            .canDelete = detail.canDelete,
             .itemName = detail.name,
             .itemType = detail.type,
             .externalStatus = detail.externalStatus,

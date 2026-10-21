@@ -84,11 +84,12 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
     constexpr float contentWidth = 920.0f;
     const bool episode = detail.type == "Episode";
     const std::string mainTitle = episode && !detail.seriesName.empty() ? detail.seriesName : detail.name;
+    const float titleWidth = style.canvasWidth - contentX - 120.0f;
     const bool hasLogo = drawLogo(detail, contentX, 118.0f, 700.0f, 132.0f);
     if (!hasLogo) {
         renderer.text(contentX, 132.0f, 6.0f,
-                      fitTextLines(mainTitle.empty() ? "Loading…" : mainTitle, 6.0f, contentWidth, 1), style.text,
-                      contentWidth);
+                      fitTextLines(mainTitle.empty() ? "Loading…" : mainTitle, 6.0f, titleWidth, 1), style.text,
+                      titleWidth);
     }
 
     const std::string episodeNumber = episodeNumberLabel(detail);

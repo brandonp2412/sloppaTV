@@ -201,6 +201,7 @@ DetailsNavigationAction DetailsNavigationController::handleItemMenu(DetailsScree
 
     const auto action = state.selectedItemMenuAction(item, seerrRequest, hasExternalPlayer, hasQueue);
     if (!action) return {};
+    if (*action == ItemMenuAction::DeleteMedia && !item.canDelete) return {};
     if (*action == ItemMenuAction::DeleteMedia || *action == ItemMenuAction::DeleteRequest) {
         state.setDeleteConfirmation(true);
         return {};

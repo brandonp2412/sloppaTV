@@ -96,6 +96,22 @@ int main() {
         DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Activate, movie, false, false, false);
     assert(navigation.type == DetailsNavigationActionType::ConfirmDelete);
 
+    // The reserved delete row is not actionable until the item detail grants permission.
+    state.beginItemMenu();
+    JellyfinItem pending = movie;
+    pending.canDelete = false;
+    for (int i = 0; i < 4; ++i)
+        (void)DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Down, pending, false, false,
+                                                          false);
+    navigation = DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Activate, pending, false,
+                                                             false, false);
+    assert(navigation.type == DetailsNavigationActionType::None);
+    assert(!state.deleteConfirmation());
+    navigation =
+        DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Activate, movie, false, false, false);
+    assert(navigation.type == DetailsNavigationActionType::None);
+    assert(state.deleteConfirmation());
+
     state.beginSeries(series);
     state.setSeasons({season});
     navigation = DetailsNavigationController::handleSeasons(state, DetailsNavigationKey::Activate, 5);

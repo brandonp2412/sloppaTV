@@ -144,6 +144,18 @@ int main() {
     assert(has(menu.renderer.verticalTexts, "DELETE REQUEST"));
     assert(has(menu.centered, "OK selects   |   Back closes"));
 
+    Harness pending;
+    Harness permitted;
+    ItemMenuRenderState pendingState;
+    pendingState.itemMenuSelection = 1;
+    pending.render(pendingState, {"FAVORITE", "DELETE MEDIA", "BACK"}, style);
+    pendingState.canDelete = true;
+    permitted.render(pendingState, {"FAVORITE", "DELETE MEDIA", "BACK"}, style);
+    assert(pending.modalHeights == permitted.modalHeights);
+    assert(pending.renderer.verticalColors[1] == style.tertiary);
+    assert(!pending.surfaces[1].destructive);
+    assert(permitted.surfaces[1].destructive);
+
     Harness fallback;
     fallback.render(
         ItemMenuRenderState{
