@@ -169,6 +169,9 @@ int main() {
         const auto failed = DetailsCompletionController::apply(completion, true, true, detail);
         assert(failed.finishLoading);
         assert(failed.error == "DETAILS: missing");
+        assert(detail.type == "Unavailable");
+        assert(detail.name == "movie-1");
+        assert(detailActionIdsFor(detail) == std::vector<DetailsAction>{DetailsAction::Back});
 
         JellyfinItem deepLink;
         deepLink.id = "movie-1";
