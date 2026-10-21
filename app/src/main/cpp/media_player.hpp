@@ -116,6 +116,8 @@ private:
     mutable PlayerStatus cachedStatus_ = PlayerStatus::Idle;
     mutable bool startedPlayback_ = false;
     mutable double readinessPositionSeconds_ = -1.0;
+    mutable double lastClockPositionSeconds_ = -1.0;
+    mutable std::chrono::steady_clock::time_point lastClockAdvance_{};
     mutable int cachedVideoWidth_ = 0;
     mutable int cachedVideoHeight_ = 0;
     mutable std::string cachedSubtitleText_;
