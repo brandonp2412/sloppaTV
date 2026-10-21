@@ -221,7 +221,6 @@ private:
     int cacheAheadMs_ = 0;
     int lastPositionMs_ = -1;
     bool playbackAdvanced_ = false;
-    bool playbackAdvanced_ = false;
     TimePoint phaseStarted_{};
     TimePoint lastAdvancing_{};
     RemuxPrefetchStatus remotePrefetch_{};
