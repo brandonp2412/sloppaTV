@@ -282,6 +282,20 @@ int main() {
     assert(state.episodes().size() == 1);
     assert(state.episodeSelection() == 0);
 
+    state.setEpisodes({episodeOne, episodeTwo});
+    episodeCommand = state.handleEpisodesInput(DetailGridScreenInput::Right, 5);
+    assert(episodeCommand.type == DetailGridScreenCommandType::None);
+    state.beginDetails(true);
+    assert(state.seriesDetail().id == "series");
+    assert(state.seasons().size() == 2);
+    assert(state.selectedSeason().id == "season-2");
+    assert(state.episodes().size() == 2);
+    assert(state.selectedEpisodeItem()->id == "episode-2");
+    state.beginDetails();
+    assert(state.seriesDetail().id.empty());
+    assert(state.seasons().empty());
+    assert(state.episodes().empty());
+
     state.reset();
     assert(state.similar().empty());
     assert(state.personItems().empty());
