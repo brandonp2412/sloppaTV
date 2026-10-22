@@ -977,8 +977,8 @@ private:
             return;
         case PlaybackHostEffectType::SeekWithTrickplay:
             requestTrickplayPreview(effect.positionMs);
-            playbackRuntime_.seekTo(effect.positionMs);
-            playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
+            if (playbackRuntime_.seekTo(playbackStreamAsync_, effect.positionMs))
+                playbackRuntime_.reportProgress(playbackTelemetryAsync_, screen_ == Screen::Player, false);
             return;
         case PlaybackHostEffectType::PlayQueueIndex:
             playbackRequests_.playQueued(effect.queueIndex, effect.restartCurrent, effect.replacingCompleted);

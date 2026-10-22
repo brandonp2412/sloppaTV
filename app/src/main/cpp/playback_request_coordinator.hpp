@@ -136,7 +136,7 @@ public:
             rejectPlaybackResolution("PLAY ALL COULD NOT BE STARTED");
     }
 
-    void beginPlayback() {
+    void beginPlayback(bool fromBeginning = false) {
         if (loading_ || details_.item().id.empty()) return;
         const PlaybackUserSelectionPlan selection = playback_.beginUserPlaybackSelection(queue_, details_.item().id);
         if (selection.resetQueue) queue_.reset();
@@ -144,7 +144,7 @@ public:
         error_.clear();
         prepareInitialPlayer();
         if (!resolution_.resolveSelection(session_, details_.item(), runtime_.resolutionOptions(),
-                                          playbackEpoch_.begin(), selection.queuedPlaybackIndex))
+                                          playbackEpoch_.begin(), selection.queuedPlaybackIndex, fromBeginning))
             rejectPlaybackResolution("PLAYBACK COULD NOT BE STARTED");
     }
 

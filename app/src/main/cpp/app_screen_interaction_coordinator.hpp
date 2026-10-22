@@ -181,7 +181,10 @@ public:
         case DetailsScreenHostAction::None:
             break;
         case DetailsScreenHostAction::BeginPlayback:
-            beginPlayback();
+            beginPlayback(false);
+            break;
+        case DetailsScreenHostAction::BeginPlaybackFromBeginning:
+            beginPlayback(true);
             break;
         case DetailsScreenHostAction::BeginSeriesPlayAll:
             playbackRequests_.beginSeriesPlayAll();
@@ -341,12 +344,12 @@ private:
         return {};
     }
 
-    void beginPlayback() {
+    void beginPlayback(bool fromBeginning) {
         if (loading_ || detailsFlow_.item().id.empty()) return;
         if (const auto player = settingsFlow_.selectedExternalPlayer())
             externalPlayback_.prepare(*player);
         else {
-            playbackRequests_.beginPlayback();
+            playbackRequests_.beginPlayback(fromBeginning);
             openPendingRemuxPlayer();
         }
     }

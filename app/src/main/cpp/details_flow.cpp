@@ -98,6 +98,8 @@ DetailsFlowCommand DetailsFlow::handleDetails(DetailsNavigationKey key, bool can
         switch (*navigation.detailAction) {
         case DetailsAction::StartPlayback:
             return command(DetailsFlowAction::BeginPlayback);
+        case DetailsAction::PlayFromBeginning:
+            return command(DetailsFlowAction::BeginPlaybackFromBeginning);
         case DetailsAction::OpenEpisodes:
             return command(DetailsFlowAction::OpenSeasons);
         case DetailsAction::PlayAll:

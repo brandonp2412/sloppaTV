@@ -28,6 +28,17 @@ int main() {
     assert(coordinator.activeTargetAvailable());
     assert(!coordinator.activeTargetUsesDirectPlay());
     assert(coordinator.session().lastPlaybackSummary() == "DirectStream");
+    coordinator.session().activeTarget().startTicks = 2'400'000'000; // Resumed at 4 minutes.
+    assert(coordinator.playerTimelineBaseMs() == 240000);
+    assert(coordinator.logicalPositionFromPlayerPosition(0) == 240000);
+    assert(coordinator.playerPositionFromLogicalPosition(0) == 0);
+    assert(coordinator.seekRequiresStreamRestart(0));
+    assert(coordinator.seekRequiresStreamRestart(239999));
+    assert(!coordinator.seekRequiresStreamRestart(240000));
+    assert(!coordinator.seekRequiresStreamRestart(260000));
+    coordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
+    assert(!coordinator.seekRequiresStreamRestart(0));
+    coordinator.session().activeTarget() = coordinatedTarget;
     assert(coordinator.tickPlan(false, true, 35000, now).reportPlaybackStart);
     assert(coordinator.telemetry().markPlaybackStartReported());
     const auto coordinatedRelease = coordinator.releaseContext(true, false, true, 12345);

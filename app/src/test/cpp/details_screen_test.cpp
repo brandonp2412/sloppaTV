@@ -39,6 +39,14 @@ int main() {
     episode.type = "Episode";
     const auto episodeActions = detailActionIdsFor(episode, true);
     assert(std::find(episodeActions.begin(), episodeActions.end(), DetailsAction::AddToSeerr) == episodeActions.end());
+    episode.positionTicks = 2'400'000'000;
+    const auto resumedActions = detailActionIdsFor(episode);
+    assert(resumedActions[0] == DetailsAction::StartPlayback);
+    assert(resumedActions[1] == DetailsAction::PlayFromBeginning);
+    assert(state.actions(episode, false)[0] == "RESUME");
+    assert(state.actions(episode, false)[1] == "PLAY");
+    episode.positionTicks = 0;
+    assert(detailActionIdsFor(episode)[1] != DetailsAction::PlayFromBeginning);
 
     state.moveAction(1, static_cast<int>(actions.size()));
     assert(state.actionSelection() == 1);

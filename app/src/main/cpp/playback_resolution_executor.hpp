@@ -93,10 +93,11 @@ public:
     }
 
     bool resolveSelection(JellyfinSession session, JellyfinItem selected, PlaybackResolutionOptions options,
-                          uint64_t generation, int queuedPlaybackIndex) {
+                          uint64_t generation, int queuedPlaybackIndex, bool fromBeginning = false) {
         return tasks_.submit([this, session = std::move(session), selected = std::move(selected),
-                              options = std::move(options), generation, queuedPlaybackIndex]() mutable {
+                              options = std::move(options), generation, queuedPlaybackIndex, fromBeginning]() mutable {
             JellyfinItem playable = selected;
+            if (fromBeginning) playable.positionTicks = 0;
             if (selected.type != "Series") {
                 // Deep links and some cached navigation entries can carry only an item ID.
                 // Hydrate the selection before PlaybackInfo so Remux sees the real media
@@ -107,7 +108,8 @@ public:
                     // The server item can lag a just-reported local stop. Keep the
                     // newest known resume point instead of replacing it with zero
                     // (or an older position) during hydration.
-                    playable.positionTicks = std::max(playable.positionTicks, selected.positionTicks);
+                    playable.positionTicks =
+                        fromBeginning ? 0 : std::max(playable.positionTicks, selected.positionTicks);
                 }
             }
             if (playable.type == "Series") {

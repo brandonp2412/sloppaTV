@@ -466,6 +466,10 @@ public:
         return target.playMethod == PlaybackMethod::DirectPlay ? 0 : playbackPositionMsFromTicks(target.startTicks);
     }
 
+    [[nodiscard]] bool seekRequiresStreamRestart(int logicalPositionMs) const {
+        return !activeTargetUsesDirectPlay() && std::max(0, logicalPositionMs) < playerTimelineBaseMs();
+    }
+
     [[nodiscard]] int logicalPositionFromPlayerPosition(int playerPositionMs) const {
         return clampSeekPositionMs(static_cast<int64_t>(playerTimelineBaseMs()) + std::max(0, playerPositionMs));
     }

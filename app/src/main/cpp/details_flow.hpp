@@ -13,6 +13,7 @@ enum class DetailsFlowAction {
     OpenDetails,
     OpenEpisodes,
     BeginPlayback,
+    BeginPlaybackFromBeginning,
     OpenSeasons,
     BeginSeriesPlayAll,
     ToggleFavorite,

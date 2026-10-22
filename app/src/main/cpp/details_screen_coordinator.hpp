@@ -26,6 +26,7 @@
 enum class DetailsScreenHostAction {
     None,
     BeginPlayback,
+    BeginPlaybackFromBeginning,
     BeginSeriesPlayAll,
     SearchSeerr,
     DeleteSeerrRequest,
@@ -226,6 +227,9 @@ private:
             return;
         case DetailsFlowAction::BeginPlayback:
             effects.action = DetailsScreenHostAction::BeginPlayback;
+            return;
+        case DetailsFlowAction::BeginPlaybackFromBeginning:
+            effects.action = DetailsScreenHostAction::BeginPlaybackFromBeginning;
             return;
         case DetailsFlowAction::OpenSeasons:
             openSeasons();

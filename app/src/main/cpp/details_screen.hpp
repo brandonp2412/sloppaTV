@@ -51,6 +51,7 @@ struct DetailsScreenCommand {
 
 enum class DetailsAction {
     StartPlayback,
+    PlayFromBeginning,
     OpenEpisodes,
     PlayAll,
     ToggleFavorite,
@@ -63,8 +64,9 @@ enum class DetailsAction {
 
 inline std::vector<DetailsAction> detailActionIdsFor(const JellyfinItem& item, bool canAddToSeerr = false) {
     std::vector<DetailsAction> result;
-    result.reserve(9);
+    result.reserve(10);
     result.push_back(DetailsAction::StartPlayback);
+    if (item.type != "Series" && item.positionTicks > 0) result.push_back(DetailsAction::PlayFromBeginning);
     if (item.type == "Series") {
         result.push_back(DetailsAction::OpenEpisodes);
         result.push_back(DetailsAction::PlayAll);
@@ -85,6 +87,8 @@ inline std::string detailsActionLabel(DetailsAction action, const JellyfinItem& 
                    ? "KEEP WATCHING"
                    : (item.type == "Series" ? ((item.played || item.positionTicks > 0) ? "PLAY NEXT" : "PLAY")
                                             : (item.positionTicks > 0 ? "RESUME" : "PLAY"));
+    case DetailsAction::PlayFromBeginning:
+        return "PLAY";
     case DetailsAction::OpenEpisodes:
         return "EPISODES";
     case DetailsAction::PlayAll:

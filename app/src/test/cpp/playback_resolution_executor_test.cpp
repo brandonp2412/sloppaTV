@@ -182,6 +182,10 @@ int main() {
     assert(movieCompletion.playable.positionTicks == movieSelection.positionTicks);
     assert(client.lastResolvedPositionTicks == movieSelection.positionTicks);
     assert(client.detailRequests == detailRequestsBeforeMovie + 1);
+    assert(executor.resolveSelection(session, movieSelection, options, 7, -1, true));
+    const auto& restartedMovie = std::get<BeginPlaybackCompletion>(completions.events.back());
+    assert(restartedMovie.playable.positionTicks == 0);
+    assert(client.lastResolvedPositionTicks == 0);
 
     JellyfinItem seriesSelection;
     seriesSelection.id = "series-1";

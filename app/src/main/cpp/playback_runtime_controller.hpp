@@ -330,14 +330,21 @@ public:
         return PlaybackRuntimeNotice::None;
     }
 
-    void seekTo(int positionMs) {
+    template <typename StreamExecutor> bool seekTo(StreamExecutor& stream, int positionMs) {
         const int targetMs = std::max(0, positionMs);
+        if (coordinator_.seekRequiresStreamRestart(targetMs)) {
+            // The server stream begins at the resume offset; mpv cannot seek before its first frame.
+            restartAt(stream, targetMs, coordinator_.tracks().selectedAudioServerIndex(),
+                      coordinator_.tracks().selectedSubtitleServerIndex());
+            return false; // Stream restart reports progress once its new timeline is ready.
+        }
         player_.seekTo(coordinator_.playerPositionFromLogicalPosition(targetMs));
         screenState_.beginSeek(targetMs, std::chrono::steady_clock::now());
+        return true;
     }
 
-    template <typename TelemetryExecutor>
-    bool skipActiveMediaSegment(TelemetryExecutor& telemetry, bool playerScreenActive) {
+    template <typename StreamExecutor, typename TelemetryExecutor>
+    bool skipActiveMediaSegment(StreamExecutor& stream, TelemetryExecutor& telemetry, bool playerScreenActive) {
         const auto* segment = coordinator_.activeSkippableSegment(screenState_.positionMs());
         const auto& activeItem = coordinator_.session().activeItem();
         if (segment && canDisableSkipForSegmentType(segment->type) &&
@@ -346,8 +353,7 @@ public:
         }
         const auto targetMs = coordinator_.activeSkippableSegmentEndMs(screenState_.positionMs());
         if (!targetMs) return false;
-        seekTo(*targetMs);
-        reportProgress(telemetry, playerScreenActive, false);
+        if (seekTo(stream, *targetMs)) reportProgress(telemetry, playerScreenActive, false);
         return true;
     }
 
@@ -515,7 +521,7 @@ public:
             return PlaybackHostEffect::adjacentEpisode(1);
         case PlayerScreenCommandType::ActivatePlayback:
             if (!shouldHandlePauseToggle(repeatCount)) return {};
-            if (skipActiveMediaSegment(telemetry, playerScreenActive)) return {};
+            if (skipActiveMediaSegment(stream, telemetry, playerScreenActive)) return {};
             [[fallthrough]];
         case PlayerScreenCommandType::TogglePause:
             if (!shouldHandlePauseToggle(repeatCount)) return {};
