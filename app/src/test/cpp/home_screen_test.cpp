@@ -273,6 +273,9 @@ int main() {
     tatami.id = "tatami-s1e1";
     tatami.type = "Episode";
     tatami.name = "Tatami Galaxy";
+    tatami.seasonName = "Season 1";
+    tatami.parentIndexNumber = 1;
+    tatami.indexNumber = 1;
     tatami.runtimeTicks = 1000;
     tatami.played = true; // Rewatch of an episode marked Watched on Remux.
     const auto now = HomeResumeOverlay::Clock::now();
@@ -309,6 +312,9 @@ int main() {
     assert(restartedHome.rows.size() == 1);
     assert(restartedHome.rows[0].title == "Continue Watching");
     assert(restartedHome.rows[0].items[0].id == "tatami-s1e1");
+    assert(restartedHome.rows[0].items[0].seasonName == "Season 1");
+    assert(restartedHome.rows[0].items[0].parentIndexNumber == 1);
+    assert(restartedHome.rows[0].items[0].indexNumber == 1);
     std::filesystem::remove_all(directory);
 
     JellyfinHomeData otherHome;

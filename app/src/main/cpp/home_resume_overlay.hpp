@@ -40,6 +40,9 @@ public:
                 entry.item.name = saved.value("name", std::string{});
                 entry.item.seriesId = saved.value("seriesId", std::string{});
                 entry.item.seriesName = saved.value("seriesName", std::string{});
+                entry.item.seasonName = saved.value("seasonName", std::string{});
+                entry.item.parentIndexNumber = saved.value("parentIndexNumber", -1);
+                entry.item.indexNumber = saved.value("indexNumber", -1);
                 entry.item.seriesPrimaryImageTag = saved.value("seriesPrimaryImageTag", std::string{});
                 entry.item.imageTag = saved.value("imageTag", std::string{});
                 entry.item.thumbTag = saved.value("thumbTag", std::string{});
@@ -72,6 +75,9 @@ public:
                 {"name", entry.item.name},
                 {"seriesId", entry.item.seriesId},
                 {"seriesName", entry.item.seriesName},
+                {"seasonName", entry.item.seasonName},
+                {"parentIndexNumber", entry.item.parentIndexNumber},
+                {"indexNumber", entry.item.indexNumber},
                 {"seriesPrimaryImageTag", entry.item.seriesPrimaryImageTag},
                 {"imageTag", entry.item.imageTag},
                 {"thumbTag", entry.item.thumbTag},
