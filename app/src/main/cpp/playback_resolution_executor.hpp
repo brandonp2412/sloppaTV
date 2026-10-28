@@ -1,6 +1,7 @@
 #pragma once
 
 #include "playback_resolver.hpp"
+#include "remux_startup_retry.hpp"
 
 #include <cstdint>
 #include <utility>
@@ -49,7 +50,12 @@ public:
         return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
                               generation, originScreen = std::move(originScreen), index, previousQueueIndex,
                               replacingPlayer, startFromBeginning]() mutable {
-            auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options, startFromBeginning);
+            auto resolved = awaitRemuxStartup(
+                [&] { return resolvePreferredPlayback(client_, session, item, options, startFromBeginning); },
+                [&] { return epoch_.active(generation); },
+                [&](const PendingRemuxPlayback& pending) {
+                    completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
+                });
             if (!epoch_.active(generation)) return;
             completions_.push(QueuedPlaybackResolutionCompletion<Origin>{
                 .generation = generation,
@@ -67,7 +73,12 @@ public:
                            uint64_t generation) {
         return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
                               generation]() mutable {
-            auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options);
+            auto resolved = awaitRemuxStartup(
+                [&] { return resolvePreferredPlayback(client_, session, item, options); },
+                [&] { return epoch_.active(generation); },
+                [&](const PendingRemuxPlayback& pending) {
+                    completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
+                });
             if (!epoch_.active(generation)) return;
             completions_.push(PlayerItemPlaybackCompletion{
                 .generation = generation,
@@ -81,7 +92,12 @@ public:
                          uint64_t generation, int queuedNextIndex) {
         return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
                               generation, queuedNextIndex]() mutable {
-            auto resolved = resolvePreferredPlayback(client_, session, std::move(item), options);
+            auto resolved = awaitRemuxStartup(
+                [&] { return resolvePreferredPlayback(client_, session, item, options); },
+                [&] { return epoch_.active(generation); },
+                [&](const PendingRemuxPlayback& pending) {
+                    completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
+                });
             if (!epoch_.active(generation)) return;
             completions_.push(AutoplayPlaybackCompletion{
                 .generation = generation,
@@ -142,9 +158,16 @@ public:
                                                      options.subtitleLanguagePreference, options.trackPolicy);
             const JellyfinItem negotiation =
                 playbackNegotiationItem(playable, options.isRemux && playable.mediaSourceId.empty());
-            auto target =
-                client_.resolvePlayback(session, negotiation, options.maxStreamingBitrate, options.maxAudioChannels,
-                                        options.overrides, tracks.audioStreamIndex, tracks.subtitleStreamIndex);
+            auto target = awaitRemuxStartup(
+                [&] {
+                    return client_.resolvePlayback(session, negotiation, options.maxStreamingBitrate,
+                                                   options.maxAudioChannels, options.overrides,
+                                                   tracks.audioStreamIndex, tracks.subtitleStreamIndex);
+                },
+                [&] { return epoch_.active(generation); },
+                [&](const PendingRemuxPlayback& pending) {
+                    completions_.push(RemuxPlaybackPendingCompletion{generation, playable.id, pending});
+                });
             if (!epoch_.active(generation)) return;
             completions_.push(BeginPlaybackCompletion{
                 .generation = generation,

@@ -7,7 +7,7 @@ int main() {
     assert(settings.maxBitrateMbps == 120);
     assert(settings.zoomMode == static_cast<int>(VideoZoomMode::Fit));
     assert(settings.stillWatchingAfter == 0);
-    assert(!settings.ambientLetterboxBars);
+    assert(settings.ambientLetterboxBars);
     assert(settings.skipDisabledSeriesIds.empty());
     assert(!skipSegmentsDisabledForSeries(settings, "series-1"));
     assert(setSkipSegmentsDisabledForSeries(settings, "series-1", true));
@@ -96,7 +96,7 @@ int main() {
     assert(adjusted.stillWatchingAfter == 2);
     assert(renderStillWatchingAfter(AppSettings{}, {}) == "OFF");
     effects = adjustSetting(adjusted, SettingId::AmbientLetterboxBars, 1);
-    assert(adjusted.ambientLetterboxBars);
+    assert(!adjusted.ambientLetterboxBars);
     assert(setSkipSegmentsDisabledForSeries(adjusted, "series-1", true));
     assert(!setSkipSegmentsDisabledForSeries(adjusted, "series-1", true));
     assert(skipSegmentsDisabledForSeries(adjusted, "series-1"));

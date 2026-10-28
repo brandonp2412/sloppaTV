@@ -16,6 +16,7 @@ struct SettingsScreenEffects {
     SettingsHostAction hostAction = SettingsHostAction::None;
     bool persistSession = false;
     bool refreshSeerrStorage = false;
+    bool showAdaptiveBarsInfo = false;
 };
 
 class SettingsScreenCoordinator {
@@ -38,6 +39,7 @@ public:
     }
 
     [[nodiscard]] SettingsScreenEffects handle(ScreenNavigationKey key) {
+        const bool adaptiveBarsWasEnabled = settings_.ambientLetterboxBars;
         const SettingsActionEffects effects = flow_.handle(key);
         if (hasSettingEffect(effects.settingEffects, SettingChangeEffect::ApplyVideoZoom))
             playback_.setZoomMode(static_cast<VideoZoomMode>(settings_.zoomMode));
@@ -52,6 +54,7 @@ public:
             .persistSession =
                 effects.saveSession || hasSettingEffect(effects.settingEffects, SettingChangeEffect::Save),
             .refreshSeerrStorage = effects.refreshSeerrStorage,
+            .showAdaptiveBarsInfo = !adaptiveBarsWasEnabled && settings_.ambientLetterboxBars,
         };
         if (result.hostAction == SettingsHostAction::Exit) {
             screen_ = navigation_.popOr(Screen::Home);

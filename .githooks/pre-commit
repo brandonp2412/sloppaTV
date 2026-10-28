@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+exec "${BUILDQ:-$HOME/.local/bin/buildq}" --wait --label "sloppaTV pre-commit cppcheck" -- python3 tools/cpp_quality.py cppcheck

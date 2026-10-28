@@ -30,9 +30,11 @@ SystemTextInputEffects SystemTextInputController::apply(const SystemTextInputEve
     switch (event.phase) {
     case SystemTextInputPhase::Changed:
         if (event.mode == kTextInputSearch) {
-            search.setQuery(event.value);
+            if (search.query() != event.value) {
+                search.setQuery(event.value);
+                effects.scheduleSearch = true;
+            }
             search.setKeyboard(false);
-            effects.scheduleSearch = true;
         } else if (event.mode == kTextInputSettingsSearch) {
             settingsScreen.setSearchText(event.value);
         } else if (event.mode == kTextInputSeerrServer) {
@@ -48,9 +50,11 @@ SystemTextInputEffects SystemTextInputController::apply(const SystemTextInputEve
     case SystemTextInputPhase::Cancelled:
         mode_ = -1;
         if (event.mode == kTextInputSearch) {
-            search.setQuery(event.value);
+            if (search.query() != event.value) {
+                search.setQuery(event.value);
+                effects.scheduleSearch = true;
+            }
             search.setKeyboard(false);
-            effects.scheduleSearch = true;
         } else if (event.mode == kTextInputSettingsSearch) {
             settingsScreen.setSearchText(event.value);
         } else if (event.mode == kTextInputSeerrServer) {

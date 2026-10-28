@@ -70,6 +70,7 @@ CPP_TESTS = [
     "playback_continuation_test.cpp",
     "playback_continuation_executor_test.cpp",
     "remux_episode_prewarm_test.cpp",
+    "remux_startup_retry_test.cpp",
     "player_buffer_indicator_test.cpp",
     "home_episode_prewarm_test.cpp",
     "search_result_prewarm_test.cpp",

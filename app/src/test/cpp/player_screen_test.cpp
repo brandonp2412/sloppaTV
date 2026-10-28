@@ -185,11 +185,11 @@ int main() {
     auto& ambient = state.ambientBars();
     assert(ambient.sampleDue(now));
     ambient.addSample({1.0f, 0.5f, 0.25f}, now);
-    assert(!ambient.sampleDue(now + 1s));
+    assert(!ambient.sampleDue(now + 500ms));
+    assert(ambient.sampleDue(now + 1s));
+    ambient.noteSampleAttempt(now + 1s);
+    assert(!ambient.sampleDue(now + 1500ms));
     assert(ambient.sampleDue(now + 2s));
-    ambient.noteSampleAttempt(now + 2s);
-    assert(!ambient.sampleDue(now + 3s));
-    assert(ambient.sampleDue(now + 4s));
     assert(ambient.sampleCount() == 1);
     const auto ambientTarget = ambient.targetColor();
     assert(ambientTarget.r > 0.0f);
@@ -197,6 +197,22 @@ int main() {
     const auto ambientStart = ambient.displayColor(now);
     const auto ambientLater = ambient.displayColor(now + 3s);
     assert(ambientLater.r > ambientStart.r);
+
+    AmbientBarColorState fastAmbient;
+    for (int i = 0; i < 6; ++i) {
+        fastAmbient.addSample({0.25f, 0.0f, 0.0f}, now + std::chrono::seconds(i));
+    }
+    assert(fastAmbient.sampleCount() == 6);
+    fastAmbient.addSample({0.0f, 0.0f, 0.25f}, now + 6s);
+    assert(fastAmbient.sampleCount() == 6);
+    assert(std::abs(fastAmbient.targetColor().r - 0.25f * 5.0f / 6.0f) < 0.001f);
+    for (int i = 7; i <= 11; ++i) {
+        fastAmbient.addSample({0.0f, 0.0f, 0.25f}, now + std::chrono::seconds(i));
+    }
+    assert(fastAmbient.targetColor().r < 0.001f);
+    assert(std::abs(fastAmbient.targetColor().b - 0.25f) < 0.001f);
+    (void)fastAmbient.displayColor(now + 11s);
+    assert(std::abs(fastAmbient.displayColor(now + 12s).b - 0.25f * (1.0f - std::exp(-1.0f))) < 0.001f);
 
     state.openTrackPicker(PlayerTrackPicker::Subtitle, {{-1, "Off", false}, {6, "English", true}, {9, "French", false}},
                           now);

@@ -33,7 +33,7 @@ public:
     using TimePoint = Clock::time_point;
 
     [[nodiscard]] bool sampleDue(TimePoint now) const {
-        return lastSample_ == TimePoint{} || now - lastSample_ >= std::chrono::seconds(2);
+        return lastSample_ == TimePoint{} || now - lastSample_ >= std::chrono::seconds(1);
     }
 
     void noteSampleAttempt(TimePoint now) { lastSample_ = now; }
@@ -64,7 +64,7 @@ public:
         const float elapsedSeconds =
             std::chrono::duration_cast<std::chrono::duration<float>>(now - lastDisplayUpdate_).count();
         lastDisplayUpdate_ = now;
-        const float blend = 1.0f - std::exp(-std::max(0.0f, elapsedSeconds) / 2.5f);
+        const float blend = 1.0f - std::exp(-std::max(0.0f, elapsedSeconds) / 1.0f);
         display_.r += (target_.r - display_.r) * blend;
         display_.g += (target_.g - display_.g) * blend;
         display_.b += (target_.b - display_.b) * blend;
@@ -86,7 +86,7 @@ public:
     [[nodiscard]] AmbientBarColor targetColor() const { return target_; }
 
 private:
-    std::array<AmbientBarColor, 30> samples_{};
+    std::array<AmbientBarColor, 6> samples_{};
     std::size_t nextSample_ = 0;
     std::size_t sampleCount_ = 0;
     TimePoint lastSample_{};

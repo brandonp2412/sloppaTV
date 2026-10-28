@@ -2,6 +2,7 @@
 
 #include "jellyfin_types.hpp"
 #include "media_player_policy.hpp"
+#include "remux_startup_retry.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -46,7 +47,12 @@ public:
                               previousTarget = std::move(previousTarget), reportPrevious, options, wasPaused,
                               generation]() mutable {
             reportStopIfNeeded("stop", session, item, previousTarget, item.positionTicks, reportPrevious);
-            auto target = resolve(session, item, options);
+            auto target = awaitRemuxStartup(
+                [&] { return resolve(session, item, options); },
+                [&] { return epoch_.active(generation); },
+                [&](const PendingRemuxPlayback& pending) {
+                    completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
+                });
             if (!epoch_.active(generation)) return;
             completions_.push(StreamRestartCompletion{
                 .generation = generation,
@@ -64,7 +70,12 @@ public:
                               failedTarget = std::move(failedTarget), reportPrevious, resumeTicks, options,
                               generation]() mutable {
             reportStopIfNeeded("stop-after-failure", session, item, failedTarget, resumeTicks, reportPrevious);
-            auto target = resolve(session, item, options);
+            auto target = awaitRemuxStartup(
+                [&] { return resolve(session, item, options); },
+                [&] { return epoch_.active(generation); },
+                [&](const PendingRemuxPlayback& pending) {
+                    completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
+                });
             if (!epoch_.active(generation)) return;
             completions_.push(FallbackPlaybackCompletion{
                 .generation = generation,

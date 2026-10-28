@@ -20,6 +20,10 @@ FIXTURE_ROOT = Path(__file__).resolve().parent / "screenshot-fixtures"
 ARTWORK_ROOT = FIXTURE_ROOT / "artwork"
 MEDIA_ROOT = FIXTURE_ROOT / "media"
 TICKS_PER_SECOND = 10_000_000
+REMUX_STARTUP_WAIT_SECONDS = 0
+REMUX_INFLIGHT_PROBE_SECONDS = 0
+REMUX_STARTUP_STARTED: dict[str, float] = {}
+REMUX_STARTUP_LOCK = threading.Lock()
 
 
 def ticks(seconds: int) -> int:
@@ -784,6 +788,26 @@ class Handler(BaseHTTPRequestHandler):
         playback = re.fullmatch(r"/Items/([^/]+)/PlaybackInfo", path)
         if playback:
             item_id = playback.group(1)
+            if REMUX_STARTUP_WAIT_SECONDS:
+                with REMUX_STARTUP_LOCK:
+                    started = REMUX_STARTUP_STARTED.setdefault(item_id, time.monotonic())
+                elapsed = time.monotonic() - started
+                if REMUX_INFLIGHT_PROBE_SECONDS and elapsed < REMUX_INFLIGHT_PROBE_SECONDS:
+                    time.sleep(REMUX_INFLIGHT_PROBE_SECONDS - elapsed)
+                    elapsed = time.monotonic() - started
+                if elapsed < REMUX_STARTUP_WAIT_SECONDS:
+                    self.send_json({
+                        "ErrorCode": "P2P_SOURCE_BUFFERING",
+                        "SourceId": "00000000-0000-4000-8000-000000000001",
+                        "RetryAfterSeconds": 2,
+                        "StartupRequiredBytes": 16_777_216,
+                        "StartupReadableBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                        "CurrentCachedBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                        "CurrentTotalBytes": 268_435_456,
+                        "DownloadMiBps": 1.2,
+                        "LivePeers": 3,
+                    }, 503)
+                    return
             is_e2e = item_id in E2E_STREAM_MODES
             video_codec = "hevc" if E2E_STREAM_MODES.get(item_id) == "decoder" else "h264"
             self.send_json(
@@ -809,6 +833,31 @@ class Handler(BaseHTTPRequestHandler):
         path = split.path
         query = parse_qs(split.query)
 
+        startup_probe = re.fullmatch(r"/Remux/Startup/([^/]+)", path, re.IGNORECASE)
+        if startup_probe and REMUX_STARTUP_WAIT_SECONDS:
+            started = REMUX_STARTUP_STARTED.get(startup_probe.group(1))
+            active = started is not None and time.monotonic() - started < REMUX_INFLIGHT_PROBE_SECONDS
+            elapsed = max(0.0, time.monotonic() - started) if started else 0.0
+            self.send_json({
+                "Active": active,
+                "SourceId": "00000000-0000-4000-8000-000000000001" if active else None,
+                "CandidateIndex": 1 if active else 0,
+                "CandidateCount": 3 if active else 0,
+                "ElapsedSeconds": int(elapsed),
+                "ProbeElapsedSeconds": int(elapsed),
+                "ProbeBudgetSeconds": 60,
+                "Prefetch": {
+                    "currentCachedBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                    "currentTotalBytes": 268_435_456,
+                    "downloadMibps": 1.2,
+                    "livePeers": 3,
+                    "startupRequiredBytes": 16_777_216,
+                    "startupReadableBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                    "startupReady": False,
+                } if active else None,
+            })
+            return
+
         if path == "/System/Info/Public":
             self.send_json(
                 {
@@ -817,6 +866,7 @@ class Handler(BaseHTTPRequestHandler):
                     "Version": "10.10.0",
                     "ProductName": "Jellyfin",
                     "OperatingSystem": "Linux",
+                    **({"RemuxVersion": "visual-qa"} if REMUX_STARTUP_WAIT_SECONDS else {}),
                 }
             )
             return
@@ -961,12 +1011,16 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def main() -> None:
-    global PLAYBACK_MEDIA_FILE, PLAYBACK_HEVC_MEDIA_FILE
+    global PLAYBACK_MEDIA_FILE, PLAYBACK_HEVC_MEDIA_FILE, REMUX_STARTUP_WAIT_SECONDS, REMUX_INFLIGHT_PROBE_SECONDS
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=18096)
     parser.add_argument("--playback-media-file", type=Path, default=VIDEO_FILE)
     parser.add_argument("--playback-hevc-media-file", type=Path)
+    parser.add_argument("--remux-startup-wait-seconds", type=int, default=0)
+    parser.add_argument("--remux-inflight-probe-seconds", type=int, default=0)
     args = parser.parse_args()
+    REMUX_STARTUP_WAIT_SECONDS = max(0, args.remux_startup_wait_seconds)
+    REMUX_INFLIGHT_PROBE_SECONDS = max(0, args.remux_inflight_probe_seconds)
     PLAYBACK_MEDIA_FILE = args.playback_media_file
     PLAYBACK_HEVC_MEDIA_FILE = args.playback_hevc_media_file or PLAYBACK_MEDIA_FILE
     ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()

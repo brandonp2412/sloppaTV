@@ -7,7 +7,7 @@
 #include <vector>
 
 namespace {
-using Completion = std::variant<StreamRestartCompletion, FallbackPlaybackCompletion>;
+using Completion = std::variant<StreamRestartCompletion, FallbackPlaybackCompletion, RemuxPlaybackPendingCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {
@@ -134,7 +134,8 @@ int main() {
     const size_t completionCount = completions.events.size();
     epoch.activeGeneration = 12;
     assert(executor.resolveFallback(session, item, previous, true, 3'000'000, options, 11));
-    assert((client.calls == std::vector<std::string>{"stop:episode-1", "resolve:episode-1"}));
+    // Cancelled generations never issue a fresh playback negotiation.
+    assert((client.calls == std::vector<std::string>{"stop:episode-1"}));
     assert(completions.events.size() == completionCount);
 
     client.calls.clear();

@@ -1,4 +1,5 @@
 #include "settings_screen.hpp"
+#include "ui_labels.hpp"
 
 #include <cassert>
 
@@ -146,6 +147,25 @@ int main() {
     assert(seerrMatches[1] == SettingId::SeerrConnection);
     assert(seerrMatches[2] == SettingId::SeerrDriveSelection);
 
+    screen.reset();
+    screen.toggleAdvanced();
+    screen.setSearchText("adaptive bars");
+    assert(screen.matches().size() == 1);
+    row = settingsScreenRow(screen, settings, 6, "MPV", "viewer", true, 0);
+    assert(row);
+    assert(row->setting == SettingId::AmbientLetterboxBars);
+    assert(materialLabel(row->label) == "Adaptive bars");
+    settings.ambientLetterboxBars = false;
+    command = screen.handleInput(SettingsScreenInput::Down);
+    assert(command.type == SettingsScreenCommandType::None);
+    command = screen.handleInput(SettingsScreenInput::Right);
+    assert(command.type == SettingsScreenCommandType::Adjust);
+    assert(command.setting == SettingId::AmbientLetterboxBars);
+    effect = adjustSetting(settings, command.setting, command.direction);
+    assert(settings.ambientLetterboxBars);
+    assert(hasSettingEffect(effect, SettingChangeEffect::Save));
+
+    screen.reset();
     screen.setSearchText("definitely unmatched");
     presentation = settingsScreenPresentation(screen, true);
     assert(presentation.showTypingFilterHint);

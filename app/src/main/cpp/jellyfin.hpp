@@ -80,6 +80,8 @@ public:
                                   int maxAudioChannels = 8) const;
     ApiValueResult<RemuxPrefetchStatus> remuxPrefetchStatus(const JellyfinSession& session,
                                                             const std::string& sourceId) const;
+    ApiValueResult<RemuxStartupProbeStatus> remuxStartupProbeStatus(const JellyfinSession& session,
+                                                                    const std::string& itemId) const;
     ApiValueResult<PlaybackTarget> resolvePlayback(const JellyfinSession& session, const JellyfinItem& item,
                                                    int maxStreamingBitrate = 120000000, int maxAudioChannels = 8,
                                                    PlaybackOverrides overrides = {}, int audioStreamIndex = -1,

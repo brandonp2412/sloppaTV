@@ -239,6 +239,12 @@ struct RemuxPrefetchCompletion {
     ApiValueResult<RemuxPrefetchStatus> result;
 };
 
+struct RemuxStartupProbeCompletion {
+    std::string userId;
+    std::string itemId;
+    ApiValueResult<RemuxStartupProbeStatus> result;
+};
+
 using AsyncCompletion = std::variant<
     SystemTextInputEvent, SeerrDeleteCompletion, SeerrRequestCompletion, SeerrSeasonsCompletion,
     SeerrStorageRefreshCompletion, SeerrPendingRefreshCompletion, SeerrSearchCompletion, SeerrConnectCompletion,
@@ -251,7 +257,8 @@ using AsyncCompletion = std::variant<
     ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion, ArtworkLoadCompletion,
     MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion, PlaybackReportCompletion,
     QueuedPlaybackCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, StreamRestartCompletion,
-    FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion, RemuxPrefetchCompletion>;
+    FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion, RemuxPrefetchCompletion,
+    RemuxPlaybackPendingCompletion, RemuxStartupProbeCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -1332,6 +1339,10 @@ private:
 
         const PlaybackTransitionStartEffects transitionEffects =
             playbackTransitionCoordinator_.start(transitionWork, app_->window);
+        if (transitionEffects.handled) {
+            pendingRemuxSourceId_.clear();
+            pendingRemuxItemId_.clear();
+        }
         if (transitionEffects.surfaceFailed) {
             popScreen(Screen::Details);
             playbackCoordinator_.clearActivePlayback();
@@ -1342,6 +1353,9 @@ private:
     [[nodiscard]] std::string activeRemuxPrefetchSource() const {
         if (!playbackCoordinator_.activeItemAvailable()) return {};
         const auto& item = playbackCoordinator_.session().activeItem();
+        if (!pendingRemuxSourceId_.empty() && pendingRemuxItemId_ == item.id &&
+            requestEpochs_.playback.active(pendingRemuxGeneration_))
+            return pendingRemuxSourceId_;
         if (playbackCoordinator_.activeTargetAvailable())
             return playbackCoordinator_.session().activeTarget().mediaSourceId;
         // While PlaybackInfo is pending, a previously selected source can
@@ -1357,9 +1371,26 @@ private:
             remuxStatsInFlight_)
             return;
         const std::string& itemId = playbackCoordinator_.session().activeItem().id;
+        const auto now = std::chrono::steady_clock::now();
+        const bool probeMode = (playbackCoordinator_.transitionLoading() || playbackCoordinator_.fallbackResolving()) &&
+                               pendingRemuxSourceId_.empty() && !playbackCoordinator_.activeTargetAvailable();
+        if (probeMode) {
+            if (remuxStatsProbeMode_ && now < remuxStatsNextPoll_) return;
+            const JellyfinSession session = session_;
+            const std::string copyItemId = itemId;
+            if (remuxStatsTasks_.submit([this, session, copyItemId] {
+                    auto result = remuxStatsApi_.remuxStartupProbeStatus(session, copyItemId);
+                    asyncCompletions_.push(RemuxStartupProbeCompletion{session.userId, copyItemId, std::move(result)});
+                })) {
+                remuxStatsInFlight_ = true;
+                remuxStatsProbeMode_ = true;
+                remuxStatsNextPoll_ = now + std::chrono::seconds(2);
+            }
+            return;
+        }
+        remuxStatsProbeMode_ = false;
         const std::string sourceId = activeRemuxPrefetchSource();
         if (sourceId.empty() || sourceId == itemId) return;
-        const auto now = std::chrono::steady_clock::now();
         if (sourceId != remuxStatsSourceId_) playerScreenState_.bufferIndicator().clearRemotePrefetch();
         if (sourceId == remuxStatsSourceId_ && now < remuxStatsNextPoll_) return;
         const JellyfinSession session = session_;
@@ -1533,6 +1564,38 @@ private:
         accountSession_.applyAuthenticatedSession(accountScreens_.complete(completion));
     }
 
+    void applyAsyncCompletion(RemuxPlaybackPendingCompletion& completion) {
+        if (!requestEpochs_.playback.active(completion.generation) || screen_ != Screen::Player ||
+            !playbackCoordinator_.activeItemAvailable())
+            return;
+        if (playbackCoordinator_.session().activeItem().id != completion.itemId ||
+            completion.pending.sourceId.empty())
+            return;
+        pendingRemuxItemId_ = completion.itemId;
+        pendingRemuxSourceId_ = completion.pending.sourceId;
+        pendingRemuxGeneration_ = completion.generation;
+        remuxStatsSourceId_ = completion.pending.sourceId;
+        remuxStatsNextPoll_ = {};
+        playerScreenState_.bufferIndicator().setRemotePrefetch(completion.pending.prefetch);
+    }
+
+    void applyAsyncCompletion(RemuxStartupProbeCompletion& completion) {
+        remuxStatsInFlight_ = false;
+        if (!completion.result.ok || screen_ != Screen::Player || completion.userId != session_.userId ||
+            !playbackCoordinator_.activeItemAvailable() ||
+            playbackCoordinator_.session().activeItem().id != completion.itemId ||
+            !pendingRemuxSourceId_.empty() || playbackCoordinator_.activeTargetAvailable())
+            return;
+        const auto& probe = completion.result.value;
+        if (!probe.sourceId.empty() && probe.hasPrefetch) {
+            if (probe.sourceId != remuxStatsSourceId_)
+                playerScreenState_.bufferIndicator().clearRemotePrefetch();
+            playerScreenState_.bufferIndicator().setRemotePrefetch(probe.prefetch);
+            remuxStatsSourceId_ = probe.sourceId;
+        }
+        playerScreenState_.bufferIndicator().setStartupProbe(probe);
+    }
+
     void applyAsyncCompletion(RemuxPrefetchCompletion& completion) {
         remuxStatsInFlight_ = false;
         if (!completion.result.ok || screen_ != Screen::Player || completion.userId != session_.userId ||
@@ -1690,6 +1753,8 @@ private:
     void stopPlayback(bool completed = false) {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
         remuxEpisodePrewarm_.clear();
+        pendingRemuxSourceId_.clear();
+        pendingRemuxItemId_.clear();
         const PlaybackReleaseContext release =
             playbackCoordinator_.releaseContext(true, completed, session_.valid(), playerScreenState_.positionMs());
         if (release.plan.updateCachedPosition) {
@@ -1822,6 +1887,10 @@ private:
     SearchResultPrewarmState searchResultPrewarm_;
     RequestEpoch searchPrewarmEpoch_;
     std::string remuxStatsSourceId_;
+    bool remuxStatsProbeMode_ = false;
+    std::string pendingRemuxSourceId_;
+    std::string pendingRemuxItemId_;
+    std::uint64_t pendingRemuxGeneration_ = 0;
     std::chrono::steady_clock::time_point remuxStatsNextPoll_{};
     bool remuxStatsInFlight_ = false;
 

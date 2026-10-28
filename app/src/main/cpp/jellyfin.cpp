@@ -44,6 +44,20 @@ std::string apiError(const HttpResponse& response) {
     return result;
 }
 
+void parseRemuxPrefetch(const json& data, RemuxPrefetchStatus& stats) {
+    stats.currentCachedBytes = data.value("currentCachedBytes", uint64_t{0});
+    stats.currentTotalBytes = data.value("currentTotalBytes", uint64_t{0});
+    stats.nextCachedBytes = data.contains("nextCachedBytes") && data["nextCachedBytes"].is_number_unsigned()
+                              ? data["nextCachedBytes"].get<uint64_t>() : 0;
+    stats.nextTotalBytes = data.contains("nextTotalBytes") && data["nextTotalBytes"].is_number_unsigned()
+                              ? data["nextTotalBytes"].get<uint64_t>() : 0;
+    stats.downloadMiBps = data.value("downloadMibps", 0.0);
+    stats.livePeers = data.value("livePeers", uint64_t{0});
+    stats.startupRequiredBytes = data.value("startupRequiredBytes", uint64_t{0});
+    stats.startupReadableBytes = data.value("startupReadableBytes", uint64_t{0});
+    stats.startupReady = data.value("startupReady", false);
+}
+
 std::string addApiKey(std::string url, const std::string& token) {
     if (token.empty() || url.find("api_key=") != std::string::npos) return url;
     url += url.find('?') == std::string::npos ? "?" : "&";
@@ -996,20 +1010,37 @@ ApiValueResult<RemuxPrefetchStatus> JellyfinClient::remuxPrefetchStatus(const Je
     try {
         const auto data = json::parse(response.body);
         if (!data.is_object()) return result;
-        result.value.currentCachedBytes = data.value("currentCachedBytes", uint64_t{0});
-        result.value.currentTotalBytes = data.value("currentTotalBytes", uint64_t{0});
-        result.value.nextCachedBytes = data.contains("nextCachedBytes") && data["nextCachedBytes"].is_number_unsigned()
-                                           ? data["nextCachedBytes"].get<uint64_t>()
-                                           : 0;
-        result.value.nextTotalBytes = data.contains("nextTotalBytes") && data["nextTotalBytes"].is_number_unsigned()
-                                          ? data["nextTotalBytes"].get<uint64_t>()
-                                          : 0;
-        result.value.downloadMiBps = data.value("downloadMibps", 0.0);
-        result.value.livePeers = data.value("livePeers", uint64_t{0});
-        result.value.startupRequiredBytes = data.value("startupRequiredBytes", uint64_t{0});
-        result.value.startupReadableBytes = data.value("startupReadableBytes", uint64_t{0});
-        result.value.startupReady = data.value("startupReady", false);
+        parseRemuxPrefetch(data, result.value);
         result.ok = result.value.currentTotalBytes > 0;
+    } catch (const json::exception&) {
+        return result;
+    }
+    return result;
+}
+
+ApiValueResult<RemuxStartupProbeStatus> JellyfinClient::remuxStartupProbeStatus(
+    const JellyfinSession& session, const std::string& itemId) const {
+    ApiValueResult<RemuxStartupProbeStatus> result;
+    if (!session.valid() || itemId.empty()) return result;
+    const auto response = http_.request("GET", session.server + "/Remux/Startup/" + urlEncode(itemId),
+                                        headers(&session, session.deviceId));
+    if (!response.ok() || response.body.empty()) return result;
+    try {
+        const auto data = json::parse(response.body);
+        if (!data.is_object()) return result;
+        result.value.active = data.value("Active", false);
+        if (data.contains("SourceId") && data["SourceId"].is_string())
+            result.value.sourceId = data["SourceId"].get<std::string>();
+        result.value.candidateIndex = data.value("CandidateIndex", 0);
+        result.value.candidateCount = data.value("CandidateCount", 0);
+        result.value.elapsedSeconds = data.value("ElapsedSeconds", 0);
+        result.value.probeElapsedSeconds = data.value("ProbeElapsedSeconds", 0);
+        result.value.probeBudgetSeconds = data.value("ProbeBudgetSeconds", 0);
+        if (const auto it = data.find("Prefetch"); it != data.end() && it->is_object()) {
+            parseRemuxPrefetch(*it, result.value.prefetch);
+            result.value.hasPrefetch = result.value.prefetch.currentTotalBytes > 0;
+        }
+        result.ok = true;
     } catch (const json::exception&) {
         return result;
     }
@@ -1131,7 +1162,21 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
         if (response.status == 503) {
             const auto body = json::parse(response.body, nullptr, false);
             if (body.is_object() && body.value("ErrorCode", std::string{}) == "P2P_SOURCE_BUFFERING") {
-                result.error = "Buffering—downloading slowly. Wait, then press Play to retry.";
+                PendingRemuxPlayback pending;
+                pending.sourceId = body.value("SourceId", std::string{});
+                pending.retryAfterSeconds = std::clamp(body.value("RetryAfterSeconds", 10), 2, 20);
+                const auto bytes = [&body](const char* key) -> std::uint64_t {
+                    const auto it = body.find(key);
+                    return it != body.end() && it->is_number_unsigned() ? it->get<std::uint64_t>() : 0;
+                };
+                pending.prefetch.currentCachedBytes = bytes("CurrentCachedBytes");
+                pending.prefetch.currentTotalBytes = bytes("CurrentTotalBytes");
+                pending.prefetch.startupRequiredBytes = bytes("StartupRequiredBytes");
+                pending.prefetch.startupReadableBytes = bytes("StartupReadableBytes");
+                pending.prefetch.livePeers = bytes("LivePeers");
+                pending.prefetch.downloadMiBps = body.value("DownloadMiBps", 0.0);
+                result.pendingRemuxPlayback = std::move(pending);
+                result.error = "Remux is downloading the initial playback range";
             }
         }
         __android_log_print(ANDROID_LOG_WARN, kTag,

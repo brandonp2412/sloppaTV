@@ -56,7 +56,7 @@ struct AppSettings {
     int zoomMode = static_cast<int>(VideoZoomMode::Fit);
     bool autoplayNext = true;
     int stillWatchingAfter = 0;
-    bool ambientLetterboxBars = false;
+    bool ambientLetterboxBars = true;
     std::vector<std::string> skipDisabledSeriesIds;
     bool refreshRateSwitching = false;
     bool showWatchedIndicators = true;
@@ -477,7 +477,7 @@ inline constexpr std::array<SettingDescriptor, kSettingCount> kSettingDescriptor
      renderBooleanSetting<&AppSettings::autoplayNext>},
     {SettingId::StillWatchingAfter, "STILL WATCHING AFTER", 13, kNoSettingOrder, SettingKind::Value,
      SettingChangeEffect::Save, adjustStillWatchingAfter, renderStillWatchingAfter},
-    {SettingId::AmbientLetterboxBars, "AMBIENT LETTERBOX BARS", kNoSettingOrder, 12, SettingKind::Boolean,
+    {SettingId::AmbientLetterboxBars, "ADAPTIVE BARS", kNoSettingOrder, 12, SettingKind::Boolean,
      SettingChangeEffect::Save, toggleSetting<&AppSettings::ambientLetterboxBars>,
      renderBooleanSetting<&AppSettings::ambientLetterboxBars>},
     {SettingId::MatchVideoRefreshRate, "MATCH VIDEO REFRESH RATE", kNoSettingOrder, 3, SettingKind::Boolean,

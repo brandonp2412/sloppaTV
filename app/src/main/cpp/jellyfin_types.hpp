@@ -1,8 +1,10 @@
 #pragma once
 
 #include "subtitle_policy.hpp"
+#include "remux_prefetch_status.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -187,6 +189,12 @@ struct PlaybackTarget {
     int64_t startTicks = 0;
 };
 
+struct PendingRemuxPlayback {
+    std::string sourceId;
+    RemuxPrefetchStatus prefetch;
+    int retryAfterSeconds = 10;
+};
+
 struct ApiResult {
     bool ok = false;
     std::string error;
@@ -194,4 +202,5 @@ struct ApiResult {
 
 template <typename T> struct ApiValueResult : ApiResult {
     T value{};
+    std::optional<PendingRemuxPlayback> pendingRemuxPlayback = std::nullopt;
 };

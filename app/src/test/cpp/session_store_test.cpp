@@ -25,7 +25,7 @@ int main() {
     state.settings.preferredMediaSources[std::string(32, 'a')] = std::string(32, 'b');
     state.settings.maxBitrateMbps = 80;
     state.settings.stillWatchingAfter = 0;
-    state.settings.ambientLetterboxBars = true;
+    state.settings.ambientLetterboxBars = false;
     state.settings.skipDisabledSeriesIds = {"series-1", "series-2"};
     state.settings.subtitleSize = 2;
     state.settings.subtitleBackground = false;
@@ -66,7 +66,7 @@ int main() {
     assert(loaded.settings.maxBitrateMbps == 80);
     assert(loaded.settings.preferredMediaSources.at(std::string(32, 'a')) == std::string(32, 'b'));
     assert(loaded.settings.stillWatchingAfter == 0);
-    assert(loaded.settings.ambientLetterboxBars);
+    assert(!loaded.settings.ambientLetterboxBars);
     assert(loaded.settings.skipDisabledSeriesIds.size() == 2);
     assert(loaded.settings.skipDisabledSeriesIds[0] == "series-1");
     assert(loaded.settings.skipDisabledSeriesIds[1] == "series-2");

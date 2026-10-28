@@ -14,7 +14,8 @@ enum class Origin {
 
 using QueuedCompletion = QueuedPlaybackResolutionCompletion<Origin>;
 using Completion =
-    std::variant<QueuedCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, BeginPlaybackCompletion>;
+    std::variant<QueuedCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, BeginPlaybackCompletion,
+                 RemuxPlaybackPendingCompletion>;
 
 struct ImmediateTaskRunner {
     bool submit(std::function<void()> task) {

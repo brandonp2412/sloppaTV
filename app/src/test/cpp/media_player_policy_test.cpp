@@ -14,6 +14,12 @@ int main() {
     assert(remuxFallbackStartPositionMs(999) == 0);
     assert(remuxFallbackStartPositionMs(1000) == 1000);
     assert(remuxFallbackStartPositionMs(263000) == 263000);
+    assert(!initialResumeSeekMissed(105'000, 0, true));
+    assert(!initialResumeSeekMissed(105'000, 4'000, false));
+    assert(initialResumeSeekMissed(105'000, 4'000, true)); // Opening Friends at 0 despite saved 1:45.
+    assert(!initialResumeSeekMissed(105'000, 104'000, true));
+    assert(!initialResumeSeekMissed(0, 4'000, true));
+    assert(!initialResumeSeekMissed(5'000, 4'000, true));
     assert(!remuxNeedsResumeReadBudget(-1));
     assert(!remuxNeedsResumeReadBudget(0));
     assert(!remuxNeedsResumeReadBudget(830'000));

@@ -371,6 +371,8 @@ public:
         player_.startAsync(start.url, videoSurface_.surface(), playerStartPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
                            start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels, isRemuxServer());
+        initialResumeTargetMs_ = coordinator_.activeTargetUsesDirectPlay() ? logicalStartPositionMs : 0;
+        initialResumeRetryMs_ = 0;
         if (logicalStartPositionMs > 0) screenState_.beginInitialPosition(logicalStartPositionMs, now);
     }
 
@@ -757,6 +759,47 @@ public:
             }
         }
         if (!playbackEnded && status != PlayerStatus::Playing && status != PlayerStatus::Paused) return {};
+        if (status == PlayerStatus::Playing && coordinator_.activeTargetUsesDirectPlay()) {
+            const int observedMs = player_.positionMs();
+            const auto now = std::chrono::steady_clock::now();
+            if (initialResumeRetryMs_ > 0) {
+                if (postSeekPositionMatchesTarget(observedMs, initialResumeRetryMs_, 3'000)) {
+                    initialResumeRetryMs_ = 0;
+                } else if (screenState_.pendingSeekAppearsFailed(observedMs, now)) {
+                    std::scoped_lock lock(stateMutex);
+                    const int requestedMs = initialResumeRetryMs_;
+                    initialResumeRetryMs_ = 0;
+                    screenState_.setPositionMs(requestedMs);
+                    if (retryWithFallback(stream, rendererReady, true)) {
+                        error_.clear();
+                        return {};
+                    }
+                    screenState_.setPositionMs(observedMs);
+                }
+            } else if (initialResumeTargetMs_ > 0) {
+                if (postSeekPositionMatchesTarget(observedMs, initialResumeTargetMs_, 3'000)) {
+                    initialResumeTargetMs_ = 0;
+                } else if (initialResumeSeekMissed(initialResumeTargetMs_, observedMs, true)) {
+                    std::scoped_lock lock(stateMutex);
+                    const int requestedMs = initialResumeTargetMs_;
+                    initialResumeTargetMs_ = 0;
+                    __android_log_print(ANDROID_LOG_WARN, "SloppaTV",
+                                        "Initial resume seek missed target=%d observed=%d; retrying after load",
+                                        requestedMs, observedMs);
+                    if (player_.seekable()) {
+                        initialResumeRetryMs_ = requestedMs;
+                        seekTo(stream, requestedMs);
+                    } else {
+                        screenState_.setPositionMs(requestedMs);
+                        if (retryWithFallback(stream, rendererReady, true)) {
+                            error_.clear();
+                            return {};
+                        }
+                        screenState_.setPositionMs(observedMs);
+                    }
+                }
+            }
+        }
         const auto discoveryNow = std::chrono::steady_clock::now();
         if (embeddedSubtitleDiscoveryStarted_ == std::chrono::steady_clock::time_point{})
             embeddedSubtitleDiscoveryStarted_ = discoveryNow;
@@ -883,6 +926,8 @@ private:
     std::string softwareDecodeItemId_;
     std::string failedSourceItemId_;
     std::vector<std::string> failedSources_;
+    int initialResumeTargetMs_ = 0;
+    int initialResumeRetryMs_ = 0;
     bool embeddedSubtitleDiscoveryDone_ = false;
     std::chrono::steady_clock::time_point embeddedSubtitleDiscoveryStarted_{};
     std::chrono::steady_clock::time_point embeddedSubtitleDiscoveryLastPoll_{};

@@ -70,6 +70,32 @@ int main() {
     assert(effects.cancelSeerrSearch);
     assert(effects.submitSearch);
 
+    // Closing the Android IME must not restart an identical search or reset focused results.
+    search.setQuery("visible results");
+    JellyfinItem first{};
+    first.id = "one";
+    JellyfinItem second{};
+    second.id = "two";
+    assert(search.finishLibrarySearch("visible results", {first, second}));
+    search.setSelection(1);
+    controller.begin(kTextInputSearch, search.query());
+    effects = controller.apply(
+        systemTextInputEvent(SystemTextInputPhase::Cancelled, kTextInputSearch, "visible results"), search,
+        settingsScreen, settings, account);
+    assert(!controller.active());
+    assert(!effects.scheduleSearch);
+    assert(search.selection() == 1);
+    assert(search.results().size() == 2);
+    assert(!search.keyboard());
+
+    // A final IME value still takes effect if its change callback has not arrived yet.
+    controller.begin(kTextInputSearch, search.query());
+    effects = controller.apply(
+        systemTextInputEvent(SystemTextInputPhase::Cancelled, kTextInputSearch, "newer results"), search,
+        settingsScreen, settings, account);
+    assert(effects.scheduleSearch);
+    assert(search.query() == "newer results");
+
     controller.begin(kTextInputSettingsSearch, "");
     effects = controller.apply(systemTextInputEvent(SystemTextInputPhase::Done, kTextInputSettingsSearch, "subtitle"),
                                search, settingsScreen, settings, account);

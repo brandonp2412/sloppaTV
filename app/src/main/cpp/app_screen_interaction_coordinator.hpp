@@ -248,6 +248,8 @@ public:
     [[nodiscard]] ScreenInteractionHostEffects applySettings(SettingsScreenEffects effects) {
         ScreenInteractionHostEffects host;
         if (effects.persistSession) host.persistSession = true;
+        if (effects.showAdaptiveBarsInfo)
+            host.notices.push_back({"ADAPTIVE BARS TINT BLACK BARS TO MATCH THE VIDEO", std::chrono::seconds(4), false});
         if (effects.refreshSeerrStorage) seerrApp_.refreshStorage(true);
         switch (effects.hostAction) {
         case SettingsHostAction::None:

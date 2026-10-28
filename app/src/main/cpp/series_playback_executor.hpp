@@ -3,6 +3,7 @@
 #include "jellyfin_types.hpp"
 #include "media_player_policy.hpp"
 #include "playback_queue.hpp"
+#include "remux_startup_retry.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -80,8 +81,15 @@ public:
                 JellyfinItem first = episodes.value.front();
                 auto detailed = client_.getItem(session, first.id);
                 if (detailed.ok) first = std::move(detailed.value);
-                auto target = client_.resolvePlayback(session, first, options.maxStreamingBitrate,
-                                                      options.maxAudioChannels, options.overrides);
+                auto target = awaitRemuxStartup(
+                    [&] {
+                        return client_.resolvePlayback(session, first, options.maxStreamingBitrate,
+                                                       options.maxAudioChannels, options.overrides);
+                    },
+                    [&] { return epoch_.active(generation); },
+                    [&](const PendingRemuxPlayback& pending) {
+                        completions_.push(RemuxPlaybackPendingCompletion{generation, first.id, pending});
+                    });
                 if (!epoch_.active(generation)) return;
                 completions_.push(SeriesPlayAllCompletion{
                     .generation = generation,

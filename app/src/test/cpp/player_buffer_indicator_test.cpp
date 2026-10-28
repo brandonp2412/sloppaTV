@@ -12,6 +12,8 @@ int main() {
     assert(b.statusText().find("Remux") != std::string::npos);
     b.observe(true, false, false, false, false, 0, 0, true, false, t);
     assert(b.statusText(t) == "Resolving Remux stream");
+    assert(!b.startupProgress(t).has_value());
+    assert(b.startupEta(t).empty());
     b.observe(false, true, false, false, false, 0, 0, true, true, t);
     assert(b.phase() == PlayerBufferPhase::Connecting);
     assert(b.statusText(t + std::chrono::seconds(14)).find("Waiting") != std::string::npos);
@@ -93,6 +95,7 @@ int main() {
     assert(startup.statusText(t + std::chrono::seconds(16)).find("remaining") == std::string::npos);
     measure.startupReady = true;
     startup.setRemotePrefetch(measure, t + std::chrono::seconds(17));
+    assert(startup.startupProgress(t + std::chrono::seconds(17)) == 1.0f);
     assert(startup.statusText(t + std::chrono::seconds(17)).find("remaining") == std::string::npos);
     startup.clearRemotePrefetch();
     assert(startup.statusText(t + std::chrono::seconds(18)).find("remaining") == std::string::npos);
@@ -112,6 +115,21 @@ int main() {
     assert(learned.statusText(next + std::chrono::seconds(2)).find("remaining") != std::string::npos);
     learned.observe(false, true, false, false, false, 0, 0, true, false, next + std::chrono::seconds(15));
     assert(learned.statusText(next + std::chrono::seconds(16)).find("remaining") != std::string::npos);
+
+    // A cold Remux search shows a qualified estimate immediately; an active
+    // server probe replaces the generic stage without claiming torrent bytes.
+    PlayerBufferIndicator pendingProbe;
+    pendingProbe.observe(true, false, false, false, false, 0, 0, true, true, t);
+    assert(pendingProbe.startupSearchText(t).find("~60s typical remaining") != std::string::npos);
+    RemuxStartupProbeStatus activeProbe;
+    activeProbe.active = true;
+    activeProbe.candidateIndex = 2;
+    activeProbe.candidateCount = 5;
+    pendingProbe.setStartupProbe(activeProbe, t + 10s);
+    assert(pendingProbe.startupSearchText(t + 10s).find("Checking source 2/5") != std::string::npos);
+    assert(pendingProbe.startupSearchText(t + 70s).find("70s elapsed") != std::string::npos);
+    pendingProbe.clearRemotePrefetch();
+    assert(pendingProbe.startupSearchText(t + 71s).find("Finding playable source") != std::string::npos);
 
     // A resumed item starts at a nonzero timestamp but has not yet advanced.
     PlayerBufferIndicator coldResume;

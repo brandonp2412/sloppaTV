@@ -6,6 +6,7 @@
 #include <cmath>
 #include <optional>
 #include <string>
+#include <utility>
 
 enum class PlayerBufferPhase { Resolving, Connecting, Buffering, Stalled, Playing, Paused };
 
@@ -32,6 +33,8 @@ public:
     void clearRemotePrefetch() {
         remotePrefetch_ = {};
         remoteReceivedAt_ = {};
+        remoteProbe_ = {};
+        probeReceivedAt_ = {};
         observedReadRate_ = 0.0;
         positiveReadSamples_ = 0;
         lastReadProgressAt_ = {};
@@ -86,6 +89,8 @@ public:
         }
         if (phase_ == PlayerBufferPhase::Connecting && phaseStarted_ != TimePoint{})
             learnDuration(now - phaseStarted_, connectAverageSeconds_, connectSamples_);
+        else if (phase_ == PlayerBufferPhase::Resolving && phaseStarted_ != TimePoint{})
+            learnDuration(now - phaseStarted_, resolveAverageSeconds_, resolveSamples_);
         const bool advanced = lastPositionMs_ >= 0 && positionMs > lastPositionMs_ + 125;
         if (lastAdvancing_ == TimePoint{} || advanced || positionMs + 500 < lastPositionMs_) {
             if (advanced) playbackAdvanced_ = true;
@@ -124,7 +129,7 @@ public:
             const std::string label = episode_
                                           ? (remux_ ? "Resolving Remux episode stream" : "Resolving episode stream")
                                           : (remux_ ? "Resolving Remux stream" : "Resolving stream");
-            return label + historicalEta(now, resolveAverageSeconds_, resolveSamples_);
+            return label + readinessEta(now).value_or(historicalEta(now, resolveAverageSeconds_, resolveSamples_));
         }
         case PlayerBufferPhase::Connecting: {
             const std::string estimate =
@@ -173,10 +178,43 @@ public:
         remoteReceivedAt_ = now;
     }
 
+    [[nodiscard]] std::string startupEta(TimePoint now = Clock::now()) const {
+        return readinessEta(now).value_or(std::string{});
+    }
+
+    void setStartupProbe(RemuxStartupProbeStatus probe, TimePoint now = Clock::now()) {
+        remoteProbe_ = std::move(probe);
+        probeReceivedAt_ = now;
+    }
+
+    [[nodiscard]] std::string startupSearchText(TimePoint now = Clock::now()) const {
+        std::string stage = "Finding playable source";
+        if (probeReceivedAt_ != TimePoint{} && now - probeReceivedAt_ < std::chrono::seconds(8) &&
+            remoteProbe_.active) {
+            if (remoteProbe_.candidateIndex > 0) {
+                stage = "Checking source " + std::to_string(remoteProbe_.candidateIndex);
+                if (remoteProbe_.candidateCount > 0)
+                    stage += "/" + std::to_string(remoteProbe_.candidateCount);
+            } else {
+                stage = "Ranking sources";
+            }
+        }
+        const int elapsed = phaseStarted_ == TimePoint{} ? 0 :
+            std::max(0, static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - phaseStarted_).count()));
+        const int typical = resolveSamples_ >= 3
+            ? std::clamp(static_cast<int>(std::round(resolveAverageSeconds_)), 20, 180) : 60;
+        if (elapsed < typical - 5) {
+            const int remaining = ((typical - elapsed + 9) / 10) * 10;
+            return stage + " · ~" + std::to_string(remaining) + "s typical remaining";
+        }
+        return stage + " · " + std::to_string(elapsed) + "s elapsed (longer than typical)";
+    }
+
     [[nodiscard]] std::optional<float> startupProgress(TimePoint now = Clock::now()) const {
         if (!remux_ || remoteReceivedAt_ == TimePoint{} || now - remoteReceivedAt_ > std::chrono::seconds(8) ||
-            remotePrefetch_.startupReady || remotePrefetch_.startupRequiredBytes == 0)
+            remotePrefetch_.startupRequiredBytes == 0)
             return std::nullopt;
+        if (remotePrefetch_.startupReady) return 1.0f;
         return static_cast<float>(std::min(1.0, static_cast<double>(remotePrefetch_.startupReadableBytes) /
                                                     static_cast<double>(remotePrefetch_.startupRequiredBytes)));
     }
@@ -239,6 +277,8 @@ private:
     TimePoint lastAdvancing_{};
     RemuxPrefetchStatus remotePrefetch_{};
     TimePoint remoteReceivedAt_{};
+    RemuxStartupProbeStatus remoteProbe_{};
+    TimePoint probeReceivedAt_{};
     TimePoint lastReadProgressAt_{};
     double observedReadRate_ = 0.0;
     int positiveReadSamples_ = 0;

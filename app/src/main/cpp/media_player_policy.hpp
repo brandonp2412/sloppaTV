@@ -118,6 +118,12 @@ constexpr int remuxFallbackStartPositionMs(int positionMs) {
     return positionMs < 1000 ? 0 : positionMs;
 }
 
+// Detect a missed start= seek only after real playback has advanced.
+// A cold/slow source must not be mistaken for a failed resume.
+constexpr bool initialResumeSeekMissed(int requestedMs, int observedMs, bool playing) {
+    return playing && requestedMs >= 10'000 && observedMs >= 4'000 && observedMs < requestedMs - 3'000;
+}
+
 // A resumed torrent must read the container index and a distant media range
 // before filling the player cache. Keep its full preparation budget: switching
 // sources after 30 seconds discards those reads and starts the cold seek again.

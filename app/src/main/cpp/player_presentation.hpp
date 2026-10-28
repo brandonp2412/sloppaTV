@@ -410,11 +410,26 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             finishLabel = "Ends " + formatLocalClock(finishAt, settings.clock24Hour);
         }
     }
+    const auto startupProgress = preparingInitialPlayback && isRemux ? buffer.startupProgress(now) : std::nullopt;
+    std::string startupLabel;
+    if (preparingInitialPlayback && isRemux) {
+        if (startupProgress) {
+            const int percent = static_cast<int>(*startupProgress * 100.0f);
+            const std::string eta = buffer.startupEta(now);
+            startupLabel = percent == 100
+                               ? "Startup buffer ready · opening player"
+                               : "Startup buffer " + std::to_string(percent) + "%" +
+                                     (eta.empty() ? " · measuring download speed" : eta);
+        } else {
+            startupLabel = buffer.startupSearchText(now);
+        }
+    }
+    // Keep the startup ETA in the existing status row, never on top of it.
     renderPlayerStatus(renderer,
                        PlayerStatusRenderState{
                            .clockText = clockText,
                            .finishText = finishLabel,
-                           .statusText = waitStatus,
+                           .statusText = startupLabel.empty() ? waitStatus : startupLabel,
                        },
                        PlayerStatusRenderStyle<Color>{
                            .muted = material_tv::onSurfaceVariant,
@@ -426,12 +441,21 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
 
     // During startup, this track measures verified consecutive bytes at the
     // requested range, not the torrent's overall downloaded percentage.
-    const auto startupProgress = preparingInitialPlayback ? buffer.startupProgress(now) : std::nullopt;
-    if (startupProgress) {
+    if (preparingInitialPlayback && isRemux) {
+        constexpr float x = 80.0f;
+        constexpr float y = 817.0f;
         constexpr float width = 590.0f;
-        renderer.roundedRect(80.0f, 817.0f, width, 6.0f, 3.0f, material_tv::track);
-        if (*startupProgress > 0.0f)
-            renderer.roundedRect(80.0f, 817.0f, width * *startupProgress, 6.0f, 3.0f, material_tv::primary);
+        renderer.roundedRect(x, y, width, 7.0f, 3.5f, material_tv::track);
+        if (startupProgress) {
+            if (*startupProgress > 0.0f)
+                renderer.roundedRect(x, y, width * *startupProgress, 7.0f, 3.5f, material_tv::primary);
+        } else {
+            // Unknown source / no trustworthy byte range yet: indeterminate, never a fake percentage.
+            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+            const float travel = static_cast<float>((elapsed % 1800) / 1800.0);
+            renderer.roundedRect(x + (width - 120.0f) * travel, y, 120.0f, 7.0f, 3.5f,
+                                 material_tv::primary);
+        }
     } else {
         // Once playing, retain the separate downloaded-file telemetry.
         const std::string remuxProgress = buffer.remotePrefetchText(now);
