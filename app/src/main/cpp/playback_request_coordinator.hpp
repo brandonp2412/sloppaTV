@@ -159,7 +159,7 @@ public:
         playback_.beginAutoplayResolution();
         loading_ = true;
         details_.item() = nextItem;
-        playerScreen_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(10));
+        playerScreen_.prepareForEpisodeAdvance(std::chrono::steady_clock::now());
         PlaybackResolutionOptions options = runtime_.resolutionOptions();
         if (resolution_.resolveAutoplay(session_, std::move(nextItem), std::move(options), playbackEpoch_.begin(),
                                         queuedNextIndex))

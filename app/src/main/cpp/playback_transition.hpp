@@ -13,6 +13,10 @@ struct PendingPlaybackTransition {
     int audioStreamIndex = -1;
 };
 
+inline bool isEpisodeAdvance(bool playerScreen, bool streamRestart, const JellyfinItem& item) {
+    return playerScreen && !streamRestart && item.type == "Episode";
+}
+
 class PlaybackTransitionState {
 public:
     void reset() {

@@ -9,6 +9,14 @@ int main() {
     assert(!state.fallbackResolving());
     assert(!state.pauseAfterRestart());
 
+    JellyfinItem episode;
+    episode.type = "Episode";
+    assert(isEpisodeAdvance(true, false, episode));
+    assert(!isEpisodeAdvance(false, false, episode));
+    assert(!isEpisodeAdvance(true, true, episode));
+    episode.type = "Movie";
+    assert(!isEpisodeAdvance(true, false, episode));
+
     PlaybackTarget target;
     target.url = "https://example.test/video";
     JellyfinItem item;

@@ -294,10 +294,10 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const bool userOverlayVisible = playerScreenState.overlayVisible(now);
     const bool showNextUp = shouldShowNextUpCard(playbackCoordinator.continuation().nextItem().has_value(), remainingMs,
                                                  userOverlayVisible, skipAffordanceVisible);
-    // During first load, keep playback controls available even on slow sources.
-    // The normal overlay timeout resumes once playback has started.
+    // Show controls during initial loading, but not during episode advancement.
     const bool preparingInitialPlayback = resolving || status == PlayerStatus::Preparing;
-    const bool showOverlay = preparingInitialPlayback || buffer.interrupted() || userOverlayVisible ||
+    const bool showOverlay = (preparingInitialPlayback && playerScreenState.preparationOverlayEnabled()) ||
+                             buffer.interrupted() || userOverlayVisible ||
                              playerScreenState.skipDisablePromptVisible();
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {

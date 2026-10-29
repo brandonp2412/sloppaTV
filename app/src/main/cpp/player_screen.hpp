@@ -84,6 +84,7 @@ public:
         pickerOptions_.clear();
         pickerSelected_ = 0;
         overlayUntil_ = {};
+        preparationOverlayEnabled_ = true;
         seekFeedbackSeconds_ = 0;
         seekFeedbackStarted_ = {};
         seekFeedbackUntil_ = {};
@@ -107,8 +108,9 @@ public:
         seekFeedbackUntil_ = {};
     }
 
-    void beginPlayback(int positionMs, int durationMs) {
+    void beginPlayback(int positionMs, int durationMs, bool showPreparationOverlay = true) {
         closeTrackPicker();
+        preparationOverlayEnabled_ = showPreparationOverlay;
         controlsActive_ = false;
         controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = {};
@@ -121,6 +123,13 @@ public:
         resetSkipButtonInteraction();
         ambientBars_.reset();
     }
+
+    void prepareForEpisodeAdvance(TimePoint now) {
+        preparationOverlayEnabled_ = false;
+        dismissOverlay(now);
+    }
+
+    [[nodiscard]] bool preparationOverlayEnabled() const { return preparationOverlayEnabled_; }
 
     [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
 
@@ -477,6 +486,7 @@ private:
     PlayerControl controlSelection_ = PlayerControl::PlayPause;
     TimePoint controlsUntil_{};
     TimePoint overlayUntil_{};
+    bool preparationOverlayEnabled_ = true;
     int seekFeedbackSeconds_ = 0;
     TimePoint seekFeedbackStarted_{};
     TimePoint seekFeedbackUntil_{};

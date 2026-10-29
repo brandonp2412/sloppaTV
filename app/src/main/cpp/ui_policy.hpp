@@ -5,6 +5,13 @@
 #include <string>
 #include <string_view>
 
+constexpr float animatedFocusScale(float desiredScale, bool animationEnabled, bool homeSelectionPress, long elapsedMs) {
+    if (!animationEnabled || homeSelectionPress || elapsedMs < 0 || elapsedMs >= 150) return desiredScale;
+    const float t = std::clamp(static_cast<float>(elapsedMs) / 150.0f, 0.0f, 1.0f);
+    const float remaining = 1.0f - t;
+    return 1.0f + (desiredScale - 1.0f) * (1.0f - remaining * remaining * remaining);
+}
+
 constexpr int mediaGridColumns() {
     return 5;
 }

@@ -178,7 +178,10 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
     };
 
     if (frame.screen == Screen::ItemMenu) {
+        // The foreground menu consumes D-pad input; keep the background focus static.
+        frame.ui.setFocusAnimationEnabled(false);
         renderScreen(frame.backgroundScreen);
+        frame.ui.setFocusAnimationEnabled(true);
         std::vector<std::string> actions;
         if (!frame.detailsFlow.state().deleteConfirmation()) {
             actions = frame.detailsFlow.itemMenuActions(

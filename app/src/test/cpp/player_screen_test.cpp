@@ -38,6 +38,18 @@ int main() {
     assert(!state.controlsActive(now + 21s));
     assert(!state.shouldDismissOnBack(now + 21s));
 
+    PlayerScreenState nextEpisodeState;
+    nextEpisodeState.showControls(now);
+    assert(nextEpisodeState.preparationOverlayEnabled());
+    nextEpisodeState.prepareForEpisodeAdvance(now + 1s);
+    assert(!nextEpisodeState.controlsActive(now + 1s));
+    assert(!nextEpisodeState.overlayVisible(now + 1s));
+    assert(!nextEpisodeState.preparationOverlayEnabled());
+    nextEpisodeState.beginPlayback(0, 50'000, false);
+    assert(!nextEpisodeState.preparationOverlayEnabled());
+    nextEpisodeState.beginPlayback(0, 50'000);
+    assert(nextEpisodeState.preparationOverlayEnabled());
+
     PlayerScreenState resumeState;
     resumeState.beginInitialPosition(60'000, now);
     assert(resumeState.positionMs() == 60'000);

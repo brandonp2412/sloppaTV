@@ -24,6 +24,7 @@
 
 struct PlaybackTransitionTickWork {
     std::optional<PendingPlaybackTransition> transition;
+    bool episodeAdvance = false;
     bool subtitleLoadFailed = false;
 };
 
@@ -58,10 +59,13 @@ public:
         auto& target = transition.target;
         auto& item = transition.item;
         const bool streamRestart = transition.streamRestart;
+        work.episodeAdvance = isEpisodeAdvance(screen_ == Screen::Player, streamRestart, item);
+        const auto now = std::chrono::steady_clock::now();
+        if (work.episodeAdvance) playerScreen_.prepareForEpisodeAdvance(now);
         const PlaybackTransitionPlan plan = playback_.activateTransition(
             item, target, streamRestart, transition.restartPaused, transition.audioStreamIndex,
-            static_cast<VideoZoomMode>(settings_.zoomMode), std::chrono::steady_clock::now());
-        playerScreen_.beginPlayback(plan.startPositionMs, plan.durationMs);
+            static_cast<VideoZoomMode>(settings_.zoomMode), now);
+        playerScreen_.beginPlayback(plan.startPositionMs, plan.durationMs, !work.episodeAdvance);
         if (plan.resetContinuation) playback_.syncQueueContinuation(queue_);
 
         if (const auto* selectedSubtitle = playback_.selectedSubtitleStream()) {
@@ -106,7 +110,7 @@ public:
         }
         mediaSession_.updateMetadata(item.name, episodeLabel(item), playbackPositionMsFromTicks(item.runtimeTicks));
         mediaSession_.updateState(MediaSessionState::Buffering, playbackPositionMsFromTicks(target.startTicks));
-        playerScreen_.showControls(std::chrono::steady_clock::now());
+        if (!work.episodeAdvance) playerScreen_.showControls(std::chrono::steady_clock::now());
         runtime_.startResolvedTarget();
         return {.handled = true};
     }

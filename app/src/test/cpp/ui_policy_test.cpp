@@ -3,6 +3,12 @@
 #include <cassert>
 
 int main() {
+    // D-pad activity in a foreground modal does not reanimate background focus.
+    assert(animatedFocusScale(1.05f, true, false, 0) == 1.0f);
+    assert(animatedFocusScale(1.05f, false, false, 0) == 1.05f);
+    assert(animatedFocusScale(1.05f, false, false, 75) == 1.05f);
+    assert(animatedFocusScale(1.05f, true, true, 0) == 1.05f);
+    assert(animatedFocusScale(1.05f, true, false, 150) == 1.05f);
     assert(mediaGridColumns() == 5);
     assert(isTopMediaGridSelection(0));
     assert(isTopMediaGridSelection(4));

@@ -37,7 +37,10 @@ public:
         clock24Hour_ = settings.clock24Hour;
         lastInteraction_ = lastInteraction;
         homeSelectionPress_ = homeSelectionPress;
+        focusAnimationEnabled_ = true;
     }
+
+    void setFocusAnimationEnabled(bool enabled) { focusAnimationEnabled_ = enabled; }
 
     void drawCoverTexture(const ArtworkEntry& entry, float x, float y, float width, float height, float alpha = 1.0f,
                           float radius = material_tv::cornerSmall) {
@@ -156,13 +159,7 @@ public:
         const auto elapsedMs =
             std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - lastInteraction_)
                 .count();
-        float animatedScale = scale;
-        if (!homeSelectionPress_ && elapsedMs >= 0 && elapsedMs < 150) {
-            const float t = std::clamp(static_cast<float>(elapsedMs) / 150.0f, 0.0f, 1.0f);
-            const float remaining = 1.0f - t;
-            const float eased = 1.0f - remaining * remaining * remaining;
-            animatedScale = 1.0f + (scale - 1.0f) * eased;
-        }
+        const float animatedScale = animatedFocusScale(scale, focusAnimationEnabled_, homeSelectionPress_, elapsedMs);
         const float scaledWidth = width * animatedScale;
         const float scaledHeight = height * animatedScale;
         return {
@@ -395,5 +392,6 @@ private:
     bool showClock_ = true;
     bool clock24Hour_ = false;
     bool homeSelectionPress_ = false;
+    bool focusAnimationEnabled_ = true;
     std::chrono::steady_clock::time_point lastInteraction_{};
 };
