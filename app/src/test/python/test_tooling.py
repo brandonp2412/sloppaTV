@@ -351,7 +351,8 @@ class WaydroidToolingTest(unittest.TestCase):
         series_keys = [
             step["key"] for step in suite["steps"][series_restart + 1 : series_capture] if step["action"] == "key"
         ]
-        self.assertEqual(series_keys, ["DPAD_UP"] * 8 + ["DPAD_DOWN"] * 3 + ["DPAD_RIGHT", "DPAD_CENTER"])
+        self.assertEqual(series_keys, ["DPAD_DOWN", "DPAD_RIGHT", "DPAD_CENTER"])
+        self.assertIn("GET /Users/fixture-user/Items?ParentId=shows", fixture_assertions)
         # From Continue Watching, one DOWN selects My Media; the first
         # CENTER opens Movies, and the second opens Big Buck Bunny details.
         for name, expected_centers in (
