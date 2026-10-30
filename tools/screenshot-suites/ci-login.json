@@ -29,8 +29,8 @@
     {"action": "capture", "name": "04-search-catalog", "store": true},
     {"action": "restart", "wait_seconds": 3},
 
-    {"action": "key", "key": "DPAD_DOWN"},
     {"action": "key", "key": "DPAD_DOWN", "wait_seconds": 2},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 2},
     {"action": "fixture_log", "contains": "GET /Users/fixture-user/Items/Latest?ParentId=movies", "timeout_seconds": 8},
     {"action": "capture", "name": "05-movie-browse", "store": true},
     {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 2},
@@ -46,7 +46,7 @@
 
     {"action": "restart", "wait_seconds": 3},
     {"action": "key", "key": "DPAD_DOWN"},
-    {"action": "key", "key": "DPAD_DOWN"},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 2},
     {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 2},
     {"action": "fixture_log", "contains": "GET /Users/fixture-user/Items/movie-big-buck-bunny?", "timeout_seconds": 8, "fresh": true},
     {"action": "key", "key": "DPAD_RIGHT"},
@@ -58,7 +58,7 @@
 
     {"action": "restart", "wait_seconds": 3},
     {"action": "key", "key": "DPAD_DOWN"},
-    {"action": "key", "key": "DPAD_DOWN"},
+    {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 2},
     {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 2},
     {"action": "fixture_log", "contains": "GET /Users/fixture-user/Items/movie-big-buck-bunny?", "timeout_seconds": 8, "fresh": true},
     {"action": "key", "key": "DPAD_CENTER", "wait_seconds": 0.2},

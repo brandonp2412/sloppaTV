@@ -326,9 +326,9 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("GET /Users/fixture-user/Items/movie-big-buck-bunny?", fixture_assertions)
         self.assertIn("GET /Users/fixture-user/Items/series-open-classics?", fixture_assertions)
         for capture_name, down_count in (
-            ("05-movie-browse", 2),
-            ("09-item-menu", 2),
-            ("10-player-cc-video", 2),
+            ("05-movie-browse", 1),
+            ("09-item-menu", 1),
+            ("10-player-cc-video", 1),
         ):
             capture_index = next(
                 index
@@ -352,14 +352,14 @@ class WaydroidToolingTest(unittest.TestCase):
             step["key"] for step in suite["steps"][series_restart + 1 : series_capture] if step["action"] == "key"
         ]
         self.assertEqual(series_keys, ["DPAD_UP"] * 8 + ["DPAD_DOWN"] * 3 + ["DPAD_RIGHT", "DPAD_CENTER"])
-        # The second DOWN focuses the movie grid; CENTER then opens details.
-        # An extra CENTER launches playback and mislabels the captured screen.
+        # From Continue Watching, one DOWN selects My Media; the first
+        # CENTER opens Movies, and the second opens Big Buck Bunny details.
         for name, expected_centers in (
-            ("05-movie-browse", 0),
-            ("06-movie-details", 1),
-            ("07-cast", 2),
-            ("09-item-menu", 2),
-            ("10-player-cc-video", 2),
+            ("05-movie-browse", 1),
+            ("06-movie-details", 2),
+            ("07-cast", 3),
+            ("09-item-menu", 3),
+            ("10-player-cc-video", 3),
             ("12-series-browse", 1),
             ("13-series-details", 2),
         ):
