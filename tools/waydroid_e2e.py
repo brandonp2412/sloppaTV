@@ -211,9 +211,10 @@ def media_session_playback_state(output: str, package: str) -> int | None:
 def require_playback_session(timeout_seconds: float = 5.0) -> None:
     deadline = time.monotonic() + timeout_seconds
     last_state: int | None = None
+    last_sessions = ""
     while time.monotonic() < deadline:
-        sessions = adb("shell", "dumpsys", "media_session", capture=True, timeout=60.0)
-        last_state = media_session_playback_state(sessions, PACKAGE)
+        last_sessions = adb("shell", "dumpsys", "media_session", capture=True, timeout=60.0)
+        last_state = media_session_playback_state(last_sessions, PACKAGE)
         # Android PlaybackState: 2=paused, 3=playing. Merely having a MediaSession
         # is not enough: failed libmpv startup used to leave acceptance screenshots
         # looking like a player test had passed after playback had already aborted.
@@ -221,6 +222,15 @@ def require_playback_session(timeout_seconds: float = 5.0) -> None:
             return
         time.sleep(0.2)
     state_label = "missing" if last_state is None else str(last_state)
+    if last_state is None:
+        # Include only app-owned headings/owner fields, never other media
+        # sessions' metadata, so CI failures distinguish parsing from startup.
+        app_rows = [
+            line.strip()[:240]
+            for line in last_sessions.splitlines()
+            if PACKAGE in line and ("(userId=" in line or "package=" in line)
+        ]
+        state_label += f" (dumpsys app rows: {app_rows[:6]})"
     raise RuntimeError(
         f"sloppaTV playback is not active; expected playing/paused media session but state was {state_label}"
     )

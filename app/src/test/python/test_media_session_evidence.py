@@ -45,6 +45,28 @@ class MediaSessionEvidenceTest(unittest.TestCase):
         self.assertIsNone(media_session_playback_state(OTHER, PACKAGE))
         self.assertIsNone(app_session_block(OTHER, PACKAGE))
 
+    def test_android_tv_session_instance_suffix_proves_own_playback(self):
+        active = (
+            "    sloppaTV app.sloppatv/sloppaTV/5 (userId=0)\n"
+            "      package=app.sloppatv\n"
+            "      active=true\n"
+            "      state=PlaybackState {state=PLAYING(3), position=166, speed=1.0}\n"
+        )
+        self.assertEqual(media_session_playback_state(OTHER + active, PACKAGE), 3)
+
+    def test_renamed_session_uses_exact_package_and_skips_inactive_record(self):
+        stale = session("PlaybackState {state=STOPPED(1), position=0}", active=False)
+        renamed = (
+            "    media-42 app.sloppatv/custom (userId=0)\n"
+            "      package=app.sloppatv\n"
+            "      active=true\n"
+            "      state=PlaybackState {state=PAUSED(2), position=1200, speed=0.0}\n"
+        )
+        self.assertEqual(media_session_playback_state(stale + OTHER + renamed, PACKAGE), 2)
+        self.assertIsNone(
+            media_session_playback_state(renamed.replace("package=app.sloppatv", "package=app.sloppatv.fake"), PACKAGE)
+        )
+
     def test_audio_requires_matching_live_active_track(self):
         output = "\n".join(
             (
