@@ -796,17 +796,20 @@ class Handler(BaseHTTPRequestHandler):
                     time.sleep(REMUX_INFLIGHT_PROBE_SECONDS - elapsed)
                     elapsed = time.monotonic() - started
                 if elapsed < REMUX_STARTUP_WAIT_SECONDS:
-                    self.send_json({
-                        "ErrorCode": "P2P_SOURCE_BUFFERING",
-                        "SourceId": "00000000-0000-4000-8000-000000000001",
-                        "RetryAfterSeconds": 2,
-                        "StartupRequiredBytes": 16_777_216,
-                        "StartupReadableBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
-                        "CurrentCachedBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
-                        "CurrentTotalBytes": 268_435_456,
-                        "DownloadMiBps": 1.2,
-                        "LivePeers": 3,
-                    }, 503)
+                    self.send_json(
+                        {
+                            "ErrorCode": "P2P_SOURCE_BUFFERING",
+                            "SourceId": "00000000-0000-4000-8000-000000000001",
+                            "RetryAfterSeconds": 2,
+                            "StartupRequiredBytes": 16_777_216,
+                            "StartupReadableBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                            "CurrentCachedBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                            "CurrentTotalBytes": 268_435_456,
+                            "DownloadMiBps": 1.2,
+                            "LivePeers": 3,
+                        },
+                        503,
+                    )
                     return
             is_e2e = item_id in E2E_STREAM_MODES
             video_codec = "hevc" if E2E_STREAM_MODES.get(item_id) == "decoder" else "h264"
@@ -838,24 +841,28 @@ class Handler(BaseHTTPRequestHandler):
             started = REMUX_STARTUP_STARTED.get(startup_probe.group(1))
             active = started is not None and time.monotonic() - started < REMUX_INFLIGHT_PROBE_SECONDS
             elapsed = max(0.0, time.monotonic() - started) if started else 0.0
-            self.send_json({
-                "Active": active,
-                "SourceId": "00000000-0000-4000-8000-000000000001" if active else None,
-                "CandidateIndex": 1 if active else 0,
-                "CandidateCount": 3 if active else 0,
-                "ElapsedSeconds": int(elapsed),
-                "ProbeElapsedSeconds": int(elapsed),
-                "ProbeBudgetSeconds": 60,
-                "Prefetch": {
-                    "currentCachedBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
-                    "currentTotalBytes": 268_435_456,
-                    "downloadMibps": 1.2,
-                    "livePeers": 3,
-                    "startupRequiredBytes": 16_777_216,
-                    "startupReadableBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
-                    "startupReady": False,
-                } if active else None,
-            })
+            self.send_json(
+                {
+                    "Active": active,
+                    "SourceId": "00000000-0000-4000-8000-000000000001" if active else None,
+                    "CandidateIndex": 1 if active else 0,
+                    "CandidateCount": 3 if active else 0,
+                    "ElapsedSeconds": int(elapsed),
+                    "ProbeElapsedSeconds": int(elapsed),
+                    "ProbeBudgetSeconds": 60,
+                    "Prefetch": {
+                        "currentCachedBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                        "currentTotalBytes": 268_435_456,
+                        "downloadMibps": 1.2,
+                        "livePeers": 3,
+                        "startupRequiredBytes": 16_777_216,
+                        "startupReadableBytes": int(16_777_216 * elapsed / REMUX_STARTUP_WAIT_SECONDS),
+                        "startupReady": False,
+                    }
+                    if active
+                    else None,
+                }
+            )
             return
 
         if path == "/System/Info/Public":

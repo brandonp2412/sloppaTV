@@ -193,16 +193,18 @@ public:
             remoteProbe_.active) {
             if (remoteProbe_.candidateIndex > 0) {
                 stage = "Checking source " + std::to_string(remoteProbe_.candidateIndex);
-                if (remoteProbe_.candidateCount > 0)
-                    stage += "/" + std::to_string(remoteProbe_.candidateCount);
+                if (remoteProbe_.candidateCount > 0) stage += "/" + std::to_string(remoteProbe_.candidateCount);
             } else {
                 stage = "Ranking sources";
             }
         }
-        const int elapsed = phaseStarted_ == TimePoint{} ? 0 :
-            std::max(0, static_cast<int>(std::chrono::duration_cast<std::chrono::seconds>(now - phaseStarted_).count()));
-        const int typical = resolveSamples_ >= 3
-            ? std::clamp(static_cast<int>(std::round(resolveAverageSeconds_)), 20, 180) : 60;
+        const int elapsed =
+            phaseStarted_ == TimePoint{}
+                ? 0
+                : std::max(0, static_cast<int>(
+                                  std::chrono::duration_cast<std::chrono::seconds>(now - phaseStarted_).count()));
+        const int typical =
+            resolveSamples_ >= 3 ? std::clamp(static_cast<int>(std::round(resolveAverageSeconds_)), 20, 180) : 60;
         if (elapsed < typical - 5) {
             const int remaining = ((typical - elapsed + 9) / 10) * 10;
             return stage + " · ~" + std::to_string(remaining) + "s typical remaining";

@@ -48,8 +48,7 @@ public:
                               generation]() mutable {
             reportStopIfNeeded("stop", session, item, previousTarget, item.positionTicks, reportPrevious);
             auto target = awaitRemuxStartup(
-                [&] { return resolve(session, item, options); },
-                [&] { return epoch_.active(generation); },
+                [&] { return resolve(session, item, options); }, [&] { return epoch_.active(generation); },
                 [&](const PendingRemuxPlayback& pending) {
                     completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
                 });
@@ -71,8 +70,7 @@ public:
                               generation]() mutable {
             reportStopIfNeeded("stop-after-failure", session, item, failedTarget, resumeTicks, reportPrevious);
             auto target = awaitRemuxStartup(
-                [&] { return resolve(session, item, options); },
-                [&] { return epoch_.active(generation); },
+                [&] { return resolve(session, item, options); }, [&] { return epoch_.active(generation); },
                 [&](const PendingRemuxPlayback& pending) {
                     completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
                 });

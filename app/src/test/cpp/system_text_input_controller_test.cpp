@@ -79,9 +79,9 @@ int main() {
     assert(search.finishLibrarySearch("visible results", {first, second}));
     search.setSelection(1);
     controller.begin(kTextInputSearch, search.query());
-    effects = controller.apply(
-        systemTextInputEvent(SystemTextInputPhase::Cancelled, kTextInputSearch, "visible results"), search,
-        settingsScreen, settings, account);
+    effects =
+        controller.apply(systemTextInputEvent(SystemTextInputPhase::Cancelled, kTextInputSearch, "visible results"),
+                         search, settingsScreen, settings, account);
     assert(!controller.active());
     assert(!effects.scheduleSearch);
     assert(search.selection() == 1);
@@ -90,9 +90,8 @@ int main() {
 
     // A final IME value still takes effect if its change callback has not arrived yet.
     controller.begin(kTextInputSearch, search.query());
-    effects = controller.apply(
-        systemTextInputEvent(SystemTextInputPhase::Cancelled, kTextInputSearch, "newer results"), search,
-        settingsScreen, settings, account);
+    effects = controller.apply(systemTextInputEvent(SystemTextInputPhase::Cancelled, kTextInputSearch, "newer results"),
+                               search, settingsScreen, settings, account);
     assert(effects.scheduleSearch);
     assert(search.query() == "newer results");
 

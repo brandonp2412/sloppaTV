@@ -48,9 +48,11 @@ void parseRemuxPrefetch(const json& data, RemuxPrefetchStatus& stats) {
     stats.currentCachedBytes = data.value("currentCachedBytes", uint64_t{0});
     stats.currentTotalBytes = data.value("currentTotalBytes", uint64_t{0});
     stats.nextCachedBytes = data.contains("nextCachedBytes") && data["nextCachedBytes"].is_number_unsigned()
-                              ? data["nextCachedBytes"].get<uint64_t>() : 0;
+                                ? data["nextCachedBytes"].get<uint64_t>()
+                                : 0;
     stats.nextTotalBytes = data.contains("nextTotalBytes") && data["nextTotalBytes"].is_number_unsigned()
-                              ? data["nextTotalBytes"].get<uint64_t>() : 0;
+                               ? data["nextTotalBytes"].get<uint64_t>()
+                               : 0;
     stats.downloadMiBps = data.value("downloadMibps", 0.0);
     stats.livePeers = data.value("livePeers", uint64_t{0});
     stats.startupRequiredBytes = data.value("startupRequiredBytes", uint64_t{0});
@@ -1018,8 +1020,8 @@ ApiValueResult<RemuxPrefetchStatus> JellyfinClient::remuxPrefetchStatus(const Je
     return result;
 }
 
-ApiValueResult<RemuxStartupProbeStatus> JellyfinClient::remuxStartupProbeStatus(
-    const JellyfinSession& session, const std::string& itemId) const {
+ApiValueResult<RemuxStartupProbeStatus> JellyfinClient::remuxStartupProbeStatus(const JellyfinSession& session,
+                                                                                const std::string& itemId) const {
     ApiValueResult<RemuxStartupProbeStatus> result;
     if (!session.valid() || itemId.empty()) return result;
     const auto response = http_.request("GET", session.server + "/Remux/Startup/" + urlEncode(itemId),

@@ -73,12 +73,12 @@ public:
                            uint64_t generation) {
         return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
                               generation]() mutable {
-            auto resolved = awaitRemuxStartup(
-                [&] { return resolvePreferredPlayback(client_, session, item, options); },
-                [&] { return epoch_.active(generation); },
-                [&](const PendingRemuxPlayback& pending) {
-                    completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
-                });
+            auto resolved =
+                awaitRemuxStartup([&] { return resolvePreferredPlayback(client_, session, item, options); },
+                                  [&] { return epoch_.active(generation); },
+                                  [&](const PendingRemuxPlayback& pending) {
+                                      completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
+                                  });
             if (!epoch_.active(generation)) return;
             completions_.push(PlayerItemPlaybackCompletion{
                 .generation = generation,
@@ -92,12 +92,12 @@ public:
                          uint64_t generation, int queuedNextIndex) {
         return tasks_.submit([this, session = std::move(session), item = std::move(item), options = std::move(options),
                               generation, queuedNextIndex]() mutable {
-            auto resolved = awaitRemuxStartup(
-                [&] { return resolvePreferredPlayback(client_, session, item, options); },
-                [&] { return epoch_.active(generation); },
-                [&](const PendingRemuxPlayback& pending) {
-                    completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
-                });
+            auto resolved =
+                awaitRemuxStartup([&] { return resolvePreferredPlayback(client_, session, item, options); },
+                                  [&] { return epoch_.active(generation); },
+                                  [&](const PendingRemuxPlayback& pending) {
+                                      completions_.push(RemuxPlaybackPendingCompletion{generation, item.id, pending});
+                                  });
             if (!epoch_.active(generation)) return;
             completions_.push(AutoplayPlaybackCompletion{
                 .generation = generation,
@@ -161,8 +161,8 @@ public:
             auto target = awaitRemuxStartup(
                 [&] {
                     return client_.resolvePlayback(session, negotiation, options.maxStreamingBitrate,
-                                                   options.maxAudioChannels, options.overrides,
-                                                   tracks.audioStreamIndex, tracks.subtitleStreamIndex);
+                                                   options.maxAudioChannels, options.overrides, tracks.audioStreamIndex,
+                                                   tracks.subtitleStreamIndex);
                 },
                 [&] { return epoch_.active(generation); },
                 [&](const PendingRemuxPlayback& pending) {

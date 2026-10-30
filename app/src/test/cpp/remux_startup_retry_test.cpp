@@ -11,7 +11,8 @@ int main() {
         [&] {
             ++calls;
             ApiValueResult<int> result;
-            result.pendingRemuxPlayback = PendingRemuxPlayback{.sourceId = "pending", .prefetch = {}, .retryAfterSeconds = 2};
+            result.pendingRemuxPlayback =
+                PendingRemuxPlayback{.sourceId = "pending", .prefetch = {}, .retryAfterSeconds = 2};
             return result;
         },
         [&] { return active; },
@@ -31,7 +32,6 @@ int main() {
             result.value = 42;
             return result;
         },
-        [] { return true; },
-        [&](const PendingRemuxPlayback&) { ++notifications; });
+        [] { return true; }, [&](const PendingRemuxPlayback&) { ++notifications; });
     assert(ready.ok && ready.value == 42 && calls == 1 && notifications == 1);
 }

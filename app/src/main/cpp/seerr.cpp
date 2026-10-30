@@ -194,7 +194,8 @@ std::string cookieValue(const std::string& headers, const std::string& wanted) {
     size_t start = 0;
     while (start < headers.size()) {
         const size_t end = headers.find('\n', start);
-        const std::string_view line(headers.data() + start, (end == std::string::npos ? headers.size() : end) - start);
+        const std::string_view line =
+            std::string_view(headers).substr(start, (end == std::string::npos ? headers.size() : end) - start);
         const size_t equals = line.find('=');
         if (equals != std::string_view::npos && line.substr(0, equals) == wanted) {
             const size_t semi = line.find(';', equals + 1);
@@ -213,7 +214,8 @@ std::string sessionCookie(const std::string& setCookies) {
     size_t start = 0;
     while (start < setCookies.size()) {
         const size_t end = setCookies.find('\n', start);
-        std::string_view line(setCookies.data() + start, (end == std::string::npos ? setCookies.size() : end) - start);
+        const std::string_view line =
+            std::string_view(setCookies).substr(start, (end == std::string::npos ? setCookies.size() : end) - start);
         const size_t equals = line.find('=');
         if (equals != std::string_view::npos) {
             const std::string_view name = line.substr(0, equals);

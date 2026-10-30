@@ -1568,8 +1568,7 @@ private:
         if (!requestEpochs_.playback.active(completion.generation) || screen_ != Screen::Player ||
             !playbackCoordinator_.activeItemAvailable())
             return;
-        if (playbackCoordinator_.session().activeItem().id != completion.itemId ||
-            completion.pending.sourceId.empty())
+        if (playbackCoordinator_.session().activeItem().id != completion.itemId || completion.pending.sourceId.empty())
             return;
         pendingRemuxItemId_ = completion.itemId;
         pendingRemuxSourceId_ = completion.pending.sourceId;
@@ -1583,13 +1582,12 @@ private:
         remuxStatsInFlight_ = false;
         if (!completion.result.ok || screen_ != Screen::Player || completion.userId != session_.userId ||
             !playbackCoordinator_.activeItemAvailable() ||
-            playbackCoordinator_.session().activeItem().id != completion.itemId ||
-            !pendingRemuxSourceId_.empty() || playbackCoordinator_.activeTargetAvailable())
+            playbackCoordinator_.session().activeItem().id != completion.itemId || !pendingRemuxSourceId_.empty() ||
+            playbackCoordinator_.activeTargetAvailable())
             return;
         const auto& probe = completion.result.value;
         if (!probe.sourceId.empty() && probe.hasPrefetch) {
-            if (probe.sourceId != remuxStatsSourceId_)
-                playerScreenState_.bufferIndicator().clearRemotePrefetch();
+            if (probe.sourceId != remuxStatsSourceId_) playerScreenState_.bufferIndicator().clearRemotePrefetch();
             playerScreenState_.bufferIndicator().setRemotePrefetch(probe.prefetch);
             remuxStatsSourceId_ = probe.sourceId;
         }

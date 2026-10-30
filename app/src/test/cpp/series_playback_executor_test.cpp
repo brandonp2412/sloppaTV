@@ -23,6 +23,7 @@ struct ImmediateTaskRunner {
 
 struct CompletionSink {
     void push(SeriesPlayAllCompletion completion) { events.push_back(std::move(completion)); }
+
     void push(RemuxPlaybackPendingCompletion completion) { pending.push_back(std::move(completion)); }
 
     std::vector<SeriesPlayAllCompletion> events;

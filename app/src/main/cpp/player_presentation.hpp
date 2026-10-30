@@ -297,8 +297,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     // Show controls during initial loading, but not during episode advancement.
     const bool preparingInitialPlayback = resolving || status == PlayerStatus::Preparing;
     const bool showOverlay = (preparingInitialPlayback && playerScreenState.preparationOverlayEnabled()) ||
-                             buffer.interrupted() || userOverlayVisible ||
-                             playerScreenState.skipDisablePromptVisible();
+                             buffer.interrupted() || userOverlayVisible || playerScreenState.skipDisablePromptVisible();
     std::string subtitleText = player.subtitleText();
     if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
         subtitleText = cue->text;
@@ -416,10 +415,9 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         if (startupProgress) {
             const int percent = static_cast<int>(*startupProgress * 100.0f);
             const std::string eta = buffer.startupEta(now);
-            startupLabel = percent == 100
-                               ? "Startup buffer ready · opening player"
-                               : "Startup buffer " + std::to_string(percent) + "%" +
-                                     (eta.empty() ? " · measuring download speed" : eta);
+            startupLabel = percent == 100 ? "Startup buffer ready · opening player"
+                                          : "Startup buffer " + std::to_string(percent) + "%" +
+                                                (eta.empty() ? " · measuring download speed" : eta);
         } else {
             startupLabel = buffer.startupSearchText(now);
         }
@@ -452,9 +450,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
         } else {
             // Unknown source / no trustworthy byte range yet: indeterminate, never a fake percentage.
             const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-            const float travel = static_cast<float>((elapsed % 1800) / 1800.0);
-            renderer.roundedRect(x + (width - 120.0f) * travel, y, 120.0f, 7.0f, 3.5f,
-                                 material_tv::primary);
+            const float travel = static_cast<float>(elapsed % 1800) / 1800.0f;
+            renderer.roundedRect(x + (width - 120.0f) * travel, y, 120.0f, 7.0f, 3.5f, material_tv::primary);
         }
     } else {
         // Once playing, retain the separate downloaded-file telemetry.
