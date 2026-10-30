@@ -352,12 +352,14 @@ class WaydroidToolingTest(unittest.TestCase):
             step["key"] for step in suite["steps"][series_restart + 1 : series_capture] if step["action"] == "key"
         ]
         self.assertEqual(series_keys, ["DPAD_UP"] * 8 + ["DPAD_DOWN"] * 3 + ["DPAD_RIGHT", "DPAD_CENTER"])
+        # The second DOWN focuses the movie grid; CENTER then opens details.
+        # An extra CENTER launches playback and mislabels the captured screen.
         for name, expected_centers in (
-            ("05-movie-browse", 1),
-            ("06-movie-details", 2),
-            ("07-cast", 3),
-            ("09-item-menu", 3),
-            ("10-player-cc-video", 3),
+            ("05-movie-browse", 0),
+            ("06-movie-details", 1),
+            ("07-cast", 2),
+            ("09-item-menu", 2),
+            ("10-player-cc-video", 2),
             ("12-series-browse", 1),
             ("13-series-details", 2),
         ):
