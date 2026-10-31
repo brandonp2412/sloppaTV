@@ -795,7 +795,7 @@ class WaydroidToolingTest(unittest.TestCase):
 
     def test_ci_screenshot_script_rejects_non_emulator_by_default(self) -> None:
         environment = os.environ.copy()
-        environment["ANDROID_SERIAL"] = "192.168.240.2:5555"
+        environment["ANDROID_SERIAL"] = "192.168.100.200:5555"
         environment.pop("SLOPPATV_SCREENSHOT_TARGET", None)
         result = subprocess.run(
             [str(ROOT / "tools" / "ci_screenshots.sh")],
@@ -810,7 +810,7 @@ class WaydroidToolingTest(unittest.TestCase):
 
     def test_ci_screenshot_script_allows_explicit_waydroid_target(self) -> None:
         environment = os.environ.copy()
-        environment["ANDROID_SERIAL"] = "192.168.240.2:5555"
+        environment["ANDROID_SERIAL"] = "192.168.100.200:5555"
         environment["SLOPPATV_SCREENSHOT_TARGET"] = "waydroid"
         environment.pop("SLOPPATV_APK", None)
         result = subprocess.run(

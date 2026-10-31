@@ -38,7 +38,7 @@ def load_local_env() -> None:
 
 
 def authorization(token: str = "", device_id: str = DEVICE_ID) -> str:
-    value = f'MediaBrowser Client="{CLIENT}",Version="{VERSION}",DeviceId="{device_id}",Device="Glass"'
+    value = f'MediaBrowser Client="{CLIENT}",Version="{VERSION}",DeviceId="{device_id}",Device="Fixture Client"'
     if token:
         value += f',Token="{token}"'
     return value

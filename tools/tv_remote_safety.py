@@ -42,6 +42,6 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--serial", default="192.168.1.114:5555")
+    parser.add_argument("--serial", required=True)
     check_tv_remote(parser.parse_args().serial)
     print("Physical TV remote preflight passed")

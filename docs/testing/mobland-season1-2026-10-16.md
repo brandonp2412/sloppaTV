@@ -39,6 +39,6 @@ These are end-to-end playback samples across each episode, rather than continuou
 
 ## Deployment
 
-App code: `31ca6353` (plus the preceding playback fix `e14d97c7`). Remux code: `c8a20eed` (Cargo development build, as authorized). The deployed Remux binary hash was checked against the compiled artifact, and `remux.service` remained active. Previous backend binary/database backup: `/var/lib/remux/e2e-backups/mobland-20261016/` on Nox.
+App code: `31ca6353` (plus the preceding playback fix `e14d97c7`). Remux code: `c8a20eed` (Cargo development build, as authorized). The deployed Remux binary hash was checked against the compiled artifact, and `remux.service` remained active. Previous backend binary/database backup: `/var/lib/remux/e2e-backups/mobland-20261016/` on test host.
 
 Work stopped at the user’s request during the final recheck. All ten episodes passed the earlier debug-build samples. The subsequent release S1E2 check played video/audio but failed its midpoint seek after a direct-stream HTTP 400 led to server conversion. Commit `aa91d5e5` adds alternative-source retry before conversion; its build and host tests passed, but its physical-device playback recheck was interrupted and is unverified. Original watch state was independently checked/restored for all ten episodes. The latest signed release is installed as part of wrap-up; no successful final-release end-to-end claim is made.

@@ -1,6 +1,6 @@
 {
   "date": "2026-09-08",
-  "host": "Nox",
+  "host": "development machine",
   "base_commit": "6aba864",
   "benchmarks": {
     "host_test_suite_seconds": {

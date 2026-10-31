@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tiny forward proxy used by the Waydroid acceptance environment.
 
-Waydroid on Glass is configured to use the host gateway at WAYDROID_GATEWAY:8888.
+The emulator can use its configured host gateway at WAYDROID_GATEWAY:8888.
 This proxy intentionally tunnels HTTPS with CONNECT rather than intercepting TLS, so
 Android clients still validate the destination server's real certificate.
 """
