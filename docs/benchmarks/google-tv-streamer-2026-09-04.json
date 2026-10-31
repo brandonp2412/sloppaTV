@@ -304,9 +304,9 @@
   },
   "embedded_mpv_acceptance": {
     "captured_at": "2026-09-06T04:52:02Z",
-    "item_id": "0f7eb629d7226090734bab5c9a3dbff1",
+    "item_id": "redacted-media-id",
     "item": "Planet Earth III S1E2 - Ocean",
-    "server": "https://jellyfin.presley.nz",
+    "server": "https://media.example.test",
     "client_playback_method": "DirectPlay",
     "client_decoder": "c2.mtk.avc.decoder",
     "client_video_codec": "H.264 / AVC",
