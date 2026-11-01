@@ -600,8 +600,8 @@ public:
 
     void finishPlaybackResolution() { transitionState_.setLoading(false); }
 
-    void stageResolvedPlayback(PlaybackTarget target, JellyfinItem item) {
-        transitionState_.stage(std::move(target), std::move(item));
+    void stageResolvedPlayback(PlaybackTarget target, JellyfinItem item, bool automaticEpisodeAdvance = false) {
+        transitionState_.stage(std::move(target), std::move(item), false, false, -1, automaticEpisodeAdvance);
     }
 
     [[nodiscard]] std::optional<PendingPlaybackTransition> takePendingTransition() { return transitionState_.take(); }

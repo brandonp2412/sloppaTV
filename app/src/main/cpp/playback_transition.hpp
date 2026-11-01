@@ -11,10 +11,12 @@ struct PendingPlaybackTransition {
     bool streamRestart = false;
     bool restartPaused = false;
     int audioStreamIndex = -1;
+    bool automaticEpisodeAdvance = false;
 };
 
-inline bool isEpisodeAdvance(bool playerScreen, bool streamRestart, const JellyfinItem& item) {
-    return playerScreen && !streamRestart && item.type == "Episode";
+inline bool isEpisodeAdvance(bool playerScreen, const PendingPlaybackTransition& transition) {
+    return playerScreen && transition.automaticEpisodeAdvance && !transition.streamRestart &&
+           transition.item.type == "Episode";
 }
 
 class PlaybackTransitionState {
@@ -27,13 +29,14 @@ public:
     }
 
     void stage(PlaybackTarget target, JellyfinItem item, bool streamRestart = false, bool restartPaused = false,
-               int audioStreamIndex = -1) {
+               int audioStreamIndex = -1, bool automaticEpisodeAdvance = false) {
         pending_ = PendingPlaybackTransition{
             .target = std::move(target),
             .item = std::move(item),
             .streamRestart = streamRestart,
             .restartPaused = restartPaused,
             .audioStreamIndex = audioStreamIndex,
+            .automaticEpisodeAdvance = automaticEpisodeAdvance,
         };
     }
 

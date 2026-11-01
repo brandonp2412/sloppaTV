@@ -59,7 +59,7 @@ public:
         auto& target = transition.target;
         auto& item = transition.item;
         const bool streamRestart = transition.streamRestart;
-        work.episodeAdvance = isEpisodeAdvance(screen_ == Screen::Player, streamRestart, item);
+        work.episodeAdvance = isEpisodeAdvance(screen_ == Screen::Player, transition);
         const auto now = std::chrono::steady_clock::now();
         if (work.episodeAdvance) playerScreen_.prepareForEpisodeAdvance(now);
         const PlaybackTransitionPlan plan = playback_.activateTransition(

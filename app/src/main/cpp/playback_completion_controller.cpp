@@ -8,11 +8,13 @@ PlaybackHomeVisibilityRestore visibilityRestore(const JellyfinItem& item) {
     };
 }
 
-PlaybackCompletionTransition resolvedTransition(PlaybackTarget target, JellyfinItem item) {
+PlaybackCompletionTransition resolvedTransition(PlaybackTarget target, JellyfinItem item,
+                                                bool automaticEpisodeAdvance = false) {
     return {
         .kind = PlaybackCompletionTransitionKind::Resolved,
         .target = std::move(target),
         .item = std::move(item),
+        .automaticEpisodeAdvance = automaticEpisodeAdvance,
     };
 }
 } // namespace
@@ -57,7 +59,7 @@ PlaybackCompletionEffects PlaybackCompletionController::apply(AutoplayPlaybackCo
         queue.setItemAt(completion.queuedNextIndex, completion.item);
     }
 
-    effects.transition = resolvedTransition(std::move(completion.result.value), std::move(completion.item));
+    effects.transition = resolvedTransition(std::move(completion.result.value), std::move(completion.item), true);
     return effects;
 }
 

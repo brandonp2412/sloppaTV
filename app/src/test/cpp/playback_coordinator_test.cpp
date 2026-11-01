@@ -922,13 +922,14 @@ int main() {
     assert(resolutionCoordinator.transition().loading());
     assert(resolutionCoordinator.continuation().autoplayChainCount() == 1);
     resolutionCoordinator.finishPlaybackResolution();
-    resolutionCoordinator.stageResolvedPlayback(resolvedTarget, resolvedItem);
+    resolutionCoordinator.stageResolvedPlayback(resolvedTarget, resolvedItem, true);
     assert(!resolutionCoordinator.transition().loading());
     assert(resolutionCoordinator.transition().hasPending());
     auto resolvedTransition = resolutionCoordinator.transition().take();
     assert(resolvedTransition);
     assert(resolvedTransition->target.url == resolvedTarget.url);
     assert(resolvedTransition->item.id == resolvedItem.id);
+    assert(resolvedTransition->automaticEpisodeAdvance);
 
     transitionTarget.audioStreamIndex = 9;
     transitionPlan = planPlaybackTransition(transitionTarget, transitionItem, true, false, -1);

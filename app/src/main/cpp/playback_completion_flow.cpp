@@ -100,7 +100,8 @@ PlaybackCompletionHostEffects PlaybackCompletionFlow::apply(PlaybackCompletionEf
         auto transition = std::move(*effects.transition);
         switch (transition.kind) {
         case PlaybackCompletionTransitionKind::Resolved:
-            coordinator_.stageResolvedPlayback(std::move(transition.target), std::move(transition.item));
+            coordinator_.stageResolvedPlayback(std::move(transition.target), std::move(transition.item),
+                                               transition.automaticEpisodeAdvance);
             break;
         case PlaybackCompletionTransitionKind::StreamRestart:
             coordinator_.stageStreamRestart(std::move(transition.target), std::move(transition.item),

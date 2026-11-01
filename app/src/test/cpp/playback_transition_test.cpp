@@ -9,13 +9,18 @@ int main() {
     assert(!state.fallbackResolving());
     assert(!state.pauseAfterRestart());
 
-    JellyfinItem episode;
-    episode.type = "Episode";
-    assert(isEpisodeAdvance(true, false, episode));
-    assert(!isEpisodeAdvance(false, false, episode));
-    assert(!isEpisodeAdvance(true, true, episode));
-    episode.type = "Movie";
-    assert(!isEpisodeAdvance(true, false, episode));
+    PendingPlaybackTransition episode;
+    episode.item.type = "Episode";
+    // An explicitly chosen episode must retain its source-loading controls.
+    assert(!isEpisodeAdvance(true, episode));
+    episode.automaticEpisodeAdvance = true;
+    assert(isEpisodeAdvance(true, episode));
+    assert(!isEpisodeAdvance(false, episode));
+    episode.streamRestart = true;
+    assert(!isEpisodeAdvance(true, episode));
+    episode.streamRestart = false;
+    episode.item.type = "Movie";
+    assert(!isEpisodeAdvance(true, episode));
 
     PlaybackTarget target;
     target.url = "https://example.test/video";
@@ -32,6 +37,11 @@ int main() {
     assert(pending->streamRestart);
     assert(pending->restartPaused);
     assert(pending->audioStreamIndex == 4);
+    assert(!pending->automaticEpisodeAdvance);
+
+    state.stage(target, item, false, false, -1, true);
+    pending = state.take();
+    assert(pending && pending->automaticEpisodeAdvance);
 
     state.setLoading(true);
     state.setFallbackResolving(true);

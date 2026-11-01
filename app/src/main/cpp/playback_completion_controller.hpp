@@ -28,6 +28,7 @@ struct PlaybackCompletionTransition {
     JellyfinItem item;
     bool restartPaused = false;
     int audioStreamIndex = -1;
+    bool automaticEpisodeAdvance = false;
 };
 
 struct PlaybackCompletionEffects {

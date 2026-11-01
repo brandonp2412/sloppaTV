@@ -105,6 +105,7 @@ int main() {
         assert(effects.transition->kind == PlaybackCompletionTransitionKind::Resolved);
         assert(effects.transition->target.url == "https://media.example/resolved");
         assert(effects.transition->item.id == "episode-2");
+        assert(!effects.transition->automaticEpisodeAdvance);
         assert(queue.currentIndex() == 1);
         assert(queue.itemAt(1)->name == "Detailed episode");
     }
@@ -124,6 +125,7 @@ int main() {
         assert(effects.detailUpdate->id == "episode-3");
         assert(effects.transition);
         assert(effects.transition->item.id == "episode-3");
+        assert(!effects.transition->automaticEpisodeAdvance);
         assert(!coordinator.transitionLoading());
     }
 
@@ -159,6 +161,7 @@ int main() {
 
         const auto effects = PlaybackCompletionController::apply(completion, true, queue, coordinator);
         assert(effects.transition);
+        assert(effects.transition->automaticEpisodeAdvance);
         assert(queue.currentIndex() == 1);
         assert(queue.itemAt(1)->name == "Resolved next");
     }
