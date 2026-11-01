@@ -40,7 +40,8 @@ template <typename UiLike>
 void renderContentMediaArtworkCard(Renderer& renderer, UiLike& ui, const AppSettings& settings,
                                    const JellyfinItem& item, float x, float y, float slotWidth, bool focused,
                                    bool showState = true, bool preferSeriesCover = false,
-                                   bool alignToPortraitBand = false, int titleLineLimit = 0) {
+                                   bool alignToPortraitBand = false, int titleLineLimit = 0,
+                                   bool compactSearch = false) {
     renderMediaArtworkCardContent(
         renderer, item, x, y, slotWidth, focused,
         MediaArtworkCardRenderOptions{
@@ -50,6 +51,7 @@ void renderContentMediaArtworkCard(Renderer& renderer, UiLike& ui, const AppSett
             .titleLineLimit = titleLineLimit,
             .uiTextSize = settings.uiTextSize,
             .showWatchedIndicators = settings.showWatchedIndicators,
+            .compactSearch = compactSearch,
         },
         contentMediaCardStyle(),
         [&ui](float imageX, float imageY, float imageWidth, float imageHeight, bool isFocused, float focusScale) {
@@ -187,9 +189,9 @@ void renderContentSearch(Renderer& renderer, UiLike& ui, const SearchScreenState
             renderLingeringTitle(renderer, x, y, scale, value, maxWidth, color, lastInteraction, now);
         },
         [&](const JellyfinItem& item, float x, float y, float width, bool focused, bool showState,
-            bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit) {
+            bool seriesCoverForEpisode, bool alignMixedHeights, int titleLineLimit, bool compactSearch) {
             renderContentMediaArtworkCard(renderer, ui, settings, item, x, y, width, focused, showState,
-                                          seriesCoverForEpisode, alignMixedHeights, titleLineLimit);
+                                          seriesCoverForEpisode, alignMixedHeights, titleLineLimit, compactSearch);
         });
 }
 

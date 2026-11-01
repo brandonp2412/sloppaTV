@@ -244,6 +244,34 @@ int main() {
     command = inputState.handleInput(SearchScreenInput::Up, 5);
     assert(command.type == SearchScreenCommandType::OpenTextInput);
 
+    // Search fills two physical rows of a category before advancing to the next.
+    SearchScreenState grid(noInputSeerr);
+    grid.setQuery("grid");
+    std::vector<JellyfinItem> gridItems(12);
+    for (int i = 0; i < 12; ++i) {
+        gridItems[static_cast<size_t>(i)].id = "grid-" + std::to_string(i);
+        gridItems[static_cast<size_t>(i)].type = "Movie";
+    }
+    assert(grid.finishLibrarySearch("grid", std::move(gridItems)));
+    grid.setKeyboard(false);
+    grid.moveSelection(0, 1, 5);
+    assert(grid.selection() == 5);
+    assert(!grid.selectionOnFirstResultRow());
+    grid.moveSelection(0, 1, 5);
+    assert(grid.selection() == 10);
+    grid.moveSelection(1, 0, 5);
+    assert(grid.selection() == 11);
+    grid.moveSelection(1, 0, 5);
+    assert(grid.selection() == 11); // Right stops at the end of a physical row.
+    grid.moveSelection(0, -1, 5);
+    assert(grid.selection() == 6);
+    grid.moveSelection(0, -1, 5);
+    assert(grid.selection() == 1);
+    assert(grid.handleInput(SearchScreenInput::Up, 5).type == SearchScreenCommandType::OpenTextInput);
+    grid.setSelection(4);
+    grid.moveSelection(1, 0, 5);
+    assert(grid.selection() == 4); // Right doesn't wrap into the next row.
+
     SeerrSearchState seerrInputState;
     SearchScreenState seerrInput(seerrInputState.results());
     seerrInput.setQuery("remote");

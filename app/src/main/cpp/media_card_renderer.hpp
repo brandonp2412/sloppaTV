@@ -16,6 +16,7 @@ struct MediaArtworkCardRenderOptions {
     int titleLineLimit = 0;
     int uiTextSize = 0;
     bool showWatchedIndicators = true;
+    bool compactSearch = false;
 };
 
 template <typename ColorLike> struct MediaCardRenderStyle {
@@ -46,9 +47,11 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
     const bool seriesCoverForEpisode = options.preferSeriesCover && item.type == "Episode" && !item.seriesId.empty() &&
                                        !item.seriesPrimaryImageTag.empty();
     const bool landscape = usesLandscapeMediaCard(item.type) && !seriesCoverForEpisode;
-    const float imageWidth = landscape ? slotWidth : mediaPosterWidth();
-    const float imageHeight = landscape ? 180.0f : mediaPosterHeight();
-    const float artworkBandHeight = options.alignToPortraitBand ? mediaPosterHeight() : imageHeight;
+    const float imageWidth = landscape ? slotWidth : (options.compactSearch ? 164.0f : mediaPosterWidth());
+    const float imageHeight = landscape ? 180.0f : (options.compactSearch ? 228.0f : mediaPosterHeight());
+    const float artworkBandHeight = options.compactSearch
+                                        ? 228.0f
+                                        : (options.alignToPortraitBand ? mediaPosterHeight() : imageHeight);
     const float imageX = x + (slotWidth - imageWidth) * 0.5f;
     const float imageY = y + std::max(0.0f, (artworkBandHeight - imageHeight) * 0.5f);
     const auto bounds = focusedBounds(imageX, imageY, imageWidth, imageHeight, focused, style.cardFocusScale);
@@ -73,7 +76,8 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
 
     if (options.showState && (item.favorite || (options.showWatchedIndicators && item.played))) {
         const std::string_view label = item.favorite ? "Favorite" : "Watched";
-        const float badgeWidth = item.favorite ? 154.0f : 140.0f;
+        const float badgeWidth = options.compactSearch ? (item.favorite ? 132.0f : 120.0f)
+                                                       : (item.favorite ? 154.0f : 140.0f);
         const float badgeX = bounds[0] + bounds[2] - badgeWidth - 12.0f;
         const float badgeY = bounds[1] + 12.0f;
         // State is useful context, but it must not read as another focused control.
@@ -93,8 +97,10 @@ void renderMediaArtworkCardContent(RendererLike& renderer, const JellyfinItem& i
 
     if (focused) drawHalo(bounds[0], bounds[1], bounds[2], bounds[3], style.focus, cardRadius);
 
-    const float titleY = y + artworkBandHeight + 24.0f;
-    const int titleLines = options.titleLineLimit > 0 ? options.titleLineLimit : (landscape ? 1 : 2);
+    const float titleY = y + artworkBandHeight + (options.compactSearch ? 12.0f : 24.0f);
+    const int titleLines = options.compactSearch
+                               ? 1
+                               : (options.titleLineLimit > 0 ? options.titleLineLimit : (landscape ? 1 : 2));
     const float titleWidth = landscape ? imageWidth - 4.0f : slotWidth - 4.0f;
     const float titleX = landscape ? imageX + 2.0f : x + 2.0f;
     const std::string fittedTitle = fitText(item.name, style.labelScale, titleWidth, titleLines);

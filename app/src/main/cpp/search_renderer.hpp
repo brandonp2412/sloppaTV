@@ -104,23 +104,29 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
         return;
     }
 
+    struct VisualRow {
+        int semanticRow;
+        int localStart;
+    };
+    std::vector<VisualRow> visualRows;
+    for (const int semanticRow : semanticRows) {
+        const int count = state.rowItemCount(semanticRow);
+        for (int offset = 0; offset < std::max(count, 1); offset += columns)
+            visualRows.push_back({semanticRow, offset});
+    }
+
     const int selectedSemanticRow = state.selectedRow();
-    const auto selectedPosition = std::find(semanticRows.begin(), semanticRows.end(), selectedSemanticRow);
-    const int selectedRowPosition = selectedPosition == semanticRows.end()
-                                        ? 0
-                                        : static_cast<int>(std::distance(semanticRows.begin(), selectedPosition));
-    // Portrait artwork, two title lines and supporting text do not fit within
-    // the 452px semantic-row pitch. Display the selected section in full rather
-    // than letting its caption collide with the next section's heading.
-    const bool hasPortraitSection = std::any_of(semanticRows.begin(), semanticRows.end(), [&](int row) {
-        const int start = state.rowStart(row);
-        const int count = state.rowItemCount(row);
-        return std::any_of(results.begin() + start, results.begin() + start + count,
-                           [](const JellyfinItem& item) { return !usesLandscapeMediaCard(item.type); });
+    const int selectedLocal = state.selection() - state.rowStart(selectedSemanticRow);
+    const auto selectedPosition = std::find_if(visualRows.begin(), visualRows.end(), [&](const VisualRow& row) {
+        return row.semanticRow == selectedSemanticRow &&
+               selectedLocal >= row.localStart && selectedLocal < row.localStart + columns;
     });
-    const int visibleSections = hasPortraitSection ? 1 : 2;
-    const int firstSemantic = std::clamp(selectedRowPosition - visibleSections + 1, 0,
-                                         std::max(0, static_cast<int>(semanticRows.size()) - visibleSections));
+    const int selectedRowPosition = selectedPosition == visualRows.end()
+                                        ? 0
+                                        : static_cast<int>(std::distance(visualRows.begin(), selectedPosition));
+    constexpr int visibleRows = 2;
+    const int firstVisual = std::clamp(selectedRowPosition - visibleRows + 1, 0,
+                                       std::max(0, static_cast<int>(visualRows.size()) - visibleRows));
 
     auto drawLoadingDots = [&](float x, float y) {
         const double seconds = std::chrono::duration<double>(now().time_since_epoch()).count();
@@ -132,13 +138,15 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
         }
     };
 
-    auto renderResultRow = [&](int semanticRow, int visibleSlot) {
-        const float labelY = visibleSlot == 0 ? 258.0f : 710.0f;
-        const float cardY = visibleSlot == 0 ? 314.0f : 764.0f;
+    auto renderResultRow = [&](const VisualRow& visualRow, int visibleSlot) {
+        const int semanticRow = visualRow.semanticRow;
+        const float labelY = visibleSlot == 0 ? 254.0f : 656.0f;
+        const float cardY = visibleSlot == 0 ? 300.0f : 702.0f;
         const int count = state.rowItemCount(semanticRow);
-        const std::string label = semanticRow == SearchScreenState::kLibraryRow
-                                      ? "In your library"
-                                      : (semanticRow == SearchScreenState::kSeerrRow ? "Seerr" : "Episodes");
+        const std::string sectionLabel = semanticRow == SearchScreenState::kLibraryRow
+                                             ? "In your library"
+                                             : (semanticRow == SearchScreenState::kSeerrRow ? "Seerr" : "Episodes");
+        const std::string label = visualRow.localStart > 0 ? sectionLabel + " · more" : sectionLabel;
 
         if (semanticRow == SearchScreenState::kSeerrRow) {
             renderer.rect(72.0f, labelY - 22.0f, 1776.0f, 1.5f, style.divider);
@@ -192,24 +200,25 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
         }
         if (count <= 0) return;
 
-        const int localStart = state.firstVisibleInRow(semanticRow, columns);
-        const int begin = state.rowStart(semanticRow) + localStart;
+        const int begin = state.rowStart(semanticRow) + visualRow.localStart;
         const int end = std::min(begin + columns, state.rowStart(semanticRow) + count);
         if (semanticRow == SearchScreenState::kSeerrRow) {
             const float imageHeight = slotWidth * 0.56f;
+            constexpr float artworkBandHeight = 228.0f;
             for (int index = begin; index < end; ++index) {
                 const int col = index - begin;
                 const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
                 const auto& item = results[static_cast<std::size_t>(index)];
                 const bool focused = !systemSearchInputActive && index == state.selection();
-                const auto bounds = focusedBounds(x, cardY, slotWidth, imageHeight, focused, style.cardFocusScale);
+                const auto bounds = focusedBounds(x, cardY + (artworkBandHeight - imageHeight) * 0.5f,
+                                                  slotWidth, imageHeight, focused, style.cardFocusScale);
                 const float radius = style.cornerSmall * bounds[3] / imageHeight;
                 renderer.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], radius, style.panelAlt);
                 if (!drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], radius)) {
                     drawArtworkPlaceholder(item, bounds[0], bounds[1], bounds[2], bounds[3], radius);
                 }
                 if (focused) drawFocusHalo(bounds[0], bounds[1], bounds[2], bounds[3], style.focus, radius);
-                const float titleY = cardY + imageHeight + 18.0f;
+                const float titleY = cardY + artworkBandHeight + 12.0f;
                 if (focused) {
                     drawLingeringTitle(x + 2.0f, titleY, 1.95f, item.name, slotWidth - 4.0f, style.text, now());
                 } else {
@@ -235,11 +244,11 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
             const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
             renderMediaArtworkCard(results[static_cast<std::size_t>(index)], x, cardY, slotWidth,
                                    !systemSearchInputActive && index == state.selection(), true, false,
-                                   rowHasPortraitCards, 1);
+                                   rowHasPortraitCards, 1, true);
         }
     };
 
-    for (int slot = 0; slot < visibleSections && firstSemantic + slot < static_cast<int>(semanticRows.size()); ++slot) {
-        renderResultRow(semanticRows[static_cast<std::size_t>(firstSemantic) + static_cast<std::size_t>(slot)], slot);
+    for (int slot = 0; slot < visibleRows && firstVisual + slot < static_cast<int>(visualRows.size()); ++slot) {
+        renderResultRow(visualRows[static_cast<std::size_t>(firstVisual) + static_cast<std::size_t>(slot)], slot);
     }
 }

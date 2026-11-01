@@ -2,6 +2,7 @@
 
 #include "jellyfin_types.hpp"
 #include "seerr_jellyfin_adapter.hpp"
+#include "ui_policy.hpp"
 #include "unicode_text.hpp"
 
 #include <algorithm>
@@ -118,7 +119,10 @@ public:
         return kLibraryRow;
     }
 
-    [[nodiscard]] bool selectionOnFirstResultRow() const { return selectedRow() == firstPopulatedRow(); }
+    [[nodiscard]] bool selectionOnFirstResultRow() const {
+        return selectedRow() == firstPopulatedRow() &&
+               selection_ - rowStart(selectedRow()) < mediaGridColumns();
+    }
 
     [[nodiscard]] const SeerrMediaItem* selectedSeerrResult() const {
         if (selectedRow() != kSeerrRow) return nullptr;
@@ -339,32 +343,39 @@ public:
         int local = selection_ - start;
 
         if (dx != 0 && count > 0) {
-            local = std::clamp(local + dx, 0, count - 1);
+            // Horizontal D-pad movement stays within the physical grid row.
+            const int rowStartLocal = (local / columns) * columns;
+            local = std::clamp(local + dx, rowStartLocal,
+                               std::min(rowStartLocal + columns, count) - 1);
             selection_ = start + local;
         }
 
         if (dy != 0) {
-            int targetRow = row;
-            while (true) {
-                targetRow += dy > 0 ? 1 : -1;
-                if (targetRow < 0 || targetRow >= kRowCount) break;
-                const int targetCount = rowItemCount(targetRow);
-                if (targetCount <= 0) continue;
-                row = targetRow;
-                selection_ = rowStart(row) + std::min(local, targetCount - 1);
-                break;
+            const int column = local % columns;
+            const int targetRowStart = (local / columns + dy) * columns;
+            if (targetRowStart >= 0 && targetRowStart < count) {
+                // Visit all result rows in this category before the next category.
+                selection_ = start + std::min(targetRowStart + column, count - 1);
+            } else {
+                int targetRow = row;
+                while (true) {
+                    targetRow += dy > 0 ? 1 : -1;
+                    if (targetRow < 0 || targetRow >= kRowCount) break;
+                    const int targetCount = rowItemCount(targetRow);
+                    if (targetCount <= 0) continue;
+                    const int destinationStart =
+                        dy > 0 ? 0 : ((targetCount - 1) / columns) * columns;
+                    selection_ = rowStart(targetRow) +
+                                 std::min(destinationStart + column, targetCount - 1);
+                    break;
+                }
             }
         }
 
         row = selectedRow();
         const int selectedLocal = selection_ - rowStart(row);
-        const int maxFirst = std::max(0, rowItemCount(row) - columns);
-        int first = std::clamp(firstVisible_[static_cast<size_t>(row)], 0, maxFirst);
-        if (selectedLocal < first)
-            first = selectedLocal;
-        else if (selectedLocal >= first + columns)
-            first = selectedLocal - columns + 1;
-        firstVisible_[static_cast<size_t>(row)] = std::clamp(first, 0, maxFirst);
+        const int firstGridRow = std::max(0, selectedLocal / columns - 1);
+        firstVisible_[static_cast<size_t>(row)] = firstGridRow * columns;
         if (selection_ != previous) navigatedResults_ = true;
     }
 

@@ -102,7 +102,7 @@ int main() {
         [](const JellyfinItem&, float, float, float, float, float) { return true; },
         [](const JellyfinItem&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
-        [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int) {},
+        [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int, bool) {},
         [] { return SearchScreenState::Clock::time_point{}; }, [](int, float) { return 99; });
 
     assert(keyboardCalls == 1);
@@ -199,7 +199,7 @@ int main() {
             assert(value == "Remote Movie");
             assert(color == style.text);
         },
-        [&](const JellyfinItem& item, float, float, float, bool focused, bool, bool, bool, int) {
+        [&](const JellyfinItem& item, float, float, float, bool focused, bool, bool, bool, int, bool) {
             ++mediaCards;
             assert(item.id == "local-1");
             assert(!focused);
@@ -207,12 +207,12 @@ int main() {
         [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
 
     assert(emptyStates == 0);
-    assert(mediaCards == 0);
+    assert(mediaCards == 1);
     assert(placeholders == 1);
     assert(halos == 1);
     assert(lingering == 1);
     assert(renderer.rects.size() == 1);
-    assert(!contains(renderer.texts, "In your library"));
+    assert(contains(renderer.texts, "In your library"));
     assert(contains(renderer.texts, "Seerr"));
     assert(contains(centered, "90%"));
     assert(contains(centered, "50%"));
@@ -249,27 +249,65 @@ int main() {
         [](const JellyfinItem&, float, float, float, float, float) { return false; },
         [&](const JellyfinItem& item, float, float y, float, float, float) {
             assert(item.id == "seerr:movie:2");
-            assert(y == 314.0f);
+            assert(y > 702.0f);
             ++remoteCards;
         },
         [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
-        [&](const JellyfinItem& item, float, float y, float, bool, bool, bool, bool, int) {
+        [&](const JellyfinItem& item, float, float y, float, bool, bool, bool, bool, int, bool) {
             assert(item.id == "remux-episode");
-            assert(y == 314.0f);
+            assert(y == 300.0f);
             ++episodeCards;
         },
         [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
     assert(episodeCards == 1);
-    assert(remoteCards == 0);
+    assert(remoteCards == 1);
     assert(!contains(episodeRenderer.texts, "In your library"));
     bool episodeHeadingFirst = false;
     bool seerrHeadingSecond = false;
     for (const auto& call : episodeRenderer.texts) {
-        if (call.value == "Episodes" && call.y == 258.0f) episodeHeadingFirst = true;
-        if (call.value == "Seerr" && call.y == 710.0f) seerrHeadingSecond = true;
+        if (call.value == "Episodes" && call.y == 254.0f) episodeHeadingFirst = true;
+        if (call.value == "Seerr" && call.y == 656.0f) seerrHeadingSecond = true;
     }
-    assert(episodeHeadingFirst && !seerrHeadingSecond);
+    assert(episodeHeadingFirst && seerrHeadingSecond);
+
+    // A single populated category renders ten posters over two rows, not five.
+    SearchScreenState posterGrid(noSeerr);
+    posterGrid.setQuery("poster");
+    posterGrid.setKeyboard(false);
+    std::vector<JellyfinItem> posters(8);
+    for (int i = 0; i < 8; ++i) {
+        posters[static_cast<size_t>(i)].id = "poster-" + std::to_string(i);
+        posters[static_cast<size_t>(i)].type = "Movie";
+    }
+    assert(posterGrid.finishLibrarySearch("poster", std::move(posters)));
+    FakeRenderer posterRenderer;
+    std::vector<float> posterYs;
+    renderSearchScreen(
+        posterRenderer, posterGrid, false, false, false, "", false, {}, style,
+        [](float x, float y, float width, float height, bool, float) {
+            return std::array<float, 4>{x, y, width, height};
+        },
+        [](std::string_view value, float, float, int) { return std::string(value); },
+        [](float, float, float, float, float, std::string_view, int) {},
+        [](float, float, float, float, float, std::string_view, int, float, float) {}, [](float) {},
+        [](std::string_view, std::string_view) {},
+        [](float x, float y, float width, float height, bool, float) {
+            return std::array<float, 4>{x, y, width, height};
+        },
+        [](const JellyfinItem&, float, float, float, float, float) { return true; },
+        [](const JellyfinItem&, float, float, float, float, float) {},
+        [](float, float, float, float, int, float) {},
+        [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
+        [&](const JellyfinItem&, float, float y, float, bool, bool, bool, bool, int, bool compact) {
+            assert(compact);
+            posterYs.push_back(y);
+        },
+        [] { return SearchScreenState::Clock::time_point{}; }, [](int, float) { return 99; });
+    assert(posterYs.size() == 8);
+    assert(std::count(posterYs.begin(), posterYs.end(), 300.0f) == 5);
+    assert(std::count(posterYs.begin(), posterYs.end(), 702.0f) == 3);
+    assert(contains(posterRenderer.texts, "In your library · more"));
 
     SearchScreenState loadingState(noSeerr);
     loadingState.setQuery("loading");
@@ -291,7 +329,7 @@ int main() {
         [](const JellyfinItem&, float, float, float, float, float) { return true; },
         [](const JellyfinItem&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
-        [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int) {},
+        [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int, bool) {},
         [] { return SearchScreenState::Clock::time_point{std::chrono::seconds(1)}; }, [](int, float) { return 99; });
 
     assert(contains(loadingRenderer.texts, "Searching media server…"));
@@ -318,7 +356,7 @@ int main() {
         [](const JellyfinItem&, float, float, float, float, float) { return true; },
         [](const JellyfinItem&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
-        [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int) {},
+        [](const JellyfinItem&, float, float, float, bool, bool, bool, bool, int, bool) {},
         [] { return SearchScreenState::Clock::time_point{}; }, [](int, float) { return 99; });
 
     assert(emptyTitle == "Find your next favorite");
