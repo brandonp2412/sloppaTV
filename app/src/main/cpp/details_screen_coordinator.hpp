@@ -357,7 +357,7 @@ private:
 
     void toggleHiddenFromHome(DetailsScreenEffects& effects) {
         const auto hiding = homeVisibility_.toggle(details_.item(), home_, homeState_);
-        if (!hiding) return;
+        if (!hiding.has_value()) return;
         effects.persistSession = true;
     }
 

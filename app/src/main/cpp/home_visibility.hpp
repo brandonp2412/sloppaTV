@@ -49,7 +49,6 @@ public:
     [[nodiscard]] bool restoreForPlayback(const JellyfinItem& item) {
         bool changed = false;
         if (!item.id.empty()) changed = hiddenItems_.erase(key(item.id)) > 0 || changed;
-        if (!item.seriesId.empty()) changed = hiddenItems_.erase(key(item.seriesId)) > 0 || changed;
         return changed;
     }
 

@@ -108,6 +108,7 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
         int semanticRow;
         int localStart;
     };
+
     std::vector<VisualRow> visualRows;
     for (const int semanticRow : semanticRows) {
         const int count = state.rowItemCount(semanticRow);
@@ -118,8 +119,8 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
     const int selectedSemanticRow = state.selectedRow();
     const int selectedLocal = state.selection() - state.rowStart(selectedSemanticRow);
     const auto selectedPosition = std::find_if(visualRows.begin(), visualRows.end(), [&](const VisualRow& row) {
-        return row.semanticRow == selectedSemanticRow &&
-               selectedLocal >= row.localStart && selectedLocal < row.localStart + columns;
+        return row.semanticRow == selectedSemanticRow && selectedLocal >= row.localStart &&
+               selectedLocal < row.localStart + columns;
     });
     const int selectedRowPosition = selectedPosition == visualRows.end()
                                         ? 0
@@ -146,7 +147,12 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
         const std::string sectionLabel = semanticRow == SearchScreenState::kLibraryRow
                                              ? "In your library"
                                              : (semanticRow == SearchScreenState::kSeerrRow ? "Seerr" : "Episodes");
-        const std::string label = visualRow.localStart > 0 ? sectionLabel + " · more" : sectionLabel;
+        const std::string label =
+            visualRow.localStart == 0
+                ? sectionLabel
+                : (semanticRow == SearchScreenState::kLibraryRow
+                       ? "More from your library"
+                       : (semanticRow == SearchScreenState::kEpisodeRow ? "More episodes" : "More Seerr results"));
 
         if (semanticRow == SearchScreenState::kSeerrRow) {
             renderer.rect(72.0f, labelY - 22.0f, 1776.0f, 1.5f, style.divider);
@@ -210,8 +216,8 @@ void renderSearchScreen(RendererLike& renderer, const SearchScreenState& state, 
                 const float x = 80.0f + static_cast<float>(col) * (slotWidth + xGap);
                 const auto& item = results[static_cast<std::size_t>(index)];
                 const bool focused = !systemSearchInputActive && index == state.selection();
-                const auto bounds = focusedBounds(x, cardY + (artworkBandHeight - imageHeight) * 0.5f,
-                                                  slotWidth, imageHeight, focused, style.cardFocusScale);
+                const auto bounds = focusedBounds(x, cardY + (artworkBandHeight - imageHeight) * 0.5f, slotWidth,
+                                                  imageHeight, focused, style.cardFocusScale);
                 const float radius = style.cornerSmall * bounds[3] / imageHeight;
                 renderer.roundedRect(bounds[0], bounds[1], bounds[2], bounds[3], radius, style.panelAlt);
                 if (!drawHomeArtwork(item, bounds[0], bounds[1], bounds[2], bounds[3], radius)) {

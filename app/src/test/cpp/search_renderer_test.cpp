@@ -296,8 +296,7 @@ int main() {
             return std::array<float, 4>{x, y, width, height};
         },
         [](const JellyfinItem&, float, float, float, float, float) { return true; },
-        [](const JellyfinItem&, float, float, float, float, float) {},
-        [](float, float, float, float, int, float) {},
+        [](const JellyfinItem&, float, float, float, float, float) {}, [](float, float, float, float, int, float) {},
         [](float, float, float, std::string_view, float, int, SearchScreenState::Clock::time_point) {},
         [&](const JellyfinItem&, float, float y, float, bool, bool, bool, bool, int, bool compact) {
             assert(compact);
@@ -307,7 +306,7 @@ int main() {
     assert(posterYs.size() == 8);
     assert(std::count(posterYs.begin(), posterYs.end(), 300.0f) == 5);
     assert(std::count(posterYs.begin(), posterYs.end(), 702.0f) == 3);
-    assert(contains(posterRenderer.texts, "In your library · more"));
+    assert(contains(posterRenderer.texts, "More from your library"));
 
     SearchScreenState loadingState(noSeerr);
     loadingState.setQuery("loading");

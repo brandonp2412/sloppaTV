@@ -332,6 +332,24 @@ int main() {
 
     std::unordered_set<std::string> toggleHidden;
     HomeVisibility toggleVisibility(brandog, toggleHidden);
+    // Starting another episode must not unhide a hidden episode or its series.
+    JellyfinItem hiddenEpisode = tatami;
+    hiddenEpisode.id = "hidden-episode";
+    hiddenEpisode.seriesId = "hidden-series";
+    JellyfinItem otherEpisode = hiddenEpisode;
+    otherEpisode.id = "other-episode";
+    const auto visibilityKey = [&](const std::string& id) {
+        return brandog.server + "\n" + brandog.userId + "\n" + id;
+    };
+    toggleHidden.insert(visibilityKey(hiddenEpisode.id));
+    toggleHidden.insert(visibilityKey(hiddenEpisode.seriesId));
+    assert(!toggleVisibility.restoreForPlayback(otherEpisode));
+    assert(toggleVisibility.isHidden(hiddenEpisode));
+    assert(toggleVisibility.restoreForPlayback(hiddenEpisode));
+    assert(!toggleVisibility.isHidden(hiddenEpisode));
+    assert(toggleHidden.contains(visibilityKey(hiddenEpisode.seriesId)));
+    toggleHidden.clear();
+
     JellyfinHomeData toggleHome;
     toggleHome.rows = {{"Continue Watching", {tatami}}, {"Next Up", {nextEpisode}}};
     HomeScreenState toggleState;

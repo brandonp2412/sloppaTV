@@ -120,8 +120,7 @@ public:
     }
 
     [[nodiscard]] bool selectionOnFirstResultRow() const {
-        return selectedRow() == firstPopulatedRow() &&
-               selection_ - rowStart(selectedRow()) < mediaGridColumns();
+        return selectedRow() == firstPopulatedRow() && selection_ - rowStart(selectedRow()) < mediaGridColumns();
     }
 
     [[nodiscard]] const SeerrMediaItem* selectedSeerrResult() const {
@@ -345,8 +344,7 @@ public:
         if (dx != 0 && count > 0) {
             // Horizontal D-pad movement stays within the physical grid row.
             const int rowStartLocal = (local / columns) * columns;
-            local = std::clamp(local + dx, rowStartLocal,
-                               std::min(rowStartLocal + columns, count) - 1);
+            local = std::clamp(local + dx, rowStartLocal, std::min(rowStartLocal + columns, count) - 1);
             selection_ = start + local;
         }
 
@@ -363,10 +361,8 @@ public:
                     if (targetRow < 0 || targetRow >= kRowCount) break;
                     const int targetCount = rowItemCount(targetRow);
                     if (targetCount <= 0) continue;
-                    const int destinationStart =
-                        dy > 0 ? 0 : ((targetCount - 1) / columns) * columns;
-                    selection_ = rowStart(targetRow) +
-                                 std::min(destinationStart + column, targetCount - 1);
+                    const int destinationStart = dy > 0 ? 0 : ((targetCount - 1) / columns) * columns;
+                    selection_ = rowStart(targetRow) + std::min(destinationStart + column, targetCount - 1);
                     break;
                 }
             }
