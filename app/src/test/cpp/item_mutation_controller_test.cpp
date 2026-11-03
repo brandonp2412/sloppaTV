@@ -80,6 +80,10 @@ int main() {
         assert(home.rows[0].items.size() == 1);
         assert(home.rows[0].items[0].id == "episode-2");
         assert(effects.nextUpAnimation);
+        assert(!effects.playedRollback);
+        assert(!rollback);
+        ItemMutationController::restorePlayedRollback(effects, home, homeState);
+        assert(home.rows[0].items[0].id == "episode-2");
     }
     {
         JellyfinItem current = item("episode-1");

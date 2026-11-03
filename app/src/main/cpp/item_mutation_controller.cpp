@@ -137,7 +137,14 @@ ItemMutationCompletionEffects ItemMutationController::apply(PlayedCompletion& co
 
     ItemMutationCompletionEffects effects;
     effects.finishLoading = true;
-    if (rollbackMatches) effects.playedRollback.swap(rollbackState);
+    // A successful server acknowledgement commits the optimistic home update.
+    // Preserve the snapshot only when the request failed and needs a rollback.
+    if (rollbackMatches) {
+        if (completion.result.ok)
+            rollbackState.reset();
+        else
+            effects.playedRollback.swap(rollbackState);
+    }
 
     if (!completion.result.ok) {
         effects.cacheUpdate = completion.item;
