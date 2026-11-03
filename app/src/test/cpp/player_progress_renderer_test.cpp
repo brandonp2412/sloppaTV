@@ -122,43 +122,47 @@ int main() {
 
     // Startup uses only the first 150px of the regular seek track, even for
     // an already-resumed position, and it never renders a seek thumb.
+    // Without actual Remux prefetch data the track remains empty, not pulsing.
     FakeRenderer searching;
     renderPlayerProgress(searching,
                          PlayerProgressRenderState{
-                             .positionMs = 5000, .durationMs = 10000, .startupLoading = true, .animationTimeMs = 0},
+                             .positionMs = 5000, .durationMs = 10000, .startupLoading = true},
                          PlayerProgressRenderStyle<TestColor>{.text = {1}, .track = {2}, .focus = {3}},
                          [](float, float, float, std::string_view, TestColor, float) {});
-    assert(searching.rects.size() == 2);
+    assert(searching.rects.size() == 1);
     assert(searching.rects[0].width == 1620.0f);
-    assert(searching.rects[1].x == 150.0f);
-    assert(searching.rects[1].width == 82.5f);
-    assert(searching.rects[1].color == 3);
 
-    FakeRenderer pulsing;
-    renderPlayerProgress(pulsing, PlayerProgressRenderState{.startupLoading = true, .animationTimeMs = 350},
+    FakeRenderer zero;
+    renderPlayerProgress(zero, PlayerProgressRenderState{.startupLoading = true, .startupProgress = 0.0f},
                          PlayerProgressRenderStyle<TestColor>{.text = {1}, .track = {2}, .focus = {3}},
                          [](float, float, float, std::string_view, TestColor, float) {});
-    assert(pulsing.rects.size() == 2);
-    assert(pulsing.rects[1].width > searching.rects[1].width);
-    assert(pulsing.rects[1].width <= 120.0f);
+    assert(zero.rects.size() == 1);
 
     FakeRenderer prefetching;
     renderPlayerProgress(prefetching, PlayerProgressRenderState{.startupLoading = true, .startupProgress = 0.4f},
                          PlayerProgressRenderStyle<TestColor>{.text = {1}, .track = {2}, .focus = {3}},
                          [](float, float, float, std::string_view, TestColor, float) {});
-    assert(prefetching.rects.size() == 3);
+    assert(prefetching.rects.size() == 2);
+    assert(prefetching.rects[1].x == 150.0f);
     assert(prefetching.rects[1].width == 60.0f);
     assert(prefetching.rects[1].color == 3);
-    assert(prefetching.rects[2].color == 1);
-    assert(prefetching.rects[2].x + prefetching.rects[2].width == 210.0f);
 
     FakeRenderer ready;
     renderPlayerProgress(ready, PlayerProgressRenderState{.startupLoading = true, .startupProgress = 1.0f},
                          PlayerProgressRenderStyle<TestColor>{.text = {1}, .track = {2}, .focus = {3}},
                          [](float, float, float, std::string_view, TestColor, float) {});
-    assert(ready.rects.size() == 3);
+    assert(ready.rects.size() == 2);
     assert(ready.rects[1].width == 150.0f);
-    assert(ready.rects[2].x + ready.rects[2].width == 300.0f);
+    assert(ready.rects[1].x + ready.rects[1].width == 300.0f);
+
+    // Out-of-range telemetry is clamped and cannot extend beyond the
+    // startup segment or draw a decoration past the fill.
+    FakeRenderer overfilled;
+    renderPlayerProgress(overfilled, PlayerProgressRenderState{.startupLoading = true, .startupProgress = 2.0f},
+                         PlayerProgressRenderStyle<TestColor>{.text = {1}, .track = {2}, .focus = {3}},
+                         [](float, float, float, std::string_view, TestColor, float) {});
+    assert(overfilled.rects.size() == 2);
+    assert(overfilled.rects[1].width == 150.0f);
 
     return 0;
 }

@@ -455,7 +455,6 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             .skipButtonVisible = skipAffordanceVisible,
             .startupLoading = preparingInitialPlayback && isRemux,
             .startupProgress = startupProgress,
-            .animationTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(),
             .positionText = positionText,
             .durationText = durationText,
         },
