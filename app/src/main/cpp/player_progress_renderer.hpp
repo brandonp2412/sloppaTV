@@ -3,6 +3,9 @@
 #include "ui_policy.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <optional>
 #include <string_view>
 
 template <typename ColorLike> struct PlayerProgressRenderStyle {
@@ -16,8 +19,11 @@ struct PlayerProgressRenderState {
     int durationMs = 0;
     int bufferAheadMs = 0;
     bool skipButtonVisible = false;
-    std::string_view positionText;
-    std::string_view durationText;
+    bool startupLoading = false;
+    std::optional<float> startupProgress = std::nullopt;
+    std::int64_t animationTimeMs = 0;
+    std::string_view positionText{};
+    std::string_view durationText{};
 };
 
 template <typename RendererLike, typename ColorLike, typename DrawRightAligned>
@@ -31,6 +37,28 @@ void renderPlayerProgress(RendererLike& renderer, const PlayerProgressRenderStat
 
     constexpr float progressTrackY = 890.0f;
     renderer.roundedRect(progressX, progressTrackY, progressWidth, 7.0f, 3.5f, style.track);
+    if (state.startupLoading) {
+        // Only this small section is animated; the seek thumb is hidden.
+        constexpr float startupWidth = 150.0f;
+        constexpr float pi = 3.14159265358979323846f;
+        const float phase = static_cast<float>(state.animationTimeMs % 1400) / 1400.0f;
+        const float pulse = 0.5f + 0.5f * std::sin(2.0f * pi * phase);
+        if (!state.startupProgress) {
+            renderer.roundedRect(progressX, progressTrackY, 45.0f + 75.0f * pulse, 7.0f, 3.5f, style.focus);
+        } else {
+            const float filled = startupWidth * std::clamp(*state.startupProgress, 0.0f, 1.0f);
+            if (filled > 0.0f) renderer.roundedRect(progressX, progressTrackY, filled, 7.0f, 3.5f, style.focus);
+            // Glint remains inside verified contiguous bytes, never fake progress.
+            if (filled > 0.0f) {
+                const float glintWidth = std::min(filled, 8.0f + 14.0f * pulse);
+                renderer.roundedRect(progressX + filled - glintWidth, progressTrackY, glintWidth, 7.0f, 3.5f,
+                                     style.text);
+            } else {
+                renderer.roundedRect(progressX, progressTrackY, 12.0f + 12.0f * pulse, 7.0f, 3.5f, style.focus);
+            }
+        }
+        return;
+    }
     if (state.durationMs <= 0) return;
 
     const float progress =

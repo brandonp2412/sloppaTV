@@ -437,23 +437,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                            ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
                        });
 
-    // During startup, this track measures verified consecutive bytes at the
-    // requested range, not the torrent's overall downloaded percentage.
-    if (preparingInitialPlayback && isRemux) {
-        constexpr float x = 80.0f;
-        constexpr float y = 817.0f;
-        constexpr float width = 590.0f;
-        renderer.roundedRect(x, y, width, 7.0f, 3.5f, material_tv::track);
-        if (startupProgress) {
-            if (*startupProgress > 0.0f)
-                renderer.roundedRect(x, y, width * *startupProgress, 7.0f, 3.5f, material_tv::primary);
-        } else {
-            // Unknown source / no trustworthy byte range yet: indeterminate, never a fake percentage.
-            const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
-            const float travel = static_cast<float>(elapsed % 1800) / 1800.0f;
-            renderer.roundedRect(x + (width - 120.0f) * travel, y, 120.0f, 7.0f, 3.5f, material_tv::primary);
-        }
-    } else {
+    if (!preparingInitialPlayback) {
         // Once playing, retain the separate downloaded-file telemetry.
         const std::string remuxProgress = buffer.remotePrefetchText(now);
         if (!remuxProgress.empty())
@@ -462,23 +446,27 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
 
     const std::string positionText = formatPlaybackTime(position);
     const std::string durationText = formatPlaybackTime(duration);
-    renderPlayerProgress(renderer,
-                         PlayerProgressRenderState{
-                             .positionMs = position,
-                             .durationMs = duration,
-                             .bufferAheadMs = buffer.cacheAheadMs(),
-                             .skipButtonVisible = skipAffordanceVisible,
-                             .positionText = positionText,
-                             .durationText = durationText,
-                         },
-                         PlayerProgressRenderStyle<Color>{
-                             .text = material_tv::onSurface,
-                             .track = material_tv::track,
-                             .focus = material_tv::primary,
-                         },
-                         [&ui](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
-                             ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
-                         });
+    renderPlayerProgress(
+        renderer,
+        PlayerProgressRenderState{
+            .positionMs = position,
+            .durationMs = duration,
+            .bufferAheadMs = buffer.cacheAheadMs(),
+            .skipButtonVisible = skipAffordanceVisible,
+            .startupLoading = preparingInitialPlayback && isRemux,
+            .startupProgress = startupProgress,
+            .animationTimeMs = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count(),
+            .positionText = positionText,
+            .durationText = durationText,
+        },
+        PlayerProgressRenderStyle<Color>{
+            .text = material_tv::onSurface,
+            .track = material_tv::track,
+            .focus = material_tv::primary,
+        },
+        [&ui](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
+            ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
+        });
 
     renderPlayerTrickplayPresentation(renderer, ui, playbackCoordinator, playerScreenState, trickplayState);
 
