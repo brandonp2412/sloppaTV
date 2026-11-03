@@ -123,6 +123,21 @@ int main() {
     assert(filtered[5] == SettingId::AutoSubtitleLanguage);
     assert(filtered[6] == SettingId::AutoSubtitleSourceAudio);
 
+    const auto captions = matchingSettings("captions", false);
+    assert(captions == filtered);
+    const auto closedCaptions = matchingSettings("CC", false);
+    assert(closedCaptions == filtered);
+
+    const auto fontSize = matchingSettings("font size", false);
+    assert(fontSize.size() == 1);
+    assert(fontSize.front() == SettingId::UiTextSize);
+
+    for (const auto* query : {"12h", "24h"}) {
+        const auto matches = matchingSettings(query, false);
+        assert(matches.size() == 1);
+        assert(matches.front() == SettingId::TimeFormat);
+    }
+
     const auto timeFiltered = matchingSettings("time format", false);
     assert(timeFiltered.size() == 1);
     assert(timeFiltered.front() == SettingId::TimeFormat);

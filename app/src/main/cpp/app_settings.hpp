@@ -736,6 +736,25 @@ inline bool settingLabelContains(std::string_view text, std::string_view query) 
                        }) != text.end();
 }
 
+inline std::string_view settingSearchAliases(SettingId setting) {
+    switch (setting) {
+    case SettingId::SubtitleSize:
+    case SettingId::SubtitleBackground:
+    case SettingId::SubtitlePosition:
+    case SettingId::SubtitleLanguages:
+    case SettingId::AutoSubtitles:
+    case SettingId::AutoSubtitleLanguage:
+    case SettingId::AutoSubtitleSourceAudio:
+        return "captions cc";
+    case SettingId::UiTextSize:
+        return "font size";
+    case SettingId::TimeFormat:
+        return "12h 24h";
+    default:
+        return {};
+    }
+}
+
 template <size_t N> consteval std::array<SettingId, N> makeSettingOrder(bool advanced) {
     std::array<SettingId, N> result{};
     size_t count = 0;
@@ -757,7 +776,8 @@ inline std::vector<SettingId> matchingSettings(const std::string& query, bool ad
     matches.reserve(advanced ? kAdvancedSettings.size() : kCommonSettings.size());
     const auto appendMatches = [&](const auto& candidates) {
         for (const SettingId setting : candidates) {
-            if (query.empty() || settingLabelContains(settingLabel(setting, advanced), query)) {
+            if (query.empty() || settingLabelContains(settingLabel(setting, advanced), query) ||
+                settingLabelContains(settingSearchAliases(setting), query)) {
                 matches.push_back(setting);
             }
         }
