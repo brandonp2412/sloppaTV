@@ -77,7 +77,7 @@ inline std::string homeArtworkKey(const JellyfinSession& session, const ArtworkR
     key.reserve(session.server.size() + session.userId.size() + artwork.itemId.size() + artwork.tag.size() +
                 kind.size() + 31);
     key.append(session.server).append(":user:").append(session.userId).push_back(':');
-    key.append(artwork.itemId).append(":home:v5-480x270:").append(kind).push_back(':');
+    key.append(artwork.itemId).append(":home:v6-hires:").append(kind).push_back(':');
     key.append(artwork.tag);
     return key;
 }

@@ -157,6 +157,11 @@ public:
             };
         }
         if (input == SettingsScreenInput::Activate) {
+            // Select changes switches and option values, just like D-pad Right.
+            // Seerr drive selection retains its activation path to refresh storage.
+            if (isAdjustableSetting(selection_) && selection_ != SettingId::SeerrDriveSelection) {
+                return {.type = SettingsScreenCommandType::Adjust, .setting = selection_, .direction = 1};
+            }
             return {
                 .type = SettingsScreenCommandType::ActivateSetting,
                 .setting = selection_,
@@ -249,8 +254,10 @@ inline SettingsScreenPresentation settingsScreenPresentation(const SettingsScree
         .searchText = searchPlaceholder ? "Search settings" : screen.searchQuery(),
         .searchActionLabel = systemSettingsInputActive ? "Typing…" : "Search",
         .sectionTitle = screen.advanced() ? "Advanced settings" : "Common settings",
-        .sectionDescription = screen.advanced() ? "Codec overrides, compatibility and device-level controls"
-                                                : "The settings you are most likely to change",
+        .sectionDescription = !screen.searchFocused() && screen.selection() == SettingId::Backdrops
+                                  ? "Background images behind titles on Home and details: Off, Dimmed, or Clear"
+                                  : (screen.advanced() ? "Codec overrides, compatibility and device-level controls"
+                                                       : "The settings you are most likely to change"),
         .searchPlaceholder = searchPlaceholder,
         .showTypingFilterHint = screen.matches().empty() && systemSettingsInputActive,
     };

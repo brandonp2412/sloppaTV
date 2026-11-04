@@ -258,7 +258,7 @@ template <typename UiLike>
 void renderContentPersonItems(Renderer& renderer, UiLike& ui, const DetailsScreenState& state,
                               const AppSettings& settings, bool loading) {
     const auto& person = state.selectedPerson();
-    const std::string heading = person.name.empty() ? "Person" : "Featuring " + person.name;
+    const std::string heading = person.name.empty() ? "Person" : "In your library · " + person.name;
     renderContentMediaGrid(renderer, ui, settings, heading, state.personItems(), loading, state.personItemSelection());
 }
 

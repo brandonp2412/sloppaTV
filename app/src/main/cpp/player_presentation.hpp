@@ -446,26 +446,25 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
 
     const std::string positionText = formatPlaybackTime(position);
     const std::string durationText = formatPlaybackTime(duration);
-    renderPlayerProgress(
-        renderer,
-        PlayerProgressRenderState{
-            .positionMs = position,
-            .durationMs = duration,
-            .bufferAheadMs = buffer.cacheAheadMs(),
-            .skipButtonVisible = skipAffordanceVisible,
-            .startupLoading = preparingInitialPlayback && isRemux,
-            .startupProgress = startupProgress,
-            .positionText = positionText,
-            .durationText = durationText,
-        },
-        PlayerProgressRenderStyle<Color>{
-            .text = material_tv::onSurface,
-            .track = material_tv::track,
-            .focus = material_tv::primary,
-        },
-        [&ui](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
-            ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
-        });
+    renderPlayerProgress(renderer,
+                         PlayerProgressRenderState{
+                             .positionMs = position,
+                             .durationMs = duration,
+                             .bufferAheadMs = buffer.cacheAheadMs(),
+                             .skipButtonVisible = skipAffordanceVisible,
+                             .startupLoading = preparingInitialPlayback && isRemux,
+                             .startupProgress = startupProgress,
+                             .positionText = positionText,
+                             .durationText = durationText,
+                         },
+                         PlayerProgressRenderStyle<Color>{
+                             .text = material_tv::onSurface,
+                             .track = material_tv::track,
+                             .focus = material_tv::primary,
+                         },
+                         [&ui](float right, float y, float scale, std::string_view value, Color color, float maxWidth) {
+                             ui.drawRightAlignedSingleLine(right, y, scale, value, color, maxWidth);
+                         });
 
     renderPlayerTrickplayPresentation(renderer, ui, playbackCoordinator, playerScreenState, trickplayState);
 

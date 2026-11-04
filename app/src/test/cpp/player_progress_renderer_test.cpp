@@ -125,8 +125,7 @@ int main() {
     // Without actual Remux prefetch data the track remains empty, not pulsing.
     FakeRenderer searching;
     renderPlayerProgress(searching,
-                         PlayerProgressRenderState{
-                             .positionMs = 5000, .durationMs = 10000, .startupLoading = true},
+                         PlayerProgressRenderState{.positionMs = 5000, .durationMs = 10000, .startupLoading = true},
                          PlayerProgressRenderStyle<TestColor>{.text = {1}, .track = {2}, .focus = {3}},
                          [](float, float, float, std::string_view, TestColor, float) {});
     assert(searching.rects.size() == 1);
