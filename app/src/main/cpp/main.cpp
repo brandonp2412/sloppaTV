@@ -1753,6 +1753,10 @@ private:
         remuxEpisodePrewarm_.clear();
         pendingRemuxSourceId_.clear();
         pendingRemuxItemId_.clear();
+        // Capture the final observed position before updating Continue Watching.
+        // releaseFlow_ refreshes telemetry too, but that happens after this local snapshot.
+        if (player_.status() == PlayerStatus::Playing || player_.status() == PlayerStatus::Paused)
+            playbackRuntime_.refreshTelemetry(true);
         const PlaybackReleaseContext release =
             playbackCoordinator_.releaseContext(true, completed, session_.valid(), playerScreenState_.positionMs());
         if (release.plan.updateCachedPosition) {

@@ -235,14 +235,21 @@ inline PlaybackReleasePlan planPlaybackRelease(bool requestedStopReport, bool co
                                                bool sessionValid, const JellyfinItem& item,
                                                const PlaybackTarget& target, int positionMs) {
     PlaybackReleasePlan plan;
-    plan.reportTicks = completed && item.runtimeTicks > 0 ? item.runtimeTicks : playbackTicksFromPositionMs(positionMs);
+    const int64_t positionTicks = playbackTicksFromPositionMs(positionMs);
+    // Remux marks a playback watched on stop at 90% by default. A Back press
+    // near the end should agree with that threshold, including the local home
+    // cache, instead of restoring a resumable entry after the server marks it played.
+    const bool canReportStop =
+        requestedStopReport && playbackStartReported && sessionValid && !item.id.empty() && !target.url.empty();
+    const bool watched = completed || (canReportStop && item.runtimeTicks > 0 &&
+                                       positionTicks >= item.runtimeTicks - item.runtimeTicks / 10);
+    plan.reportTicks = watched && item.runtimeTicks > 0 ? item.runtimeTicks : positionTicks;
     // A failed cold start has no playback progress to persist. In particular,
     // leaving a spinner must not erase the last saved resume position.
-    plan.updateCachedPosition = completed || playbackStartReported;
-    plan.cachedPositionTicks = plan.updateCachedPosition ? (completed ? 0 : plan.reportTicks) : item.positionTicks;
-    plan.markPlayed = completed;
-    plan.reportStop =
-        requestedStopReport && playbackStartReported && sessionValid && !item.id.empty() && !target.url.empty();
+    plan.updateCachedPosition = watched || playbackStartReported;
+    plan.cachedPositionTicks = plan.updateCachedPosition ? (watched ? 0 : plan.reportTicks) : item.positionTicks;
+    plan.markPlayed = watched;
+    plan.reportStop = canReportStop;
     return plan;
 }
 
