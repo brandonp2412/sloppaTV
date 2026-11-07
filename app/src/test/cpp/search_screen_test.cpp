@@ -98,6 +98,26 @@ int main() {
     assert(state.selectionOnFirstResultRow());
     assert(state.selectedSeerrResult() == nullptr);
 
+    // Exact series titles must beat similarly named movies regardless of server ordering.
+    std::vector<SeerrMediaItem> noFriendsRemote;
+    SearchScreenState friendsRanked(noFriendsRemote);
+    friendsRanked.setQuery("Friends");
+    JellyfinItem distantMovie;
+    distantMovie.id = "movie-with-friends";
+    distantMovie.name = "My Friends & Me";
+    distantMovie.type = "Movie";
+    JellyfinItem prefixMovie = distantMovie;
+    prefixMovie.id = "friends-forever";
+    prefixMovie.name = "Friends Forever";
+    JellyfinItem classicShow = distantMovie;
+    classicShow.id = "friends-1994";
+    classicShow.name = "Friends";
+    classicShow.type = "Series";
+    classicShow.productionYear = 1994;
+    assert(friendsRanked.finishLibrarySearch("Friends", {distantMovie, prefixMovie, classicShow}));
+    assert(friendsRanked.results()[0].id == "friends-1994");
+    assert(friendsRanked.results()[1].id == "friends-forever");
+
     // Episode-only Remux searches must select the playable match, not a Seerr request.
     SearchScreenState episodeFirst(seerrState.results());
     episodeFirst.setQuery("bro");

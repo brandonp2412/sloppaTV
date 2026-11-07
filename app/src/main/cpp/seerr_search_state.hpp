@@ -1,7 +1,10 @@
 #pragma once
 
+#include "search_relevance.hpp"
+
 #include "seerr_media.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <utility>
@@ -111,6 +114,13 @@ public:
         if (query_ != query) return false;
         loading_ = false;
         error_.clear();
+        std::stable_sort(results.begin(), results.end(), [&](const auto& lhs, const auto& rhs) {
+            const int lhsMatch = searchTitleMatchScore(lhs.name, query);
+            const int rhsMatch = searchTitleMatchScore(rhs.name, query);
+            if (lhsMatch != rhsMatch) return lhsMatch > rhsMatch;
+            if (lhsMatch > 0 && lhs.television() != rhs.television()) return lhs.television();
+            return lhs.popularity > rhs.popularity;
+        });
         results_ = std::move(results);
         return true;
     }

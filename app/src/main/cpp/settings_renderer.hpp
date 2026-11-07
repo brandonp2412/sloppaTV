@@ -126,7 +126,7 @@ void renderSettingsScreen(RendererLike& renderer, const SettingsRenderState& sta
 
     const float footerY = settingsFooterY(state.settings.uiTextSize);
     drawCentered(330.0f, footerY, 1260.0f, 58.0f, 1.65f,
-                 "Left / Right changes   |   OK opens options   |   Up searches", style.muted, 14.0f, 5.0f);
+                 "Left / Right changes   |   OK selects or toggles   |   Up searches", style.muted, 14.0f, 5.0f);
 
     if (!state.screen.subtitleLanguagePicker()) return;
 

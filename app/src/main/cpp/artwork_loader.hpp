@@ -34,7 +34,12 @@ public:
             homeDiskCache_, request.key,
             [&] {
                 if (request.external) return seerr_.downloadImage(request.externalUrl);
-                return jellyfin_.downloadHomeImage(session, request.itemId, request.artwork, 480, 270);
+                // Portrait posters were previously capped at 270px high, even on 4K TVs.
+                const bool landscape = request.artwork.kind == ArtworkKind::Thumb ||
+                                       request.artwork.kind == ArtworkKind::Backdrop ||
+                                       preferHomeLandscapeArtwork(request.itemType);
+                return jellyfin_.downloadHomeImage(session, request.itemId, request.artwork, landscape ? 800 : 600,
+                                                   landscape ? 450 : 900);
             },
             [this](const std::string& encoded, std::string& error) { return decoder_.decode(encoded, error); });
     }

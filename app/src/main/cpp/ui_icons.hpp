@@ -107,6 +107,7 @@ inline std::optional<Glyph> forLabel(std::string_view label) {
 
 inline Glyph forSetting(std::string_view label) {
     if (const auto icon = forLabel(label)) return *icon;
+    if (label.find("BACKGROUND ARTWORK") != std::string_view::npos) return Glyph::Display;
     if (label.find("SUBTITLE") != std::string_view::npos) return Glyph::Subtitles;
     if (label.find("AUDIO") != std::string_view::npos) return Glyph::Audio;
     if (label.find("SEERR") != std::string_view::npos) return Glyph::Server;

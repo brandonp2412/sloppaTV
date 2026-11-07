@@ -17,7 +17,7 @@ inline std::string_view materialLabel(std::string_view value) {
         {"MATCH VIDEO REFRESH RATE", "Match video refresh rate"},
         {"WATCHED INDICATORS", "Watched indicators"},
         {"CLOCK", "Clock"},
-        {"BACKDROPS", "Backdrops"},
+        {"BACKGROUND ARTWORK", "Background artwork"},
         {"SUBTITLE SIZE", "Subtitle size"},
         {"SUBTITLE BACKGROUND", "Subtitle background"},
         {"SUBTITLE POSITION", "Subtitle position"},

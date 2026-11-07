@@ -28,8 +28,17 @@ int main() {
     assert(command.setting == SettingId::UiTextSize);
     assert(command.direction == 1);
     command = screen.handleInput(SettingsScreenInput::Activate);
-    assert(command.type == SettingsScreenCommandType::ActivateSetting);
+    assert(command.type == SettingsScreenCommandType::Adjust);
     assert(command.setting == SettingId::UiTextSize);
+    assert(command.direction == 1);
+
+    screen.setSearchText("clock");
+    screen.moveDown();
+    assert(screen.selection() == SettingId::Clock);
+    command = screen.handleInput(SettingsScreenInput::Activate);
+    assert(command.type == SettingsScreenCommandType::Adjust);
+    assert(command.setting == SettingId::Clock);
+    assert(command.direction == 1);
 
     screen.reset();
     command = screen.handleInput(SettingsScreenInput::Search);
