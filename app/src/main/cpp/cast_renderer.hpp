@@ -67,6 +67,6 @@ void renderCastScreen(RendererLike& renderer, std::string_view detailName, const
         }
     }
 
-    drawCentered(500.0f, 1032.0f, 920.0f, 40.0f, 1.55f, "Press OK to explore titles in your library featuring this person",
-                 style.tertiary, 12.0f, 2.0f);
+    drawCentered(500.0f, 1032.0f, 920.0f, 40.0f, 1.55f,
+                 "Press OK to explore titles in your library featuring this person", style.tertiary, 12.0f, 2.0f);
 }

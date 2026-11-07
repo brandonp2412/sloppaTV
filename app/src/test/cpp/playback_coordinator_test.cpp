@@ -695,6 +695,20 @@ int main() {
     assert(releasePlan.markPlayed);
     assert(releasePlan.reportStop);
 
+    // Backing out during the last 10% should be watched just like Remux's
+    // default stopped-playback threshold, without waiting for a natural EOF.
+    releasePlan = planPlaybackRelease(true, false, true, true, releaseItem, releaseTarget, 80'999);
+    assert(!releasePlan.markPlayed);
+    assert(releasePlan.cachedPositionTicks == 809'990'000);
+    releasePlan = planPlaybackRelease(true, false, true, true, releaseItem, releaseTarget, 81'000);
+    assert(releasePlan.markPlayed);
+    assert(releasePlan.reportTicks == releaseItem.runtimeTicks);
+    assert(releasePlan.cachedPositionTicks == 0);
+    assert(releasePlan.reportStop);
+    releasePlan = planPlaybackRelease(false, false, true, true, releaseItem, releaseTarget, 81'000);
+    assert(!releasePlan.markPlayed);
+    assert(!releasePlan.reportStop);
+
     releaseItem.positionTicks = 987'650'000;
     releasePlan = planPlaybackRelease(true, false, false, true, releaseItem, releaseTarget, 12345);
     assert(!releasePlan.reportStop);
