@@ -22,14 +22,14 @@ int main() {
     const auto actionIds = detailActionIdsFor(series);
     assert(actionIds.front() == DetailsAction::StartPlayback);
     assert(actionIds[1] == DetailsAction::OpenEpisodes);
-    assert(actionIds[2] == DetailsAction::PlayAll);
+    assert(std::find(actionIds.begin(), actionIds.end(), DetailsAction::PlayAll) == actionIds.end());
     const auto actions = state.actions(series, false);
     assert(actions.front() == "PLAY");
     series.positionTicks = 10000000;
     assert(state.actions(series, false).front() == "PLAY NEXT");
     series.positionTicks = 0;
     assert(actions[1] == "EPISODES");
-    assert(actions[2] == "PLAY ALL");
+    assert(std::find(actions.begin(), actions.end(), "PLAY ALL") == actions.end());
     assert(std::find(actions.begin(), actions.end(), "MORE") == actions.end());
     assert(actions.back() == "BACK");
     const auto remuxSeerrActions = state.actions(series, false, true);
@@ -104,20 +104,19 @@ int main() {
 
     state.beginItemMenu();
     const auto menuIds = itemMenuActionIdsFor(series, false, true, true);
-    assert(menuIds.front() == ItemMenuAction::PlayAll);
-    assert(menuIds[1] == ItemMenuAction::PlayExternal);
-    assert(menuIds[2] == ItemMenuAction::ViewQueue);
+    assert(menuIds.front() == ItemMenuAction::PlayExternal);
+    assert(menuIds[1] == ItemMenuAction::ViewQueue);
+    assert(std::find(menuIds.begin(), menuIds.end(), ItemMenuAction::PlayAll) == menuIds.end());
     auto menu = state.itemMenuActions(series, false, true, true, false);
-    assert(menu.front() == "PLAY ALL");
-    assert(menu[1] == "PLAY EXTERNAL");
-    assert(menu[2] == "VIEW QUEUE");
+    assert(menu.front() == "PLAY EXTERNAL");
+    assert(menu[1] == "VIEW QUEUE");
     assert(menu[menu.size() - 2] == "DELETE MEDIA");
     auto menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Down, static_cast<int>(menu.size()));
     menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Down, static_cast<int>(menu.size()));
     menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Down, static_cast<int>(menu.size()));
     assert(menuCommand.type == ItemMenuScreenCommandType::None);
     assert(state.itemMenuSelection() == 3);
-    assert(state.selectedItemMenuAction(series, false, true, true) == ItemMenuAction::ToggleFavorite);
+    assert(state.selectedItemMenuAction(series, false, true, true) == ItemMenuAction::TogglePlayed);
     menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Activate, static_cast<int>(menu.size()));
     assert(menuCommand.type == ItemMenuScreenCommandType::ActivateAction);
 

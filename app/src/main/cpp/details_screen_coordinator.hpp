@@ -297,7 +297,7 @@ private:
         loading_ = true;
         error_.clear();
         const uint64_t generation = contentEpoch_.begin();
-        if (detailsAsync_.loadPersonItems(session_, person.id, generation, 60)) return;
+        if (detailsAsync_.loadPersonItems(session_, person.id, generation, 200)) return;
         contentEpoch_.invalidate();
         loading_ = false;
         error_ = "PERSON ITEMS COULD NOT BE STARTED";

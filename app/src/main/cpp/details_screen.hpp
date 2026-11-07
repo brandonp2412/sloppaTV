@@ -67,10 +67,7 @@ inline std::vector<DetailsAction> detailActionIdsFor(const JellyfinItem& item, b
     result.reserve(10);
     result.push_back(DetailsAction::StartPlayback);
     if (item.type != "Series" && item.positionTicks > 0) result.push_back(DetailsAction::PlayFromBeginning);
-    if (item.type == "Series") {
-        result.push_back(DetailsAction::OpenEpisodes);
-        result.push_back(DetailsAction::PlayAll);
-    }
+    if (item.type == "Series") result.push_back(DetailsAction::OpenEpisodes);
     result.push_back(DetailsAction::ToggleFavorite);
     result.push_back(DetailsAction::TogglePlayed);
     if (canAddToSeerr && (item.type == "Movie" || item.type == "Series")) result.push_back(DetailsAction::AddToSeerr);
@@ -185,13 +182,12 @@ enum class ItemMenuAction {
     Back,
 };
 
-inline std::vector<ItemMenuAction> itemMenuActionIdsFor(const JellyfinItem& item, bool seerrRequest,
-                                                        bool hasExternalPlayer, bool hasQueue) {
+inline std::vector<ItemMenuAction> itemMenuActionIdsFor(const JellyfinItem&, bool seerrRequest, bool hasExternalPlayer,
+                                                        bool hasQueue) {
     if (seerrRequest) return {ItemMenuAction::DeleteRequest, ItemMenuAction::Back};
 
     std::vector<ItemMenuAction> result;
     result.reserve(9);
-    if (item.type == "Series") result.push_back(ItemMenuAction::PlayAll);
     if (hasExternalPlayer) result.push_back(ItemMenuAction::PlayExternal);
     if (hasQueue) result.push_back(ItemMenuAction::ViewQueue);
     result.push_back(ItemMenuAction::ToggleFavorite);

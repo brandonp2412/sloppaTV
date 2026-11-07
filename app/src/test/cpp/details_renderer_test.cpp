@@ -87,6 +87,7 @@ struct Harness {
     std::vector<std::pair<std::string, float>> chipPositions;
     std::vector<bool> buttonFocus;
     std::vector<bool> buttonPrimary;
+    std::vector<float> buttonY;
 
     void render(const JellyfinItem& detail, const DetailsScreenState& state, std::span<const std::string> actions,
                 const DetailsRenderConfig& config) {
@@ -162,6 +163,7 @@ struct Harness {
             [&](float x, float y, float width, float height, bool focused, bool primary) {
                 buttonFocus.push_back(focused);
                 buttonPrimary.push_back(primary);
+                buttonY.push_back(y);
                 return std::array<float, 4>{x, y, width, height};
             },
             [](float x, float y, float width, float height, bool focused, float) {
@@ -243,6 +245,19 @@ int main() {
         if (rect.width == 280.0f && rect.color == 5) sawHalfProgress = true;
     }
     assert(sawHalfProgress);
+
+    // Async metadata and logos must not move the action row between frames.
+    JellyfinItem loadingMovie = movie;
+    loadingMovie.overview.clear();
+    loadingMovie.favorite = false;
+    loadingMovie.played = false;
+    Harness loadingHarness;
+    loadingHarness.render(loadingMovie, movieState, movieActions, DetailsRenderConfig{.showWatchedIndicators = true});
+    Harness loadedHarness;
+    loadedHarness.logo = true;
+    loadedHarness.render(movie, movieState, movieActions, DetailsRenderConfig{.showWatchedIndicators = true});
+    assert(!loadingHarness.buttonY.empty());
+    assert(loadingHarness.buttonY == loadedHarness.buttonY);
 
     JellyfinItem series;
     series.id = "series";

@@ -775,12 +775,12 @@ JellyfinClient::getItemsForPerson(const JellyfinSession& session, const std::str
         result.error = "Person-items request is incomplete";
         return result;
     }
-    const std::string url =
-        session.server + "/Users/" + session.userId + "/Items" + "?Recursive=true&PersonIds=" + urlEncode(personId) +
-        "&IncludeItemTypes=Movie,Series,Episode" + "&SortBy=ProductionYear,SortName&SortOrder=Descending" +
-        "&Limit=" + std::to_string(std::clamp(limit, 1, 100)) +
-        "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
-        "&EnableTotalRecordCount=false";
+    const std::string url = session.server + "/Users/" + session.userId + "/Items" +
+                            "?Recursive=true&PersonIds=" + urlEncode(personId) + "&IncludeItemTypes=Movie,Series" +
+                            "&SortBy=ProductionYear,SortName&SortOrder=Descending" +
+                            "&Limit=" + std::to_string(std::clamp(limit, 1, 300)) +
+                            "&ImageTypeLimit=1&EnableImageTypes=Primary,Backdrop,Thumb"
+                            "&EnableTotalRecordCount=false";
     auto result = parseItemList(http_.request("GET", url, headers(&session, session.deviceId)));
     if (result.ok) retainScopedVideoItems(result.value);
     return result;

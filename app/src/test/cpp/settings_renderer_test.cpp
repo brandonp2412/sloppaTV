@@ -114,12 +114,12 @@ int main() {
     assert(common.inputSurfaces == 1);
     assert(common.listSurfaces == 6);
     assert(common.emptyStates == 0);
-    assert(common.switches == 1);
+    assert(common.switches == 2);
     assert(has(common.renderer.texts, "Settings"));
     assert(has(common.renderer.texts, "Common settings"));
     assert(has(common.renderer.verticalTexts, "UI TEXT SIZE"));
     assert(has(common.renderer.verticalTexts, "ALL LANGUAGES"));
-    assert(has(common.centered, "Left / Right changes   |   OK opens options   |   Up searches"));
+    assert(has(common.centered, "Left / Right changes   |   OK selects or toggles   |   Up searches"));
 
     screen.setSearchText("definitely unmatched");
     Harness filtering;
