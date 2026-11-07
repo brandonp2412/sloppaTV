@@ -98,7 +98,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
                                                  : episodeNumber + (episodeNumber.empty() ? "" : "  |  ") + detail.name)
                                           : episodeLabel(detail);
     const float uiScale = uiTextScale(config.uiTextSize);
-    const float titleBottom = hasLogo ? 250.0f : 132.0f + 11.0f * 6.0f * uiScale;
+    // Keep content stationary when an asynchronously loaded logo replaces the title.
+    const float titleBottom = std::max(250.0f, 132.0f + 11.0f * 6.0f * uiScale);
     const float secondaryY = std::max(268.0f, titleBottom + 14.0f);
     if (!secondary.empty()) {
         renderer.text(contentX, secondaryY, 2.80f, fitTextLines(secondary, 2.80f, contentWidth, 1), style.secondaryText,
@@ -120,8 +121,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
 
     // The episode subtitle is taller than 50px at every supported text size.
     // Reserve its actual line height before placing metadata chips below it.
-    const float metadataY =
-        secondary.empty() ? std::max(294.0f, titleBottom + 14.0f) : secondaryY + 11.0f * 2.80f * uiScale + 14.0f;
+    // Reserve the subtitle row even before episode/season details arrive.
+    const float metadataY = secondaryY + 11.0f * 2.80f * uiScale + 14.0f;
     float metadataX = contentX;
     for (const auto& value : metadata) {
         const float available = contentX + contentWidth - metadataX;
@@ -137,9 +138,9 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
                       style.secondaryText, contentWidth);
     }
 
-    const float overviewHeight =
-        detail.overview.empty() ? 0.0f : 11.0f * 2.35f * uiScale * static_cast<float>(overviewLines);
-    const float stateY = overviewY + overviewHeight + (detail.overview.empty() ? 4.0f : 18.0f);
+    // Reserve synopsis height before the async detail response arrives.
+    const float overviewHeight = 11.0f * 2.35f * uiScale * static_cast<float>(overviewLines);
+    const float stateY = overviewY + overviewHeight + 18.0f;
     float stateX = contentX;
     if (detail.favorite) {
         stateX += drawChip(stateX, stateY, "Favorite", true, 1.42f, 42.0f, 180.0f) + 10.0f;
@@ -148,8 +149,8 @@ void renderDetailsScreen(RendererLike& renderer, const JellyfinItem& detail, con
         drawChip(stateX, stateY, "Watched", true, 1.42f, 42.0f, 180.0f);
     }
 
-    const float actionY =
-        stateY + ((detail.favorite || (config.showWatchedIndicators && detail.played)) ? 58.0f : 12.0f);
+    // Favorite/Watched chips may arrive late; always reserve their row.
+    const float actionY = stateY + 58.0f;
     constexpr float actionGap = 18.0f;
     constexpr float actionRightInset = 72.0f;
     auto desiredActionWidth = [&](const std::string& action) {

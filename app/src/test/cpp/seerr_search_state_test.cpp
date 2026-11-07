@@ -67,6 +67,28 @@ int main() {
     assert(state.query() == "other");
 
     assert(state.finish("other", {media("seerr:movie:20")}));
+    // The exact 1994 TV series beats a movie prefix match and an unrelated popular film.
+    assert(state.finish("other", {media("ignored")}));
+    SeerrMediaItem friendsMovie = media("movie-friends");
+    friendsMovie.name = "Friends With Benefits";
+    friendsMovie.popularity = 200.0;
+    SeerrMediaItem friendsShow = media("tv-friends");
+    friendsShow.name = "Friends";
+    friendsShow.mediaType = "tv";
+    friendsShow.popularity = 80.0;
+    SeerrMediaItem unrelated = media("another");
+    unrelated.name = "Best Movie";
+    unrelated.popularity = 1000.0;
+    assert(state.finish("other", {friendsMovie, friendsShow, unrelated}));
+    assert(state.results()[0].id == "another");
+    // A matching query places the exact TV title ahead of the prefix movie.
+    assert(state.beginImmediate("Friends").started);
+    assert(state.finish("Friends", {friendsMovie, friendsShow, unrelated}));
+    assert(state.results()[0].id == "tv-friends");
+    assert(state.results()[1].id == "movie-friends");
+    // Continue the original request-state checks.
+    assert(state.beginImmediate("other").started);
+    assert(state.finish("other", {media("seerr:movie:20")}));
     state.markRequested("seerr:movie:20", "Queued", 42);
     assert(state.results().front().requested);
     assert(state.results().front().requestId == 42);

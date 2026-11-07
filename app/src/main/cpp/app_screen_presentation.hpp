@@ -211,7 +211,9 @@ void renderAppScreenFrame(AppScreenPresentationFrame<UiLike, ArtworkLike> frame)
                : frame.screen == Screen::Search                  ? "Searching media libraries"
                                                                  : "Loading media details");
     const StatusOverlayRenderState status = frame.statusOverlayState.renderState(
-        frame.error, (frame.loading || frame.homeLoading || frame.mutationLoading) && frame.screen != Screen::Player,
+        frame.error,
+        (frame.loading || (frame.homeLoading && frame.home.rows.empty()) || frame.mutationLoading) &&
+            frame.screen != Screen::Player,
         frame.screen == Screen::Player, std::chrono::steady_clock::now(), loadingLabel);
     renderStatusOverlay(
         frame.renderer, status,

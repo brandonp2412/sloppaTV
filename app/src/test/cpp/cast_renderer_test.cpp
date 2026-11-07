@@ -128,7 +128,7 @@ int main() {
     assert(sawRole10);
 
     assert(centered.size() == 1);
-    assert(centered[0].text == "Press OK to explore titles featuring this person");
+    assert(centered[0].text == "Press OK to explore titles in your library featuring this person");
     assert(centered[0].x == 500.0f);
     assert(centered[0].y == 1032.0f);
     assert(centered[0].color == style.tertiary);

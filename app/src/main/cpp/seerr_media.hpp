@@ -16,6 +16,7 @@ struct SeerrMediaItem {
     std::string progressLabel;
     std::string progressEta;
     int productionYear = 0;
+    double popularity = 0.0;
     int progressPercent = -1;
     int requestId = 0;
     int mediaStatus = 0;

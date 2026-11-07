@@ -86,7 +86,7 @@ struct FakeJellyfin {
         assert(artwork.itemId == "movie-1");
         assert(artwork.tag == "thumb-tag");
         assert(artwork.kind == ArtworkKind::Thumb);
-        assert(width == 480 && height == 270);
+        assert(width == 800 && height == 450);
         return bytesResult("home");
     }
 

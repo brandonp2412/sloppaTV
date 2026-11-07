@@ -16,8 +16,8 @@
 using nlohmann::json;
 
 namespace {
-constexpr const char* kTmdbPosterBase = "https://image.tmdb.org/t/p/w500";
-constexpr const char* kTmdbBackdropBase = "https://image.tmdb.org/t/p/w780";
+constexpr const char* kTmdbPosterBase = "https://image.tmdb.org/t/p/w780";
+constexpr const char* kTmdbBackdropBase = "https://image.tmdb.org/t/p/w1280";
 
 std::string apiError(const HttpResponse& response) {
     if (!response.error.empty()) return response.error;
@@ -139,6 +139,7 @@ SeerrMediaItem itemFromSearchResult(const json& value) {
 
     const std::string date = mediaType == "tv" ? stringValue(value, "firstAirDate") : stringValue(value, "releaseDate");
     item.productionYear = productionYearFromDate(date);
+    item.popularity = doubleValue(value, "popularity");
 
     const auto mediaInfo = value.find("mediaInfo");
     if (mediaInfo != value.end() && mediaInfo->is_object()) {

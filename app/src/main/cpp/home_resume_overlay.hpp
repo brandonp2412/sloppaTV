@@ -116,6 +116,13 @@ public:
 
     void remember(const JellyfinSession& session, JellyfinItem item, int64_t positionTicks, bool completed,
                   Clock::time_point now = Clock::now()) {
+        // Mask a stale server Resume response after a completed stop. Simply
+        // removing the local overlay is insufficient: an in-flight home load
+        // can still return the old unfinished position.
+        if (completed) {
+            forget(session, item.id, now);
+            return;
+        }
         std::erase_if(recent_, [&](const Entry& entry) {
             return entry.server == session.server && entry.userId == session.userId && entry.item.id == item.id;
         });
@@ -153,7 +160,14 @@ public:
             }
             const auto existing = std::find_if(resume->items.begin(), resume->items.end(),
                                                [&](const JellyfinItem& item) { return item.id == entry->item.id; });
-            if (existing == resume->items.end()) resume->items.insert(resume->items.begin(), entry->item);
+            // Keep the most advanced position when a stale server response races
+            // the local stop snapshot, and promote the just-played item to the front.
+            JellyfinItem current = entry->item;
+            if (existing != resume->items.end()) {
+                if (existing->positionTicks > current.positionTicks) current = *existing;
+                resume->items.erase(existing);
+            }
+            resume->items.insert(resume->items.begin(), std::move(current));
         }
         bool emptiedNextUp = false;
         const auto current = std::find_if(home.rows.begin(), home.rows.end(),

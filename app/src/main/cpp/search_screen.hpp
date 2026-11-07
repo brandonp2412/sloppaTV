@@ -2,6 +2,7 @@
 
 #include "jellyfin_types.hpp"
 #include "seerr_jellyfin_adapter.hpp"
+#include "search_relevance.hpp"
 #include "ui_policy.hpp"
 #include "unicode_text.hpp"
 
@@ -233,6 +234,13 @@ public:
             else
                 libraryTitles_.push_back(std::move(item));
         }
+        std::stable_sort(libraryTitles_.begin(), libraryTitles_.end(), [&](const auto& lhs, const auto& rhs) {
+            const int lhsMatch = searchTitleMatchScore(lhs.name, query_);
+            const int rhsMatch = searchTitleMatchScore(rhs.name, query_);
+            if (lhsMatch != rhsMatch) return lhsMatch > rhsMatch;
+            if (lhsMatch > 0 && (lhs.type == "Series") != (rhs.type == "Series")) return lhs.type == "Series";
+            return lhs.communityRating > rhs.communityRating;
+        });
         const bool hasLocalResults = !libraryTitles_.empty() || !episodes_.empty();
         rebuildResults();
         // Seerr may complete first; do not leave its automatically selected card ahead of playable results.
