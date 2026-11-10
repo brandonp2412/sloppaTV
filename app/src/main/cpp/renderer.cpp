@@ -1,4 +1,5 @@
 #include "renderer.hpp"
+#include "player_ambient_bars.hpp"
 #include "font_ink_bounds.hpp"
 #include "ui_icon_atlas.hpp"
 #include "renderer_shaders.hpp"
@@ -379,8 +380,8 @@ void Renderer::shutdown() {
             if (externalVbo_) glDeleteBuffers(1, &externalVbo_);
             if (externalVao_) glDeleteVertexArrays(1, &externalVao_);
             if (externalProgram_) glDeleteProgram(externalProgram_);
-            if (externalSampleFramebuffer_) glDeleteFramebuffers(1, &externalSampleFramebuffer_);
-            if (externalSampleTexture_) glDeleteTextures(1, &externalSampleTexture_);
+            if (screenSampleFramebuffer_) glDeleteFramebuffers(1, &screenSampleFramebuffer_);
+            if (screenSampleTexture_) glDeleteTextures(1, &screenSampleTexture_);
         }
         eglMakeCurrent(display_, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (context_ != EGL_NO_CONTEXT) eglDestroyContext(display_, context_);
@@ -410,8 +411,8 @@ void Renderer::shutdown() {
     externalAlphaLocation_ = -1;
     externalTransformLocation_ = -1;
     externalProgramFailed_ = false;
-    externalSampleTexture_ = 0;
-    externalSampleFramebuffer_ = 0;
+    screenSampleTexture_ = 0;
+    screenSampleFramebuffer_ = 0;
     iconTexture_ = 0;
     fontTexture_ = 0;
     fontOutlineTexture_ = 0;
@@ -499,6 +500,10 @@ void Renderer::rect(float x, float y, float w, float h, Color c) {
     y = uiOffsetY_ + y * uiScale_;
     w *= uiScale_;
     h *= uiScale_;
+    screenRect(x, y, w, h, c);
+}
+
+void Renderer::screenRect(float x, float y, float w, float h, Color c) {
     const Vertex v0{x, y, c.r, c.g, c.b, c.a};
     const Vertex v1{x + w, y, c.r, c.g, c.b, c.a};
     const Vertex v2{x + w, y + h, c.r, c.g, c.b, c.a};
@@ -855,103 +860,94 @@ bool Renderer::ensureExternalProgram() {
     return true;
 }
 
-bool Renderer::ensureExternalSampleTarget() {
-    if (externalSampleTexture_ != 0 && externalSampleFramebuffer_ != 0) return true;
+bool Renderer::ensureScreenSampleTarget() {
+    if (screenSampleTexture_ != 0 && screenSampleFramebuffer_ != 0) return true;
     if (!ready()) return false;
 
-    constexpr int kSampleWidth = 8;
-    constexpr int kSampleHeight = 5;
+    constexpr int kSampleWidth = kAmbientSampleWidth;
+    constexpr int kSampleHeight = kAmbientSampleHeight;
     GLint previousFramebuffer = 0;
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
 
-    glGenTextures(1, &externalSampleTexture_);
-    glBindTexture(GL_TEXTURE_2D, externalSampleTexture_);
+    glGenTextures(1, &screenSampleTexture_);
+    glBindTexture(GL_TEXTURE_2D, screenSampleTexture_);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, kSampleWidth, kSampleHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
 
-    glGenFramebuffers(1, &externalSampleFramebuffer_);
-    glBindFramebuffer(GL_FRAMEBUFFER, externalSampleFramebuffer_);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, externalSampleTexture_, 0);
+    glGenFramebuffers(1, &screenSampleFramebuffer_);
+    glBindFramebuffer(GL_FRAMEBUFFER, screenSampleFramebuffer_);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, screenSampleTexture_, 0);
     const bool complete = glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
     glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
     glBindTexture(GL_TEXTURE_2D, 0);
 
     if (!complete) {
         __android_log_print(ANDROID_LOG_WARN, kTag, "Ambient video sample framebuffer unavailable");
-        if (externalSampleFramebuffer_) glDeleteFramebuffers(1, &externalSampleFramebuffer_);
-        if (externalSampleTexture_) glDeleteTextures(1, &externalSampleTexture_);
-        externalSampleFramebuffer_ = 0;
-        externalSampleTexture_ = 0;
+        if (screenSampleFramebuffer_) glDeleteFramebuffers(1, &screenSampleFramebuffer_);
+        if (screenSampleTexture_) glDeleteTextures(1, &screenSampleTexture_);
+        screenSampleFramebuffer_ = 0;
+        screenSampleTexture_ = 0;
     }
     return complete;
 }
 
-bool Renderer::sampleExternalAverage(GLuint texture, const std::array<float, 16>& transform,
-                                     std::array<float, 3>& rgb) {
-    constexpr int kSampleWidth = 8;
-    constexpr int kSampleHeight = 5;
-    if (!ready() || texture == 0 || !ensureExternalProgram() || !ensureExternalSampleTarget()) return false;
+bool Renderer::sampleRenderedAverage(float x, float y, float width, float height, std::array<float, 3>& rgb,
+                                     std::array<float, 2>& embeddedInsets) {
+    constexpr int kSampleWidth = kAmbientSampleWidth;
+    constexpr int kSampleHeight = kAmbientSampleHeight;
+    if (!ready() || width <= 0.0f || height <= 0.0f || !ensureScreenSampleTarget()) return false;
 
+    // The video is already drawn to the window. Sample those exact pixels instead of
+    // rendering the external decoder texture a second time (unreliable on some TV GPUs).
     flush();
+    const float pixelScaleX = static_cast<float>(surfaceWidth_) / logicalWidth();
+    const float pixelScaleY = static_cast<float>(surfaceHeight_) / logicalHeight();
+    const float insetX = width * 0.10f;
+    const GLint left = std::clamp(static_cast<GLint>((x + insetX) * pixelScaleX), 0, surfaceWidth_ - 1);
+    const GLint right = std::clamp(static_cast<GLint>((x + width - insetX) * pixelScaleX), left + 1, surfaceWidth_);
+    const GLint bottom =
+        std::clamp(static_cast<GLint>((logicalHeight() - y - height) * pixelScaleY), 0, surfaceHeight_ - 1);
+    const GLint top = std::clamp(static_cast<GLint>((logicalHeight() - y) * pixelScaleY), bottom + 1, surfaceHeight_);
 
+    GLint previousReadFramebuffer = 0;
+    GLint previousDrawFramebuffer = 0;
+    glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &previousReadFramebuffer);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &previousDrawFramebuffer);
     while (glGetError() != GL_NO_ERROR) {}
 
-    GLint previousFramebuffer = 0;
-    GLint previousViewport[4]{};
-    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebuffer);
-    glGetIntegerv(GL_VIEWPORT, previousViewport);
-    const GLboolean blendEnabled = glIsEnabled(GL_BLEND);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, screenSampleFramebuffer_);
+    glBlitFramebuffer(left, bottom, right, top, 0, 0, kSampleWidth, kSampleHeight, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, screenSampleFramebuffer_);
 
-    glBindFramebuffer(GL_FRAMEBUFFER, externalSampleFramebuffer_);
-    glViewport(0, 0, kSampleWidth, kSampleHeight);
-    glDisable(GL_BLEND);
-
-    const TextureVertex vertices[] = {
-        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {static_cast<float>(kSampleWidth), 0.0f, 1.0f, 0.0f, 0.0f, 0.0f},
-        {static_cast<float>(kSampleWidth), static_cast<float>(kSampleHeight), 1.0f, 1.0f, 0.0f, 0.0f},
-        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f},
-        {static_cast<float>(kSampleWidth), static_cast<float>(kSampleHeight), 1.0f, 1.0f, 0.0f, 0.0f},
-        {0.0f, static_cast<float>(kSampleHeight), 0.0f, 1.0f, 0.0f, 0.0f},
-    };
-    glUseProgram(externalProgram_);
-    glUniform2f(externalResolutionLocation_, static_cast<float>(kSampleWidth), static_cast<float>(kSampleHeight));
-    glUniform1f(externalAlphaLocation_, 1.0f);
-    glUniformMatrix4fv(externalTransformLocation_, 1, GL_FALSE, transform.data());
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, texture);
-    glBindVertexArray(externalVao_);
-    glBindBuffer(GL_ARRAY_BUFFER, externalVbo_);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STREAM_DRAW);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    std::array<uint8_t, kSampleWidth * kSampleHeight * 4> pixels{};
+    AmbientFramePixels pixels{};
     glReadPixels(0, 0, kSampleWidth, kSampleHeight, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
+    const GLenum error = glGetError();
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, static_cast<GLuint>(previousReadFramebuffer));
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, static_cast<GLuint>(previousDrawFramebuffer));
+    if (error != GL_NO_ERROR) {
+        __android_log_print(ANDROID_LOG_WARN, kTag, "Adaptive bars framebuffer sample failed: 0x%x", error);
+        return false;
+    }
 
-    glBindVertexArray(0);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, 0);
-    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(previousFramebuffer));
-    glViewport(previousViewport[0], previousViewport[1], previousViewport[2], previousViewport[3]);
-    if (blendEnabled)
-        glEnable(GL_BLEND);
-    else
-        glDisable(GL_BLEND);
-
-    if (glGetError() != GL_NO_ERROR) return false;
-
+    embeddedInsets = detectEmbeddedLetterboxBars(pixels);
     uint32_t red = 0;
     uint32_t green = 0;
     uint32_t blue = 0;
-    constexpr uint32_t kPixelCount = kSampleWidth * kSampleHeight;
-    for (size_t offset = 0; offset < pixels.size(); offset += 4) {
-        red += pixels[offset];
-        green += pixels[offset + 1];
-        blue += pixels[offset + 2];
+    constexpr int firstContentRow = kSampleHeight / 4;
+    constexpr int lastContentRow = kSampleHeight * 3 / 4;
+    for (int row = firstContentRow; row < lastContentRow; ++row) {
+        for (int col = 0; col < kSampleWidth; ++col) {
+            const size_t offset = static_cast<size_t>(row * kSampleWidth + col) * 4;
+            red += pixels[offset];
+            green += pixels[offset + 1];
+            blue += pixels[offset + 2];
+        }
     }
-    constexpr float kNormalize = 1.0f / (255.0f * static_cast<float>(kPixelCount));
+    constexpr float kNormalize = 1.0f / (255.0f * kSampleWidth * (lastContentRow - firstContentRow));
     rgb = {static_cast<float>(red) * kNormalize, static_cast<float>(green) * kNormalize,
            static_cast<float>(blue) * kNormalize};
     return true;

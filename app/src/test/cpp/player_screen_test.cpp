@@ -223,8 +223,56 @@ int main() {
     }
     assert(fastAmbient.targetColor().r < 0.001f);
     assert(std::abs(fastAmbient.targetColor().b - 0.25f) < 0.001f);
-    (void)fastAmbient.displayColor(now + 11s);
-    assert(std::abs(fastAmbient.displayColor(now + 12s).b - 0.25f * (1.0f - std::exp(-1.0f))) < 0.001f);
+    assert(std::abs(fastAmbient.displayColor(now + 12s).b - 0.25f) < 0.001f);
+
+    AmbientBarColorState easedAmbient;
+    easedAmbient.addSample({0.25f, 0.0f, 0.0f}, now);
+    assert(easedAmbient.displayColor(now).r == 0.0f);
+    assert(std::abs(easedAmbient.displayColor(now + 250ms).r - 0.25f * 0.15625f) < 0.001f);
+    const auto midpoint = easedAmbient.displayColor(now + 500ms);
+    assert(std::abs(midpoint.r - 0.125f) < 0.001f);
+    easedAmbient.addSample({0.0f, 0.0f, 0.25f}, now + 500ms);
+    assert(std::abs(easedAmbient.displayColor(now + 500ms).r - midpoint.r) < 0.001f);
+    assert(std::abs(easedAmbient.displayColor(now + 1s).b - 0.0625f) < 0.001f);
+    assert(std::abs(easedAmbient.displayColor(now + 1500ms).b - 0.125f) < 0.001f);
+    easedAmbient.reset();
+    assert(easedAmbient.displayColor(now + 2s).b == 0.0f);
+    AmbientFramePixels letterboxedPixels{};
+    for (int y = 14; y < kAmbientSampleHeight - 14; ++y) {
+        for (int x = 0; x < kAmbientSampleWidth; ++x) {
+            const std::size_t offset = static_cast<std::size_t>(y * kAmbientSampleWidth + x) * 4;
+            letterboxedPixels[offset] = 140;
+            letterboxedPixels[offset + 1] = 80;
+            letterboxedPixels[offset + 2] = 50;
+            letterboxedPixels[offset + 3] = 255;
+        }
+    }
+    const auto detectedInsets = detectEmbeddedLetterboxBars(letterboxedPixels);
+    assert(detectedInsets[0] > 0.12f && detectedInsets[0] < 0.14f);
+    assert(detectedInsets[1] > 0.12f && detectedInsets[1] < 0.14f);
+    AmbientBarColorState encodedAmbient;
+    encodedAmbient.observeEmbeddedInsets(detectedInsets);
+    assert(encodedAmbient.embeddedInsets()[0] == 0.0f);
+    encodedAmbient.observeEmbeddedInsets(detectedInsets);
+    assert(encodedAmbient.embeddedInsets()[0] > 0.12f);
+    for (int i = 0; i < 5; ++i) encodedAmbient.observeEmbeddedInsets({});
+    assert(encodedAmbient.embeddedInsets()[0] > 0.12f);
+    encodedAmbient.observeEmbeddedInsets({});
+    assert(encodedAmbient.embeddedInsets()[0] == 0.0f);
+    encodedAmbient.observeEmbeddedInsets(detectedInsets);
+    encodedAmbient.observeEmbeddedInsets(detectedInsets);
+    encodedAmbient.reset();
+    assert(encodedAmbient.embeddedInsets()[0] == 0.0f);
+    assert(detectEmbeddedLetterboxBars(AmbientFramePixels{})[0] == 0.0f);
+    for (int y = 6; y < 14; ++y) {
+        for (int x = 0; x < kAmbientSampleWidth; ++x) {
+            const std::size_t offset = static_cast<std::size_t>(y * kAmbientSampleWidth + x) * 4;
+            letterboxedPixels[offset] = 140;
+            letterboxedPixels[offset + 1] = 80;
+            letterboxedPixels[offset + 2] = 50;
+        }
+    }
+    assert(detectEmbeddedLetterboxBars(letterboxedPixels)[0] == 0.0f);
 
     state.openTrackPicker(PlayerTrackPicker::Subtitle, {{-1, "Off", false}, {6, "English", true}, {9, "French", false}},
                           now);

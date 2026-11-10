@@ -264,20 +264,37 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             videoState.zoomMode == VideoZoomMode::Fit &&
             (videoBounds.x > 1.0f || videoBounds.y > 1.0f || videoBounds.width < videoState.logicalWidth - 2.0f ||
              videoBounds.height < videoState.logicalHeight - 2.0f);
-        if (settings.ambientLetterboxBars && hasLetterboxBars) {
-            auto& ambientBars = playerScreenState.ambientBars();
-            if (status == PlayerStatus::Playing && ambientBars.sampleDue(now)) {
-                std::array<float, 3> sample{};
-                if (renderer.sampleExternalAverage(videoSurface.texture(), videoSurface.transform(), sample)) {
-                    ambientBars.addSample(AmbientBarColor{sample[0], sample[1], sample[2]}, now);
-                } else {
-                    ambientBars.noteSampleAttempt(now);
-                }
-            }
-            const AmbientBarColor ambient = ambientBars.displayColor(now);
+        auto& ambientBars = playerScreenState.ambientBars();
+        const bool adaptiveBarsActive = settings.ambientLetterboxBars && videoState.zoomMode == VideoZoomMode::Fit;
+        const AmbientBarColor ambient = ambientBars.displayColor(now);
+        if (adaptiveBarsActive && hasLetterboxBars) {
             renderer.clearScreen(Color{ambient.r, ambient.g, ambient.b, 1.0f});
         }
         renderPlayerVideo(renderer, videoState, videoSurface.transform());
+        if (adaptiveBarsActive && status == PlayerStatus::Playing && ambientBars.sampleDue(now)) {
+            std::array<float, 3> sample{};
+            std::array<float, 2> embeddedSample{};
+            if (renderer.sampleRenderedAverage(videoBounds.x, videoBounds.y, videoBounds.width, videoBounds.height,
+                                               sample, embeddedSample)) {
+                ambientBars.addSample(AmbientBarColor{sample[0], sample[1], sample[2]}, now);
+                ambientBars.observeEmbeddedInsets(embeddedSample);
+            } else {
+                ambientBars.noteSampleAttempt(now);
+            }
+        }
+        if (adaptiveBarsActive) {
+            const auto insets = ambientBars.embeddedInsets();
+            const Color barColor{ambient.r, ambient.g, ambient.b, 1.0f};
+            if (insets[0] > 0.0f) {
+                renderer.screenRect(0.0f, videoBounds.y, videoState.logicalWidth, videoBounds.height * insets[0],
+                                    barColor);
+            }
+            if (insets[1] > 0.0f) {
+                const float barTop = videoBounds.y + videoBounds.height * (1.0f - insets[1]);
+                renderer.screenRect(0.0f, barTop, videoState.logicalWidth, videoBounds.y + videoBounds.height - barTop,
+                                    barColor);
+            }
+        }
     }
 
     const int remainingMs = playerScreenState.durationMs() > 0

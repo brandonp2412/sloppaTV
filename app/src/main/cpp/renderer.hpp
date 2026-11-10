@@ -41,7 +41,8 @@ public:
     void beginFrame();
     void endFrame();
     void clearScreen(Color color);
-    bool sampleExternalAverage(GLuint texture, const std::array<float, 16>& transform, std::array<float, 3>& rgb);
+    bool sampleRenderedAverage(float x, float y, float width, float height, std::array<float, 3>& rgb,
+                               std::array<float, 2>& embeddedInsets);
     void setUiTransform(float safeAreaFraction, float textScale);
     void beginClipRect(float x, float y, float w, float h);
     void endClipRect();
@@ -50,6 +51,7 @@ public:
                         Color color);
     void icon(ui_icons::Glyph glyph, float x, float y, float size, Color color);
     void rect(float x, float y, float w, float h, Color color);
+    void screenRect(float x, float y, float w, float h, Color color);
     void triangle(float x1, float y1, float x2, float y2, float x3, float y3, Color color);
     void roundedRect(float x, float y, float w, float h, float radius, Color color);
     void roundedOutline(float x, float y, float w, float h, float radius, float thickness, Color color);
@@ -114,7 +116,7 @@ private:
 
     void flush();
     bool ensureExternalProgram();
-    bool ensureExternalSampleTarget();
+    bool ensureScreenSampleTarget();
     bool loadFontAtlas();
     bool loadFontOutlineAtlas();
     static PreparedFontAtlas prepareFontAtlas(JavaVM* vm, jobject activity);
@@ -152,8 +154,8 @@ private:
     GLint externalAlphaLocation_ = -1;
     GLint externalTransformLocation_ = -1;
     bool externalProgramFailed_ = false;
-    GLuint externalSampleTexture_ = 0;
-    GLuint externalSampleFramebuffer_ = 0;
+    GLuint screenSampleTexture_ = 0;
+    GLuint screenSampleFramebuffer_ = 0;
     GLuint iconTexture_ = 0;
     GLuint fontTexture_ = 0;
     GLuint fontOutlineTexture_ = 0;
