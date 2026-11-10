@@ -269,6 +269,11 @@ int main() {
     auto exactSubtitle = planPlaybackSubtitleTrackSelection(item, 6, PlaybackMethod::DirectPlay, {"eng"});
     assert(exactSubtitle.action == PlaybackSubtitleCycleAction::LoadNative);
     assert(exactSubtitle.subtitleStreamIndex == 6);
+    exactSubtitle = planPlaybackSubtitleTrackSelection(item, 6, PlaybackMethod::DirectStream, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::LoadNative);
+    assert(exactSubtitle.directPlayStream && exactSubtitle.directPlayStream->index == 6);
+    exactSubtitle = planPlaybackSubtitleTrackSelection(item, 6, PlaybackMethod::Transcode, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     exactSubtitle = planPlaybackSubtitleTrackSelection(item, -1, PlaybackMethod::DirectPlay, {"eng"});
     assert(exactSubtitle.action == PlaybackSubtitleCycleAction::DisableInPlayer);
     exactSubtitle = planPlaybackSubtitleTrackSelection(item, 999, PlaybackMethod::DirectPlay, {"eng"});
@@ -291,6 +296,11 @@ int main() {
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     assert(subtitleCycle.subtitleStreamIndex == kSubtitleOffIndex);
     assert(!subtitleCycle.directPlayStream);
+
+    subtitleCycle = planPlaybackSubtitleTrackCycle(item, kSubtitleOffIndex, PlaybackMethod::DirectStream,
+                                                   carriedPolicy.allowedSubtitleLanguages);
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::LoadNative);
+    assert(subtitleCycle.subtitleStreamIndex == 6);
 
     subtitleCycle = planPlaybackSubtitleTrackCycle(item, kSubtitleOffIndex, PlaybackMethod::DirectPlay, {"deu"});
     assert(subtitleCycle.action == PlaybackSubtitleCycleAction::NoAllowedTracks);

@@ -364,9 +364,13 @@ inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackSelection(const Jellyf
             std::find_if(item.subtitles.begin(), item.subtitles.end(),
                          [&](const JellyfinSubtitleStream& track) { return track.index == requestedSubtitleIndex; });
         plan.strategy = subtitleStrategy(chosen->codec);
-        if (playbackMethod == PlaybackMethod::DirectPlay) {
+        const bool nativeText = useNativeSubtitleRenderer(plan.strategy, true);
+        if (playbackMethod == PlaybackMethod::DirectPlay ||
+            (playbackMethod == PlaybackMethod::DirectStream && nativeText)) {
             plan.directPlayStream = *chosen;
-            if (useNativeSubtitleRenderer(plan.strategy, true)) {
+            // DirectStream can drop text tracks from the stream itself. Download
+            // their text asynchronously and render it without restarting video.
+            if (nativeText) {
                 plan.action = PlaybackSubtitleCycleAction::LoadNative;
                 return plan;
             }
