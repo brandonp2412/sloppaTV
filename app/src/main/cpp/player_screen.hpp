@@ -133,6 +133,10 @@ public:
 
     [[nodiscard]] bool controlsActive(TimePoint now) const { return controlsActive_ && now < controlsUntil_; }
 
+    [[nodiscard]] bool controlsVisible(TimePoint now, bool preparingInitialPlayback) const {
+        return controlsActive(now) || (preparingInitialPlayback && preparationOverlayEnabled_);
+    }
+
     [[nodiscard]] PlayerControl controlSelection() const { return controlSelection_; }
 
     [[nodiscard]] bool controlSelected(std::size_t index) const {
@@ -224,7 +228,8 @@ public:
 
     [[nodiscard]] bool shouldDismissOnBack(TimePoint now) const { return overlayVisible(now); }
 
-    [[nodiscard]] PlayerScreenCommand handleInput(PlayerScreenInput input, TimePoint now) {
+    [[nodiscard]] PlayerScreenCommand handleInput(PlayerScreenInput input, TimePoint now,
+                                                  bool preparingInitialPlayback = false) {
         if (picker_ != PlayerTrackPicker::None) {
             refreshControls(now);
             if (input == PlayerScreenInput::Back) {
@@ -249,17 +254,22 @@ public:
             }
             return {.type = PlayerScreenCommandType::StopPlayback};
         }
-        if (input == PlayerScreenInput::Up && !controlsActive(now)) {
+        const bool navigatingControls = controlsVisible(now, preparingInitialPlayback);
+        if (input == PlayerScreenInput::Up && !navigatingControls) {
             showControls(now);
             return {};
         }
 
-        if (controlsActive(now))
-            refreshControls(now);
-        else
+        if (navigatingControls) {
+            if (controlsActive(now))
+                refreshControls(now);
+            else
+                showControls(now);
+        } else {
             showOverlayFor(now, std::chrono::seconds(5));
+        }
 
-        if (controlsActive(now)) {
+        if (navigatingControls) {
             if (input == PlayerScreenInput::Down)
                 hideControls();
             else if (input == PlayerScreenInput::Left)

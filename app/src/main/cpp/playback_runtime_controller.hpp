@@ -509,7 +509,9 @@ public:
                                          StreamExecutor& stream, TelemetryExecutor& telemetry,
                                          bool playerScreenActive = true) {
         const auto now = std::chrono::steady_clock::now();
-        const PlayerScreenCommand command = screenState_.handleInput(input, now);
+        const bool preparingInitialPlayback = coordinator_.transitionLoading() || coordinator_.fallbackResolving() ||
+                                              player_.status() == PlayerStatus::Preparing;
+        const PlayerScreenCommand command = screenState_.handleInput(input, now, preparingInitialPlayback);
         switch (command.type) {
         case PlayerScreenCommandType::None:
             return {};

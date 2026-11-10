@@ -93,6 +93,28 @@ int main() {
     command = inputState.handleInput(PlayerScreenInput::Back, now + 6s);
     assert(command.type == PlayerScreenCommandType::StopPlayback);
 
+    // Startup controls are visible while preparing, even if the normal 10-second focus window
+    // has expired or a playback transition reset it between remote key presses.
+    PlayerScreenState startupInputState;
+    startupInputState.beginPlayback(0, 50'000);
+    assert(startupInputState.controlsVisible(now, true));
+    assert(!startupInputState.controlsActive(now));
+    command = startupInputState.handleInput(PlayerScreenInput::Up, now, true);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(startupInputState.controlsActive(now));
+    startupInputState.beginPlayback(0, 50'000);
+    command = startupInputState.handleInput(PlayerScreenInput::Right, now + 1s, true);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(startupInputState.controlSelection() == PlayerControl::NextEpisode);
+    startupInputState.hideControls();
+    command = startupInputState.handleInput(PlayerScreenInput::Right, now + 12s, true);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(startupInputState.controlSelection() == PlayerControl::NextEpisode);
+    startupInputState.beginPlayback(0, 50'000, false);
+    assert(!startupInputState.controlsVisible(now + 13s, true));
+    command = startupInputState.handleInput(PlayerScreenInput::Right, now + 13s, true);
+    assert(command.type == PlayerScreenCommandType::SeekForward);
+
     PlayerScreenState playbackInputState;
     command = playbackInputState.handleInput(PlayerScreenInput::Previous, now);
     assert(command.type == PlayerScreenCommandType::PreviousEpisode);

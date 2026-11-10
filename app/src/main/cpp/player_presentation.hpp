@@ -485,7 +485,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
 
     renderPlayerTrickplayPresentation(renderer, ui, playbackCoordinator, playerScreenState, trickplayState);
 
-    if (preparingInitialPlayback || playerScreenState.controlsActive(now)) {
+    if (playerScreenState.controlsVisible(now, preparingInitialPlayback)) {
         renderPlayerControls(
             renderer,
             PlayerControlsRenderState{
