@@ -999,6 +999,12 @@ public:
         sessionState_.activeTarget().subtitleStreamIndex = streamIndex;
     }
 
+    void selectPlayerSubtitleStream(int streamIndex) {
+        selectSubtitleStream(streamIndex);
+        // A previous downloaded text track must not override the player's embedded subtitles.
+        trackState_.setSubtitleEnabled(false);
+    }
+
     void disableSubtitleRendering() {
         selectSubtitleStream(kSubtitleOffIndex);
         trackState_.setSubtitleEnabled(false);

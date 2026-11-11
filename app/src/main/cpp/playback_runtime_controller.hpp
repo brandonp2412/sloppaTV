@@ -294,9 +294,10 @@ public:
                 activeDecodeMode() == PlaybackDecodeMode::Software && selected.discoveredByPlayer &&
                 activeMethod == PlaybackMethod::DirectPlay &&
                 canSwitchEmbeddedSubtitleInPlayer(plan.strategy, selected.isExternal);
-            if ((usePlayerDiscoveredTextTrack(selected, activeMethod) || canCompositeEmbeddedBitmap) &&
+            if ((usePlayerEmbeddedTextTrack(selected, activeMethod) ||
+                 usePlayerDiscoveredTextTrack(selected, activeMethod) || canCompositeEmbeddedBitmap) &&
                 player_.selectEmbeddedSubtitleStream(selected.index)) {
-                coordinator_.selectSubtitleStream(selected.index);
+                coordinator_.selectPlayerSubtitleStream(selected.index);
                 screenState_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(4));
                 error_.clear();
                 reportProgress(telemetry, playerScreenActive, false);
@@ -563,12 +564,19 @@ public:
             std::vector<PlayerTrackOption> options;
             const int selected = coordinator_.tracks().selectedSubtitleServerIndex();
             options.push_back({-1, "Off", selected < 0});
+            std::vector<const JellyfinSubtitleStream*> tracks;
             for (const auto& track : coordinator_.session().activeItem().subtitles) {
-                if (!playbackSubtitleAllowed(track, settings_.subtitleLanguages)) continue;
-                std::string label = track.title.empty() ? track.language : track.title;
-                if (label.empty()) label = "Subtitle " + std::to_string(track.index);
-                if (track.forced) label += " (forced)";
-                options.push_back({track.index, std::move(label), track.index == selected});
+                if (playbackSubtitleAllowed(track, settings_.subtitleLanguages)) tracks.push_back(&track);
+            }
+            // Prefer directly playable text to bitmap formats that require transcoding or software rendering.
+            std::stable_sort(tracks.begin(), tracks.end(), [](const auto* a, const auto* b) {
+                return subtitlePickerPriority(*a) < subtitlePickerPriority(*b);
+            });
+            for (const auto* track : tracks) {
+                std::string label = track->title.empty() ? track->language : track->title;
+                if (label.empty()) label = "Subtitle " + std::to_string(track->index);
+                if (track->forced) label += " (forced)";
+                options.push_back({track->index, std::move(label), track->index == selected});
             }
             screenState_.openTrackPicker(PlayerTrackPicker::Subtitle, std::move(options), now);
             return {};

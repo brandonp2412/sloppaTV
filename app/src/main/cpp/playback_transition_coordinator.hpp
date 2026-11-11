@@ -70,7 +70,8 @@ public:
 
         if (const auto* selectedSubtitle = playback_.selectedSubtitleStream()) {
             const SubtitleStrategy strategy = subtitleStrategy(selectedSubtitle->codec);
-            if (useNativeSubtitleRenderer(strategy, true)) {
+            if (useNativeSubtitleRenderer(strategy, true) &&
+                !usePlayerEmbeddedTextTrack(*selectedSubtitle, target.playMethod)) {
                 const std::string deliveryUrl =
                     strategy == SubtitleStrategy::ClientText ? target.subtitleUrl : std::string{};
                 work.subtitleLoadFailed = !runtime_.loadSubtitle(subtitleLoadAsync_, *selectedSubtitle, deliveryUrl);

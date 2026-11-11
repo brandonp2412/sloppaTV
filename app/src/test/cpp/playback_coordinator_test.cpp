@@ -308,11 +308,11 @@ int main() {
 
     playerStartCoordinator.selectSubtitleStream(12);
     playerStart = playerStartCoordinator.playerStartContext();
-    assert(playerStart.subtitleStreamIndex == kSubtitleOffIndex);
-    assert(playerStart.subtitleOrdinal == -1);
+    assert(playerStart.subtitleStreamIndex == 12);
+    assert(playerStart.subtitleOrdinal == 1);
     playerStart = playerStartCoordinator.playerStartContext(PlaybackPlayerStartMode::WindowRestore);
     assert(playerStart.subtitleStreamIndex == 12);
-    assert(playerStart.subtitleOrdinal == -1);
+    assert(playerStart.subtitleOrdinal == 1);
 
     PlaybackCoordinator loadedSubtitleLabelCoordinator;
     loadedSubtitleLabelCoordinator.activate(preferenceItem, coordinatedTarget, now);
@@ -408,6 +408,10 @@ int main() {
     assert(subtitleLoadCoordinator.tracks().activeSubtitleServerIndex() == 5);
     assert(subtitleLoadCoordinator.tracks().subtitleLanguage() == "English");
     assert(subtitleLoadCoordinator.tracks().subtitleCues().size() == 1);
+    subtitleLoadCoordinator.selectPlayerSubtitleStream(4);
+    assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == 4);
+    assert(!subtitleLoadCoordinator.tracks().subtitleEnabled());
+    assert(subtitleLoadCoordinator.activeSubtitleCue(250) == nullptr);
     subtitleLoadCoordinator.disableSubtitleRendering();
     assert(subtitleLoadCoordinator.tracks().selectedSubtitleServerIndex() == kSubtitleOffIndex);
     assert(subtitleLoadCoordinator.session().activeTarget().subtitleStreamIndex == kSubtitleOffIndex);

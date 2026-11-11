@@ -26,12 +26,24 @@ int main() {
     auto serverOnlyAss = embeddedAss;
     serverOnlyAss.discoveredByPlayer = false;
     assert(!usePlayerDiscoveredTextTrack(serverOnlyAss, PlaybackMethod::DirectPlay));
+    auto serverOnlySrt = serverOnlyAss;
+    serverOnlySrt.codec = "srt";
+    assert(usePlayerEmbeddedTextTrack(serverOnlySrt, PlaybackMethod::DirectPlay));
+    assert(!usePlayerEmbeddedTextTrack(serverOnlySrt, PlaybackMethod::DirectStream));
+    serverOnlySrt.isExternal = true;
+    assert(!usePlayerEmbeddedTextTrack(serverOnlySrt, PlaybackMethod::DirectPlay));
+    assert(!usePlayerEmbeddedTextTrack(serverOnlyAss, PlaybackMethod::DirectPlay));
     auto externalAss = embeddedAss;
     externalAss.isExternal = true;
     assert(!usePlayerDiscoveredTextTrack(externalAss, PlaybackMethod::DirectPlay));
     auto bitmap = embeddedAss;
     bitmap.codec = "hdmv_pgs_subtitle";
     assert(!usePlayerDiscoveredTextTrack(bitmap, PlaybackMethod::DirectPlay));
+    auto externalSrt = serverOnlySrt;
+    assert(subtitlePickerPriority(serverOnlyAss) < subtitlePickerPriority(bitmap));
+    serverOnlySrt.isExternal = false;
+    assert(subtitlePickerPriority(serverOnlySrt) < subtitlePickerPriority(externalSrt));
+    assert(subtitlePickerPriority(externalSrt) < subtitlePickerPriority(bitmap));
 
     JellyfinItem item;
     item.audios = {
@@ -117,8 +129,8 @@ int main() {
     assert(playerSubtitleOrdinal(playerSubtitleTarget, playerSubtitleItem) == 0);
     assert(directExternalSubtitleUrl(playerSubtitleTarget, playerSubtitleItem).empty());
     playerSubtitleTarget.subtitleStreamIndex = 12;
-    assert(playerSubtitleStreamIndex(playerSubtitleTarget, playerSubtitleItem) == kSubtitleOffIndex);
-    assert(playerSubtitleOrdinal(playerSubtitleTarget, playerSubtitleItem) == -1);
+    assert(playerSubtitleStreamIndex(playerSubtitleTarget, playerSubtitleItem) == 12);
+    assert(playerSubtitleOrdinal(playerSubtitleTarget, playerSubtitleItem) == 1);
     playerSubtitleTarget.subtitleStreamIndex = 13;
     assert(playerSubtitleStreamIndex(playerSubtitleTarget, playerSubtitleItem) == 13);
     assert(playerSubtitleOrdinal(playerSubtitleTarget, playerSubtitleItem) == -1);

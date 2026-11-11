@@ -100,6 +100,25 @@ inline int playerAudioOrdinal(const PlaybackTarget& target, const JellyfinItem& 
     return -1;
 }
 
+inline int subtitlePickerPriority(const JellyfinSubtitleStream& track) {
+    switch (subtitleStrategy(track.codec)) {
+    case SubtitleStrategy::ClientText:
+        return track.isExternal ? 1 : 0;
+    case SubtitleStrategy::ClientStyled:
+        return 2;
+    case SubtitleStrategy::ClientEmbedded:
+        return 3;
+    case SubtitleStrategy::ServerTranscode:
+        return 4;
+    }
+    return 4;
+}
+
+inline bool usePlayerEmbeddedTextTrack(const JellyfinSubtitleStream& track, PlaybackMethod method) {
+    return method == PlaybackMethod::DirectPlay && !track.isExternal &&
+           subtitleStrategy(track.codec) == SubtitleStrategy::ClientText;
+}
+
 inline int playerSubtitleStreamIndex(const PlaybackTarget& target, const JellyfinItem& item) {
     if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return kSubtitleOffIndex;
     const auto selected =
@@ -107,8 +126,10 @@ inline int playerSubtitleStreamIndex(const PlaybackTarget& target, const Jellyfi
             return subtitle.index == target.subtitleStreamIndex;
         });
     if (selected == item.subtitles.end()) return kSubtitleOffIndex;
-    return subtitleStrategy(selected->codec) == SubtitleStrategy::ClientEmbedded ? target.subtitleStreamIndex
-                                                                                 : kSubtitleOffIndex;
+    return subtitleStrategy(selected->codec) == SubtitleStrategy::ClientEmbedded ||
+                   usePlayerEmbeddedTextTrack(*selected, target.playMethod)
+               ? target.subtitleStreamIndex
+               : kSubtitleOffIndex;
 }
 
 inline int playerSubtitleOrdinal(const PlaybackTarget& target, const JellyfinItem& item) {
