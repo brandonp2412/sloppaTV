@@ -81,6 +81,9 @@ def upload_store!(track:, include_bundle:)
     metadata_path: metadata_path,
     track: track,
     release_status: ENV.fetch("PLAY_RELEASE_STATUS", "completed"),
+    # Never turn a failed review submission into a successful draft upload.
+    changes_not_sent_for_review: false,
+    rescue_changes_not_sent_for_review: false,
     skip_upload_apk: true,
     skip_upload_aab: !include_bundle,
     skip_upload_metadata: false,

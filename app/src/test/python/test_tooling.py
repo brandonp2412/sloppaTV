@@ -429,7 +429,7 @@ class WaydroidToolingTest(unittest.TestCase):
         self.assertIn("# A listing-only refresh is intentionally independent", workflow)
         self.assertIn("*x86_64-release.apk", workflow)
         self.assertIn("Capturing screenshots from $screenshot_apk", workflow)
-        self.assertIn("needs: [build, screenshots, release-gate]", workflow)
+        self.assertIn("needs: [build, screenshots, release-gate, publish-play-store]", workflow)
         self.assertRegex(workflow, r"needs:\s*(?:screenshots|\[[^\n]*\bscreenshots\b[^\n]*\])")
         self.assertIn("python3 tools/sync_play_store_screenshots.py --source artifacts/ci-screenshots", workflow)
         self.assertIn('ruby-version: "3.4"', workflow)
