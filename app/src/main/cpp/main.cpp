@@ -70,6 +70,7 @@
 #include "media_display_text.hpp"
 #include "media_grid_renderer.hpp"
 #include "media_player.hpp"
+#include "subtitle_audio_probe.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
@@ -239,6 +240,15 @@ struct RemuxPrefetchCompletion {
     ApiValueResult<RemuxPrefetchStatus> result;
 };
 
+struct SubtitleSyncCompletion {
+    uint64_t requestId = 0;
+    uint64_t generation = 0;
+    std::string itemId;
+    std::string sourceId;
+    int subtitleIndex = -1;
+    SubtitleAudioSyncResult result;
+};
+
 struct RemuxStartupProbeCompletion {
     std::string userId;
     std::string itemId;
@@ -254,11 +264,11 @@ using AsyncCompletion = std::variant<
     DetailsSimilarCompletion, SimilarPrefetchCompletion, EpisodeSeriesContextRequestCompletion,
     EpisodeSeriesContextCompletion, QuickConnectStartedCompletion, QuickConnectFailedCompletion,
     QuickConnectAuthenticatedCompletion, QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
-    ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion, ArtworkLoadCompletion,
-    MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion, PlaybackReportCompletion,
-    QueuedPlaybackCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, StreamRestartCompletion,
-    FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion, RemuxPrefetchCompletion,
-    RemuxPlaybackPendingCompletion, RemuxStartupProbeCompletion>;
+    ExternalPlaybackCompletion, SubtitleLoadCompletion, SubtitleSyncCompletion, TrickplayTileCompletion,
+    ArtworkLoadCompletion, MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion,
+    PlaybackReportCompletion, QueuedPlaybackCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion,
+    StreamRestartCompletion, FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion,
+    RemuxPrefetchCompletion, RemuxPlaybackPendingCompletion, RemuxStartupProbeCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -316,6 +326,14 @@ public:
               1, [] {},
               [](const std::string& error) {
                   __android_log_print(ANDROID_LOG_WARN, kTag, "Remux search prewarm exception: %s", error.c_str());
+              }),
+          subtitleSyncTasks_(
+              1,
+              [app] {
+                  if (app && app->looper) ALooper_wake(app->looper);
+              },
+              [](const std::string& error) {
+                  __android_log_print(ANDROID_LOG_WARN, kTag, "Subtitle auto-sync worker: %s", error.c_str());
               }),
           accountAsync_(api_, tasks_, asyncCompletions_), quickConnectAsync_(api_, tasks_, asyncCompletions_),
           detailsAsync_(api_, tasks_, asyncCompletions_), browseAsync_(api_, tasks_, asyncCompletions_),
@@ -1642,6 +1660,68 @@ private:
         for (int i = 0; i < persistCount; ++i) persistSession();
     }
 
+    void applyAsyncCompletion(SubtitleLoadCompletion& completion) {
+        const bool current =
+            screen_ == Screen::Player && requestEpochs_.playback.active(completion.generation) &&
+            playbackCoordinator_.subtitleLoadMatches(completion.itemId, completion.requestedSubtitleIndex);
+        const bool align = current && completion.cues.size() >= 12 && !dataPath_.empty() &&
+                           playbackCoordinator_.activeTargetAvailable();
+        const auto& target = playbackCoordinator_.session().activeTarget();
+        const uint64_t requestId = ++subtitleSyncRequestId_;
+        SubtitleAudioSyncRequest probe;
+        if (align && target.playMethod != PlaybackMethod::Transcode && !target.url.empty()) {
+            probe.mediaUrl = target.url;
+            probe.privateFilesDir = dataPath_ + "/files";
+            probe.cues = completion.cues;
+            const int position = std::max(0, player_.positionMs());
+            probe.sampleStartMs = std::max(0, position - 90000);
+            probe.subtitleTimelineBaseMs = playbackCoordinator_.playerTimelineBaseMs();
+            const int sourceDurationMs = std::max(0, playerScreenState_.durationMs() - probe.subtitleTimelineBaseMs);
+            if (sourceDurationMs > 300000)
+                probe.sampleStartMs = std::min(probe.sampleStartMs, sourceDurationMs - 300000);
+            probe.extendedSample =
+                sourceDurationMs >= 600000 && probe.sampleStartMs == 0 && probe.subtitleTimelineBaseMs == 0;
+        }
+        const std::string itemId = completion.itemId;
+        const int subtitleIndex = completion.loadedSubtitle.index;
+        const uint64_t generation = completion.generation;
+        const std::string sourceId = target.mediaSourceId;
+        applyPlaybackCompletionApplicationEffects(playbackCompletions_.complete(completion));
+        if (probe.mediaUrl.empty()) return;
+
+        if (!subtitleSyncTasks_.submit(
+                [this, requestId, generation, itemId, sourceId, subtitleIndex, probe = std::move(probe)] {
+                    SubtitleAudioSyncResult result = synchronizeSubtitleAudio(probe);
+                    asyncCompletions_.push(SubtitleSyncCompletion{
+                        .requestId = requestId,
+                        .generation = generation,
+                        .itemId = itemId,
+                        .sourceId = sourceId,
+                        .subtitleIndex = subtitleIndex,
+                        .result = std::move(result),
+                    });
+                }))
+            __android_log_print(ANDROID_LOG_WARN, kTag, "Subtitle auto-sync task unavailable");
+    }
+
+    void applyAsyncCompletion(SubtitleSyncCompletion& completion) {
+        if (completion.requestId != subtitleSyncRequestId_ || !requestEpochs_.playback.active(completion.generation) ||
+            screen_ != Screen::Player ||
+            !playbackCoordinator_.subtitleLoadMatches(completion.itemId, completion.subtitleIndex) ||
+            playbackCoordinator_.session().activeTarget().mediaSourceId != completion.sourceId)
+            return;
+        if (!completion.result.decision.confident) {
+            __android_log_print(ANDROID_LOG_INFO, kTag, "Subtitle auto-sync skipped item=%.8s: %s",
+                                completion.itemId.c_str(), completion.result.failure.c_str());
+            return;
+        }
+        playbackCoordinator_.applySubtitleAutoSync(completion.result.decision.offsetMs);
+        __android_log_print(ANDROID_LOG_INFO, kTag,
+                            "Subtitle auto-sync applied item=%.8s index=%d offsetMs=%d audioMs=%d confidence=%.3f",
+                            completion.itemId.c_str(), completion.subtitleIndex, completion.result.decision.offsetMs,
+                            completion.result.audioMs, completion.result.decision.agreement);
+    }
+
     void applyPlaybackCompletionApplicationEffects(PlaybackCompletionApplicationEffects effects) {
         if (effects.popToDetails) popScreen(Screen::Details);
         if (effects.saveSessionCount > 0) playbackCoordinator_.requestHomeRefresh();
@@ -1802,6 +1882,7 @@ private:
     TaskRunner homePrewarmTasks_;
     TaskRunner searchPrewarmTasks_;
     AsyncCompletionQueue<AsyncCompletion> asyncCompletions_;
+    TaskRunner subtitleSyncTasks_;
     RequestEpochs requestEpochs_;
     AccountAsyncExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> accountAsync_;
     QuickConnectExecutor<JellyfinClient, TaskRunner, AsyncCompletionQueue<AsyncCompletion>> quickConnectAsync_;
@@ -1835,6 +1916,7 @@ private:
         artwork_;
     UiPresentation<decltype(artwork_)> uiPresentation_;
     std::string dataPath_;
+    uint64_t subtitleSyncRequestId_ = 0;
 
     Screen screen_ = Screen::Login;
     NavigationStack<Screen> navigation_{Screen::Login};

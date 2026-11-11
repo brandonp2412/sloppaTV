@@ -36,6 +36,14 @@ int main() {
     assert(state.activeSubtitleCue(300) == nullptr);
     assert(state.activeSubtitleCue(600)->text == "second");
     assert(state.activeSubtitleCue(900) == nullptr);
+    state.setSubtitleOffsetMs(1200);
+    assert(state.subtitleOffsetMs() == 1200);
+    assert(state.activeSubtitleCue(1300)->text == "first");
+    assert(state.activeSubtitleCue(1700)->text == "second");
+    assert(state.activeSubtitleCue(600) == nullptr);
+    state.setSubtitleOffsetMs(-100);
+    assert(state.activeSubtitleCue(0)->text == "first");
+    state.setSubtitleOffsetMs(0);
 
     state.setSubtitleEnabled(false);
     assert(state.activeSubtitleCue(600) == nullptr);
@@ -46,10 +54,13 @@ int main() {
         {.startMs = 2'000, .endMs = 3'000, .text = "brief sign"},
     };
     state.applySubtitle(7, "English", std::move(overlappingCues));
+    assert(state.subtitleOffsetMs() == 0);
     assert(state.activeSubtitleCue(2'500)->text == "brief sign");
     assert(state.activeSubtitleCue(3'500)->text == "long dialogue");
 
+    state.setSubtitleOffsetMs(2500);
     state.failSelectedSubtitle();
+    assert(state.subtitleOffsetMs() == 0);
     assert(!state.subtitleBusy());
     assert(state.selectedSubtitleServerIndex() == -1);
     assert(state.activeSubtitleServerIndex() == -1);

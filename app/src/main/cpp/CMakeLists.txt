@@ -49,6 +49,7 @@ add_library(sloppatv SHARED
     launch_intent.cpp
     image_decoder.cpp
     media_player.cpp
+    subtitle_audio_probe.cpp
     media_session.cpp
     playback_info.cpp
     seerr.cpp
@@ -56,6 +57,23 @@ add_library(sloppatv SHARED
     task_runner.cpp
     video_surface.cpp
 )
+
+add_library(sloppatv_fvad STATIC
+    third_party/libfvad/src/fvad.c
+    third_party/libfvad/src/signal_processing/division_operations.c
+    third_party/libfvad/src/signal_processing/energy.c
+    third_party/libfvad/src/signal_processing/get_scaling_square.c
+    third_party/libfvad/src/signal_processing/resample_48khz.c
+    third_party/libfvad/src/signal_processing/resample_by_2_internal.c
+    third_party/libfvad/src/signal_processing/resample_fractional.c
+    third_party/libfvad/src/signal_processing/spl_inl.c
+    third_party/libfvad/src/vad/vad_core.c
+    third_party/libfvad/src/vad/vad_filterbank.c
+    third_party/libfvad/src/vad/vad_gmm.c
+    third_party/libfvad/src/vad/vad_sp.c
+)
+set_target_properties(sloppatv_fvad PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(sloppatv_fvad PRIVATE third_party/libfvad/src third_party/libfvad/include)
 
 target_include_directories(sloppatv PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
@@ -79,6 +97,7 @@ if(SLOPPATV_E2E_TELEMETRY)
 endif()
 
 target_link_libraries(sloppatv PRIVATE
+    sloppatv_fvad
     android
     dl
     log

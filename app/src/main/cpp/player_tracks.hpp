@@ -22,6 +22,7 @@ public:
         subtitleBusy_ = false;
         activeSubtitleCues_.clear();
         subtitleCueMaxEndMs_.clear();
+        subtitleOffsetMs_ = 0;
         subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
         activeSubtitleServerIndex_ = -1;
@@ -67,6 +68,7 @@ public:
 
     void applySubtitle(int serverIndex, std::string language, std::vector<SubtitleCue> cues) {
         activeSubtitleCues_ = std::move(cues);
+        subtitleOffsetMs_ = 0;
         subtitleCueMaxEndMs_.clear();
         subtitleCueMaxEndMs_.reserve(activeSubtitleCues_.size());
         int maxEndMs = 0;
@@ -87,6 +89,7 @@ public:
         activeSubtitleEnabled_ = false;
         activeSubtitleCues_.clear();
         subtitleCueMaxEndMs_.clear();
+        subtitleOffsetMs_ = 0;
         subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
     }
@@ -97,12 +100,17 @@ public:
 
     [[nodiscard]] const std::vector<SubtitleCue>& subtitleCues() const { return activeSubtitleCues_; }
 
+    void setSubtitleOffsetMs(int offsetMs) { subtitleOffsetMs_ = std::clamp(offsetMs, -30000, 30000); }
+
+    [[nodiscard]] int subtitleOffsetMs() const { return subtitleOffsetMs_; }
+
     [[nodiscard]] const std::string& subtitleLanguage() const { return activeSubtitleLanguage_; }
 
     [[nodiscard]] int activeSubtitleServerIndex() const { return activeSubtitleServerIndex_; }
 
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {
         if (!activeSubtitleEnabled_ || activeSubtitleCues_.empty()) return nullptr;
+        positionMs -= subtitleOffsetMs_;
 
         if (subtitleCueHint_ < activeSubtitleCues_.size() &&
             activeSubtitleCues_[subtitleCueHint_].startMs <= positionMs) {
@@ -134,6 +142,7 @@ public:
 
 private:
     bool subtitleBusy_ = false;
+    int subtitleOffsetMs_ = 0;
     std::vector<SubtitleCue> activeSubtitleCues_;
     std::vector<int> subtitleCueMaxEndMs_;
     mutable size_t subtitleCueHint_ = 0;
