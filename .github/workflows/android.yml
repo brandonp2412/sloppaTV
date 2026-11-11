@@ -209,6 +209,9 @@ jobs:
       - name: Run host policy tests
         run: uv run python tools/run_host_tests.py
 
+      - name: Test Google Play submission policy
+        run: ruby tools/test_play_submission.rb
+
       - name: Validate Google Play metadata
         run: python3 tools/sync_play_store_screenshots.py --validate-only
 
@@ -295,12 +298,12 @@ jobs:
           retention-days: 14
 
   publish-play-store:
-    name: Publish Android TV release to Google Play
+    name: Submit Android TV release to Google Play review
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.release-gate.outputs.should_release == 'true' }}
     needs: [screenshots, release-gate]
     runs-on: ubuntu-latest
     outputs:
-      published: ${{ steps.publish.outputs.published }}
+      submitted: ${{ steps.publish.outputs.submitted }}
     permissions:
       contents: write
 
@@ -359,14 +362,20 @@ jobs:
           set -e
 
           if [[ "$publish_status" -eq 0 ]]; then
-            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "submitted=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "Google Play accepted build $((100000 + GITHUB_RUN_NUMBER)) for review via the API."
+              echo
+              echo "Google review and publication happen after this workflow finishes."
+              echo "Check [Publishing overview](https://play.google.com/console/u/0/developers/7752294226475422746/app/4974256539512236820/publishing) and [Submission activity](https://play.google.com/console/u/0/developers/7752294226475422746/app/4974256539512236820/publishing/submission-activity) for the current status."
+            } >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
 
           if grep -Fq 'upload certificate this APK is signed with is not yet valid because it has been recently reset' "$publish_log"; then
-            echo "published=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Google Play upload certificate pending::Google Play is still activating the recently reset upload certificate; publication is safely deferred."
-            exit 0
+            echo "submitted=false" >> "$GITHUB_OUTPUT"
+            echo "::error title=Google Play submission blocked::Google Play is still activating the recently reset upload certificate. No release was submitted; retry after activation."
+            exit "$publish_status"
           fi
 
           exit "$publish_status"
@@ -407,7 +416,7 @@ jobs:
   create-github-release:
     name: Create GitHub release
     if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.release-gate.outputs.should_release == 'true' }}
-    needs: [build, screenshots, release-gate]
+    needs: [build, screenshots, release-gate, publish-play-store]
     runs-on: ubuntu-latest
     permissions:
       contents: write
