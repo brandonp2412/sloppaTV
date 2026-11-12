@@ -7,6 +7,7 @@
 #include "media_session_policy.hpp"
 #include "playback_continuation_executor.hpp"
 #include "playback_coordinator.hpp"
+#include "playback_duration_policy.hpp"
 #include "playback_queue.hpp"
 #include "playback_resolver.hpp"
 #include "playback_stream_executor.hpp"
@@ -157,7 +158,9 @@ public:
         if (!plan.read) return;
         screenState_.applyObservedPosition(coordinator_.logicalPositionFromPlayerPosition(player_.positionMs()), now);
         if (plan.knownDurationMs > 0) {
-            screenState_.setDurationMs(plan.knownDurationMs);
+            const int measured = coordinator_.activeTargetUsesDirectPlay() ? player_.durationMs() : 0;
+            screenState_.setDurationMs(
+                preferredPlaybackDurationMs(plan.knownDurationMs, measured, coordinator_.activeTargetUsesDirectPlay()));
         } else if (plan.probeDuration) {
             const int duration = player_.durationMs();
             if (duration > 0) screenState_.setDurationMs(duration);
