@@ -112,6 +112,20 @@ void testLongSampleConfidenceAndMismatchedTracks() {
     assert(!decideSubtitleSync(wrongModerate, wrongAggressive, 300000, 76).confident);
 }
 
+void testProbeUsesDecodedHlsStart() {
+    const auto firstFrame = subtitleProbeFirstFrameMs(
+        "Parsed_ashowinfo_0: n:0 pts:2256000 pts_time:141.0 fmt:s16 rate:16000 nb_samples:1024");
+    assert(firstFrame && *firstFrame == 141000);
+    assert(subtitleProbeActualStartMs(30000, *firstFrame) == 141000);
+    assert(subtitleSyncLogicalSampleStart(subtitleProbeActualStartMs(30000, *firstFrame), 547579) == 688579);
+    assert(subtitleProbeActualStartMs(30000, 29952) == 30000);
+    assert(!subtitleProbeFirstFrameMs("Parsed_ashowinfo_0: n:1 pts_time:466.0 fmt:s16"));
+    assert(!subtitleProbeFirstFrameMs("Parsed_ashowinfo_0: n:0 pts_time:nan fmt:s16"));
+    assert(!subtitleProbeFirstFrameMs("Parsed_ashowinfo_0: n:0 pts_time:1e100 fmt:s16"));
+    assert(!subtitleProbeFirstFrameMs("Parsed_ashowinfo_0: n:0 pts_time:4junk fmt:s16"));
+    assert(!subtitleProbeFirstFrameMs("unrelated decoder log pts_time:466.0"));
+}
+
 void testPcmSampleDurationNeverOverflowsArm32() {
     // Captured on the real TV: WAV length 9,123,502 PCM bytes at 16 kHz.
     // Previous size_t multiplication wrapped to 16,673 ms on 32-bit ARM.
@@ -211,6 +225,7 @@ int main() {
     testLargeBroadcastAndRecapOffsets();
     testDirectStreamResumeTimeline();
     testUncertainMatchesAreNotApplied();
+    testProbeUsesDecodedHlsStart();
     testPcmSampleDurationNeverOverflowsArm32();
     testProviderCreditsNeverCountAsSpeech();
     testWatermarkCannotDominateAlignment();

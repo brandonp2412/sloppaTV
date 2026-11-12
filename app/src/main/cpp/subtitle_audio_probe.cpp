@@ -3,6 +3,9 @@
 #include "third_party/libfvad/include/fvad.h"
 
 #include <dlfcn.h>
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 
 #include <algorithm>
 #include <array>
@@ -25,6 +28,7 @@ constexpr uintmax_t kProbeReadyBytes = 270U * 16000U * 2U; // 270 seconds of mon
 constexpr uintmax_t kExtendedProbeReadyBytes = 500U * 16000U * 2U;
 constexpr size_t kMaximumPcmBytes = 20 * 1024 * 1024;
 constexpr int kMpvEndFileEvent = 7;
+constexpr int kMpvLogMessageEvent = 2;
 
 struct MpvEvent {
     int eventId;
@@ -38,6 +42,13 @@ struct MpvEventEndFile {
     int error;
 };
 
+struct ProbeLogMessage {
+    const char* prefix;
+    const char* level;
+    const char* text;
+    int logLevel;
+};
+
 struct ProbeMpv {
     using Create = void* (*)();
     using Initialize = int (*)(void*);
@@ -45,12 +56,14 @@ struct ProbeMpv {
     using Option = int (*)(void*, const char*, const char*);
     using Command = int (*)(void*, const char* const*);
     using WaitEvent = MpvEvent* (*)(void*, double);
+    using RequestLogMessages = int (*)(void*, const char*);
     Create create = nullptr;
     Initialize initialize = nullptr;
     Terminate terminate = nullptr;
     Option option = nullptr;
     Command command = nullptr;
     WaitEvent waitEvent = nullptr;
+    RequestLogMessages requestLogMessages = nullptr;
 };
 
 template <typename T> T loadSymbol(void* handle, const char* name) {
@@ -65,11 +78,13 @@ ProbeMpv loadApi(void* handle) {
         loadSymbol<ProbeMpv::Option>(handle, "mpv_set_option_string"),
         loadSymbol<ProbeMpv::Command>(handle, "mpv_command"),
         loadSymbol<ProbeMpv::WaitEvent>(handle, "mpv_wait_event"),
+        loadSymbol<ProbeMpv::RequestLogMessages>(handle, "mpv_request_log_messages"),
     };
 }
 
 bool completeApi(const ProbeMpv& api) {
-    return api.create && api.initialize && api.terminate && api.option && api.command && api.waitEvent;
+    return api.create && api.initialize && api.terminate && api.option && api.command && api.waitEvent &&
+           api.requestLogMessages;
 }
 
 uint16_t le16(const unsigned char* p) {
@@ -160,7 +175,8 @@ void* openMpvLibrary() {
     return handle;
 }
 
-bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::path& output, std::string& failure) {
+bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::path& output, std::string& failure,
+                int& actualStartMs) {
     void* library = openMpvLibrary();
     if (!library) {
         failure = "libmpv unavailable";
@@ -192,7 +208,7 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
     const std::filesystem::path certificate = std::filesystem::path(request.privateFilesDir) / "android-ca-bundle.pem";
     if (!option("config", "no") || !option("video", "no") || !option("vo", "null") || !option("ao", "pcm") ||
         !option("ao-pcm-file", output.string()) || !option("audio-samplerate", "16000") ||
-        !option("audio-channels", "mono") || !option("audio-format", "s16") ||
+        !option("audio-channels", "mono") || !option("audio-format", "s16") || !option("af", "lavfi=[ashowinfo]") ||
         !option("start", std::to_string(request.sampleStartMs / 1000.0)) ||
         !option("length", std::to_string(request.extendedSample ? kExtendedProbeSeconds : kProbeSeconds)) ||
         !option("cache", "no") || !option("demuxer", "lavf") || !option("ytdl", "no") ||
@@ -204,6 +220,7 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
         failure = "unable to initialize audio-only libmpv";
         return false;
     }
+    api.requestLogMessages(mpv, "v");
     const char* command[] = {"loadfile", request.mediaUrl.c_str(), "replace", nullptr};
     if (api.command(mpv, command) < 0) {
         failure = "audio probe media failed to open";
@@ -212,18 +229,38 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
     const auto deadline =
         std::chrono::steady_clock::now() +
         std::chrono::seconds(request.extendedSample ? kExtendedProbeTimeoutSeconds : kProbeTimeoutSeconds);
+    const auto observeFirstFrame = [&](const MpvEvent* event) {
+        if (event && event->eventId == kMpvLogMessageEvent && actualStartMs < 0) {
+            const auto* log = static_cast<const ProbeLogMessage*>(event->data);
+            if (log && log->text) {
+                if (const auto firstFrameMs = subtitleProbeFirstFrameMs(log->text)) {
+                    actualStartMs = subtitleProbeActualStartMs(request.sampleStartMs, *firstFrameMs);
+                    api.requestLogMessages(mpv, "error");
+                }
+            }
+        }
+    };
     while (std::chrono::steady_clock::now() < deadline) {
         MpvEvent* event = api.waitEvent(mpv, 0.25);
+        observeFirstFrame(event);
         // Live/DirectStream URLs can continue waiting after sufficient PCM is captured.
         std::error_code fileError;
         const auto bytes = std::filesystem::file_size(output, fileError);
-        if (!fileError && bytes >= (request.extendedSample ? kExtendedProbeReadyBytes : kProbeReadyBytes)) return true;
+        if (!fileError && actualStartMs >= 0 &&
+            bytes >= (request.extendedSample ? kExtendedProbeReadyBytes : kProbeReadyBytes))
+            return true;
         if (event && event->eventId == kMpvEndFileEvent) {
             const auto* end = static_cast<const MpvEventEndFile*>(event->data);
             failure = "audio probe end reason=" + std::to_string(end ? end->reason : -1) +
                       " error=" + std::to_string(end ? end->error : event->error) +
                       " wavBytes=" + std::to_string(fileError ? 0 : bytes);
-            return end && end->reason == 0;
+            const bool cleanEnd = end && end->reason == 0;
+            // Log events have their own queue and can follow END_FILE for fast
+            // local inputs. Drain the first-frame timestamp before returning.
+            const auto logDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
+            while (actualStartMs < 0 && std::chrono::steady_clock::now() < logDeadline)
+                observeFirstFrame(api.waitEvent(mpv, 0.01));
+            return cleanEnd;
         }
     }
     failure = "audio probe deadline exceeded";
@@ -261,7 +298,8 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
     // A crashed or reinstalled process may leave an old file with this counter value.
     std::filesystem::remove(output, ec);
     // A live stream can time out after providing a sufficiently long usable sample.
-    capturePcm(request, output, result.failure);
+    int actualStartMs = -1;
+    capturePcm(request, output, result.failure, actualStartMs);
     const std::string captureDiagnostic = result.failure;
     const auto wavBytes = std::filesystem::file_size(output, ec);
     PcmAudio audio = readPcmWave(output);
@@ -275,6 +313,16 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         return result;
     }
 
+    if (actualStartMs < 0) {
+        result.failure = "audio probe did not report its decoded starting timestamp";
+        return result;
+    }
+#ifdef __ANDROID__
+    __android_log_print(ANDROID_LOG_INFO, "sloppaTV/subsync",
+                        "Audio probe timeline requestedMs=%d actualMs=%d baseMs=%d", request.sampleStartMs,
+                        actualStartMs, request.subtitleTimelineBaseMs);
+#endif
+
     result.audioMs = subtitlePcmDurationMs(audio.samples.size(), audio.sampleRate);
     const auto moderate = detectSpeech(audio, 2);
     const auto aggressive = detectSpeech(audio, 3);
@@ -282,8 +330,7 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         result.failure = "speech detector rejected the audio format";
         return result;
     }
-    const int subtitleSampleStartMs =
-        subtitleSyncLogicalSampleStart(request.sampleStartMs, request.subtitleTimelineBaseMs);
+    const int subtitleSampleStartMs = subtitleSyncLogicalSampleStart(actualStartMs, request.subtitleTimelineBaseMs);
     const auto evaluation = evaluateSubtitleTimeWarp(moderate, aggressive, request.cues, subtitleSampleStartMs);
     const int matchingCues = evaluation.matchingCues;
     const SubtitleSyncPeak& score2 = evaluation.moderate;
@@ -300,6 +347,7 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         result.failure += " capture=" + captureDiagnostic +
                           " wavBytes=" + std::to_string(wavBytes == static_cast<uintmax_t>(-1) ? 0 : wavBytes) +
                           " playerSampleStartMs=" + std::to_string(request.sampleStartMs) +
+                          " actualSampleStartMs=" + std::to_string(actualStartMs) +
                           " timelineBaseMs=" + std::to_string(request.subtitleTimelineBaseMs) +
                           " isHls=" + std::to_string(request.mediaUrl.find(".m3u8") != std::string::npos);
     }
