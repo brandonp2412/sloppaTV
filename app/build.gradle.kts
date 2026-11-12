@@ -5,6 +5,7 @@ plugins {
 }
 
 val sloppaVersionCode = providers.gradleProperty("SLOPPATV_VERSION_CODE").get().toInt()
+val minReleaseVersionCode = providers.gradleProperty("SLOPPATV_MIN_RELEASE_CODE").get().toInt()
 val sloppaVersionName = providers.gradleProperty("SLOPPATV_VERSION_NAME").get()
 val splitReleaseApks = providers.gradleProperty("SLOPPATV_SPLIT_APKS")
     .orNull
@@ -149,6 +150,9 @@ gradle.taskGraph.whenReady {
     }
     require(!signedArtifactRequested || releaseSigningConfigured) {
         "Release and benchmark builds require ${releaseSigningPropertiesFile.path}; copy key.properties.example and supply the signing key details"
+    }
+    require(!signedArtifactRequested || sloppaVersionCode >= minReleaseVersionCode) {
+        "Refusing to sign SloppaTV versionCode $sloppaVersionCode: release codes must be >= $minReleaseVersionCode. Use tools/install_tv_release.py for monotonic TV upgrades."
     }
 }
 

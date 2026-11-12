@@ -136,7 +136,7 @@ jobs:
         if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
         shell: bash
         run: |
-          play_version_code=$((100000 + GITHUB_RUN_NUMBER))
+          play_version_code=$((100009 + GITHUB_RUN_NUMBER))
           echo "ORG_GRADLE_PROJECT_SLOPPATV_VERSION_CODE=$play_version_code" >> "$GITHUB_ENV"
           echo "SLOPPATV_PLAY_VERSION_CODE=$play_version_code" >> "$GITHUB_ENV"
           echo "Google Play version code: $play_version_code"
@@ -338,7 +338,7 @@ jobs:
       - name: Prepare Google Play release notes
         shell: bash
         run: |
-          play_version_code=$((100000 + GITHUB_RUN_NUMBER))
+          play_version_code=$((100009 + GITHUB_RUN_NUMBER))
           release_notes="fastlane/metadata/android/en-US/changelogs/$play_version_code.txt"
           printf 'Latest sloppaTV main release: %s\n' "$(git log -1 --pretty=%s)" > "$release_notes"
 
@@ -364,7 +364,7 @@ jobs:
           if [[ "$publish_status" -eq 0 ]]; then
             echo "submitted=true" >> "$GITHUB_OUTPUT"
             {
-              echo "Google Play accepted build $((100000 + GITHUB_RUN_NUMBER)) for review via the API."
+              echo "Google Play accepted build $((100009 + GITHUB_RUN_NUMBER)) for review via the API."
               echo
               echo "Google review and publication happen after this workflow finishes."
               echo "Check [Publishing overview](https://play.google.com/console/u/0/developers/7752294226475422746/app/4974256539512236820/publishing) and [Submission activity](https://play.google.com/console/u/0/developers/7752294226475422746/app/4974256539512236820/publishing/submission-activity) for the current status."
@@ -441,7 +441,7 @@ jobs:
           set -euo pipefail
 
           version_name="$(sed -n 's/^SLOPPATV_VERSION_NAME=//p' gradle.properties)"
-          version_code=$((100000 + GITHUB_RUN_NUMBER))
+          version_code=$((100009 + GITHUB_RUN_NUMBER))
           tag_name="v${version_name}+${version_code}"
           release_name="sloppaTV ${version_name} (build ${version_code})"
 
