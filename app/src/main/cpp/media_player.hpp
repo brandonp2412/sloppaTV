@@ -61,6 +61,7 @@ public:
     [[nodiscard]] PlayerStatus status() const;
     [[nodiscard]] std::string error() const;
     [[nodiscard]] int positionMs() const;
+    [[nodiscard]] std::optional<int> timelineOriginMs(const std::string& expectedUrl) const;
     [[nodiscard]] int durationMs() const;
     [[nodiscard]] int bufferedAheadMs() const;
     [[nodiscard]] bool pausedForCache() const;

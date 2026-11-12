@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <functional>
 #include <optional>
 #include <limits>
 #include <string>
@@ -16,6 +17,16 @@ struct SubtitleAudioSyncRequest {
     std::string privateFilesDir;
     std::vector<SubtitleCue> cues;
     int sampleStartMs = 0;
+    // Zero-based audio ordinal in this URL; server-remuxed HLS has one audio track.
+    int audioOrdinal = -1;
+    // Duration on this URL's player timeline, excluding a DirectStream base.
+    int sourceDurationMs = 0;
+    // Main player and probe may rebase the same rolling HLS URL differently.
+    std::function<std::optional<int>()> playbackTimelineOrigin;
+    std::optional<int> playbackTimelineOriginMs;
+    // Negotiate distant HLS windows at the server instead of seeking an unfinished playlist.
+    std::function<std::optional<std::string>(int)> verificationMediaUrl;
+    std::function<bool()> cancelled;
     // Start-of-episode music may obscure speech; analyse a longer continuous
     // sample without seeking or opening a second stream.
     bool extendedSample = false;
@@ -26,8 +37,19 @@ struct SubtitleAudioSyncRequest {
 struct SubtitleAudioSyncResult {
     SubtitleSyncDecision decision;
     int audioMs = 0;
+    std::optional<int> playbackTimelineOriginMs;
     std::string failure;
 };
+
+// Convert a probe clock into the main player's clock before adding its logical base.
+// The absolute transport mux offset cancels; no assumption about TS start PTS is needed.
+inline std::optional<int> subtitleProbeLogicalStartMs(int sampleMs, int timelineBaseMs, int probeOriginMs,
+                                                      int playbackOriginMs) {
+    if (sampleMs < 0 || timelineBaseMs < 0) return std::nullopt;
+    const int64_t logical = static_cast<int64_t>(sampleMs) + timelineBaseMs + probeOriginMs - playbackOriginMs;
+    if (logical < 0 || logical > std::numeric_limits<int>::max()) return std::nullopt;
+    return static_cast<int>(logical);
+}
 
 // Convert sample count to milliseconds using wide arithmetic. On 32-bit Android,
 // a five-minute 16 kHz recording overflows size_t when multiplied by 1000.

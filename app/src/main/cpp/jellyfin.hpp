@@ -86,6 +86,7 @@ public:
                                                    int maxStreamingBitrate = 120000000, int maxAudioChannels = 8,
                                                    PlaybackOverrides overrides = {}, int audioStreamIndex = -1,
                                                    int subtitleStreamIndex = kSubtitleServerDefaultIndex) const;
+    ApiResult stopTranscoding(const JellyfinSession& session, const PlaybackTarget& target) const;
     ApiResult reportPlaybackStart(const JellyfinSession& session, const JellyfinItem& item,
                                   const PlaybackTarget& target, int64_t positionTicks) const;
     ApiResult reportPlaybackProgress(const JellyfinSession& session, const JellyfinItem& item,

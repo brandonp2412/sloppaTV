@@ -1079,6 +1079,16 @@ int NativeMediaPlayer::positionMs() const {
     return getDoublePropertyLocked("time-pos", value) ? boundedMs(value) : 0;
 }
 
+std::optional<int> NativeMediaPlayer::timelineOriginMs(const std::string& expectedUrl) const {
+    std::scoped_lock lock(mutex_);
+    if (!mpv_ || getStringPropertyLocked("path") != expectedUrl) return std::nullopt;
+    double origin = 0.0;
+    if (!getDoublePropertyLocked("demuxer-start-time", origin) || !std::isfinite(origin) ||
+        std::abs(origin) > std::numeric_limits<int>::max() / 1000.0)
+        return std::nullopt;
+    return static_cast<int>(std::llround(origin * 1000.0));
+}
+
 int NativeMediaPlayer::bufferedAheadMs() const {
     std::scoped_lock lock(mutex_);
     if (!mpv_) return 0;

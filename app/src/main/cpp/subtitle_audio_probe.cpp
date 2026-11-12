@@ -18,6 +18,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <thread>
 
 namespace {
 constexpr int kProbeSeconds = 300;
@@ -193,7 +194,7 @@ std::optional<std::uint64_t> pcmDataOffset(const std::filesystem::path& path) {
 }
 
 bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::path& output, std::string& failure,
-                int& actualStartMs) {
+                int& actualStartMs, std::optional<int>* probeOriginMs = nullptr) {
     void* library = openMpvLibrary();
     if (!library) {
         failure = "libmpv unavailable";
@@ -226,6 +227,7 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
     if (!option("config", "no") || !option("video", "no") || !option("vo", "null") || !option("ao", "pcm") ||
         !option("ao-pcm-file", output.string()) || !option("audio-samplerate", "16000") ||
         !option("audio-channels", "mono") || !option("audio-format", "s16") || !option("af", "lavfi=[ashowinfo]") ||
+        (request.audioOrdinal >= 0 && !option("aid", std::to_string(request.audioOrdinal + 1))) ||
         !option("start", std::to_string(request.sampleStartMs / 1000.0)) ||
         !option("length", std::to_string(request.extendedSample ? kExtendedProbeSeconds : kProbeSeconds)) ||
         !option("cache", "no") || !option("demuxer", "lavf") || !option("ytdl", "no") ||
@@ -276,18 +278,37 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
         }
     };
     while (std::chrono::steady_clock::now() < deadline) {
+        if (request.cancelled && request.cancelled()) {
+            failure = "audio probe cancelled";
+            return false;
+        }
+        if (probeOriginMs && !*probeOriginMs) {
+            double origin = 0.0;
+            if (api.getProperty(mpv, "demuxer-start-time", 5, &origin) >= 0 && std::isfinite(origin) &&
+                std::abs(origin) <= std::numeric_limits<int>::max() / 1000.0)
+                *probeOriginMs = static_cast<int>(std::llround(origin * 1000.0));
+        }
         MpvEvent* event = api.waitEvent(mpv, 0.25);
         observeFirstFrame(event);
-        // Live/DirectStream URLs can continue waiting after sufficient PCM is captured.
+        // Freeze only this probe while measuring clock and PCM. Unthrottled
+        // decoding can advance seconds between otherwise adjacent property reads.
         std::error_code fileError;
+        const auto previewBytes = std::filesystem::file_size(output, fileError);
+        const char* pauseCommand[] = {"set", "pause", "yes", nullptr};
+        const char* resumeCommand[] = {"set", "pause", "no", nullptr};
+        const bool measurementPaused = !fileError && previewBytes >= 32000 && api.command(mpv, pauseCommand) >= 0;
+        // The pause command can complete before the player refreshes its output
+        // clock. Let that refresh finish; all consistency checks still apply.
+        if (measurementPaused) std::this_thread::sleep_for(std::chrono::milliseconds(20));
         double beforeSeconds = 0.0;
         const bool beforeValid = api.getProperty(mpv, "time-pos", 5, &beforeSeconds) >= 0;
         const auto bytes = std::filesystem::file_size(output, fileError);
         double afterSeconds = 0.0;
         const bool afterValid = api.getProperty(mpv, "time-pos", 5, &afterSeconds) >= 0;
+        if (measurementPaused) static_cast<void>(api.command(mpv, resumeCommand));
         if (!fileError && bytes > 128) {
             if (!dataOffset) dataOffset = pcmDataOffset(output);
-            if (beforeValid && afterValid && dataOffset && bytes >= *dataOffset) {
+            if (measurementPaused && beforeValid && afterValid && dataOffset && bytes >= *dataOffset) {
                 clock.observe(beforeSeconds, afterSeconds, bytes - *dataOffset);
             }
         }
@@ -316,7 +337,8 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
 }
 } // namespace
 
-SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest& request) {
+static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncRequest& request,
+                                                        SubtitleSyncWindow& window) {
     SubtitleAudioSyncResult result;
     if (request.mediaUrl.empty() || request.privateFilesDir.empty() || request.cues.size() < 12) {
         result.failure = "missing audio or subtitle inputs";
@@ -347,7 +369,8 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
     std::filesystem::remove(output, ec);
     // A live stream can time out after providing a sufficiently long usable sample.
     int actualStartMs = -1;
-    capturePcm(request, output, result.failure, actualStartMs);
+    std::optional<int> probeOriginMs;
+    capturePcm(request, output, result.failure, actualStartMs, &probeOriginMs);
     const std::string captureDiagnostic = result.failure;
     const auto wavBytes = std::filesystem::file_size(output, ec);
     PcmAudio audio = readPcmWave(output);
@@ -361,6 +384,10 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         return result;
     }
 
+    if (request.cancelled && request.cancelled()) {
+        result.failure = "audio probe cancelled";
+        return result;
+    }
     if (actualStartMs < 0) {
         result.failure = "audio probe did not report its decoded starting timestamp";
         return result;
@@ -378,7 +405,27 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         result.failure = "speech detector rejected the audio format";
         return result;
     }
-    const int subtitleSampleStartMs = subtitleSyncLogicalSampleStart(actualStartMs, request.subtitleTimelineBaseMs);
+    int subtitleSampleStartMs = subtitleSyncLogicalSampleStart(actualStartMs, request.subtitleTimelineBaseMs);
+    if (request.playbackTimelineOriginMs) {
+        if (!probeOriginMs) {
+            result.failure = "audio probe did not report its timeline origin";
+            return result;
+        }
+        const auto logical = subtitleProbeLogicalStartMs(actualStartMs, request.subtitleTimelineBaseMs, *probeOriginMs,
+                                                         *request.playbackTimelineOriginMs);
+        if (!logical) {
+            result.failure = "audio probe timeline origin was incompatible with playback";
+            return result;
+        }
+        subtitleSampleStartMs = *logical;
+        result.playbackTimelineOriginMs = request.playbackTimelineOriginMs;
+    }
+#ifdef __ANDROID__
+    __android_log_print(ANDROID_LOG_INFO, "sloppaTV/subsync",
+                        "Audio probe origins probeMs=%d playbackMs=%d logicalStartMs=%d", probeOriginMs.value_or(-1),
+                        request.playbackTimelineOriginMs.value_or(-1), subtitleSampleStartMs);
+#endif
+    window = SubtitleSyncWindow{subtitleSampleStartMs, moderate, aggressive};
     const auto evaluation = evaluateSubtitleTimeWarp(moderate, aggressive, request.cues, subtitleSampleStartMs);
     const int matchingCues = evaluation.matchingCues;
     const SubtitleSyncPeak& score2 = evaluation.moderate;
@@ -399,5 +446,67 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
                           " timelineBaseMs=" + std::to_string(request.subtitleTimelineBaseMs) +
                           " isHls=" + std::to_string(request.mediaUrl.find(".m3u8") != std::string::npos);
     }
+    return result;
+}
+
+SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest& originalRequest) {
+    auto request = originalRequest;
+    if (request.playbackTimelineOrigin) {
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(kProbeTimeoutSeconds);
+        while (!request.playbackTimelineOriginMs && std::chrono::steady_clock::now() < deadline) {
+            if (request.cancelled && request.cancelled()) return {{}, 0, {}, "audio probe cancelled"};
+            request.playbackTimelineOriginMs = request.playbackTimelineOrigin();
+            if (!request.playbackTimelineOriginMs) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (!request.playbackTimelineOriginMs) return {{}, 0, {}, "playback timeline origin unavailable"};
+    }
+    SubtitleSyncWindow first;
+    auto result = captureSubtitleAudioSync(request, first);
+    // Short remaining HLS sessions cannot provide widely separated observations.
+    // Keep their existing local confidence guards, without inferring 24/23.976 speed.
+    if (!result.decision.confident || request.sourceDurationMs < 900000) return result;
+    std::vector<SubtitleSyncWindow> windows;
+    windows.push_back(std::move(first));
+    const int lastStartMs = request.sourceDurationMs - 300000;
+    const std::vector<int> starts{0, lastStartMs / 2, lastStartMs};
+    for (int count = 0; count < 2; ++count) {
+        int selectedStartMs = -1;
+        int greatestDistanceMs = 0;
+        for (int start : starts) {
+            int distanceMs = std::numeric_limits<int>::max();
+            for (const auto& window : windows)
+                distanceMs = std::min(distanceMs, std::abs(start + request.subtitleTimelineBaseMs - window.startMs));
+            if (distanceMs > greatestDistanceMs) {
+                greatestDistanceMs = distanceMs;
+                selectedStartMs = start;
+            }
+        }
+        if (selectedStartMs < 0 || greatestDistanceMs < 180000) break;
+        auto verification = request;
+        verification.sampleStartMs = selectedStartMs;
+        if (request.verificationMediaUrl) {
+            const auto url = request.verificationMediaUrl(selectedStartMs);
+            if (!url) {
+                result.decision.confident = false;
+                result.failure = "distant subtitle probe release negotiation failed";
+                return result;
+            }
+            verification.mediaUrl = *url;
+            verification.sampleStartMs = 0;
+        }
+        verification.extendedSample = false;
+        SubtitleSyncWindow window;
+        const auto captured = captureSubtitleAudioSync(verification, window);
+        if (window.moderate.empty()) {
+            result.decision.confident = false;
+            result.failure = "distant subtitle verification unavailable: " + captured.failure;
+            return result;
+        }
+        result.audioMs += captured.audioMs;
+        windows.push_back(std::move(window));
+    }
+    result.decision = evaluateSubtitleSyncWindows(windows, request.cues);
+    if (!result.decision.confident)
+        result.failure = "subtitle windows did not establish one consistent episode timeline";
     return result;
 }

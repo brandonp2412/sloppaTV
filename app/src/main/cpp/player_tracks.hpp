@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -20,6 +22,7 @@ public:
     }
 
     void resetPlayback() {
+        invalidateSubtitleSync();
         subtitleBusy_ = false;
         activeSubtitleCues_.clear();
         subtitleCueMaxEndMs_.clear();
@@ -43,11 +46,21 @@ public:
 
     [[nodiscard]] int selectedAudioServerIndex() const { return selectedAudioServerIndex_; }
 
-    void setSelectedAudioServerIndex(int index) { selectedAudioServerIndex_ = index; }
+    void setSelectedAudioServerIndex(int index) {
+        if (selectedAudioServerIndex_ != index) invalidateSubtitleSync();
+        selectedAudioServerIndex_ = index;
+    }
 
     [[nodiscard]] int selectedSubtitleServerIndex() const { return selectedSubtitleServerIndex_; }
 
-    void setSelectedSubtitleServerIndex(int index) { selectedSubtitleServerIndex_ = index; }
+    void setSelectedSubtitleServerIndex(int index) {
+        if (selectedSubtitleServerIndex_ != index) invalidateSubtitleSync();
+        selectedSubtitleServerIndex_ = index;
+    }
+
+    [[nodiscard]] uint64_t subtitleSyncRevision() const { return subtitleSyncRevision_; }
+
+    void setSubtitleContextChanged(std::function<void()> changed) { subtitleContextChanged_ = std::move(changed); }
 
     [[nodiscard]] const std::optional<std::string>& audioLanguagePreference() const { return audioLanguagePreference_; }
 
@@ -69,6 +82,7 @@ public:
     }
 
     void applySubtitle(int serverIndex, std::string language, std::vector<SubtitleCue> cues) {
+        invalidateSubtitleSync();
         activeSubtitleCues_ = std::move(cues);
         subtitleOffsetMs_ = 0;
         subtitleTimeScale_ = 1.0;
@@ -86,6 +100,7 @@ public:
     }
 
     void failSelectedSubtitle() {
+        invalidateSubtitleSync();
         subtitleBusy_ = false;
         selectedSubtitleServerIndex_ = -1;
         activeSubtitleServerIndex_ = -1;
@@ -100,7 +115,10 @@ public:
 
     [[nodiscard]] bool subtitleEnabled() const { return activeSubtitleEnabled_; }
 
-    void setSubtitleEnabled(bool enabled) { activeSubtitleEnabled_ = enabled; }
+    void setSubtitleEnabled(bool enabled) {
+        if (activeSubtitleEnabled_ != enabled) invalidateSubtitleSync();
+        activeSubtitleEnabled_ = enabled;
+    }
 
     [[nodiscard]] const std::vector<SubtitleCue>& subtitleCues() const { return activeSubtitleCues_; }
 
@@ -153,6 +171,13 @@ public:
     }
 
 private:
+    void invalidateSubtitleSync() {
+        ++subtitleSyncRevision_;
+        if (subtitleContextChanged_) subtitleContextChanged_();
+    }
+
+    std::function<void()> subtitleContextChanged_;
+    uint64_t subtitleSyncRevision_ = 0;
     bool subtitleBusy_ = false;
     int subtitleOffsetMs_ = 0;
     double subtitleTimeScale_ = 1.0;

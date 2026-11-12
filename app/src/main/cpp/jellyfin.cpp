@@ -1198,6 +1198,8 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
     target.playSessionId = std::move(offer.playSessionId);
     target.mediaSourceId = std::move(offer.mediaSourceId);
     target.alternativeMediaSourceId = std::move(offer.alternativeMediaSourceId);
+    target.sourceFingerprint = std::move(offer.sourceFingerprint);
+    target.sourceRuntimeTicks = offer.sourceRuntimeTicks;
     target.audioStreamIndex = offer.audioStreamIndex;
     target.audioOrdinal = offer.audioOrdinal;
     target.audioTracks = std::move(offer.audioTracks);
@@ -1256,6 +1258,20 @@ ApiValueResult<PlaybackTarget> JellyfinClient::resolvePlayback(const JellyfinSes
         subtitleStreamIndex == kSubtitleServerDefaultIndex ? " (server default)" : "", !target.subtitleUrl.empty());
     result.value = std::move(target);
     result.ok = true;
+    return result;
+}
+
+ApiResult JellyfinClient::stopTranscoding(const JellyfinSession& session, const PlaybackTarget& target) const {
+    ApiResult result;
+    if (!session.valid() || session.deviceId.empty() || target.playSessionId.empty()) {
+        result.error = "Transcode session identity is incomplete";
+        return result;
+    }
+    const std::string url = session.server + "/Videos/ActiveEncodings?DeviceId=" + urlEncode(session.deviceId) +
+                            "&PlaySessionId=" + urlEncode(target.playSessionId);
+    const auto response = http_.request("DELETE", url, headers(&session, session.deviceId));
+    result.ok = response.ok();
+    if (!result.ok) result.error = apiError(response);
     return result;
 }
 

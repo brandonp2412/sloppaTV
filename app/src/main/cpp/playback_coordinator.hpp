@@ -110,6 +110,7 @@ struct PlaybackSubtitleCycleContext {
 struct PlaybackSubtitleLoadContext {
     std::string itemId;
     std::string mediaSourceId;
+    std::string cacheSessionId;
     int requestedSubtitleStreamIndex = -1;
     std::vector<JellyfinSubtitleStream> candidates;
 };
@@ -963,6 +964,10 @@ public:
         return PlaybackSubtitleLoadContext{
             .itemId = item.id,
             .mediaSourceId = item.mediaSourceId,
+            .cacheSessionId =
+                sessionState_.activeTarget().playSessionId.empty()
+                    ? std::string{}
+                    : sessionState_.activeTarget().playSessionId + "-" + sessionState_.activeTarget().sourceFingerprint,
             .requestedSubtitleStreamIndex = requested.index,
             .candidates = playbackSubtitleLoadCandidates(item, requested, allowedLanguages),
         };

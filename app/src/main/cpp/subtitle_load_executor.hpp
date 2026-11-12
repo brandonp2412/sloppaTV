@@ -16,6 +16,8 @@ struct SubtitleLoadRequest {
     uint64_t generation = 0;
     std::string itemId;
     std::string mediaSourceId;
+    // A source ID may be an alias whose backing release changes after negotiation.
+    std::string cacheSessionId;
     int requestedSubtitleIndex = -1;
     std::vector<JellyfinSubtitleStream> candidates;
     std::string deliveryUrl;
@@ -55,6 +57,7 @@ public:
 
     bool load(JellyfinSession session, SubtitleLoadRequest request) {
         return tasks_.submit([this, session = std::move(session), request = std::move(request)] {
+            if (!epoch_.active(request.generation)) return;
             JellyfinItem subtitleItem;
             subtitleItem.id = request.itemId;
             subtitleItem.mediaSourceId = request.mediaSourceId;
@@ -67,8 +70,16 @@ public:
                 std::string subtitleBody;
                 std::filesystem::path cacheFile;
                 bool fromCache = false;
-                if (!request.dataPath.empty()) {
-                    const std::filesystem::path directory = std::filesystem::path(request.dataPath) / "subtitles";
+                if (!request.dataPath.empty() && !request.cacheSessionId.empty()) {
+                    // Encode the opaque session ID so it cannot introduce path components.
+                    std::string sessionKey;
+                    constexpr char hex[] = "0123456789abcdef";
+                    for (unsigned char c : request.cacheSessionId) {
+                        sessionKey += hex[c >> 4];
+                        sessionKey += hex[c & 15];
+                    }
+                    const std::filesystem::path directory =
+                        std::filesystem::path(request.dataPath) / "subtitles" / sessionKey;
                     const std::string format = subtitleTextFormat(candidate.codec);
                     // Track indices belong to a release, not just an episode. Never reuse
                     // captions from a previous source (including legacy item-only caches).

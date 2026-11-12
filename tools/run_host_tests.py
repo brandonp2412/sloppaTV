@@ -139,6 +139,7 @@ CPP_TESTS = [
     "status_overlay_state_test.cpp",
     "subtitle_auto_sync_test.cpp",
     "subtitle_load_executor_test.cpp",
+    "subtitle_sync_executor_test.cpp",
     "subtitle_policy_test.cpp",
     "system_text_input_test.cpp",
     "text_layout_test.cpp",

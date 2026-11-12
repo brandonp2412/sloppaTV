@@ -10,6 +10,8 @@ struct PlaybackInfoOffer {
     std::string playSessionId;
     std::string mediaSourceId;
     std::string alternativeMediaSourceId;
+    std::string sourceFingerprint;
+    int64_t sourceRuntimeTicks = 0;
     int sourceCount = 0;
     int directPlaySourceCount = 0;
     int audioStreamIndex = -1;

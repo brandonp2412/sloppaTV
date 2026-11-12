@@ -178,6 +178,8 @@ struct PlaybackTarget {
     std::string playSessionId;
     std::string mediaSourceId;
     std::string alternativeMediaSourceId;
+    std::string sourceFingerprint;
+    int64_t sourceRuntimeTicks = 0;
     bool transcoding = false;
     PlaybackMethod playMethod = PlaybackMethod::DirectPlay;
     int audioStreamIndex = -1;

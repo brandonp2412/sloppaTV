@@ -1,4 +1,5 @@
 #include "subtitle_audio_probe.hpp"
+#include "fixtures/subtitle_sync_evidence.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -237,7 +238,106 @@ void testPalFrameRateDriftCorrection() {
 
 } // namespace
 
+void testSeparatedWindowsRequireOneTimeline() {
+    std::vector<SubtitleCue> cues;
+    for (int time = 1500, i = 0; time < 43 * 60000; ++i) {
+        cues.push_back({time, time + 800 + (i * 173) % 1300, "dialogue"});
+        time += 2500 + (i * 251) % 3700;
+    }
+    cues.push_back({1000, 7000, "Advertise your product or brand here"});
+    std::sort(cues.begin(), cues.end(), [](const auto& a, const auto& b) { return a.startMs < b.startMs; });
+    const auto windowsFor = [&](double scale, bool differentEdit) {
+        std::vector<SubtitleSyncWindow> windows;
+        for (int start : {60000, 900000, 1800000}) {
+            SubtitleSyncWindow window;
+            window.startMs = start;
+            const int offset = differentEdit && start == 900000 ? 5100 : 2100;
+            for (int frame = 0; frame < 18000; ++frame) {
+                const double time = (start + frame * 10 - offset) / scale;
+                const auto cue = std::upper_bound(cues.begin(), cues.end(), time,
+                                                  [](double value, const auto& line) { return value < line.startMs; });
+                const bool active =
+                    cue != cues.begin() && time < (cue - 1)->endMs && !subtitleSyncCueIsMetadata(*(cue - 1));
+                window.moderate.push_back(active || frame % 167 == 0);
+                window.aggressive.push_back((active && frame % 4 != 0) || (!active && frame % 251 == 0));
+            }
+            windows.push_back(std::move(window));
+        }
+        return windows;
+    };
+    for (double scale :
+         {1.0, 1000.0 / 1001.0, 1001.0 / 1000.0, 24.0 / 25.0, 24000.0 / 25025.0, 25.0 / 24.0, 25025.0 / 24000.0}) {
+        const auto decision = evaluateSubtitleSyncWindows(windowsFor(scale, false), cues);
+        assert(decision.confident);
+        assert(std::abs(decision.timeScale - scale) < 0.000001);
+        assert(std::abs(decision.offsetMs - 2100) <= 150);
+    }
+    assert(!evaluateSubtitleSyncWindows(windowsFor(1.0, true), cues).confident);
+    assert(!evaluateSubtitleSyncWindows(windowsFor(1000.0 / 1001.0, true), cues).confident);
+    assert(!evaluateSubtitleSyncWindows(windowsFor(0.973, false), cues).confident);
+    auto duplicate = windowsFor(1.0, false);
+    duplicate[1] = duplicate[0];
+    assert(!evaluateSubtitleSyncWindows(duplicate, cues).confident);
+    auto missing = windowsFor(1.0, false);
+    missing[1].aggressive.clear();
+    assert(!evaluateSubtitleSyncWindows(missing, cues).confident);
+    auto wrong = windowsFor(1.0, false);
+    for (auto& window : wrong) std::fill(window.moderate.begin(), window.moderate.end(), 1);
+    assert(!evaluateSubtitleSyncWindows(wrong, cues).confident);
+}
+
+void testPackedMasksPreserveCountsAtPartialWords() {
+    std::vector<uint8_t> speech(137, 0);
+    for (size_t i = 0; i < speech.size(); i += 3) speech[i] = 7;
+    const std::vector<SubtitleCue> cues{{50, 670, "first"}, {600, 1250, "overlap"}};
+    const auto peak = findSubtitleSyncPeak(speech, cues, 0, 0);
+    assert(peak.speechFrames == 46);
+    assert(peak.subtitleFrames == 120);
+    assert(peak.matchedSpeechFrames == 40);
+    const double expected = (40.0 * 137 - 46.0 * 120) / std::sqrt(46.0 * 91 * 120 * 17);
+    assert(std::abs(peak.correlation - expected) < 1e-12);
+}
+
+void testProbeAndPlaybackClockOrigins() {
+    // A rolling playlist has advanced 111 seconds since the player opened it.
+    assert(subtitleProbeLogicalStartMs(30000, 385000, 112464, 1464) == 526000);
+    // Transport timestamps can retain a large absolute media clock. Only the
+    // difference between origins belongs in the normalized player timeline.
+    assert(subtitleProbeLogicalStartMs(64, 385000, 381538, 381538) == 385064);
+    assert(subtitleProbeLogicalStartMs(6400, 385000, 375138, 381538) == 385000);
+    assert(!subtitleProbeLogicalStartMs(0, 0, 1464, 381538));
+    assert(!subtitleProbeLogicalStartMs(-1, 385000, 0, 0));
+    assert(!subtitleProbeLogicalStartMs(100, -1, 0, 0));
+    assert(!subtitleProbeLogicalStartMs(std::numeric_limits<int>::max(), 1, 0, 0));
+}
+
+void testRetainedFriendsEvidence() {
+    using namespace subtitle_sync_evidence;
+    const auto decode = [](int frames, const std::vector<std::pair<int, int>>& intervals) {
+        std::vector<uint8_t> mask(static_cast<size_t>(frames), 0);
+        for (const auto& [begin, end] : intervals) {
+            assert(begin >= 0 && end >= begin && end <= frames);
+            std::fill(mask.begin() + begin, mask.begin() + end, 1);
+        }
+        return mask;
+    };
+    const auto valid = evaluateSubtitleTimeWarp(decode(friends0Frames, friends0Moderate),
+                                                decode(friends0Frames, friends0Aggressive), friendsCues, 385000);
+    assert(valid.decision.confident);
+    assert(valid.decision.timeScale == 1.0);
+    assert(valid.decision.offsetMs == 2250);
+    assert(valid.matchingCues == 47);
+    const auto ambiguous = evaluateSubtitleTimeWarp(decode(friends1Frames, friends1Moderate),
+                                                    decode(friends1Frames, friends1Aggressive), friendsCues, 547579);
+    assert(!ambiguous.decision.confident);
+    assert(ambiguous.matchingCues == 59);
+}
+
 int main() {
+    testRetainedFriendsEvidence();
+    testProbeAndPlaybackClockOrigins();
+    testPackedMasksPreserveCountsAtPartialWords();
+    testSeparatedWindowsRequireOneTimeline();
     testPositiveAndNegativeOffsets();
     testLargeBroadcastAndRecapOffsets();
     testDirectStreamResumeTimeline();

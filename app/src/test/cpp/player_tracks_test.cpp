@@ -4,6 +4,8 @@
 
 int main() {
     PlayerTrackState state;
+    int invalidations = 0;
+    state.setSubtitleContextChanged([&] { ++invalidations; });
 
     assert(!state.subtitleBusy());
     assert(state.beginSubtitleWork());
@@ -65,9 +67,28 @@ int main() {
     state.setSubtitleOffsetMs(0);
     assert(state.subtitleTimeScale() == 1.0);
 
+    const auto beforeToggle = state.subtitleSyncRevision();
     state.setSubtitleEnabled(false);
     assert(state.activeSubtitleCue(600) == nullptr);
     state.setSubtitleEnabled(true);
+    assert(state.subtitleSyncRevision() > beforeToggle);
+    // Returning to the same track must still cancel work for the earlier selection.
+    const auto beforeAudioSwitch = state.subtitleSyncRevision();
+    state.setSelectedAudioServerIndex(4);
+    state.setSelectedAudioServerIndex(3);
+    assert(state.subtitleSyncRevision() > beforeAudioSwitch);
+    const auto beforeSubtitleSwitch = state.subtitleSyncRevision();
+    state.setSelectedSubtitleServerIndex(8);
+    state.setSelectedSubtitleServerIndex(7);
+    assert(state.subtitleSyncRevision() > beforeSubtitleSwitch);
+    const auto stableSelection = state.subtitleSyncRevision();
+    const int stableInvalidations = invalidations;
+    state.setSelectedSubtitleServerIndex(7);
+    state.setSelectedAudioServerIndex(3);
+    state.setSubtitleEnabled(true);
+    assert(state.subtitleSyncRevision() == stableSelection);
+    assert(invalidations == stableInvalidations);
+    assert(invalidations >= 6);
 
     std::vector<SubtitleCue> overlappingCues{
         {.startMs = 1'000, .endMs = 5'000, .text = "long dialogue"},

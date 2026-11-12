@@ -188,6 +188,7 @@ public:
                                          .generation = generation,
                                          .itemId = std::move(context->itemId),
                                          .mediaSourceId = std::move(context->mediaSourceId),
+                                         .cacheSessionId = std::move(context->cacheSessionId),
                                          .requestedSubtitleIndex = context->requestedSubtitleStreamIndex,
                                          .candidates = std::move(context->candidates),
                                          .deliveryUrl = deliveryUrl,

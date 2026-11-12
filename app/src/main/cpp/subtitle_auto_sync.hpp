@@ -3,6 +3,7 @@
 #include "subtitle_policy.hpp"
 
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <cctype>
 #include <cstdint>
@@ -76,6 +77,18 @@ inline SubtitleSyncPeak findSubtitleSyncPeak(const std::vector<uint8_t>& speech,
     const int speechFrames = result.speechFrames;
     if (speechFrames <= 0 || speechFrames >= n) return result;
 
+    // Pack masks so each correlation step counts 64 frames at once. Multiple
+    // distant windows otherwise multiply the cost of scanning every 10 ms frame.
+    std::vector<uint64_t> speechWords((speech.size() + 63) / 64, 0);
+    std::vector<uint64_t> cueWords((cueActive.size() + 63) / 64 + 1, 0);
+    std::vector<int> cuePrefix(cueActive.size() + 1, 0);
+    for (size_t i = 0; i < speech.size(); ++i)
+        if (speech[i]) speechWords[i / 64] |= uint64_t{1} << (i % 64);
+    for (size_t i = 0; i < cueActive.size(); ++i) {
+        if (cueActive[i]) cueWords[i / 64] |= uint64_t{1} << (i % 64);
+        cuePrefix[i + 1] = cuePrefix[i] + cueActive[i];
+    }
+
     struct Candidate {
         int offsetMs;
         int matched;
@@ -88,11 +101,15 @@ inline SubtitleSyncPeak findSubtitleSyncPeak(const std::vector<uint8_t>& speech,
     for (int offset = -maxOffsetMs; offset <= maxOffsetMs; offset += kStepMs) {
         const int shift = offset / kFrameMs;
         int matched = 0;
-        int subtitleFrames = 0;
-        for (int i = 0; i < n; ++i) {
-            const bool cue = cueActive[static_cast<size_t>(i + padding - shift)] != 0;
-            if (cue) ++subtitleFrames;
-            if (cue && speech[static_cast<size_t>(i)]) ++matched;
+        const auto begin = static_cast<size_t>(padding - shift);
+        const int subtitleFrames = cuePrefix[begin + speech.size()] - cuePrefix[begin];
+        for (size_t word = 0; word < speechWords.size(); ++word) {
+            const size_t bit = begin + word * 64;
+            const size_t sourceWord = bit / 64;
+            const auto remainder = static_cast<unsigned int>(bit % 64);
+            uint64_t active = cueWords[sourceWord] >> remainder;
+            if (remainder != 0) active |= cueWords[sourceWord + 1] << (64 - remainder);
+            matched += std::popcount(speechWords[word] & active);
         }
         if (subtitleFrames == 0 || subtitleFrames == n) continue;
         const double numerator = static_cast<double>(matched) * n - static_cast<double>(speechFrames) * subtitleFrames;
@@ -196,31 +213,40 @@ inline bool subtitleTimeWarpStable(const std::vector<uint8_t>& moderateSpeech,
            std::abs(lateModerate.offsetMs - lateAggressive.offsetMs) <= modeToleranceMs;
 }
 
+inline SubtitleTimeWarpEvaluation evaluateSubtitleTimeScale(const std::vector<uint8_t>& moderateSpeech,
+                                                            const std::vector<uint8_t>& aggressiveSpeech,
+                                                            const std::vector<SubtitleCue>& cues, int sampleStartMs,
+                                                            double timeScale) {
+    SubtitleTimeWarpEvaluation candidate;
+    if (moderateSpeech.empty() || aggressiveSpeech.size() != moderateSpeech.size() || cues.empty()) return candidate;
+    const int durationMs = static_cast<int>(moderateSpeech.size()) * 10;
+    candidate.matchingCues = static_cast<int>(std::count_if(cues.begin(), cues.end(), [&](const SubtitleCue& cue) {
+        if (cue.endMs <= cue.startMs || cue.endMs - cue.startMs > 12000 || subtitleSyncCueIsMetadata(cue)) return false;
+        const double scaledStartMs = static_cast<double>(cue.startMs) * timeScale;
+        const double scaledEndMs = static_cast<double>(cue.endMs) * timeScale;
+        return scaledStartMs < sampleStartMs + durationMs && scaledEndMs > sampleStartMs;
+    }));
+    candidate.moderate = findSubtitleSyncPeak(moderateSpeech, cues, sampleStartMs, 120000, timeScale);
+    candidate.aggressive = findSubtitleSyncPeak(aggressiveSpeech, cues, sampleStartMs, 120000, timeScale);
+    candidate.decision =
+        decideSubtitleSync(candidate.moderate, candidate.aggressive, durationMs, candidate.matchingCues);
+    if (candidate.decision.confident &&
+        !subtitleTimeWarpStable(moderateSpeech, aggressiveSpeech, cues, sampleStartMs, timeScale))
+        candidate.decision.confident = false;
+    candidate.decision.timeScale = timeScale;
+    return candidate;
+}
+
 inline SubtitleTimeWarpEvaluation evaluateSubtitleTimeWarp(const std::vector<uint8_t>& moderateSpeech,
                                                            const std::vector<uint8_t>& aggressiveSpeech,
                                                            const std::vector<SubtitleCue>& cues, int sampleStartMs) {
     SubtitleTimeWarpEvaluation baseline;
     if (moderateSpeech.empty() || aggressiveSpeech.size() != moderateSpeech.size() || cues.empty()) return baseline;
-    const int durationMs = static_cast<int>(moderateSpeech.size()) * 10;
     SubtitleTimeWarpEvaluation best;
     double bestQuality = -1.0;
     // PAL conversion ratios: 24->25 and 24000/1001->25, plus their inverses.
     for (double timeScale : {1.0, 24.0 / 25.0, 24000.0 / 25025.0, 25.0 / 24.0, 25025.0 / 24000.0}) {
-        SubtitleTimeWarpEvaluation candidate;
-        candidate.matchingCues = static_cast<int>(std::count_if(cues.begin(), cues.end(), [&](const SubtitleCue& cue) {
-            if (cue.endMs <= cue.startMs || cue.endMs - cue.startMs > 12000 || subtitleSyncCueIsMetadata(cue))
-                return false;
-            const double scaledStartMs = static_cast<double>(cue.startMs) * timeScale;
-            const double scaledEndMs = static_cast<double>(cue.endMs) * timeScale;
-            return scaledStartMs < sampleStartMs + durationMs && scaledEndMs > sampleStartMs;
-        }));
-        candidate.moderate = findSubtitleSyncPeak(moderateSpeech, cues, sampleStartMs, 120000, timeScale);
-        candidate.aggressive = findSubtitleSyncPeak(aggressiveSpeech, cues, sampleStartMs, 120000, timeScale);
-        candidate.decision =
-            decideSubtitleSync(candidate.moderate, candidate.aggressive, durationMs, candidate.matchingCues);
-        if (candidate.decision.confident &&
-            !subtitleTimeWarpStable(moderateSpeech, aggressiveSpeech, cues, sampleStartMs, timeScale))
-            candidate.decision.confident = false;
+        auto candidate = evaluateSubtitleTimeScale(moderateSpeech, aggressiveSpeech, cues, sampleStartMs, timeScale);
         if (timeScale == 1.0) {
             baseline = candidate;
             // Never sacrifice an already credible match to try speculative frame-rate changes.
@@ -239,5 +265,60 @@ inline SubtitleTimeWarpEvaluation evaluateSubtitleTimeWarp(const std::vector<uin
         }
     }
     if (!best.decision.confident) return baseline;
+    return best;
+}
+
+// Widely separated windows distinguish 24/23.976 drift from a local offset.
+// Every window must independently pass the existing confidence and stability guards.
+struct SubtitleSyncWindow {
+    int startMs = 0;
+    std::vector<uint8_t> moderate;
+    std::vector<uint8_t> aggressive;
+};
+
+inline SubtitleSyncDecision evaluateSubtitleSyncWindows(const std::vector<SubtitleSyncWindow>& windows,
+                                                        const std::vector<SubtitleCue>& cues) {
+    SubtitleSyncDecision best;
+    if (windows.size() < 3) return best;
+    const auto bounds = std::minmax_element(windows.begin(), windows.end(),
+                                            [](const auto& a, const auto& b) { return a.startMs < b.startMs; });
+    if (bounds.second->startMs - bounds.first->startMs < 600000) return best;
+    std::vector<int> starts;
+    for (const auto& window : windows) starts.push_back(window.startMs);
+    std::sort(starts.begin(), starts.end());
+    for (size_t i = 1; i < starts.size(); ++i)
+        if (starts[i] - starts[i - 1] < 180000) return best;
+    double bestQuality = -1.0;
+    for (double scale :
+         {1.0, 1000.0 / 1001.0, 1001.0 / 1000.0, 24.0 / 25.0, 24000.0 / 25025.0, 25.0 / 24.0, 25025.0 / 24000.0}) {
+        std::vector<int> offsets;
+        double quality = 1.0;
+        double agreement = 1.0;
+        for (const auto& window : windows) {
+            const auto match =
+                evaluateSubtitleTimeScale(window.moderate, window.aggressive, cues, window.startMs, scale);
+            const double correlation = std::min(match.moderate.correlation, match.aggressive.correlation);
+            if (!match.decision.confident ||
+                (scale != 1.0 && (correlation < 0.13 || match.decision.agreement < 0.03))) {
+                offsets.clear();
+                break;
+            }
+            offsets.push_back(match.decision.offsetMs);
+            quality = std::min(quality, correlation + 0.5 * match.decision.agreement);
+            agreement = std::min(agreement, match.decision.agreement);
+        }
+        if (offsets.size() != windows.size()) continue;
+        const auto offsetBounds = std::minmax_element(offsets.begin(), offsets.end());
+        // A global correction must agree much more tightly than local VAD halves.
+        // A changing edit or incompatible HLS timeline must not become a speed fix.
+        if (*offsetBounds.second - *offsetBounds.first > 500) continue;
+        std::sort(offsets.begin(), offsets.end());
+        const SubtitleSyncDecision decision{true, offsets[offsets.size() / 2], agreement, scale};
+        if (scale == 1.0) return decision;
+        if (quality > bestQuality) {
+            bestQuality = quality;
+            best = decision;
+        }
+    }
     return best;
 }

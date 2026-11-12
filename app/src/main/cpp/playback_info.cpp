@@ -24,6 +24,39 @@ template <typename T> T scalarValueOr(const json& value, const char* key, T fall
     }
 }
 
+std::string playbackSourceFingerprint(const json& source) {
+    const auto path = scalarValueOr(source, "Path", std::string{});
+    const auto runtime = scalarValueOr<int64_t>(source, "RunTimeTicks", 0);
+    if (path.empty() || runtime <= 0 || !source.contains("MediaStreams") || !source["MediaStreams"].is_array())
+        return {};
+    json streams = json::array();
+    for (const auto& track : source["MediaStreams"]) {
+        if (!track.is_object() || scalarValueOr(track, "IsExternal", false)) continue;
+        json physical;
+        for (const char* key : {"Index", "Type", "Codec", "Language", "Channels", "SampleRate", "Width", "Height",
+                                "RealFrameRate", "AverageFrameRate"})
+            physical[key] = track.value(key, json(nullptr));
+        streams.push_back(std::move(physical));
+    }
+    if (streams.empty()) return {};
+    // IDs and ETags can both be aliases. Delivery URLs and external providers
+    // can change without changing the release; exclude them from this identity.
+    const std::string identity = json{
+        {"path", path},
+        {"runtime", runtime},
+        {"container", scalarValueOr(source, "Container", std::string{})},
+        {"streams",
+         std::move(streams)}}.dump();
+    uint64_t hash = 14695981039346656037ULL;
+    for (unsigned char value : identity) {
+        hash ^= value;
+        hash *= 1099511628211ULL;
+    }
+    std::ostringstream out;
+    out << std::hex << hash;
+    return out.str();
+}
+
 bool isNoStreamsPlaceholder(const json& source) {
     // Remux exposes an explicit sentinel media source when provider lookup
     // yielded no playable streams. It advertises DirectPlay/DirectStream so
@@ -254,6 +287,8 @@ ApiValueResult<PlaybackInfoOffer> parsePlaybackInfoOffer(std::string_view respon
         // torrent, index 1 can be Italian where index 1 was English on the
         // previous source. Match the intended language against THIS source's
         // audio tracks and carry the native ordinal to libmpv.
+        offer.sourceFingerprint = playbackSourceFingerprint(*source);
+        offer.sourceRuntimeTicks = scalarValueOr<int64_t>(*source, "RunTimeTicks", 0);
         offer.audioStreamIndex = scalarValueOr(*source, "DefaultAudioStreamIndex", -1);
         if (source->contains("MediaStreams") && (*source)["MediaStreams"].is_array()) {
             for (const auto& track : (*source)["MediaStreams"]) {

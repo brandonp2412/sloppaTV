@@ -97,6 +97,7 @@ SubtitleLoadRequest request(int subtitleIndex, std::vector<JellyfinSubtitleStrea
         .generation = generation,
         .itemId = "episode-1",
         .mediaSourceId = "source-1",
+        .cacheSessionId = "session-1",
         .requestedSubtitleIndex = subtitleIndex,
         .candidates = std::move(candidates),
         .deliveryUrl = std::move(deliveryUrl),
@@ -164,9 +165,10 @@ int main() {
     const auto cacheRoot = std::filesystem::temp_directory_path() / "sloppatv-subtitle-load-executor-test";
     std::error_code ec;
     std::filesystem::remove_all(cacheRoot, ec);
-    std::filesystem::create_directories(cacheRoot / "subtitles");
+    const auto sessionCache = cacheRoot / "subtitles" / "73657373696f6e2d31";
+    std::filesystem::create_directories(sessionCache);
     {
-        std::ofstream cached(cacheRoot / "subtitles" / "episode-1-source-1-6.srt", std::ios::binary);
+        std::ofstream cached(sessionCache / "episode-1-source-1-6.srt", std::ios::binary);
         cached << kValidSrt;
     }
     client.calls.clear();
@@ -185,13 +187,31 @@ int main() {
     assert(executor.load(session, request(6, {subtitle(6, "srt")}, {}, cacheRoot.string())));
     assert(client.calls.empty());
     assert(completions.events.back().cues.front().startMs == 1000);
+    // The same alias and track index can resolve to a different release.
+    auto renegotiated = request(6, {subtitle(6, "srt")}, {}, cacheRoot.string());
+    renegotiated.cacheSessionId = "session-2";
+    assert(executor.load(session, renegotiated));
+    assert((client.calls == std::vector<std::string>{"text:6"}));
+    assert(completions.events.back().cues.front().startMs == 5000);
+    client.calls.clear();
+    assert(executor.load(session, renegotiated));
+    assert(client.calls.empty());
+    // No negotiated identity means persistent captions cannot be trusted.
+    renegotiated.cacheSessionId.clear();
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        client.calls.clear();
+        assert(executor.load(session, renegotiated));
+        assert((client.calls == std::vector<std::string>{"text:6"}));
+    }
     std::filesystem::remove_all(cacheRoot, ec);
 
     const size_t completionCount = completions.events.size();
     epoch.activeGeneration = 6;
+    client.calls.clear();
     client.textResponses[7] = success(kValidSrt);
     assert(executor.load(session, request(7, {subtitle(7, "srt")})));
     assert(completions.events.size() == completionCount);
+    assert(client.calls.empty());
 
     tasks.accept = false;
     assert(!executor.load(session, request(8, {subtitle(8, "srt")}, {}, {}, 6)));

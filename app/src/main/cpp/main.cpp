@@ -71,6 +71,7 @@
 #include "media_grid_renderer.hpp"
 #include "media_player.hpp"
 #include "subtitle_audio_probe.hpp"
+#include "subtitle_sync_executor.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
 #include "navigation_stack.hpp"
@@ -176,6 +177,7 @@
 #include "virtual_keyboard.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <array>
 #include <chrono>
 #include <cctype>
@@ -245,6 +247,9 @@ struct SubtitleSyncCompletion {
     uint64_t generation = 0;
     std::string itemId;
     std::string sourceId;
+    std::string mediaUrl;
+    int timelineBaseMs = 0;
+    uint64_t trackRevision = 0;
     int subtitleIndex = -1;
     SubtitleAudioSyncResult result;
 };
@@ -278,6 +283,7 @@ class SloppaApp {
 public:
     explicit SloppaApp(android_app* app)
         : app_(app), renderer_(app->activity->vm, app->activity->clazz), api_(app->activity->vm, app->activity->clazz),
+          subtitleProbeApi_(app->activity->vm, app->activity->clazz),
           similarPrefetchApi_(app->activity->vm, app->activity->clazz),
           remuxPrewarmApi_(app->activity->vm, app->activity->clazz),
           remuxStatsApi_(app->activity->vm, app->activity->clazz),
@@ -464,6 +470,8 @@ public:
                               virtualKeyboard_, accountFlow_, serverInfo_, loading_, error_, renderBurstUntil_) {
         __android_log_print(ANDROID_LOG_INFO, kTag, "Startup init: platform bridges ready");
         dataPath_ = app->activity->internalDataPath ? app->activity->internalDataPath : "";
+        playbackCoordinator_.tracks().setSubtitleContextChanged(
+            [this] { subtitleSyncRequestId_.fetch_add(1, std::memory_order_relaxed); });
         artwork_.setDataPath(dataPath_);
         brandMark_.load(app_ && app_->activity ? app_->activity->assetManager : nullptr, imageDecoder_);
         const LaunchRequest launchRequest = readLaunchRequest(app_);
@@ -533,6 +541,7 @@ public:
 
     ~SloppaApp() {
         api_.cancelPendingRequests();
+        subtitleProbeApi_.cancelPendingRequests();
         similarPrefetchApi_.cancelPendingRequests();
         remuxPrewarmApi_.cancelPendingRequests();
         remuxStatsApi_.cancelPendingRequests();
@@ -541,6 +550,7 @@ public:
         seerr_.cancelPendingRequests();
         seerrSearch_.cancelPendingRequests();
         requestEpochs_.invalidateAll();
+        subtitleSyncTasks_.shutdown();
         similarPrefetchTasks_.shutdown();
         remuxPrewarmTasks_.shutdown();
         remuxStatsTasks_.shutdown();
@@ -1667,16 +1677,24 @@ private:
         const bool align = current && completion.cues.size() >= 12 && !dataPath_.empty() &&
                            playbackCoordinator_.activeTargetAvailable();
         const auto& target = playbackCoordinator_.session().activeTarget();
-        const uint64_t requestId = ++subtitleSyncRequestId_;
         SubtitleAudioSyncRequest probe;
         if (align && target.playMethod != PlaybackMethod::Transcode && !target.url.empty()) {
             probe.mediaUrl = target.url;
+            PlaybackTarget audioTarget = target;
+            audioTarget.audioStreamIndex = playbackCoordinator_.tracks().selectedAudioServerIndex();
+            // An embedded audio switch can change the ordinal without replacing the target.
+            audioTarget.audioOrdinal = -1;
+            probe.audioOrdinal = playerAudioOrdinal(audioTarget, playbackCoordinator_.session().activeItem());
             probe.privateFilesDir = dataPath_ + "/files";
             probe.cues = completion.cues;
             const int position = std::max(0, player_.positionMs());
             probe.sampleStartMs = std::max(0, position - 90000);
             probe.subtitleTimelineBaseMs = playbackCoordinator_.playerTimelineBaseMs();
-            const int sourceDurationMs = std::max(0, playerScreenState_.durationMs() - probe.subtitleTimelineBaseMs);
+            const int releaseDurationMs = target.sourceRuntimeTicks > 0
+                                              ? playbackPositionMsFromTicks(target.sourceRuntimeTicks)
+                                              : playerScreenState_.durationMs();
+            const int sourceDurationMs = std::max(0, releaseDurationMs - probe.subtitleTimelineBaseMs);
+            probe.sourceDurationMs = sourceDurationMs;
             if (sourceDurationMs > 300000)
                 probe.sampleStartMs = std::min(probe.sampleStartMs, sourceDurationMs - 300000);
             probe.extendedSample =
@@ -1685,22 +1703,42 @@ private:
         const std::string itemId = completion.itemId;
         const int subtitleIndex = completion.loadedSubtitle.index;
         const uint64_t generation = completion.generation;
+        if (probe.mediaUrl.find(".m3u8") != std::string::npos) {
+            probe.playbackTimelineOrigin = [this, url = probe.mediaUrl] { return player_.timelineOriginMs(url); };
+        }
         const std::string sourceId = target.mediaSourceId;
+        const std::string playbackUrl = target.url;
+        const PlaybackTarget probeTarget = target;
+        const JellyfinItem probeItem = playbackCoordinator_.session().activeItem();
+        const int probeMaxBitrate = settings_.maxBitrateMbps * 1000000;
+        const int probeMaxChannels = settings_.maxAudioChannels;
         applyPlaybackCompletionApplicationEffects(playbackCompletions_.complete(completion));
         if (probe.mediaUrl.empty()) return;
+        const uint64_t trackRevision = playbackCoordinator_.tracks().subtitleSyncRevision();
+        const uint64_t requestId = ++subtitleSyncRequestId_;
+        probe.cancelled = [this, generation, requestId] {
+            return !requestEpochs_.playback.active(generation) ||
+                   subtitleSyncRequestId_.load(std::memory_order_relaxed) != requestId;
+        };
 
-        if (!subtitleSyncTasks_.submit(
-                [this, requestId, generation, itemId, sourceId, subtitleIndex, probe = std::move(probe)] {
-                    SubtitleAudioSyncResult result = synchronizeSubtitleAudio(probe);
-                    asyncCompletions_.push(SubtitleSyncCompletion{
-                        .requestId = requestId,
-                        .generation = generation,
-                        .itemId = itemId,
-                        .sourceId = sourceId,
-                        .subtitleIndex = subtitleIndex,
-                        .result = std::move(result),
-                    });
-                }))
+        if (!subtitleSyncTasks_.submit([this, requestId, generation, itemId, sourceId, playbackUrl, probeTarget,
+                                        probeItem, probeMaxBitrate, probeMaxChannels, session = session_, trackRevision,
+                                        subtitleIndex, probe = std::move(probe)] {
+                SubtitleAudioSyncResult result =
+                    executeSubtitleAudioSync(subtitleProbeApi_, session, probeItem, probeTarget, probe, probeMaxBitrate,
+                                             probeMaxChannels, synchronizeSubtitleAudio);
+                asyncCompletions_.push(SubtitleSyncCompletion{
+                    .requestId = requestId,
+                    .generation = generation,
+                    .itemId = itemId,
+                    .sourceId = sourceId,
+                    .mediaUrl = playbackUrl,
+                    .timelineBaseMs = probe.subtitleTimelineBaseMs,
+                    .trackRevision = trackRevision,
+                    .subtitleIndex = subtitleIndex,
+                    .result = std::move(result),
+                });
+            }))
             __android_log_print(ANDROID_LOG_WARN, kTag, "Subtitle auto-sync task unavailable");
     }
 
@@ -1708,7 +1746,13 @@ private:
         if (completion.requestId != subtitleSyncRequestId_ || !requestEpochs_.playback.active(completion.generation) ||
             screen_ != Screen::Player ||
             !playbackCoordinator_.subtitleLoadMatches(completion.itemId, completion.subtitleIndex) ||
-            playbackCoordinator_.session().activeTarget().mediaSourceId != completion.sourceId)
+            playbackCoordinator_.session().activeTarget().mediaSourceId != completion.sourceId ||
+            playbackCoordinator_.session().activeTarget().url != completion.mediaUrl ||
+            playbackCoordinator_.playerTimelineBaseMs() != completion.timelineBaseMs ||
+            playbackCoordinator_.tracks().subtitleSyncRevision() != completion.trackRevision)
+            return;
+        if (completion.result.playbackTimelineOriginMs &&
+            player_.timelineOriginMs(completion.mediaUrl) != completion.result.playbackTimelineOriginMs)
             return;
         if (!completion.result.decision.confident) {
             __android_log_print(ANDROID_LOG_INFO, kTag, "Subtitle auto-sync skipped item=%.8s: %s",
@@ -1864,6 +1908,7 @@ private:
     android_app* app_ = nullptr;
     Renderer renderer_;
     JellyfinClient api_;
+    JellyfinClient subtitleProbeApi_;
     JellyfinClient similarPrefetchApi_;
     JellyfinClient remuxPrewarmApi_;
     JellyfinClient remuxStatsApi_;
@@ -1918,7 +1963,7 @@ private:
         artwork_;
     UiPresentation<decltype(artwork_)> uiPresentation_;
     std::string dataPath_;
-    uint64_t subtitleSyncRequestId_ = 0;
+    std::atomic<uint64_t> subtitleSyncRequestId_{0};
 
     Screen screen_ = Screen::Login;
     NavigationStack<Screen> navigation_{Screen::Login};

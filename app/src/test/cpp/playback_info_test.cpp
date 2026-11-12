@@ -5,7 +5,48 @@
 
 using nlohmann::json;
 
+void testSourceFingerprintsIgnoreAliasesAndDetectBackingChanges() {
+    json source = {
+        {"Id", "alias"},
+        {"ETag", "alias"},
+        {"Path", "/releases/episode.mkv"},
+        {"RunTimeTicks", 13363410000LL},
+        {"Container", "mkv"},
+        {"SupportsDirectPlay", true},
+        {"MediaStreams",
+         json::array({{{"Index", 0}, {"Type", "Video"}, {"Codec", "h264"}, {"Width", 1280}, {"Height", 720}},
+                      {{"Index", 1}, {"Type", "Audio"}, {"Codec", "aac"}, {"Language", "eng"}, {"Channels", 2}}})}};
+    const auto fingerprint = [](const json& value) {
+        const auto parsed = parsePlaybackInfoOffer(json{{"MediaSources", json::array({value})}}.dump(), 1, -1);
+        assert(parsed.ok);
+        assert(parsed.value.sourceRuntimeTicks == value.value("RunTimeTicks", int64_t{0}));
+        return parsed.value.sourceFingerprint;
+    };
+    const auto expected = fingerprint(source);
+    assert(!expected.empty());
+    auto alias = source;
+    alias["Id"] = "other-alias";
+    alias["ETag"] = "other-alias";
+    assert(fingerprint(alias) == expected);
+    alias["MediaStreams"].push_back(
+        {{"Index", 7}, {"Type", "Subtitle"}, {"IsExternal", true}, {"DeliveryUrl", "https://provider/new-captions"}});
+    assert(fingerprint(alias) == expected);
+    auto changed = source;
+    changed["MediaStreams"][1]["Codec"] = "ac3";
+    assert(fingerprint(changed) != expected);
+    changed = source;
+    changed["RunTimeTicks"] = 13363840000LL;
+    assert(fingerprint(changed) != expected);
+    changed = source;
+    changed["Path"] = "/releases/another-edit.mkv";
+    assert(fingerprint(changed) != expected);
+    changed = source;
+    changed.erase("Path");
+    assert(fingerprint(changed).empty());
+}
+
 int main() {
+    testSourceFingerprintsIgnoreAliasesAndDetectBackingChanges();
     JellyfinSession session;
     session.userId = "user";
 
