@@ -474,12 +474,6 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         mergeHomeResumeCandidates(resume.value, std::move(fallback.value));
         return resume;
     });
-    auto nextUpFuture = std::async(std::launch::async, [this, &session, &common] {
-        return parseItemList(http_.request("GET",
-                                           session.server + "/Shows/NextUp?UserId=" + session.userId +
-                                               "&Limit=30&EnableResumable=false" + common,
-                                           headers(&session, session.deviceId)));
-    });
 
     auto views = viewsFuture.get();
     if (!views.ok) {
@@ -496,13 +490,6 @@ ApiValueResult<JellyfinHomeData> JellyfinClient::loadHomeCore(const JellyfinSess
         if (!resume.value.empty()) result.value.rows.push_back({"Continue Watching", std::move(resume.value)});
     } else {
         addWarning("Continue Watching unavailable");
-    }
-
-    auto nextUp = nextUpFuture.get();
-    if (nextUp.ok) {
-        if (!nextUp.value.empty()) result.value.rows.push_back({"Next Up", std::move(nextUp.value)});
-    } else {
-        addWarning("Next Up unavailable");
     }
 
     result.ok = true;
