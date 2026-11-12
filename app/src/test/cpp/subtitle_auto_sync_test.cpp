@@ -126,6 +126,23 @@ void testProbeUsesDecodedHlsStart() {
     assert(!subtitleProbeFirstFrameMs("unrelated decoder log pts_time:466.0"));
 }
 
+void testProbeClockFallback() {
+    SubtitleProbeClock clock;
+    assert(!clock.startMs());
+    // A 111-second HLS seek jump, independently measured from output PCM.
+    for (int duration : {1000, 2000, 3000}) {
+        const double position = 141.0 + duration / 1000.0;
+        clock.observe(position, position, static_cast<std::uint64_t>(duration) * 32);
+    }
+    assert(clock.startMs() && *clock.startMs() == 141000);
+    // Timestamp discontinuities within the captured audio are unsafe.
+    clock.observe(155.0, 155.0, 4000ULL * 32);
+    assert(!clock.startMs());
+    SubtitleProbeClock racing;
+    for (int i = 0; i < 4; ++i) racing.observe(142.0, 144.0, 32000ULL * (i + 1));
+    assert(!racing.startMs());
+}
+
 void testPcmSampleDurationNeverOverflowsArm32() {
     // Captured on the real TV: WAV length 9,123,502 PCM bytes at 16 kHz.
     // Previous size_t multiplication wrapped to 16,673 ms on 32-bit ARM.
@@ -226,6 +243,7 @@ int main() {
     testDirectStreamResumeTimeline();
     testUncertainMatchesAreNotApplied();
     testProbeUsesDecodedHlsStart();
+    testProbeClockFallback();
     testPcmSampleDurationNeverOverflowsArm32();
     testProviderCreditsNeverCountAsSpeech();
     testWatermarkCannotDominateAlignment();

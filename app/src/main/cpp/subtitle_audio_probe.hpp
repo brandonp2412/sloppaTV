@@ -59,6 +59,40 @@ inline int subtitleProbeActualStartMs(int requestedMs, int firstFrameMs) {
     return std::max({0, requestedMs, firstFrameMs});
 }
 
+// Independent client clock fallback: FFmpeg log delivery can be suppressed by
+// another libmpv instance in the same process. Use several stable observations
+// of audio progress minus emitted PCM, never the requested seek position alone.
+class SubtitleProbeClock {
+public:
+    void observe(double beforeSeconds, double afterSeconds, std::uint64_t pcmBytes) {
+        if (!std::isfinite(beforeSeconds) || !std::isfinite(afterSeconds) || afterSeconds < beforeSeconds ||
+            afterSeconds - beforeSeconds > 0.1 || pcmBytes < 32000 || pcmBytes == lastBytes_)
+            return;
+        const double start = ((beforeSeconds + afterSeconds) * 500.0) - static_cast<double>(pcmBytes) / 32.0;
+        if (start < -500.0 || start > std::numeric_limits<int>::max()) return;
+        starts_.push_back(static_cast<int>(std::lround(std::max(0.0, start))));
+        lastBytes_ = pcmBytes;
+    }
+
+    [[nodiscard]] bool inconsistent() const {
+        if (starts_.size() < 2) return false;
+        const auto bounds = std::minmax_element(starts_.begin(), starts_.end());
+        return *bounds.second - *bounds.first > 1000;
+    }
+
+    [[nodiscard]] std::optional<int> startMs() const {
+        if (starts_.size() < 3) return std::nullopt;
+        auto sorted = starts_;
+        std::sort(sorted.begin(), sorted.end());
+        if (sorted.back() - sorted.front() > 1000) return std::nullopt;
+        return sorted[sorted.size() / 2];
+    }
+
+private:
+    std::vector<int> starts_;
+    std::uint64_t lastBytes_ = 0;
+};
+
 // Decode a bounded audio-only sample using an independent libmpv instance.
 // This is intended for a background worker, never the playback/render thread.
 SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest& request);

@@ -57,6 +57,7 @@ struct ProbeMpv {
     using Command = int (*)(void*, const char* const*);
     using WaitEvent = MpvEvent* (*)(void*, double);
     using RequestLogMessages = int (*)(void*, const char*);
+    using GetProperty = int (*)(void*, const char*, int, void*);
     Create create = nullptr;
     Initialize initialize = nullptr;
     Terminate terminate = nullptr;
@@ -64,6 +65,7 @@ struct ProbeMpv {
     Command command = nullptr;
     WaitEvent waitEvent = nullptr;
     RequestLogMessages requestLogMessages = nullptr;
+    GetProperty getProperty = nullptr;
 };
 
 template <typename T> T loadSymbol(void* handle, const char* name) {
@@ -79,12 +81,13 @@ ProbeMpv loadApi(void* handle) {
         loadSymbol<ProbeMpv::Command>(handle, "mpv_command"),
         loadSymbol<ProbeMpv::WaitEvent>(handle, "mpv_wait_event"),
         loadSymbol<ProbeMpv::RequestLogMessages>(handle, "mpv_request_log_messages"),
+        loadSymbol<ProbeMpv::GetProperty>(handle, "mpv_get_property"),
     };
 }
 
 bool completeApi(const ProbeMpv& api) {
     return api.create && api.initialize && api.terminate && api.option && api.command && api.waitEvent &&
-           api.requestLogMessages;
+           api.requestLogMessages && api.getProperty;
 }
 
 uint16_t le16(const unsigned char* p) {
@@ -175,6 +178,20 @@ void* openMpvLibrary() {
     return handle;
 }
 
+std::optional<std::uint64_t> pcmDataOffset(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    input.seekg(12);
+    while (input && input.tellg() < 4096) {
+        std::array<unsigned char, 8> chunk{};
+        if (!input.read(reinterpret_cast<char*>(chunk.data()), chunk.size())) return std::nullopt;
+        if (std::memcmp(chunk.data(), "data", 4) == 0) return static_cast<std::uint64_t>(input.tellg());
+        const auto size = le32(chunk.data() + 4);
+        if (size > 4096) return std::nullopt;
+        input.seekg(static_cast<std::streamoff>(size) + static_cast<std::streamoff>(size % 2), std::ios::cur);
+    }
+    return std::nullopt;
+}
+
 bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::path& output, std::string& failure,
                 int& actualStartMs) {
     void* library = openMpvLibrary();
@@ -229,15 +246,33 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
     const auto deadline =
         std::chrono::steady_clock::now() +
         std::chrono::seconds(request.extendedSample ? kExtendedProbeTimeoutSeconds : kProbeTimeoutSeconds);
+    SubtitleProbeClock clock;
+    int firstDecodedFrameMs = -1;
+    std::optional<std::uint64_t> dataOffset;
     const auto observeFirstFrame = [&](const MpvEvent* event) {
-        if (event && event->eventId == kMpvLogMessageEvent && actualStartMs < 0) {
+        if (event && event->eventId == kMpvLogMessageEvent && firstDecodedFrameMs < 0) {
             const auto* log = static_cast<const ProbeLogMessage*>(event->data);
             if (log && log->text) {
                 if (const auto firstFrameMs = subtitleProbeFirstFrameMs(log->text)) {
-                    actualStartMs = subtitleProbeActualStartMs(request.sampleStartMs, *firstFrameMs);
+                    firstDecodedFrameMs = *firstFrameMs;
                     api.requestLogMessages(mpv, "error");
                 }
             }
+        }
+    };
+    const auto updateActualStart = [&] {
+        actualStartMs = -1;
+        if (clock.inconsistent()) return;
+        if (const auto start = clock.startMs()) {
+            actualStartMs = subtitleProbeActualStartMs(request.sampleStartMs, *start);
+            if (firstDecodedFrameMs >= 0) {
+                const int frameStart = subtitleProbeActualStartMs(request.sampleStartMs, firstDecodedFrameMs);
+                // Prefer exact frame PTS when independently corroborated. A
+                // different mpv context can otherwise misroute FFmpeg logs.
+                if (std::abs(frameStart - actualStartMs) <= 250) actualStartMs = frameStart;
+            }
+        } else if (firstDecodedFrameMs >= 0) {
+            actualStartMs = subtitleProbeActualStartMs(request.sampleStartMs, firstDecodedFrameMs);
         }
     };
     while (std::chrono::steady_clock::now() < deadline) {
@@ -245,7 +280,18 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
         observeFirstFrame(event);
         // Live/DirectStream URLs can continue waiting after sufficient PCM is captured.
         std::error_code fileError;
+        double beforeSeconds = 0.0;
+        const bool beforeValid = api.getProperty(mpv, "time-pos", 5, &beforeSeconds) >= 0;
         const auto bytes = std::filesystem::file_size(output, fileError);
+        double afterSeconds = 0.0;
+        const bool afterValid = api.getProperty(mpv, "time-pos", 5, &afterSeconds) >= 0;
+        if (!fileError && bytes > 128) {
+            if (!dataOffset) dataOffset = pcmDataOffset(output);
+            if (beforeValid && afterValid && dataOffset && bytes >= *dataOffset) {
+                clock.observe(beforeSeconds, afterSeconds, bytes - *dataOffset);
+            }
+        }
+        updateActualStart();
         if (!fileError && actualStartMs >= 0 &&
             bytes >= (request.extendedSample ? kExtendedProbeReadyBytes : kProbeReadyBytes))
             return true;
@@ -258,8 +304,10 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
             // Log events have their own queue and can follow END_FILE for fast
             // local inputs. Drain the first-frame timestamp before returning.
             const auto logDeadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(250);
-            while (actualStartMs < 0 && std::chrono::steady_clock::now() < logDeadline)
+            while (actualStartMs < 0 && std::chrono::steady_clock::now() < logDeadline) {
                 observeFirstFrame(api.waitEvent(mpv, 0.01));
+                updateActualStart();
+            }
             return cleanEnd;
         }
     }
