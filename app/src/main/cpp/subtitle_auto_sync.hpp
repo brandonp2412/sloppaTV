@@ -166,19 +166,19 @@ inline bool subtitleTimeWarpStable(const std::vector<uint8_t>& moderateSpeech,
                                    int sampleStartMs, double timeScale) {
     const size_t n = moderateSpeech.size();
     if (n < 18000) return timeScale == 1.0; // No reliable speed correction from less than three minutes.
-    const size_t half = n / 2;
+    const auto half = static_cast<std::vector<uint8_t>::difference_type>(n / 2);
     const auto earlyModerate =
         findSubtitleSyncPeak(std::vector<uint8_t>(moderateSpeech.begin(), moderateSpeech.begin() + half), cues,
                              sampleStartMs, 120000, timeScale);
     const auto lateModerate =
         findSubtitleSyncPeak(std::vector<uint8_t>(moderateSpeech.begin() + half, moderateSpeech.end()), cues,
-                             sampleStartMs + static_cast<int>(half * 10), 120000, timeScale);
+                             sampleStartMs + static_cast<int>(half) * 10, 120000, timeScale);
     const auto earlyAggressive =
         findSubtitleSyncPeak(std::vector<uint8_t>(aggressiveSpeech.begin(), aggressiveSpeech.begin() + half), cues,
                              sampleStartMs, 120000, timeScale);
     const auto lateAggressive =
         findSubtitleSyncPeak(std::vector<uint8_t>(aggressiveSpeech.begin() + half, aggressiveSpeech.end()), cues,
-                             sampleStartMs + static_cast<int>(half * 10), 120000, timeScale);
+                             sampleStartMs + static_cast<int>(half) * 10, 120000, timeScale);
     const bool enoughEvidence = earlyModerate.correlation >= 0.10 && lateModerate.correlation >= 0.10 &&
                                 earlyAggressive.correlation >= 0.10 && lateAggressive.correlation >= 0.10 &&
                                 earlyModerate.speechFrames >= 250 && lateModerate.speechFrames >= 250 &&
