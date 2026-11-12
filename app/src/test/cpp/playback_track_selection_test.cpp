@@ -151,6 +151,31 @@ int main() {
 
     autoPolicy.autoSubtitleSourceLanguage = "any";
     assert(playbackAutoSubtitleIndexForItem(item, 3, autoPolicy) == 6);
+
+    // Friends S4E15: Russian "Dais" at index 5 and English SDH at index 6.
+    JellyfinItem friends;
+    friends.audios = {{.index = 4, .codec = "ac3", .language = "eng", .title = "Original", .isDefault = true}};
+    friends.subtitles = {
+        {.index = 5, .codec = "subrip", .language = "rus", .title = "Dais", .discoveredByPlayer = true},
+        {.index = 6, .codec = "subrip", .language = "eng", .title = "SDH", .discoveredByPlayer = true},
+    };
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(friends, 4, autoPolicy, false) == 6);
+    assert(playbackSubtitleIndexForItem(friends, 4, std::string("eng"), autoPolicy) == 6);
+    assert(playbackSubtitleIndexForItem(friends, 4, std::string("rus"), autoPolicy) == kSubtitleOffIndex);
+
+    // Another S4E15 release: English DVD bitmap default plus external English SRT.
+    // Text is compatible with the hardware player, whereas bitmap may require burn-in.
+    JellyfinItem friends1080;
+    friends1080.audios = friends.audios;
+    friends1080.subtitles = {
+        {.index = 2, .codec = "dvd_subtitle", .language = "eng", .title = "English", .isDefault = true},
+        {.index = 13, .codec = "subrip", .language = "eng", .title = "English", .isExternal = true},
+    };
+    assert(playbackAutoSubtitleIndexForItem(friends1080, 4, autoPolicy) == 13);
+    assert(playbackSubtitleIndexForItem(friends1080, 4, std::string("eng"), autoPolicy) == 13);
+    friends1080.subtitles.pop_back();
+    assert(playbackAutoSubtitleIndexForItem(friends1080, 4, autoPolicy) == 2);
+
     JellyfinItem unprobedRemux;
     unprobedRemux.audios = item.audios;
     assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, false) == kSubtitleOffIndex);
@@ -164,7 +189,7 @@ int main() {
     bitmapEnglish.index = 10;
     unprobedRemux.subtitles = {bitmapEnglish, discoveredEnglish};
     assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, false) == 9);
-    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, true) == 10);
+    assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, true) == 9);
     unprobedRemux.subtitles = {bitmapEnglish};
     assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, false) == kSubtitleOffIndex);
     assert(playbackAutoDiscoveredSubtitleIndexForItem(unprobedRemux, 1, autoPolicy, true) == 10);

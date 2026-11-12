@@ -114,6 +114,25 @@ inline int subtitlePickerPriority(const JellyfinSubtitleStream& track) {
     return 4;
 }
 
+// A default bitmap subtitle may precede a playable English text track.
+// Prefer text delivery first and use the default flag only within a codec tier.
+inline const JellyfinSubtitleStream*
+preferredTextSubtitleForLanguage(const std::vector<JellyfinSubtitleStream>& subtitles, const std::string& language,
+                                 const std::vector<std::string>& allowedLanguages, bool allowForced = false) {
+    const JellyfinSubtitleStream* best = nullptr;
+    for (const auto& subtitle : subtitles) {
+        if (subtitle.index < 0 || !playbackSubtitleAllowed(subtitle, allowedLanguages) ||
+            normalizeSubtitleLanguage(subtitle.language) != language || isLikelySignsOnlySubtitle(subtitle.title) ||
+            (!allowForced && subtitle.forced))
+            continue;
+        if (!best || subtitlePickerPriority(subtitle) < subtitlePickerPriority(*best) ||
+            (subtitlePickerPriority(subtitle) == subtitlePickerPriority(*best) && subtitle.isDefault &&
+             !best->isDefault))
+            best = &subtitle;
+    }
+    return best;
+}
+
 inline bool usePlayerEmbeddedTextTrack(const JellyfinSubtitleStream& track, PlaybackMethod method) {
     return method == PlaybackMethod::DirectPlay && !track.isExternal &&
            subtitleStrategy(track.codec) == SubtitleStrategy::ClientText;
@@ -180,23 +199,12 @@ inline int playbackAutoSubtitleIndexForItem(const JellyfinItem& item, int audioS
         sourceMatches = audioLanguage == normalizeSubtitleLanguage(source);
     if (!sourceMatches) return kSubtitleOffIndex;
 
-    const auto matchesTarget = [&](const JellyfinSubtitleStream& subtitle) {
-        return subtitle.index >= 0 && normalizeSubtitleLanguage(subtitle.language) == targetLanguage &&
-               !isLikelySignsOnlySubtitle(subtitle.title);
-    };
-    auto selected =
-        std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-            return matchesTarget(subtitle) && subtitle.isDefault;
-        });
-    if (selected == item.subtitles.end()) {
+    const JellyfinSubtitleStream* selected =
+        preferredTextSubtitleForLanguage(item.subtitles, targetLanguage, policy.allowedSubtitleLanguages);
+    if (!selected)
         selected =
-            std::find_if(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
-                return matchesTarget(subtitle) && !subtitle.forced;
-            });
-    }
-    if (selected == item.subtitles.end())
-        selected = std::find_if(item.subtitles.begin(), item.subtitles.end(), matchesTarget);
-    return selected == item.subtitles.end() ? kSubtitleOffIndex : selected->index;
+            preferredTextSubtitleForLanguage(item.subtitles, targetLanguage, policy.allowedSubtitleLanguages, true);
+    return selected ? selected->index : kSubtitleOffIndex;
 }
 
 // Remux can offer no subtitle metadata until libmpv opens the selected file.
@@ -298,16 +306,10 @@ inline int playbackSubtitleIndexForItem(const JellyfinItem& item, int audioStrea
     }
     if (languagePreference && !languagePreference->empty()) {
         const std::string preferred = normalizeSubtitleLanguage(*languagePreference);
-        // A manual choice means full subtitles in that language where available.
-        for (const bool requireDefault : {true, false}) {
-            for (const auto& subtitle : item.subtitles) {
-                if (!playbackSubtitleAllowed(subtitle, policy.allowedSubtitleLanguages) ||
-                    normalizeSubtitleLanguage(subtitle.language) != preferred || subtitle.forced ||
-                    isLikelySignsOnlySubtitle(subtitle.title) || (requireDefault && !subtitle.isDefault))
-                    continue;
-                return subtitle.index;
-            }
-        }
+        // An explicit language still prefers renderable text over a default bitmap.
+        if (const auto* selected =
+                preferredTextSubtitleForLanguage(item.subtitles, preferred, policy.allowedSubtitleLanguages))
+            return selected->index;
     }
     return subtitleIndexForQueuePreference(candidates, languagePreference);
 #endif
