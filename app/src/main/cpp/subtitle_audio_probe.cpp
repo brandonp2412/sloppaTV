@@ -220,10 +220,10 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
         if (!fileError && bytes >= (request.extendedSample ? kExtendedProbeReadyBytes : kProbeReadyBytes)) return true;
         if (event && event->eventId == kMpvEndFileEvent) {
             const auto* end = static_cast<const MpvEventEndFile*>(event->data);
-            if (end && end->reason == 0) return true;
-            failure = "audio probe ended with mpv reason " + std::to_string(end ? end->reason : -1) + " error " +
-                      std::to_string(end ? end->error : event->error);
-            return false;
+            failure = "audio probe end reason=" + std::to_string(end ? end->reason : -1) +
+                      " error=" + std::to_string(end ? end->error : event->error) +
+                      " wavBytes=" + std::to_string(fileError ? 0 : bytes);
+            return end && end->reason == 0;
         }
     }
     failure = "audio probe deadline exceeded";
@@ -262,6 +262,7 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
     std::filesystem::remove(output, ec);
     // A live stream can time out after providing a sufficiently long usable sample.
     capturePcm(request, output, result.failure);
+    const std::string captureDiagnostic = result.failure;
     const auto wavBytes = std::filesystem::file_size(output, ec);
     PcmAudio audio = readPcmWave(output);
     std::filesystem::remove(output, ec);
@@ -274,7 +275,7 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         return result;
     }
 
-    result.audioMs = static_cast<int>(audio.samples.size() * 1000 / static_cast<size_t>(audio.sampleRate));
+    result.audioMs = subtitlePcmDurationMs(audio.samples.size(), audio.sampleRate);
     const auto moderate = detectSpeech(audio, 2);
     const auto aggressive = detectSpeech(audio, 3);
     if (moderate.empty() || aggressive.size() != moderate.size()) {
@@ -299,6 +300,11 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
                           std::to_string(score2.alternativeCorrelation) + " mode3=" + std::to_string(score3.offsetMs) +
                           ":" + std::to_string(score3.correlation) + ":" +
                           std::to_string(score3.alternativeCorrelation);
+        result.failure += " capture=" + captureDiagnostic +
+                          " wavBytes=" + std::to_string(wavBytes == static_cast<uintmax_t>(-1) ? 0 : wavBytes) +
+                          " playerSampleStartMs=" + std::to_string(request.sampleStartMs) +
+                          " timelineBaseMs=" + std::to_string(request.subtitleTimelineBaseMs) +
+                          " isHls=" + std::to_string(request.mediaUrl.find(".m3u8") != std::string::npos);
     }
     return result;
 }

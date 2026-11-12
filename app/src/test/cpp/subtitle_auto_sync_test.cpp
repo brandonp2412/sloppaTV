@@ -112,6 +112,16 @@ void testLongSampleConfidenceAndMismatchedTracks() {
     assert(!decideSubtitleSync(wrongModerate, wrongAggressive, 300000, 76).confident);
 }
 
+void testPcmSampleDurationNeverOverflowsArm32() {
+    // Captured on the real TV: WAV length 9,123,502 PCM bytes at 16 kHz.
+    // Previous size_t multiplication wrapped to 16,673 ms on 32-bit ARM.
+    assert(subtitlePcmDurationMs(4561751, 16000) == 285109);
+    assert(subtitlePcmDurationMs(8000000, 16000) == 500000);
+    assert(subtitlePcmDurationMs(160, 16000) == 10);
+    assert(subtitlePcmDurationMs(0, 16000) == 0);
+    assert(subtitlePcmDurationMs(4561751, 0) == 0);
+}
+
 void testProviderCreditsNeverCountAsSpeech() {
     const std::vector<SubtitleCue> credits{
         {6000, 12000, "Watch Online Movies and Series for FREE\nwww.osdb.link/lm"},
@@ -141,6 +151,7 @@ int main() {
     testLargeBroadcastAndRecapOffsets();
     testDirectStreamResumeTimeline();
     testUncertainMatchesAreNotApplied();
+    testPcmSampleDurationNeverOverflowsArm32();
     testProviderCreditsNeverCountAsSpeech();
     testWatermarkCannotDominateAlignment();
     testLongSampleConfidenceAndMismatchedTracks();
