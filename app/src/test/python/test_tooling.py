@@ -754,6 +754,31 @@ class WaydroidToolingTest(unittest.TestCase):
             )
             self.assertEqual(sync_play_store_screenshots.screenshot_files(source), [source / "store.png"])
 
+    def test_store_screenshots_put_movie_catalog_ahead_of_search(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "generated"
+            source.mkdir()
+            for name in ["01-home", "02-search-catalog", "03-movie-browse"]:
+                (source / f"{name}.png").write_bytes(
+                    b"\x89PNG\r\n\x1a\n"
+                    + b"\x00\x00\x00\rIHDR"
+                    + (1920).to_bytes(4, "big")
+                    + (1080).to_bytes(4, "big")
+                    + b"\x08\x02"
+                    + name.encode()
+                )
+            destination = root / "tvScreenshots"
+            sync_play_store_screenshots.sync_screenshots(source, destination)
+            self.assertEqual(
+                [path.name for path in sorted(destination.iterdir())],
+                ["01-home.png", "02-movie-browse.png", "03-search-catalog.png"],
+            )
+            self.assertEqual(
+                (destination / "02-movie-browse.png").read_bytes(),
+                (source / "03-movie-browse.png").read_bytes(),
+            )
+
     def test_metadata_sync_mirrors_store_screenshots_into_web_and_tv(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

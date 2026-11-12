@@ -1,11 +1,24 @@
-sloppaTV is an independent Android TV client for Jellyfin media servers. Connect to a Jellyfin server you control and watch your library with a remote-first TV interface.
+sloppaTV is an independent Jellyfin client built for Android TV and Google TV. Enjoy movies and shows from your own Jellyfin media server with a clean, remote-first interface.
 
-Browse home sections, movies, shows, collections, genres and people. Search your library, open detailed media information, resume where you left off, and manage watched or favourite status from the TV.
+EXPLORE YOUR LIBRARY
+• Browse movies, TV series, collections, genres and people.
+• Search your library, view detailed information and continue watching where you left off.
+• Mark titles watched, manage favourites and switch between saved users.
 
-Playback adapts to your server and device. sloppaTV supports Jellyfin Direct Play, Direct Stream and server transcoding, with audio and subtitle selection, queues, autoplay, seeking, playback controls, refresh-rate handling and HDR capability negotiation where supported by the device and media.
+PLAYBACK BUILT FOR TV
+• Direct Play, Direct Stream and server transcoding, depending on your setup.
+• Choose audio tracks and subtitles, seek, queue episodes and use autoplay.
+• Refresh-rate handling and HDR capability negotiation when supported by the device and media.
 
-You can save multiple Jellyfin users and servers, switch profiles, use Quick Connect, tune playback and subtitle settings, and use Android TV search and media controls.
+EASY SERVER ACCESS
+• Sign in to a Jellyfin server you control, including Quick Connect.
+• Save multiple Jellyfin servers and users and customise playback and subtitle settings.
+• Use Android TV search and media controls.
 
-A Jellyfin server and account are required. Media availability, codec support and whether a file can play directly depend on your Jellyfin server, media and Android TV device.
+PRIVACY
+No ads, third-party analytics SDKs or developer-operated backend. sloppaTV connects directly to the Jellyfin server you choose. Your server's security and data policies determine how it handles your account and library.
+
+WHAT YOU NEED
+A Jellyfin media server and account are required; sloppaTV does not provide any media. Actual playback, codec, HDR and transcoding capabilities depend on your media, server and device.
 
 sloppaTV is an independent client and is not affiliated with or endorsed by the Jellyfin project.
