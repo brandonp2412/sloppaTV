@@ -40,6 +40,26 @@ void testPositiveAndNegativeOffsets() {
     }
 }
 
+void testLargeBroadcastAndRecapOffsets() {
+    // Different episode edits can shift dialogue by more than 30 seconds.
+    // Keep a wide speech sample so both early and late cues are observable.
+    constexpr int sampleStartMs = 120000;
+    const auto cues = makeCues(sampleStartMs + 125000);
+    for (const int offset : {-110000, 110000}) {
+        auto speech = std::vector<uint8_t>(47000, 0);
+        for (size_t i = 0; i < speech.size(); ++i) {
+            const int mediaMs = sampleStartMs + static_cast<int>(i) * 10;
+            const int cueMs = mediaMs - offset;
+            speech[i] = std::any_of(cues.begin(), cues.end(),
+                                    [&](const SubtitleCue& cue) { return cue.startMs <= cueMs && cueMs < cue.endMs; })
+                            ? 1
+                            : 0;
+        }
+        const auto peak = findSubtitleSyncPeak(speech, cues, sampleStartMs);
+        assert(std::abs(peak.offsetMs - offset) <= 100);
+    }
+}
+
 void testDirectStreamResumeTimeline() {
     constexpr int timelineBaseMs = 18 * 60 * 1000;
     constexpr int playerSampleMs = 14000;
@@ -104,6 +124,7 @@ void testWatermarkCannotDominateAlignment() {
 
 int main() {
     testPositiveAndNegativeOffsets();
+    testLargeBroadcastAndRecapOffsets();
     testDirectStreamResumeTimeline();
     testUncertainMatchesAreNotApplied();
     testWatermarkCannotDominateAlignment();

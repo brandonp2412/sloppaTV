@@ -100,7 +100,7 @@ public:
 
     [[nodiscard]] const std::vector<SubtitleCue>& subtitleCues() const { return activeSubtitleCues_; }
 
-    void setSubtitleOffsetMs(int offsetMs) { subtitleOffsetMs_ = std::clamp(offsetMs, -30000, 30000); }
+    void setSubtitleOffsetMs(int offsetMs) { subtitleOffsetMs_ = std::clamp(offsetMs, -120000, 120000); }
 
     [[nodiscard]] int subtitleOffsetMs() const { return subtitleOffsetMs_; }
 

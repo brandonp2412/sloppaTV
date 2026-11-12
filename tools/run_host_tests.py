@@ -136,6 +136,7 @@ CPP_TESTS = [
     "similar_prefetch_controller_test.cpp",
     "status_overlay_renderer_test.cpp",
     "status_overlay_state_test.cpp",
+    "subtitle_auto_sync_test.cpp",
     "subtitle_load_executor_test.cpp",
     "subtitle_policy_test.cpp",
     "system_text_input_test.cpp",

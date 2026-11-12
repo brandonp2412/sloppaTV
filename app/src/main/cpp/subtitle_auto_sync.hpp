@@ -31,7 +31,7 @@ inline int subtitleSyncLogicalSampleStart(int playerSampleMs, int timelineBaseMs
 }
 
 inline SubtitleSyncPeak findSubtitleSyncPeak(const std::vector<uint8_t>& speech, const std::vector<SubtitleCue>& cues,
-                                             int sampleStartMs, int maxOffsetMs = 30000) {
+                                             int sampleStartMs, int maxOffsetMs = 120000) {
     SubtitleSyncPeak result;
     if (speech.empty() || cues.empty() || maxOffsetMs < 0) return result;
 

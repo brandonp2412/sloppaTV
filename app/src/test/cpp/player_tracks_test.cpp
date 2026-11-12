@@ -43,6 +43,13 @@ int main() {
     assert(state.activeSubtitleCue(600) == nullptr);
     state.setSubtitleOffsetMs(-100);
     assert(state.activeSubtitleCue(0)->text == "first");
+    state.setSubtitleOffsetMs(110000);
+    assert(state.subtitleOffsetMs() == 110000);
+    assert(state.activeSubtitleCue(110100)->text == "first");
+    state.setSubtitleOffsetMs(500000);
+    assert(state.subtitleOffsetMs() == 120000);
+    state.setSubtitleOffsetMs(-500000);
+    assert(state.subtitleOffsetMs() == -120000);
     state.setSubtitleOffsetMs(0);
 
     state.setSubtitleEnabled(false);
