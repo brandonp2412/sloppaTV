@@ -63,6 +63,34 @@ inline int playbackAudioIndexForItem(const JellyfinItem& item, const std::option
     return audioIndexForQueuePreference(candidates, languagePreference);
 }
 
+inline const JellyfinSubtitleStream*
+playbackDiscoveredSubtitleAtIndex(const std::vector<JellyfinSubtitleStream>& discovered, int streamIndex) {
+    if (streamIndex < 0) return nullptr;
+    const auto it = std::find_if(discovered.begin(), discovered.end(),
+                                 [streamIndex](const auto& track) { return track.index == streamIndex; });
+    return it == discovered.end() ? nullptr : &*it;
+}
+
+// A source fallback can reuse an ff-index for a different language. Only
+// correct stale native selections; preserve deliberate external selections.
+inline bool playbackShouldRebindDiscoveredSubtitle(const std::vector<JellyfinSubtitleStream>& discovered,
+                                                   int selectedIndex, int preferredIndex,
+                                                   const std::string& desiredLanguage, bool selectedExternal = false) {
+    if (selectedExternal || preferredIndex < 0 || preferredIndex == selectedIndex) return false;
+    if (selectedIndex < 0) return true;
+    const auto* selected = playbackDiscoveredSubtitleAtIndex(discovered, selectedIndex);
+    return !selected || (!desiredLanguage.empty() && normalizeSubtitleLanguage(selected->language) != desiredLanguage);
+}
+
+inline bool playbackShouldDisableStaleDiscoveredSubtitle(const std::vector<JellyfinSubtitleStream>& discovered,
+                                                         int selectedIndex, int preferredIndex,
+                                                         const std::string& desiredLanguage,
+                                                         bool selectedExternal = false) {
+    if (selectedExternal || selectedIndex < 0 || preferredIndex >= 0 || desiredLanguage.empty()) return false;
+    const auto* selected = playbackDiscoveredSubtitleAtIndex(discovered, selectedIndex);
+    return !selected || normalizeSubtitleLanguage(selected->language) != desiredLanguage;
+}
+
 inline bool playbackSubtitleAllowed(const JellyfinSubtitleStream& subtitle,
                                     const std::vector<std::string>& allowedLanguages) {
     return subtitleLanguageAllowed(subtitle.language, allowedLanguages);

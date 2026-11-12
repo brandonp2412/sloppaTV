@@ -836,18 +836,42 @@ public:
                     });
                 }
                 if (!subtitles.empty()) {
+                    // Remux can change the backing release when it falls back.
+                    // Its previous subtitle ff-index may now be another language
+                    // (S4E15: English at 4 in one source, Danish at 4 in another).
+                    // Reconcile using the actual player's demuxed tracks, never
+                    // just the older server-provided index list.
+                    const auto policy = trackSelectionPolicy();
+                    auto discoveredItem = coordinator_.session().activeItem();
+                    discoveredItem.subtitles = subtitles;
+                    const int selectedIndex = coordinator_.session().activeTarget().subtitleStreamIndex;
+                    const auto* selectedBefore = coordinator_.selectedSubtitleStream();
+                    const bool externalSelection =
+                        selectedBefore && selectedBefore->isExternal && !selectedBefore->discoveredByPlayer;
+                    const int preferred = playbackAutoDiscoveredSubtitleIndexForItem(
+                        discoveredItem, coordinator_.session().activeTarget().audioStreamIndex, policy,
+                        activeDecodeMode() == PlaybackDecodeMode::Software);
+                    const auto* saved = playbackSeriesTrackPreferences(discoveredItem, policy);
+                    const std::string desiredLanguage =
+                        saved && saved->subtitleLanguage && !saved->subtitleLanguage->empty()
+                            ? normalizeSubtitleLanguage(*saved->subtitleLanguage)
+                            : (policy.autoSubtitles ? normalizeSubtitleLanguage(policy.autoSubtitleLanguage)
+                                                    : std::string{});
+                    const bool shouldRebind = playbackShouldRebindDiscoveredSubtitle(
+                        subtitles, selectedIndex, preferred, desiredLanguage, externalSelection);
+                    const bool shouldDisable = playbackShouldDisableStaleDiscoveredSubtitle(
+                        subtitles, selectedIndex, preferred, desiredLanguage, externalSelection);
                     coordinator_.session().mergeEmbeddedSubtitles(subtitles);
                     embeddedSubtitleDiscoveryDone_ = true;
-                    if (!coordinator_.selectedSubtitleStream()) {
-                        const auto& item = coordinator_.session().activeItem();
-                        const int preferred = playbackAutoDiscoveredSubtitleIndexForItem(
-                            item, coordinator_.session().activeTarget().audioStreamIndex, trackSelectionPolicy(),
-                            activeDecodeMode() == PlaybackDecodeMode::Software);
-                        if (preferred >= 0 && player_.selectEmbeddedSubtitleStream(preferred)) {
-                            coordinator_.selectSubtitleStream(preferred);
-                            __android_log_print(ANDROID_LOG_INFO, "SloppaTV",
-                                                "Auto-selected discovered subtitle stream %d", preferred);
-                        }
+                    if (shouldRebind && player_.selectEmbeddedSubtitleStream(preferred)) {
+                        coordinator_.selectPlayerSubtitleStream(preferred);
+                        __android_log_print(ANDROID_LOG_INFO, "SloppaTV",
+                                            "Corrected discovered subtitle stream from %d to %d", selectedIndex,
+                                            preferred);
+                    } else if (shouldDisable) {
+                        // The previous source's English ff-index now belongs to
+                        // another language. Do not render misleading subtitles.
+                        if (player_.disableSubtitles()) coordinator_.disableSubtitleRendering();
                     }
                     __android_log_print(ANDROID_LOG_INFO, "SloppaTV", "Discovered %zu embedded subtitle tracks",
                                         subtitles.size());

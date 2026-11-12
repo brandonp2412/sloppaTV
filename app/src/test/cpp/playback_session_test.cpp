@@ -91,6 +91,30 @@ int main() {
     assert(state.activeItem().subtitles.size() == 1);
     assert(state.activeItem().subtitles.front().title == "Full Subtitles [P9]");
 
+    // Real demuxed tracks override a stale server external track at the
+    // same ff-index after source replacement.
+    auto collidedItem = state.activeItem();
+    collidedItem.subtitles = {{
+        .index = 3,
+        .codec = "srt",
+        .language = "eng",
+        .title = "External English",
+        .isExternal = true,
+        .deliveryUrl = "https://media.test/external.srt",
+    }};
+    state.setActive(collidedItem, state.activeTarget());
+    state.mergeEmbeddedSubtitles({{
+        .index = 3,
+        .codec = "dvd_subtitle",
+        .language = "dan",
+        .title = "Danish",
+        .discoveredByPlayer = true,
+    }});
+    assert(state.activeItem().subtitles.size() == 1);
+    assert(state.activeItem().subtitles.front().language == "dan");
+    assert(!state.activeItem().subtitles.front().isExternal);
+    assert(state.activeItem().subtitles.front().deliveryUrl.empty());
+
     state.activeTarget().audioStreamIndex = 7;
     assert(state.activeTarget().audioStreamIndex == 7);
 

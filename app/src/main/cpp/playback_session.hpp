@@ -141,6 +141,13 @@ public:
                 if (!track.codec.empty()) existing->codec = track.codec;
                 if (!track.language.empty()) existing->language = track.language;
                 if (!track.title.empty()) existing->title = track.title;
+                // The active demuxer's ff-index is authoritative after Remux
+                // falls back to another release. Do not leave an earlier
+                // server-side external track at the same index marked external.
+                existing->forced = track.forced;
+                existing->isDefault = track.isDefault;
+                existing->isExternal = false;
+                existing->deliveryUrl.clear();
                 existing->discoveredByPlayer = true;
             }
         }

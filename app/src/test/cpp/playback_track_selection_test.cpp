@@ -152,6 +152,21 @@ int main() {
     autoPolicy.autoSubtitleSourceLanguage = "any";
     assert(playbackAutoSubtitleIndexForItem(item, 3, autoPolicy) == 6);
 
+    // Changing source reuses ff-index 4: English becomes Danish. Rebind it
+    // to a new English text index, but preserve external and off selections.
+    const std::vector<JellyfinSubtitleStream> switchedTracks = {
+        {.index = 4, .codec = "srt", .language = "dan", .title = "Danish", .discoveredByPlayer = true},
+        {.index = 6, .codec = "srt", .language = "eng", .title = "English SDH", .discoveredByPlayer = true},
+    };
+    assert(playbackShouldRebindDiscoveredSubtitle(switchedTracks, 4, 6, "eng"));
+    assert(playbackShouldRebindDiscoveredSubtitle(switchedTracks, -1, 6, "eng"));
+    assert(!playbackShouldRebindDiscoveredSubtitle(switchedTracks, 6, 6, "eng"));
+    assert(!playbackShouldRebindDiscoveredSubtitle(switchedTracks, 4, 6, "eng", true));
+    assert(playbackShouldDisableStaleDiscoveredSubtitle(switchedTracks, 4, -1, "eng"));
+    assert(!playbackShouldDisableStaleDiscoveredSubtitle(switchedTracks, 4, -1, "dan"));
+    assert(!playbackShouldDisableStaleDiscoveredSubtitle(switchedTracks, 4, -1, "eng", true));
+    assert(!playbackShouldDisableStaleDiscoveredSubtitle(switchedTracks, -1, -1, "eng"));
+
     // Friends S4E15: Russian "Dais" at index 5 and English SDH at index 6.
     JellyfinItem friends;
     friends.audios = {{.index = 4, .codec = "ac3", .language = "eng", .title = "Original", .isDefault = true}};
