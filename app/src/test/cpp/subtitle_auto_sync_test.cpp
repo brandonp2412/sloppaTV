@@ -112,6 +112,20 @@ void testLongSampleConfidenceAndMismatchedTracks() {
     assert(!decideSubtitleSync(wrongModerate, wrongAggressive, 300000, 76).confident);
 }
 
+void testProviderCreditsNeverCountAsSpeech() {
+    const std::vector<SubtitleCue> credits{
+        {6000, 12000, "Watch Online Movies and Series for FREE\nwww.osdb.link/lm"},
+        {20000, 24000, "Original Air Date on January 18, 2012"},
+        {25000, 29000, "== sync, corrected by elderman =="},
+    };
+    assert(subtitleSyncCueIsMetadata(credits[0]));
+    assert(subtitleSyncCueIsMetadata(credits[1]));
+    assert(subtitleSyncCueIsMetadata(credits[2]));
+    assert(!subtitleSyncCueIsMetadata({0, 2000, "spoken dialogue"}));
+    const auto score = findSubtitleSyncPeak(makeSpeech(makeCues(0), 0, 1200, 2), credits, 0);
+    assert(score.correlation == -1.0);
+}
+
 void testWatermarkCannotDominateAlignment() {
     const auto cues = makeCues(0);
     auto withAd = cues;
@@ -127,6 +141,7 @@ int main() {
     testLargeBroadcastAndRecapOffsets();
     testDirectStreamResumeTimeline();
     testUncertainMatchesAreNotApplied();
+    testProviderCreditsNeverCountAsSpeech();
     testWatermarkCannotDominateAlignment();
     testLongSampleConfidenceAndMismatchedTracks();
 }

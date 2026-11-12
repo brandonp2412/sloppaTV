@@ -286,7 +286,7 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
     const int matchingCues =
         static_cast<int>(std::count_if(request.cues.begin(), request.cues.end(), [&](const SubtitleCue& cue) {
             return cue.startMs < subtitleSampleStartMs + result.audioMs && cue.endMs > subtitleSampleStartMs &&
-                   cue.endMs - cue.startMs <= 12000;
+                   cue.endMs - cue.startMs <= 12000 && !subtitleSyncCueIsMetadata(cue);
         }));
     const SubtitleSyncPeak score2 = findSubtitleSyncPeak(moderate, request.cues, subtitleSampleStartMs);
     const SubtitleSyncPeak score3 = findSubtitleSyncPeak(aggressive, request.cues, subtitleSampleStartMs);

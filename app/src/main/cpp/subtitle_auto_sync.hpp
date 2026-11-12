@@ -4,8 +4,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cctype>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 // An audio probe supplies one 10 ms speech/non-speech observation per frame.
@@ -30,6 +32,16 @@ inline int subtitleSyncLogicalSampleStart(int playerSampleMs, int timelineBaseMs
     return std::max(0, playerSampleMs) + std::max(0, timelineBaseMs);
 }
 
+// Subtitle credits, ads and delivery URLs aren't spoken dialogue. Exclude them
+// from alignment while leaving their rendering untouched.
+inline bool subtitleSyncCueIsMetadata(const SubtitleCue& cue) {
+    std::string text = cue.text;
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::tolower(c); });
+    return text.find("www.") != std::string::npos || text.find("http://") != std::string::npos ||
+           text.find("https://") != std::string::npos || text.find("original air date") != std::string::npos ||
+           text.find("sync, corrected by") != std::string::npos || text.find("subtitles by") != std::string::npos;
+}
+
 inline SubtitleSyncPeak findSubtitleSyncPeak(const std::vector<uint8_t>& speech, const std::vector<SubtitleCue>& cues,
                                              int sampleStartMs, int maxOffsetMs = 120000) {
     SubtitleSyncPeak result;
@@ -43,7 +55,7 @@ inline SubtitleSyncPeak findSubtitleSyncPeak(const std::vector<uint8_t>& speech,
     std::vector<uint8_t> cueActive(static_cast<size_t>(width), 0);
     const int64_t maskStartMs = static_cast<int64_t>(sampleStartMs) - static_cast<int64_t>(padding) * kFrameMs;
     for (const SubtitleCue& cue : cues) {
-        if (cue.endMs <= cue.startMs || cue.endMs - cue.startMs > 12000) continue;
+        if (cue.endMs <= cue.startMs || cue.endMs - cue.startMs > 12000 || subtitleSyncCueIsMetadata(cue)) continue;
         const int begin = static_cast<int>(
             std::clamp<int64_t>((static_cast<int64_t>(cue.startMs) - maskStartMs + 5) / kFrameMs, 0, width));
         const int end = static_cast<int>(
