@@ -82,6 +82,12 @@ def sync_screenshots(source: Path, destination: Path) -> None:
     if not source.is_dir():
         raise FileNotFoundError(f"screenshot source directory does not exist: {source}")
     files = screenshot_files(source)
+    # Lead with the richer movie-library screen, before the sparse search screen.
+    # Generated screenshot manifests may list search before browsing.
+    movie_index = next((index for index, path in enumerate(files) if path.stem.endswith("movie-browse")), None)
+    search_index = next((index for index, path in enumerate(files) if path.stem.endswith("search-catalog")), None)
+    if movie_index is not None and search_index is not None and movie_index > search_index:
+        files.insert(search_index, files.pop(movie_index))
     if not files:
         raise RuntimeError(f"no screenshots found in {source}")
     if len(files) > 8:

@@ -1,1 +1,1 @@
-sloppaTV
+sloppaTV: Jellyfin TV Client

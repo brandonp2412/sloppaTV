@@ -14,9 +14,9 @@
 <p align="center">
   <img src="fastlane/metadata/android/en-US/images/tvScreenshots/01-home.png" alt="sloppaTV home screen" width="100%">
   <br>
-  <img src="fastlane/metadata/android/en-US/images/tvScreenshots/02-search-catalog.png" alt="sloppaTV search catalog" width="100%">
+  <img src="fastlane/metadata/android/en-US/images/tvScreenshots/02-movie-browse.png" alt="sloppaTV movie browser" width="100%">
   <br>
-  <img src="fastlane/metadata/android/en-US/images/tvScreenshots/03-movie-browse.png" alt="sloppaTV movie browser" width="100%">
+  <img src="fastlane/metadata/android/en-US/images/tvScreenshots/03-search-catalog.png" alt="sloppaTV search catalog" width="100%">
   <br>
   <img src="fastlane/metadata/android/en-US/images/tvScreenshots/04-movie-details.png" alt="sloppaTV movie details" width="100%">
   <br>
