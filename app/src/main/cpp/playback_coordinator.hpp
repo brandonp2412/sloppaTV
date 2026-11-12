@@ -871,7 +871,9 @@ public:
         return playbackTrackLabel(sessionState_.activeItem(), trackState_, kind);
     }
 
-    void applySubtitleAutoSync(int offsetMs) { trackState_.setSubtitleOffsetMs(offsetMs); }
+    void applySubtitleAutoSync(int offsetMs, double timeScale = 1.0) {
+        trackState_.setSubtitleTimeWarp(offsetMs, timeScale);
+    }
 
     [[nodiscard]] int subtitleOffsetMs() const { return trackState_.subtitleOffsetMs(); }
 

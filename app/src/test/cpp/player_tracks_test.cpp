@@ -52,6 +52,19 @@ int main() {
     assert(state.subtitleOffsetMs() == -120000);
     state.setSubtitleOffsetMs(0);
 
+    // Subtitle cues can use a different frame-rate clock than the video.
+    const double palScale = 24000.0 / 25025.0;
+    state.applySubtitle(7, "English", {{1200000, 1202000, "pal line"}});
+    state.setSubtitleTimeWarp(2400, palScale);
+    assert(std::abs(state.subtitleTimeScale() - palScale) < 0.00001);
+    const int palStartMs = static_cast<int>(std::lround(1200000 * palScale + 2400));
+    const int palEndMs = static_cast<int>(std::lround(1202000 * palScale + 2400));
+    assert(state.activeSubtitleCue(palStartMs - 10) == nullptr);
+    assert(state.activeSubtitleCue(palStartMs + 10)->text == "pal line");
+    assert(state.activeSubtitleCue(palEndMs + 10) == nullptr);
+    state.setSubtitleOffsetMs(0);
+    assert(state.subtitleTimeScale() == 1.0);
+
     state.setSubtitleEnabled(false);
     assert(state.activeSubtitleCue(600) == nullptr);
     state.setSubtitleEnabled(true);
@@ -68,6 +81,7 @@ int main() {
     state.setSubtitleOffsetMs(2500);
     state.failSelectedSubtitle();
     assert(state.subtitleOffsetMs() == 0);
+    assert(state.subtitleTimeScale() == 1.0);
     assert(!state.subtitleBusy());
     assert(state.selectedSubtitleServerIndex() == -1);
     assert(state.activeSubtitleServerIndex() == -1);

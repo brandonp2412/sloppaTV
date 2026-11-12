@@ -1715,11 +1715,13 @@ private:
                                 completion.itemId.c_str(), completion.result.failure.c_str());
             return;
         }
-        playbackCoordinator_.applySubtitleAutoSync(completion.result.decision.offsetMs);
-        __android_log_print(ANDROID_LOG_INFO, kTag,
-                            "Subtitle auto-sync applied item=%.8s index=%d offsetMs=%d audioMs=%d confidence=%.3f",
-                            completion.itemId.c_str(), completion.subtitleIndex, completion.result.decision.offsetMs,
-                            completion.result.audioMs, completion.result.decision.agreement);
+        playbackCoordinator_.applySubtitleAutoSync(completion.result.decision.offsetMs,
+                                                   completion.result.decision.timeScale);
+        __android_log_print(
+            ANDROID_LOG_INFO, kTag,
+            "Subtitle auto-sync applied item=%.8s index=%d offsetMs=%d scale=%.6f audioMs=%d confidence=%.3f",
+            completion.itemId.c_str(), completion.subtitleIndex, completion.result.decision.offsetMs,
+            completion.result.decision.timeScale, completion.result.audioMs, completion.result.decision.agreement);
     }
 
     void applyPlaybackCompletionApplicationEffects(PlaybackCompletionApplicationEffects effects) {

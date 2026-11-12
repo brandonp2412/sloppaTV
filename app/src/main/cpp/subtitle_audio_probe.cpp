@@ -284,14 +284,11 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
     }
     const int subtitleSampleStartMs =
         subtitleSyncLogicalSampleStart(request.sampleStartMs, request.subtitleTimelineBaseMs);
-    const int matchingCues =
-        static_cast<int>(std::count_if(request.cues.begin(), request.cues.end(), [&](const SubtitleCue& cue) {
-            return cue.startMs < subtitleSampleStartMs + result.audioMs && cue.endMs > subtitleSampleStartMs &&
-                   cue.endMs - cue.startMs <= 12000 && !subtitleSyncCueIsMetadata(cue);
-        }));
-    const SubtitleSyncPeak score2 = findSubtitleSyncPeak(moderate, request.cues, subtitleSampleStartMs);
-    const SubtitleSyncPeak score3 = findSubtitleSyncPeak(aggressive, request.cues, subtitleSampleStartMs);
-    result.decision = decideSubtitleSync(score2, score3, result.audioMs, matchingCues);
+    const auto evaluation = evaluateSubtitleTimeWarp(moderate, aggressive, request.cues, subtitleSampleStartMs);
+    const int matchingCues = evaluation.matchingCues;
+    const SubtitleSyncPeak& score2 = evaluation.moderate;
+    const SubtitleSyncPeak& score3 = evaluation.aggressive;
+    result.decision = evaluation.decision;
     if (!result.decision.confident) {
         result.failure = "subtitle timing match lacked confidence";
         result.failure += " startMs=" + std::to_string(subtitleSampleStartMs) +

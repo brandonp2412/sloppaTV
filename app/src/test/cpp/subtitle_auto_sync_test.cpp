@@ -144,6 +144,41 @@ void testWatermarkCannotDominateAlignment() {
     const auto result = findSubtitleSyncPeak(speech, withAd, 0);
     assert(std::abs(result.offsetMs - 1200) <= 100);
 }
+
+void testPalFrameRateDriftCorrection() {
+    // Captions from a 23.976 fps master must be accelerated for a 25 fps
+    // playback source; a constant offset is wrong at the end of the episode.
+    std::vector<SubtitleCue> cues;
+    for (int t = 1500, i = 0; t < 43 * 60000; ++i) {
+        cues.push_back({t, t + 800 + (i * 17) % 1300, "dialogue"});
+        t += 2500 + (i * 251) % 3700;
+    }
+    constexpr int sampleStartMs = 15 * 60000;
+    constexpr int mediaOffsetMs = 2400;
+    const auto makeAudio = [&](double actualScale, int mode) {
+        std::vector<uint8_t> audio(18000, 0);
+        for (size_t i = 0; i < audio.size(); ++i) {
+            const double cueTime = (sampleStartMs + static_cast<int>(i) * 10 - mediaOffsetMs) / actualScale;
+            const auto it = std::upper_bound(cues.begin(), cues.end(), cueTime,
+                                             [](double value, const SubtitleCue& cue) { return value < cue.startMs; });
+            const bool spoken = it != cues.begin() && cueTime < (it - 1)->endMs;
+            audio[i] = (spoken && (mode == 2 || i % 4 != 0)) || (!spoken && i % 167 == 0);
+        }
+        return audio;
+    };
+    for (double scale : {1.0, 24.0 / 25.0, 24000.0 / 25025.0, 25.0 / 24.0}) {
+        const auto result = evaluateSubtitleTimeWarp(makeAudio(scale, 2), makeAudio(scale, 3), cues, sampleStartMs);
+        assert(result.decision.confident);
+        assert(std::abs(result.decision.timeScale - scale) <= 0.0011);
+        assert(std::abs(result.decision.offsetMs - mediaOffsetMs) <= 500);
+    }
+    // Nonstandard drift must not be misdiagnosed as a trustworthy fixed offset.
+    const auto unsupported = evaluateSubtitleTimeWarp(makeAudio(0.973, 2), makeAudio(0.973, 3), cues, sampleStartMs);
+    assert(!unsupported.decision.confident);
+    const auto unrelated = std::vector<uint8_t>(18000, 1);
+    assert(!evaluateSubtitleTimeWarp(unrelated, unrelated, cues, sampleStartMs).decision.confident);
+}
+
 } // namespace
 
 int main() {
@@ -155,4 +190,5 @@ int main() {
     testProviderCreditsNeverCountAsSpeech();
     testWatermarkCannotDominateAlignment();
     testLongSampleConfidenceAndMismatchedTracks();
+    testPalFrameRateDriftCorrection();
 }

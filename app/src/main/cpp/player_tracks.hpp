@@ -3,6 +3,7 @@
 #include "subtitle_policy.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <utility>
@@ -23,6 +24,7 @@ public:
         activeSubtitleCues_.clear();
         subtitleCueMaxEndMs_.clear();
         subtitleOffsetMs_ = 0;
+        subtitleTimeScale_ = 1.0;
         subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
         activeSubtitleServerIndex_ = -1;
@@ -69,6 +71,7 @@ public:
     void applySubtitle(int serverIndex, std::string language, std::vector<SubtitleCue> cues) {
         activeSubtitleCues_ = std::move(cues);
         subtitleOffsetMs_ = 0;
+        subtitleTimeScale_ = 1.0;
         subtitleCueMaxEndMs_.clear();
         subtitleCueMaxEndMs_.reserve(activeSubtitleCues_.size());
         int maxEndMs = 0;
@@ -90,6 +93,7 @@ public:
         activeSubtitleCues_.clear();
         subtitleCueMaxEndMs_.clear();
         subtitleOffsetMs_ = 0;
+        subtitleTimeScale_ = 1.0;
         subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
     }
@@ -100,9 +104,16 @@ public:
 
     [[nodiscard]] const std::vector<SubtitleCue>& subtitleCues() const { return activeSubtitleCues_; }
 
-    void setSubtitleOffsetMs(int offsetMs) { subtitleOffsetMs_ = std::clamp(offsetMs, -120000, 120000); }
+    void setSubtitleOffsetMs(int offsetMs) { setSubtitleTimeWarp(offsetMs, 1.0); }
+
+    void setSubtitleTimeWarp(int offsetMs, double timeScale) {
+        subtitleOffsetMs_ = std::clamp(offsetMs, -120000, 120000);
+        subtitleTimeScale_ = std::isfinite(timeScale) ? std::clamp(timeScale, 0.9, 1.1) : 1.0;
+    }
 
     [[nodiscard]] int subtitleOffsetMs() const { return subtitleOffsetMs_; }
+
+    [[nodiscard]] double subtitleTimeScale() const { return subtitleTimeScale_; }
 
     [[nodiscard]] const std::string& subtitleLanguage() const { return activeSubtitleLanguage_; }
 
@@ -110,7 +121,8 @@ public:
 
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {
         if (!activeSubtitleEnabled_ || activeSubtitleCues_.empty()) return nullptr;
-        positionMs -= subtitleOffsetMs_;
+        positionMs =
+            static_cast<int>(std::lround((static_cast<double>(positionMs) - subtitleOffsetMs_) / subtitleTimeScale_));
 
         if (subtitleCueHint_ < activeSubtitleCues_.size() &&
             activeSubtitleCues_[subtitleCueHint_].startMs <= positionMs) {
@@ -143,6 +155,7 @@ public:
 private:
     bool subtitleBusy_ = false;
     int subtitleOffsetMs_ = 0;
+    double subtitleTimeScale_ = 1.0;
     std::vector<SubtitleCue> activeSubtitleCues_;
     std::vector<int> subtitleCueMaxEndMs_;
     mutable size_t subtitleCueHint_ = 0;
