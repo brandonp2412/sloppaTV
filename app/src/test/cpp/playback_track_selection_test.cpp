@@ -333,6 +333,10 @@ int main() {
     assert(exactSubtitle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     exactSubtitle = planPlaybackSubtitleTrackSelection(item, -1, PlaybackMethod::DirectPlay, {"eng"});
     assert(exactSubtitle.action == PlaybackSubtitleCycleAction::DisableInPlayer);
+    exactSubtitle = planPlaybackSubtitleTrackSelection(item, -1, PlaybackMethod::DirectStream, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::DisableInPlayer);
+    exactSubtitle = planPlaybackSubtitleTrackSelection(item, -1, PlaybackMethod::Transcode, {"eng"});
+    assert(exactSubtitle.action == PlaybackSubtitleCycleAction::RestartPlayback);
     exactSubtitle = planPlaybackSubtitleTrackSelection(item, 999, PlaybackMethod::DirectPlay, {"eng"});
     assert(exactSubtitle.action == PlaybackSubtitleCycleAction::NoSubtitles);
     exactSubtitle = planPlaybackSubtitleTrackSelection(item, 8, PlaybackMethod::DirectPlay, {"eng"});
@@ -350,7 +354,7 @@ int main() {
 
     subtitleCycle =
         planPlaybackSubtitleTrackCycle(item, 7, PlaybackMethod::DirectStream, carriedPolicy.allowedSubtitleLanguages);
-    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::RestartPlayback);
+    assert(subtitleCycle.action == PlaybackSubtitleCycleAction::DisableInPlayer);
     assert(subtitleCycle.subtitleStreamIndex == kSubtitleOffIndex);
     assert(!subtitleCycle.directPlayStream);
 

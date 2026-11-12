@@ -408,7 +408,10 @@ inline PlaybackSubtitleCyclePlan planPlaybackSubtitleTrackSelection(const Jellyf
         }
     }
     plan.subtitleStreamIndex = requestedSubtitleIndex;
-    if (playbackMethod == PlaybackMethod::DirectPlay && requestedSubtitleIndex < 0) {
+    // DirectStream text is rendered locally just like DirectPlay text. Disabling
+    // it must not replace the HLS session and invalidate its timeline/probe.
+    if ((playbackMethod == PlaybackMethod::DirectPlay || playbackMethod == PlaybackMethod::DirectStream) &&
+        requestedSubtitleIndex < 0) {
         plan.action = PlaybackSubtitleCycleAction::DisableInPlayer;
         return plan;
     }
