@@ -131,7 +131,11 @@ void testProviderCreditsNeverCountAsSpeech() {
     assert(subtitleSyncCueIsMetadata(credits[0]));
     assert(subtitleSyncCueIsMetadata(credits[1]));
     assert(subtitleSyncCueIsMetadata(credits[2]));
+    assert(subtitleSyncCueIsMetadata({11000, 17074, "Advertise your product or brand here"}));
+    assert(subtitleSyncCueIsMetadata({0, 2000, "contact OpenSubtitles.org today"}));
+    assert(subtitleSyncCueIsMetadata({0, 2000, "Synced and corrected by a contributor"}));
     assert(!subtitleSyncCueIsMetadata({0, 2000, "spoken dialogue"}));
+    assert(!subtitleSyncCueIsMetadata({0, 2000, "We should advertise your product tomorrow."}));
     const auto score = findSubtitleSyncPeak(makeSpeech(makeCues(0), 0, 1200, 2), credits, 0);
     assert(score.correlation == -1.0);
 }
@@ -143,6 +147,27 @@ void testWatermarkCannotDominateAlignment() {
     const auto speech = makeSpeech(cues, 0, 1200, 2);
     const auto result = findSubtitleSyncPeak(speech, withAd, 0);
     assert(std::abs(result.offsetMs - 1200) <= 100);
+}
+
+void testFixedOffsetVadWindowDisagreement() {
+    std::vector<SubtitleCue> cues;
+    for (int time = 1500, i = 0; time < 175000; ++i) {
+        cues.push_back({time, time + 800 + (i * 173) % 1300, "dialogue"});
+        time += 2500 + (i * 251) % 3700;
+    }
+    const auto audio = [&](int lateOffset) {
+        std::vector<uint8_t> speech(18000, 0);
+        for (size_t i = 0; i < speech.size(); ++i) {
+            const int position = static_cast<int>(i) * 10 - (i < 9000 ? 3300 : lateOffset);
+            speech[i] = std::any_of(cues.begin(), cues.end(), [&](const SubtitleCue& cue) {
+                return cue.startMs <= position && position < cue.endMs;
+            });
+        }
+        return speech;
+    };
+    const auto aggressive = audio(3300);
+    assert(subtitleTimeWarpStable(audio(4500), aggressive, cues, 0, 1.0));
+    assert(!subtitleTimeWarpStable(audio(5500), aggressive, cues, 0, 1.0));
 }
 
 void testPalFrameRateDriftCorrection() {
@@ -190,5 +215,6 @@ int main() {
     testProviderCreditsNeverCountAsSpeech();
     testWatermarkCannotDominateAlignment();
     testLongSampleConfidenceAndMismatchedTracks();
+    testFixedOffsetVadWindowDisagreement();
     testPalFrameRateDriftCorrection();
 }

@@ -131,9 +131,11 @@ inline int playerAudioOrdinal(const PlaybackTarget& target, const JellyfinItem& 
 inline int subtitlePickerPriority(const JellyfinSubtitleStream& track) {
     switch (subtitleStrategy(track.codec)) {
     case SubtitleStrategy::ClientText:
-        return track.isExternal ? 1 : 0;
+        return track.isExternal ? 2 : 0;
     case SubtitleStrategy::ClientStyled:
-        return 2;
+        // Embedded captions were muxed with this release; provider SRTs may
+        // belong to a different edit even when their language matches.
+        return track.isExternal ? 2 : 1;
     case SubtitleStrategy::ClientEmbedded:
         return 3;
     case SubtitleStrategy::ServerTranscode:

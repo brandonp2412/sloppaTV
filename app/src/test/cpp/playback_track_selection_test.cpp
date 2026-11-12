@@ -44,6 +44,11 @@ int main() {
     serverOnlySrt.isExternal = false;
     assert(subtitlePickerPriority(serverOnlySrt) < subtitlePickerPriority(externalSrt));
     assert(subtitlePickerPriority(externalSrt) < subtitlePickerPriority(bitmap));
+    assert(subtitlePickerPriority(serverOnlyAss) < subtitlePickerPriority(externalSrt));
+    assert(subtitlePickerPriority(serverOnlySrt) < subtitlePickerPriority(serverOnlyAss));
+    // S2E4: provider SRT must not outrank ASS muxed with the actual episode.
+    const std::vector<JellyfinSubtitleStream> releaseTracks{externalSrt, serverOnlyAss};
+    assert(preferredTextSubtitleForLanguage(releaseTracks, "eng", {"eng"})->codec == "ass");
 
     JellyfinItem item;
     item.audios = {

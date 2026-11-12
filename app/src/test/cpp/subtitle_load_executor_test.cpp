@@ -166,13 +166,25 @@ int main() {
     std::filesystem::remove_all(cacheRoot, ec);
     std::filesystem::create_directories(cacheRoot / "subtitles");
     {
-        std::ofstream cached(cacheRoot / "subtitles" / "episode-1-6.srt", std::ios::binary);
+        std::ofstream cached(cacheRoot / "subtitles" / "episode-1-source-1-6.srt", std::ios::binary);
         cached << kValidSrt;
     }
     client.calls.clear();
     assert(executor.load(session, request(6, {subtitle(6, "srt")}, {}, cacheRoot.string())));
     assert(client.calls.empty());
     assert(completions.events.back().loadedSubtitle.index == 6);
+    // A release switch with the same ff-index must fetch its own captions.
+    client.calls.clear();
+    client.textResponses[6] = success("1\n00:00:05,000 --> 00:00:06,000\nOther release\n");
+    auto otherSource = request(6, {subtitle(6, "srt")}, {}, cacheRoot.string());
+    otherSource.mediaSourceId = "source-2";
+    assert(executor.load(session, std::move(otherSource)));
+    assert((client.calls == std::vector<std::string>{"text:6"}));
+    assert(completions.events.back().cues.front().startMs == 5000);
+    client.calls.clear();
+    assert(executor.load(session, request(6, {subtitle(6, "srt")}, {}, cacheRoot.string())));
+    assert(client.calls.empty());
+    assert(completions.events.back().cues.front().startMs == 1000);
     std::filesystem::remove_all(cacheRoot, ec);
 
     const size_t completionCount = completions.events.size();

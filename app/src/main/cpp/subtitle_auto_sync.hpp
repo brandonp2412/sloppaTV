@@ -41,7 +41,10 @@ inline bool subtitleSyncCueIsMetadata(const SubtitleCue& cue) {
     std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::tolower(c); });
     return text.find("www.") != std::string::npos || text.find("http://") != std::string::npos ||
            text.find("https://") != std::string::npos || text.find("original air date") != std::string::npos ||
-           text.find("sync, corrected by") != std::string::npos || text.find("subtitles by") != std::string::npos;
+           text.find("sync, corrected by") != std::string::npos || text.find("subtitles by") != std::string::npos ||
+           text.find("advertise your product or brand here") != std::string::npos ||
+           text.find("opensubtitles.org") != std::string::npos ||
+           text.find("synced and corrected by") != std::string::npos;
 }
 
 inline SubtitleSyncPeak findSubtitleSyncPeak(const std::vector<uint8_t>& speech, const std::vector<SubtitleCue>& cues,
@@ -184,10 +187,13 @@ inline bool subtitleTimeWarpStable(const std::vector<uint8_t>& moderateSpeech,
                                 earlyModerate.speechFrames >= 250 && lateModerate.speechFrames >= 250 &&
                                 earlyModerate.subtitleFrames >= 350 && lateModerate.subtitleFrames >= 350;
     if (!enoughEvidence) return timeScale == 1.0;
+    // VAD modes can disagree slightly on quiet speech. Keep the stricter
+    // bound for speed changes, which amplify errors throughout the episode.
+    const int modeToleranceMs = timeScale == 1.0 ? 1500 : 1000;
     return std::abs(earlyModerate.offsetMs - lateModerate.offsetMs) <= 1800 &&
            std::abs(earlyAggressive.offsetMs - lateAggressive.offsetMs) <= 1800 &&
-           std::abs(earlyModerate.offsetMs - earlyAggressive.offsetMs) <= 1000 &&
-           std::abs(lateModerate.offsetMs - lateAggressive.offsetMs) <= 1000;
+           std::abs(earlyModerate.offsetMs - earlyAggressive.offsetMs) <= modeToleranceMs &&
+           std::abs(lateModerate.offsetMs - lateAggressive.offsetMs) <= modeToleranceMs;
 }
 
 inline SubtitleTimeWarpEvaluation evaluateSubtitleTimeWarp(const std::vector<uint8_t>& moderateSpeech,

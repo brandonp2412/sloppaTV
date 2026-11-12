@@ -70,8 +70,10 @@ public:
                 if (!request.dataPath.empty()) {
                     const std::filesystem::path directory = std::filesystem::path(request.dataPath) / "subtitles";
                     const std::string format = subtitleTextFormat(candidate.codec);
-                    cacheFile = directory / (request.itemId + "-" + std::to_string(candidate.index) + "." +
-                                             (format.empty() ? "txt" : format));
+                    // Track indices belong to a release, not just an episode. Never reuse
+                    // captions from a previous source (including legacy item-only caches).
+                    cacheFile = directory / (request.itemId + "-" + request.mediaSourceId + "-" +
+                                             std::to_string(candidate.index) + "." + (format.empty() ? "txt" : format));
                     std::ifstream cached(cacheFile, std::ios::binary);
                     if (cached) {
                         subtitleBody.assign(std::istreambuf_iterator<char>(cached), std::istreambuf_iterator<char>());
