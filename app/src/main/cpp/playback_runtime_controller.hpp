@@ -147,9 +147,15 @@ public:
     }
 
     [[nodiscard]] PlaybackDecodeMode activeDecodeMode() const {
-        const std::string& itemId = coordinator_.session().activeItem().id;
-        return !itemId.empty() && itemId == softwareDecodeItemId_ ? PlaybackDecodeMode::Software
-                                                                  : PlaybackDecodeMode::Hardware;
+        const auto& active = coordinator_.session();
+        if (!active.activeItem().id.empty() && active.activeItem().id == softwareDecodeItemId_)
+            return PlaybackDecodeMode::Software;
+        if (playbackNeedsBitmapCompositing(active.activeItem(), active.activeTarget())) {
+            // MediaCodec's GPU-copy path can corrupt 10-bit video on some TVs.
+            return active.activeItem().videoBitDepth > 8 ? PlaybackDecodeMode::Software
+                                                        : PlaybackDecodeMode::HardwareComposite;
+        }
+        return PlaybackDecodeMode::Hardware;
     }
 
     void refreshTelemetry(bool force = false) {
@@ -295,7 +301,7 @@ public:
             const JellyfinSubtitleStream& selected = *plan.directPlayStream;
             const PlaybackMethod activeMethod = coordinator_.session().activeTarget().playMethod;
             const bool canCompositeEmbeddedBitmap =
-                activeDecodeMode() == PlaybackDecodeMode::Software && selected.discoveredByPlayer &&
+                activeDecodeMode() != PlaybackDecodeMode::Hardware && selected.discoveredByPlayer &&
                 activeMethod == PlaybackMethod::DirectPlay &&
                 canSwitchEmbeddedSubtitleInPlayer(plan.strategy, selected.isExternal);
             if ((usePlayerEmbeddedTextTrack(selected, activeMethod) ||
@@ -851,7 +857,7 @@ public:
                         selectedBefore && selectedBefore->isExternal && !selectedBefore->discoveredByPlayer;
                     const int preferred = playbackAutoDiscoveredSubtitleIndexForItem(
                         discoveredItem, coordinator_.session().activeTarget().audioStreamIndex, policy,
-                        activeDecodeMode() == PlaybackDecodeMode::Software);
+                        activeDecodeMode() != PlaybackDecodeMode::Hardware);
                     const auto* saved = playbackSeriesTrackPreferences(discoveredItem, policy);
                     const std::string desiredLanguage =
                         saved && saved->subtitleLanguage && !saved->subtitleLanguage->empty()

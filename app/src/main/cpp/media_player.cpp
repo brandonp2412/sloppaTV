@@ -390,14 +390,15 @@ bool NativeMediaPlayer::initializeLocked(JNIEnv* env, jobject surface, int buffe
     const std::string cacheSecs =
         durations.maxBufferMs > 0 ? std::to_string(std::max(30, durations.maxBufferMs / 1000)) : "120";
 
-    if (decodeMode == PlaybackDecodeMode::Software) {
-        // The legacy gpu VO can fail its software-frame upload path on Android
-        // environments where MediaCodec is unavailable (notably Waydroid),
-        // leaving audio running with no decoded video. gpu-next/libplacebo is
-        // included in our embedded mpv build and accepts the software yuv420p
-        // fallback while keeping the normal mediacodec_embed path untouched.
+    if (decodeMode != PlaybackDecodeMode::Hardware) {
+        // mediacodec_embed cannot composite bitmap (PGS/VobSub) subtitles.
+        // gpu-next renders subtitles over either copied MediaCodec frames or
+        // software-decoded frames. Avoid the hardware-copy path for 10-bit video
+        // because some Android decoders corrupt its GPU upload.
+        const char* hwdec = decodeMode == PlaybackDecodeMode::HardwareComposite ? "mediacodec-copy" : "no";
         if (!setOptionLocked("vo", "gpu-next", true, &error) ||
-            !setOptionLocked("gpu-context", "android", true, &error) || !setOptionLocked("hwdec", "no", true, &error)) {
+            !setOptionLocked("gpu-context", "android", true, &error) ||
+            !setOptionLocked("hwdec", hwdec, true, &error)) {
             return false;
         }
     } else {
@@ -601,7 +602,9 @@ void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int6
     __android_log_print(
         ANDROID_LOG_INFO, kTag, "Embedded playback requested start=%lldms audioOrdinal=%d subtitleStream=%d decoder=%s",
         static_cast<long long>(std::max<int64_t>(0, startPositionMs)), embeddedAudioOrdinal,
-        embeddedSubtitleStreamIndex, decodeMode == PlaybackDecodeMode::Software ? "software" : "mediacodec");
+        embeddedSubtitleStreamIndex,
+        decodeMode == PlaybackDecodeMode::Software ? "software"
+        : decodeMode == PlaybackDecodeMode::HardwareComposite ? "mediacodec-copy" : "mediacodec");
 }
 
 void NativeMediaPlayer::stop() {
