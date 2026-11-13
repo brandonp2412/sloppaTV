@@ -74,14 +74,25 @@ SubtitleAudioSyncResult executeSubtitleAudioSync(Client& client, JellyfinSession
     if (!subtitleProbeSessionCompatible(playback, target))
         return failure("independent subtitle probe resolved a different release or audio track");
     if (request.cancelled && request.cancelled()) return failure("audio probe cancelled");
+    // A separately negotiated HLS probe starts at its requested episode time.
+    // The independent transcoder's transport PTS origin is NOT comparable with
+    // the live player's PTS origin (on some Remux releases the origins differ by
+    // tens of minutes even while the audio starts at the episode opening).
+    // Decode in the probe's own zero-based clock, anchored to its requested base.
+    const int64_t firstBaseTicks = item.positionTicks;
+    if (firstBaseTicks < 0 || firstBaseTicks / 10000 > std::numeric_limits<int>::max())
+        return failure("independent subtitle probe timeline base overflow");
+    request.subtitleTimelineBaseMs = static_cast<int>(firstBaseTicks / 10000);
+    request.playbackTimelineOriginMs.reset();
+    request.playbackTimelineOrigin = {};
     request.verificationMediaUrl = [&](int sampleStartMs) -> std::optional<std::string> {
         if (request.cancelled && request.cancelled()) return std::nullopt;
         auto windowItem = item;
         const int64_t delta = static_cast<int64_t>(sampleStartMs) * 10000;
-        if ((delta < 0 && playback.startTicks < -delta) ||
-            (delta > 0 && playback.startTicks > std::numeric_limits<int64_t>::max() - delta))
+        if ((delta < 0 && firstBaseTicks < -delta) ||
+            (delta > 0 && firstBaseTicks > std::numeric_limits<int64_t>::max() - delta))
             return std::nullopt;
-        windowItem.positionTicks = playback.startTicks + delta;
+        windowItem.positionTicks = firstBaseTicks + delta;
         auto window = client.resolvePlayback(session, windowItem, maxBitrate, maxAudioChannels, overrides,
                                              playback.audioStreamIndex, kSubtitleOffIndex);
         if (!window.ok || window.value.playSessionId.empty() || window.value.playSessionId == playback.playSessionId)

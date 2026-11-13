@@ -155,6 +155,18 @@ void testProbeClockFallback() {
     // Timestamp discontinuities within the captured audio are unsafe.
     clock.observe(155.0, 155.0, 4000ULL * 32);
     assert(!clock.startMs());
+    SubtitleProbeClock isolatedStale;
+    for (int i = 1; i <= 14; ++i)
+        isolatedStale.observe(4.4 + i, 4.4 + i, i * 32000ULL);
+    isolatedStale.observe(15.328, 15.328, 15ULL * 32000);
+    for (int i = 16; i <= 34; ++i)
+        isolatedStale.observe(4.4 + i, 4.4 + i, i * 32000ULL);
+    assert(isolatedStale.startMs() && !isolatedStale.inconsistent());
+    assert(std::abs(*isolatedStale.startMs() - 4400) < 50);
+    SubtitleProbeClock actualJump;
+    for (int i = 1; i <= 13; ++i) actualJump.observe(4.4 + i, 4.4 + i, i * 32000ULL);
+    for (int i = 14; i <= 27; ++i) actualJump.observe(8.4 + i, 8.4 + i, i * 32000ULL);
+    assert(actualJump.inconsistent() && !actualJump.startMs());
     SubtitleProbeClock racing;
     for (int i = 0; i < 4; ++i) racing.observe(142.0, 144.0, 32000ULL * (i + 1));
     assert(!racing.startMs());

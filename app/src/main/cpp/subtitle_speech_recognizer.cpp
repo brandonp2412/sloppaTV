@@ -2,6 +2,7 @@
 #include "subtitle_speech_model.hpp"
 #include <whisper.h>
 #include <chrono>
+#include <android/log.h>
 #include <mutex>
 #include <thread>
 
@@ -40,8 +41,8 @@ std::vector<SubtitleSpeechWord> SubtitleSpeechRecognizer::recognize(const std::v
     std::function<bool()> abort = [&] {
         return (cancelled && cancelled()) || std::chrono::steady_clock::now() >= deadline;
     };
-    auto params = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH);
-    params.n_threads = static_cast<int>(std::clamp(std::thread::hardware_concurrency() / 2U, 1U, 4U));
+    auto params = whisper_full_default_params(WHISPER_SAMPLING_GREEDY);
+    params.n_threads = static_cast<int>(std::clamp(std::thread::hardware_concurrency() / 2U, 1U, 2U));
     params.language = "en";
     params.translate = false;
     params.no_context = true;
@@ -52,7 +53,7 @@ std::vector<SubtitleSpeechWord> SubtitleSpeechRecognizer::recognize(const std::v
     params.token_timestamps = true;
     params.max_len = 1;
     params.split_on_word = true;
-    params.beam_search.beam_size = 5;
+    params.greedy.best_of = 1;
     // No subtitle text is supplied as a prompt: recognition is independent evidence.
     params.initial_prompt = nullptr;
     params.abort_callback = [](void* data) { return (*static_cast<const std::function<bool()>*>(data))(); };
@@ -61,7 +62,16 @@ std::vector<SubtitleSpeechWord> SubtitleSpeechRecognizer::recognize(const std::v
         return !(*static_cast<const std::function<bool()>*>(data))();
     };
     params.encoder_begin_callback_user_data = &abort;
-    if (whisper_full(impl_->context, params, audio.data(), static_cast<int>(audio.size())) != 0 || abort()) return {};
+    const auto recognitionStart = std::chrono::steady_clock::now();
+    const int status = whisper_full(impl_->context, params, audio.data(), static_cast<int>(audio.size()));
+    const bool timedOutOrCancelled = abort();
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now() - recognitionStart).count();
+    __android_log_print(ANDROID_LOG_INFO, "sloppaTV/subsync",
+                        "Speech recognition inputMs=%zu elapsedMs=%lld status=%d aborted=%d segments=%d",
+                        audio.size() / 16U, static_cast<long long>(elapsed), status,
+                        timedOutOrCancelled, status == 0 ? whisper_full_n_segments(impl_->context) : 0);
+    if (status != 0 || timedOutOrCancelled) return {};
     std::vector<SubtitleSpeechWord> words;
     for (int segment = 0; segment < whisper_full_n_segments(impl_->context); ++segment) {
         const auto* text = whisper_full_get_segment_text(impl_->context, segment);

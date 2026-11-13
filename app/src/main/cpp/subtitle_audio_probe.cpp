@@ -335,6 +335,7 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
             if (actualStartMs < 0)
                 failure += " clockSamples=" + std::to_string(clock.observationCount()) +
                            " spreadMs=" + std::to_string(clock.spreadMs()) +
+                           " rawClockMs=" + clock.diagnosticClockSamples() +
                            " firstFrameMs=" + std::to_string(firstDecodedFrameMs) +
                            " startMs=" + std::to_string(request.sampleStartMs);
             return cleanEnd;
@@ -467,7 +468,10 @@ static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncR
     if (request.recognizeSpeech && dialogueWindow && audio.sampleRate == 16000) {
         int recognizedWords = 0;
         std::vector<SubtitleDialogueAnchor> allAnchors;
-        constexpr size_t clipSamples = 90U * 16000U;
+        // Keep independent Whisper work bounded on software-rendered emulators.
+        // A 90-second segment can exceed the recognizer's deadline and discard
+        // otherwise useful dialogue. Thirty seconds still spans several cues.
+        constexpr size_t clipSamples = 30U * 16000U;
         for (size_t begin = 0; begin < audio.samples.size(); begin += clipSamples) {
             if (request.cancelled && request.cancelled()) {
                 result.decision.confident = false;
@@ -480,7 +484,8 @@ static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncR
             samples.reserve(end - begin);
             for (size_t i = begin; i < end; ++i) samples.push_back(static_cast<float>(audio.samples[i]) / 32768.0F);
             auto words = request.recognizeSpeech(samples);
-            if (words.empty()) break;
+            // Silence and opening music do not invalidate a later spoken window.
+            if (words.empty()) continue;
             const int clipStartMs = static_cast<int>(begin / 16U);
             const int clipDurationMs = static_cast<int>((end - begin) / 16U);
             const int count = static_cast<int>(std::count_if(words.begin(), words.end(), [](const auto& word) {
@@ -596,6 +601,26 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
     const int relativeBaseMs = scopeBaseMs - request.subtitleTimelineBaseMs;
     const int lastStartMs = request.sourceDurationMs - scopeBaseMs - 300000;
     const std::vector<int> starts{relativeBaseMs, relativeBaseMs + lastStartMs / 2, relativeBaseMs + lastStartMs};
+    // Remux can give each independent verification HLS session an unrelated
+    // transport PTS epoch. Map it to the requested episode time instead. This
+    // also fixes the case where a 00:00 probe was mislabelled as 39:27.
+    const auto retargetWindow = [&](SubtitleAudioSyncRequest& window, int relativePositionMs) {
+        const int64_t logicalBase = static_cast<int64_t>(request.subtitleTimelineBaseMs) + relativePositionMs;
+        if (logicalBase < 0 || logicalBase > std::numeric_limits<int>::max()) return false;
+        window.subtitleTimelineBaseMs = static_cast<int>(logicalBase);
+        window.playbackTimelineOrigin = {};
+        window.playbackTimelineOriginMs.reset();
+        if (request.verificationMediaUrl) {
+            const auto verify = request.verificationMediaUrl;
+            window.verificationMediaUrl = [verify, relativePositionMs](int nextMs) {
+                const int64_t offset = static_cast<int64_t>(relativePositionMs) + nextMs;
+                if (offset < std::numeric_limits<int>::min() || offset > std::numeric_limits<int>::max())
+                    return std::optional<std::string>{};
+                return verify(static_cast<int>(offset));
+            };
+        }
+        return true;
+    };
     for (int count = 0; count < 2; ++count) {
         std::optional<int> selectedStartMs;
         int greatestDistanceMs = 0;
@@ -620,6 +645,11 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
             }
             verification.mediaUrl = *url;
             verification.sampleStartMs = 0;
+        }
+        if (request.verificationMediaUrl && !retargetWindow(verification, *selectedStartMs)) {
+            result.decision.confident = false;
+            result.failure = "distant subtitle verification timeline base overflow";
+            return result;
         }
         verification.extendedSample = false;
         if (candidateVadGlobal) {
@@ -659,6 +689,9 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
                 verification.mediaUrl = *url;
                 verification.sampleStartMs = 0;
             } else if (verification.sampleStartMs < 0)
+                continue;
+            if (request.verificationMediaUrl &&
+                !retargetWindow(verification, dialogueWindows[i].startMs - request.subtitleTimelineBaseMs))
                 continue;
             SubtitleSyncWindow extra;
             SubtitleDialogueWindow extraDialogue;
@@ -706,6 +739,10 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
                 holdout.mediaUrl = *media;
                 holdout.sampleStartMs = 0;
             } else if (holdout.sampleStartMs < 0) {
+                dialogue.confident = false;
+                break;
+            }
+            if (request.verificationMediaUrl && !retargetWindow(holdout, static_cast<int>(position))) {
                 dialogue.confident = false;
                 break;
             }

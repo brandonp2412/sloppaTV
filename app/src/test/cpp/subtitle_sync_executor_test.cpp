@@ -109,8 +109,12 @@ int main() {
     client.freshSessions = true;
     request.mediaUrl = playback.url;
     const int previousStops = client.stops;
+    request.playbackTimelineOriginMs = 1153069;
     const auto verifyWindows = [&](const SubtitleAudioSyncRequest& probe) {
         assert(probe.verificationMediaUrl);
+        assert(probe.subtitleTimelineBaseMs == 385000);
+        // Probe HLS PTS epochs cannot be compared with the live player epoch.
+        assert(!probe.playbackTimelineOriginMs && !probe.playbackTimelineOrigin);
         const auto middle = probe.verificationMediaUrl(300000);
         const auto late = probe.verificationMediaUrl(700000);
         const auto earlier = probe.verificationMediaUrl(-385000);
@@ -166,7 +170,8 @@ int main() {
     request.sourceDurationMs = 1336384;
     request.subtitleTimelineBaseMs = 1173735;
     const auto beforeCredits = [&](const SubtitleAudioSyncRequest& probe) {
-        assert(probe.sampleStartMs == 0 && probe.subtitleTimelineBaseMs == 1173735);
+        assert(probe.sampleStartMs == 0 && probe.subtitleTimelineBaseMs == 1036384);
+        assert(!probe.playbackTimelineOriginMs);
         assert(client.positions.back() == 10363840000LL);
         return SubtitleAudioSyncResult{};
     };

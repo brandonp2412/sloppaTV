@@ -105,8 +105,18 @@ public:
 
     [[nodiscard]] bool inconsistent() const {
         if (starts_.size() < 2) return false;
+        if (startMs()) return false;
         const auto bounds = std::minmax_element(starts_.begin(), starts_.end());
         return *bounds.second - *bounds.first > 1000;
+    }
+
+    [[nodiscard]] std::string diagnosticClockSamples() const {
+        std::string result;
+        for (const int value : starts_) {
+            if (!result.empty()) result.push_back(',');
+            result += std::to_string(value);
+        }
+        return result;
     }
 
     [[nodiscard]] std::size_t observationCount() const { return starts_.size(); }
@@ -121,8 +131,15 @@ public:
         if (starts_.size() < 3) return std::nullopt;
         auto sorted = starts_;
         std::sort(sorted.begin(), sorted.end());
-        if (sorted.back() - sorted.front() > 1000) return std::nullopt;
-        return sorted[sorted.size() / 2];
+        if (sorted.back() - sorted.front() <= 1000) return sorted[sorted.size() / 2];
+        // Reject discontinuities, but forgive ONE stale property reading when
+        // at least eleven other independent PCM/clock pairs agree tightly.
+        if (sorted.size() < 12) return std::nullopt;
+        const bool earliestOutlier = sorted.back() - sorted[1] <= 250;
+        const bool latestOutlier = sorted[sorted.size() - 2] - sorted.front() <= 250;
+        if (earliestOutlier == latestOutlier) return std::nullopt;
+        if (earliestOutlier) return sorted[1 + (sorted.size() - 1) / 2];
+        return sorted[(sorted.size() - 2) / 2];
     }
 
 private:
