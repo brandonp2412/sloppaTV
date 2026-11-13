@@ -1,6 +1,7 @@
 #pragma once
 
 #include "subtitle_auto_sync.hpp"
+#include "subtitle_dialogue_sync.hpp"
 
 #include <cctype>
 #include <cmath>
@@ -19,7 +20,7 @@ struct SubtitleAudioSyncRequest {
     int sampleStartMs = 0;
     // Zero-based audio ordinal in this URL; server-remuxed HLS has one audio track.
     int audioOrdinal = -1;
-    // Duration on this URL's player timeline, excluding a DirectStream base.
+    // Full negotiated release duration, including any DirectStream base.
     int sourceDurationMs = 0;
     // Main player and probe may rebase the same rolling HLS URL differently.
     std::function<std::optional<int>()> playbackTimelineOrigin;
@@ -27,6 +28,10 @@ struct SubtitleAudioSyncRequest {
     // Negotiate distant HLS windows at the server instead of seeking an unfinished playlist.
     std::function<std::optional<std::string>(int)> verificationMediaUrl;
     std::function<bool()> cancelled;
+    std::function<std::vector<SubtitleSpeechWord>(const std::vector<float>&)> recognizeSpeech;
+    bool shortSpeechProbe = true;
+    int requiredDialogueAnchors = 4;
+    int speechWindowRetries = 0;
     // Start-of-episode music may obscure speech; analyse a longer continuous
     // sample without seeking or opening a second stream.
     bool extendedSample = false;
@@ -39,6 +44,8 @@ struct SubtitleAudioSyncResult {
     int audioMs = 0;
     std::optional<int> playbackTimelineOriginMs;
     std::string failure;
+    std::string evidence = "vad";
+    int dialogueAnchors = 0;
 };
 
 // Convert a probe clock into the main player's clock before adding its logical base.

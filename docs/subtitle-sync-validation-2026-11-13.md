@@ -1,5 +1,7 @@
 # Subtitle synchronization validation on Glass
 
+Follow-up: [on-device dialogue matching and subsequent live validation](subtitle-dialogue-sync-validation-2026-11-13.md). The VAD-only limitations below describe the earlier implementation.
+
 Testing used Glass Waydroid at `192.168.240.112:5555` and the isolated package `app.sloppatv.remuxtest`. The Google TV Streamer was not inspected or controlled. The previous subtitle commit, `e20ac671`, passed [CI run 43193440595](https://github.com/brandonp2412/sloppaTV/actions/runs/43193440595).
 
 ## Release identity

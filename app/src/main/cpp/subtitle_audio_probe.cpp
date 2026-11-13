@@ -223,14 +223,19 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
         failure = std::string("mpv rejected audio probe option ") + name;
         return false;
     };
+    const bool shortSpeechProbe = request.recognizeSpeech && request.shortSpeechProbe;
+    const int sampleSeconds = shortSpeechProbe ? 120 : request.extendedSample ? kExtendedProbeSeconds : kProbeSeconds;
+    const uintmax_t readyBytes = shortSpeechProbe         ? 90U * 16000U * 2U
+                                 : request.extendedSample ? kExtendedProbeReadyBytes
+                                                          : kProbeReadyBytes;
     const std::filesystem::path certificate = std::filesystem::path(request.privateFilesDir) / "android-ca-bundle.pem";
     if (!option("config", "no") || !option("video", "no") || !option("vo", "null") || !option("ao", "pcm") ||
         !option("ao-pcm-file", output.string()) || !option("audio-samplerate", "16000") ||
         !option("audio-channels", "mono") || !option("audio-format", "s16") || !option("af", "lavfi=[ashowinfo]") ||
         (request.audioOrdinal >= 0 && !option("aid", std::to_string(request.audioOrdinal + 1))) ||
         !option("start", std::to_string(request.sampleStartMs / 1000.0)) ||
-        !option("length", std::to_string(request.extendedSample ? kExtendedProbeSeconds : kProbeSeconds)) ||
-        !option("cache", "no") || !option("demuxer", "lavf") || !option("ytdl", "no") ||
+        !option("length", std::to_string(sampleSeconds)) || !option("cache", "no") || !option("demuxer", "lavf") ||
+        !option("ytdl", "no") ||
         (std::filesystem::exists(certificate) && !option("tls-ca-file", certificate.string())) ||
         !option("tls-verify", "yes"))
         return false;
@@ -313,9 +318,7 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
             }
         }
         updateActualStart();
-        if (!fileError && actualStartMs >= 0 &&
-            bytes >= (request.extendedSample ? kExtendedProbeReadyBytes : kProbeReadyBytes))
-            return true;
+        if (!fileError && actualStartMs >= 0 && bytes >= readyBytes) return true;
         if (event && event->eventId == kMpvEndFileEvent) {
             const auto* end = static_cast<const MpvEventEndFile*>(event->data);
             failure = "audio probe end reason=" + std::to_string(end ? end->reason : -1) +
@@ -338,7 +341,8 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
 } // namespace
 
 static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncRequest& request,
-                                                        SubtitleSyncWindow& window) {
+                                                        SubtitleSyncWindow& window,
+                                                        SubtitleDialogueWindow* dialogueWindow = nullptr) {
     SubtitleAudioSyncResult result;
     if (request.mediaUrl.empty() || request.privateFilesDir.empty() || request.cues.size() < 12) {
         result.failure = "missing audio or subtitle inputs";
@@ -446,6 +450,107 @@ static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncR
                           " timelineBaseMs=" + std::to_string(request.subtitleTimelineBaseMs) +
                           " isHls=" + std::to_string(request.mediaUrl.find(".m3u8") != std::string::npos);
     }
+    if (request.recognizeSpeech && dialogueWindow && audio.sampleRate == 16000) {
+        int recognizedWords = 0;
+        std::vector<SubtitleDialogueAnchor> allAnchors;
+        constexpr size_t clipSamples = 90U * 16000U;
+        for (size_t begin = 0; begin < audio.samples.size(); begin += clipSamples) {
+            if (request.cancelled && request.cancelled()) {
+                result.decision.confident = false;
+                result.failure = "audio probe cancelled";
+                return result;
+            }
+            const size_t end = std::min(begin + clipSamples, audio.samples.size());
+            if (end - begin < 20U * 16000U) break;
+            std::vector<float> samples;
+            samples.reserve(end - begin);
+            for (size_t i = begin; i < end; ++i) samples.push_back(static_cast<float>(audio.samples[i]) / 32768.0F);
+            auto words = request.recognizeSpeech(samples);
+            if (words.empty()) break;
+            const int clipStartMs = static_cast<int>(begin / 16U);
+            const int clipDurationMs = static_cast<int>((end - begin) / 16U);
+            const int count = static_cast<int>(std::count_if(words.begin(), words.end(), [](const auto& word) {
+                return word.confidence >= 0.65 && !subtitleDialogueWords(word.text).empty();
+            }));
+            recognizedWords = std::max(recognizedWords, count);
+            *dialogueWindow = {
+                subtitleSampleStartMs + clipStartMs, clipDurationMs,
+                matchSubtitleDialogue(words, request.cues, subtitleSampleStartMs + clipStartMs, clipDurationMs),
+                recognizedWords};
+            allAnchors.insert(allAnchors.end(), dialogueWindow->anchors.begin(), dialogueWindow->anchors.end());
+            result.dialogueAnchors = static_cast<int>(dialogueWindow->anchors.size());
+            const auto dialogue = evaluateSubtitleDialogue({*dialogueWindow}, false);
+            if (dialogue.confident && result.dialogueAnchors >= request.requiredDialogueAnchors) {
+                result.decision = dialogue;
+                result.evidence = "dialogue";
+                result.failure.clear();
+                break;
+            }
+            if (request.sourceDurationMs >= 900000 &&
+                result.dialogueAnchors >= std::max(6, request.requiredDialogueAnchors)) {
+                result.evidence = "dialogue-candidate";
+                break; // Only distant windows may authorize a speed correction.
+            }
+        }
+        if (request.requiredDialogueAnchors > 4 && result.evidence != "dialogue" &&
+            result.evidence != "dialogue-candidate" &&
+            static_cast<int>(allAnchors.size()) >= request.requiredDialogueAnchors) {
+            *dialogueWindow = {subtitleSampleStartMs, result.audioMs, std::move(allAnchors), recognizedWords};
+            result.dialogueAnchors = static_cast<int>(dialogueWindow->anchors.size());
+            const auto combined = evaluateSubtitleDialogue({*dialogueWindow}, false);
+            if (combined.confident) {
+                result.decision = combined;
+                result.evidence = "dialogue";
+                result.failure.clear();
+            } else if (request.sourceDurationMs >= 900000)
+                result.evidence = "dialogue-candidate";
+        }
+#ifdef __ANDROID__
+        __android_log_print(ANDROID_LOG_INFO, "sloppaTV/subsync",
+                            "Dialogue probe startMs=%d anchors=%d confident=%d offsetMs=%d", subtitleSampleStartMs,
+                            result.dialogueAnchors, result.evidence == "dialogue", result.decision.offsetMs);
+#endif
+        if (result.evidence != "dialogue" && result.evidence != "dialogue-candidate" && request.shortSpeechProbe &&
+            !(request.cancelled && request.cancelled())) {
+            const int64_t nextLogical = static_cast<int64_t>(subtitleSampleStartMs) + 90000;
+            if (recognizedWords > 0 && request.speechWindowRetries < 2 &&
+                nextLogical <= std::numeric_limits<int>::max() &&
+                (request.sourceDurationMs <= 0 || nextLogical + 20000 < request.sourceDurationMs)) {
+                auto next = request;
+                ++next.speechWindowRetries;
+                if (request.verificationMediaUrl) {
+                    const auto url =
+                        request.verificationMediaUrl(static_cast<int>(nextLogical) - request.subtitleTimelineBaseMs);
+                    if (!url) {
+                        result.decision.confident = false;
+                        result.failure = "speech retry release negotiation failed";
+                        return result;
+                    }
+                    next.mediaUrl = *url;
+                    next.sampleStartMs = 0;
+                } else {
+                    const int64_t position = static_cast<int64_t>(request.sampleStartMs) + 90000;
+                    if (position > std::numeric_limits<int>::max()) return result;
+                    next.sampleStartMs = static_cast<int>(position);
+                }
+                auto retried = captureSubtitleAudioSync(next, window, dialogueWindow);
+                retried.audioMs += result.audioMs;
+                return retried;
+            }
+            auto longer = request;
+            longer.shortSpeechProbe = false;
+            // Once speech recognition is available, two further minutes suffice;
+            // retain the legacy longer VAD sample when the model is unavailable.
+            if (recognizedWords > 0) longer.extendedSample = false;
+            auto retried = captureSubtitleAudioSync(longer, window, dialogueWindow);
+            retried.audioMs += result.audioMs;
+            return retried;
+        }
+        if (result.evidence != "dialogue" && subtitleHasDialogueEvidence({*dialogueWindow})) {
+            result.decision.confident = false;
+            result.failure = "recognized speech did not establish a stable subtitle dialogue match";
+        }
+    }
     return result;
 }
 
@@ -461,16 +566,22 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         if (!request.playbackTimelineOriginMs) return {{}, 0, {}, "playback timeline origin unavailable"};
     }
     SubtitleSyncWindow first;
-    auto result = captureSubtitleAudioSync(request, first);
-    // Short remaining HLS sessions cannot provide widely separated observations.
-    // Keep their existing local confidence guards, without inferring 24/23.976 speed.
-    if (!result.decision.confident || request.sourceDurationMs < 900000) return result;
+    SubtitleDialogueWindow firstDialogue;
+    auto result = captureSubtitleAudioSync(request, first, &firstDialogue);
+    // Short media cannot establish a speed correction across distant windows.
+    if ((!result.decision.confident && firstDialogue.anchors.size() < 4) || request.sourceDurationMs < 900000)
+        return result;
     std::vector<SubtitleSyncWindow> windows;
     windows.push_back(std::move(first));
-    const int lastStartMs = request.sourceDurationMs - 300000;
-    const std::vector<int> starts{0, lastStartMs / 2, lastStartMs};
+    std::vector<SubtitleDialogueWindow> dialogueWindows;
+    dialogueWindows.push_back(std::move(firstDialogue));
+    // With a late HLS restart, negotiate earlier windows of the same release.
+    const int scopeBaseMs = request.verificationMediaUrl ? 0 : request.subtitleTimelineBaseMs;
+    const int relativeBaseMs = scopeBaseMs - request.subtitleTimelineBaseMs;
+    const int lastStartMs = request.sourceDurationMs - scopeBaseMs - 300000;
+    const std::vector<int> starts{relativeBaseMs, relativeBaseMs + lastStartMs / 2, relativeBaseMs + lastStartMs};
     for (int count = 0; count < 2; ++count) {
-        int selectedStartMs = -1;
+        std::optional<int> selectedStartMs;
         int greatestDistanceMs = 0;
         for (int start : starts) {
             int distanceMs = std::numeric_limits<int>::max();
@@ -481,11 +592,11 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
                 selectedStartMs = start;
             }
         }
-        if (selectedStartMs < 0 || greatestDistanceMs < 180000) break;
+        if (!selectedStartMs || greatestDistanceMs < 180000) break;
         auto verification = request;
-        verification.sampleStartMs = selectedStartMs;
+        verification.sampleStartMs = *selectedStartMs;
         if (request.verificationMediaUrl) {
-            const auto url = request.verificationMediaUrl(selectedStartMs);
+            const auto url = request.verificationMediaUrl(*selectedStartMs);
             if (!url) {
                 result.decision.confident = false;
                 result.failure = "distant subtitle probe release negotiation failed";
@@ -496,7 +607,8 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         }
         verification.extendedSample = false;
         SubtitleSyncWindow window;
-        const auto captured = captureSubtitleAudioSync(verification, window);
+        SubtitleDialogueWindow dialogueWindow;
+        const auto captured = captureSubtitleAudioSync(verification, window, &dialogueWindow);
         if (window.moderate.empty()) {
             result.decision.confident = false;
             result.failure = "distant subtitle verification unavailable: " + captured.failure;
@@ -504,7 +616,53 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         }
         result.audioMs += captured.audioMs;
         windows.push_back(std::move(window));
+        result.dialogueAnchors += captured.dialogueAnchors;
+        dialogueWindows.push_back(std::move(dialogueWindow));
     }
+    auto dialogue = evaluateSubtitleDialogue(dialogueWindows);
+    // Speed verification needs six independent phrases in every window. Gather
+    // more speech where a shorter fixed-offset sample did not supply enough.
+    if (!dialogue.confident && result.dialogueAnchors >= 12) {
+        for (size_t i = 0; i < dialogueWindows.size(); ++i) {
+            if (dialogueWindows[i].anchors.size() >= 6) continue;
+            auto verification = request;
+            verification.shortSpeechProbe = false;
+            verification.extendedSample = false;
+            verification.requiredDialogueAnchors = 6;
+            verification.sampleStartMs = dialogueWindows[i].startMs - request.subtitleTimelineBaseMs;
+            if (request.verificationMediaUrl) {
+                const auto url = request.verificationMediaUrl(verification.sampleStartMs);
+                if (!url) continue;
+                verification.mediaUrl = *url;
+                verification.sampleStartMs = 0;
+            } else if (verification.sampleStartMs < 0)
+                continue;
+            SubtitleSyncWindow extra;
+            SubtitleDialogueWindow extraDialogue;
+            const auto captured = captureSubtitleAudioSync(verification, extra, &extraDialogue);
+            if (extraDialogue.anchors.size() > dialogueWindows[i].anchors.size()) {
+                result.dialogueAnchors -= static_cast<int>(dialogueWindows[i].anchors.size());
+                result.dialogueAnchors += captured.dialogueAnchors;
+                dialogueWindows[i] = std::move(extraDialogue);
+                if (!extra.moderate.empty()) windows[i] = std::move(extra);
+            }
+            result.audioMs += captured.audioMs;
+        }
+        dialogue = evaluateSubtitleDialogue(dialogueWindows);
+    }
+    if (dialogue.confident) {
+        result.decision = dialogue;
+        result.evidence = "dialogue";
+        result.failure.clear();
+        return result;
+    }
+    // Conflicting recognized dialogue must not be overruled by a VAD coincidence.
+    if (subtitleHasDialogueEvidence(dialogueWindows)) {
+        result.decision.confident = false;
+        result.failure = "recognized dialogue did not establish one consistent episode timeline";
+        return result;
+    }
+    result.evidence = "vad";
     result.decision = evaluateSubtitleSyncWindows(windows, request.cues);
     if (!result.decision.confident)
         result.failure = "subtitle windows did not establish one consistent episode timeline";

@@ -17,7 +17,7 @@ struct Client {
         assert(device == "player-subtitle-probe");
         assert(item.mediaSourceId == "alias");
         positions.push_back(item.positionTicks);
-        assert(item.positionTicks >= 3850000000LL);
+        assert(item.positionTicks >= 0);
         assert(overrides.forceServerStream);
         assert(audio == 4 && subtitle == kSubtitleOffIndex);
         auto response = result;
@@ -113,6 +113,9 @@ int main() {
         assert(probe.verificationMediaUrl);
         const auto middle = probe.verificationMediaUrl(300000);
         const auto late = probe.verificationMediaUrl(700000);
+        const auto earlier = probe.verificationMediaUrl(-385000);
+        assert(earlier && *earlier != *middle && *earlier != *late);
+        assert(!probe.verificationMediaUrl(-385001));
         assert(middle && late && *middle != *late && *middle != probe.mediaUrl);
         SubtitleAudioSyncResult result;
         result.decision.confident = true;
@@ -120,9 +123,10 @@ int main() {
     };
     assert(executeSubtitleAudioSync(client, session, {}, playback, request, 120000000, 2, verifyWindows)
                .decision.confident);
-    assert(client.stops == previousStops + 3);
-    assert(client.positions[client.positions.size() - 2] == 6850000000LL);
-    assert(client.positions.back() == 10850000000LL);
+    assert(client.stops == previousStops + 4);
+    assert(client.positions[client.positions.size() - 3] == 6850000000LL);
+    assert(client.positions[client.positions.size() - 2] == 10850000000LL);
+    assert(client.positions.back() == 0);
     // Reject and clean a wrong release returned only for a distant window.
     const int stopsBeforeMismatch = client.stops;
     const auto wrongWindow = [&](const SubtitleAudioSyncRequest& probe) {
@@ -147,4 +151,28 @@ int main() {
     assert(!executeSubtitleAudioSync(client, session, {}, playback, request, 120000000, 2, cancelWindow)
                 .decision.confident);
     assert(client.stops == stopsBeforeCancel + 1);
+    // Initial nonzero samples negotiate a fresh server base, avoiding a long HLS seek.
+    cancelled = false;
+    request.sampleStartMs = 30000;
+    const auto shifted = [&](const SubtitleAudioSyncRequest& probe) {
+        assert(probe.sampleStartMs == 0);
+        assert(client.positions.back() == 4150000000LL);
+        return SubtitleAudioSyncResult{};
+    };
+    executeSubtitleAudioSync(client, session, {}, playback, request, 120000000, 2, shifted);
+    // Late restarts probe a complete earlier window without changing playback's base.
+    playback.startTicks = 11737350000LL;
+    request.sampleStartMs = 0;
+    request.sourceDurationMs = 1336384;
+    request.subtitleTimelineBaseMs = 1173735;
+    const auto beforeCredits = [&](const SubtitleAudioSyncRequest& probe) {
+        assert(probe.sampleStartMs == 0 && probe.subtitleTimelineBaseMs == 1173735);
+        assert(client.positions.back() == 10363840000LL);
+        return SubtitleAudioSyncResult{};
+    };
+    executeSubtitleAudioSync(client, session, {}, playback, request, 120000000, 2, beforeCredits);
+    request.sampleStartMs = -1;
+    const int beforeInvalid = client.resolutions;
+    assert(!executeSubtitleAudioSync(client, session, {}, playback, request, 120000000, 2, shifted).decision.confident);
+    assert(client.resolutions == beforeInvalid);
 }

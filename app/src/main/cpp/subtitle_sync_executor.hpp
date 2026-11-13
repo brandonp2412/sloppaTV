@@ -5,6 +5,8 @@
 #include "subtitle_audio_probe.hpp"
 
 #include <utility>
+#include <limits>
+#include <vector>
 
 inline bool subtitleProbeSessionCompatible(const PlaybackTarget& playback, const PlaybackTarget& probe) {
     return !playback.playSessionId.empty() && !probe.playSessionId.empty() &&
@@ -30,7 +32,17 @@ SubtitleAudioSyncResult executeSubtitleAudioSync(Client& client, JellyfinSession
         return failure("HLS source identity unavailable for independent subtitle probe");
     session.deviceId += "-subtitle-probe";
     item.mediaSourceId = playback.mediaSourceId;
-    item.positionTicks = playback.startTicks;
+    const int64_t initialDelta = static_cast<int64_t>(request.sampleStartMs) * 10000;
+    if (request.sampleStartMs < 0 || playback.startTicks < 0 ||
+        playback.startTicks > std::numeric_limits<int64_t>::max() - initialDelta)
+        return failure("invalid subtitle probe sample position");
+    item.positionTicks = playback.startTicks + initialDelta;
+    // Leave a full verification window before the credits, even when playback
+    // restarted close to EOF. The decoded origin still anchors this earlier probe.
+    if (request.sourceDurationMs >= 300000) {
+        const int64_t lastWindowTicks = static_cast<int64_t>(request.sourceDurationMs - 300000) * 10000;
+        item.positionTicks = std::min(item.positionTicks, lastWindowTicks);
+    }
     PlaybackOverrides overrides;
     overrides.forceServerStream = true;
     auto negotiated = client.resolvePlayback(session, item, maxBitrate, maxAudioChannels, overrides,
@@ -45,12 +57,16 @@ SubtitleAudioSyncResult executeSubtitleAudioSync(Client& client, JellyfinSession
         Client& client;
         const JellyfinSession& session;
         std::vector<PlaybackTarget> targets;
+        size_t stopped = 0;
 
         Cleanup(Client& api, const JellyfinSession& credentials) : client(api), session(credentials) {}
 
-        ~Cleanup() {
-            for (const auto& target : targets) static_cast<void>(client.stopTranscoding(session, target));
+        void stopFinished() {
+            for (; stopped < targets.size(); ++stopped)
+                static_cast<void>(client.stopTranscoding(session, targets[stopped]));
         }
+
+        ~Cleanup() { stopFinished(); }
     } cleanup{client, session};
 
     cleanup.targets.push_back(target);
@@ -61,18 +77,24 @@ SubtitleAudioSyncResult executeSubtitleAudioSync(Client& client, JellyfinSession
     request.verificationMediaUrl = [&](int sampleStartMs) -> std::optional<std::string> {
         if (request.cancelled && request.cancelled()) return std::nullopt;
         auto windowItem = item;
-        windowItem.positionTicks = playback.startTicks + static_cast<int64_t>(sampleStartMs) * 10000;
+        const int64_t delta = static_cast<int64_t>(sampleStartMs) * 10000;
+        if ((delta < 0 && playback.startTicks < -delta) ||
+            (delta > 0 && playback.startTicks > std::numeric_limits<int64_t>::max() - delta))
+            return std::nullopt;
+        windowItem.positionTicks = playback.startTicks + delta;
         auto window = client.resolvePlayback(session, windowItem, maxBitrate, maxAudioChannels, overrides,
                                              playback.audioStreamIndex, kSubtitleOffIndex);
         if (!window.ok || window.value.playSessionId.empty() || window.value.playSessionId == playback.playSessionId)
             return std::nullopt;
         for (const auto& previous : cleanup.targets)
             if (previous.playSessionId == window.value.playSessionId) return std::nullopt;
+        cleanup.stopFinished();
         cleanup.targets.push_back(window.value);
         if (!subtitleProbeSessionCompatible(playback, window.value)) return std::nullopt;
         return window.value.url;
     };
     request.mediaUrl = target.url;
+    request.sampleStartMs = 0; // The server started this independent HLS session at the requested window.
     request.audioOrdinal = -1; // The server selected the requested audio into this HLS stream.
     return synchronize(request);
 }
