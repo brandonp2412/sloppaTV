@@ -48,6 +48,27 @@ struct SubtitleAudioSyncResult {
     int dialogueAnchors = 0;
 };
 
+// An independent HLS retry starts a *new* transport at its requested episode
+// position. Carry that logical base through later verification callbacks rather
+// than treating the new transport's first frame as the old timeline's zero.
+inline bool subtitleRebaseHlsRetry(SubtitleAudioSyncRequest& retry, const SubtitleAudioSyncRequest& original,
+                                   int absoluteStartMs) {
+    if (!original.verificationMediaUrl || absoluteStartMs < original.subtitleTimelineBaseMs) return false;
+    const int64_t relativeStart = static_cast<int64_t>(absoluteStartMs) - original.subtitleTimelineBaseMs;
+    if (relativeStart > std::numeric_limits<int>::max()) return false;
+    retry.subtitleTimelineBaseMs = absoluteStartMs;
+    retry.playbackTimelineOriginMs.reset();
+    retry.playbackTimelineOrigin = {};
+    const auto verify = original.verificationMediaUrl;
+    retry.verificationMediaUrl = [verify, relativeStart](int nextPositionMs) -> std::optional<std::string> {
+        const int64_t shifted = relativeStart + nextPositionMs;
+        if (shifted < std::numeric_limits<int>::min() || shifted > std::numeric_limits<int>::max())
+            return std::nullopt;
+        return verify(static_cast<int>(shifted));
+    };
+    return true;
+}
+
 // Convert a probe clock into the main player's clock before adding its logical base.
 // The absolute transport mux offset cancels; no assumption about TS start PTS is needed.
 inline std::optional<int> subtitleProbeLogicalStartMs(int sampleMs, int timelineBaseMs, int probeOriginMs,

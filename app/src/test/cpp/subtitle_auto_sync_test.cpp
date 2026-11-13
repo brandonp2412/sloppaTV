@@ -129,6 +129,25 @@ void testStrongVadEvidenceRequiresGlobalConfirmation() {
     assert(!evaluateSubtitleSyncWindows({}, {}).confident);
 }
 
+void testHlsSpeechRetryRebasesItsLogicalClock() {
+    SubtitleAudioSyncRequest original;
+    original.subtitleTimelineBaseMs = 1154000;
+    original.playbackTimelineOriginMs = 1153069;
+    std::vector<int> requested;
+    original.verificationMediaUrl = [&](int offsetMs) {
+        requested.push_back(offsetMs);
+        return std::optional<std::string>(std::to_string(offsetMs));
+    };
+    auto retry = original;
+    assert(subtitleRebaseHlsRetry(retry, original, 1244000));
+    assert(retry.subtitleTimelineBaseMs == 1244000);
+    assert(!retry.playbackTimelineOriginMs);
+    assert(retry.verificationMediaUrl && *retry.verificationMediaUrl(30000) == "120000");
+    assert(requested == std::vector<int>{120000});
+    assert(!subtitleRebaseHlsRetry(retry, original, 1153999));
+    assert(!retry.verificationMediaUrl(std::numeric_limits<int>::max()));
+}
+
 void testProbeUsesDecodedHlsStart() {
     const auto firstFrame = subtitleProbeFirstFrameMs(
         "Parsed_ashowinfo_0: n:0 pts:2256000 pts_time:141.0 fmt:s16 rate:16000 nb_samples:1024");
@@ -371,6 +390,7 @@ int main() {
     testDirectStreamResumeTimeline();
     testUncertainMatchesAreNotApplied();
     testStrongVadEvidenceRequiresGlobalConfirmation();
+    testHlsSpeechRetryRebasesItsLogicalClock();
     testProbeUsesDecodedHlsStart();
     testProbeClockFallback();
     testPcmSampleDurationNeverOverflowsArm32();

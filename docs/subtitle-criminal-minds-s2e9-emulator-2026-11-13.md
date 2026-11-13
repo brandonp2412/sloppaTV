@@ -32,3 +32,7 @@ The first sample contains exact phrase matches (similarity 1.0). Independently, 
 The full host suite (including 79 Python tests), the focused subtitle C++ tests, and the Android x86_64/ARM32/ARM64 debug build pass. The actual episode and subtitles were visually inspected in the emulator at 19:14 and around 30 minutes.
 
 **Still needed:** scene/edit-aware subtitle retiming, or a subtitle release matching this exact video edit. Positive completion requires a corrected overlay and independent spoken-to-caption onset residuals below 500 ms at the beginning, after 19:14, and past 30 minutes. Rendering a subtitle at those timestamps alone is not proof of synchronization.
+
+## Follow-up: HLS speech-retry start position
+
+The emulator exposed another clock rebasing error: when a short opening speech probe restarted its independent HLS transcoder 90 seconds later, the probe kept the previous logical sample base. Fixed the retry to carry the new episode base and rebase subsequent verification URL callbacks. A focused regression verifies 90-second rebasing and callback bounds. The updated x86_64/ARM32/ARM64 Android debug APK (versionCode `100709`) built and was installed on the headless emulator; the same episode and external English subtitles were visually inspected. The corrected timing of the episode has **not** passed end-to-end playback verification.

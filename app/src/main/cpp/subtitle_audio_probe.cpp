@@ -547,6 +547,14 @@ static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncR
                     }
                     next.mediaUrl = *url;
                     next.sampleStartMs = 0;
+                    // The server restart shifted this independent stream to
+                    // nextLogical. Keeping the old base would mislabel 01:30
+                    // of audio as 00:00 and manufacture a dialogue conflict.
+                    if (!subtitleRebaseHlsRetry(next, request, static_cast<int>(nextLogical))) {
+                        result.decision.confident = false;
+                        result.failure = "speech retry HLS timeline base overflow";
+                        return result;
+                    }
                 } else {
                     const int64_t position = static_cast<int64_t>(request.sampleStartMs) + 90000;
                     if (position > std::numeric_limits<int>::max()) return result;
