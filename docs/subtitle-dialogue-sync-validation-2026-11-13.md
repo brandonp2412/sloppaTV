@@ -50,3 +50,5 @@ Local checks passed: host C++ suite and 79 Python tests, cppcheck, clang-tidy ov
 Switching audio during recognition invalidated the old request. The following English request recognized fresh dialogue successfully. A later Friends provider probe was cancelled by leaving playback and opening Psychodrama; no Friends correction was applied after the source change. The v37 late restart obtained a new correction rather than reusing either v34 or v36 results.
 
 Local evidence includes per-process probe snapshots and paired logs, independent transcripts, acoustic comparisons and paused screenshots under `build/host-tests/subtitle-finish-20261113/`. Counter-based WAV names are interpreted only with their paired process and request logs.
+
+Psychodrama was rechecked on v37 after the source-change cancellation test. Both embedded ASS tracks rendered their expected dialogue at 40,910 ms. Switching tracks preserved that paused position and player load/release counts; their libmpv styling remained intact.
