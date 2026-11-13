@@ -168,10 +168,10 @@ inline PlaybackProfilePlan makePlaybackProfilePlan(const PlaybackDeviceCapabilit
     plan.allowAudioStreamCopy =
         audio.selected && audioStreamCopyAllowed(plan.audioCodecs, audio.codec, audio.channels, plan.maxAudioChannels);
     const SubtitleStrategy subtitleMode = subtitleStrategy(subtitle.codec);
-    // mediacodec_embed renders decoded video directly to the Android Surface and
-    // cannot composite libmpv bitmap subtitles. Keep text/styled subtitles on the
-    // native GLES path, but ask Jellyfin to burn bitmap/unsupported formats in.
-    plan.clientSubtitle = subtitle.selected && useNativeSubtitleRenderer(subtitleMode, true);
+    // Bitmap subtitles require a compositing video output. The playback runtime
+    // selects gpu-next for embedded PGS/VobSub rather than mediacodec_embed.
+    // Only unknown formats require server burn-in. Remux cannot transcode.
+    plan.clientSubtitle = subtitle.selected && subtitleMode != SubtitleStrategy::ServerTranscode;
     plan.serverSubtitle = subtitle.selected && !plan.clientSubtitle;
     return plan;
 }

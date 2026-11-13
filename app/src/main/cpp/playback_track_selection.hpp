@@ -168,6 +168,14 @@ inline bool usePlayerEmbeddedTextTrack(const JellyfinSubtitleStream& track, Play
            subtitleStrategy(track.codec) == SubtitleStrategy::ClientText;
 }
 
+inline bool playbackNeedsBitmapCompositing(const JellyfinItem& item, const PlaybackTarget& target) {
+    if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return false;
+    return std::any_of(item.subtitles.begin(), item.subtitles.end(), [&](const JellyfinSubtitleStream& subtitle) {
+        return subtitle.index == target.subtitleStreamIndex && !subtitle.isExternal &&
+               subtitleStrategy(subtitle.codec) == SubtitleStrategy::ClientEmbedded;
+    });
+}
+
 inline int playerSubtitleStreamIndex(const PlaybackTarget& target, const JellyfinItem& item) {
     if (target.playMethod != PlaybackMethod::DirectPlay || target.subtitleStreamIndex < 0) return kSubtitleOffIndex;
     const auto selected =

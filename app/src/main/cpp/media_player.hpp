@@ -20,6 +20,7 @@ enum class PlayerStatus {
 
 enum class PlaybackDecodeMode {
     Hardware,
+    HardwareComposite,
     Software,
 };
 

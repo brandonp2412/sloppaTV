@@ -435,6 +435,23 @@ int main() {
     assert(subtitleCycle.strategy == SubtitleStrategy::ClientEmbedded);
     assert(subtitleCycle.directPlayStream);
     assert(subtitleCycle.directPlayStream->index == 11);
+    PlaybackTarget bitmapTarget;
+    bitmapTarget.playMethod = PlaybackMethod::DirectPlay;
+    bitmapTarget.subtitleStreamIndex = 11;
+    assert(playbackNeedsBitmapCompositing(bitmapSubtitles, bitmapTarget));
+    bitmapSubtitles.subtitles.front().codec = "pgssub";
+    assert(playbackNeedsBitmapCompositing(bitmapSubtitles, bitmapTarget));
+    bitmapSubtitles.subtitles.front().codec = "hdmv_pgs_subtitle";
+    assert(playbackNeedsBitmapCompositing(bitmapSubtitles, bitmapTarget));
+    bitmapSubtitles.subtitles.front().codec = "pgs";
+    bitmapTarget.subtitleStreamIndex = -1;
+    assert(!playbackNeedsBitmapCompositing(bitmapSubtitles, bitmapTarget));
+    bitmapTarget.subtitleStreamIndex = 11;
+    bitmapTarget.playMethod = PlaybackMethod::DirectStream;
+    assert(!playbackNeedsBitmapCompositing(bitmapSubtitles, bitmapTarget));
+    bitmapTarget.playMethod = PlaybackMethod::DirectPlay;
+    bitmapSubtitles.subtitles.front().isExternal = true;
+    assert(!playbackNeedsBitmapCompositing(bitmapSubtitles, bitmapTarget));
 
     JellyfinItem fallbackAudio;
     fallbackAudio.audios = {{

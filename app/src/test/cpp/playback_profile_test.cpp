@@ -135,12 +135,16 @@ int main() {
 
     const PlaybackSubtitleCapabilityInput imageSubtitle{.selected = true, .codec = "pgs"};
     plan = makePlaybackProfilePlan(device, {}, {}, imageSubtitle, 8, {});
-    assert(!plan.clientSubtitle);
-    assert(plan.serverSubtitle);
+    assert(plan.clientSubtitle);
+    assert(!plan.serverSubtitle);
     auto flags = playbackRequestFlags(plan, {});
-    assert(!flags.enableDirectPlay);
-    assert(!flags.enableDirectStream);
-    assert(!flags.allowVideoStreamCopy);
+    assert(flags.enableDirectPlay);
+    assert(flags.enableDirectStream);
+    assert(flags.allowVideoStreamCopy);
+    for (const char* codec : {"pgssub", "hdmv_pgs_subtitle", "dvd_subtitle"}) {
+        plan = makePlaybackProfilePlan(device, {}, {}, {.selected = true, .codec = codec}, 8, {});
+        assert(plan.clientSubtitle && !plan.serverSubtitle);
+    }
 
     const PlaybackSubtitleCapabilityInput unknownSubtitle{.selected = true, .codec = "madeup"};
     plan = makePlaybackProfilePlan(device, {}, {}, unknownSubtitle, 8, {});
