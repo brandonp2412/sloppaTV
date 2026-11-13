@@ -121,7 +121,9 @@ constexpr int remuxFallbackStartPositionMs(int positionMs) {
 // Detect a missed start= seek only after real playback has advanced.
 // A cold/slow source must not be mistaken for a failed resume.
 constexpr bool initialResumeSeekMissed(int requestedMs, int observedMs, bool playing) {
-    return playing && requestedMs >= 10'000 && observedMs >= 4'000 && observedMs < requestedMs - 3'000;
+    // Once decoded playback has advanced a second, mpv's start= option did not land.
+    // Waiting several seconds exposes the episode opening while the progress bar shows the resume point.
+    return playing && requestedMs >= 10'000 && observedMs >= 1'000 && observedMs < requestedMs - 3'000;
 }
 
 // A resumed torrent must read the container index and a distant media range

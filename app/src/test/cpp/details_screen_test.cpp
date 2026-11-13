@@ -284,6 +284,18 @@ int main() {
     assert(state.episodes().size() == 1);
     assert(state.episodeSelection() == 0);
 
+    // Friends > Season 1 > Episode 1 > Back must restore the same episode grid.
+    state.beginDetails(true);
+    assert(state.seriesDetail().id == "series");
+    assert(state.selectedSeason().id == "season-2");
+    assert(state.selectedSeasonItem()->id == "season-2");
+    assert(state.selectedEpisodeItem()->id == "episode-1");
+    assert(state.handleEpisodesInput(DetailGridScreenInput::Activate, 5).type ==
+           DetailGridScreenCommandType::OpenSelected);
+    state.beginDetails(); // An unrelated details screen must not retain that grid.
+    assert(state.seasons().empty());
+    assert(state.episodes().empty());
+
     state.reset();
     assert(state.similar().empty());
     assert(state.personItems().empty());

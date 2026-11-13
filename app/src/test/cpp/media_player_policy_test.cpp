@@ -14,8 +14,10 @@ int main() {
     assert(remuxFallbackStartPositionMs(999) == 0);
     assert(remuxFallbackStartPositionMs(1000) == 1000);
     assert(remuxFallbackStartPositionMs(263000) == 263000);
-    assert(!initialResumeSeekMissed(105'000, 0, true));
+    assert(!initialResumeSeekMissed(1'177'000, 0, true));
+    assert(!initialResumeSeekMissed(1'177'000, 999, true));
     assert(!initialResumeSeekMissed(105'000, 4'000, false));
+    assert(initialResumeSeekMissed(1'177'000, 1'000, true)); // S4E21 resumed at 19:37 but played its opening.
     assert(initialResumeSeekMissed(105'000, 4'000, true)); // Opening Friends at 0 despite saved 1:45.
     assert(!initialResumeSeekMissed(105'000, 104'000, true));
     assert(!initialResumeSeekMissed(0, 4'000, true));

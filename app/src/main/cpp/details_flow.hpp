@@ -54,7 +54,7 @@ public:
     [[nodiscard]] const DetailsScreenState& state() const { return state_; }
 
     void reset();
-    void beginDetails(JellyfinItem item);
+    void beginDetails(JellyfinItem item, bool preserveSeriesNavigation = false);
     [[nodiscard]] bool beginCast();
     [[nodiscard]] bool beginPerson(const JellyfinPerson& person);
     [[nodiscard]] bool beginItemMenu();
