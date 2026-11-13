@@ -35,12 +35,24 @@ void renderPlayerProgress(RendererLike& renderer, const PlayerProgressRenderStat
     constexpr float progressTrackY = 890.0f;
     renderer.roundedRect(progressX, progressTrackY, progressWidth, 7.0f, 3.5f, style.track);
     if (state.startupLoading) {
-        // Fill the first 150px only as Remux confirms readable startup bytes.
-        // No pulse or glint: an unknown percentage remains an empty track.
-        constexpr float startupWidth = 150.0f;
+        // Keep the resume thumb fixed at its actual timeline position while
+        // Remux prepares the stream. The segment leading up to that thumb
+        // indicates startup readiness, rather than pretending playback began
+        // at zero. If no seek position is known, retain a short startup bar.
+        const bool knownDuration = state.durationMs > 0;
+        const float resumeFraction =
+            knownDuration
+                ? std::clamp(static_cast<float>(state.positionMs) / static_cast<float>(state.durationMs), 0.0f, 1.0f)
+                : 0.0f;
+        const float resumePixels = progressWidth * resumeFraction;
+        const float loadingWidth = resumePixels > 0.0f ? resumePixels : 150.0f;
         if (state.startupProgress) {
-            const float filled = startupWidth * std::clamp(*state.startupProgress, 0.0f, 1.0f);
+            const float filled = loadingWidth * std::clamp(*state.startupProgress, 0.0f, 1.0f);
             if (filled > 0.0f) renderer.roundedRect(progressX, progressTrackY, filled, 7.0f, 3.5f, style.focus);
+        }
+        if (knownDuration) {
+            const float thumbCenterX = playbackProgressThumbCenterX(progressX, progressWidth, resumeFraction, 9.0f);
+            renderer.roundedRect(thumbCenterX - 9.0f, progressTrackY - 5.5f, 18.0f, 18.0f, 9.0f, style.text);
         }
         return;
     }
