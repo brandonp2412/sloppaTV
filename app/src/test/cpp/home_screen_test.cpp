@@ -261,6 +261,47 @@ int main() {
     mergeHomeResumeCandidates(emptyResume, {brieflyPlayed});
     assert(emptyResume.size() == 1 && emptyResume.front().id == "tatami-e1");
 
+    // Regression: Nov 1 partials must not displace the current next episode
+    // when later episodes were completed on Nov 11. A genuinely recent rewatch
+    // of an older episode must still be resumable.
+    JellyfinItem friendsE1 = resumedEpisode;
+    friendsE1.id = "friends-s4e1";
+    friendsE1.seriesId = "friends";
+    friendsE1.parentIndexNumber = 4;
+    friendsE1.indexNumber = 1;
+    friendsE1.positionTicks = 201;
+    friendsE1.lastPlayedDate = "2026-11-01T07:08:51Z";
+    JellyfinItem friendsE9 = friendsE1;
+    friendsE9.id = "friends-s4e9";
+    friendsE9.indexNumber = 9;
+    friendsE9.lastPlayedDate = "2026-11-01T07:14:14Z";
+    JellyfinItem friendsE18 = friendsE1;
+    friendsE18.id = "friends-s4e18";
+    friendsE18.indexNumber = 18;
+    friendsE18.positionTicks = 0;
+    friendsE18.played = true;
+    friendsE18.lastPlayedDate = "2026-11-11T08:50:29Z";
+    JellyfinItem friendsE19 = friendsE18;
+    friendsE19.id = "friends-s4e19";
+    friendsE19.indexNumber = 19;
+    friendsE19.played = false;
+    friendsE19.positionTicks = 0;
+    friendsE19.lastPlayedDate = "2026-11-11T08:51:00Z"; // failed startup is not completion
+    std::vector<JellyfinItem> staleResume{friendsE1, friendsE9};
+    mergeHomeResumeCandidates(staleResume, {friendsE18, friendsE19, friendsE1, friendsE9});
+    assert(staleResume.empty());
+    JellyfinItem recentRewatch = friendsE9;
+    recentRewatch.lastPlayedDate = "2026-11-12T05:52:00Z";
+    std::vector<JellyfinItem> genuineResume{recentRewatch};
+    mergeHomeResumeCandidates(genuineResume, {friendsE18, friendsE19, recentRewatch});
+    assert(genuineResume.size() == 1 && genuineResume[0].id == "friends-s4e9");
+    // No date => insufficient evidence to hide a server-provided resume.
+    JellyfinItem undatedResume = friendsE1;
+    undatedResume.lastPlayedDate.clear();
+    std::vector<JellyfinItem> unknownResume{undatedResume};
+    mergeHomeResumeCandidates(unknownResume, {friendsE18});
+    assert(unknownResume.size() == 1);
+
     // A just-stopped episode is visible even if the server Resume feed is still empty.
     HomeResumeOverlay overlay;
     JellyfinSession brandog;
