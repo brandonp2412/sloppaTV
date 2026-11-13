@@ -113,6 +113,22 @@ void testLongSampleConfidenceAndMismatchedTracks() {
     assert(!decideSubtitleSync(wrongModerate, wrongAggressive, 300000, 76).confident);
 }
 
+void testStrongVadEvidenceRequiresGlobalConfirmation() {
+    // These peaks represent an actual difficult external-SRT sample. They can
+    // trigger further verification but must never be applied by themselves.
+    const SubtitleSyncPeak moderate{4600, 680, 440, 1400, 4500, 0.244411, 0.155308};
+    const SubtitleSyncPeak aggressive{4600, 900, 650, 1800, 4500, 0.392739, 0.270550};
+    assert(subtitleStrongVadGlobalCandidate(moderate, aggressive, 275370, 94));
+    assert(!subtitleStrongVadGlobalCandidate(moderate, aggressive, 90000, 94));
+    auto wrongOffset = aggressive;
+    wrongOffset.offsetMs += 18000;
+    assert(!subtitleStrongVadGlobalCandidate(moderate, wrongOffset, 275370, 94));
+    auto weakMargin = moderate;
+    weakMargin.alternativeCorrelation = 0.215;
+    assert(!subtitleStrongVadGlobalCandidate(weakMargin, aggressive, 275370, 94));
+    assert(!evaluateSubtitleSyncWindows({}, {}).confident);
+}
+
 void testProbeUsesDecodedHlsStart() {
     const auto firstFrame = subtitleProbeFirstFrameMs(
         "Parsed_ashowinfo_0: n:0 pts:2256000 pts_time:141.0 fmt:s16 rate:16000 nb_samples:1024");
@@ -342,6 +358,7 @@ int main() {
     testLargeBroadcastAndRecapOffsets();
     testDirectStreamResumeTimeline();
     testUncertainMatchesAreNotApplied();
+    testStrongVadEvidenceRequiresGlobalConfirmation();
     testProbeUsesDecodedHlsStart();
     testProbeClockFallback();
     testPcmSampleDurationNeverOverflowsArm32();

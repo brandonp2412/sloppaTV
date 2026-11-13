@@ -211,11 +211,41 @@ inline SubtitleSyncDecision evaluateSubtitleDialogue(const std::vector<SubtitleD
         for (size_t i = 1; i < starts.size(); ++i)
             if (starts[i] - starts[i - 1] < 180000) return rejected;
     }
+    // Provider releases can have non-standard but *uniform* speed differences.
+    // Fit a robust rate from independent, distant spoken-to-caption matches rather
+    // than guessing a frame rate from the media duration. The existing per-window
+    // inlier checks below still reject missing edits and clock discontinuities.
+    const std::vector<double> standardRates{
+        1.0, 1000.0 / 1001.0, 1001.0 / 1000.0, 24.0 / 25.0,
+        24000.0 / 25025.0, 25.0 / 24.0, 25025.0 / 24000.0};
+    std::vector<double> candidateRates = standardRates;
+    if (requireGlobal && windows.size() >= 3) {
+        std::vector<double> measuredRates;
+        for (size_t i = 0; i < windows.size(); ++i) {
+            for (size_t j = i + 1; j < windows.size(); ++j) {
+                if (std::abs(windows[j].startMs - windows[i].startMs) < 300000) continue;
+                for (const auto& early : windows[i].anchors) {
+                    for (const auto& late : windows[j].anchors) {
+                        const double subtitleSpan = static_cast<double>(late.subtitleMs) - early.subtitleMs;
+                        const double spokenSpan = static_cast<double>(late.spokenMs) - early.spokenMs;
+                        if (std::abs(subtitleSpan) < 300000 || subtitleSpan * spokenSpan <= 0) continue;
+                        const double rate = spokenSpan / subtitleSpan;
+                        if (rate >= 0.9 && rate <= 1.1) measuredRates.push_back(rate);
+                    }
+                }
+            }
+        }
+        if (measuredRates.size() >= 24) {
+            const double rate = subtitleDialogueMedian(std::move(measuredRates));
+            const bool distinct = std::all_of(standardRates.begin(), standardRates.end(),
+                                              [rate](double standard) { return std::abs(rate - standard) >= 0.0015; });
+            if (distinct) candidateRates.push_back(rate);
+        }
+    }
     SubtitleSyncDecision best;
     double bestError = std::numeric_limits<double>::max();
     double secondError = std::numeric_limits<double>::max();
-    for (double scale :
-         {1.0, 1000.0 / 1001.0, 1001.0 / 1000.0, 24.0 / 25.0, 24000.0 / 25025.0, 25.0 / 24.0, 25025.0 / 24000.0}) {
+    for (double scale : candidateRates) {
         if (!requireGlobal && scale != 1.0) continue;
         std::vector<double> residuals;
         std::set<int> uniqueCues;

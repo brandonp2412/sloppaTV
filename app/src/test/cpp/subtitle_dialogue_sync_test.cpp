@@ -93,7 +93,17 @@ int main() {
     recognized.recognizedWords = 39;
     assert(!subtitleHasDialogueEvidence({recognized}));
     assert(subtitleHasDialogueEvidence(subtitle_dialogue_evidence::friendsProvider));
-    assert(!evaluateSubtitleDialogue(synthetic(0.985, 3300)).confident);
+    // An unusual uniform release speed can now be recovered from independent
+    // phrase timing, without accepting an abrupt inserted/deleted scene.
+    for (double rate : {0.973, 0.985, 1.027}) {
+        const auto corrected = evaluateSubtitleDialogue(synthetic(rate, 3300));
+        assert(corrected.confident);
+        assert(std::abs(corrected.timeScale - rate) < 0.00015);
+        assert(std::abs(corrected.offsetMs - 3300) <= 200);
+    }
+    auto novelRateEdit = synthetic(0.985, 3300);
+    for (auto& anchor : novelRateEdit.back().anchors) anchor.spokenMs -= 19000;
+    assert(!evaluateSubtitleDialogue(novelRateEdit).confident);
     // Re-time real recognized dialogue to known frame-rate mismatches.
     auto extended = subtitle_dialogue_evidence::friendsEmbedded;
     extended[2] = {805731, 90000, subtitle_dialogue_evidence::friendsExtendedMiddle};

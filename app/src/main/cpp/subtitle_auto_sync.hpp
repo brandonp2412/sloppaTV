@@ -178,6 +178,22 @@ struct SubtitleTimeWarpEvaluation {
     int matchingCues = 0;
 };
 
+// Very strong two-detector local evidence can justify gathering distant VAD
+// windows, but NEVER authorizes a correction by itself. This rescues cases where
+// recognition yields no matching phrases and within-window VAD stability is
+// marginal. The final global decision must still agree across three distant
+// independent sections of the same release.
+inline bool subtitleStrongVadGlobalCandidate(const SubtitleSyncPeak& moderate, const SubtitleSyncPeak& aggressive,
+                                            int durationMs, int matchingCues) {
+    if (durationMs < 180000 || matchingCues < 60 || moderate.speechFrames < 500 ||
+        aggressive.speechFrames < 350 || moderate.subtitleFrames < 1000 ||
+        aggressive.subtitleFrames < 1000) return false;
+    return moderate.correlation >= 0.20 && aggressive.correlation >= 0.30 &&
+           moderate.correlation - moderate.alternativeCorrelation >= 0.07 &&
+           aggressive.correlation - aggressive.alternativeCorrelation >= 0.07 &&
+           std::abs(moderate.offsetMs - aggressive.offsetMs) <= 250;
+}
+
 // A wrong frame-rate (or a different edit) can occasionally produce a sharp
 // *local* offset peak despite continuing to drift throughout the episode.
 // Requiring independently matching offsets in two halves prevents that false fix.
@@ -295,8 +311,17 @@ inline SubtitleSyncDecision evaluateSubtitleSyncWindows(const std::vector<Subtit
         double quality = 1.0;
         double agreement = 1.0;
         for (const auto& window : windows) {
-            const auto match =
+            auto match =
                 evaluateSubtitleTimeScale(window.moderate, window.aggressive, cues, window.startMs, scale);
+            // A locally unstable but exceptionally strong fixed-offset peak is
+            // safe only when three distant windows agree to within 500 ms.
+            if (scale == 1.0 && !match.decision.confident &&
+                subtitleStrongVadGlobalCandidate(match.moderate, match.aggressive,
+                    static_cast<int>(window.moderate.size()) * 10, match.matchingCues)) {
+                match.decision = {true, (match.moderate.offsetMs + match.aggressive.offsetMs) / 2,
+                                  std::min(match.moderate.correlation - match.moderate.alternativeCorrelation,
+                                           match.aggressive.correlation - match.aggressive.alternativeCorrelation), 1.0};
+            }
             const double correlation = std::min(match.moderate.correlation, match.aggressive.correlation);
             if (!match.decision.confident ||
                 (scale != 1.0 && (correlation < 0.13 || match.decision.agreement < 0.03))) {

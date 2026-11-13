@@ -109,6 +109,14 @@ public:
         return *bounds.second - *bounds.first > 1000;
     }
 
+    [[nodiscard]] std::size_t observationCount() const { return starts_.size(); }
+
+    [[nodiscard]] int spreadMs() const {
+        if (starts_.empty()) return 0;
+        const auto bounds = std::minmax_element(starts_.begin(), starts_.end());
+        return *bounds.second - *bounds.first;
+    }
+
     [[nodiscard]] std::optional<int> startMs() const {
         if (starts_.size() < 3) return std::nullopt;
         auto sorted = starts_;

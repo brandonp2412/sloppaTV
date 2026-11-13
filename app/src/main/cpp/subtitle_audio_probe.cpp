@@ -332,10 +332,19 @@ bool capturePcm(const SubtitleAudioSyncRequest& request, const std::filesystem::
                 observeFirstFrame(api.waitEvent(mpv, 0.01));
                 updateActualStart();
             }
+            if (actualStartMs < 0)
+                failure += " clockSamples=" + std::to_string(clock.observationCount()) +
+                           " spreadMs=" + std::to_string(clock.spreadMs()) +
+                           " firstFrameMs=" + std::to_string(firstDecodedFrameMs) +
+                           " startMs=" + std::to_string(request.sampleStartMs);
             return cleanEnd;
         }
     }
     failure = "audio probe deadline exceeded";
+    if (actualStartMs < 0)
+        failure += " clockSamples=" + std::to_string(clock.observationCount()) +
+                   " spreadMs=" + std::to_string(clock.spreadMs()) +
+                   " firstFrameMs=" + std::to_string(firstDecodedFrameMs);
     return false;
 }
 } // namespace
@@ -393,7 +402,9 @@ static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncR
         return result;
     }
     if (actualStartMs < 0) {
-        result.failure = "audio probe did not report its decoded starting timestamp";
+        result.failure = "audio probe did not report its decoded starting timestamp: " + captureDiagnostic +
+                         " wavBytes=" + std::to_string(wavBytes == static_cast<uintmax_t>(-1) ? 0 : wavBytes) +
+                         " sampleStartMs=" + std::to_string(request.sampleStartMs);
         return result;
     }
 #ifdef __ANDROID__
@@ -435,6 +446,9 @@ static SubtitleAudioSyncResult captureSubtitleAudioSync(const SubtitleAudioSyncR
     const SubtitleSyncPeak& score2 = evaluation.moderate;
     const SubtitleSyncPeak& score3 = evaluation.aggressive;
     result.decision = evaluation.decision;
+    if (!result.decision.confident &&
+        subtitleStrongVadGlobalCandidate(score2, score3, result.audioMs, matchingCues))
+        result.evidence = "vad-global-candidate";
     if (!result.decision.confident) {
         result.failure = "subtitle timing match lacked confidence";
         result.failure += " startMs=" + std::to_string(subtitleSampleStartMs) +
@@ -569,7 +583,9 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
     SubtitleDialogueWindow firstDialogue;
     auto result = captureSubtitleAudioSync(request, first, &firstDialogue);
     // Short media cannot establish a speed correction across distant windows.
-    if ((!result.decision.confident && firstDialogue.anchors.size() < 4) || request.sourceDurationMs < 900000)
+    const bool candidateVadGlobal = result.evidence == "vad-global-candidate";
+    if ((!result.decision.confident && firstDialogue.anchors.size() < 4 && !candidateVadGlobal) ||
+        request.sourceDurationMs < 900000)
         return result;
     std::vector<SubtitleSyncWindow> windows;
     windows.push_back(std::move(first));
@@ -606,6 +622,13 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
             verification.sampleStartMs = 0;
         }
         verification.extendedSample = false;
+        if (candidateVadGlobal) {
+            // The initial recognition already found no reliable caption text.
+            // Verify VAD only; do not rerun a costly speech model on two more
+            // sections just to adjudicate a global fixed-offset candidate.
+            verification.recognizeSpeech = {};
+            verification.shortSpeechProbe = false;
+        }
         SubtitleSyncWindow window;
         SubtitleDialogueWindow dialogueWindow;
         const auto captured = captureSubtitleAudioSync(verification, window, &dialogueWindow);
@@ -650,6 +673,64 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         }
         dialogue = evaluateSubtitleDialogue(dialogueWindows);
     }
+    // A freely estimated speed needs more evidence than a known PAL/NTSC
+    // conversion: four sparse anchors could otherwise hide a cut scene. Verify
+    // the same slope in TWO previously unseen quarters of the episode before
+    // changing caption playback speed. Never alter the active HLS session.
+    const std::vector<double> knownRates{1.0, 1000.0 / 1001.0, 1001.0 / 1000.0,
+                                         24.0 / 25.0, 24000.0 / 25025.0,
+                                         25.0 / 24.0, 25025.0 / 24000.0};
+    const bool novelRate = dialogue.confident &&
+        std::all_of(knownRates.begin(), knownRates.end(),
+                    [&](double rate) { return std::abs(dialogue.timeScale - rate) > 0.001; });
+    if (novelRate) {
+        const SubtitleSyncDecision initialFit = dialogue;
+        const int holdoutScopeBase = request.verificationMediaUrl ? 0 : request.subtitleTimelineBaseMs;
+        const int lastHoldoutStart = request.sourceDurationMs - holdoutScopeBase - 300000;
+        for (int quarter : {1, 3}) {
+            if (lastHoldoutStart <= 0 || (request.cancelled && request.cancelled())) {
+                dialogue.confident = false;
+                break;
+            }
+            const int64_t position = static_cast<int64_t>(holdoutScopeBase - request.subtitleTimelineBaseMs) +
+                                     static_cast<int64_t>(lastHoldoutStart) * quarter / 4;
+            if (position < std::numeric_limits<int>::min() || position > std::numeric_limits<int>::max()) {
+                dialogue.confident = false;
+                break;
+            }
+            auto holdout = request;
+            holdout.sampleStartMs = static_cast<int>(position);
+            if (request.verificationMediaUrl) {
+                const auto media = request.verificationMediaUrl(holdout.sampleStartMs);
+                if (!media) { dialogue.confident = false; break; }
+                holdout.mediaUrl = *media;
+                holdout.sampleStartMs = 0;
+            } else if (holdout.sampleStartMs < 0) {
+                dialogue.confident = false;
+                break;
+            }
+            holdout.extendedSample = false;
+            holdout.requiredDialogueAnchors = 6;
+            SubtitleSyncWindow speechHoldout;
+            SubtitleDialogueWindow dialogueHoldout;
+            const auto captured = captureSubtitleAudioSync(holdout, speechHoldout, &dialogueHoldout);
+            result.audioMs += captured.audioMs;
+            result.dialogueAnchors += captured.dialogueAnchors;
+            if (dialogueHoldout.anchors.size() < 6) { dialogue.confident = false; break; }
+            dialogueWindows.push_back(std::move(dialogueHoldout));
+            dialogue = evaluateSubtitleDialogue(dialogueWindows);
+            if (!dialogue.confident || std::abs(dialogue.timeScale - initialFit.timeScale) > 0.00025 ||
+                std::abs(dialogue.offsetMs - initialFit.offsetMs) > 500) {
+                dialogue.confident = false;
+                break;
+            }
+        }
+        if (!dialogue.confident) {
+            result.decision.confident = false;
+            result.failure = "nonstandard subtitle speed failed independent holdout verification";
+            return result;
+        }
+    }
     if (dialogue.confident) {
         result.decision = dialogue;
         result.evidence = "dialogue";
@@ -657,7 +738,9 @@ SubtitleAudioSyncResult synchronizeSubtitleAudio(const SubtitleAudioSyncRequest&
         return result;
     }
     // Conflicting recognized dialogue must not be overruled by a VAD coincidence.
-    if (subtitleHasDialogueEvidence(dialogueWindows)) {
+    if (subtitleHasDialogueEvidence(dialogueWindows) &&
+        (!candidateVadGlobal || std::any_of(dialogueWindows.begin(), dialogueWindows.end(),
+                                            [](const auto& window) { return !window.anchors.empty(); }))) {
         result.decision.confident = false;
         result.failure = "recognized dialogue did not establish one consistent episode timeline";
         return result;
