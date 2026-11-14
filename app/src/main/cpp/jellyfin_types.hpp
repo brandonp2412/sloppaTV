@@ -110,6 +110,7 @@ struct JellyfinItem {
     int64_t runtimeTicks = 0;
     bool favorite = false;
     bool played = false;
+    std::string lastPlayedDate; // ISO-8601 UserData.LastPlayedDate, for identifying stale episode resumes.
     bool canDelete = false;
 
     // Synthetic external media fields used by optional request-manager integrations.

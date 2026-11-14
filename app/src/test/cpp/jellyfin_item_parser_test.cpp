@@ -30,7 +30,8 @@ int main() {
            {"Name", "Actor"},
            {"PrimaryImageTag", "actor-tag"},
            {"Role", "Lead"}}}},
-        {"UserData", {{"PlaybackPositionTicks", 25000000LL}, {"IsFavorite", true}, {"Played", false}}},
+        {"UserData", {{"PlaybackPositionTicks", 25000000LL}, {"IsFavorite", true}, {"Played", false},
+                      {"LastPlayedDate", "2026-11-12T05:39:00Z"}}},
         {"ImageTags", {{"Primary", "primary-tag"}, {"Thumb", "thumb-tag"}, {"Logo", "logo-tag"}}},
         {"BackdropImageTags", {"backdrop-tag"}},
         {"MediaSources",
@@ -88,6 +89,7 @@ int main() {
     assert(item.cast.size() == 1 && item.cast[0] == "Actor");
     assert(item.positionTicks == 25000000LL);
     assert(item.favorite && !item.played);
+    assert(item.lastPlayedDate == "2026-11-12T05:39:00Z");
     assert(item.imageTag == "primary-tag");
     assert(item.logoItemId == "episode-1");
     assert(item.backdropItemId == "episode-1");

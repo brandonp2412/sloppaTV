@@ -91,6 +91,7 @@ JellyfinItem parseJellyfinItem(const json& value) {
         item.positionTicks = scalarValueOr(*userData, "PlaybackPositionTicks", static_cast<int64_t>(0));
         item.favorite = scalarValueOr(*userData, "IsFavorite", false);
         item.played = scalarValueOr(*userData, "Played", false);
+        item.lastPlayedDate = scalarValueOr(*userData, "LastPlayedDate", std::string{});
     }
     if (const auto imageTags = value.find("ImageTags"); imageTags != value.end() && imageTags->is_object()) {
         item.imageTag = scalarValueOr(*imageTags, "Primary", std::string{});
