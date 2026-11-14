@@ -857,7 +857,11 @@ void NativeMediaPlayer::logDecodedFrameTelemetryLocked(std::chrono::steady_clock
     }
     lastDecodedFrameTelemetry_ = now;
 
-    const char* args[] = {"screenshot-raw", "video", nullptr};
+    const char* args[] = {"screenshot-raw", "subtitles", nullptr};
+    bool visible = false;
+    const bool visibilityKnown = getFlagPropertyLocked("sub-visibility", visible);
+    __android_log_print(ANDROID_LOG_INFO, kTag, "E2E PGS state sid=%s subVisible=%d known=%d",
+                        getStringPropertyLocked("sid").c_str(), visible, visibilityKnown);
     MpvNode result{};
     const int rc = symbols_->commandRet(mpv_, args, &result);
     if (rc < 0) {
@@ -905,6 +909,10 @@ void NativeMediaPlayer::logDecodedFrameTelemetryLocked(std::chrono::steady_clock
             maxByte = std::max(maxByte, value);
             nonzero += value != 0;
             ++sampled;
+        }
+        if (minByte < 255 && width == 720 && height == 480 && stride == 2880 && !filesDir_.empty()) {
+            std::ofstream frame(filesDir_ + "/pgs-qa-rendered.bgr0", std::ios::binary | std::ios::trunc);
+            frame.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(bytes->size));
         }
         ++decodedFrameTelemetrySamples_;
         __android_log_print(

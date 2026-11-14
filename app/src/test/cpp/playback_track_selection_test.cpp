@@ -171,6 +171,15 @@ int main() {
     assert(!playbackShouldDisableStaleDiscoveredSubtitle(switchedTracks, 4, -1, "dan"));
     assert(!playbackShouldDisableStaleDiscoveredSubtitle(switchedTracks, 4, -1, "eng", true));
     assert(!playbackShouldDisableStaleDiscoveredSubtitle(switchedTracks, -1, -1, "eng"));
+    // PGS sources may advertise English while their demuxed track lacks a tag.
+    auto untaggedTracks = switchedTracks;
+    untaggedTracks.front().language.clear();
+    assert(!playbackShouldDisableStaleDiscoveredSubtitle(untaggedTracks, 4, -1, "eng"));
+    assert(!playbackShouldRebindDiscoveredSubtitle(untaggedTracks, 4, 6, "eng"));
+    untaggedTracks.front().language = "und";
+    assert(!playbackShouldDisableStaleDiscoveredSubtitle(untaggedTracks, 4, -1, "eng"));
+    untaggedTracks.front().language = "dan";
+    assert(playbackShouldDisableStaleDiscoveredSubtitle(untaggedTracks, 4, -1, "eng"));
 
     // Friends S4E15: Russian "Dais" at index 5 and English SDH at index 6.
     JellyfinItem friends;
