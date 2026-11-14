@@ -137,12 +137,7 @@ CPP_TESTS = [
     "similar_prefetch_controller_test.cpp",
     "status_overlay_renderer_test.cpp",
     "status_overlay_state_test.cpp",
-    "subtitle_auto_sync_test.cpp",
-    "subtitle_dialogue_sync_test.cpp",
-    "subtitle_speech_model_test.cpp",
-    "subtitle_sync_correction_cache_test.cpp",
     "subtitle_load_executor_test.cpp",
-    "subtitle_sync_executor_test.cpp",
     "subtitle_policy_test.cpp",
     "system_text_input_test.cpp",
     "text_layout_test.cpp",
@@ -203,17 +198,6 @@ LINKED_CPP_TESTS = [
             "settings_navigation_controller.cpp",
         ],
         [],
-    ),
-    (
-        "subtitle_lapse_test.cpp",
-        [
-            "subtitle_lapse_alignment.cpp",
-            *[
-                f"third_party/lapse/{name}.cpp"
-                for name in ["align", "correlate", "cuetext", "srt_parser", "charset", "log"]
-            ],
-        ],
-        ["-lfftw3"],
     ),
     ("http_get_coordinator_test.cpp", [], ["-pthread"]),
     ("http_retry_coordinator_test.cpp", [], ["-pthread"]),

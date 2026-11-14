@@ -9,59 +9,6 @@ if(NOT DEFINED SLOPPATV_VERSION_NAME)
     set(SLOPPATV_VERSION_NAME "dev")
 endif()
 
-# Pinned whisper.cpp; speech recognition stays on the device.
-include(FetchContent)
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
-set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
-set(GGML_BACKEND_DL OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(WHISPER_BUILD_SERVER OFF CACHE BOOL "" FORCE)
-set(WHISPER_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(subtitle_whisper
-    URL https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/d1be6fde11ac6e0407606b4e42fe72d34add8037
-    URL_HASH SHA256=645445da884df6dbd52b30f82d7be7c01d1767c938714e477e786b88d529e9f4
-)
-FetchContent_MakeAvailable(subtitle_whisper)
-# Speech inference needs optimized kernels even in isolated debug builds.
-foreach(speech_target whisper ggml ggml-base ggml-cpu)
-    if(TARGET ${speech_target})
-        get_target_property(speech_target_type ${speech_target} TYPE)
-        if(NOT speech_target_type STREQUAL "INTERFACE_LIBRARY")
-            target_compile_options(${speech_target} PRIVATE -O3)
-        endif()
-    endif()
-endforeach()
-
-
-# LAPSE uses FFTW for the alignment search. Keep both native dependencies pinned.
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ENABLE_THREADS OFF CACHE BOOL "" FORCE)
-set(ENABLE_OPENMP OFF CACHE BOOL "" FORCE)
-set(DISABLE_FORTRAN ON CACHE BOOL "" FORCE)
-set(ENABLE_FLOAT OFF CACHE BOOL "" FORCE)
-set(ENABLE_LONG_DOUBLE OFF CACHE BOOL "" FORCE)
-FetchContent_Declare(subtitle_fftw
-    URL https://www.fftw.org/fftw-3.3.10.tar.gz
-    URL_HASH SHA256=56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467
-)
-FetchContent_MakeAvailable(subtitle_fftw)
-add_library(sloppatv_lapse STATIC
-    third_party/lapse/align.cpp
-    third_party/lapse/correlate.cpp
-    third_party/lapse/silero.cpp
-    third_party/lapse/srt_parser.cpp
-    third_party/lapse/charset.cpp
-    third_party/lapse/cuetext.cpp
-    third_party/lapse/log.cpp
-)
-target_include_directories(sloppatv_lapse PUBLIC ${subtitle_fftw_SOURCE_DIR}/api)
-target_link_libraries(sloppatv_lapse PUBLIC fftw3)
-target_compile_options(sloppatv_lapse PRIVATE -O3)
-
-
 add_library(sloppatv SHARED
     ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
     main.cpp
@@ -102,10 +49,6 @@ add_library(sloppatv SHARED
     launch_intent.cpp
     image_decoder.cpp
     media_player.cpp
-    subtitle_lapse_alignment.cpp
-    subtitle_lapse.cpp
-    subtitle_audio_probe.cpp
-    subtitle_speech_recognizer.cpp
     media_session.cpp
     playback_info.cpp
     seerr.cpp
@@ -113,23 +56,6 @@ add_library(sloppatv SHARED
     task_runner.cpp
     video_surface.cpp
 )
-
-add_library(sloppatv_fvad STATIC
-    third_party/libfvad/src/fvad.c
-    third_party/libfvad/src/signal_processing/division_operations.c
-    third_party/libfvad/src/signal_processing/energy.c
-    third_party/libfvad/src/signal_processing/get_scaling_square.c
-    third_party/libfvad/src/signal_processing/resample_48khz.c
-    third_party/libfvad/src/signal_processing/resample_by_2_internal.c
-    third_party/libfvad/src/signal_processing/resample_fractional.c
-    third_party/libfvad/src/signal_processing/spl_inl.c
-    third_party/libfvad/src/vad/vad_core.c
-    third_party/libfvad/src/vad/vad_filterbank.c
-    third_party/libfvad/src/vad/vad_gmm.c
-    third_party/libfvad/src/vad/vad_sp.c
-)
-set_target_properties(sloppatv_fvad PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_include_directories(sloppatv_fvad PRIVATE third_party/libfvad/src third_party/libfvad/include)
 
 target_include_directories(sloppatv PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
@@ -153,8 +79,6 @@ if(SLOPPATV_E2E_TELEMETRY)
 endif()
 
 target_link_libraries(sloppatv PRIVATE
-    sloppatv_fvad
-    whisper
     android
     dl
     log
@@ -162,5 +86,3 @@ target_link_libraries(sloppatv PRIVATE
     EGL
     GLESv3
 )
-
-target_link_libraries(sloppatv PRIVATE sloppatv_lapse)

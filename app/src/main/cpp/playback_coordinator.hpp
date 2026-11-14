@@ -880,14 +880,6 @@ public:
         return playbackTrackLabel(sessionState_.activeItem(), trackState_, kind);
     }
 
-    void applySubtitleAutoSync(int offsetMs, double timeScale = 1.0) {
-        trackState_.setSubtitleTimeWarp(offsetMs, timeScale);
-    }
-
-    void applySubtitleTimeline(const std::vector<SubtitleTimelineRegion>& regions) {
-        trackState_.setSubtitleTimeline(regions);
-    }
-
     [[nodiscard]] int subtitleOffsetMs() const { return trackState_.subtitleOffsetMs(); }
 
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {

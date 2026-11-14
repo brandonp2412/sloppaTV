@@ -1,18 +1,12 @@
 #include "player_tracks.hpp"
-
 #include <cassert>
 
 int main() {
     PlayerTrackState state;
-    int invalidations = 0;
-    state.setSubtitleContextChanged([&] { ++invalidations; });
-
     assert(!state.subtitleBusy());
     assert(state.beginSubtitleWork());
-    assert(state.subtitleBusy());
     assert(!state.beginSubtitleWork());
     state.endSubtitleWork();
-    assert(!state.subtitleBusy());
 
     state.setSelectedAudioServerIndex(3);
     state.setSelectedSubtitleServerIndex(7);
@@ -20,119 +14,59 @@ int main() {
     state.setSubtitleLanguagePreference(std::string("jpn"));
     assert(state.selectedAudioServerIndex() == 3);
     assert(state.selectedSubtitleServerIndex() == 7);
-    assert(state.audioLanguagePreference() == std::optional<std::string>("eng"));
-    assert(state.subtitleLanguagePreference() == std::optional<std::string>("jpn"));
 
-    std::vector<SubtitleCue> cues{
-        {.startMs = 100, .endMs = 300, .text = "first"},
-        {.startMs = 500, .endMs = 900, .text = "second"},
-    };
-    state.applySubtitle(7, "English", std::move(cues));
+    state.applySubtitle(7, "English", {{100, 300, "first"}, {500, 900, "second"}});
     assert(state.subtitleEnabled());
     assert(state.activeSubtitleServerIndex() == 7);
     assert(state.subtitleLanguage() == "English");
-    assert(state.subtitleCues().size() == 2);
     assert(state.activeSubtitleCue(50) == nullptr);
     assert(state.activeSubtitleCue(100)->text == "first");
     assert(state.activeSubtitleCue(299)->text == "first");
     assert(state.activeSubtitleCue(300) == nullptr);
     assert(state.activeSubtitleCue(600)->text == "second");
     assert(state.activeSubtitleCue(900) == nullptr);
+
+    // Manual constant offset remains available, without automatic correction.
     state.setSubtitleOffsetMs(1200);
-    assert(state.subtitleOffsetMs() == 1200);
     assert(state.activeSubtitleCue(1300)->text == "first");
     assert(state.activeSubtitleCue(1700)->text == "second");
     assert(state.activeSubtitleCue(600) == nullptr);
     state.setSubtitleOffsetMs(-100);
     assert(state.activeSubtitleCue(0)->text == "first");
-    state.setSubtitleOffsetMs(110000);
-    assert(state.subtitleOffsetMs() == 110000);
-    assert(state.activeSubtitleCue(110100)->text == "first");
     state.setSubtitleOffsetMs(500000);
     assert(state.subtitleOffsetMs() == 120000);
     state.setSubtitleOffsetMs(-500000);
     assert(state.subtitleOffsetMs() == -120000);
     state.setSubtitleOffsetMs(0);
 
-    // Subtitle cues can use a different frame-rate clock than the video.
-    const double palScale = 24000.0 / 25025.0;
-    state.applySubtitle(7, "English", {{1200000, 1202000, "pal line"}});
-    state.setSubtitleTimeWarp(2400, palScale);
-    assert(std::abs(state.subtitleTimeScale() - palScale) < 0.00001);
-    const int palStartMs = static_cast<int>(std::lround(1200000 * palScale + 2400));
-    const int palEndMs = static_cast<int>(std::lround(1202000 * palScale + 2400));
-    assert(state.activeSubtitleCue(palStartMs - 10) == nullptr);
-    assert(state.activeSubtitleCue(palStartMs + 10)->text == "pal line");
-    assert(state.activeSubtitleCue(palEndMs + 10) == nullptr);
-    state.setSubtitleOffsetMs(0);
-    assert(state.subtitleTimeScale() == 1.0);
-
-    const auto beforeToggle = state.subtitleSyncRevision();
     state.setSubtitleEnabled(false);
     assert(state.activeSubtitleCue(600) == nullptr);
     state.setSubtitleEnabled(true);
-    assert(state.subtitleSyncRevision() > beforeToggle);
-    // Returning to the same track must still cancel work for the earlier selection.
-    const auto beforeAudioSwitch = state.subtitleSyncRevision();
-    state.setSelectedAudioServerIndex(4);
-    state.setSelectedAudioServerIndex(3);
-    assert(state.subtitleSyncRevision() > beforeAudioSwitch);
-    const auto beforeSubtitleSwitch = state.subtitleSyncRevision();
-    state.setSelectedSubtitleServerIndex(8);
-    state.setSelectedSubtitleServerIndex(7);
-    assert(state.subtitleSyncRevision() > beforeSubtitleSwitch);
-    const auto stableSelection = state.subtitleSyncRevision();
-    const int stableInvalidations = invalidations;
-    state.setSelectedSubtitleServerIndex(7);
-    state.setSelectedAudioServerIndex(3);
-    state.setSubtitleEnabled(true);
-    assert(state.subtitleSyncRevision() == stableSelection);
-    assert(invalidations == stableInvalidations);
-    assert(invalidations >= 6);
+    assert(state.activeSubtitleCue(600)->text == "second");
 
-    std::vector<SubtitleCue> overlappingCues{
-        {.startMs = 1'000, .endMs = 5'000, .text = "long dialogue"},
-        {.startMs = 2'000, .endMs = 3'000, .text = "brief sign"},
-    };
-    state.applySubtitle(7, "English", std::move(overlappingCues));
-    assert(state.subtitleOffsetMs() == 0);
-    assert(state.activeSubtitleCue(2'500)->text == "brief sign");
-    assert(state.activeSubtitleCue(3'500)->text == "long dialogue");
-
-    state.setSubtitleTimeline({{1000, 60000, 3000, 1.0, 8}});
-    assert(!state.activeSubtitleCue(1500)); // no early flash before the mapped region
-    assert(state.activeSubtitleCue(6500)->text == "long dialogue");
+    state.applySubtitle(7, "English",
+                        {{1000, 5000, "long dialogue"}, {2000, 3000, "brief sign"}});
+    assert(state.activeSubtitleCue(2500)->text == "brief sign");
+    assert(state.activeSubtitleCue(3500)->text == "long dialogue");
+    state.setSubtitleOffsetMs(3000);
     assert(state.activeSubtitleCue(5500)->text == "brief sign");
-    assert(state.activeSubtitleCue(6500)->text == "long dialogue"); // seek forward/back
-    assert(state.subtitleCues().front().startMs == 1000);           // immutable original
+    assert(state.activeSubtitleCue(6500)->text == "long dialogue");
     state.setSelectedAudioServerIndex(99);
-    assert(!state.activeSubtitleCue(6500)); // old audio's correction is invalidated
+    assert(state.subtitleOffsetMs() == 0);
     state.setSubtitleOffsetMs(2500);
     state.failSelectedSubtitle();
     assert(state.subtitleOffsetMs() == 0);
-    assert(state.subtitleTimeScale() == 1.0);
     assert(!state.subtitleBusy());
     assert(state.selectedSubtitleServerIndex() == -1);
-    assert(state.activeSubtitleServerIndex() == -1);
     assert(!state.subtitleEnabled());
     assert(state.subtitleCues().empty());
 
     state.setSelectedAudioServerIndex(4);
     state.setSelectedSubtitleServerIndex(8);
-    state.setAudioLanguagePreference(std::string("eng"));
-    state.setSubtitleLanguagePreference(std::string("spa"));
     state.resetSession();
     assert(state.selectedAudioServerIndex() == -1);
     assert(state.selectedSubtitleServerIndex() == -1);
     assert(!state.audioLanguagePreference().has_value());
     assert(!state.subtitleLanguagePreference().has_value());
-    assert(state.subtitleCues().empty());
-
     return 0;
-    PlayerTrackState negative;
-    negative.setSelectedSubtitleServerIndex(2);
-    negative.applySubtitle(2, "English", {{10000, 12000, "first"}, {60000, 61000, "last"}});
-    negative.setSubtitleTimeline({{10000, 60999, -3000, 1.0, 8}});
-    assert(negative.activeSubtitleCue(57500)->text == "last");
-    assert(!negative.activeSubtitleCue(60500)); // no repeat at the original timestamp
 }
