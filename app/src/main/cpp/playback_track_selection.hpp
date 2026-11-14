@@ -71,6 +71,14 @@ playbackDiscoveredSubtitleAtIndex(const std::vector<JellyfinSubtitleStream>& dis
     return it == discovered.end() ? nullptr : &*it;
 }
 
+// A demuxer can omit the language tag on an otherwise valid PGS track.
+// Missing/undetermined language is not evidence that the selected track changed.
+inline bool discoveredSubtitleLanguageConflicts(const JellyfinSubtitleStream& track, const std::string& desiredLanguage) {
+    if (desiredLanguage.empty()) return false;
+    const std::string language = normalizeSubtitleLanguage(track.language);
+    return !language.empty() && language != "und" && language != "unknown" && language != desiredLanguage;
+}
+
 // A source fallback can reuse an ff-index for a different language. Only
 // correct stale native selections; preserve deliberate external selections.
 inline bool playbackShouldRebindDiscoveredSubtitle(const std::vector<JellyfinSubtitleStream>& discovered,
@@ -79,7 +87,7 @@ inline bool playbackShouldRebindDiscoveredSubtitle(const std::vector<JellyfinSub
     if (selectedExternal || preferredIndex < 0 || preferredIndex == selectedIndex) return false;
     if (selectedIndex < 0) return true;
     const auto* selected = playbackDiscoveredSubtitleAtIndex(discovered, selectedIndex);
-    return !selected || (!desiredLanguage.empty() && normalizeSubtitleLanguage(selected->language) != desiredLanguage);
+    return !selected || discoveredSubtitleLanguageConflicts(*selected, desiredLanguage);
 }
 
 inline bool playbackShouldDisableStaleDiscoveredSubtitle(const std::vector<JellyfinSubtitleStream>& discovered,
@@ -88,7 +96,7 @@ inline bool playbackShouldDisableStaleDiscoveredSubtitle(const std::vector<Jelly
                                                          bool selectedExternal = false) {
     if (selectedExternal || selectedIndex < 0 || preferredIndex >= 0 || desiredLanguage.empty()) return false;
     const auto* selected = playbackDiscoveredSubtitleAtIndex(discovered, selectedIndex);
-    return !selected || normalizeSubtitleLanguage(selected->language) != desiredLanguage;
+    return !selected || discoveredSubtitleLanguageConflicts(*selected, desiredLanguage);
 }
 
 inline bool playbackSubtitleAllowed(const JellyfinSubtitleStream& subtitle,
