@@ -1,5 +1,6 @@
 #pragma once
 
+#include "hls_playback_policy.hpp"
 #include "audio_policy.hpp"
 #include "media_player_policy.hpp"
 #include "playback_continuation.hpp"
@@ -404,7 +405,8 @@ inline PlaybackTransitionPlan planPlaybackTransition(const PlaybackTarget& targe
                                                      bool streamRestart, bool restartPaused, int audioStreamIndex) {
     PlaybackTransitionPlan plan;
     plan.startPositionMs = playbackPositionMsFromTicks(target.startTicks);
-    plan.durationMs = playbackPositionMsFromTicks(item.runtimeTicks);
+    plan.durationMs =
+        playbackPositionMsFromTicks(target.sourceRuntimeTicks > 0 ? target.sourceRuntimeTicks : item.runtimeTicks);
     plan.selectedAudioServerIndex = audioStreamIndex >= 0 ? audioStreamIndex : target.audioStreamIndex;
     if (plan.selectedAudioServerIndex < 0 && !item.audios.empty()) {
         const auto preferred = std::find_if(item.audios.begin(), item.audios.end(),
@@ -475,7 +477,8 @@ public:
     }
 
     [[nodiscard]] bool seekRequiresStreamRestart(int logicalPositionMs) const {
-        return !activeTargetUsesDirectPlay() && std::max(0, logicalPositionMs) < playerTimelineBaseMs();
+        return serverStreamSeekNeedsRestart(activeTargetUsesDirectPlay(), sessionState_.activeTarget().url,
+                                            logicalPositionMs, playerTimelineBaseMs());
     }
 
     [[nodiscard]] int logicalPositionFromPlayerPosition(int playerPositionMs) const {
@@ -621,6 +624,8 @@ public:
         transitionState_.clearPauseAfterRestart();
         return true;
     }
+
+    [[nodiscard]] bool pauseAfterRestart() const { return transitionState_.pauseAfterRestart(); }
 
     [[nodiscard]] bool transitionLoading() const { return transitionState_.loading(); }
 
@@ -805,8 +810,11 @@ public:
     [[nodiscard]] PlaybackTelemetryReadPlan consumeTelemetryRead(TimePoint now, bool force, int currentDurationMs) {
         if (!telemetryState_.shouldReadPlayback(now, force)) return {};
         PlaybackTelemetryReadPlan plan{.read = true};
-        if (sessionState_.activeItem().runtimeTicks > 0) {
-            plan.knownDurationMs = playbackPositionMsFromTicks(sessionState_.activeItem().runtimeTicks);
+        const int64_t durationTicks = sessionState_.activeTarget().sourceRuntimeTicks > 0
+                                          ? sessionState_.activeTarget().sourceRuntimeTicks
+                                          : sessionState_.activeItem().runtimeTicks;
+        if (durationTicks > 0) {
+            plan.knownDurationMs = playbackPositionMsFromTicks(durationTicks);
         } else if ((force || currentDurationMs <= 0) && telemetryState_.shouldProbeDuration(now, force)) {
             plan.probeDuration = true;
             telemetryState_.markDurationProbe(now);
@@ -874,6 +882,10 @@ public:
 
     void applySubtitleAutoSync(int offsetMs, double timeScale = 1.0) {
         trackState_.setSubtitleTimeWarp(offsetMs, timeScale);
+    }
+
+    void applySubtitleTimeline(const std::vector<SubtitleTimelineRegion>& regions) {
+        trackState_.setSubtitleTimeline(regions);
     }
 
     [[nodiscard]] int subtitleOffsetMs() const { return trackState_.subtitleOffsetMs(); }

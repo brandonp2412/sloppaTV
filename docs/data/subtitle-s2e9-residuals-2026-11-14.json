@@ -1,0 +1,2478 @@
+{
+  "buildVersionCode": 100730,
+  "emulator": "remux_subtitles_pixel5_api35",
+  "serial": "emulator-5580",
+  "sourceSha256": "6883874db686c2242cf68cd6c6217bf65d0f4f6d64270b7dd61cd6a5543a1b8f",
+  "originalSubtitleSha256": "9a247b017a3892310a095e4926cad2a9d81e6ecee99cfb2430d85634080a3f82",
+  "subtitleCues": 791,
+  "subtitleStream": 2,
+  "manualDelayMs": 0,
+  "profileClockChecks": [
+    {
+      "sampleMs": 5000,
+      "referenceMs": 5040,
+      "clockErrorMs": 47,
+      "correlation": 0.9907495263156223
+    },
+    {
+      "sampleMs": 1100000,
+      "referenceMs": 1100040,
+      "clockErrorMs": 47,
+      "correlation": 0.9665701334835456
+    },
+    {
+      "sampleMs": 1160000,
+      "referenceMs": 1160040,
+      "clockErrorMs": 47,
+      "correlation": 0.9799504648679463
+    },
+    {
+      "sampleMs": 1730000,
+      "referenceMs": 1730040,
+      "clockErrorMs": 47,
+      "correlation": 0.9780648918059276
+    },
+    {
+      "sampleMs": 1810000,
+      "referenceMs": 1810040,
+      "clockErrorMs": 47,
+      "correlation": 0.9723592877901588
+    },
+    {
+      "sampleMs": 2550000,
+      "referenceMs": 2550040,
+      "clockErrorMs": 47,
+      "correlation": 0.9826007800299651
+    },
+    {
+      "sampleMs": 2610000,
+      "referenceMs": 2610040,
+      "clockErrorMs": 47,
+      "correlation": 0.9733921806809256
+    }
+  ],
+  "audioSamples": [
+    {
+      "region": "before19",
+      "sourceStartMs": 1100000,
+      "durationSeconds": 45,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "5470d6e56be7a3db7a10b67875dd06477ac624657c8934d62e64d11e17d37d4c"
+    },
+    {
+      "region": "critical19",
+      "sourceStartMs": 1150000,
+      "durationSeconds": 85,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "457ef129d0f04d0ed423d61712490b5ffd41932fbf06c33f4d432c8a2a06fb8c"
+    },
+    {
+      "region": "ending",
+      "sourceStartMs": 2535000,
+      "durationSeconds": 90,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "c1d76e42f7044ac0ece5fb7b9104375852531c965a748e21d430bdd1cc6512b1"
+    },
+    {
+      "region": "forward30",
+      "sourceStartMs": 1810000,
+      "durationSeconds": 50,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "b9a58b5864fb372e5fd3b73807a9864dc1fb941589a6b9c58173fc873c211b7d"
+    },
+    {
+      "region": "late29",
+      "sourceStartMs": 1705000,
+      "durationSeconds": 135,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "9eb9c2bdeb1b877cad7dcc855df972ca6ef53a979a1e9236505dfb4ca6fe27e0"
+    },
+    {
+      "region": "offon-reopen",
+      "sourceStartMs": 1892000,
+      "durationSeconds": 45,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "ff6dba41d430fb92f9a695900ae52d5e6cb62bbd359368c081f64fc5f895ffb3"
+    },
+    {
+      "region": "opening",
+      "sourceStartMs": 40,
+      "durationSeconds": 76,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "70d69f24ea1fc7d26793db2f46e3fd663194d4a0103c9e1c810495afa77c7430"
+    },
+    {
+      "region": "quick19",
+      "sourceStartMs": 1150000,
+      "durationSeconds": 35,
+      "profilePhysicalStartMs": 40,
+      "file": "decoded-audio.wav",
+      "sha256": "5f0c92a8fe6ae59ee8d4aedacfb57d268d5f58366cd60893806178d7764a8ae2"
+    }
+  ],
+  "baseEn": [
+    {
+      "label": "before19",
+      "matches": 12,
+      "medianMs": 114.0,
+      "maxAbsMs": 340,
+      "p90AbsMs": 287,
+      "below500": 12,
+      "rows": [
+        {
+          "cueMs": 1101747,
+          "renderSourceMs": 1105271,
+          "spokenSourceMs": 1105300,
+          "residualMs": -29,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9194099307060242,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1104348,
+          "renderSourceMs": 1107940,
+          "spokenSourceMs": 1107600,
+          "residualMs": 340,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8711523413658142,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1116225,
+          "renderSourceMs": 1119827,
+          "spokenSourceMs": 1119540,
+          "residualMs": 287,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9963443875312805,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1121158,
+          "renderSourceMs": 1124749,
+          "spokenSourceMs": 1124600,
+          "residualMs": 149,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9308533072471619,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1124267,
+          "renderSourceMs": 1127877,
+          "spokenSourceMs": 1127720,
+          "residualMs": 157,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8920207023620605,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1126275,
+          "renderSourceMs": 1129920,
+          "spokenSourceMs": 1129820,
+          "residualMs": 100,
+          "similarity": 1.0,
+          "firstWordProbability": 0.969064325094223,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1128165,
+          "renderSourceMs": 1131756,
+          "spokenSourceMs": 1131800,
+          "residualMs": -44,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9923535585403442,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1130507,
+          "renderSourceMs": 1134091,
+          "spokenSourceMs": 1133980,
+          "residualMs": 111,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8614270687103271,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1133058,
+          "renderSourceMs": 1136719,
+          "spokenSourceMs": 1136540,
+          "residualMs": 179,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9815240502357483,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1134967,
+          "renderSourceMs": 1138554,
+          "spokenSourceMs": 1138620,
+          "residualMs": -66,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9966362714767456,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1137855,
+          "renderSourceMs": 1141390,
+          "spokenSourceMs": 1141300,
+          "residualMs": 90,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9911837577819824,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1144755,
+          "renderSourceMs": 1148397,
+          "spokenSourceMs": 1148280,
+          "residualMs": 117,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9958518743515015,
+          "repeatedOnset": false
+        }
+      ]
+    },
+    {
+      "label": "critical19",
+      "matches": 11,
+      "medianMs": 293,
+      "maxAbsMs": 548,
+      "p90AbsMs": 494,
+      "below500": 10,
+      "rows": [
+        {
+          "cueMs": 1149328,
+          "renderSourceMs": 1153027,
+          "spokenSourceMs": 1152880,
+          "residualMs": 147,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9169850945472717,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1152176,
+          "renderSourceMs": 1155654,
+          "spokenSourceMs": 1155160,
+          "residualMs": 494,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9932819306850433,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1154016,
+          "renderSourceMs": 1157490,
+          "spokenSourceMs": 1157540,
+          "residualMs": -50,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9470741748809814,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1158368,
+          "renderSourceMs": 1161869,
+          "spokenSourceMs": 1161440,
+          "residualMs": 429,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9647549390792847,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1160237,
+          "renderSourceMs": 1163913,
+          "spokenSourceMs": 1163620,
+          "residualMs": 293,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9705855846405029,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1168055,
+          "renderSourceMs": 1171712,
+          "spokenSourceMs": 1171600,
+          "residualMs": 112,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9895261526107788,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1179338,
+          "renderSourceMs": 1182890,
+          "spokenSourceMs": 1182580,
+          "residualMs": 310,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8105167150497437,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1184136,
+          "renderSourceMs": 1187853,
+          "spokenSourceMs": 1187560,
+          "residualMs": 293,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9949530959129333,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1194297,
+          "renderSourceMs": 1197988,
+          "spokenSourceMs": 1197440,
+          "residualMs": 548,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8863027095794678,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1202945,
+          "renderSourceMs": 1206539,
+          "spokenSourceMs": 1206300,
+          "residualMs": 239,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9926652312278748,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1204775,
+          "renderSourceMs": 1208332,
+          "spokenSourceMs": 1208440,
+          "residualMs": -108,
+          "similarity": 1.0,
+          "firstWordProbability": 0.998786985874176,
+          "repeatedOnset": false
+        }
+      ]
+    },
+    {
+      "label": "ending",
+      "matches": 18,
+      "medianMs": 202.5,
+      "maxAbsMs": 503,
+      "p90AbsMs": 497,
+      "below500": 17,
+      "rows": [
+        {
+          "cueMs": 2532319,
+          "renderSourceMs": 2542331,
+          "spokenSourceMs": 2542240,
+          "residualMs": 91,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9653740525245667,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2535300,
+          "renderSourceMs": 2545209,
+          "spokenSourceMs": 2544980,
+          "residualMs": 229,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9950084686279297,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2537518,
+          "renderSourceMs": 2547503,
+          "spokenSourceMs": 2547000,
+          "residualMs": 503,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9728249311447144,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2546790,
+          "renderSourceMs": 2556804,
+          "spokenSourceMs": 2556780,
+          "residualMs": 24,
+          "similarity": 1.0,
+          "firstWordProbability": 0.888649046421051,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2549959,
+          "renderSourceMs": 2559932,
+          "spokenSourceMs": 2559820,
+          "residualMs": 112,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9957346320152283,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2553199,
+          "renderSourceMs": 2563269,
+          "spokenSourceMs": 2563140,
+          "residualMs": 129,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9902467727661133,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2556440,
+          "renderSourceMs": 2566397,
+          "spokenSourceMs": 2565900,
+          "residualMs": 497,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9954427480697632,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2558628,
+          "renderSourceMs": 2568691,
+          "spokenSourceMs": 2568480,
+          "residualMs": 211,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9835630655288696,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2561719,
+          "renderSourceMs": 2571819,
+          "spokenSourceMs": 2571620,
+          "residualMs": 199,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9953581690788269,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2570408,
+          "renderSourceMs": 2580411,
+          "spokenSourceMs": 2580220,
+          "residualMs": 191,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9929397106170654,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2571868,
+          "renderSourceMs": 2581954,
+          "spokenSourceMs": 2581600,
+          "residualMs": 354,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9931766986846924,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2581641,
+          "renderSourceMs": 2591547,
+          "spokenSourceMs": 2591340,
+          "residualMs": 207,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9962846040725708,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2583839,
+          "renderSourceMs": 2593925,
+          "spokenSourceMs": 2593540,
+          "residualMs": 385,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9979000091552734,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2586030,
+          "renderSourceMs": 2596010,
+          "spokenSourceMs": 2596040,
+          "residualMs": -30,
+          "similarity": 1.0,
+          "firstWordProbability": 0.998387336730957,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2588418,
+          "renderSourceMs": 2598346,
+          "spokenSourceMs": 2598140,
+          "residualMs": 206,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9871386885643005,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2590451,
+          "renderSourceMs": 2600389,
+          "spokenSourceMs": 2600360,
+          "residualMs": 29,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9890713691711426,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2592191,
+          "renderSourceMs": 2602225,
+          "spokenSourceMs": 2601900,
+          "residualMs": 325,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9814229011535645,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 2608668,
+          "renderSourceMs": 2618574,
+          "spokenSourceMs": 2618580,
+          "residualMs": -6,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9917805790901184,
+          "repeatedOnset": false
+        }
+      ]
+    },
+    {
+      "label": "late29",
+      "matches": 21,
+      "medianMs": 63,
+      "maxAbsMs": 301,
+      "p90AbsMs": 209,
+      "below500": 21,
+      "rows": [
+        {
+          "cueMs": 1701460,
+          "renderSourceMs": 1707122,
+          "spokenSourceMs": 1707120,
+          "residualMs": 2,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9968579113483429,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1705400,
+          "renderSourceMs": 1711043,
+          "spokenSourceMs": 1711060,
+          "residualMs": -17,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9961509704589844,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1711191,
+          "renderSourceMs": 1716798,
+          "spokenSourceMs": 1716720,
+          "residualMs": 78,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9353333115577698,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1724681,
+          "renderSourceMs": 1730312,
+          "spokenSourceMs": 1730360,
+          "residualMs": -48,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9852409958839417,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1735861,
+          "renderSourceMs": 1741490,
+          "spokenSourceMs": 1741500,
+          "residualMs": -10,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9982339143753052,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1739929,
+          "renderSourceMs": 1745661,
+          "spokenSourceMs": 1745500,
+          "residualMs": 161,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9906172752380371,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1748811,
+          "renderSourceMs": 1754461,
+          "spokenSourceMs": 1754160,
+          "residualMs": 301,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9189184904098511,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1758932,
+          "renderSourceMs": 1766640,
+          "spokenSourceMs": 1766680,
+          "residualMs": -40,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8924424052238464,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1761025,
+          "renderSourceMs": 1768725,
+          "spokenSourceMs": 1768720,
+          "residualMs": 5,
+          "similarity": 0.9523809523809523,
+          "firstWordProbability": 0.9721782803535461,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1763084,
+          "renderSourceMs": 1770769,
+          "spokenSourceMs": 1770520,
+          "residualMs": 249,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9045488834381104,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1769132,
+          "renderSourceMs": 1776733,
+          "spokenSourceMs": 1776760,
+          "residualMs": -27,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9972032308578491,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1779585,
+          "renderSourceMs": 1787369,
+          "spokenSourceMs": 1787160,
+          "residualMs": 209,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9001476168632507,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1785334,
+          "renderSourceMs": 1793125,
+          "spokenSourceMs": 1793000,
+          "residualMs": 125,
+          "similarity": 1.0,
+          "firstWordProbability": 0.994502067565918,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1786663,
+          "renderSourceMs": 1794376,
+          "spokenSourceMs": 1794360,
+          "residualMs": 16,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8641200065612793,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1788865,
+          "renderSourceMs": 1796503,
+          "spokenSourceMs": 1796440,
+          "residualMs": 63,
+          "similarity": 0.9523809523809523,
+          "firstWordProbability": 0.9931808710098267,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1802602,
+          "renderSourceMs": 1810308,
+          "spokenSourceMs": 1810240,
+          "residualMs": 68,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8475562930107117,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1805753,
+          "renderSourceMs": 1813437,
+          "spokenSourceMs": 1813360,
+          "residualMs": 77,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9803851842880249,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1810754,
+          "renderSourceMs": 1818358,
+          "spokenSourceMs": 1818560,
+          "residualMs": -202,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9860852956771851,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1813535,
+          "renderSourceMs": 1821236,
+          "spokenSourceMs": 1821080,
+          "residualMs": 156,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9292241334915161,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1820724,
+          "renderSourceMs": 1828493,
+          "spokenSourceMs": 1828340,
+          "residualMs": 153,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9001761078834534,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 1822262,
+          "renderSourceMs": 1829828,
+          "spokenSourceMs": 1829920,
+          "residualMs": -92,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9979874789714813,
+          "repeatedOnset": false
+        }
+      ]
+    },
+    {
+      "label": "opening",
+      "matches": 3,
+      "medianMs": 213,
+      "maxAbsMs": 361,
+      "p90AbsMs": 361,
+      "below500": 3,
+      "rows": [
+        {
+          "cueMs": 16251,
+          "renderSourceMs": 16141,
+          "spokenSourceMs": 15780,
+          "residualMs": 361,
+          "similarity": 1.0,
+          "firstWordProbability": 0.8650792837142944,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 24713,
+          "renderSourceMs": 24733,
+          "spokenSourceMs": 24520,
+          "residualMs": 213,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9502726793289185,
+          "repeatedOnset": false
+        },
+        {
+          "cueMs": 63507,
+          "renderSourceMs": 63313,
+          "spokenSourceMs": 63480,
+          "residualMs": -167,
+          "similarity": 1.0,
+          "firstWordProbability": 0.9753574132919312,
+          "repeatedOnset": false
+        }
+      ]
+    }
+  ],
+  "smallEn": [
+    {
+      "region": "opening",
+      "matches": 1,
+      "medianMs": 5,
+      "maxAbsMs": 5,
+      "below500": 1,
+      "stableOnsets": 0,
+      "stableBelow500": 0,
+      "stableMaxAbsMs": null,
+      "rows": [
+        {
+          "cueMs": 11972,
+          "renderSourceMs": 11762,
+          "residualMs": 542,
+          "spokenMs": 11220,
+          "similarity": 1.0,
+          "probability": 0.16466960310935974
+        },
+        {
+          "cueMs": 16251,
+          "renderSourceMs": 16141,
+          "residualMs": -139,
+          "spokenMs": 16280,
+          "similarity": 1.0,
+          "probability": 0.5328591465950012
+        },
+        {
+          "cueMs": 22560,
+          "renderSourceMs": 22397,
+          "residualMs": -83,
+          "spokenMs": 22480,
+          "similarity": 1.0,
+          "probability": 0.552250325679779
+        },
+        {
+          "cueMs": 24713,
+          "renderSourceMs": 24733,
+          "residualMs": 173,
+          "spokenMs": 24560,
+          "similarity": 1.0,
+          "probability": 0.36701127886772156
+        },
+        {
+          "cueMs": 31893,
+          "renderSourceMs": 31740,
+          "residualMs": -20,
+          "spokenMs": 31760,
+          "similarity": 1.0,
+          "probability": 0.4115257263183594
+        },
+        {
+          "cueMs": 36443,
+          "renderSourceMs": 36370,
+          "residualMs": 290,
+          "spokenMs": 36080,
+          "similarity": 1.0,
+          "probability": 0.5594094395637512
+        },
+        {
+          "cueMs": 39846,
+          "renderSourceMs": 39706,
+          "residualMs": -54,
+          "spokenMs": 39760,
+          "similarity": 1.0,
+          "probability": 0.36690977215766907
+        },
+        {
+          "cueMs": 59818,
+          "renderSourceMs": 59685,
+          "residualMs": 5,
+          "spokenMs": 59680,
+          "similarity": 1.0,
+          "probability": 0.915734052658081
+        },
+        {
+          "cueMs": 63507,
+          "renderSourceMs": 63313,
+          "residualMs": -87,
+          "spokenMs": 63400,
+          "similarity": 1.0,
+          "probability": 0.27457714080810547
+        }
+      ],
+      "stableRows": []
+    },
+    {
+      "region": "before19",
+      "matches": 12,
+      "medianMs": -15.5,
+      "maxAbsMs": 180,
+      "below500": 12,
+      "stableOnsets": 9,
+      "stableBelow500": 9,
+      "stableMaxAbsMs": 340,
+      "rows": [
+        {
+          "cueMs": 1101747,
+          "renderSourceMs": 1105271,
+          "residualMs": -69,
+          "spokenMs": 1105340,
+          "similarity": 1.0,
+          "probability": 0.9669163823127747
+        },
+        {
+          "cueMs": 1104348,
+          "renderSourceMs": 1107940,
+          "residualMs": 180,
+          "spokenMs": 1107760,
+          "similarity": 1.0,
+          "probability": 0.8843619227409363
+        },
+        {
+          "cueMs": 1108527,
+          "renderSourceMs": 1112069,
+          "residualMs": -51,
+          "spokenMs": 1112120,
+          "similarity": 1.0,
+          "probability": 0.9484008848667145
+        },
+        {
+          "cueMs": 1113566,
+          "renderSourceMs": 1117241,
+          "residualMs": 1,
+          "spokenMs": 1117240,
+          "similarity": 1.0,
+          "probability": 0.9715774059295654
+        },
+        {
+          "cueMs": 1116225,
+          "renderSourceMs": 1119827,
+          "residualMs": 147,
+          "spokenMs": 1119680,
+          "similarity": 1.0,
+          "probability": 0.9957504272460938
+        },
+        {
+          "cueMs": 1118328,
+          "renderSourceMs": 1121912,
+          "residualMs": -8,
+          "spokenMs": 1121920,
+          "similarity": 1.0,
+          "probability": 0.8542066812515259
+        },
+        {
+          "cueMs": 1121158,
+          "renderSourceMs": 1124749,
+          "residualMs": 29,
+          "spokenMs": 1124720,
+          "similarity": 1.0,
+          "probability": 0.9658396244049072
+        },
+        {
+          "cueMs": 1124267,
+          "renderSourceMs": 1127877,
+          "residualMs": -23,
+          "spokenMs": 1127900,
+          "similarity": 1.0,
+          "probability": 0.8377826809883118
+        },
+        {
+          "cueMs": 1126275,
+          "renderSourceMs": 1129920,
+          "residualMs": 340,
+          "spokenMs": 1129580,
+          "similarity": 1.0,
+          "probability": 0.7320279479026794
+        },
+        {
+          "cueMs": 1128165,
+          "renderSourceMs": 1131756,
+          "residualMs": -64,
+          "spokenMs": 1131820,
+          "similarity": 1.0,
+          "probability": 0.987968921661377
+        },
+        {
+          "cueMs": 1130507,
+          "renderSourceMs": 1134091,
+          "residualMs": 111,
+          "spokenMs": 1133980,
+          "similarity": 1.0,
+          "probability": 0.6330435872077942
+        },
+        {
+          "cueMs": 1133058,
+          "renderSourceMs": 1136719,
+          "residualMs": 179,
+          "spokenMs": 1136540,
+          "similarity": 1.0,
+          "probability": 0.9892149567604065
+        },
+        {
+          "cueMs": 1134967,
+          "renderSourceMs": 1138554,
+          "residualMs": -146,
+          "spokenMs": 1138700,
+          "similarity": 1.0,
+          "probability": 0.9917616844177246
+        },
+        {
+          "cueMs": 1137855,
+          "renderSourceMs": 1141390,
+          "residualMs": -50,
+          "spokenMs": 1141440,
+          "similarity": 1.0,
+          "probability": 0.9825586080551147
+        }
+      ],
+      "stableRows": [
+        {
+          "cueMs": 1101747,
+          "renderSourceMs": 1105271,
+          "residualMs": -69,
+          "spokenMs": 1105340,
+          "similarity": 1.0,
+          "probability": 0.9669163823127747,
+          "baseResidualMs": -29
+        },
+        {
+          "cueMs": 1104348,
+          "renderSourceMs": 1107940,
+          "residualMs": 180,
+          "spokenMs": 1107760,
+          "similarity": 1.0,
+          "probability": 0.8843619227409363,
+          "baseResidualMs": 340
+        },
+        {
+          "cueMs": 1116225,
+          "renderSourceMs": 1119827,
+          "residualMs": 147,
+          "spokenMs": 1119680,
+          "similarity": 1.0,
+          "probability": 0.9957504272460938,
+          "baseResidualMs": 287
+        },
+        {
+          "cueMs": 1121158,
+          "renderSourceMs": 1124749,
+          "residualMs": 29,
+          "spokenMs": 1124720,
+          "similarity": 1.0,
+          "probability": 0.9658396244049072,
+          "baseResidualMs": 149
+        },
+        {
+          "cueMs": 1124267,
+          "renderSourceMs": 1127877,
+          "residualMs": -23,
+          "spokenMs": 1127900,
+          "similarity": 1.0,
+          "probability": 0.8377826809883118,
+          "baseResidualMs": 157
+        },
+        {
+          "cueMs": 1128165,
+          "renderSourceMs": 1131756,
+          "residualMs": -64,
+          "spokenMs": 1131820,
+          "similarity": 1.0,
+          "probability": 0.987968921661377,
+          "baseResidualMs": -44
+        },
+        {
+          "cueMs": 1133058,
+          "renderSourceMs": 1136719,
+          "residualMs": 179,
+          "spokenMs": 1136540,
+          "similarity": 1.0,
+          "probability": 0.9892149567604065,
+          "baseResidualMs": 179
+        },
+        {
+          "cueMs": 1134967,
+          "renderSourceMs": 1138554,
+          "residualMs": -146,
+          "spokenMs": 1138700,
+          "similarity": 1.0,
+          "probability": 0.9917616844177246,
+          "baseResidualMs": -66
+        },
+        {
+          "cueMs": 1137855,
+          "renderSourceMs": 1141390,
+          "residualMs": -50,
+          "spokenMs": 1141440,
+          "similarity": 1.0,
+          "probability": 0.9825586080551147,
+          "baseResidualMs": 90
+        }
+      ]
+    },
+    {
+      "region": "critical19",
+      "matches": 16,
+      "medianMs": 69.5,
+      "maxAbsMs": 329,
+      "below500": 16,
+      "stableOnsets": 7,
+      "stableBelow500": 7,
+      "stableMaxAbsMs": 429,
+      "rows": [
+        {
+          "cueMs": 1149328,
+          "renderSourceMs": 1153027,
+          "residualMs": -13,
+          "spokenMs": 1153040,
+          "similarity": 1.0,
+          "probability": 0.8769127726554871
+        },
+        {
+          "cueMs": 1152176,
+          "renderSourceMs": 1155654,
+          "residualMs": -66,
+          "spokenMs": 1155720,
+          "similarity": 1.0,
+          "probability": 0.9694555997848511
+        },
+        {
+          "cueMs": 1154016,
+          "renderSourceMs": 1157490,
+          "residualMs": -150,
+          "spokenMs": 1157640,
+          "similarity": 1.0,
+          "probability": 0.9742024540901184
+        },
+        {
+          "cueMs": 1155827,
+          "renderSourceMs": 1159533,
+          "residualMs": 253,
+          "spokenMs": 1159280,
+          "similarity": 1.0,
+          "probability": 0.7496097087860107
+        },
+        {
+          "cueMs": 1158368,
+          "renderSourceMs": 1161869,
+          "residualMs": 329,
+          "spokenMs": 1161540,
+          "similarity": 1.0,
+          "probability": 0.9207199811935425
+        },
+        {
+          "cueMs": 1160237,
+          "renderSourceMs": 1163913,
+          "residualMs": 53,
+          "spokenMs": 1163860,
+          "similarity": 1.0,
+          "probability": 0.8693906664848328
+        },
+        {
+          "cueMs": 1164497,
+          "renderSourceMs": 1168084,
+          "residualMs": 304,
+          "spokenMs": 1167780,
+          "similarity": 1.0,
+          "probability": 0.9531063437461853
+        },
+        {
+          "cueMs": 1168055,
+          "renderSourceMs": 1171712,
+          "residualMs": -8,
+          "spokenMs": 1171720,
+          "similarity": 1.0,
+          "probability": 0.9803131222724915
+        },
+        {
+          "cueMs": 1173727,
+          "renderSourceMs": 1177426,
+          "residualMs": 86,
+          "spokenMs": 1177340,
+          "similarity": 0.972972972972973,
+          "probability": 0.9938421249389648
+        },
+        {
+          "cueMs": 1176906,
+          "renderSourceMs": 1180554,
+          "residualMs": 114,
+          "spokenMs": 1180440,
+          "similarity": 1.0,
+          "probability": 0.9825370907783508
+        },
+        {
+          "cueMs": 1179338,
+          "renderSourceMs": 1182890,
+          "residualMs": -90,
+          "spokenMs": 1182980,
+          "similarity": 1.0,
+          "probability": 0.9784292578697205
+        },
+        {
+          "cueMs": 1181168,
+          "renderSourceMs": 1184725,
+          "residualMs": 45,
+          "spokenMs": 1184680,
+          "similarity": 1.0,
+          "probability": 0.5636247992515564
+        },
+        {
+          "cueMs": 1184136,
+          "renderSourceMs": 1187853,
+          "residualMs": 213,
+          "spokenMs": 1187640,
+          "similarity": 1.0,
+          "probability": 0.976625919342041
+        },
+        {
+          "cueMs": 1194297,
+          "renderSourceMs": 1197988,
+          "residualMs": 128,
+          "spokenMs": 1197860,
+          "similarity": 1.0,
+          "probability": 0.9481207132339478
+        },
+        {
+          "cueMs": 1196758,
+          "renderSourceMs": 1200324,
+          "residualMs": -76,
+          "spokenMs": 1200400,
+          "similarity": 1.0,
+          "probability": 0.9966872334480286
+        },
+        {
+          "cueMs": 1202945,
+          "renderSourceMs": 1206539,
+          "residualMs": 219,
+          "spokenMs": 1206320,
+          "similarity": 1.0,
+          "probability": 0.8854486048221588
+        },
+        {
+          "cueMs": 1204775,
+          "renderSourceMs": 1208332,
+          "residualMs": -148,
+          "spokenMs": 1208480,
+          "similarity": 1.0,
+          "probability": 0.9982169270515442
+        },
+        {
+          "cueMs": 1207278,
+          "renderSourceMs": 1210918,
+          "residualMs": 118,
+          "spokenMs": 1210800,
+          "similarity": 1.0,
+          "probability": 0.8787075281143188
+        }
+      ],
+      "stableRows": [
+        {
+          "cueMs": 1149328,
+          "renderSourceMs": 1153027,
+          "residualMs": -13,
+          "spokenMs": 1153040,
+          "similarity": 1.0,
+          "probability": 0.8769127726554871,
+          "baseResidualMs": 147
+        },
+        {
+          "cueMs": 1154016,
+          "renderSourceMs": 1157490,
+          "residualMs": -150,
+          "spokenMs": 1157640,
+          "similarity": 1.0,
+          "probability": 0.9742024540901184,
+          "baseResidualMs": -50
+        },
+        {
+          "cueMs": 1158368,
+          "renderSourceMs": 1161869,
+          "residualMs": 329,
+          "spokenMs": 1161540,
+          "similarity": 1.0,
+          "probability": 0.9207199811935425,
+          "baseResidualMs": 429
+        },
+        {
+          "cueMs": 1168055,
+          "renderSourceMs": 1171712,
+          "residualMs": -8,
+          "spokenMs": 1171720,
+          "similarity": 1.0,
+          "probability": 0.9803131222724915,
+          "baseResidualMs": 112
+        },
+        {
+          "cueMs": 1184136,
+          "renderSourceMs": 1187853,
+          "residualMs": 213,
+          "spokenMs": 1187640,
+          "similarity": 1.0,
+          "probability": 0.976625919342041,
+          "baseResidualMs": 293
+        },
+        {
+          "cueMs": 1202945,
+          "renderSourceMs": 1206539,
+          "residualMs": 219,
+          "spokenMs": 1206320,
+          "similarity": 1.0,
+          "probability": 0.8854486048221588,
+          "baseResidualMs": 239
+        },
+        {
+          "cueMs": 1204775,
+          "renderSourceMs": 1208332,
+          "residualMs": -148,
+          "spokenMs": 1208480,
+          "similarity": 1.0,
+          "probability": 0.9982169270515442,
+          "baseResidualMs": -108
+        }
+      ]
+    },
+    {
+      "region": "late29",
+      "matches": 22,
+      "medianMs": 57.0,
+      "maxAbsMs": 248,
+      "below500": 22,
+      "stableOnsets": 17,
+      "stableBelow500": 17,
+      "stableMaxAbsMs": 301,
+      "rows": [
+        {
+          "cueMs": 1701460,
+          "renderSourceMs": 1707122,
+          "residualMs": 22,
+          "spokenMs": 1707100,
+          "similarity": 1.0,
+          "probability": 0.9944169819355011
+        },
+        {
+          "cueMs": 1703300,
+          "renderSourceMs": 1708957,
+          "residualMs": 157,
+          "spokenMs": 1708800,
+          "similarity": 1.0,
+          "probability": 0.9935105443000793
+        },
+        {
+          "cueMs": 1705400,
+          "renderSourceMs": 1711043,
+          "residualMs": -17,
+          "spokenMs": 1711060,
+          "similarity": 1.0,
+          "probability": 0.9956400394439697
+        },
+        {
+          "cueMs": 1711191,
+          "renderSourceMs": 1716798,
+          "residualMs": 58,
+          "spokenMs": 1716740,
+          "similarity": 1.0,
+          "probability": 0.9529528021812439
+        },
+        {
+          "cueMs": 1719182,
+          "renderSourceMs": 1724848,
+          "residualMs": 248,
+          "spokenMs": 1724600,
+          "similarity": 1.0,
+          "probability": 0.8587104082107544
+        },
+        {
+          "cueMs": 1724681,
+          "renderSourceMs": 1730312,
+          "residualMs": -8,
+          "spokenMs": 1730320,
+          "similarity": 1.0,
+          "probability": 0.9968170523643494
+        },
+        {
+          "cueMs": 1730409,
+          "renderSourceMs": 1736026,
+          "residualMs": 86,
+          "spokenMs": 1735940,
+          "similarity": 1.0,
+          "probability": 0.9835057854652405
+        },
+        {
+          "cueMs": 1735861,
+          "renderSourceMs": 1741490,
+          "residualMs": 10,
+          "spokenMs": 1741480,
+          "similarity": 1.0,
+          "probability": 0.9980217218399048
+        },
+        {
+          "cueMs": 1739929,
+          "renderSourceMs": 1745661,
+          "residualMs": 161,
+          "spokenMs": 1745500,
+          "similarity": 1.0,
+          "probability": 0.992955207824707
+        },
+        {
+          "cueMs": 1742731,
+          "renderSourceMs": 1748246,
+          "residualMs": -254,
+          "spokenMs": 1748500,
+          "similarity": 1.0,
+          "probability": 0.4845134913921356
+        },
+        {
+          "cueMs": 1748811,
+          "renderSourceMs": 1754461,
+          "residualMs": 121,
+          "spokenMs": 1754340,
+          "similarity": 1.0,
+          "probability": 0.9916967451572418
+        },
+        {
+          "cueMs": 1756683,
+          "renderSourceMs": 1764304,
+          "residualMs": -56,
+          "spokenMs": 1764360,
+          "similarity": 1.0,
+          "probability": 0.7362908720970154
+        },
+        {
+          "cueMs": 1758932,
+          "renderSourceMs": 1766640,
+          "residualMs": -40,
+          "spokenMs": 1766680,
+          "similarity": 1.0,
+          "probability": 0.6758531779050827
+        },
+        {
+          "cueMs": 1761025,
+          "renderSourceMs": 1768725,
+          "residualMs": 65,
+          "spokenMs": 1768660,
+          "similarity": 1.0,
+          "probability": 0.9785320460796356
+        },
+        {
+          "cueMs": 1763084,
+          "renderSourceMs": 1770769,
+          "residualMs": 69,
+          "spokenMs": 1770700,
+          "similarity": 1.0,
+          "probability": 0.892447829246521
+        },
+        {
+          "cueMs": 1766683,
+          "renderSourceMs": 1774398,
+          "residualMs": -482,
+          "spokenMs": 1774880,
+          "similarity": 1.0,
+          "probability": 0.37393614649772644
+        },
+        {
+          "cueMs": 1774923,
+          "renderSourceMs": 1782698,
+          "residualMs": -82,
+          "spokenMs": 1782780,
+          "similarity": 1.0,
+          "probability": 0.6719009876251221
+        },
+        {
+          "cueMs": 1779585,
+          "renderSourceMs": 1787369,
+          "residualMs": 49,
+          "spokenMs": 1787320,
+          "similarity": 1.0,
+          "probability": 0.883026123046875
+        },
+        {
+          "cueMs": 1781842,
+          "renderSourceMs": 1789496,
+          "residualMs": -104,
+          "spokenMs": 1789600,
+          "similarity": 1.0,
+          "probability": 0.5396724045276642
+        },
+        {
+          "cueMs": 1785334,
+          "renderSourceMs": 1793125,
+          "residualMs": 45,
+          "spokenMs": 1793080,
+          "similarity": 1.0,
+          "probability": 0.9731027483940125
+        },
+        {
+          "cueMs": 1788865,
+          "renderSourceMs": 1796503,
+          "residualMs": -97,
+          "spokenMs": 1796600,
+          "similarity": 0.9523809523809523,
+          "probability": 0.8194474577903748
+        },
+        {
+          "cueMs": 1797924,
+          "renderSourceMs": 1805595,
+          "residualMs": -145,
+          "spokenMs": 1805740,
+          "similarity": 1.0,
+          "probability": 0.9492753446102142
+        },
+        {
+          "cueMs": 1802602,
+          "renderSourceMs": 1810308,
+          "residualMs": 68,
+          "spokenMs": 1810240,
+          "similarity": 1.0,
+          "probability": 0.9673963189125061
+        },
+        {
+          "cueMs": 1805753,
+          "renderSourceMs": 1813437,
+          "residualMs": -63,
+          "spokenMs": 1813500,
+          "similarity": 1.0,
+          "probability": 0.9226230978965759
+        },
+        {
+          "cueMs": 1813535,
+          "renderSourceMs": 1821236,
+          "residualMs": 56,
+          "spokenMs": 1821180,
+          "similarity": 1.0,
+          "probability": 0.9578384160995483
+        },
+        {
+          "cueMs": 1815993,
+          "renderSourceMs": 1823822,
+          "residualMs": 162,
+          "spokenMs": 1823660,
+          "similarity": 1.0,
+          "probability": 0.9838088154792786
+        },
+        {
+          "cueMs": 1818934,
+          "renderSourceMs": 1826658,
+          "residualMs": 38,
+          "spokenMs": 1826620,
+          "similarity": 1.0,
+          "probability": 0.7337387204170227
+        },
+        {
+          "cueMs": 1820724,
+          "renderSourceMs": 1828493,
+          "residualMs": 93,
+          "spokenMs": 1828400,
+          "similarity": 1.0,
+          "probability": 0.9114336371421814
+        },
+        {
+          "cueMs": 1822262,
+          "renderSourceMs": 1829828,
+          "residualMs": -52,
+          "spokenMs": 1829880,
+          "similarity": 1.0,
+          "probability": 0.9968201518058777
+        }
+      ],
+      "stableRows": [
+        {
+          "cueMs": 1701460,
+          "renderSourceMs": 1707122,
+          "residualMs": 22,
+          "spokenMs": 1707100,
+          "similarity": 1.0,
+          "probability": 0.9944169819355011,
+          "baseResidualMs": 2
+        },
+        {
+          "cueMs": 1705400,
+          "renderSourceMs": 1711043,
+          "residualMs": -17,
+          "spokenMs": 1711060,
+          "similarity": 1.0,
+          "probability": 0.9956400394439697,
+          "baseResidualMs": -17
+        },
+        {
+          "cueMs": 1711191,
+          "renderSourceMs": 1716798,
+          "residualMs": 58,
+          "spokenMs": 1716740,
+          "similarity": 1.0,
+          "probability": 0.9529528021812439,
+          "baseResidualMs": 78
+        },
+        {
+          "cueMs": 1724681,
+          "renderSourceMs": 1730312,
+          "residualMs": -8,
+          "spokenMs": 1730320,
+          "similarity": 1.0,
+          "probability": 0.9968170523643494,
+          "baseResidualMs": -48
+        },
+        {
+          "cueMs": 1735861,
+          "renderSourceMs": 1741490,
+          "residualMs": 10,
+          "spokenMs": 1741480,
+          "similarity": 1.0,
+          "probability": 0.9980217218399048,
+          "baseResidualMs": -10
+        },
+        {
+          "cueMs": 1739929,
+          "renderSourceMs": 1745661,
+          "residualMs": 161,
+          "spokenMs": 1745500,
+          "similarity": 1.0,
+          "probability": 0.992955207824707,
+          "baseResidualMs": 161
+        },
+        {
+          "cueMs": 1748811,
+          "renderSourceMs": 1754461,
+          "residualMs": 121,
+          "spokenMs": 1754340,
+          "similarity": 1.0,
+          "probability": 0.9916967451572418,
+          "baseResidualMs": 301
+        },
+        {
+          "cueMs": 1761025,
+          "renderSourceMs": 1768725,
+          "residualMs": 65,
+          "spokenMs": 1768660,
+          "similarity": 1.0,
+          "probability": 0.9785320460796356,
+          "baseResidualMs": 5
+        },
+        {
+          "cueMs": 1763084,
+          "renderSourceMs": 1770769,
+          "residualMs": 69,
+          "spokenMs": 1770700,
+          "similarity": 1.0,
+          "probability": 0.892447829246521,
+          "baseResidualMs": 249
+        },
+        {
+          "cueMs": 1779585,
+          "renderSourceMs": 1787369,
+          "residualMs": 49,
+          "spokenMs": 1787320,
+          "similarity": 1.0,
+          "probability": 0.883026123046875,
+          "baseResidualMs": 209
+        },
+        {
+          "cueMs": 1785334,
+          "renderSourceMs": 1793125,
+          "residualMs": 45,
+          "spokenMs": 1793080,
+          "similarity": 1.0,
+          "probability": 0.9731027483940125,
+          "baseResidualMs": 125
+        },
+        {
+          "cueMs": 1788865,
+          "renderSourceMs": 1796503,
+          "residualMs": -97,
+          "spokenMs": 1796600,
+          "similarity": 0.9523809523809523,
+          "probability": 0.8194474577903748,
+          "baseResidualMs": 63
+        },
+        {
+          "cueMs": 1802602,
+          "renderSourceMs": 1810308,
+          "residualMs": 68,
+          "spokenMs": 1810240,
+          "similarity": 1.0,
+          "probability": 0.9673963189125061,
+          "baseResidualMs": 68
+        },
+        {
+          "cueMs": 1805753,
+          "renderSourceMs": 1813437,
+          "residualMs": -63,
+          "spokenMs": 1813500,
+          "similarity": 1.0,
+          "probability": 0.9226230978965759,
+          "baseResidualMs": 77
+        },
+        {
+          "cueMs": 1813535,
+          "renderSourceMs": 1821236,
+          "residualMs": 56,
+          "spokenMs": 1821180,
+          "similarity": 1.0,
+          "probability": 0.9578384160995483,
+          "baseResidualMs": 156
+        },
+        {
+          "cueMs": 1820724,
+          "renderSourceMs": 1828493,
+          "residualMs": 93,
+          "spokenMs": 1828400,
+          "similarity": 1.0,
+          "probability": 0.9114336371421814,
+          "baseResidualMs": 153
+        },
+        {
+          "cueMs": 1822262,
+          "renderSourceMs": 1829828,
+          "residualMs": -52,
+          "spokenMs": 1829880,
+          "similarity": 1.0,
+          "probability": 0.9968201518058777,
+          "baseResidualMs": -92
+        }
+      ]
+    },
+    {
+      "region": "ending",
+      "matches": 18,
+      "medianMs": 85.0,
+      "maxAbsMs": 397,
+      "below500": 18,
+      "stableOnsets": 13,
+      "stableBelow500": 12,
+      "stableMaxAbsMs": 503,
+      "rows": [
+        {
+          "cueMs": 2532319,
+          "renderSourceMs": 2542331,
+          "residualMs": 51,
+          "spokenMs": 2542280,
+          "similarity": 1.0,
+          "probability": 0.9762315154075623
+        },
+        {
+          "cueMs": 2535300,
+          "renderSourceMs": 2545209,
+          "residualMs": 109,
+          "spokenMs": 2545100,
+          "similarity": 1.0,
+          "probability": 0.9937527775764465
+        },
+        {
+          "cueMs": 2537518,
+          "renderSourceMs": 2547503,
+          "residualMs": 363,
+          "spokenMs": 2547140,
+          "similarity": 1.0,
+          "probability": 0.99332195520401
+        },
+        {
+          "cueMs": 2539651,
+          "renderSourceMs": 2549589,
+          "residualMs": 69,
+          "spokenMs": 2549520,
+          "similarity": 1.0,
+          "probability": 0.9926151037216187
+        },
+        {
+          "cueMs": 2545011,
+          "renderSourceMs": 2555011,
+          "residualMs": 71,
+          "spokenMs": 2554940,
+          "similarity": 1.0,
+          "probability": 0.9616661667823792
+        },
+        {
+          "cueMs": 2546790,
+          "renderSourceMs": 2556804,
+          "residualMs": -36,
+          "spokenMs": 2556840,
+          "similarity": 1.0,
+          "probability": 0.987409770488739
+        },
+        {
+          "cueMs": 2549959,
+          "renderSourceMs": 2559932,
+          "residualMs": 32,
+          "spokenMs": 2559900,
+          "similarity": 1.0,
+          "probability": 0.9972222149372101
+        },
+        {
+          "cueMs": 2553199,
+          "renderSourceMs": 2563269,
+          "residualMs": 189,
+          "spokenMs": 2563080,
+          "similarity": 1.0,
+          "probability": 0.3401779532432556
+        },
+        {
+          "cueMs": 2556440,
+          "renderSourceMs": 2566397,
+          "residualMs": 397,
+          "spokenMs": 2566000,
+          "similarity": 1.0,
+          "probability": 0.9930976033210754
+        },
+        {
+          "cueMs": 2558628,
+          "renderSourceMs": 2568691,
+          "residualMs": 151,
+          "spokenMs": 2568540,
+          "similarity": 1.0,
+          "probability": 0.9223862886428833
+        },
+        {
+          "cueMs": 2560368,
+          "renderSourceMs": 2570276,
+          "residualMs": -44,
+          "spokenMs": 2570320,
+          "similarity": 1.0,
+          "probability": 0.7662221789360046
+        },
+        {
+          "cueMs": 2561719,
+          "renderSourceMs": 2571819,
+          "residualMs": 99,
+          "spokenMs": 2571720,
+          "similarity": 1.0,
+          "probability": 0.9770395755767822
+        },
+        {
+          "cueMs": 2570408,
+          "renderSourceMs": 2580411,
+          "residualMs": 71,
+          "spokenMs": 2580340,
+          "similarity": 1.0,
+          "probability": 0.9977364540100098
+        },
+        {
+          "cueMs": 2571868,
+          "renderSourceMs": 2581954,
+          "residualMs": 134,
+          "spokenMs": 2581820,
+          "similarity": 1.0,
+          "probability": 0.993921160697937
+        },
+        {
+          "cueMs": 2578801,
+          "renderSourceMs": 2588711,
+          "residualMs": 151,
+          "spokenMs": 2588560,
+          "similarity": 1.0,
+          "probability": 0.969795823097229
+        },
+        {
+          "cueMs": 2581641,
+          "renderSourceMs": 2591547,
+          "residualMs": 227,
+          "spokenMs": 2591320,
+          "similarity": 1.0,
+          "probability": 0.5927515029907227
+        },
+        {
+          "cueMs": 2583839,
+          "renderSourceMs": 2593925,
+          "residualMs": 525,
+          "spokenMs": 2593400,
+          "similarity": 1.0,
+          "probability": 0.2731955051422119
+        },
+        {
+          "cueMs": 2586030,
+          "renderSourceMs": 2596010,
+          "residualMs": -70,
+          "spokenMs": 2596080,
+          "similarity": 1.0,
+          "probability": 0.9968247413635254
+        },
+        {
+          "cueMs": 2588418,
+          "renderSourceMs": 2598346,
+          "residualMs": 146,
+          "spokenMs": 2598200,
+          "similarity": 1.0,
+          "probability": 0.9974853992462158
+        },
+        {
+          "cueMs": 2590451,
+          "renderSourceMs": 2600389,
+          "residualMs": 589,
+          "spokenMs": 2599800,
+          "similarity": 1.0,
+          "probability": 0.5897023677825928
+        },
+        {
+          "cueMs": 2592191,
+          "renderSourceMs": 2602225,
+          "residualMs": 245,
+          "spokenMs": 2601980,
+          "similarity": 1.0,
+          "probability": 0.9754369854927063
+        },
+        {
+          "cueMs": 2599939,
+          "renderSourceMs": 2609982,
+          "residualMs": 362,
+          "spokenMs": 2609620,
+          "similarity": 1.0,
+          "probability": 0.34109020233154297
+        },
+        {
+          "cueMs": 2606469,
+          "renderSourceMs": 2616489,
+          "residualMs": -71,
+          "spokenMs": 2616560,
+          "similarity": 1.0,
+          "probability": 0.990557074546814
+        },
+        {
+          "cueMs": 2608668,
+          "renderSourceMs": 2618574,
+          "residualMs": -86,
+          "spokenMs": 2618660,
+          "similarity": 1.0,
+          "probability": 0.9822874665260315
+        }
+      ],
+      "stableRows": [
+        {
+          "cueMs": 2532319,
+          "renderSourceMs": 2542331,
+          "residualMs": 51,
+          "spokenMs": 2542280,
+          "similarity": 1.0,
+          "probability": 0.9762315154075623,
+          "baseResidualMs": 91
+        },
+        {
+          "cueMs": 2535300,
+          "renderSourceMs": 2545209,
+          "residualMs": 109,
+          "spokenMs": 2545100,
+          "similarity": 1.0,
+          "probability": 0.9937527775764465,
+          "baseResidualMs": 229
+        },
+        {
+          "cueMs": 2537518,
+          "renderSourceMs": 2547503,
+          "residualMs": 363,
+          "spokenMs": 2547140,
+          "similarity": 1.0,
+          "probability": 0.99332195520401,
+          "baseResidualMs": 503
+        },
+        {
+          "cueMs": 2546790,
+          "renderSourceMs": 2556804,
+          "residualMs": -36,
+          "spokenMs": 2556840,
+          "similarity": 1.0,
+          "probability": 0.987409770488739,
+          "baseResidualMs": 24
+        },
+        {
+          "cueMs": 2549959,
+          "renderSourceMs": 2559932,
+          "residualMs": 32,
+          "spokenMs": 2559900,
+          "similarity": 1.0,
+          "probability": 0.9972222149372101,
+          "baseResidualMs": 112
+        },
+        {
+          "cueMs": 2556440,
+          "renderSourceMs": 2566397,
+          "residualMs": 397,
+          "spokenMs": 2566000,
+          "similarity": 1.0,
+          "probability": 0.9930976033210754,
+          "baseResidualMs": 497
+        },
+        {
+          "cueMs": 2558628,
+          "renderSourceMs": 2568691,
+          "residualMs": 151,
+          "spokenMs": 2568540,
+          "similarity": 1.0,
+          "probability": 0.9223862886428833,
+          "baseResidualMs": 211
+        },
+        {
+          "cueMs": 2561719,
+          "renderSourceMs": 2571819,
+          "residualMs": 99,
+          "spokenMs": 2571720,
+          "similarity": 1.0,
+          "probability": 0.9770395755767822,
+          "baseResidualMs": 199
+        },
+        {
+          "cueMs": 2570408,
+          "renderSourceMs": 2580411,
+          "residualMs": 71,
+          "spokenMs": 2580340,
+          "similarity": 1.0,
+          "probability": 0.9977364540100098,
+          "baseResidualMs": 191
+        },
+        {
+          "cueMs": 2586030,
+          "renderSourceMs": 2596010,
+          "residualMs": -70,
+          "spokenMs": 2596080,
+          "similarity": 1.0,
+          "probability": 0.9968247413635254,
+          "baseResidualMs": -30
+        },
+        {
+          "cueMs": 2588418,
+          "renderSourceMs": 2598346,
+          "residualMs": 146,
+          "spokenMs": 2598200,
+          "similarity": 1.0,
+          "probability": 0.9974853992462158,
+          "baseResidualMs": 206
+        },
+        {
+          "cueMs": 2592191,
+          "renderSourceMs": 2602225,
+          "residualMs": 245,
+          "spokenMs": 2601980,
+          "similarity": 1.0,
+          "probability": 0.9754369854927063,
+          "baseResidualMs": 325
+        },
+        {
+          "cueMs": 2608668,
+          "renderSourceMs": 2618574,
+          "residualMs": -86,
+          "spokenMs": 2618660,
+          "similarity": 1.0,
+          "probability": 0.9822874665260315,
+          "baseResidualMs": -6
+        }
+      ]
+    }
+  ],
+  "reviewedBaseOutlier": {
+    "cueMs": 1194297,
+    "renderSourceMs": 1197988,
+    "baseEnOnsetMs": 1197440,
+    "baseEnResidualMs": 548,
+    "smallEnOnsetMs": 1197860,
+    "smallEnResidualMs": 128,
+    "acousticOnsetMs": 1197880,
+    "acousticResolutionMs": 20,
+    "acousticResidualMs": 108,
+    "review": "Base model attached the new phrase to the preceding utterance. A quiet interval from about 1197680 to 1197880 ms separates the phrases. The independent small.en onset agrees with the new energy onset. No app correction or subtitle delay was changed for this review.",
+    "rms20ms": [
+      {
+        "sourceMs": 1197200,
+        "rms": 0.028406159619871096
+      },
+      {
+        "sourceMs": 1197220,
+        "rms": 0.02799244420795978
+      },
+      {
+        "sourceMs": 1197240,
+        "rms": 0.03933204172951214
+      },
+      {
+        "sourceMs": 1197260,
+        "rms": 0.056866606563412615
+      },
+      {
+        "sourceMs": 1197280,
+        "rms": 0.0650673543273688
+      },
+      {
+        "sourceMs": 1197300,
+        "rms": 0.0640850379987142
+      },
+      {
+        "sourceMs": 1197320,
+        "rms": 0.05869429058772441
+      },
+      {
+        "sourceMs": 1197340,
+        "rms": 0.04461335314455211
+      },
+      {
+        "sourceMs": 1197360,
+        "rms": 0.026660274301868413
+      },
+      {
+        "sourceMs": 1197380,
+        "rms": 0.015299914158139543
+      },
+      {
+        "sourceMs": 1197400,
+        "rms": 0.008483729429639406
+      },
+      {
+        "sourceMs": 1197420,
+        "rms": 0.00736992403552921
+      },
+      {
+        "sourceMs": 1197440,
+        "rms": 0.008451135112946094
+      },
+      {
+        "sourceMs": 1197460,
+        "rms": 0.009398275777086506
+      },
+      {
+        "sourceMs": 1197480,
+        "rms": 0.011742937190903795
+      },
+      {
+        "sourceMs": 1197500,
+        "rms": 0.024147865015939268
+      },
+      {
+        "sourceMs": 1197520,
+        "rms": 0.02093245174481838
+      },
+      {
+        "sourceMs": 1197540,
+        "rms": 0.02053088659785655
+      },
+      {
+        "sourceMs": 1197560,
+        "rms": 0.02462263965557413
+      },
+      {
+        "sourceMs": 1197580,
+        "rms": 0.0231179157264368
+      },
+      {
+        "sourceMs": 1197600,
+        "rms": 0.03246929790388896
+      },
+      {
+        "sourceMs": 1197620,
+        "rms": 0.026553751676365527
+      },
+      {
+        "sourceMs": 1197640,
+        "rms": 0.019053638965673508
+      },
+      {
+        "sourceMs": 1197660,
+        "rms": 0.011182786693309367
+      },
+      {
+        "sourceMs": 1197680,
+        "rms": 0.004055936392934892
+      },
+      {
+        "sourceMs": 1197700,
+        "rms": 0.001676551419565465
+      },
+      {
+        "sourceMs": 1197720,
+        "rms": 0.001661818037263736
+      },
+      {
+        "sourceMs": 1197740,
+        "rms": 0.0015849495612351413
+      },
+      {
+        "sourceMs": 1197760,
+        "rms": 0.0012106421229603243
+      },
+      {
+        "sourceMs": 1197780,
+        "rms": 0.0009968249942044775
+      },
+      {
+        "sourceMs": 1197800,
+        "rms": 0.0012400852699460875
+      },
+      {
+        "sourceMs": 1197820,
+        "rms": 0.0011228981126859294
+      },
+      {
+        "sourceMs": 1197840,
+        "rms": 0.0013656445720610024
+      },
+      {
+        "sourceMs": 1197860,
+        "rms": 0.0012311914002202645
+      },
+      {
+        "sourceMs": 1197880,
+        "rms": 0.014450596696180215
+      },
+      {
+        "sourceMs": 1197900,
+        "rms": 0.06411700525464319
+      },
+      {
+        "sourceMs": 1197920,
+        "rms": 0.07597743631592226
+      },
+      {
+        "sourceMs": 1197940,
+        "rms": 0.04946487169544365
+      },
+      {
+        "sourceMs": 1197960,
+        "rms": 0.03971501820179501
+      },
+      {
+        "sourceMs": 1197980,
+        "rms": 0.042369276314123225
+      },
+      {
+        "sourceMs": 1198000,
+        "rms": 0.060682168331247156
+      },
+      {
+        "sourceMs": 1198020,
+        "rms": 0.0833516058308392
+      },
+      {
+        "sourceMs": 1198040,
+        "rms": 0.09980224016276762
+      },
+      {
+        "sourceMs": 1198060,
+        "rms": 0.09241187907214121
+      },
+      {
+        "sourceMs": 1198080,
+        "rms": 0.07189698573433649
+      }
+    ]
+  },
+  "backwardSeek": [
+    {
+      "cueMs": 1149328,
+      "renderSourceMs": 1152860,
+      "smallEnOnsetMs": 1153040,
+      "smallEnResidualMs": -180,
+      "baseEnResidualMs": -20,
+      "probability": 0.8769127726554871
+    },
+    {
+      "cueMs": 1152176,
+      "renderSourceMs": 1155738,
+      "smallEnOnsetMs": 1155720,
+      "smallEnResidualMs": 18,
+      "baseEnResidualMs": 578,
+      "probability": 0.9694555997848511
+    },
+    {
+      "cueMs": 1154016,
+      "renderSourceMs": 1157531,
+      "smallEnOnsetMs": 1157640,
+      "smallEnResidualMs": -109,
+      "baseEnResidualMs": -9,
+      "probability": 0.9742024540901184
+    },
+    {
+      "cueMs": 1158368,
+      "renderSourceMs": 1161952,
+      "smallEnOnsetMs": 1161540,
+      "smallEnResidualMs": 412,
+      "baseEnResidualMs": 512,
+      "probability": 0.9207199811935425
+    },
+    {
+      "cueMs": 1160237,
+      "renderSourceMs": 1163746,
+      "smallEnOnsetMs": 1163860,
+      "smallEnResidualMs": -114,
+      "baseEnResidualMs": 126,
+      "probability": 0.8693906664848328
+    },
+    {
+      "cueMs": 1168055,
+      "renderSourceMs": 1171587,
+      "smallEnOnsetMs": 1171720,
+      "smallEnResidualMs": -133,
+      "baseEnResidualMs": -13,
+      "probability": 0.9803131222724915
+    }
+  ],
+  "forwardSeek": {
+    "label": "forward30",
+    "matches": 9,
+    "medianMs": 55,
+    "maxAbsMs": 309,
+    "p90AbsMs": 309,
+    "below500": 9,
+    "rows": [
+      {
+        "cueMs": 1810754,
+        "renderSourceMs": 1818567,
+        "spokenSourceMs": 1818560,
+        "residualMs": 7,
+        "similarity": 1.0,
+        "firstWordProbability": 0.9860852956771851,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1813535,
+        "renderSourceMs": 1821153,
+        "spokenSourceMs": 1821080,
+        "residualMs": 73,
+        "similarity": 1.0,
+        "firstWordProbability": 0.9292241334915161,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1820724,
+        "renderSourceMs": 1828452,
+        "spokenSourceMs": 1828340,
+        "residualMs": 112,
+        "similarity": 1.0,
+        "firstWordProbability": 0.9001761078834534,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1822262,
+        "renderSourceMs": 1830036,
+        "spokenSourceMs": 1829920,
+        "residualMs": 116,
+        "similarity": 1.0,
+        "firstWordProbability": 0.9979874789714813,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1835902,
+        "renderSourceMs": 1843508,
+        "spokenSourceMs": 1843460,
+        "residualMs": 48,
+        "similarity": 1.0,
+        "firstWordProbability": 0.988679826259613,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1837812,
+        "renderSourceMs": 1845635,
+        "spokenSourceMs": 1845580,
+        "residualMs": 55,
+        "similarity": 1.0,
+        "firstWordProbability": 0.9919470846652985,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1839675,
+        "renderSourceMs": 1847429,
+        "spokenSourceMs": 1847120,
+        "residualMs": 309,
+        "similarity": 1.0,
+        "firstWordProbability": 0.920731782913208,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1844013,
+        "renderSourceMs": 1851600,
+        "spokenSourceMs": 1851680,
+        "residualMs": -80,
+        "similarity": 1.0,
+        "firstWordProbability": 0.9596646428108215,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1846414,
+        "renderSourceMs": 1854144,
+        "spokenSourceMs": 1854120,
+        "residualMs": 24,
+        "similarity": 1.0,
+        "firstWordProbability": 0.8562862873077393,
+        "repeatedOnset": false
+      }
+    ]
+  },
+  "subtitleOffOnAfterReopen": {
+    "label": "offon-reopen",
+    "matches": 3,
+    "medianMs": 238,
+    "maxAbsMs": 461,
+    "p90AbsMs": 461,
+    "below500": 3,
+    "rows": [
+      {
+        "cueMs": 1904554,
+        "renderSourceMs": 1912118,
+        "spokenSourceMs": 1911880,
+        "residualMs": 238,
+        "similarity": 1.0,
+        "firstWordProbability": 0.989859402179718,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1907274,
+        "renderSourceMs": 1914996,
+        "spokenSourceMs": 1914840,
+        "residualMs": 156,
+        "similarity": 1.0,
+        "firstWordProbability": 0.9908975958824158,
+        "repeatedOnset": false
+      },
+      {
+        "cueMs": 1913742,
+        "renderSourceMs": 1921461,
+        "spokenSourceMs": 1921000,
+        "residualMs": 461,
+        "similarity": 1.0,
+        "firstWordProbability": 0.8577243089675903,
+        "repeatedOnset": false
+      }
+    ]
+  },
+  "finalLiveHlsClockChecks": [
+    {
+      "file": "subtitle-audio-1.wav",
+      "labelledSourceStartMs": 23,
+      "acousticSourceStartMs": -20,
+      "clockErrorMs": 43,
+      "correlation": 0.9886940317710371,
+      "requestedBaseMs": 0,
+      "logicalStartMs": 106,
+      "mainOriginMs": -83
+    },
+    {
+      "file": "subtitle-audio-2.wav",
+      "labelledSourceStartMs": 45,
+      "acousticSourceStartMs": -20,
+      "clockErrorMs": 65,
+      "correlation": 0.9886940317710371,
+      "requestedBaseMs": 0,
+      "logicalStartMs": 128,
+      "mainOriginMs": -83
+    },
+    {
+      "file": "subtitle-audio-3.wav",
+      "labelledSourceStartMs": 1100023,
+      "acousticSourceStartMs": 1099980,
+      "clockErrorMs": 43,
+      "correlation": 0.974847072049388,
+      "requestedBaseMs": 1100000,
+      "logicalStartMs": 1101008,
+      "mainOriginMs": 1099015
+    },
+    {
+      "file": "subtitle-audio-4.wav",
+      "labelledSourceStartMs": 1150066,
+      "acousticSourceStartMs": 1149980,
+      "clockErrorMs": 86,
+      "correlation": 0.9907904994183938,
+      "requestedBaseMs": 1150000,
+      "logicalStartMs": 1153003,
+      "mainOriginMs": 1147063
+    },
+    {
+      "file": "subtitle-audio-5.wav",
+      "labelledSourceStartMs": 1705045,
+      "acousticSourceStartMs": 1704980,
+      "clockErrorMs": 65,
+      "correlation": 0.9900159831245203,
+      "requestedBaseMs": 1705000,
+      "logicalStartMs": 1710430,
+      "mainOriginMs": 1699615
+    },
+    {
+      "file": "subtitle-audio-6.wav",
+      "labelledSourceStartMs": 2366605,
+      "acousticSourceStartMs": 2366520,
+      "clockErrorMs": 85,
+      "correlation": 0.7924097663979087,
+      "requestedBaseMs": 2366539,
+      "logicalStartMs": 2367156,
+      "mainOriginMs": 2534449
+    },
+    {
+      "file": "subtitle-audio-7.wav",
+      "labelledSourceStartMs": 1150066,
+      "acousticSourceStartMs": 1149980,
+      "clockErrorMs": 86,
+      "correlation": 0.9907904994183938,
+      "requestedBaseMs": 1150000,
+      "logicalStartMs": 1153003,
+      "mainOriginMs": 1147063
+    },
+    {
+      "file": "subtitle-audio-8.wav",
+      "labelledSourceStartMs": 1740045,
+      "acousticSourceStartMs": 1739980,
+      "clockErrorMs": 65,
+      "correlation": 0.9540102506545273,
+      "requestedBaseMs": 1740000,
+      "logicalStartMs": 1744394,
+      "mainOriginMs": 1735651
+    },
+    {
+      "file": "subtitle-audio-9.wav",
+      "labelledSourceStartMs": 1810023,
+      "acousticSourceStartMs": 1809980,
+      "clockErrorMs": 43,
+      "correlation": 0.9627862659703459,
+      "requestedBaseMs": 1810000,
+      "logicalStartMs": 1812300,
+      "mainOriginMs": 1807723
+    },
+    {
+      "file": "subtitle-audio-10.wav",
+      "labelledSourceStartMs": 1876204,
+      "acousticSourceStartMs": 1876160,
+      "clockErrorMs": 44,
+      "correlation": 0.7703948735765508,
+      "requestedBaseMs": 1876181,
+      "logicalStartMs": 1878596,
+      "mainOriginMs": 1873789
+    },
+    {
+      "file": "subtitle-audio-11.wav",
+      "labelledSourceStartMs": 1882045,
+      "acousticSourceStartMs": 1881980,
+      "clockErrorMs": 65,
+      "correlation": 0.7711551158317216,
+      "requestedBaseMs": 1882000,
+      "logicalStartMs": 1884250,
+      "mainOriginMs": 1879795
+    }
+  ]
+}

@@ -1562,6 +1562,15 @@ std::string JellyfinClient::staticVideoUrl(const JellyfinSession& session, const
            "?Static=true&MediaSourceId=" + urlEncode(item.mediaSourceId) + "&api_key=" + urlEncode(session.token);
 }
 
+std::string JellyfinClient::subtitleAudioProfileUrl(const JellyfinSession& session, const JellyfinItem& item,
+                                                    const std::string& sourceId) const {
+    if (!session.valid() || item.id.empty() || sourceId.empty()) return {};
+    // Static delivery returns the original release. Omitting the extension lets
+    // the decoder identify its container without guessing from an HLS URL.
+    return session.server + "/Videos/" + urlEncode(item.id) +
+           "/stream?Static=true&MediaSourceId=" + urlEncode(sourceId) + "&api_key=" + urlEncode(session.token);
+}
+
 std::string JellyfinClient::subtitleSrtUrl(const JellyfinSession& session, const JellyfinItem& item,
                                            int subtitleIndex) const {
     if (!session.valid() || item.id.empty() || item.mediaSourceId.empty() || subtitleIndex < 0) return {};

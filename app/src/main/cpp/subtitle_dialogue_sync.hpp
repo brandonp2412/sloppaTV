@@ -135,6 +135,11 @@ inline std::vector<SubtitleDialogueAnchor> matchSubtitleDialogue(const std::vect
             Match best{i, 0.0, 0.0};
             for (size_t count = tokens.size() - 1; count <= tokens.size() + 1; ++count) {
                 if (count < 4 || i + count > speech.size()) continue;
+                if (speech[i + count - 1].endMs - speech[i].startMs > 15000) continue;
+                bool interrupted = false;
+                for (size_t j = i + 1; j < i + count; ++j)
+                    if (speech[j].startMs - speech[j - 1].endMs > 3000) interrupted = true;
+                if (interrupted) continue;
                 const double similarity = subtitleDialogueSimilarity(tokens, speech, i, count);
                 double confidence = 0.0;
                 for (size_t j = i; j < i + count; ++j) confidence += speech[j].confidence;
@@ -216,8 +221,7 @@ inline SubtitleSyncDecision evaluateSubtitleDialogue(const std::vector<SubtitleD
     // than guessing a frame rate from the media duration. The existing per-window
     // inlier checks below still reject missing edits and clock discontinuities.
     const std::vector<double> standardRates{
-        1.0, 1000.0 / 1001.0, 1001.0 / 1000.0, 24.0 / 25.0,
-        24000.0 / 25025.0, 25.0 / 24.0, 25025.0 / 24000.0};
+        1.0, 1000.0 / 1001.0, 1001.0 / 1000.0, 24.0 / 25.0, 24000.0 / 25025.0, 25.0 / 24.0, 25025.0 / 24000.0};
     std::vector<double> candidateRates = standardRates;
     if (requireGlobal && windows.size() >= 3) {
         std::vector<double> measuredRates;

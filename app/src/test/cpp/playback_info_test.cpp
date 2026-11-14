@@ -43,6 +43,9 @@ void testSourceFingerprintsIgnoreAliasesAndDetectBackingChanges() {
     changed = source;
     changed.erase("Path");
     assert(fingerprint(changed).empty());
+    changed = source;
+    changed["Size"] = 123456789;
+    assert(fingerprint(changed) != expected);
 }
 
 int main() {

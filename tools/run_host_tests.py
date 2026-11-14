@@ -204,6 +204,17 @@ LINKED_CPP_TESTS = [
         ],
         [],
     ),
+    (
+        "subtitle_lapse_test.cpp",
+        [
+            "subtitle_lapse_alignment.cpp",
+            *[
+                f"third_party/lapse/{name}.cpp"
+                for name in ["align", "correlate", "cuetext", "srt_parser", "charset", "log"]
+            ],
+        ],
+        ["-lfftw3"],
+    ),
     ("http_get_coordinator_test.cpp", [], ["-pthread"]),
     ("http_retry_coordinator_test.cpp", [], ["-pthread"]),
     ("jellyfin_item_parser_test.cpp", ["jellyfin_item_parser.cpp"], []),
@@ -234,13 +245,13 @@ def run_cpp_test(test_name: str, extra_sources: list[str] | None = None, extra_f
         "-Wextra",
         "-Wpedantic",
         "-Werror",
-        *(extra_flags or []),
         "-I",
         str(CPP_DIR),
         "-I",
         str(CPP_DIR / "third_party"),
         str(source),
         *(str(CPP_DIR / extra) for extra in (extra_sources or [])),
+        *(extra_flags or []),
         "-o",
         str(binary),
     ]

@@ -73,6 +73,7 @@
 #include "subtitle_audio_probe.hpp"
 #include "subtitle_sync_executor.hpp"
 #include "subtitle_speech_recognizer.hpp"
+#include "subtitle_scene_cache.hpp"
 #include "subtitle_sync_correction_cache.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
@@ -1450,6 +1451,19 @@ private:
         applyPlaybackHostEffect(playbackRuntime_.tickActivePlayer(playbackStreamAsync_, playbackTelemetryAsync_,
                                                                   playbackContinuationAsync_, mediaSession_,
                                                                   queueState_, renderer_.ready(), stateMutex_));
+#ifndef NDEBUG
+        const int position = playerScreenState_.positionMs();
+        const auto* cue = playbackCoordinator_.activeSubtitleCue(position);
+        const int onset = cue ? cue->startMs : -1;
+        if (onset != debugSubtitleCueStart_) {
+            debugSubtitleCueStart_ = onset;
+            const auto& target = playbackCoordinator_.session().activeTarget();
+            __android_log_print(ANDROID_LOG_INFO, kTag,
+                                "Subtitle render cueMs=%d playerMs=%d localMs=%d baseMs=%d originMs=%d", onset,
+                                position, player_.positionMs(), playbackCoordinator_.playerTimelineBaseMs(),
+                                player_.timelineOriginMs(target.url).value_or(0));
+        }
+#endif
         scheduleRemuxPrefetchStatus();
         // Do not speculatively resolve/probe the next Remux episode while the
         // foreground stream is active. PlaybackInfo can start a P2P torrent and
@@ -1692,6 +1706,9 @@ private:
             // An embedded audio switch can change the ordinal without replacing the target.
             audioTarget.audioOrdinal = -1;
             probe.audioOrdinal = playerAudioOrdinal(audioTarget, playbackCoordinator_.session().activeItem());
+            for (const auto& audio : target.audioTracks)
+                if (audio.index == playbackCoordinator_.tracks().selectedAudioServerIndex())
+                    probe.centerSpeechChannel = audio.channels > 2;
             probe.privateFilesDir = dataPath_ + "/files";
             probe.cues = completion.cues;
             const int position = std::max(0, player_.positionMs());
@@ -1732,10 +1749,13 @@ private:
                                         subtitleCueFingerprint(completion.cues),
                                         probe.playbackTimelineOrigin ? player_.timelineOriginMs(playbackUrl)
                                                                      : std::nullopt};
+        auto evidenceContext = syncContext;
+        evidenceContext.cueFingerprint = subtitleCueFingerprint(completion.cues, true);
         applyPlaybackCompletionApplicationEffects(playbackCompletions_.complete(completion));
         if (probe.mediaUrl.empty()) return;
         if (const auto cached = subtitleSyncCorrections_.find(syncContext)) {
             playbackCoordinator_.applySubtitleAutoSync(cached->offsetMs, cached->timeScale);
+            playbackCoordinator_.applySubtitleTimeline(cached->regions);
             __android_log_print(ANDROID_LOG_INFO, kTag,
                                 "Subtitle auto-sync reused item=%.8s index=%d offsetMs=%d scale=%.6f", itemId.c_str(),
                                 subtitleIndex, cached->offsetMs, cached->timeScale);
@@ -1757,6 +1777,29 @@ private:
                 return subtitleSpeech_.recognize(samples, directory, cancelled);
             };
         }
+
+        probe.proposeScenes = [this, cancelled = probe.cancelled,
+                               directory = probe.privateFilesDir](const auto& audio, const auto& cues, int startMs) {
+            return subtitleSpeech_.proposeScenes(audio, cues, startMs, directory, cancelled);
+        };
+        const std::string evidenceAccount = session_.server + "\n" + session_.userId;
+        probe.recallSourceScenes = [this, evidenceAccount, syncContext = evidenceContext,
+                                    directory = probe.privateFilesDir] {
+            subtitleSceneEvidence_.setFile(directory + "/subtitle-scene-evidence.json");
+            auto regions = subtitleSceneEvidence_.find(evidenceAccount, syncContext);
+            __android_log_print(ANDROID_LOG_INFO, kTag,
+                                "Subtitle source evidence item=%.8s fingerprint=%s audio=%d subtitle=%d cues=%llu "
+                                "trusted=%d regions=%zu",
+                                syncContext.itemId.c_str(), syncContext.sourceFingerprint.c_str(),
+                                syncContext.audioIndex, syncContext.subtitleIndex,
+                                static_cast<unsigned long long>(syncContext.cueFingerprint), syncContext.trustworthy(),
+                                regions.size());
+            return regions;
+        };
+        probe.rememberSourceScenes = [this, evidenceAccount, syncContext = evidenceContext,
+                                      cancelled = probe.cancelled](const auto& regions) {
+            if (!(cancelled && cancelled())) subtitleSceneEvidence_.store(evidenceAccount, syncContext, regions);
+        };
 
         if (!subtitleSyncTasks_.submit([this, requestId, generation, itemId, sourceId, playbackUrl, probeTarget,
                                         probeItem, probeMaxBitrate, probeMaxChannels, session = session_, trackRevision,
@@ -1801,6 +1844,11 @@ private:
         subtitleSyncCorrections_.store(completion.syncContext, completion.result.decision);
         playbackCoordinator_.applySubtitleAutoSync(completion.result.decision.offsetMs,
                                                    completion.result.decision.timeScale);
+        playbackCoordinator_.applySubtitleTimeline(completion.result.decision.regions);
+        for (const auto& region : completion.result.decision.regions)
+            __android_log_print(
+                ANDROID_LOG_INFO, kTag, "Subtitle region firstMs=%d lastMs=%d offsetMs=%d scale=%.6f anchors=%d",
+                region.firstSubtitleMs, region.lastSubtitleMs, region.offsetMs, region.scale, region.anchors);
         __android_log_print(ANDROID_LOG_INFO, kTag,
                             "Subtitle auto-sync applied item=%.8s index=%d offsetMs=%d scale=%.6f audioMs=%d "
                             "confidence=%.3f evidence=%s anchors=%d",
@@ -2008,6 +2056,10 @@ private:
     std::string dataPath_;
     std::atomic<uint64_t> subtitleSyncRequestId_{0};
     SubtitleSyncCorrectionCache subtitleSyncCorrections_;
+    SubtitleSceneEvidenceCache subtitleSceneEvidence_;
+#ifndef NDEBUG
+    int debugSubtitleCueStart_ = -1;
+#endif
 
     Screen screen_ = Screen::Login;
     NavigationStack<Screen> navigation_{Screen::Login};

@@ -113,6 +113,8 @@ public:
                                                   const ArtworkReference& artwork, int width = 480,
                                                   int height = 270) const;
     [[nodiscard]] std::string staticVideoUrl(const JellyfinSession& session, const JellyfinItem& item) const;
+    [[nodiscard]] std::string subtitleAudioProfileUrl(const JellyfinSession& session, const JellyfinItem& item,
+                                                      const std::string& sourceId) const;
     [[nodiscard]] std::string subtitleSrtUrl(const JellyfinSession& session, const JellyfinItem& item,
                                              int subtitleIndex) const;
     [[nodiscard]] std::string subtitleTextUrl(const JellyfinSession& session, const JellyfinItem& item,

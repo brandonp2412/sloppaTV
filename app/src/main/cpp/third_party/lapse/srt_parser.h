@@ -1,0 +1,106 @@
+// LAPSE - Language-Agnostic subtitle synchronization engine
+// Copyright (C) 2026 Rasmus Stisen Jensen (rs-jensen)
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+#pragma once
+#include <iostream>
+#include <string>
+#include <fstream>
+#include <sstream>
+#include <vector>
+#include <algorithm>
+#include <filesystem>
+#include <cctype>
+#include "charset.h"
+
+int parse_timestamp(const std::string& line, size_t from);
+std::string load_text(const std::string& path, Charset* was = nullptr);
+std::string load_bytes(const std::string& path);
+std::string trim(const std::string& s);
+
+std::vector<size_t> ass_commas(const std::string& line);
+bool ass_field(const std::string& line, const std::vector<size_t>& commas, int index, size_t& from, size_t& len);
+std::pair<int,int> ass_time_columns(const std::string& format_line);
+
+bool sub_frames(const std::string& line, long long& a, long long& b, size_t& text_from);
+bool mpl2_times(const std::string& line, long long& a, long long& b, size_t& text_from);
+bool is_mpl2(const std::string& text);
+int tenths_to_ms(long long tenths);
+bool subviewer_times(const std::string& line, size_t& comma);
+bool is_subviewer(const std::string& text);
+double sub_fps(const std::string& text);
+void set_sub_fps(double fps);
+int frames_to_ms(long long frame, double fps);
+
+extern const std::vector<std::string> SUBTITLE_FORMATS;
+std::string subtitle_kind(const std::string& path);
+std::vector<std::pair<int,int>> read_subtitle(const std::string& path);
+std::vector<std::pair<int, int>> read_srt(const char* filename);
+std::vector<std::pair<int, int>> read_ass(const char* filename);
+std::vector<std::pair<int,int>> read_vtt(const char* filename);
+std::vector<std::pair<int,int>> read_sub(const char* filename);
+std::vector<std::pair<int,int>> read_sup(const char* filename);
+std::vector<std::pair<int,int>> read_sbv(const char* filename);
+bool sbv_time_line(const std::string& line);
+bool ebu_stl(const std::string& data);
+int stl_fps(const std::string& data);
+int stl_ms(const unsigned char* tc, int fps);
+int stl_zero(const std::string& data, int fps);
+std::vector<std::pair<int,int>> read_stl(const char* filename);
+
+struct SpruceLine {
+    int seconds[2] = {0, 0}, frames[2] = {0, 0};
+    size_t at[2] = {0, 0}, len[2] = {0, 0}, text = 0;
+};
+bool spruce_line(const std::string& line, SpruceLine& got);
+int spruce_fps(const std::string& text);
+int spruce_ms(const SpruceLine& got, int which, int fps);
+
+struct SccLine {
+    size_t at = 0, len = 0;
+    int ms = 0;
+    char sep = ':';
+    bool show = false, hide = false, load = false;
+    std::string text;
+};
+std::vector<SccLine> scc_lines(const std::string& text);
+std::vector<std::pair<int,int>> read_scc(const char* filename);
+std::vector<std::pair<int,int>> read_idx(const char* filename);
+bool idx_time_line(const std::string& line, size_t& val_from, size_t& val_len);
+int idx_time_ms(const std::string& v);
+bool idx_delay_line(const std::string& line, int& delay);
+int spu_stop_ms(const unsigned char* spu, size_t n);
+std::vector<std::pair<int,int>> read_smi(const char* filename);
+size_t ifind(const std::string& text, const std::string& needle, size_t from);
+bool sync_start(const std::string& text, size_t from, size_t to, size_t& val_from, size_t& val_len);
+bool smi_blank(const std::string& body);
+std::vector<std::pair<int,int>> read_ttml(const char* filename);
+bool ttml_attr(const std::string& text, size_t from, size_t to, const char* name, size_t& val_from, size_t& val_len);
+int ttml_time_ms(const std::string& v);
+std::string ttml_time(int ms, const std::string& like);
+void ttml_rates(const std::string& text);
+size_t ttml_p(const std::string& text, size_t from);
+std::pair<std::vector<std::pair<int,int>>, std::vector<int>> process_spans(const std::vector<std::pair<int, int>>& timestamps, bool merge = true, bool sort_by_time = true);
+const float SPEECH_THRESHOLD = 0.25f;
+const int MIN_CUES = 10;
+const int MIN_SPEECH_MS = 200;
+const int MAX_CUE_MS = 10000;
+const int LEAD_IN_MS = 150;
+
+const int MAX_TIME_MS = 24 * 3600 * 1000;
+const int MAX_CUES = 100000;
+const size_t MAX_SUBTITLE_BYTES = 64u * 1024 * 1024;
+
+std::pair<std::vector<std::pair<int, int>>, std::vector<float>> reference_spans(const std::vector<float>& probability);
+void lead_in(std::vector<std::pair<int,int>>& spans);

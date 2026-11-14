@@ -1,4 +1,5 @@
 #include "subtitle_dialogue_sync.hpp"
+#include "subtitle_scene_sync.hpp"
 #include "fixtures/subtitle_dialogue_evidence.hpp"
 #include <cassert>
 #include <cmath>
@@ -117,4 +118,47 @@ int main() {
         assert(fitted.confident && std::abs(fitted.timeScale - scale) < 0.000001);
         assert(std::abs(fitted.offsetMs - 8512) <= 150);
     }
+    const auto oneScene = synthetic(1.0, 3300);
+    const std::vector<SubtitleTimelineRegion> rememberedScenes{
+        {10000, 47500, 3300, 1.0, 8}, {700000, 737500, 3300, 1.0, 8}, {1400000, 1437500, 3300, 1.0, 8}};
+    assert(subtitleTimelinePosition(rememberedScenes, oneScene[0].anchors[2].spokenMs));
+    for (const int gap : {0, 400000, 2000000}) assert(!subtitleTimelinePosition(rememberedScenes, gap));
+    assert(revalidateSubtitleScenes(rememberedScenes, oneScene.front(), 0).size() == rememberedScenes.size());
+    auto restartedDialogue = oneScene.front();
+    restartedDialogue.startMs += 4200;
+    for (auto& a : restartedDialogue.anchors) a.spokenMs += 4200;
+    assert(!revalidateSubtitleScenes(rememberedScenes, restartedDialogue, 4200).empty());
+    assert(revalidateSubtitleScenes(rememberedScenes, restartedDialogue, 0).empty());
+    restartedDialogue.anchors.resize(3);
+    assert(revalidateSubtitleScenes(rememberedScenes, restartedDialogue, 4200).empty());
+    assert(revalidateSubtitleScenes(rememberedScenes, {0, 90000, {}}, 0).empty());
+    auto conflictingFresh = oneScene.front();
+    auto conflict = conflictingFresh.anchors.front();
+    conflict.spokenMs += 2000;
+    conflictingFresh.anchors.push_back(conflict);
+    assert(revalidateSubtitleScenes(rememberedScenes, conflictingFresh, 0).empty());
+    auto malformed = rememberedScenes;
+    malformed.front().scale = std::numeric_limits<double>::quiet_NaN();
+    assert(!subtitleTimelineValid(malformed));
+    auto overlapping = rememberedScenes;
+    overlapping.push_back(rememberedScenes.front());
+    assert(!subtitleTimelineValid(overlapping));
+    assert(subtitleTimelinePosition(rememberedScenes, 45000 + 3300 + 2000));
+    assert(!subtitleTimelinePosition(rememberedScenes, 45000 + 3300 + 2501));
+    std::vector<SubtitleCue> samplingCues;
+    for (int base : {10000, 250000})
+        for (int i = 0; i < 9; ++i)
+            samplingCues.push_back({base + i * 5000, base + i * 5000 + 2500, "several independently spoken words"});
+    const auto sampleStarts = subtitleSceneVerificationStarts({10000, 350000, 3300, 1.0, 8}, samplingCues);
+    assert(sampleStarts.size() >= 2);
+    assert(std::any_of(sampleStarts.begin(), sampleStarts.end(),
+                       [&](int start) { return std::abs(start - sampleStarts.front()) >= 85000; }));
+    for (const int start : sampleStarts) assert(start < 60000 || start > 180000);
+    assert(subtitleSceneVerificationStarts({10000, 350000, 3300, 1.0, 8}, {}).empty());
+    auto interruptedWords = words;
+    for (size_t j = 1; j < interruptedWords.size(); ++j) {
+        interruptedWords[j].startMs += static_cast<int>(j) * 20000;
+        interruptedWords[j].endMs += static_cast<int>(j) * 20000;
+    }
+    assert(matchSubtitleDialogue(interruptedWords, cues, 100000, 900000).empty());
 }

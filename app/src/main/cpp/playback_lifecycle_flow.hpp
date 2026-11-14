@@ -79,7 +79,7 @@ public:
                                coordinator_.playerPositionFromLogicalPosition(playerScreen_.positionMs()),
                                settings_.playbackBufferPreset, start.audioOrdinal, start.subtitleStreamIndex,
                                start.subtitleOrdinal, start.externalSubtitleUrl, runtime_.activeDecodeMode(),
-                               settings_.maxAudioChannels, runtime_.isRemuxServer());
+                               settings_.maxAudioChannels, runtime_.isRemuxServer(), plan.pauseAfterRestart);
             coordinator_.setPauseAfterRestart(plan.pauseAfterRestart);
             mediaSession_.updateState(MediaSessionState::Buffering, playerScreen_.positionMs());
             diagnostic = PlaybackLifecycleDiagnostic::RecreatedPlaybackSurface;

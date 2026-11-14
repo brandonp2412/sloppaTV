@@ -153,7 +153,7 @@ public:
         if (playbackNeedsBitmapCompositing(active.activeItem(), active.activeTarget())) {
             // MediaCodec's GPU-copy path can corrupt 10-bit video on some TVs.
             return active.activeItem().videoBitDepth > 8 ? PlaybackDecodeMode::Software
-                                                        : PlaybackDecodeMode::HardwareComposite;
+                                                         : PlaybackDecodeMode::HardwareComposite;
         }
         return PlaybackDecodeMode::Hardware;
     }
@@ -212,11 +212,13 @@ public:
         if (!session_.valid()) return false;
         const int targetPositionMs = std::max(0, positionMs);
         const bool wasPaused = player_.status() == PlayerStatus::Paused;
+        // The caller may refer to activeTarget(); beginStreamRestart moves it.
+        const std::string pinnedSource = replacementMediaSourceId;
         auto restartPlan = coordinator_.beginStreamRestart(targetPositionMs);
         if (!restartPlan) return false;
 
         JellyfinItem item = std::move(restartPlan->item);
-        if (!replacementMediaSourceId.empty()) item.mediaSourceId = replacementMediaSourceId;
+        if (!pinnedSource.empty()) item.mediaSourceId = pinnedSource;
         __android_log_print(ANDROID_LOG_INFO, "SloppaTV",
                             "Playback restart item=%s title=%s series=%s S%dE%d preferredSource=%s atMs=%d",
                             item.id.c_str(), item.name.c_str(), item.seriesId.c_str(), item.parentIndexNumber,
@@ -343,10 +345,12 @@ public:
 
     template <typename StreamExecutor> bool seekTo(StreamExecutor& stream, int positionMs) {
         const int targetMs = std::max(0, positionMs);
+        hlsRecovery_.reset();
         if (coordinator_.seekRequiresStreamRestart(targetMs)) {
-            // The server stream begins at the resume offset; mpv cannot seek before its first frame.
+            // Keep the same release and tracks when replacing an expired playlist.
             restartAt(stream, targetMs, coordinator_.tracks().selectedAudioServerIndex(),
-                      coordinator_.tracks().selectedSubtitleServerIndex());
+                      coordinator_.tracks().selectedSubtitleServerIndex(),
+                      coordinator_.session().activeTarget().mediaSourceId);
             return false; // Stream restart reports progress once its new timeline is ready.
         }
         player_.seekTo(coordinator_.playerPositionFromLogicalPosition(targetMs));
@@ -381,7 +385,8 @@ public:
         embeddedSubtitleDiscoveryLastPoll_ = {};
         player_.startAsync(start.url, videoSurface_.surface(), playerStartPositionMs, settings_.playbackBufferPreset,
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
-                           start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels, isRemuxServer());
+                           start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels, isRemuxServer(),
+                           coordinator_.pauseAfterRestart());
         initialResumeTargetMs_ = coordinator_.activeTargetUsesDirectPlay() ? logicalStartPositionMs : 0;
         initialResumeRetryMs_ = 0;
         if (logicalStartPositionMs > 0) screenState_.beginInitialPosition(logicalStartPositionMs, now);
@@ -712,8 +717,8 @@ public:
             coordinator_.finishPreparing();
         }
 
-        if (coordinator_.consumePauseAfterRestart(status == PlayerStatus::Playing)) {
-            player_.togglePause();
+        if (coordinator_.consumePauseAfterRestart(status == PlayerStatus::Playing || status == PlayerStatus::Paused)) {
+            player_.pause();
             status = player_.status();
         }
 
@@ -752,9 +757,30 @@ public:
             return PlaybackHostEffect::stop();
         }
 
+        hlsRecovery_.observePlaying(status == PlayerStatus::Playing, std::chrono::steady_clock::now());
         if (status == PlayerStatus::Playing) failedSources_.clear();
 
         const bool playbackEnded = status == PlayerStatus::Ended;
+        if (playbackEnded && !coordinator_.activeTargetUsesDirectPlay() &&
+            coordinator_.session().activeTarget().url.find(".m3u8") != std::string::npos) {
+            const auto& target = coordinator_.session().activeTarget();
+            const int duration = target.sourceRuntimeTicks > 0 ? playbackPositionMsFromTicks(target.sourceRuntimeTicks)
+                                                               : screenState_.durationMs();
+            const int seek = screenState_.prematureSeekEndTarget(duration, std::chrono::steady_clock::now());
+            const auto resume = prematureHlsEndPosition(screenState_.positionMs(), seek, duration);
+            if (resume) {
+                std::scoped_lock lock(stateMutex);
+                const auto& item = coordinator_.session().activeItem();
+                if (hlsRecovery_.consume(item.id, target.mediaSourceId, std::chrono::steady_clock::now()) &&
+                    restartAt(stream, *resume, coordinator_.tracks().selectedAudioServerIndex(),
+                              coordinator_.tracks().selectedSubtitleServerIndex(), target.mediaSourceId)) {
+                    error_.clear();
+                    return {};
+                }
+                error_ = "Server stream ended before the episode finished";
+                return PlaybackHostEffect::stop();
+            }
+        }
         if (playbackEnded && coordinator_.activeTargetUsesDirectPlay()) {
             // Sparse Remux streams can report a truncated duration on premature EOF.
             // Preserve the known episode runtime when deciding if an early seek finished playback.
@@ -970,6 +996,7 @@ private:
     std::string softwareDecodeItemId_;
     std::string failedSourceItemId_;
     std::vector<std::string> failedSources_;
+    HlsRecoveryBudget hlsRecovery_;
     int initialResumeTargetMs_ = 0;
     int initialResumeRetryMs_ = 0;
     bool embeddedSubtitleDiscoveryDone_ = false;

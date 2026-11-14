@@ -1,6 +1,7 @@
 #pragma once
 
 #include "subtitle_policy.hpp"
+#include "subtitle_timeline.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -28,6 +29,7 @@ public:
         subtitleCueMaxEndMs_.clear();
         subtitleOffsetMs_ = 0;
         subtitleTimeScale_ = 1.0;
+        subtitleTimeline_.clear();
         subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
         activeSubtitleServerIndex_ = -1;
@@ -86,6 +88,7 @@ public:
         activeSubtitleCues_ = std::move(cues);
         subtitleOffsetMs_ = 0;
         subtitleTimeScale_ = 1.0;
+        subtitleTimeline_.clear();
         subtitleCueMaxEndMs_.clear();
         subtitleCueMaxEndMs_.reserve(activeSubtitleCues_.size());
         int maxEndMs = 0;
@@ -109,6 +112,7 @@ public:
         subtitleCueMaxEndMs_.clear();
         subtitleOffsetMs_ = 0;
         subtitleTimeScale_ = 1.0;
+        subtitleTimeline_.clear();
         subtitleCueHint_ = 0;
         activeSubtitleLanguage_.clear();
     }
@@ -125,8 +129,13 @@ public:
     void setSubtitleOffsetMs(int offsetMs) { setSubtitleTimeWarp(offsetMs, 1.0); }
 
     void setSubtitleTimeWarp(int offsetMs, double timeScale) {
+        subtitleTimeline_.clear();
         subtitleOffsetMs_ = std::clamp(offsetMs, -120000, 120000);
         subtitleTimeScale_ = std::isfinite(timeScale) ? std::clamp(timeScale, 0.9, 1.1) : 1.0;
+    }
+
+    void setSubtitleTimeline(const std::vector<SubtitleTimelineRegion>& regions) {
+        if (subtitleTimelineValid(regions)) subtitleTimeline_ = regions;
     }
 
     [[nodiscard]] int subtitleOffsetMs() const { return subtitleOffsetMs_; }
@@ -139,8 +148,14 @@ public:
 
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {
         if (!activeSubtitleEnabled_ || activeSubtitleCues_.empty()) return nullptr;
-        positionMs =
-            static_cast<int>(std::lround((static_cast<double>(positionMs) - subtitleOffsetMs_) / subtitleTimeScale_));
+        bool sceneMapped = false;
+        if (!subtitleTimeline_.empty()) {
+            const auto mapped = subtitleTimelinePosition(subtitleTimeline_, positionMs);
+            sceneMapped = mapped.has_value();
+            positionMs = mapped.value_or(positionMs);
+        } else
+            positionMs = static_cast<int>(
+                std::lround((static_cast<double>(positionMs) - subtitleOffsetMs_) / subtitleTimeScale_));
 
         if (subtitleCueHint_ < activeSubtitleCues_.size() &&
             activeSubtitleCues_[subtitleCueHint_].startMs <= positionMs) {
@@ -161,7 +176,15 @@ public:
         size_t candidate = subtitleCueHint_;
         while (true) {
             const auto& cue = activeSubtitleCues_[candidate];
-            if (positionMs >= cue.startMs && positionMs < cue.endMs) return &cue;
+            // A corrected cue must never appear at its original timestamp in
+            // the gap before/after its verified region. That would flash the
+            // same dialogue early, or repeat it after a negative correction.
+            const bool awaitingMappedTime =
+                !sceneMapped &&
+                std::any_of(subtitleTimeline_.begin(), subtitleTimeline_.end(), [&](const auto& region) {
+                    return cue.startMs >= region.firstSubtitleMs && cue.startMs <= region.lastSubtitleMs;
+                });
+            if (!awaitingMappedTime && positionMs >= cue.startMs && positionMs < cue.endMs) return &cue;
             if (candidate == 0 || subtitleCueMaxEndMs_.size() != activeSubtitleCues_.size() ||
                 subtitleCueMaxEndMs_[candidate - 1] <= positionMs) {
                 return nullptr;
@@ -172,6 +195,9 @@ public:
 
 private:
     void invalidateSubtitleSync() {
+        subtitleTimeline_.clear();
+        subtitleOffsetMs_ = 0;
+        subtitleTimeScale_ = 1.0;
         ++subtitleSyncRevision_;
         if (subtitleContextChanged_) subtitleContextChanged_();
     }
@@ -181,6 +207,7 @@ private:
     bool subtitleBusy_ = false;
     int subtitleOffsetMs_ = 0;
     double subtitleTimeScale_ = 1.0;
+    std::vector<SubtitleTimelineRegion> subtitleTimeline_;
     std::vector<SubtitleCue> activeSubtitleCues_;
     std::vector<int> subtitleCueMaxEndMs_;
     mutable size_t subtitleCueHint_ = 0;

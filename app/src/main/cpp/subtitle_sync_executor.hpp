@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jellyfin_types.hpp"
+#include "playback_track_selection.hpp"
 #include "media_player_policy.hpp"
 #include "subtitle_audio_probe.hpp"
 
@@ -27,6 +28,24 @@ SubtitleAudioSyncResult executeSubtitleAudioSync(Client& client, JellyfinSession
         return result;
     };
     if (request.cancelled && request.cancelled()) return failure("audio probe cancelled");
+    // A rolling HLS playlist can expose only a few minutes. Obtain the complete
+    // selected release for the VAD proposal; fresh HLS dialogue still validates
+    // every region before any proposal is allowed to affect playback.
+    if constexpr (requires { client.subtitleAudioProfileUrl(session, item, playback.mediaSourceId); }) {
+        request.profileAudioOrdinal = playback.audioOrdinal;
+        for (size_t index = 0; index < playback.audioTracks.size(); ++index)
+            if (playback.audioTracks[index].index == playback.audioStreamIndex)
+                request.profileAudioOrdinal = static_cast<int>(index);
+        if (request.profileAudioOrdinal < 0) {
+            auto source = playback;
+            source.playMethod = PlaybackMethod::DirectPlay;
+            request.profileAudioOrdinal = playerAudioOrdinal(source, item);
+        }
+        // The raw file contains all audio tracks, unlike the negotiated HLS.
+        // Never silently analyze its default audio after a selected-track switch.
+        if (request.profileAudioOrdinal >= 0)
+            request.profileMediaUrl = client.subtitleAudioProfileUrl(session, item, playback.mediaSourceId);
+    }
     if (request.mediaUrl.find(".m3u8") == std::string::npos) return synchronize(request);
     if (playback.sourceFingerprint.empty() || playback.playSessionId.empty())
         return failure("HLS source identity unavailable for independent subtitle probe");
@@ -74,17 +93,16 @@ SubtitleAudioSyncResult executeSubtitleAudioSync(Client& client, JellyfinSession
     if (!subtitleProbeSessionCompatible(playback, target))
         return failure("independent subtitle probe resolved a different release or audio track");
     if (request.cancelled && request.cancelled()) return failure("audio probe cancelled");
-    // A separately negotiated HLS probe starts at its requested episode time.
-    // The independent transcoder's transport PTS origin is NOT comparable with
-    // the live player's PTS origin (on some Remux releases the origins differ by
-    // tens of minutes even while the audio starts at the episode opening).
-    // Decode in the probe's own zero-based clock, anchored to its requested base.
+    // Keep the live player's clock fixed while independent HLS sessions move.
+    // A probe-local zero includes mux preroll: adding it to the requested base
+    // counts that preroll twice. Convert decoded PTS into the live player clock.
+    if (playback.startTicks / 10000 > std::numeric_limits<int>::max())
+        return failure("live subtitle player timeline base overflow");
+    request.playerTimelineBaseMs = static_cast<int>(playback.startTicks / 10000);
     const int64_t firstBaseTicks = item.positionTicks;
     if (firstBaseTicks < 0 || firstBaseTicks / 10000 > std::numeric_limits<int>::max())
         return failure("independent subtitle probe timeline base overflow");
     request.subtitleTimelineBaseMs = static_cast<int>(firstBaseTicks / 10000);
-    request.playbackTimelineOriginMs.reset();
-    request.playbackTimelineOrigin = {};
     request.verificationMediaUrl = [&](int sampleStartMs) -> std::optional<std::string> {
         if (request.cancelled && request.cancelled()) return std::nullopt;
         auto windowItem = item;

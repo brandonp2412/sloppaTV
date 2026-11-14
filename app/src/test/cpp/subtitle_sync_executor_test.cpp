@@ -1,4 +1,6 @@
 #include "subtitle_sync_executor.hpp"
+#include "hls_playback_policy.hpp"
+#include "playback_coordinator.hpp"
 
 #include <cassert>
 
@@ -9,6 +11,13 @@ struct Client {
     std::string device;
     bool freshSessions = false;
     std::vector<int64_t> positions;
+
+    std::string subtitleAudioProfileUrl(const JellyfinSession& session, const JellyfinItem&,
+                                        const std::string& sourceId) {
+        assert(session.deviceId == "player");
+        assert(sourceId == "alias");
+        return "https://fixture/static.mp4?MediaSourceId=alias";
+    }
 
     ApiValueResult<PlaybackTarget> resolvePlayback(const JellyfinSession& session, const JellyfinItem& item, int, int,
                                                    PlaybackOverrides overrides, int audio, int subtitle) {
@@ -37,6 +46,26 @@ struct Client {
 };
 
 int main() {
+    // A library estimate must not autoplay over the selected release's ending.
+    {
+        JellyfinItem episode;
+        episode.id = "episode";
+        episode.runtimeTicks = 2580LL * 10000000;
+        PlaybackTarget release;
+        release.sourceRuntimeTicks = 26665390000LL;
+        release.playMethod = PlaybackMethod::Transcode;
+        const auto plan = planPlaybackTransition(release, episode, true, true, -1);
+        assert(plan.durationMs == 2666539 && plan.pauseAfterRestart);
+        PlaybackCoordinator coordinator;
+        coordinator.activate(episode, release, PlaybackCoordinator::Clock::now());
+        const auto read = coordinator.consumeTelemetryRead(PlaybackCoordinator::Clock::now(), true, 2580000);
+        assert(read.knownDurationMs == 2666539);
+        assert(coordinator.continuationPlan(false, 2579500, read.knownDurationMs, {}, true, 0).action ==
+               PlaybackContinuationAction::None);
+        release.sourceRuntimeTicks = 0;
+        assert(planPlaybackTransition(release, episode, false, false, -1).durationMs == 2580000);
+    }
+
     JellyfinSession session;
     session.deviceId = "player";
     PlaybackTarget playback;
@@ -45,6 +74,7 @@ int main() {
     playback.mediaSourceId = "alias";
     playback.sourceFingerprint = "release-a";
     playback.audioStreamIndex = 4;
+    playback.audioTracks = {{1, 2, "aac", "jpn", "Japanese", true}, {4, 6, "aac", "eng", "English", false}};
     playback.startTicks = 3850000000LL;
     playback.playMethod = PlaybackMethod::DirectStream;
     Client client;
@@ -59,6 +89,8 @@ int main() {
         decoded = true;
         assert(probe.mediaUrl == client.result.value.url);
         assert(probe.audioOrdinal == -1);
+        assert(probe.profileMediaUrl == "https://fixture/static.mp4?MediaSourceId=alias");
+        assert(probe.profileAudioOrdinal == 1); // second physical audio, first in the HLS
         SubtitleAudioSyncResult result;
         result.decision.confident = true;
         return result;
@@ -113,8 +145,8 @@ int main() {
     const auto verifyWindows = [&](const SubtitleAudioSyncRequest& probe) {
         assert(probe.verificationMediaUrl);
         assert(probe.subtitleTimelineBaseMs == 385000);
-        // Probe HLS PTS epochs cannot be compared with the live player epoch.
-        assert(!probe.playbackTimelineOriginMs && !probe.playbackTimelineOrigin);
+        assert(probe.playerTimelineBaseMs == 385000);
+        assert(probe.playbackTimelineOriginMs == 1153069);
         const auto middle = probe.verificationMediaUrl(300000);
         const auto late = probe.verificationMediaUrl(700000);
         const auto earlier = probe.verificationMediaUrl(-385000);
@@ -171,7 +203,8 @@ int main() {
     request.subtitleTimelineBaseMs = 1173735;
     const auto beforeCredits = [&](const SubtitleAudioSyncRequest& probe) {
         assert(probe.sampleStartMs == 0 && probe.subtitleTimelineBaseMs == 1036384);
-        assert(!probe.playbackTimelineOriginMs);
+        assert(probe.playerTimelineBaseMs == 1173735);
+        assert(probe.playbackTimelineOriginMs == 1153069);
         assert(client.positions.back() == 10363840000LL);
         return SubtitleAudioSyncResult{};
     };
@@ -180,4 +213,26 @@ int main() {
     const int beforeInvalid = client.resolutions;
     assert(!executeSubtitleAudioSync(client, session, {}, playback, request, 120000000, 2, shifted).decision.confident);
     assert(client.resolutions == beforeInvalid);
+    // A long subtitle analysis can outlive a paused HLS playlist. Seeking must
+    // replace that playlist and an early EOF must never authorize autoplay.
+    assert(serverStreamSeekNeedsRestart(false, "https://fixture/stream.m3u8", 1150000, 0));
+    assert(serverStreamSeekNeedsRestart(false, "https://fixture/stream.m3u8", 1000, 1150000));
+    assert(!serverStreamSeekNeedsRestart(true, "https://fixture/file.mp4", 1150000, 0));
+    assert(!serverStreamSeekNeedsRestart(false, "https://fixture/file.ts", 1150000, 0));
+    assert(prematureHlsEndPosition(45000, -1, 2666539) == 45000);
+    assert(prematureHlsEndPosition(45000, 1150000, 2666539) == 1150000);
+    assert(!prematureHlsEndPosition(2660000, -1, 2666539));
+    HlsRecoveryBudget recovery;
+    const auto instant = HlsRecoveryBudget::Clock::now();
+    assert(recovery.consume("episode", "release", instant));
+    assert(!recovery.consume("episode", "release", instant + std::chrono::seconds(1)));
+    assert(!recovery.consume("episode", "release", instant + std::chrono::seconds(31)));
+    recovery.observePlaying(true, instant + std::chrono::seconds(31));
+    recovery.observePlaying(false, instant + std::chrono::seconds(50));
+    assert(!recovery.consume("episode", "release", instant + std::chrono::seconds(61)));
+    recovery.observePlaying(true, instant + std::chrono::seconds(62));
+    recovery.observePlaying(true, instant + std::chrono::seconds(93));
+    assert(recovery.consume("episode", "release", instant + std::chrono::seconds(93)));
+    recovery.reset();
+    assert(recovery.consume("episode", "release", instant + std::chrono::seconds(94)));
 }

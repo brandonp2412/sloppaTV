@@ -35,6 +35,33 @@ foreach(speech_target whisper ggml ggml-base ggml-cpu)
 endforeach()
 
 
+# LAPSE uses FFTW for the alignment search. Keep both native dependencies pinned.
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(ENABLE_THREADS OFF CACHE BOOL "" FORCE)
+set(ENABLE_OPENMP OFF CACHE BOOL "" FORCE)
+set(DISABLE_FORTRAN ON CACHE BOOL "" FORCE)
+set(ENABLE_FLOAT OFF CACHE BOOL "" FORCE)
+set(ENABLE_LONG_DOUBLE OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(subtitle_fftw
+    URL https://www.fftw.org/fftw-3.3.10.tar.gz
+    URL_HASH SHA256=56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467
+)
+FetchContent_MakeAvailable(subtitle_fftw)
+add_library(sloppatv_lapse STATIC
+    third_party/lapse/align.cpp
+    third_party/lapse/correlate.cpp
+    third_party/lapse/silero.cpp
+    third_party/lapse/srt_parser.cpp
+    third_party/lapse/charset.cpp
+    third_party/lapse/cuetext.cpp
+    third_party/lapse/log.cpp
+)
+target_include_directories(sloppatv_lapse PUBLIC ${subtitle_fftw_SOURCE_DIR}/api)
+target_link_libraries(sloppatv_lapse PUBLIC fftw3)
+target_compile_options(sloppatv_lapse PRIVATE -O3)
+
+
 add_library(sloppatv SHARED
     ${ANDROID_NDK}/sources/android/native_app_glue/android_native_app_glue.c
     main.cpp
@@ -75,6 +102,8 @@ add_library(sloppatv SHARED
     launch_intent.cpp
     image_decoder.cpp
     media_player.cpp
+    subtitle_lapse_alignment.cpp
+    subtitle_lapse.cpp
     subtitle_audio_probe.cpp
     subtitle_speech_recognizer.cpp
     media_session.cpp
@@ -133,3 +162,5 @@ target_link_libraries(sloppatv PRIVATE
     EGL
     GLESv3
 )
+
+target_link_libraries(sloppatv PRIVATE sloppatv_lapse)

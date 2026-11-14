@@ -1,4 +1,5 @@
 #pragma once
+#include "subtitle_lapse.hpp"
 
 #include "subtitle_auto_sync.hpp"
 #include "subtitle_dialogue_sync.hpp"
@@ -30,6 +31,15 @@ struct SubtitleAudioSyncRequest {
     std::function<bool()> cancelled;
     std::function<std::vector<SubtitleSpeechWord>(const std::vector<float>&)> recognizeSpeech;
     bool shortSpeechProbe = true;
+    // Dense analysis recognizes each bounded clip once and preserves all anchors.
+    bool sceneProbe = false;
+    bool sceneProfileProbe = false;
+    bool centerSpeechChannel = false;
+    std::string profileMediaUrl;
+    int profileAudioOrdinal = -1;
+    std::function<SubtitleSceneProposal(const std::vector<float>&, const std::vector<SubtitleCue>&, int)> proposeScenes;
+    std::function<std::vector<SubtitleTimelineRegion>()> recallSourceScenes;
+    std::function<void(const std::vector<SubtitleTimelineRegion>&)> rememberSourceScenes;
     int requiredDialogueAnchors = 4;
     int speechWindowRetries = 0;
     // Start-of-episode music may obscure speech; analyse a longer continuous
@@ -37,6 +47,8 @@ struct SubtitleAudioSyncRequest {
     bool extendedSample = false;
     // DirectStream starts at its own zero; subtitle cues remain episode-relative.
     int subtitleTimelineBaseMs = 0;
+    // Fixed live-player base; independent probe bases change on every HLS restart.
+    std::optional<int> playerTimelineBaseMs;
 };
 
 struct SubtitleAudioSyncResult {
@@ -57,13 +69,12 @@ inline bool subtitleRebaseHlsRetry(SubtitleAudioSyncRequest& retry, const Subtit
     const int64_t relativeStart = static_cast<int64_t>(absoluteStartMs) - original.subtitleTimelineBaseMs;
     if (relativeStart > std::numeric_limits<int>::max()) return false;
     retry.subtitleTimelineBaseMs = absoluteStartMs;
-    retry.playbackTimelineOriginMs.reset();
+    if (!retry.playerTimelineBaseMs) retry.playbackTimelineOriginMs.reset();
     retry.playbackTimelineOrigin = {};
     const auto verify = original.verificationMediaUrl;
     retry.verificationMediaUrl = [verify, relativeStart](int nextPositionMs) -> std::optional<std::string> {
         const int64_t shifted = relativeStart + nextPositionMs;
-        if (shifted < std::numeric_limits<int>::min() || shifted > std::numeric_limits<int>::max())
-            return std::nullopt;
+        if (shifted < std::numeric_limits<int>::min() || shifted > std::numeric_limits<int>::max()) return std::nullopt;
         return verify(static_cast<int>(shifted));
     };
     return true;
@@ -77,6 +88,17 @@ inline std::optional<int> subtitleProbeLogicalStartMs(int sampleMs, int timeline
     const int64_t logical = static_cast<int64_t>(sampleMs) + timelineBaseMs + probeOriginMs - playbackOriginMs;
     if (logical < 0 || logical > std::numeric_limits<int>::max()) return std::nullopt;
     return static_cast<int>(logical);
+}
+
+// Decoded PTS must be compatible with this release's live clock. Different
+// mux preroll is allowed; unrelated transport epochs are rejected safely.
+inline std::optional<int> subtitleProbePlayerClockStartMs(int actualMs, int probeOriginMs, int playerBaseMs,
+                                                          int playerOriginMs, int probeBaseMs, int requestedMs = 0) {
+    const auto logical = subtitleProbeLogicalStartMs(actualMs, playerBaseMs, probeOriginMs, playerOriginMs);
+    if (!logical || probeBaseMs < 0 || requestedMs < 0) return std::nullopt;
+    const int64_t expected = static_cast<int64_t>(probeBaseMs) + requestedMs;
+    if (std::abs(static_cast<int64_t>(*logical) - expected) > 10000) return std::nullopt;
+    return logical;
 }
 
 // Convert sample count to milliseconds using wide arithmetic. On 32-bit Android,

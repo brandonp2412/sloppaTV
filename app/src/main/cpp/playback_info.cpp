@@ -44,6 +44,7 @@ std::string playbackSourceFingerprint(const json& source) {
     const std::string identity = json{
         {"path", path},
         {"runtime", runtime},
+        {"size", scalarValueOr<int64_t>(source, "Size", 0)},
         {"container", scalarValueOr(source, "Container", std::string{})},
         {"streams",
          std::move(streams)}}.dump();

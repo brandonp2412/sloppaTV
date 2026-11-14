@@ -175,11 +175,9 @@ void testProbeClockFallback() {
     clock.observe(155.0, 155.0, 4000ULL * 32);
     assert(!clock.startMs());
     SubtitleProbeClock isolatedStale;
-    for (int i = 1; i <= 14; ++i)
-        isolatedStale.observe(4.4 + i, 4.4 + i, i * 32000ULL);
+    for (int i = 1; i <= 14; ++i) isolatedStale.observe(4.4 + i, 4.4 + i, i * 32000ULL);
     isolatedStale.observe(15.328, 15.328, 15ULL * 32000);
-    for (int i = 16; i <= 34; ++i)
-        isolatedStale.observe(4.4 + i, 4.4 + i, i * 32000ULL);
+    for (int i = 16; i <= 34; ++i) isolatedStale.observe(4.4 + i, 4.4 + i, i * 32000ULL);
     assert(isolatedStale.startMs() && !isolatedStale.inconsistent());
     assert(std::abs(*isolatedStale.startMs() - 4400) < 50);
     SubtitleProbeClock actualJump;
@@ -399,4 +397,19 @@ int main() {
     testLongSampleConfidenceAndMismatchedTracks();
     testFixedOffsetVadWindowDisagreement();
     testPalFrameRateDriftCorrection();
+    // Acoustically verified emulator samples: adding the independent local
+    // start to its episode base counted HLS mux preroll twice.
+    assert(subtitleProbePlayerClockStartMs(281, 2366281, 0, 0, 2366539) == 2366562);
+    assert(subtitleProbePlayerClockStartMs(494, 2456371, 0, 0, 2456820) == 2456865);
+    assert(subtitleProbePlayerClockStartMs(4227, 1321237, 1325441, 1321237, 1325441) == 1329668);
+    assert(!subtitleProbePlayerClockStartMs(281, 2366281, 0, 0, 0));
+    assert(!subtitleProbePlayerClockStartMs(-1, 0, 0, 0, 0));
+    SubtitleAudioSyncRequest original;
+    original.subtitleTimelineBaseMs = 1154000;
+    original.playbackTimelineOriginMs = 1153069;
+    original.verificationMediaUrl = [](int) { return std::optional<std::string>("fixture"); };
+    original.playerTimelineBaseMs = 1154000;
+    auto retry = original;
+    assert(subtitleRebaseHlsRetry(retry, original, 1244000));
+    assert(retry.playerTimelineBaseMs == 1154000 && retry.playbackTimelineOriginMs == 1153069);
 }

@@ -4,7 +4,17 @@
 #include <optional>
 #include <string>
 
-inline uint64_t subtitleCueFingerprint(const std::vector<SubtitleCue>& cues) {
+inline bool subtitleProviderAdvertisement(const std::string& text) {
+    std::string lower = text;
+    std::transform(lower.begin(), lower.end(), lower.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return lower.find("opensubtitles.org") != std::string::npos ||
+           lower.find("opensubtitles.com") != std::string::npos || lower.find("www.osdb.link/") != std::string::npos ||
+           (lower.find("please rate this subtitle at %url%") != std::string::npos &&
+            lower.find("help other users to choose the best subtitles") != std::string::npos);
+}
+
+inline uint64_t subtitleCueFingerprint(const std::vector<SubtitleCue>& cues, bool sourceEvidence = false) {
     if (cues.empty()) return 0;
     uint64_t hash = 14695981039346656037ULL;
     const auto byte = [&](unsigned char value) {
@@ -21,8 +31,12 @@ inline uint64_t subtitleCueFingerprint(const std::vector<SubtitleCue>& cues) {
     for (const auto& cue : cues) {
         integer(static_cast<uint64_t>(cue.startMs));
         integer(static_cast<uint64_t>(cue.endMs));
-        integer(cue.text.size());
-        for (unsigned char c : cue.text) byte(c);
+        // Providers rotate advertising text without changing the subtitle. Keep
+        // its timestamps and position in the cue sequence, but not the ad copy.
+        const std::string_view text =
+            sourceEvidence && subtitleProviderAdvertisement(cue.text) ? std::string_view{} : std::string_view(cue.text);
+        integer(text.size());
+        for (unsigned char c : text) byte(c);
     }
     return hash;
 }
@@ -54,7 +68,7 @@ public:
     void store(SubtitleSyncContext context, SubtitleSyncDecision decision) {
         if (!context.trustworthy() || !decision.confident || !std::isfinite(decision.timeScale) ||
             decision.timeScale < 0.9 || decision.timeScale > 1.1 || decision.offsetMs < -120000 ||
-            decision.offsetMs > 120000)
+            decision.offsetMs > 120000 || (!decision.regions.empty() && !subtitleTimelineValid(decision.regions)))
             return;
         context_ = std::move(context);
         decision_ = decision;

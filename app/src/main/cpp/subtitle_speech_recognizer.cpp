@@ -65,12 +65,13 @@ std::vector<SubtitleSpeechWord> SubtitleSpeechRecognizer::recognize(const std::v
     const auto recognitionStart = std::chrono::steady_clock::now();
     const int status = whisper_full(impl_->context, params, audio.data(), static_cast<int>(audio.size()));
     const bool timedOutOrCancelled = abort();
-    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - recognitionStart).count();
+    const auto elapsed =
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - recognitionStart)
+            .count();
     __android_log_print(ANDROID_LOG_INFO, "sloppaTV/subsync",
                         "Speech recognition inputMs=%zu elapsedMs=%lld status=%d aborted=%d segments=%d",
-                        audio.size() / 16U, static_cast<long long>(elapsed), status,
-                        timedOutOrCancelled, status == 0 ? whisper_full_n_segments(impl_->context) : 0);
+                        audio.size() / 16U, static_cast<long long>(elapsed), status, timedOutOrCancelled,
+                        status == 0 ? whisper_full_n_segments(impl_->context) : 0);
     if (status != 0 || timedOutOrCancelled) return {};
     std::vector<SubtitleSpeechWord> words;
     for (int segment = 0; segment < whisper_full_n_segments(impl_->context); ++segment) {
@@ -92,4 +93,17 @@ std::vector<SubtitleSpeechWord> SubtitleSpeechRecognizer::recognize(const std::v
         words.push_back({static_cast<int>(start), static_cast<int>(end), text, confidence / count});
     }
     return words;
+}
+
+SubtitleSceneProposal SubtitleSpeechRecognizer::proposeScenes(const std::vector<float>& audio,
+                                                              const std::vector<SubtitleCue>& cues, int startMs,
+                                                              const std::string& directory,
+                                                              const std::function<bool()>& cancelled) {
+    std::scoped_lock lock(impl_->mutex);
+    const SubtitleSpeechModelSpec spec{"silero-vad-lapse.onnx",
+                                       "https://raw.githubusercontent.com/snakers4/silero-vad/"
+                                       "066409f3d9db45a30d21dfcbf9147826ffdd7052/src/silero_vad/data/silero_vad.onnx",
+                                       2327524, "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3"};
+    const auto model = ensureSubtitleSpeechModel(http_, directory, cancelled, spec);
+    return proposeSubtitleLapse(audio, cues, startMs, model, cancelled);
 }

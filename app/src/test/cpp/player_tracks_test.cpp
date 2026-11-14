@@ -99,6 +99,14 @@ int main() {
     assert(state.activeSubtitleCue(2'500)->text == "brief sign");
     assert(state.activeSubtitleCue(3'500)->text == "long dialogue");
 
+    state.setSubtitleTimeline({{1000, 60000, 3000, 1.0, 8}});
+    assert(!state.activeSubtitleCue(1500)); // no early flash before the mapped region
+    assert(state.activeSubtitleCue(6500)->text == "long dialogue");
+    assert(state.activeSubtitleCue(5500)->text == "brief sign");
+    assert(state.activeSubtitleCue(6500)->text == "long dialogue"); // seek forward/back
+    assert(state.subtitleCues().front().startMs == 1000);           // immutable original
+    state.setSelectedAudioServerIndex(99);
+    assert(!state.activeSubtitleCue(6500)); // old audio's correction is invalidated
     state.setSubtitleOffsetMs(2500);
     state.failSelectedSubtitle();
     assert(state.subtitleOffsetMs() == 0);
@@ -121,4 +129,10 @@ int main() {
     assert(state.subtitleCues().empty());
 
     return 0;
+    PlayerTrackState negative;
+    negative.setSelectedSubtitleServerIndex(2);
+    negative.applySubtitle(2, "English", {{10000, 12000, "first"}, {60000, 61000, "last"}});
+    negative.setSubtitleTimeline({{10000, 60999, -3000, 1.0, 8}});
+    assert(negative.activeSubtitleCue(57500)->text == "last");
+    assert(!negative.activeSubtitleCue(60500)); // no repeat at the original timestamp
 }

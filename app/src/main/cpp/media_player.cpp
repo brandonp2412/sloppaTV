@@ -545,7 +545,8 @@ void NativeMediaPlayer::releaseLocked(JNIEnv* env) {
 void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int64_t startPositionMs, int bufferPreset,
                                    int embeddedAudioOrdinal, int embeddedSubtitleStreamIndex,
                                    int embeddedSubtitleOrdinal, const std::string& externalSubtitleUrl,
-                                   PlaybackDecodeMode decodeMode, int maxAudioChannels, bool isRemux) {
+                                   PlaybackDecodeMode decodeMode, int maxAudioChannels, bool isRemux,
+                                   bool startPaused) {
     stop();
     if (!surface || url.empty()) {
         std::scoped_lock lock(mutex_);
@@ -580,7 +581,7 @@ void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int6
     pendingSubtitleOff_ = embeddedSubtitleStreamIndex < 0 && externalSubtitleUrl.empty();
 
     const double startSeconds = static_cast<double>(std::max<int64_t>(0, startPositionMs)) / 1000.0;
-    std::string loadOptions = "pause=no";
+    std::string loadOptions = startPaused ? "pause=yes" : "pause=no";
     if (startSeconds > 0.0) loadOptions += ",start=" + std::to_string(startSeconds);
     const char* loadCommand[] = {"loadfile", url.c_str(), "replace", "-1", loadOptions.c_str(), nullptr};
     if (!commandLocked(loadCommand, "loadfile", &error)) {
@@ -600,11 +601,13 @@ void NativeMediaPlayer::startAsync(const std::string& url, jobject surface, int6
     cachedStatus_ = PlayerStatus::Preparing;
     lastSnapshotPoll_ = {};
     __android_log_print(
-        ANDROID_LOG_INFO, kTag, "Embedded playback requested start=%lldms audioOrdinal=%d subtitleStream=%d decoder=%s",
+        ANDROID_LOG_INFO, kTag,
+        "Embedded playback requested start=%lldms audioOrdinal=%d subtitleStream=%d paused=%d decoder=%s",
         static_cast<long long>(std::max<int64_t>(0, startPositionMs)), embeddedAudioOrdinal,
-        embeddedSubtitleStreamIndex,
-        decodeMode == PlaybackDecodeMode::Software ? "software"
-        : decodeMode == PlaybackDecodeMode::HardwareComposite ? "mediacodec-copy" : "mediacodec");
+        embeddedSubtitleStreamIndex, startPaused,
+        decodeMode == PlaybackDecodeMode::Software            ? "software"
+        : decodeMode == PlaybackDecodeMode::HardwareComposite ? "mediacodec-copy"
+                                                              : "mediacodec");
 }
 
 void NativeMediaPlayer::stop() {
