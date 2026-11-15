@@ -162,5 +162,4 @@ tasks.withType<JavaCompile>().configureEach {
 
 dependencies {
     implementation(files("libs/mpv-core-no-vulkan.aar"))
-    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.23.2")
 }
