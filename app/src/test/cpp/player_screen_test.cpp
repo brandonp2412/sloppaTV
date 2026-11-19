@@ -74,18 +74,8 @@ int main() {
     inputState.moveControl(1);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
     assert(command.type == PlayerScreenCommandType::OpenSubtitlePicker);
-    inputState.setSubtitleOffsetAvailable(true);
-    inputState.moveControl(1);
-    command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
-    assert(command.type == PlayerScreenCommandType::OpenSubtitleOffset);
-    inputState.openSubtitleOffset();
-    assert(inputState.subtitleOffsetOpen());
-    command = inputState.handleInput(PlayerScreenInput::Right, now + 2s);
-    assert(command.type == PlayerScreenCommandType::AdjustSubtitleOffset && command.trackIndex == 250);
-    command = inputState.handleInput(PlayerScreenInput::Left, now + 2s);
-    assert(command.type == PlayerScreenCommandType::AdjustSubtitleOffset && command.trackIndex == -250);
-    command = inputState.handleInput(PlayerScreenInput::Back, now + 2s);
-    assert(command.type == PlayerScreenCommandType::None && !inputState.subtitleOffsetOpen());
+    // The dedicated offset interaction is covered by offsetState below.
+    inputState.resetSession();
     inputState.showControls(now + 2s);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
     assert(command.type == PlayerScreenCommandType::TogglePause);
@@ -125,6 +115,43 @@ int main() {
     assert(!startupInputState.controlsVisible(now + 13s, true));
     command = startupInputState.handleInput(PlayerScreenInput::Right, now + 13s, true);
     assert(command.type == PlayerScreenCommandType::SeekForward);
+
+    // No offset action exists when subtitles are Off. With a selected track,
+    // open the non-modal adjustment and consume D-pad input without seeking.
+    PlayerScreenState offsetState;
+    offsetState.showControls(now);
+    offsetState.moveControl(99);
+    assert(offsetState.controlSelection() == PlayerControl::SubtitleTrack);
+    offsetState.setSubtitleOffsetAvailable(true);
+    offsetState.moveControl(1);
+    assert(offsetState.controlSelection() == PlayerControl::SubtitleOffset);
+    command = offsetState.handleInput(PlayerScreenInput::Activate, now + 1s);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(offsetState.subtitleOffsetOverlayVisible());
+    assert(!offsetState.controlsActive(now + 1s));
+    command = offsetState.handleInput(PlayerScreenInput::Left, now + 2s);
+    assert(command.type == PlayerScreenCommandType::AdjustSubtitleOffset);
+    assert(command.offsetDeltaMs == -250);
+    command = offsetState.handleInput(PlayerScreenInput::Right, now + 3s);
+    assert(command.type == PlayerScreenCommandType::AdjustSubtitleOffset);
+    assert(command.offsetDeltaMs == 250);
+    command = offsetState.handleInput(PlayerScreenInput::Activate, now + 4s);
+    assert(command.type == PlayerScreenCommandType::ResetSubtitleOffset);
+    command = offsetState.handleInput(PlayerScreenInput::Back, now + 5s);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(!offsetState.subtitleOffsetOverlayVisible());
+    command = offsetState.handleInput(PlayerScreenInput::Back, now + 6s);
+    assert(command.type == PlayerScreenCommandType::StopPlayback);
+    offsetState.setSubtitleOffsetAvailable(false);
+    assert(offsetState.controlSelection() == PlayerControl::SubtitleTrack);
+    offsetState.setSubtitleOffsetAvailable(true);
+    offsetState.showControls(now + 7s);
+    offsetState.moveControl(99);
+    command = offsetState.handleInput(PlayerScreenInput::Activate, now + 7s);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(offsetState.subtitleOffsetOverlayVisible());
+    offsetState.beginPlayback(0, 30'000);
+    assert(!offsetState.subtitleOffsetOverlayVisible());
 
     PlayerScreenState playbackInputState;
     command = playbackInputState.handleInput(PlayerScreenInput::Previous, now);

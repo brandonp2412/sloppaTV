@@ -635,6 +635,17 @@ bool NativeMediaPlayer::setStringPropertyLocked(const char* name, const std::str
     return symbols_->setProperty(mpv_, name, kMpvFormatString, &raw) >= 0;
 }
 
+bool NativeMediaPlayer::setSubtitleDelayMs(int delayMs) {
+    std::scoped_lock lock(mutex_);
+    if (!symbols_ || !mpv_) return false;
+    double seconds = static_cast<double>(delayMs) / 1000.0;
+    if (symbols_->setProperty(mpv_, "sub-delay", kMpvFormatDouble, &seconds) < 0) return false;
+    // Read the current cue now, rather than keeping the pre-adjustment cached text
+    // until the next playback status poll. This never changes the playback clock.
+    cachedSubtitleText_ = getStringPropertyLocked("sub-text");
+    return true;
+}
+
 bool NativeMediaPlayer::setFlagPropertyLocked(const char* name, bool value) const {
     if (!symbols_ || !mpv_) return false;
     int raw = value ? 1 : 0;

@@ -30,17 +30,16 @@ template <typename RendererLike, typename ColorLike, typename DrawButton, typena
 void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderState& state,
                           const PlayerControlsRenderStyle<ColorLike>& style, DrawButton&& drawButton,
                           FitScale&& fitScale, MaterialLabel&& materialLabel) {
-    constexpr std::array<float, 6> controlWidths{94.0f, 94.0f, 94.0f, 298.0f, 340.0f, 120.0f};
+    constexpr std::array<float, 6> controlWidths{94.0f, 94.0f, 94.0f, 298.0f, 340.0f, 178.0f};
     constexpr float controlHeight = 66.0f;
     constexpr float controlGap = 20.0f;
     constexpr float controlY = 925.0f;
-    const std::size_t visibleControls = state.subtitleOffsetAvailable ? controlWidths.size() : controlWidths.size() - 1;
-    const float controlGroupWidth =
-        std::accumulate(controlWidths.begin(), controlWidths.begin() + visibleControls, 0.0f) +
-        controlGap * static_cast<float>(visibleControls - 1);
+    const std::size_t controlCount = state.subtitleOffsetAvailable ? controlWidths.size() : controlWidths.size() - 1;
+    const float controlGroupWidth = std::accumulate(controlWidths.begin(), controlWidths.begin() + controlCount, 0.0f) +
+                                    controlGap * static_cast<float>(controlCount - 1);
     float x = (state.logicalWidth - controlGroupWidth) * 0.5f;
 
-    for (std::size_t i = 0; i < visibleControls; ++i) {
+    for (std::size_t i = 0; i < controlCount; ++i) {
         const bool selected = i == static_cast<std::size_t>(state.selection);
         const auto tint = selected ? style.focused : style.muted;
         const auto bounds = drawButton(x, controlY, controlWidths[i], controlHeight, selected, i == 1);
@@ -63,10 +62,7 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
             ui_icons::audio(renderer, iconX, iconCenterY - 18.0f, iconWidth, tint);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, tint);
-        } else if (i == 5) {
-            const std::string label = state.subtitleOffsetAvailable ? "Sync" : "—";
-            renderer.textVerticallyCentered(bounds[0] + 20.0f, bounds[1], bounds[3], 1.35f, label, tint);
-        } else {
+        } else if (i == 4) {
             constexpr float iconWidth = 36.0f;
             constexpr float gap = 14.0f;
             const std::string label = "Subtitles  " + std::string(materialLabel(state.subtitleTrackLabel));
@@ -77,6 +73,14 @@ void renderPlayerControls(RendererLike& renderer, const PlayerControlsRenderStat
             const float iconX = bounds[0] + (bounds[2] - groupWidth) * 0.5f;
             ui_icons::subtitles(renderer, iconX, iconCenterY - 18.0f, iconWidth, tint);
             renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], labelScale, label, tint);
+        } else {
+            constexpr float iconWidth = 30.0f;
+            constexpr float gap = 10.0f;
+            const std::string label = "Offset";
+            const float textWidth = renderer.textWidth(1.45f, label);
+            const float iconX = bounds[0] + (bounds[2] - iconWidth - gap - textWidth) * 0.5f;
+            renderer.icon(ui_icons::Glyph::Clock, iconX, iconCenterY - iconWidth * 0.5f, iconWidth, tint);
+            renderer.textVerticallyCentered(iconX + iconWidth + gap, bounds[1], bounds[3], 1.45f, label, tint);
         }
 
         x += controlWidths[i] + controlGap;

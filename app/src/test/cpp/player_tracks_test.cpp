@@ -38,11 +38,19 @@ int main() {
     state.setSubtitleOffsetMs(-500000);
     assert(state.subtitleOffsetMs() == -120000);
     state.setSubtitleOffsetMs(0);
-
     state.setSubtitleEnabled(false);
     assert(state.activeSubtitleCue(600) == nullptr);
     state.setSubtitleEnabled(true);
     assert(state.activeSubtitleCue(600)->text == "second");
+    // The cue at the SAME timestamp changes as soon as the offset changes,
+    // without waiting for another cue boundary or seeking the playback clock.
+    state.applySubtitle(7, "English", {{100, 1000, "present"}, {1000, 2000, "upcoming"}});
+    assert(state.activeSubtitleCue(900)->text == "present");
+    state.setSubtitleOffsetMs(-250);
+    assert(state.activeSubtitleCue(900)->text == "upcoming");
+    state.setSubtitleOffsetMs(250);
+    assert(state.activeSubtitleCue(900)->text == "present");
+    state.setSubtitleOffsetMs(0);
 
     state.applySubtitle(7, "English",
                         {{1000, 5000, "long dialogue"}, {2000, 3000, "brief sign"}});

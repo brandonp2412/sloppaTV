@@ -261,6 +261,7 @@ public:
         }
 
         refreshTelemetry(true);
+        player_.setSubtitleDelayMs(0);
         const int switchPositionMs = screenState_.positionMs();
         if (plan.tryEmbeddedSwitch && player_.selectEmbeddedAudioStream(plan.audioStreamIndex, plan.audioOrdinal)) {
             coordinator_.selectAudioStream(plan.audioStreamIndex);
@@ -292,6 +293,7 @@ public:
             return PlaybackRuntimeNotice::None;
         }
 
+        player_.setSubtitleDelayMs(0);
         if (plan.action == PlaybackSubtitleCycleAction::DisableInPlayer && player_.disableSubtitles()) {
             coordinator_.disableSubtitleRendering();
             screenState_.showOverlayFor(std::chrono::steady_clock::now(), std::chrono::seconds(4));
@@ -527,8 +529,8 @@ public:
         const auto now = std::chrono::steady_clock::now();
         const bool preparingInitialPlayback = coordinator_.transitionLoading() || coordinator_.fallbackResolving() ||
                                               player_.status() == PlayerStatus::Preparing;
-        screenState_.setSubtitleOffsetAvailable(coordinator_.tracks().subtitleEnabled() &&
-                                                !coordinator_.tracks().subtitleCues().empty());
+        screenState_.setSubtitleOffsetAvailable(coordinator_.tracks().selectedSubtitleServerIndex() >= 0 &&
+                                                !coordinator_.tracks().subtitleBusy());
         const PlayerScreenCommand command = screenState_.handleInput(input, now, preparingInitialPlayback);
         switch (command.type) {
         case PlayerScreenCommandType::None:
@@ -577,14 +579,6 @@ public:
             screenState_.openTrackPicker(PlayerTrackPicker::Audio, std::move(options), now);
             return {};
         }
-        case PlayerScreenCommandType::OpenSubtitleOffset:
-            if (coordinator_.tracks().selectedSubtitleServerIndex() >= 0 && coordinator_.tracks().subtitleEnabled() &&
-                !coordinator_.tracks().subtitleCues().empty())
-                screenState_.openSubtitleOffset();
-            return {};
-        case PlayerScreenCommandType::AdjustSubtitleOffset:
-            coordinator_.adjustSubtitleOffsetMs(command.trackIndex);
-            return {};
         case PlayerScreenCommandType::OpenSubtitlePicker: {
             std::vector<PlayerTrackOption> options;
             const int selected = coordinator_.tracks().selectedSubtitleServerIndex();
@@ -604,6 +598,20 @@ public:
                 options.push_back({track->index, std::move(label), track->index == selected});
             }
             screenState_.openTrackPicker(PlayerTrackPicker::Subtitle, std::move(options), now);
+            return {};
+        }
+        case PlayerScreenCommandType::AdjustSubtitleOffset:
+        case PlayerScreenCommandType::ResetSubtitleOffset: {
+            const int previous = coordinator_.subtitleOffsetMs();
+            const int next = command.type == PlayerScreenCommandType::ResetSubtitleOffset
+                                 ? 0
+                                 : std::clamp(previous + command.offsetDeltaMs, -120000, 120000);
+            coordinator_.setSubtitleOffsetMs(next);
+            if (!coordinator_.tracks().subtitleEnabled()) {
+                // libmpv-owned embedded/external text tracks render their own cues.
+                // Apply the offset directly to their active subtitle decoder.
+                player_.setSubtitleDelayMs(next);
+            }
             return {};
         }
         case PlayerScreenCommandType::SelectAudioTrack:

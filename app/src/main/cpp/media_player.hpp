@@ -57,6 +57,7 @@ public:
     bool selectEmbeddedAudioStream(int streamIndex, int ordinal = -1);
     bool selectEmbeddedSubtitleStream(int streamIndex, int ordinal = -1);
     bool disableSubtitles();
+    bool setSubtitleDelayMs(int delayMs);
     bool addExternalSubtitle(const std::string& url, bool select = true);
 
     [[nodiscard]] PlayerStatus status() const;

@@ -886,6 +886,8 @@ public:
         trackState_.setSubtitleOffsetMs(trackState_.subtitleOffsetMs() + deltaMs);
     }
 
+    void setSubtitleOffsetMs(int offsetMs) { trackState_.setSubtitleOffsetMs(offsetMs); }
+
     [[nodiscard]] const SubtitleCue* activeSubtitleCue(int positionMs) const {
         return trackState_.activeSubtitleCue(positionMs);
     }

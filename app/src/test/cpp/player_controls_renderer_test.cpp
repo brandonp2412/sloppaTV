@@ -96,5 +96,19 @@ int main() {
     assert(playing.renderer.icons.size() == 5);
     assert((playing.renderer.vertical == std::vector<std::string>{"Audio  Director", "Subtitles  English"}));
 
+    Harness offsetAvailable;
+    offsetAvailable.render(PlayerControlsRenderState{
+        .paused = false,
+        .selection = PlayerControl::SubtitleOffset,
+        .logicalWidth = 1920.0f,
+        .audioTrackLabel = "Default",
+        .subtitleTrackLabel = "English",
+        .subtitleOffsetAvailable = true,
+    });
+    assert((offsetAvailable.focusedButtons == std::vector<std::size_t>{5}));
+    assert(offsetAvailable.renderer.icons.size() == 6);
+    assert(offsetAvailable.renderer.icons.back() == ui_icons::Glyph::Clock);
+    assert(offsetAvailable.renderer.vertical.back() == "Offset");
+
     return 0;
 }

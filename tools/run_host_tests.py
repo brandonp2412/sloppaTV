@@ -95,6 +95,7 @@ CPP_TESTS = [
     "player_skip_button_renderer_test.cpp",
     "player_status_renderer_test.cpp",
     "player_subtitle_renderer_test.cpp",
+    "player_subtitle_offset_renderer_test.cpp",
     "player_trickplay_renderer_test.cpp",
     "player_tracks_test.cpp",
     "player_video_renderer_test.cpp",

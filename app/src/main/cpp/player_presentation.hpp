@@ -12,6 +12,7 @@
 #include "player_progress_renderer.hpp"
 #include "player_screen.hpp"
 #include "player_status_renderer.hpp"
+#include "player_subtitle_offset_renderer.hpp"
 #include "player_trickplay_renderer.hpp"
 #include "player_video_renderer.hpp"
 #include "renderer.hpp"
@@ -357,6 +358,12 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             return ui.drawFloatingControl(x, y, width, height, focused);
         },
         [](float r, float g, float b, float a) { return Color{r, g, b, a}; });
+    if (playerScreenState.subtitleOffsetOverlayVisible()) {
+        renderSubtitleOffsetOverlay(renderer, playbackCoordinator.subtitleOffsetMs(), Renderer::logicalWidth(),
+                                    Renderer::logicalHeight(), Color{0.02f, 0.02f, 0.02f, 0.74f},
+                                    material_tv::onSurfaceVariant, material_tv::onSurface, material_tv::primary);
+    }
+
     // The status and Remux progress belong to the playback controls. When the
     // overlay is dismissed or times out, render no standalone status text.
     if (!showOverlay) return;
@@ -485,8 +492,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 .logicalWidth = Renderer::logicalWidth(),
                 .audioTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Audio),
                 .subtitleTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle),
-                .subtitleOffsetAvailable = playbackCoordinator.tracks().subtitleEnabled() &&
-                                           !playbackCoordinator.tracks().subtitleCues().empty(),
+                .subtitleOffsetAvailable = playbackCoordinator.tracks().selectedSubtitleServerIndex() >= 0 &&
+                                           !playbackCoordinator.tracks().subtitleBusy(),
             },
             PlayerControlsRenderStyle<Color>{
                 .text = material_tv::onSurface,
@@ -500,25 +507,6 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 return ui.fittedSingleLineScale(scale, value, width, height);
             },
             [](std::string_view value) { return materialLabel(value); });
-    }
-
-    if (playerScreenState.subtitleOffsetOpen()) {
-        const int offsetMs = playbackCoordinator.subtitleOffsetMs();
-        constexpr float centerX = 960.0f;
-        constexpr float lineWidth = 820.0f;
-        constexpr float lineY = 555.0f;
-        renderer.roundedRect(465.0f, 457.0f, 990.0f, 185.0f, 25.0f, Color{0.05f, 0.06f, 0.08f, 0.78f});
-        std::string seconds = std::to_string(offsetMs / 1000.0f);
-        seconds.erase(seconds.find_last_not_of('0') + 1);
-        if (seconds.back() == '.') seconds.pop_back();
-        const std::string label = "Subtitle offset  " + std::string(offsetMs > 0 ? "+" : "") + seconds + "s";
-        ui.drawLeftAlignedSingleLineFit(540.0f, 472.0f, 850.0f, 47.0f, 1.65f, label, material_tv::onSurface);
-        renderer.roundedRect(centerX - lineWidth / 2, lineY, lineWidth, 4.0f, 2.0f, material_tv::onSurfaceVariant);
-        renderer.roundedRect(centerX - 1.5f, lineY - 11.0f, 3.0f, 26.0f, 1.5f, material_tv::onSurface);
-        const float dotX = centerX + std::clamp(offsetMs / 30000.0f, -1.0f, 1.0f) * lineWidth / 2;
-        renderer.roundedRect(dotX - 10.0f, lineY - 8.0f, 20.0f, 20.0f, 10.0f, material_tv::primary);
-        ui.drawLeftAlignedSingleLineFit(540.0f, 585.0f, 850.0f, 35.0f, 1.05f,
-                                        "Left / Right: 0.25s  ·  OK / Back: close", material_tv::onSurfaceVariant);
     }
 
     if (playerScreenState.trackPicker() != PlayerTrackPicker::None) {

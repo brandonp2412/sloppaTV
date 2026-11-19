@@ -51,10 +51,10 @@ enum class PlayerScreenCommandType {
     TogglePause,
     OpenAudioPicker,
     OpenSubtitlePicker,
-    OpenSubtitleOffset,
-    AdjustSubtitleOffset,
     SelectAudioTrack,
     SelectSubtitleTrack,
+    AdjustSubtitleOffset,
+    ResetSubtitleOffset,
     SeekBackward,
     SeekForward,
 };
@@ -62,6 +62,7 @@ enum class PlayerScreenCommandType {
 struct PlayerScreenCommand {
     PlayerScreenCommandType type = PlayerScreenCommandType::None;
     int trackIndex = -1;
+    int offsetDeltaMs = 0;
 };
 
 enum class PlayerTrackPicker { None, Audio, Subtitle };
@@ -83,11 +84,11 @@ public:
         controlsActive_ = false;
         controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = {};
-        subtitleOffsetOpen_ = false;
-        subtitleOffsetAvailable_ = false;
         picker_ = PlayerTrackPicker::None;
         pickerOptions_.clear();
         pickerSelected_ = 0;
+        subtitleOffsetAvailable_ = false;
+        subtitleOffsetOverlayVisible_ = false;
         overlayUntil_ = {};
         preparationOverlayEnabled_ = true;
         seekFeedbackSeconds_ = 0;
@@ -115,7 +116,8 @@ public:
 
     void beginPlayback(int positionMs, int durationMs, bool showPreparationOverlay = true) {
         closeTrackPicker();
-        subtitleOffsetOpen_ = false;
+        subtitleOffsetAvailable_ = false;
+        subtitleOffsetOverlayVisible_ = false;
         preparationOverlayEnabled_ = showPreparationOverlay;
         controlsActive_ = false;
         controlSelection_ = PlayerControl::PlayPause;
@@ -145,21 +147,13 @@ public:
 
     [[nodiscard]] PlayerControl controlSelection() const { return controlSelection_; }
 
-    [[nodiscard]] bool subtitleOffsetOpen() const { return subtitleOffsetOpen_; }
+    [[nodiscard]] bool subtitleOffsetOverlayVisible() const { return subtitleOffsetOverlayVisible_; }
 
     void setSubtitleOffsetAvailable(bool available) {
         subtitleOffsetAvailable_ = available;
-        if (!available) {
-            subtitleOffsetOpen_ = false;
-            if (controlSelection_ == PlayerControl::SubtitleOffset) controlSelection_ = PlayerControl::SubtitleTrack;
-        }
-    }
-
-    void closeSubtitleOffset() { subtitleOffsetOpen_ = false; }
-
-    void openSubtitleOffset() {
-        subtitleOffsetOpen_ = true;
-        hideControls();
+        if (available) return;
+        subtitleOffsetOverlayVisible_ = false;
+        if (controlSelection_ == PlayerControl::SubtitleOffset) controlSelection_ = PlayerControl::SubtitleTrack;
     }
 
     [[nodiscard]] bool controlSelected(std::size_t index) const {
@@ -213,8 +207,9 @@ public:
     }
 
     void moveControl(int delta) {
-        const int selection = std::clamp(static_cast<int>(controlSelection_) + delta, 0,
-                                         static_cast<int>(controlCount()) - (subtitleOffsetAvailable_ ? 1 : 2));
+        const int selection = std::clamp(
+            static_cast<int>(controlSelection_) + delta, 0,
+            static_cast<int>(subtitleOffsetAvailable_ ? PlayerControl::SubtitleOffset : PlayerControl::SubtitleTrack));
         controlSelection_ = static_cast<PlayerControl>(selection);
     }
 
@@ -246,6 +241,7 @@ public:
 
     void dismissOverlay(TimePoint now) {
         hideControls();
+        subtitleOffsetOverlayVisible_ = false;
         overlayUntil_ = now;
     }
 
@@ -253,14 +249,20 @@ public:
 
     [[nodiscard]] PlayerScreenCommand handleInput(PlayerScreenInput input, TimePoint now,
                                                   bool preparingInitialPlayback = false) {
-        if (subtitleOffsetOpen_) {
-            if (input == PlayerScreenInput::Back || input == PlayerScreenInput::Activate) {
-                subtitleOffsetOpen_ = false;
+        if (subtitleOffsetOverlayVisible_) {
+            if (input == PlayerScreenInput::Back) {
+                dismissOverlay(now);
                 return {};
             }
-            if (input == PlayerScreenInput::Left || input == PlayerScreenInput::Right)
+            if (input == PlayerScreenInput::Left || input == PlayerScreenInput::Right) {
                 return {.type = PlayerScreenCommandType::AdjustSubtitleOffset,
-                        .trackIndex = input == PlayerScreenInput::Right ? 250 : -250};
+                        .offsetDeltaMs = input == PlayerScreenInput::Right ? 250 : -250};
+            }
+            if (input == PlayerScreenInput::Activate) return {.type = PlayerScreenCommandType::ResetSubtitleOffset};
+            // Dedicated playback buttons remain usable while the adjustment overlay is open.
+            if (input == PlayerScreenInput::Play) return {.type = PlayerScreenCommandType::Play};
+            if (input == PlayerScreenInput::Pause) return {.type = PlayerScreenCommandType::Pause};
+            if (input == PlayerScreenInput::PlayPause) return {.type = PlayerScreenCommandType::TogglePause};
             return {};
         }
         if (picker_ != PlayerTrackPicker::None) {
@@ -309,8 +311,14 @@ public:
                 moveControl(-1);
             else if (input == PlayerScreenInput::Right)
                 moveControl(1);
-            else if (input == PlayerScreenInput::Activate)
+            else if (input == PlayerScreenInput::Activate) {
+                if (controlSelection_ == PlayerControl::SubtitleOffset && subtitleOffsetAvailable_) {
+                    subtitleOffsetOverlayVisible_ = true;
+                    hideControls();
+                    return {};
+                }
                 return selectedControlCommand();
+            }
             return {};
         }
 
@@ -517,19 +525,19 @@ private:
         case PlayerControl::SubtitleTrack:
             return {.type = PlayerScreenCommandType::OpenSubtitlePicker};
         case PlayerControl::SubtitleOffset:
-            return {.type = PlayerScreenCommandType::OpenSubtitleOffset};
+            return {};
         case PlayerControl::Count:
             return {};
         }
         return {};
     }
 
-    bool subtitleOffsetOpen_ = false;
-    bool subtitleOffsetAvailable_ = false;
     PlayerTrackPicker picker_ = PlayerTrackPicker::None;
     std::vector<PlayerTrackOption> pickerOptions_;
     std::size_t pickerSelected_ = 0;
     bool controlsActive_ = false;
+    bool subtitleOffsetAvailable_ = false;
+    bool subtitleOffsetOverlayVisible_ = false;
     PlayerControl controlSelection_ = PlayerControl::PlayPause;
     TimePoint controlsUntil_{};
     TimePoint overlayUntil_{};
