@@ -316,8 +316,9 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     const bool showOverlay = (preparingInitialPlayback && playerScreenState.preparationOverlayEnabled()) ||
                              buffer.interrupted() || userOverlayVisible || playerScreenState.skipDisablePromptVisible();
     std::string subtitleText = player.subtitleText();
-    if (const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs())) {
-        subtitleText = cue->text;
+    if (playbackCoordinator.tracks().subtitleEnabled() && !playbackCoordinator.tracks().subtitleCues().empty()) {
+        const SubtitleCue* cue = playbackCoordinator.activeSubtitleCue(playerScreenState.positionMs());
+        subtitleText = cue ? cue->text : std::string{};
     }
     const bool subtitleVisible = !subtitleText.empty();
     const float subtitleScale = subtitleVisible ? subtitleTextScale(settings.subtitleSize) : 1.0f;
@@ -428,17 +429,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
     }
     const auto startupProgress = preparingInitialPlayback && isRemux ? buffer.startupProgress(now) : std::nullopt;
     std::string startupLabel;
-    if (preparingInitialPlayback && isRemux) {
-        if (startupProgress) {
-            const int percent = static_cast<int>(*startupProgress * 100.0f);
-            const std::string eta = buffer.startupEta(now);
-            startupLabel = percent == 100 ? "Startup buffer ready · opening player"
-                                          : "Startup buffer " + std::to_string(percent) + "%" +
-                                                (eta.empty() ? " · measuring download speed" : eta);
-        } else {
-            startupLabel = buffer.startupSearchText(now);
-        }
-    }
+    if (preparingInitialPlayback && isRemux) startupLabel = buffer.startupDisplayText(resolving, now);
     // Keep the startup ETA in the existing status row, never on top of it.
     renderPlayerStatus(renderer,
                        PlayerStatusRenderState{
@@ -494,6 +485,8 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 .logicalWidth = Renderer::logicalWidth(),
                 .audioTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Audio),
                 .subtitleTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle),
+                .subtitleOffsetAvailable = playbackCoordinator.tracks().subtitleEnabled() &&
+                                           !playbackCoordinator.tracks().subtitleCues().empty(),
             },
             PlayerControlsRenderStyle<Color>{
                 .text = material_tv::onSurface,
@@ -507,6 +500,25 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
                 return ui.fittedSingleLineScale(scale, value, width, height);
             },
             [](std::string_view value) { return materialLabel(value); });
+    }
+
+    if (playerScreenState.subtitleOffsetOpen()) {
+        const int offsetMs = playbackCoordinator.subtitleOffsetMs();
+        constexpr float centerX = 960.0f;
+        constexpr float lineWidth = 820.0f;
+        constexpr float lineY = 555.0f;
+        renderer.roundedRect(465.0f, 457.0f, 990.0f, 185.0f, 25.0f, Color{0.05f, 0.06f, 0.08f, 0.78f});
+        std::string seconds = std::to_string(offsetMs / 1000.0f);
+        seconds.erase(seconds.find_last_not_of('0') + 1);
+        if (seconds.back() == '.') seconds.pop_back();
+        const std::string label = "Subtitle offset  " + std::string(offsetMs > 0 ? "+" : "") + seconds + "s";
+        ui.drawLeftAlignedSingleLineFit(540.0f, 472.0f, 850.0f, 47.0f, 1.65f, label, material_tv::onSurface);
+        renderer.roundedRect(centerX - lineWidth / 2, lineY, lineWidth, 4.0f, 2.0f, material_tv::onSurfaceVariant);
+        renderer.roundedRect(centerX - 1.5f, lineY - 11.0f, 3.0f, 26.0f, 1.5f, material_tv::onSurface);
+        const float dotX = centerX + std::clamp(offsetMs / 30000.0f, -1.0f, 1.0f) * lineWidth / 2;
+        renderer.roundedRect(dotX - 10.0f, lineY - 8.0f, 20.0f, 20.0f, 10.0f, material_tv::primary);
+        ui.drawLeftAlignedSingleLineFit(540.0f, 585.0f, 850.0f, 35.0f, 1.05f,
+                                        "Left / Right: 0.25s  ·  OK / Back: close", material_tv::onSurfaceVariant);
     }
 
     if (playerScreenState.trackPicker() != PlayerTrackPicker::None) {

@@ -35,6 +35,7 @@ enum class PlayerControl {
     NextEpisode,
     AudioTrack,
     SubtitleTrack,
+    SubtitleOffset,
     Count,
 };
 
@@ -50,6 +51,8 @@ enum class PlayerScreenCommandType {
     TogglePause,
     OpenAudioPicker,
     OpenSubtitlePicker,
+    OpenSubtitleOffset,
+    AdjustSubtitleOffset,
     SelectAudioTrack,
     SelectSubtitleTrack,
     SeekBackward,
@@ -80,6 +83,8 @@ public:
         controlsActive_ = false;
         controlSelection_ = PlayerControl::PlayPause;
         controlsUntil_ = {};
+        subtitleOffsetOpen_ = false;
+        subtitleOffsetAvailable_ = false;
         picker_ = PlayerTrackPicker::None;
         pickerOptions_.clear();
         pickerSelected_ = 0;
@@ -110,6 +115,7 @@ public:
 
     void beginPlayback(int positionMs, int durationMs, bool showPreparationOverlay = true) {
         closeTrackPicker();
+        subtitleOffsetOpen_ = false;
         preparationOverlayEnabled_ = showPreparationOverlay;
         controlsActive_ = false;
         controlSelection_ = PlayerControl::PlayPause;
@@ -138,6 +144,23 @@ public:
     }
 
     [[nodiscard]] PlayerControl controlSelection() const { return controlSelection_; }
+
+    [[nodiscard]] bool subtitleOffsetOpen() const { return subtitleOffsetOpen_; }
+
+    void setSubtitleOffsetAvailable(bool available) {
+        subtitleOffsetAvailable_ = available;
+        if (!available) {
+            subtitleOffsetOpen_ = false;
+            if (controlSelection_ == PlayerControl::SubtitleOffset) controlSelection_ = PlayerControl::SubtitleTrack;
+        }
+    }
+
+    void closeSubtitleOffset() { subtitleOffsetOpen_ = false; }
+
+    void openSubtitleOffset() {
+        subtitleOffsetOpen_ = true;
+        hideControls();
+    }
 
     [[nodiscard]] bool controlSelected(std::size_t index) const {
         return index == static_cast<std::size_t>(controlSelection_);
@@ -190,8 +213,8 @@ public:
     }
 
     void moveControl(int delta) {
-        const int selection =
-            std::clamp(static_cast<int>(controlSelection_) + delta, 0, static_cast<int>(controlCount()) - 1);
+        const int selection = std::clamp(static_cast<int>(controlSelection_) + delta, 0,
+                                         static_cast<int>(controlCount()) - (subtitleOffsetAvailable_ ? 1 : 2));
         controlSelection_ = static_cast<PlayerControl>(selection);
     }
 
@@ -230,6 +253,16 @@ public:
 
     [[nodiscard]] PlayerScreenCommand handleInput(PlayerScreenInput input, TimePoint now,
                                                   bool preparingInitialPlayback = false) {
+        if (subtitleOffsetOpen_) {
+            if (input == PlayerScreenInput::Back || input == PlayerScreenInput::Activate) {
+                subtitleOffsetOpen_ = false;
+                return {};
+            }
+            if (input == PlayerScreenInput::Left || input == PlayerScreenInput::Right)
+                return {.type = PlayerScreenCommandType::AdjustSubtitleOffset,
+                        .trackIndex = input == PlayerScreenInput::Right ? 250 : -250};
+            return {};
+        }
         if (picker_ != PlayerTrackPicker::None) {
             refreshControls(now);
             if (input == PlayerScreenInput::Back) {
@@ -483,12 +516,16 @@ private:
             return {.type = PlayerScreenCommandType::OpenAudioPicker};
         case PlayerControl::SubtitleTrack:
             return {.type = PlayerScreenCommandType::OpenSubtitlePicker};
+        case PlayerControl::SubtitleOffset:
+            return {.type = PlayerScreenCommandType::OpenSubtitleOffset};
         case PlayerControl::Count:
             return {};
         }
         return {};
     }
 
+    bool subtitleOffsetOpen_ = false;
+    bool subtitleOffsetAvailable_ = false;
     PlayerTrackPicker picker_ = PlayerTrackPicker::None;
     std::vector<PlayerTrackOption> pickerOptions_;
     std::size_t pickerSelected_ = 0;

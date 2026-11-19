@@ -1,0 +1,1 @@
+- [x] Smooth transition the adaptive bars colors from one to the next

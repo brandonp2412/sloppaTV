@@ -209,8 +209,8 @@ public final class HttpBridgeHarness {
 
     def test_playback_info_timeout_is_scoped_to_the_endpoint(self) -> None:
         cases = [
-            ("POST", "/Items/123/PlaybackInfo?UserId=42", [95_000, 90_000, 100]),
-            ("GET", "/items/123/playbackinfo", [95_000, 90_000, 100]),
+            ("POST", "/Items/123/PlaybackInfo?UserId=42", [2_100_000, 2_040_000, 100]),
+            ("GET", "/items/123/playbackinfo", [2_100_000, 2_040_000, 100]),
             ("POST", "/Items/123/PlaybackInfoExtra", [45_000, 30_000, 100]),
             ("GET", "/Users/123/Items/456", [45_000, 30_000, 100]),
             ("POST", "/System/Info", [45_000, 30_000, 100]),

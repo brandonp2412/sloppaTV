@@ -6,8 +6,8 @@
 #include <chrono>
 #include <cstdio>
 #include <fstream>
+#include <functional>
 #include <iterator>
-#include <unordered_set>
 #include <string_view>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -139,20 +139,24 @@ public:
         if (recent_.size() > 12) recent_.resize(12);
     }
 
-    void apply(const JellyfinSession& session, JellyfinHomeData& home, Clock::time_point now = Clock::now()) const {
+    void apply(const JellyfinSession& session, JellyfinHomeData& home, Clock::time_point now = Clock::now(),
+               const std::function<bool(const JellyfinItem&)>& isHidden = {}) const {
         auto resume = std::find_if(home.rows.begin(), home.rows.end(),
                                    [](const JellyfinHomeRow& row) { return row.title == "Continue Watching"; });
         if (resume != home.rows.end()) {
             std::erase_if(resume->items, [&](const JellyfinItem& item) {
-                return std::any_of(dismissed_.begin(), dismissed_.end(), [&](const Dismissal& entry) {
-                    return entry.server == session.server && entry.userId == session.userId &&
-                           entry.itemId == item.id && now >= entry.time && now - entry.time < std::chrono::minutes(2);
-                });
+                return (isHidden && isHidden(item)) ||
+                       std::any_of(dismissed_.begin(), dismissed_.end(), [&](const Dismissal& entry) {
+                           return entry.server == session.server && entry.userId == session.userId &&
+                                  entry.itemId == item.id && now >= entry.time &&
+                                  now - entry.time < std::chrono::minutes(2);
+                       });
             });
         }
         for (auto entry = recent_.rbegin(); entry != recent_.rend(); ++entry) {
             if (entry->server != session.server || entry->userId != session.userId ||
-                now - entry->time > std::chrono::hours(24 * 30) || now < entry->time)
+                now - entry->time > std::chrono::hours(24 * 30) || now < entry->time ||
+                (isHidden && isHidden(entry->item)))
                 continue;
             if (resume == home.rows.end()) {
                 home.rows.push_back({"Continue Watching", {}});
@@ -173,23 +177,27 @@ public:
         const auto current = std::find_if(home.rows.begin(), home.rows.end(),
                                           [](const JellyfinHomeRow& row) { return row.title == "Continue Watching"; });
         if (current != home.rows.end()) {
-            std::unordered_set<std::string> ids;
-            std::unordered_set<std::string> seriesIds;
-            std::unordered_set<std::string> seriesNames;
-            for (const auto& item : current->items) {
-                if (!item.id.empty()) ids.insert(item.id);
-                if (item.type != "Episode") continue;
-                if (!item.seriesId.empty()) seriesIds.insert(item.seriesId);
-                if (!item.seriesName.empty()) seriesNames.insert(item.seriesName);
-            }
             for (auto& row : home.rows) {
                 if (row.title != "Next Up") continue;
                 const size_t oldSize = row.items.size();
                 std::erase_if(row.items, [&](const JellyfinItem& item) {
-                    return (!item.id.empty() && ids.contains(item.id)) ||
-                           (item.type == "Episode" &&
-                            ((!item.seriesId.empty() && seriesIds.contains(item.seriesId)) ||
-                             (!item.seriesName.empty() && seriesNames.contains(item.seriesName))));
+                    return std::any_of(current->items.begin(), current->items.end(), [&](const JellyfinItem& resumed) {
+                        if (!item.id.empty() && item.id == resumed.id) return true;
+                        if (item.type != "Episode" || resumed.type != "Episode") return false;
+                        const bool sameSeries = (!item.seriesId.empty() && item.seriesId == resumed.seriesId) ||
+                                                (!item.seriesName.empty() && item.seriesName == resumed.seriesName);
+                        if (!sameSeries) return false;
+                        // An old partial rewatch (e.g. Friends S4E9) must not hide
+                        // the next unwatched episode (S4E19).
+                        if (item.parentIndexNumber >= 0 && resumed.parentIndexNumber >= 0 && item.indexNumber >= 0 &&
+                            resumed.indexNumber >= 0) {
+                            if (item.parentIndexNumber == resumed.parentIndexNumber &&
+                                resumed.indexNumber + 1 < item.indexNumber)
+                                return false;
+                            if (resumed.parentIndexNumber + 1 < item.parentIndexNumber) return false;
+                        }
+                        return true;
+                    });
                 });
                 emptiedNextUp |= oldSize > 0 && row.items.empty();
             }

@@ -527,6 +527,8 @@ public:
         const auto now = std::chrono::steady_clock::now();
         const bool preparingInitialPlayback = coordinator_.transitionLoading() || coordinator_.fallbackResolving() ||
                                               player_.status() == PlayerStatus::Preparing;
+        screenState_.setSubtitleOffsetAvailable(coordinator_.tracks().subtitleEnabled() &&
+                                                !coordinator_.tracks().subtitleCues().empty());
         const PlayerScreenCommand command = screenState_.handleInput(input, now, preparingInitialPlayback);
         switch (command.type) {
         case PlayerScreenCommandType::None:
@@ -575,6 +577,14 @@ public:
             screenState_.openTrackPicker(PlayerTrackPicker::Audio, std::move(options), now);
             return {};
         }
+        case PlayerScreenCommandType::OpenSubtitleOffset:
+            if (coordinator_.tracks().selectedSubtitleServerIndex() >= 0 && coordinator_.tracks().subtitleEnabled() &&
+                !coordinator_.tracks().subtitleCues().empty())
+                screenState_.openSubtitleOffset();
+            return {};
+        case PlayerScreenCommandType::AdjustSubtitleOffset:
+            coordinator_.adjustSubtitleOffsetMs(command.trackIndex);
+            return {};
         case PlayerScreenCommandType::OpenSubtitlePicker: {
             std::vector<PlayerTrackOption> options;
             const int selected = coordinator_.tracks().selectedSubtitleServerIndex();

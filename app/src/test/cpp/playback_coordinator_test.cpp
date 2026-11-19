@@ -193,6 +193,12 @@ int main() {
     assert(!preparePlan.timedOut);
     prepareCoordinator.beginPreparing(now - 90s);
     preparePlan = prepareCoordinator.preparePlan(now, true);
+    assert(!preparePlan.timedOut);
+    prepareCoordinator.beginPreparing(now - 599s);
+    preparePlan = prepareCoordinator.preparePlan(now, true);
+    assert(!preparePlan.timedOut);
+    prepareCoordinator.beginPreparing(now - 600s);
+    preparePlan = prepareCoordinator.preparePlan(now, true);
     assert(preparePlan.timedOut);
     assert(!preparePlan.retryWithTranscodeFallback);
     prepareCoordinator.finishPreparing();

@@ -88,7 +88,7 @@ int main() {
     assert(startup.statusText(t + std::chrono::seconds(5)).find("remaining") == std::string::npos);
     measure.startupReadableBytes = 3000000;
     startup.setRemotePrefetch(measure, t + std::chrono::seconds(7));
-    assert(startup.statusText(t + std::chrono::seconds(7)).find("~15s remaining") != std::string::npos);
+    assert(startup.statusText(t + std::chrono::seconds(7)).find("about 15s remaining") != std::string::npos);
     assert(startup.startupProgress(t + std::chrono::seconds(7)).has_value());
     assert(*startup.startupProgress(t + std::chrono::seconds(7)) == 0.3f);
     assert(!startup.startupProgress(t + std::chrono::seconds(16)).has_value());
@@ -96,6 +96,9 @@ int main() {
     measure.startupReady = true;
     startup.setRemotePrefetch(measure, t + std::chrono::seconds(17));
     assert(startup.startupProgress(t + std::chrono::seconds(17)) == 1.0f);
+    assert(startup.startupDisplayText(false, t + std::chrono::seconds(17)) == "Waiting for Remux stream data");
+    assert(startup.startupDisplayText(true, t + std::chrono::seconds(17)).find("Finding playable source") !=
+           std::string::npos);
     assert(startup.statusText(t + std::chrono::seconds(17)).find("remaining") == std::string::npos);
     startup.clearRemotePrefetch();
     assert(startup.statusText(t + std::chrono::seconds(18)).find("remaining") == std::string::npos);
@@ -120,13 +123,17 @@ int main() {
     // server probe replaces the generic stage without claiming torrent bytes.
     PlayerBufferIndicator pendingProbe;
     pendingProbe.observe(true, false, false, false, false, 0, 0, true, true, t);
-    assert(pendingProbe.startupSearchText(t).find("~60s typical remaining") != std::string::npos);
+    assert(pendingProbe.startupSearchText(t).find("about 60s typical remaining") != std::string::npos);
     RemuxStartupProbeStatus activeProbe;
     activeProbe.active = true;
     activeProbe.candidateIndex = 2;
     activeProbe.candidateCount = 5;
     pendingProbe.setStartupProbe(activeProbe, t + 10s);
     assert(pendingProbe.startupSearchText(t + 10s).find("Checking source 2/5") != std::string::npos);
+    measure.startupReady = true;
+    pendingProbe.setRemotePrefetch(measure, t + 10s);
+    assert(pendingProbe.startupDisplayText(true, t + 10s).find("Checking source 2/5") != std::string::npos);
+    assert(pendingProbe.startupDisplayText(true, t + 10s).find("opening player") == std::string::npos);
     assert(pendingProbe.startupSearchText(t + 70s).find("70s elapsed") != std::string::npos);
     pendingProbe.clearRemotePrefetch();
     assert(pendingProbe.startupSearchText(t + 71s).find("Finding playable source") != std::string::npos);

@@ -11,8 +11,8 @@ import install_tv_release as installer
 
 
 class TvReleaseVersioningTest(unittest.TestCase):
-    def test_release_floor_is_above_old_tv_version(self):
-        self.assertEqual(installer.baseline_version(), 100700)
+    def test_local_release_baseline_is_above_old_tv_version(self):
+        self.assertGreaterEqual(installer.baseline_version(), 100738)
 
     def test_only_reads_canonical_package_not_testing_variants(self):
         packages = """Package [app.sloppatv.remuxtest] (a):

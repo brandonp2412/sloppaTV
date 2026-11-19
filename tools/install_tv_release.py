@@ -28,14 +28,17 @@ def installed_version(serial):
 
 def baseline_version():
     text = (ROOT / "gradle.properties").read_text()
-    match = re.search(r"^SLOPPATV_MIN_RELEASE_CODE=(\d+)$", text, re.MULTILINE)
+    match = re.search(r"^SLOPPATV_VERSION_CODE=(\d+)$", text, re.MULTILINE)
     if not match:
-        raise RuntimeError("Missing SLOPPATV_MIN_RELEASE_CODE in gradle.properties")
+        raise RuntimeError("Missing SLOPPATV_VERSION_CODE in gradle.properties")
     return int(match.group(1))
 
 
 def apk_identity(apk):
     output = run([str(AAPT), "dump", "badging", str(apk)]).stdout
+    if "application-debuggable" in output:
+        raise RuntimeError("Refusing debuggable APK")
+    run([str(AAPT.parent / "apksigner"), "verify", str(apk)])
     match = re.search(r"^package: name='([^']+)' versionCode='(\d+)'", output, re.MULTILINE)
     if not match:
         raise RuntimeError("Cannot read APK identity")
@@ -46,6 +49,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serial", default=os.environ.get("ANDROID_SERIAL"))
     parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--build-only", action="store_true", help="Build and validate without installing")
     args = parser.parse_args()
     if not args.serial:
         parser.error("Set --serial to the TV's ADB serial or ANDROID_SERIAL")
@@ -54,13 +58,24 @@ def main():
     if not args.skip_build:
         print(f"Building signed production release {code} (installed: {prior})", flush=True)
         subprocess.run(
-            [str(ROOT / "gradlew"), ":app:assembleRelease", f"-PSLOPPATV_VERSION_CODE={code}"], cwd=ROOT, check=True
+            [
+                str(ROOT / "gradlew"),
+                ":app:assembleRelease",
+                f"-PSLOPPATV_VERSION_CODE={code}",
+                "--no-daemon",
+                "--console=plain",
+            ],
+            cwd=ROOT,
+            check=True,
         )
     package, actual = apk_identity(APK)
     if package != PACKAGE or actual <= prior:
         raise RuntimeError(f"Refusing APK {package} version {actual}: installed production version is {prior}")
     if not args.skip_build and actual != code:
         raise RuntimeError(f"Expected build {code}, APK is {actual}")
+    if args.build_only:
+        print(f"Verified release APK: {APK} (versionCode={actual})", flush=True)
+        return
     print(f"Installing {PACKAGE} version {actual}, replacing {prior}, preserving app data", flush=True)
     run(["adb", "-s", args.serial, "install", "-r", str(APK)], capture=False)
     confirmed = installed_version(args.serial)

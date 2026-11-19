@@ -35,10 +35,9 @@ GPL-3.0-or-later. See [LICENSE](LICENSE).
 
 ## Android TV release installation
 
-The baseline `SLOPPATV_VERSION_CODE=18` is for isolated debug/E2E builds, **not** signed
-production releases. Android refuses an in-place install if its version code is lower
-than the existing app. The release build therefore requires at least
-`SLOPPATV_MIN_RELEASE_CODE`, while GitHub Play releases use the CI run number.
+Local builds and TV installs use `SLOPPATV_VERSION_CODE` as their starting version
+code. GitHub Play releases use the workflow run number. The TV installer advances
+the starting code when needed to update the installed production app.
 
 For a connected TV, run `python3 tools/install_tv_release.py --serial <adb-serial>`
 to build, validate, install and launch `app.sloppatv` without clearing data. The

@@ -29,7 +29,7 @@ int main() {
     assert(!remuxNeedsResumeReadBudget(9'999'999));
     assert(remuxNeedsResumeReadBudget(10'000'000));
     assert(remuxNeedsResumeReadBudget(2'630'000'000));
-    assert(shouldRetrySlowRemuxSource(true, 30'000, true, remuxNeedsResumeReadBudget(830'000)));
+    assert(!shouldRetrySlowRemuxSource(true, 30'000, true, remuxNeedsResumeReadBudget(830'000)));
     assert(!shouldRetrySlowRemuxSource(true, 30'000, true, remuxNeedsResumeReadBudget(2'630'000'000)));
 
     assert(clampSeekPositionMs(-1) == 0);
@@ -120,17 +120,21 @@ int main() {
     assert(playbackPrepareTimedOut(false, 15'000));
     assert(!playbackPrepareTimedOut(true, 29'999));
     assert(playbackPrepareTimedOut(true, 30'000));
-    assert(playbackPrepareTimeoutMs(false, true) == 90'000);
-    assert(playbackPrepareTimeoutMs(true, true) == 90'000);
-    assert(!playbackPrepareTimedOut(false, 89'999, true));
-    assert(playbackPrepareTimedOut(false, 90'000, true));
+    assert(playbackPrepareTimeoutMs(false, true) == 600'000);
+    assert(playbackPrepareTimeoutMs(true, true) == 600'000);
+    assert(!playbackPrepareTimedOut(false, 300'000, true));
+    assert(!playbackPrepareTimedOut(false, 599'999, true));
+    assert(playbackPrepareTimedOut(false, 600'000, true));
     assert(!playbackPrepareTimedOut(true, 30'000, true));
     assert(playbackCachePauseWaitSeconds(false) == 2);
     assert(playbackCachePauseWaitSeconds(true) == 20);
-    assert(!shouldRetrySlowRemuxSource(false, 90'000, true));
-    assert(!shouldRetrySlowRemuxSource(true, 90'000, false));
+    assert(!shouldRetrySlowRemuxSource(false, 600'000, true));
+    assert(!shouldRetrySlowRemuxSource(true, 600'000, false));
     assert(!shouldRetrySlowRemuxSource(true, 29'999, true));
-    assert(shouldRetrySlowRemuxSource(true, 30'000, true));
+    assert(!shouldRetrySlowRemuxSource(true, 30'000, true));
+    assert(!shouldRetrySlowRemuxSource(true, 300'000, true));
+    assert(!shouldRetrySlowRemuxSource(true, 599'999, true));
+    assert(shouldRetrySlowRemuxSource(true, 600'000, true));
     assert(mpvLogIndicatesHardwareDecoderFailure("h264_mediacodec: MediaCodec 0x0 failed to start"));
     assert(mpvLogIndicatesHardwareDecoderFailure("MediaCodec initialization ERROR"));
     assert(!mpvLogIndicatesHardwareDecoderFailure("ffmpeg: Could not open codec"));
@@ -141,12 +145,13 @@ int main() {
     assert(!mpvLogIndicatesFatalVideoFailure("h264_mediacodec: MediaCodec 0x0 failed to start"));
     assert(!mpvLogIndicatesFatalVideoFailure("audio decoder failed"));
     // A cold resume needs both container-index and distant-range reads before
-    // mpv can fill its cache; do not discard it at the beginning-only deadline.
+    // mpv can fill its cache; both start modes must retain the full budget.
     assert(!shouldRetrySlowRemuxSource(true, 30'000, true, true));
-    assert(!shouldRetrySlowRemuxSource(true, 89'999, true, true));
-    assert(shouldRetrySlowRemuxSource(true, 90'000, true, true));
-    assert(!shouldRetrySlowRemuxSource(true, 90'000, false, true));
-    assert(!shouldRetrySlowRemuxSource(false, 90'000, true, true));
+    assert(!shouldRetrySlowRemuxSource(true, 300'000, true, true));
+    assert(!shouldRetrySlowRemuxSource(true, 599'999, true, true));
+    assert(shouldRetrySlowRemuxSource(true, 600'000, true, true));
+    assert(!shouldRetrySlowRemuxSource(true, 600'000, false, true));
+    assert(!shouldRetrySlowRemuxSource(false, 600'000, true, true));
     // A slow first source may be offered again as the alternate after a retry.
     // Do not bounce A -> B -> A, and do not retry the current or empty source.
     assert(shouldUseRemuxAlternate("A", "B", {}));

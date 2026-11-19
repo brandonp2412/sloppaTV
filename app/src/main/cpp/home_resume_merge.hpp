@@ -22,20 +22,21 @@ inline void mergeHomeResumeCandidates(std::vector<JellyfinItem>& resume, std::ve
     struct ProgressMarker {
         std::string seriesId;
         std::string lastPlayedDate;
-        int season;
-        int episode;
+        int season = -1;
+        int episode = -1;
     };
+
     std::vector<ProgressMarker> laterPlayback;
     laterPlayback.reserve(recent.size());
     for (const auto& item : recent) {
-        if (item.type == "Episode" && !item.seriesId.empty() && item.parentIndexNumber >= 0 &&
-            item.indexNumber >= 0 && !item.lastPlayedDate.empty() && (item.played || item.positionTicks > 0)) {
+        if (item.type == "Episode" && !item.seriesId.empty() && item.parentIndexNumber >= 0 && item.indexNumber >= 0 &&
+            !item.lastPlayedDate.empty() && (item.played || item.positionTicks > 0)) {
             laterPlayback.push_back({item.seriesId, item.lastPlayedDate, item.parentIndexNumber, item.indexNumber});
         }
     }
     const auto supersededByLaterPlayback = [&](const JellyfinItem& item) {
-        if (item.type != "Episode" || item.seriesId.empty() || item.parentIndexNumber < 0 ||
-            item.indexNumber < 0 || item.lastPlayedDate.empty())
+        if (item.type != "Episode" || item.seriesId.empty() || item.parentIndexNumber < 0 || item.indexNumber < 0 ||
+            item.lastPlayedDate.empty())
             return false;
         return std::any_of(laterPlayback.begin(), laterPlayback.end(), [&](const ProgressMarker& later) {
             if (later.seriesId != item.seriesId || later.lastPlayedDate <= item.lastPlayedDate) return false;

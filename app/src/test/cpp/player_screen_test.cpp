@@ -8,7 +8,7 @@ int main() {
     PlayerScreenState state;
     const auto now = PlayerScreenState::Clock::time_point{10s};
 
-    assert(PlayerScreenState::controlCount() == 5);
+    assert(PlayerScreenState::controlCount() == 6);
     assert(!state.controlsActive(now));
     assert(state.controlSelection() == PlayerControl::PlayPause);
     assert(!state.overlayVisible(now));
@@ -24,7 +24,6 @@ int main() {
     assert(!state.overlayVisible(now + 10s));
     state.showOverlayFor(now + 11s, 5s);
     assert(!state.controlsActive(now + 11s));
-    state.moveControl(1);
     state.moveControl(1);
     state.moveControl(1);
     state.moveControl(1);
@@ -75,7 +74,19 @@ int main() {
     inputState.moveControl(1);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
     assert(command.type == PlayerScreenCommandType::OpenSubtitlePicker);
-    inputState.moveControl(-3);
+    inputState.setSubtitleOffsetAvailable(true);
+    inputState.moveControl(1);
+    command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
+    assert(command.type == PlayerScreenCommandType::OpenSubtitleOffset);
+    inputState.openSubtitleOffset();
+    assert(inputState.subtitleOffsetOpen());
+    command = inputState.handleInput(PlayerScreenInput::Right, now + 2s);
+    assert(command.type == PlayerScreenCommandType::AdjustSubtitleOffset && command.trackIndex == 250);
+    command = inputState.handleInput(PlayerScreenInput::Left, now + 2s);
+    assert(command.type == PlayerScreenCommandType::AdjustSubtitleOffset && command.trackIndex == -250);
+    command = inputState.handleInput(PlayerScreenInput::Back, now + 2s);
+    assert(command.type == PlayerScreenCommandType::None && !inputState.subtitleOffsetOpen());
+    inputState.showControls(now + 2s);
     command = inputState.handleInput(PlayerScreenInput::Activate, now + 2s);
     assert(command.type == PlayerScreenCommandType::TogglePause);
     inputState.moveControl(-1);

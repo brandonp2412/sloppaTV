@@ -38,6 +38,8 @@ public:
         observedReadRate_ = 0.0;
         positiveReadSamples_ = 0;
         lastReadProgressAt_ = {};
+        displayedStartupProgress_ = 0.0f;
+        visualProgressAt_ = {};
     }
 
     void observe(bool resolving, bool preparing, bool playing, bool paused, bool cachePaused, int positionMs,
@@ -207,18 +209,47 @@ public:
             resolveSamples_ >= 3 ? std::clamp(static_cast<int>(std::round(resolveAverageSeconds_)), 20, 180) : 60;
         if (elapsed < typical - 5) {
             const int remaining = ((typical - elapsed + 9) / 10) * 10;
-            return stage + " · ~" + std::to_string(remaining) + "s typical remaining";
+            return stage + " · about " + std::to_string(remaining) + "s typical remaining";
         }
         return stage + " · " + std::to_string(elapsed) + "s elapsed (longer than typical)";
     }
 
     [[nodiscard]] std::optional<float> startupProgress(TimePoint now = Clock::now()) const {
-        if (!remux_ || remoteReceivedAt_ == TimePoint{} || now - remoteReceivedAt_ > std::chrono::seconds(8) ||
-            remotePrefetch_.startupRequiredBytes == 0)
-            return std::nullopt;
-        if (remotePrefetch_.startupReady) return 1.0f;
-        return static_cast<float>(std::min(1.0, static_cast<double>(remotePrefetch_.startupReadableBytes) /
-                                                    static_cast<double>(remotePrefetch_.startupRequiredBytes)));
+        if (!remux_) return std::nullopt;
+        if (remoteReceivedAt_ != TimePoint{} && now - remoteReceivedAt_ <= std::chrono::seconds(8) &&
+            remotePrefetch_.startupRequiredBytes > 0) {
+            if (remotePrefetch_.startupReady) return 1.0f;
+            const float measured =
+                static_cast<float>(std::min(1.0, static_cast<double>(remotePrefetch_.startupReadableBytes) /
+                                                     static_cast<double>(remotePrefetch_.startupRequiredBytes)));
+            // Readable ranges can arrive in large chunks. Ease the visual
+            // indicator toward the measured value so polling gaps do not look
+            // like a sudden jump.
+            if (visualProgressAt_ == TimePoint{}) {
+                // The first reliable byte count is ground truth; avoid a zero
+                // frame when Remux already reports usable startup progress.
+                displayedStartupProgress_ = measured;
+            } else {
+                const float elapsed = std::max(0.0f, std::chrono::duration<float>(now - visualProgressAt_).count());
+                displayedStartupProgress_ = std::max(displayedStartupProgress_,
+                                                     std::min(measured, displayedStartupProgress_ + elapsed * 0.08f));
+            }
+            visualProgressAt_ = now;
+            return displayedStartupProgress_;
+        }
+        // Show progress only when Remux reports readable startup bytes. Fake
+        // time-based increments become misleading when a torrent stalls.
+        return std::nullopt;
+    }
+
+    // A ready torrent range is not a ready player. Remux may still be selecting
+    // a source, and libmpv may need additional container/index/seek ranges.
+    [[nodiscard]] std::string startupDisplayText(bool resolving, TimePoint now = Clock::now()) const {
+        const auto progress = startupProgress(now);
+        if (!progress) return startupSearchText(now);
+        if (*progress >= 1.0f) return resolving ? startupSearchText(now) : statusText(now);
+        const std::string eta = startupEta(now);
+        return eta.empty() ? "Preparing video" : "Preparing video · " + eta;
     }
 
     [[nodiscard]] std::string remotePrefetchText(TimePoint now = Clock::now()) const {
@@ -253,7 +284,7 @@ private:
         if (!remux_ || samples < 3 || phaseStarted_ == TimePoint{}) return {};
         const double remaining = average - std::chrono::duration<double>(now - phaseStarted_).count();
         if (remaining < 3.0 || remaining > 180.0) return {};
-        return " · ~" + std::to_string(static_cast<int>(std::ceil(remaining / 5.0)) * 5) + "s remaining";
+        return " · about " + std::to_string(static_cast<int>(std::ceil(remaining / 5.0)) * 5) + "s remaining";
     }
 
     [[nodiscard]] std::optional<std::string> readinessEta(TimePoint now) const {
@@ -266,7 +297,7 @@ private:
             static_cast<double>(remotePrefetch_.startupRequiredBytes - remotePrefetch_.startupReadableBytes) /
             observedReadRate_;
         if (!std::isfinite(remaining) || remaining < 1.0 || remaining > 300.0) return std::nullopt;
-        return " · ~" + std::to_string(static_cast<int>(std::ceil(remaining / 5.0)) * 5) + "s remaining";
+        return " · about " + std::to_string(static_cast<int>(std::ceil(remaining / 5.0)) * 5) + "s remaining";
     }
 
     PlayerBufferPhase phase_ = PlayerBufferPhase::Resolving;
@@ -284,6 +315,8 @@ private:
     TimePoint lastReadProgressAt_{};
     double observedReadRate_ = 0.0;
     int positiveReadSamples_ = 0;
+    mutable float displayedStartupProgress_ = 0.0f;
+    mutable TimePoint visualProgressAt_{};
     double resolveAverageSeconds_ = 0.0;
     double connectAverageSeconds_ = 0.0;
     int resolveSamples_ = 0;

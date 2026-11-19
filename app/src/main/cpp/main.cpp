@@ -796,6 +796,9 @@ public:
                 case PlayerControl::SubtitleTrack:
                     summary += ", Subtitle track";
                     break;
+                case PlayerControl::SubtitleOffset:
+                    summary += ", Subtitle offset";
+                    break;
                 case PlayerControl::Count:
                     break;
                 }
@@ -1619,7 +1622,9 @@ private:
     }
 
     void applyAsyncCompletion(HomeCoreCompletion& completion) {
-        if (completion.result.ok) homeResume_.apply(session_, completion.result.value);
+        if (completion.result.ok)
+            homeResume_.apply(session_, completion.result.value, HomeResumeOverlay::Clock::now(),
+                              [this](const JellyfinItem& item) { return homeVisibility_.isHidden(item); });
         const auto effects = homeCompletions_.complete(completion);
         if (effects.retryDelaySeconds)
             __android_log_print(ANDROID_LOG_WARN, kTag, "Home load failed transiently; retrying in %d seconds: %s",
@@ -1783,7 +1788,8 @@ private:
         }
         playbackRequests_.release(true, completed);
         const HomeSelectionSnapshot snapshot = homeState_.snapshot(home_.rows);
-        homeResume_.apply(session_, home_);
+        homeResume_.apply(session_, home_, HomeResumeOverlay::Clock::now(),
+                          [this](const JellyfinItem& item) { return homeVisibility_.isHidden(item); });
         homeVisibility_.filter(home_);
         const HomeRestorePlan restore = HomeScreenState::restorePlan(snapshot, home_.rows);
         homeState_.setSelections(restore.selections);

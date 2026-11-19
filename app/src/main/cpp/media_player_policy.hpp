@@ -92,10 +92,10 @@ constexpr int64_t heldSeekDeltaMs(int seekSeconds, int repeatCount) {
     return static_cast<int64_t>(std::max(0, seekSeconds)) * 1000 * heldSeekMultiplier(std::max(0, repeatCount));
 }
 
-// Remux can still be fetching its initial torrent pieces. Aborting direct play
-// after 15 seconds and starting a second transcoding session discards that work.
+// Remux can still be fetching torrent pieces after PlaybackInfo returns, especially
+// for a resumed seek. Allow ten minutes before discarding the chosen source.
 constexpr int playbackPrepareTimeoutMs(bool transcoding, bool isRemux = false) {
-    return isRemux ? 90'000 : (transcoding ? 30'000 : 15'000);
+    return isRemux ? 600'000 : (transcoding ? 30'000 : 15'000);
 }
 
 constexpr bool playbackPrepareTimedOut(bool transcoding, int64_t elapsedMs, bool isRemux = false) {
@@ -126,12 +126,12 @@ constexpr bool initialResumeSeekMissed(int requestedMs, int observedMs, bool pla
     return playing && requestedMs >= 10'000 && observedMs >= 1'000 && observedMs < requestedMs - 3'000;
 }
 
-// A resumed torrent must read the container index and a distant media range
-// before filling the player cache. Keep its full preparation budget: switching
-// sources after 30 seconds discards those reads and starts the cold seek again.
-// Playback from the beginning can still try another offered version sooner.
-constexpr bool shouldRetrySlowRemuxSource(bool isRemux, int64_t elapsedMs, bool hasAlternate, bool resuming = false) {
-    const int retryAfterMs = resuming ? playbackPrepareTimeoutMs(false, true) : 30'000;
+// A cold torrent may need several minutes for startup pieces even after its
+// metadata probe. Preserve the preparation budget for both fresh and resumed
+// playback; switching sources early discards that download progress.
+constexpr bool shouldRetrySlowRemuxSource(bool isRemux, int64_t elapsedMs, bool hasAlternate,
+                                          [[maybe_unused]] bool resuming = false) {
+    const int retryAfterMs = playbackPrepareTimeoutMs(false, true);
     return isRemux && hasAlternate && elapsedMs >= retryAfterMs;
 }
 
