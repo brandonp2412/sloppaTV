@@ -82,6 +82,23 @@ bool VideoSurface::create(std::string& error) {
             if (error.empty()) error = "Unable to create SurfaceTexture";
             goto fail;
         }
+        // libmpv's software GPU renderer draws into this Surface through EGL.
+        // Without an explicit default size the SurfaceTexture starts at 1x1,
+        // so the entire decoded frame becomes a single changing colour when
+        // Android stretches it across the player (notably on Waydroid).
+        jmethodID setDefaultBufferSize = env->GetMethodID(localTextureClass, "setDefaultBufferSize", "(II)V");
+        if (clearException(env, "SurfaceTexture buffer size method lookup", error) || !setDefaultBufferSize) {
+            env->DeleteLocalRef(localTextureClass);
+            env->DeleteLocalRef(localTexture);
+            if (error.empty()) error = "Unable to size video SurfaceTexture";
+            goto fail;
+        }
+        env->CallVoidMethod(localTexture, setDefaultBufferSize, static_cast<jint>(1920), static_cast<jint>(1080));
+        if (clearException(env, "SurfaceTexture.setDefaultBufferSize", error)) {
+            env->DeleteLocalRef(localTextureClass);
+            env->DeleteLocalRef(localTexture);
+            goto fail;
+        }
         surfaceTexture_ = env->NewGlobalRef(localTexture);
         const bool textureRetainFailed = clearException(env, "Retain SurfaceTexture", error);
         env->DeleteLocalRef(localTexture);
