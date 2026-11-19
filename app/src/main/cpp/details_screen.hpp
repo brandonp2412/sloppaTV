@@ -182,8 +182,8 @@ enum class ItemMenuAction {
     Back,
 };
 
-inline std::vector<ItemMenuAction> itemMenuActionIdsFor(const JellyfinItem&, bool seerrRequest, bool hasExternalPlayer,
-                                                        bool hasQueue) {
+inline std::vector<ItemMenuAction> itemMenuActionIdsFor(const JellyfinItem& item, bool seerrRequest,
+                                                        bool hasExternalPlayer, bool hasQueue) {
     if (seerrRequest) return {ItemMenuAction::DeleteRequest, ItemMenuAction::Back};
 
     std::vector<ItemMenuAction> result;
@@ -194,7 +194,7 @@ inline std::vector<ItemMenuAction> itemMenuActionIdsFor(const JellyfinItem&, boo
     result.push_back(ItemMenuAction::TogglePlayed);
     result.push_back(ItemMenuAction::ToggleHomeVisibility);
     result.push_back(ItemMenuAction::RefreshMetadata);
-    result.push_back(ItemMenuAction::DeleteMedia);
+    if (item.canDelete) result.push_back(ItemMenuAction::DeleteMedia);
     result.push_back(ItemMenuAction::Back);
     return result;
 }

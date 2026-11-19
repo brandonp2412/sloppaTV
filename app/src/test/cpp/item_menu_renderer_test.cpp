@@ -148,11 +148,13 @@ int main() {
     Harness permitted;
     ItemMenuRenderState pendingState;
     pendingState.itemMenuSelection = 1;
-    pending.render(pendingState, {"FAVORITE", "DELETE MEDIA", "BACK"}, style);
-    pendingState.canDelete = true;
+    pending.render(pendingState, {"FAVORITE", "BACK"}, style);
     permitted.render(pendingState, {"FAVORITE", "DELETE MEDIA", "BACK"}, style);
-    assert(pending.modalHeights == permitted.modalHeights);
-    assert(pending.renderer.verticalColors[1] == style.tertiary);
+    assert(pending.modalHeights[0] + 66.0f == permitted.modalHeights[0]);
+    assert(pending.surfaces.size() == 2);
+    assert(permitted.surfaces.size() == 3);
+    assert(!has(pending.renderer.verticalTexts, "DELETE MEDIA"));
+    assert(has(permitted.renderer.verticalTexts, "DELETE MEDIA"));
     assert(!pending.surfaces[1].destructive);
     assert(permitted.surfaces[1].destructive);
 

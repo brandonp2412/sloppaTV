@@ -96,7 +96,7 @@ int main() {
         DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Activate, movie, false, false, false);
     assert(navigation.type == DetailsNavigationActionType::ConfirmDelete);
 
-    // The reserved delete row is not actionable until the item detail grants permission.
+    // Without deletion permission the final row is Back, not a disabled Delete action.
     state.beginItemMenu();
     JellyfinItem pending = movie;
     pending.canDelete = false;
@@ -105,8 +105,13 @@ int main() {
                                                           false);
     navigation = DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Activate, pending, false,
                                                              false, false);
-    assert(navigation.type == DetailsNavigationActionType::None);
+    assert(navigation.type == DetailsNavigationActionType::ActivateItemMenuAction);
+    assert(navigation.itemMenuAction == ItemMenuAction::Back);
     assert(!state.deleteConfirmation());
+    state.beginItemMenu();
+    for (int i = 0; i < 4; ++i)
+        (void)DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Down, movie, false, false,
+                                                          false);
     navigation =
         DetailsNavigationController::handleItemMenu(state, DetailsNavigationKey::Activate, movie, false, false, false);
     assert(navigation.type == DetailsNavigationActionType::None);

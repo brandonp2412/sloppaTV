@@ -120,11 +120,14 @@ int main() {
     menuCommand = state.handleItemMenuInput(ItemMenuScreenInput::Activate, static_cast<int>(menu.size()));
     assert(menuCommand.type == ItemMenuScreenCommandType::ActivateAction);
 
-    // An unfinished home row has no CanDelete field yet. Keep the action slot stable.
+    // Without CanDelete Jellyfin must omit the destructive row entirely.
     JellyfinItem pending = series;
     pending.canDelete = false;
     const auto pendingMenu = state.itemMenuActions(pending, false, true, true, false);
-    assert(pendingMenu == menu);
+    assert(pendingMenu.size() + 1 == menu.size());
+    assert(std::find(pendingMenu.begin(), pendingMenu.end(), "DELETE MEDIA") == pendingMenu.end());
+    assert(pendingMenu.back() == "BACK");
+    assert(std::find(menu.begin(), menu.end(), "DELETE MEDIA") != menu.end());
 
     const auto seerrMenu = state.itemMenuActions(series, true, false, false, false);
     assert(seerrMenu.size() == 2);
