@@ -473,7 +473,13 @@ public:
 
     [[nodiscard]] int playerTimelineBaseMs() const {
         const auto& target = sessionState_.activeTarget();
-        return target.playMethod == PlaybackMethod::DirectPlay ? 0 : playbackPositionMsFromTicks(target.startTicks);
+        // Jellyfin HLS playlists are full-length timelines even when their
+        // PlaybackInfo request specified StartTimeTicks. libmpv's time-pos is
+        // already absolute for these playlists; adding the requested start
+        // offset makes the UI advance while decoding the Netflix intro again.
+        return target.playMethod == PlaybackMethod::DirectPlay || target.url.find(".m3u8") != std::string::npos
+                   ? 0
+                   : playbackPositionMsFromTicks(target.startTicks);
     }
 
     [[nodiscard]] bool seekRequiresStreamRestart(int logicalPositionMs) const {
@@ -796,7 +802,7 @@ public:
         return PlaybackPlayerStartContext{
             .url = target.url,
             .logicalStartPositionMs = logicalStartPositionMs,
-            .playerStartPositionMs = target.playMethod == PlaybackMethod::DirectPlay ? logicalStartPositionMs : 0,
+            .playerStartPositionMs = playerTimelineBaseMs() == 0 ? logicalStartPositionMs : 0,
             .audioOrdinal = playerAudioOrdinal(target, item),
             .subtitleStreamIndex =
                 mode == PlaybackPlayerStartMode::WindowRestore && target.playMethod == PlaybackMethod::DirectPlay

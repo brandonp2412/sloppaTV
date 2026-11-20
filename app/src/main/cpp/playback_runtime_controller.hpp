@@ -400,7 +400,7 @@ public:
                            start.audioOrdinal, start.subtitleStreamIndex, start.subtitleOrdinal,
                            start.externalSubtitleUrl, activeDecodeMode(), settings_.maxAudioChannels, isRemuxServer(),
                            coordinator_.pauseAfterRestart());
-        initialResumeTargetMs_ = coordinator_.activeTargetUsesDirectPlay() ? logicalStartPositionMs : 0;
+        initialResumeTargetMs_ = coordinator_.playerTimelineBaseMs() == 0 ? logicalStartPositionMs : 0;
         initialResumeRetryMs_ = 0;
         if (logicalStartPositionMs > 0) screenState_.beginInitialPosition(logicalStartPositionMs, now);
     }

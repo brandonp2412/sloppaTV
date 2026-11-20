@@ -36,6 +36,15 @@ int main() {
     assert(coordinator.seekRequiresStreamRestart(239999));
     assert(!coordinator.seekRequiresStreamRestart(240000));
     assert(!coordinator.seekRequiresStreamRestart(260000));
+    // Jellyfin HLS VOD starts its playlist at zero even when PlaybackInfo was
+    // negotiated with a nonzero resume time. All seeks use mpv's absolute
+    // timeline, not a fake offset plus a restart at Netflix's opening card.
+    coordinator.session().activeTarget().url = "https://jellyfin.test/Videos/item/master.m3u8?StartTimeTicks=0";
+    assert(coordinator.playerTimelineBaseMs() == 0);
+    assert(coordinator.logicalPositionFromPlayerPosition(20000) == 20000);
+    assert(coordinator.playerPositionFromLogicalPosition(20000) == 20000);
+    assert(!coordinator.seekRequiresStreamRestart(20000));
+    assert(coordinator.playerStartContext().playerStartPositionMs == 240000);
     coordinator.session().activeTarget().playMethod = PlaybackMethod::DirectPlay;
     assert(!coordinator.seekRequiresStreamRestart(0));
     coordinator.session().activeTarget() = coordinatedTarget;

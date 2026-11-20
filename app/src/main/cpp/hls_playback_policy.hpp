@@ -7,9 +7,13 @@
 #include <string_view>
 
 inline bool serverStreamSeekNeedsRestart(bool directPlay, std::string_view url, int targetMs, int baseMs) {
-    // A server's rolling playlist may have dropped the requested segment while
-    // paused. Negotiate the requested position instead of seeking stale media.
-    return !directPlay && (std::max(0, targetMs) < baseMs || url.find(".m3u8") != std::string_view::npos);
+    // A full-length Jellyfin HLS VOD playlist is seekable by its native
+    // segment index. Restarting it reopens segment zero, making the displayed
+    // timeline disagree with the video. Jellyfin also rejects StartTimeTicks
+    // on dynamic HLS segment requests, so don't try URL-based HLS seeks.
+    // Non-HLS server streams still require re-negotiation if seeking before
+    // their known start offset.
+    return !directPlay && url.find(".m3u8") == std::string_view::npos && std::max(0, targetMs) < baseMs;
 }
 
 inline std::optional<int> prematureHlsEndPosition(int observedMs, int recentSeekMs, int durationMs) {
