@@ -488,7 +488,7 @@ void renderPlayerPresentation(Renderer& renderer, NativeMediaPlayer& player, Vid
             renderer,
             PlayerControlsRenderState{
                 .paused = status == PlayerStatus::Paused,
-                .selection = playerScreenState.controlSelection(),
+                .selection = playerScreenState.focusedControl(now),
                 .logicalWidth = Renderer::logicalWidth(),
                 .audioTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Audio),
                 .subtitleTrackLabel = playbackCoordinator.trackLabel(PlaybackTrackLabelKind::Subtitle),

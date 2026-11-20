@@ -1,20 +1,39 @@
 #include "player_screen.hpp"
+#include "deferred_playback_seek.hpp"
 
 #include <cassert>
 #include <chrono>
 
 int main() {
     using namespace std::chrono_literals;
+    // Repeated DPAD presses must accumulate while an HLS restart is in flight.
+    DeferredPlaybackSeek deferred;
+    const auto seekTime = DeferredPlaybackSeek::TimePoint{10s};
+    deferred.request("episode-a", 10'000, seekTime);
+    assert(deferred.positionFor("episode-a") == 10'000);
+    assert(!deferred.takeReady("episode-a", true, seekTime + 200ms));
+    deferred.request("episode-a", *deferred.positionFor("episode-a") + 10'000, seekTime + 200ms);
+    assert(!deferred.takeReady("episode-a", false, seekTime + 1s));
+    assert(deferred.takeReady("episode-a", true, seekTime + 1s) == 20'000);
+    assert(!deferred.positionFor("episode-a"));
+    deferred.request("episode-a", 55'000, seekTime);
+    assert(!deferred.takeReady("episode-b", true, seekTime + 1s));
+    assert(!deferred.positionFor("episode-a"));
+    deferred.request("episode-a", 30'000, seekTime);
+    deferred.clear();
+    assert(!deferred.positionFor("episode-a"));
     PlayerScreenState state;
     const auto now = PlayerScreenState::Clock::time_point{10s};
 
     assert(PlayerScreenState::controlCount() == 6);
     assert(!state.controlsActive(now));
     assert(state.controlSelection() == PlayerControl::PlayPause);
+    assert(state.focusedControl(now) == PlayerControl::Count);
     assert(!state.overlayVisible(now));
 
     state.showControls(now);
     assert(state.controlsActive(now + 9s));
+    assert(state.focusedControl(now + 9s) == PlayerControl::PlayPause);
     state.refreshControls(now + 9s);
     assert(state.controlsActive(now + 18s));
     assert(!state.controlsActive(now + 19s));
@@ -94,23 +113,28 @@ int main() {
     command = inputState.handleInput(PlayerScreenInput::Back, now + 6s);
     assert(command.type == PlayerScreenCommandType::StopPlayback);
 
-    // Startup controls are visible while preparing, even if the normal 10-second focus window
-    // has expired or a playback transition reset it between remote key presses.
+    // Startup loading can display controls but must neither focus Play/Pause nor
+    // steal Left/Right from playback seeks. Up deliberately enters control navigation.
     PlayerScreenState startupInputState;
     startupInputState.beginPlayback(0, 50'000);
     assert(startupInputState.controlsVisible(now, true));
-    assert(!startupInputState.controlsActive(now));
-    command = startupInputState.handleInput(PlayerScreenInput::Up, now, true);
+    assert(startupInputState.focusedControl(now) == PlayerControl::Count);
+    command = startupInputState.handleInput(PlayerScreenInput::Right, now, true);
+    assert(command.type == PlayerScreenCommandType::SeekForward);
+    assert(startupInputState.focusedControl(now) == PlayerControl::Count);
+    command = startupInputState.handleInput(PlayerScreenInput::Left, now + 1s, true);
+    assert(command.type == PlayerScreenCommandType::SeekBackward);
+    assert(startupInputState.focusedControl(now + 1s) == PlayerControl::Count);
+    command = startupInputState.handleInput(PlayerScreenInput::Up, now + 2s, true);
     assert(command.type == PlayerScreenCommandType::None);
-    assert(startupInputState.controlsActive(now));
+    assert(startupInputState.focusedControl(now + 2s) == PlayerControl::PlayPause);
+    command = startupInputState.handleInput(PlayerScreenInput::Right, now + 3s, true);
+    assert(command.type == PlayerScreenCommandType::None);
+    assert(startupInputState.focusedControl(now + 3s) == PlayerControl::NextEpisode);
     startupInputState.beginPlayback(0, 50'000);
-    command = startupInputState.handleInput(PlayerScreenInput::Right, now + 1s, true);
-    assert(command.type == PlayerScreenCommandType::None);
-    assert(startupInputState.controlSelection() == PlayerControl::NextEpisode);
-    startupInputState.hideControls();
-    command = startupInputState.handleInput(PlayerScreenInput::Right, now + 12s, true);
-    assert(command.type == PlayerScreenCommandType::None);
-    assert(startupInputState.controlSelection() == PlayerControl::NextEpisode);
+    assert(startupInputState.focusedControl(now + 4s) == PlayerControl::Count);
+    command = startupInputState.handleInput(PlayerScreenInput::Right, now + 4s, true);
+    assert(command.type == PlayerScreenCommandType::SeekForward);
     startupInputState.beginPlayback(0, 50'000, false);
     assert(!startupInputState.controlsVisible(now + 13s, true));
     command = startupInputState.handleInput(PlayerScreenInput::Right, now + 13s, true);

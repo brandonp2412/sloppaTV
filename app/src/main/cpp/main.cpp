@@ -255,11 +255,11 @@ using AsyncCompletion = std::variant<
     DetailsSimilarCompletion, SimilarPrefetchCompletion, EpisodeSeriesContextRequestCompletion,
     EpisodeSeriesContextCompletion, QuickConnectStartedCompletion, QuickConnectFailedCompletion,
     QuickConnectAuthenticatedCompletion, QuickConnectTimedOutCompletion, HomeCoreCompletion, HomeSecondaryCompletion,
-    ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion,
-    ArtworkLoadCompletion, MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion,
-    PlaybackReportCompletion, QueuedPlaybackCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion,
-    StreamRestartCompletion, FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion,
-    RemuxPrefetchCompletion, RemuxPlaybackPendingCompletion, RemuxStartupProbeCompletion>;
+    ExternalPlaybackCompletion, SubtitleLoadCompletion, TrickplayTileCompletion, ArtworkLoadCompletion,
+    MediaSegmentsCompletion, NextEpisodeCompletion, PlaybackAdjacentCompletion, PlaybackReportCompletion,
+    QueuedPlaybackCompletion, PlayerItemPlaybackCompletion, AutoplayPlaybackCompletion, StreamRestartCompletion,
+    FallbackPlaybackCompletion, BeginPlaybackCompletion, SeriesPlayAllCompletion, RemuxPrefetchCompletion,
+    RemuxPlaybackPendingCompletion, RemuxStartupProbeCompletion>;
 
 class SloppaApp;
 SloppaApp* gActiveApp = nullptr;
@@ -780,7 +780,7 @@ public:
                 const auto action = detailsFlow_.state().selectedAction(detailsFlow_.item());
                 if (action) summary += ", " + detailsActionLabel(*action, detailsFlow_.item(), false);
             } else if (screen_ == Screen::Player) {
-                switch (playerScreenState_.controlSelection()) {
+                switch (playerScreenState_.focusedControl(std::chrono::steady_clock::now())) {
                 case PlayerControl::PreviousEpisode:
                     summary += ", Previous episode";
                     break;
@@ -1773,6 +1773,7 @@ private:
 
     void stopPlayback(bool completed = false) {
         if (screen_ != Screen::Player && player_.status() == PlayerStatus::Idle) return;
+        playbackRuntime_.clearDeferredSeek();
         remuxEpisodePrewarm_.clear();
         pendingRemuxSourceId_.clear();
         pendingRemuxItemId_.clear();

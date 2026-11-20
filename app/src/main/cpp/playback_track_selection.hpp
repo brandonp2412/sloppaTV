@@ -73,7 +73,8 @@ playbackDiscoveredSubtitleAtIndex(const std::vector<JellyfinSubtitleStream>& dis
 
 // A demuxer can omit the language tag on an otherwise valid PGS track.
 // Missing/undetermined language is not evidence that the selected track changed.
-inline bool discoveredSubtitleLanguageConflicts(const JellyfinSubtitleStream& track, const std::string& desiredLanguage) {
+inline bool discoveredSubtitleLanguageConflicts(const JellyfinSubtitleStream& track,
+                                                const std::string& desiredLanguage) {
     if (desiredLanguage.empty()) return false;
     const std::string language = normalizeSubtitleLanguage(track.language);
     return !language.empty() && language != "und" && language != "unknown" && language != desiredLanguage;

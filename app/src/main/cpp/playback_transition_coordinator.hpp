@@ -111,7 +111,6 @@ public:
         }
         mediaSession_.updateMetadata(item.name, episodeLabel(item), playbackPositionMsFromTicks(item.runtimeTicks));
         mediaSession_.updateState(MediaSessionState::Buffering, playbackPositionMsFromTicks(target.startTicks));
-        if (!work.episodeAdvance) playerScreen_.showControls(std::chrono::steady_clock::now());
         runtime_.startResolvedTarget();
         return {.handled = true};
     }

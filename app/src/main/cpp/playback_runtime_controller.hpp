@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app_settings.hpp"
+#include "deferred_playback_seek.hpp"
 #include "media_player.hpp"
 #include "media_player_policy.hpp"
 #include "media_session.hpp"
@@ -345,18 +346,28 @@ public:
         return PlaybackRuntimeNotice::None;
     }
 
-    template <typename StreamExecutor> bool seekTo(StreamExecutor& stream, int positionMs) {
+    void clearDeferredSeek() { deferredSeek_.clear(); }
+
+    template <typename StreamExecutor> bool seekTo([[maybe_unused]] StreamExecutor& stream, int positionMs) {
         const int targetMs = std::max(0, positionMs);
         hlsRecovery_.reset();
-        if (coordinator_.seekRequiresStreamRestart(targetMs)) {
-            // Keep the same release and tracks when replacing an expired playlist.
-            restartAt(stream, targetMs, coordinator_.tracks().selectedAudioServerIndex(),
-                      coordinator_.tracks().selectedSubtitleServerIndex(),
-                      coordinator_.session().activeTarget().mediaSourceId);
-            return false; // Stream restart reports progress once its new timeline is ready.
+        const auto now = std::chrono::steady_clock::now();
+        const PlayerStatus status = player_.status();
+        const bool streamNotReady = coordinator_.transitionLoading() || coordinator_.fallbackResolving() ||
+                                    !coordinator_.activeTargetAvailable() || status == PlayerStatus::Preparing ||
+                                    status == PlayerStatus::Idle;
+        if (streamNotReady || coordinator_.seekRequiresStreamRestart(targetMs)) {
+            // A non-seekable server playlist requires re-negotiation. Wait for a
+            // brief remote-input burst so one Jellyfin restart handles all keys;
+            // retain further presses if that restart is still buffering.
+            const std::string& itemId = coordinator_.session().activeItem().id;
+            if (itemId.empty()) return false;
+            deferredSeek_.request(itemId, targetMs, now);
+            screenState_.beginSeek(targetMs, now);
+            return false;
         }
         player_.seekTo(coordinator_.playerPositionFromLogicalPosition(targetMs));
-        screenState_.beginSeek(targetMs, std::chrono::steady_clock::now());
+        screenState_.beginSeek(targetMs, now);
         return true;
     }
 
@@ -629,8 +640,9 @@ public:
             const bool forward = command.type == PlayerScreenCommandType::SeekForward;
             const int64_t deltaMs =
                 heldSeekDeltaMs(forward ? settings_.seekForwardSeconds : settings_.seekBackSeconds, repeatCount);
-            const int targetMs = relativeSeekPositionMs(screenState_.positionMs(), forward ? deltaMs : -deltaMs,
-                                                        screenState_.durationMs());
+            const auto pending = deferredSeek_.positionFor(coordinator_.session().activeItem().id);
+            const int targetMs = relativeSeekPositionMs(pending.value_or(screenState_.positionMs()),
+                                                        forward ? deltaMs : -deltaMs, screenState_.durationMs());
             screenState_.showSeekFeedback(static_cast<int>((forward ? deltaMs : -deltaMs) / 1000), now);
             return PlaybackHostEffect::seekWithTrickplay(targetMs);
         }
@@ -773,6 +785,32 @@ public:
                                 target.mediaSourceId.c_str(), playerError.c_str());
             error_ = playerError;
             return PlaybackHostEffect::stop();
+        }
+
+        // A previous HLS restart may still be loading when more DPAD presses
+        // arrive. Apply the latest accumulated target only to a ready stream.
+        const auto seekNow = std::chrono::steady_clock::now();
+        if (const auto pending =
+                deferredSeek_.takeReady(coordinator_.session().activeItem().id,
+                                        (status == PlayerStatus::Playing || status == PlayerStatus::Paused) &&
+                                            !coordinator_.transitionLoading() && coordinator_.activeTargetAvailable(),
+                                        seekNow)) {
+            std::scoped_lock lock(stateMutex);
+            if (coordinator_.seekRequiresStreamRestart(*pending)) {
+                const auto& activeTarget = coordinator_.session().activeTarget();
+                __android_log_print(ANDROID_LOG_INFO, "SloppaTV", "Applying deferred HLS seek target=%d", *pending);
+                if (!restartAt(stream, *pending, coordinator_.tracks().selectedAudioServerIndex(),
+                               coordinator_.tracks().selectedSubtitleServerIndex(), activeTarget.mediaSourceId)) {
+                    // Subtitle/track work can temporarily reject a restart. Do
+                    // not discard a DPAD seek until the server accepted it.
+                    deferredSeek_.request(coordinator_.session().activeItem().id, *pending, seekNow);
+                }
+            } else {
+                player_.seekTo(coordinator_.playerPositionFromLogicalPosition(*pending));
+                screenState_.beginSeek(*pending, seekNow);
+                reportProgress(telemetry, true, false);
+            }
+            return {};
         }
 
         hlsRecovery_.observePlaying(status == PlayerStatus::Playing, std::chrono::steady_clock::now());
@@ -1015,6 +1053,7 @@ private:
     std::string failedSourceItemId_;
     std::vector<std::string> failedSources_;
     HlsRecoveryBudget hlsRecovery_;
+    DeferredPlaybackSeek deferredSeek_;
     int initialResumeTargetMs_ = 0;
     int initialResumeRetryMs_ = 0;
     bool embeddedSubtitleDiscoveryDone_ = false;

@@ -147,6 +147,11 @@ public:
 
     [[nodiscard]] PlayerControl controlSelection() const { return controlSelection_; }
 
+    // Visible startup controls have no focus until the user explicitly presses Up.
+    [[nodiscard]] PlayerControl focusedControl(TimePoint now) const {
+        return controlsActive(now) ? controlSelection_ : PlayerControl::Count;
+    }
+
     [[nodiscard]] bool subtitleOffsetOverlayVisible() const { return subtitleOffsetOverlayVisible_; }
 
     void setSubtitleOffsetAvailable(bool available) {
@@ -289,7 +294,9 @@ public:
             }
             return {.type = PlayerScreenCommandType::StopPlayback};
         }
-        const bool navigatingControls = controlsVisible(now, preparingInitialPlayback);
+        // Showing preparation controls must not hijack Left/Right away from seeking.
+        const bool navigatingControls = controlsActive(now);
+        (void)preparingInitialPlayback;
         if (input == PlayerScreenInput::Up && !navigatingControls) {
             showControls(now);
             return {};
@@ -525,7 +532,6 @@ private:
         case PlayerControl::SubtitleTrack:
             return {.type = PlayerScreenCommandType::OpenSubtitlePicker};
         case PlayerControl::SubtitleOffset:
-            return {};
         case PlayerControl::Count:
             return {};
         }

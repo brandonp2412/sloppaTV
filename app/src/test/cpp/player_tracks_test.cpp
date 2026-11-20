@@ -52,8 +52,7 @@ int main() {
     assert(state.activeSubtitleCue(900)->text == "present");
     state.setSubtitleOffsetMs(0);
 
-    state.applySubtitle(7, "English",
-                        {{1000, 5000, "long dialogue"}, {2000, 3000, "brief sign"}});
+    state.applySubtitle(7, "English", {{1000, 5000, "long dialogue"}, {2000, 3000, "brief sign"}});
     assert(state.activeSubtitleCue(2500)->text == "brief sign");
     assert(state.activeSubtitleCue(3500)->text == "long dialogue");
     state.setSubtitleOffsetMs(3000);
