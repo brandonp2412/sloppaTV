@@ -24,6 +24,7 @@
 #include "browse_screen_coordinator.hpp"
 #include "brand_mark.hpp"
 #include "cast_renderer.hpp"
+#include "clock_time_zone.hpp"
 #include "content_screen_presentation.hpp"
 #include "content_mutation_flow.hpp"
 #include "content_completion_coordinator.hpp"
@@ -542,6 +543,10 @@ public:
     static void handleAppCommand(android_app* app, int32_t command) {
         auto* self = static_cast<SloppaApp*>(app->userData);
         if (self) self->onAppCommand(command);
+    }
+
+    void requestClockRender() const {
+        if (app_ && app_->looper) ALooper_wake(app_->looper);
     }
 
     static int32_t handleInput(android_app* app, AInputEvent* event) {
@@ -1988,6 +1993,12 @@ extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeO
     const std::string queryValue = jniString(env, query);
     std::scoped_lock lock(gActiveAppMutex);
     if (gActiveApp) gActiveApp->onNewLaunchIntent(actionValue, dataValue, queryValue);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeRefreshTimeZone(JNIEnv*, jclass) {
+    refreshLocalClockTimeZone();
+    std::scoped_lock lock(gActiveAppMutex);
+    if (gActiveApp) gActiveApp->requestClockRender();
 }
 
 extern "C" JNIEXPORT void JNICALL Java_app_sloppatv_SloppaNativeActivity_nativeOnBackPressed(JNIEnv*, jclass) {

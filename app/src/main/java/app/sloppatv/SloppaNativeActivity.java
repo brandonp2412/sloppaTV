@@ -2,7 +2,9 @@ package app.sloppatv;
 
 import android.annotation.SuppressLint;
 import android.app.NativeActivity;
+import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -51,10 +53,23 @@ public final class SloppaNativeActivity extends NativeActivity {
     private static final int MEDIA_COMMAND_PREVIOUS = 6;
     private EditText nativeTextInput;
     private TextView nativeAccessibilitySummary;
+    private final BroadcastReceiver timeChangeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            nativeRefreshTimeZone();
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        IntentFilter timeChanges = new IntentFilter(Intent.ACTION_TIMEZONE_CHANGED);
+        timeChanges.addAction(Intent.ACTION_TIME_CHANGED);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(timeChangeReceiver, timeChanges, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(timeChangeReceiver, timeChanges);
+        }
         hideSystemBars();
         installAccessibilitySummary();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -63,6 +78,18 @@ public final class SloppaNativeActivity extends NativeActivity {
                 this::dispatchBackToNative
             );
         }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        nativeRefreshTimeZone();
+    }
+
+    @Override
+    protected void onDestroy() {
+        unregisterReceiver(timeChangeReceiver);
+        super.onDestroy();
     }
 
     private void dispatchBackToNative() {
@@ -483,6 +510,7 @@ public final class SloppaNativeActivity extends NativeActivity {
     private static native void nativeOnActivityResult(int requestCode, int resultCode, Intent data);
     private static native void nativeOnNewIntent(String action, String data, String query);
     private static native void nativeOnBackPressed();
+    private static native void nativeRefreshTimeZone();
     private static native void nativeOnMediaSessionCommand(int command, long positionMs);
     private static native void nativeOnSystemTextInputChanged(int mode, String text);
     private static native void nativeOnSystemTextInputDone(int mode, String text);

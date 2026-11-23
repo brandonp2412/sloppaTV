@@ -1,5 +1,7 @@
 #include "media_display_text.hpp"
+#include "clock_time_zone.hpp"
 #include <cassert>
+#include <cstdlib>
 
 int main() {
     JellyfinItem episode;
@@ -24,4 +26,21 @@ int main() {
     episode.type = "Movie";
     episode.name = "S02E09";
     assert(episodeNumberLabel(episode).empty());
+
+    // New Zealand uses UTC+13 in November and UTC+12 in July.
+    assert(setenv("TZ", "Pacific/Auckland", 1) == 0);
+    refreshLocalClockTimeZone();
+    assert(formatLocalClock(1795408260, false) == "5:31 PM");
+    assert(formatLocalClock(1782880260, false) == "4:31 PM");
+    assert(formatLocalClock(1795408260, true) == "17:31");
+
+    // Changing the zone in a long-running process must not retain old offsets.
+    assert(setenv("TZ", "UTC", 1) == 0);
+    refreshLocalClockTimeZone();
+    assert(formatLocalClock(1795408260, false) == "4:31 AM");
+    assert(setenv("TZ", "Pacific/Auckland", 1) == 0);
+    refreshLocalClockTimeZone();
+    assert(formatLocalClock(1795408260, false) == "5:31 PM");
+    assert(unsetenv("TZ") == 0);
+    refreshLocalClockTimeZone();
 }
