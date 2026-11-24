@@ -3,10 +3,6 @@ name: Android CI
 on:
   push:
   pull_request:
-  # GitHub cron cannot express a true fortnightly interval. Run weekly,
-  # then release only when the previous published release is at least 14 days old.
-  schedule:
-    - cron: "0 2 * * 1"
   workflow_dispatch:
     inputs:
       play_listing_only:
@@ -22,57 +18,6 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  release-gate:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      should_release: ${{ steps.cadence.outputs.should_release }}
-    steps:
-      - name: Check release cadence and changes
-        id: cadence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" 2>/dev/null || true)"
-          if [[ -z "$release_json" ]]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          latest_tag="$(jq -r '.tag_name // empty' <<<"$release_json")"
-          published_at="$(jq -r '.published_at // empty' <<<"$release_json")"
-          if [[ -z "$latest_tag" || -z "$published_at" ]]; then
-            echo "should_release=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          ahead="$(gh api "repos/$GITHUB_REPOSITORY/compare/$latest_tag...$GITHUB_SHA" --jq '.ahead_by' 2>/dev/null || echo 1)"
-          if [[ "$ahead" == "0" ]]; then
-            echo "No commits since $latest_tag; skipping scheduled release."
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          published_epoch="$(date -u -d "$published_at" +%s)"
-          now_epoch="$(date -u +%s)"
-          if (( now_epoch - published_epoch < 1209600 )); then
-            echo "Latest release is less than 14 days old; skipping scheduled release."
-            echo "should_release=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo "should_release=true" >> "$GITHUB_OUTPUT"
-
   build:
     # A listing-only refresh is intentionally independent of native build/lint
     # gates, so stale website screenshots can be fixed without shipping an AAB.
@@ -133,7 +78,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y clang-format clang-tidy cppcheck shellcheck
 
       - name: Set Play version code for main release
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
+        if: github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true
         shell: bash
         run: |
           play_version_code=$((100020 + GITHUB_RUN_NUMBER))
@@ -142,7 +87,7 @@ jobs:
           echo "Google Play version code: $play_version_code"
 
       - name: Configure Play signing identity
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
+        if: github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true
         shell: bash
         env:
           SLOPPATV_KEYSTORE_BASE64: ${{ secrets.SLOPPATV_KEYSTORE_BASE64 }}
@@ -222,11 +167,11 @@ jobs:
         run: ./gradlew --no-daemon test assembleDebug
 
       - name: Build signed benchmark and release artifacts
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
+        if: github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true
         run: ./gradlew --no-daemon assembleBenchmark assembleRelease bundleRelease
 
       - name: Build architecture release APKs
-        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true)
+        if: github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true
         run: ./gradlew --no-daemon -PSLOPPATV_SPLIT_APKS=true assembleRelease
 
       - name: Run C++ quality gates
@@ -299,8 +244,8 @@ jobs:
 
   publish-play-store:
     name: Submit Android TV release to Google Play review
-    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.release-gate.outputs.should_release == 'true' }}
-    needs: [screenshots, release-gate]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true }}
+    needs: screenshots
     runs-on: ubuntu-latest
     outputs:
       submitted: ${{ steps.publish.outputs.submitted }}
@@ -415,8 +360,8 @@ jobs:
 
   create-github-release:
     name: Create GitHub release
-    if: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && needs.release-gate.outputs.should_release == 'true' }}
-    needs: [build, screenshots, release-gate, publish-play-store]
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true }}
+    needs: [build, screenshots, publish-play-store]
     runs-on: ubuntu-latest
     permissions:
       contents: write
