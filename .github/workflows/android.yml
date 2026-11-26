@@ -5,6 +5,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      release_notes:
+        description: "Plain-English release notes (required for binary releases, max 500 characters)"
+        required: false
+        type: string
       play_listing_only:
         description: "Refresh public/default and Android TV screenshots without releasing a binary"
         required: false
@@ -30,6 +34,14 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+
+      - name: Validate handwritten release notes
+        if: github.event_name == 'workflow_dispatch' && inputs.play_listing_only != true
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/authored-release-notes.txt"
+          python3 scripts/release_notes.py "$RUNNER_TEMP/authored-release-notes.txt"
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
@@ -282,10 +294,13 @@ jobs:
 
       - name: Prepare Google Play release notes
         shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           play_version_code=$((100020 + GITHUB_RUN_NUMBER))
           release_notes="fastlane/metadata/android/en-US/changelogs/$play_version_code.txt"
-          printf 'Latest sloppaTV main release: %s\n' "$(git log -1 --pretty=%s)" > "$release_notes"
+          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/authored-release-notes.txt"
+          python3 scripts/release_notes.py "$RUNNER_TEMP/authored-release-notes.txt" "$release_notes"
 
       - name: Publish AAB, metadata, graphics and screenshots to production
         id: publish
@@ -382,7 +397,11 @@ jobs:
       - name: Prepare GitHub release
         id: release
         shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
+          printf '%s\n' "$RELEASE_NOTES" > "$RUNNER_TEMP/authored-release-notes.txt"
+          python3 scripts/release_notes.py "$RUNNER_TEMP/authored-release-notes.txt" release-notes.txt
           set -euo pipefail
 
           version_name="$(sed -n 's/^SLOPPATV_VERSION_NAME=//p' gradle.properties)"
@@ -411,7 +430,7 @@ jobs:
           tag_name: ${{ steps.release.outputs.tag_name }}
           name: ${{ steps.release.outputs.release_name }}
           target_commitish: ${{ github.sha }}
-          generate_release_notes: true
+          body_path: release-notes.txt
           files: release-assets/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
